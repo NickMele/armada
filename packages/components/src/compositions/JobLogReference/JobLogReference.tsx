@@ -9,23 +9,28 @@ import type { WhereRowProps } from "../WhereRow/WhereRow";
 /**
  * Job log reference — where the work is, and where the log is.
  *
- * **Bridge names a job's log on every job from dispatch** — running, failed and
- * finished. The job worth reading a log for is usually the one still running
- * badly, and a failed job has already stopped, so its log is a post-mortem.
+ * Bridge names a job's log on every job from dispatch — running, failed
+ * and finished. The job worth reading a log for is usually the one
+ * still running badly, and a failed job has already stopped, so its log
+ * is a post-mortem.
  *
- * The treatment is a path in mono that copies on click, what is known about it
- * beside it, and — where the surface can open it — one ghost row action that
- * hands it to the OS. **Never a count nothing measures** — the drawing shows
- * "142 lines · 0 error" and nothing counts either, so the row names the path
- * and stops. **No viewer, no level filter, no tail**: the Check output pane
- * answers what the suite said, the log answers what Fleet, the drone and
- * Bridge each did, joined on `job_id`. A reader is a later milestone's
- * problem; knowing where the file is, is not.
+ * The treatment is a path in mono that copies on click, what is known
+ * about it beside it, and — where the surface can open it — one ghost
+ * row action that hands it to the OS. Never a count nothing measures —
+ * the drawing shows "142 lines · 0 error" and nothing counts either, so
+ * the row names the path and stops.
+ */
+
+/**
+ * No viewer, no level filter, no tail: the Check output pane answers
+ * what the suite said, the log answers what Fleet, the drone and Bridge
+ * each did, joined on `job_id`. A reader is a later milestone's problem;
+ * knowing where the file is, is not.
  *
- * On a failed job the same block carries the branch and the worktree above the
- * log, because the screen's four statements in order are what failed, that the
- * job is over, where the branch is, and where the log is. **All the controls
- * take you to the work; none offers to act on it.**
+ * On a failed job the same block carries the branch and the worktree
+ * above the log, since the screen's four statements in order are what
+ * failed, that the job is over, where the branch is, and where the log
+ * is. All the controls take you to the work; none offers to act on it.
  *
  * UI copy says "log". Never "Log Envelope" — that name is outside the
  * sanctioned lexicon, and a surface is not the place to settle it.

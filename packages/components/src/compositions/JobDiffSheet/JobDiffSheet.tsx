@@ -5,16 +5,18 @@ import type { DiffFile } from "../UnifiedDiff/UnifiedDiff";
 /**
  * The Job's patch, on the layer that can hold it — Journey 4, frame `4j`.
  *
- * **The patch is the Job's, not the step's.** Fleet commits once at the end, so
- * there is no per-step patch to draw: the header names the branch, and the only
- * step-scoped fact a diff has is which step wrote each file, which is what the
- * rail carries. What a step chooses is *where the diff opens* — opening from a
- * step's `Produced` scrolls the reading to that step's first file.
+ * The patch is the Job's, not the step's: Fleet commits once at the
+ * end, so there is no per-step patch to draw — the header names the
+ * branch, and the only step-scoped fact a diff has is which step wrote
+ * each file, which the rail carries. What a step chooses is where the
+ * diff opens: opening from a step's `Produced` scrolls the reading to
+ * that step's first file.
  *
- * **A sheet, because a patch in a panel is a patch in a 602px column.** That
- * was the reading this replaced, and a diff read in a column that narrow is a
- * decision taken on a line that wrapped.
+ * A sheet, because a patch in a panel is a patch in a 602px column:
+ * that was the reading this replaced, and a diff read in a column that
+ * narrow is a decision taken on a line that wrapped.
  */
+
 /**
  * One row of the rail. **Not a `DiffFile`** — the patch is drawn by the
  * caller's own diff component, and the rail needs one number per file where the
@@ -43,21 +45,18 @@ export type JobDiffFile = {
 };
 
 /**
- * The rail for a patch, counted off the same files the patch is drawn from.
+ * The rail for a patch, counted off the same files the patch is drawn
+ * from. One answer feeds the rail, the header and the body: hand this
+ * the array you hand `UnifiedDiff` and the header cannot contradict
+ * what is beside it — which is what #310 was, a rail and a count taken
+ * from a footprint while the body was taken from the worktree, so a Job
+ * mid-step read `0 files · +0 −0` above its own patch.
  *
- * **One answer feeds the rail, the header and the body.** Hand this the array
- * you hand `UnifiedDiff` and the header cannot contradict what is beside it —
- * which is what #310 was: a rail and a count taken from a footprint while the
- * body was taken from the worktree, so a Job mid-step read `0 files · +0 −0`
- * above its own patch.
- *
- * **A cut patch counts what was drawn**, because that is what the reader is
- * looking at. `UnifiedDiff`'s `cut` is what says the rest exists; a header
- * counting lines nobody can see would be the second source again, one field
- * along.
- *
- * No `step`: a patch does not say which step wrote a file, and nothing is
- * guessed here. See `JobDiffFile.step`.
+ * A cut patch counts what was drawn, since that is what the reader is
+ * looking at: `UnifiedDiff`'s `cut` is what says the rest exists, and a
+ * header counting lines nobody can see would be the second source
+ * again, one field along. No `step`: a patch does not say which step
+ * wrote a file, and nothing is guessed here — see `JobDiffFile.step`.
  */
 export function railOfPatch(files: DiffFile[]): JobDiffFile[] {
   return files.map((file) => {

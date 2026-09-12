@@ -42,22 +42,23 @@ export type TheListSixStatesOneRowShapeProps = {
 };
 
 /**
- * The track list a Job at the gate takes: it has no branch, no step and no
- * elapsed yet, so the run is a different field set and carries its own tracks.
- * 168px 72px 108px 100px 128px from the drawing — the workflow, the empty bar,
- * the step, the timestamp it has instead of elapsed, and origin. Exported
- * because the surface drawing real Jobs needs the same tracks, and a second
- * copy is how the two start to differ.
- *
- * **Named properties, not five `calc()` literals.** It was the literals, which
- * is precisely how it missed #218: that change gave `Job row (stacked)` a sixth
- * track and had to call it `--armada-track-provenance`, because
- * `--armada-track-origin` was already spent on the branch-or-workflow track —
- * and nothing here referred to either name, so the fifth width here went on
- * meaning origin by coincidence. The stories' own `GATE_TRACKS`, written in the
- * same change to stand in for this list, had already drifted 24px on the fourth
- * track. Both now read the same properties, declared once in
- * `JobRowStacked.css`.
+ * The track list a Job at the gate takes: it has no branch, no step and
+ * no elapsed yet, so the run is a different field set with its own
+ * tracks. 168px 72px 108px 100px 128px from the drawing — the workflow,
+ * the empty bar, the step, the timestamp it has instead of elapsed, and
+ * origin. Exported because the surface drawing real Jobs needs the same
+ * tracks, and a second copy is how the two start to differ.
+ */
+
+/**
+ * Named properties, not five `calc()` literals: the literals are
+ * precisely how it missed #218 — that change gave `Job row (stacked)` a
+ * sixth track and had to call it `--armada-track-provenance`, since
+ * `--armada-track-origin` was already spent on the branch-or-workflow
+ * track, and nothing here referred to either name, so the fifth width
+ * here went on meaning origin by coincidence. The stories' own
+ * `GATE_TRACKS` had already drifted 24px on the fourth track. Both now
+ * read the same properties, declared once in `JobRowStacked.css`.
  */
 export const APPROVAL_TRACKS = [
   "var(--armada-track-origin)",

@@ -5,23 +5,16 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
  * One chapter of a step's story — a numbered header line, and a body that
- * opens beneath it.
+ * opens beneath it. A chapter collapses to its header, never to nothing:
+ * number, name and meta stay readable at a glance, and each chapter opens
+ * and closes on its own — pressing one header never closes another.
  *
- * **A chapter collapses to its header, never to nothing.** A collapsed chapter
- * still carries its number, its name and its meta, so what happened in the
- * step stays readable at a glance.
- *
- * **Each chapter opens and closes on its own.** Pressing one header never
- * closes another; the region holding them decides nothing about that.
- *
- * **No tab strip, and no second surface.** The four-tab region job detail grew
- * is what put the activity log behind a click; the chapters replace it because
- * a tab hides the order these things happened in, which is the one thing the
- * story is for.
- *
- * **The header meta is a fact about the chapter, and it is always drawn.**
- * `47 entries`, `3 files · +94 −31`, a timestamp. It is what makes a collapsed
- * chapter worth leaving collapsed.
+ * No tab strip, no second surface: the four-tab region job detail grew put
+ * the activity log behind a click, and chapters replace it because a tab
+ * hides the order things happened in, which is the one thing the story is
+ * for. The header meta — `47 entries`, `3 files · +94 −31`, a timestamp —
+ * is always drawn, since it is what makes a collapsed chapter worth
+ * leaving collapsed.
  */
 
 /**

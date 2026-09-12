@@ -6,32 +6,33 @@ import { Select } from "../../primitives/Select/Select";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 
 /**
- * Job composer — what M1 renders where the approval card goes.
+ * Job composer — what M1 renders where the approval card goes. Same
+ * card, same order, same button, one field set smaller: the full
+ * approval card exists in the design and is not built at this
+ * milestone, since it turns on a diff size, a job type and an estimated
+ * cost, none of which Armada can measure before a drone has run. The
+ * composer keeps the card's shape and drops what M1 cannot fill.
  *
- * **Same card, same order, same button, one field set smaller.** The full
- * approval card exists in the design and is not built at this milestone: it
- * turns on a diff size, a job type and an estimated cost, none of which
- * Armada can measure before a drone has run. The composer keeps the card's
- * shape and drops what M1 cannot fill.
+ * The glance strip survives with the two values M1 can measure: how
+ * long the workflow is, and which Checks gate it. A card whose whole
+ * design is a forced glance cannot ship with nothing to glance at, so
+ * the strip narrows from three fields to two rather than disappearing.
+ */
+
+/**
+ * `Approve and dispatch` is the one accent fill in the milestone: the
+ * only place a person commits Armada to spend, and every other action
+ * in Bridge is secondary or ghost so that this one reads as the decision.
  *
- * **The glance strip survives with the two values M1 can measure.** How long
- * the workflow is, and which Checks gate it. A card whose whole design is a
- * forced glance cannot ship with nothing to glance at, so the strip narrows
- * from three fields to two rather than disappearing.
+ * `Approve` lands the job in `queued`, not `running` — a drone spawning
+ * is what starts it, and Fleet runs a bounded number at once, so an
+ * approved job waits where the bound is reached. `Cancel` writes
+ * `killed`: a job you never dispatched was not stopped, it was
+ * abandoned, and `rejected` is a verdict exit M1 does not have. The
+ * copy names what the person is doing; the record names what happened.
  *
- * **`Approve and dispatch` is the one accent fill in the milestone.** It is
- * the only place a person commits Armada to spend, and every other action in
- * Bridge is secondary or ghost so that this one reads as the decision.
- *
- * **`Approve` lands the job in `queued`, not `running`** — a drone spawning is
- * what starts it, and Fleet runs a bounded number of them at once, so an
- * approved job waits where the bound is reached. **`Cancel` writes `killed`**: a
- * job you never dispatched was not stopped, it was abandoned, and `rejected` is
- * a verdict exit that M1 does not have. The copy names what the person is
- * doing; the record names what happened.
- *
- * The field labels are the drawing's: `Title`, `Brief`, `Workflow`, `Project`.
- * None opens with a Wh- word.
+ * The field labels are the drawing's: `Title`, `Brief`, `Workflow`,
+ * `Project`. None opens with a Wh- word.
  */
 export type JobComposerGlance = {
   /** The field name, in sans and set back. */

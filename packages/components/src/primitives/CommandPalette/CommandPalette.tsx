@@ -4,39 +4,39 @@ import type { LucideIcon } from "lucide-react";
 import { Kbd, KbdChord } from "../Kbd/Kbd";
 
 /**
- * The palette is a superset of the UI, never a substitute for it, and it is
- * the discovery surface: it is how a person learns forty shortcuts without a
- * cheat sheet, which is why every entry displays its binding and no action may
- * exist outside it.
+ * The palette is a superset of the UI, never a substitute for it, and it
+ * is the discovery surface: it is how a person learns forty shortcuts
+ * without a cheat sheet, which is why every entry displays its binding
+ * and no action may exist outside it.
  *
- * **The empty query is the cheat sheet, and that is the load-bearing state.**
- * Opening the palette with nothing typed shows every section head and every
- * binding, so reading three on the way past to do one thing is the whole
- * mechanism by which forty get learned without a help screen. Every other
- * state here is a narrowing of it.
- *
- * A floating layer — `--bg-overlay`, `--border-default`, `--radius-lg`, a
- * shadow, and no blur. **Top-anchored, never centered**: a centered dialog
- * rises as results fall away, so the row under the cursor changes while a
- * person is still typing.
+ * The empty query is the cheat sheet, and that is the load-bearing
+ * state: opening the palette with nothing typed shows every section
+ * head and every binding, so reading three on the way past to do one
+ * thing is the whole mechanism by which forty get learned without a
+ * help screen. Every other state here is a narrowing of it.
+ */
+
+/**
+ * A floating layer — `--bg-overlay`, `--border-default`, `--radius-lg`,
+ * a shadow, no blur — top-anchored, never centered, since a centered
+ * dialog rises as results fall away and the row under the cursor
+ * changes while typing.
  *
  * Three safety rules from `### Safety rules for single-key actions` are
  * structural here, not decoration.
  *
- * 1. Single-key shortcuts are suppressed whenever a text input holds focus.
- *    The palette is a text input, so every key except the navigation set and
- *    `Esc` goes to the query. Typing "axe" cannot approve, kill and open
- *    something.
- * 2. Every destructive action confirms, even from the keyboard. A destructive
- *    entry does not act and does not close the palette; it hands the entry to
- *    `onConfirm`, and the host opens the confirmation over it.
- * 3. Kill is `x`, never `k`. The map is `actions.toml`'s and this only draws
- *    what it is given.
- *
- * **The palette obeys the lexicon.** `aliases` are searched and never
- * rendered, so "terminate" finds Kill and the row still reads Kill — with no
- * marked span, because an alias has none to mark and faking one would render
- * the alias.
+ * 1. Single-key shortcuts are suppressed while a text input holds
+ *    focus — every key but the navigation set and `Esc` goes to the query.
+ * 2. Every destructive action confirms, even from the keyboard, via
+ *    `onConfirm` rather than acting directly.
+ * 3. Kill is `x`, never `k` — `actions.toml`'s map, drawn as given.
+ */
+
+/**
+ * The palette obeys the lexicon: `aliases` are searched and never
+ * rendered, so "terminate" finds Kill and the row still reads Kill —
+ * with no marked span, since an alias has none to mark and faking one
+ * would render the alias.
  */
 export type PaletteEntry = {
   id: string;

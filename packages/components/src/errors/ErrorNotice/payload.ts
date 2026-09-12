@@ -1,47 +1,43 @@
 /**
- * The debug info an error carries — one artifact, quotable.
+ * The debug info an error carries — one artifact, quotable. This is what
+ * a person pastes into an issue, a message or a terminal, and the only
+ * thing that makes it worth having is that it is complete without the
+ * screen it came from. Nothing here is decorative and nothing is prose.
  *
- * **This is what a person pastes into an issue, a message or a terminal**, and
- * the only thing that makes it worth having is that it is complete without the
- * screen it came from. Nothing here is decorative and nothing here is prose:
- * every line is a fact the machine had.
+ * Why text rather than JSON: it is read by a person before anything else
+ * reads it. Aligned columns in mono at 11pm are readable; a JSON object
+ * with escaped newlines in the stack is not, and neither is a fenced
+ * block pasted into a terminal. No fences — the same characters have to
+ * survive an issue body, a chat message and a shell scrollback, and a
+ * fence only helps in one of the three.
+ */
+
+/**
+ * Why one string, not two renderings: `debugInfo` is the only thing that
+ * formats a payload. The expanded view renders this exact string in a
+ * `<pre>`, so what is on screen is what is on the clipboard by
+ * construction rather than by two renderers agreeing about field order.
  *
- * # Why text rather than JSON
+ * Absent is absent: every field below is omitted from the output when it
+ * is not there. A failure that precedes a Job shows no `job_id` row
+ * rather than a blank one, and an error with no structured fields shows
+ * no `fields` block.
+ */
+
+/**
+ * `code` is the single exception, and it renders `none`: the error
+ * treatment guarantees a code on every error and shows it always, so a
+ * reader meeting a payload without one cannot tell whether the failure
+ * carried none or the paste was truncated — read away from the screen
+ * that would have answered that.
  *
- * It is read by a person before it is read by anything else. Aligned columns
- * in mono at 11pm are readable; a JSON object with escaped newlines in the
- * stack is not, and neither is a fenced block pasted into a terminal. **No
- * fences** — the same characters have to survive an issue body, a chat message
- * and a shell scrollback, and a fence only helps in one of the three.
- *
- * # Why one string, not two renderings
- *
- * `debugInfo` is the only thing that formats a payload. The expanded view
- * renders this exact string in a `<pre>`, so what is on screen is what is on
- * the clipboard by construction rather than by two renderers agreeing about
- * field order. The issue asked for "the same order in the clipboard"; one
- * producer is how that stops being something to keep in step.
- *
- * # Absent is absent
- *
- * Every field below is omitted from the output when it is not there. A failure
- * that precedes a Job shows no `job_id` row rather than a blank one, and an
- * error with no structured fields shows no `fields` block.
- *
- * **`code` is the single exception, and it renders `none`.** The error
- * treatment guarantees a code on every error and shows it always, so a reader
- * meeting a payload without one cannot tell whether the failure carried none
- * or whether the paste was truncated — and the payload is read away from the
- * screen that would have answered that.
- *
- * **No failure Bridge builds reaches that fallback any more.** Two used to:
+ * No failure Bridge builds reaches that fallback any more. Two used to:
  * a renderer exception never went near the wire, and `UnreadableJob` is a
- * row-level fault Fleet sends as a bare sentence rather than as a `WireError`.
- * Both now carry a code Bridge minted in its own namespace — `codes.ts` beside
- * `ErrorCode` carries why, and `failures.ts` in `@armada/shell` carries the
- * declarations. `none` stays for a caller outside those builders, because a
- * payload that renders no `code` row at all is the one thing a reader cannot
- * tell apart from a truncated paste.
+ * row-level fault Fleet sends as a bare sentence rather than a
+ * `WireError`. Both now carry a code Bridge minted in its own namespace —
+ * `codes.ts` beside `ErrorCode` carries why, `failures.ts` in
+ * `@armada/shell` carries the declarations. `none` stays for a caller
+ * outside those builders.
  */
 
 /**
@@ -189,21 +185,17 @@ export function debugInfo(payload: DebugPayload): string {
 }
 
 /**
- * Put a payload on the clipboard, and say so either way.
+ * Put a payload on the clipboard, and say so either way. The one
+ * implementation of the act, so the control and the keyboard do the same
+ * thing: `c` is `copy debug info` in the contextual key map, and a
+ * binding that reimplemented the write would be a second artifact the
+ * moment either side changed.
  *
- * **The one implementation of the act**, so the control and the keyboard do the
- * same thing rather than two things that agree today. `c` is `copy debug info`
- * in the contextual key map, and a binding that reimplemented the write would
- * be a second artifact the moment either side changed.
- *
- * It copies `debugInfo(payload)` — the exact string the expanded view renders,
- * with the same instant in its tail. What is read on screen is what arrives in
- * the issue body, including when it was taken.
- *
- * `onCopied` is called on failure as well as on success, and is given the name
- * of what was copied rather than the fifteen lines of it. **A clipboard write
- * is silent by nature**, and a failed one is indistinguishable from a dead
- * control, so the surface is told either way and raises the same toast.
+ * It copies `debugInfo(payload)` — the exact string the expanded view
+ * renders, with the same instant in its tail. `onCopied` is called on
+ * failure as well as success, given the name of what was copied rather
+ * than the fifteen lines of it: a clipboard write is silent by nature,
+ * and a failed one is indistinguishable from a dead control.
  */
 export function copyDebugInfo(payload: DebugPayload, onCopied?: (what: string) => void): void {
   const said = () => onCopied?.(COPIED);
@@ -214,29 +206,27 @@ export function copyDebugInfo(payload: DebugPayload, onCopied?: (what: string) =
 export const COPIED = "The debug info";
 
 /**
- * Why the payload is safe to quote, and where that stops.
+ * Why the payload is safe to quote, and where that stops. Two sentences,
+ * because one cannot be written that is true. The first is exactly right
+ * about `fields`: `ipc::WireValue` is five primitive variants, `Secret<T>`
+ * implements no `Display` and no `Serialize`, so formatting a credential
+ * into a field does not compile — getting one in needs an explicit
+ * `expose()`, a deliberate act and greppable in one search.
  *
- * **Two sentences, because one cannot be written that is true.** The first half
- * is exactly right about `fields`: `ipc::WireValue` is five primitive variants,
- * `Secret<T>` implements no `Display` and no `Serialize`, so formatting a
- * credential into a field does not compile. Getting one in needs an explicit
- * `expose()`, which is a deliberate act and greppable in one search.
- *
- * It says nothing about the rest of the payload, and the payload is not only
- * `fields`. `message` and `chain` are prose written by whatever error `Display`
- * impl raised them, and no type bounds what an author put there. Rendering the
- * bounded claim over the whole artifact would promise an outcome the mechanism
- * does not reach — and the mechanism is what the reader was owed.
- *
- * It also makes no claim about the wider context: a credential sitting in a
- * repository file was never a `Secret<T>` and the type system was never
- * involved.
- *
- * **Here rather than beside the expanded view, because two surfaces say it.**
- * The expanded view shows it under the payload, and the file-an-issue dialog
- * shows it against the envelope row — where it is the whole reason that row
- * cannot be marked bounded and waved through. Two copies would be two claims
- * about one mechanism, and the day the mechanism changed only one would move.
+ * It says nothing about the rest: `message` and `chain` are prose written
+ * by whatever error `Display` impl raised them, and no type bounds what
+ * an author put there. Rendering the bounded claim over the whole
+ * artifact would promise an outcome the mechanism does not reach. It
+ * also makes no claim about the wider context — a credential sitting in
+ * a repository file was never a `Secret<T>`.
+ */
+
+/**
+ * Here rather than beside the expanded view, because two surfaces say it:
+ * the expanded view shows it under the payload, and the file-an-issue
+ * dialog shows it against the envelope row — the whole reason that row
+ * cannot be marked bounded and waved through. Two copies would be two
+ * claims about one mechanism, and the day it changed only one would move.
  */
 export const SAFETY =
   "Structured fields carry primitives only, and a credential does not compile into one. " +

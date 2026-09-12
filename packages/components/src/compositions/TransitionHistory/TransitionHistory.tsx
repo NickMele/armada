@@ -5,26 +5,28 @@ import { DRONE_PRESENCE, MOVEMENT_KIND } from "../../generated/vocabulary";
 /**
  * Transition history — every move one Job made, in order.
  *
- * **Rendered, never replayed.** `crates/store/src/fold.rs` owns the machine:
- * every recorded move goes back through `Job::transition` there, and a history
- * the machine would not admit fails to fold rather than producing a Job no
- * legal sequence could reach. Nothing here does that. A second machine would
- * agree with the first only until one of them changed.
+ * Rendered, never replayed: `crates/store/src/fold.rs` owns the
+ * machine, every recorded move goes back through `Job::transition`
+ * there, and a history the machine would not admit fails to fold
+ * rather than producing a Job no legal sequence could reach. A second
+ * machine would agree with the first only until one of them changed.
  *
- * **`seq` is the order, never `at`.** The instant is injected rather than read
- * from a clock, so two moves inside one millisecond carry the same one. The key
- * is drawn as well as obeyed — it is what a person joins to when they go and
- * look at the row itself.
+ * `seq` is the order, never `at`: the instant is injected rather than
+ * read from a clock, so two moves inside one millisecond carry the
+ * same one. The key is drawn as well as obeyed — it is what a person
+ * joins to when they go and look at the row itself.
+ */
+
+/**
+ * Not the Drone's turns: a transcript renders what the Drone said, this
+ * renders what Armada did. A Job that went wrong usually needs both,
+ * side by side rather than blended, so the two stay two surfaces.
  *
- * **Not the Drone's turns.** A transcript renders what the Drone said; this
- * renders what Armada did. A Job that went wrong usually needs both, side by
- * side rather than blended, so the two stay two surfaces.
- *
- * **Neutral, all the way down.** Hue below Job level exists only where
- * `tokens/status.css` declares it, and it declares no history row — twelve
- * statuses hued down a list would also read as twelve verdicts. The kind
- * column carries the scan instead, and `movement_kind` refuses a token for
- * that reason rather than being owed one.
+ * Neutral, all the way down: hue below Job level exists only where
+ * `tokens/status.css` declares it, and it declares no history row —
+ * twelve statuses hued down a list would also read as twelve verdicts.
+ * The kind column carries the scan instead, and `movement_kind` refuses
+ * a token for that reason rather than being owed one.
  */
 export type TransitionMove = {
   /** The key the log assigned. Monotonic, never reused, and what orders this. */

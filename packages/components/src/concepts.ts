@@ -2,29 +2,30 @@ import type { ReactNode } from "react";
 import { phaseSaid } from "./compositions/PhaseCard/PhaseCard";
 
 /**
- * What a word naming an Armada concept means, in one sentence, written once.
+ * What a word naming an Armada concept means, in one sentence, written
+ * once. Standing copy rather than values: every sentence here is true
+ * of every Job on every workflow, which is exactly what makes it a
+ * thing a surface must not retype — the moment two screens each explain
+ * what a Check is, they can disagree.
  *
- * **Standing copy rather than values.** Every sentence here is true of every
- * Job on every workflow, which is exactly what makes it a thing a surface must
- * not retype: the moment two screens each explain what a Check is, they can
- * disagree, and the difference between a Check and a Judge is the distinction
- * the whole gate rests on.
+ * Keyed by the word a reader sees, so no call site holds a string: a
+ * fact label, a chapter title, a region's eyebrow and a header field are
+ * all the same question — *what is this thing* — asked of the same
+ * vocabulary. Looking the answer up by the visible word keeps this one
+ * table instead of one annotation per component, which is how a hover
+ * pass becomes two hundred hand-written strings that drift.
+ */
+
+/**
+ * The three gate tiers are not here: `PhaseCard` already writes them,
+ * keyed by kind and state, since a tier that can never hold a step
+ * cannot say what a tier holding one says — see `phaseSaid`. Those
+ * entries below read it rather than carrying a second sentence about
+ * the same thing.
  *
- * **Keyed by the word a reader sees, so no call site holds a string.** A fact
- * label, a chapter title, a region's eyebrow and a header field are all the
- * same question — *what is this thing* — asked of the same vocabulary. Looking
- * the answer up by the visible word is what keeps this one table instead of one
- * annotation per component, which is how a hover pass becomes two hundred
- * hand-written strings that drift.
- *
- * **The three gate tiers are not here.** `PhaseCard` already writes them, keyed
- * by kind *and* state, because a tier that can never hold a step cannot say
- * what a tier holding one says — see `phaseSaid`. Those entries below read it
- * rather than carrying a second sentence about the same thing.
- *
- * **What does not get an entry.** A criterion sentence, a Judge's grounds, a
- * log line and a step's own name already read as themselves; a hover that
- * restates the visible text is worse than none.
+ * What does not get an entry: a criterion sentence, a Judge's grounds,
+ * a log line and a step's own name already read as themselves; a hover
+ * that restates the visible text is worse than none.
  */
 const SAID: Readonly<Record<string, string>> = {
   // The gate tiers, read from the one place they are written. `current` is the

@@ -157,21 +157,19 @@ export const ACommandLongerThanTheRow: Story = {
 };
 
 /**
- * **A command longer than the wire carries, said on the row.** Fleet stops at
- * 200 characters and a heredoc does not, so the row shows what fits and states
- * how much there was.
+ * A command longer than the wire carries, said on the row: Fleet stops
+ * at 200 characters and a heredoc does not, so the row shows what fits
+ * and states how much there was. It sits on its own line and never
+ * trails the command — inside the mono block it would be selected and
+ * copied with the command it is a caveat about, and a cut command
+ * pasted into an allowlist as a whole one is the failure this prevents.
+ * A tooltip is worse still: not there when the command is being copied.
  *
- * **It sits on its own line and never trails the command.** Set inside the mono
- * block it would be selected and copied with the command it is a caveat about,
- * and a cut command pasted into an allowlist as a whole one is the failure this
- * exists to prevent. A tooltip is worse still: it is not there at the moment
- * the command is being copied.
- *
- * The sentence is the list note's, one level down — *showing 200 of 14,320
- * characters* under a command, *showing 50 of 137 refused calls* under the
- * list. The last row is a transcript written before Fleet recorded a size: it
- * says it was cut and claims no total, because `200 characters shown` reads as
- * the whole of it.
+ * The sentence is the list note's, one level down — *showing 200 of
+ * 14,320 characters* under a command, *showing 50 of 137 refused calls*
+ * under the list. The last row is a transcript written before Fleet
+ * recorded a size: it says it was cut and claims no total, since `200
+ * characters shown` reads as the whole of it.
  */
 export const ACommandCutByTheWire: Story = {
   args: {

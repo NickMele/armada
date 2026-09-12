@@ -98,25 +98,26 @@ export type FramesShownProps = {
 };
 
 /**
- * The frames a step's harness produced — what a change whose point is not the
- * code is reviewed by.
+ * The frames a step's harness produced — what a change whose point is not
+ * the code is reviewed by. Images and their provenance, nothing that
+ * reads as a claim: each frame carries the name the spec gave it, the run
+ * it came from and what it weighs. There is no caption and no field for
+ * one — a screenshot of the wrong state looks exactly like the right
+ * state, so only the spec that produced it, in the diff beside the
+ * change, makes a frame checkable. A sentence here would be the Drone
+ * attesting to its own work in a field nothing can check.
+ */
+
+/**
+ * The run is on every frame, not implied by grouping: a step worked three
+ * times captured three different screens, and a reader counting down a
+ * list to work out which run they were looking at would be guessing at
+ * the one thing that decides whether a frame is current.
  *
- * **Images and their provenance, and nothing that reads as a claim.** Each
- * frame carries the name the spec gave it, the run it came from and what it
- * weighs. There is no caption and no field for one: a screenshot of the wrong
- * state looks exactly like one of the right state, so the only thing that makes
- * a frame checkable is the spec that produced it — code, in the diff, beside
- * the change. A sentence here would be the Drone attesting to its own work in a
- * field nothing can check.
- *
- * **The run is on every frame, not implied by grouping.** A step worked three
- * times captured three sets and they are three different screens; a reader who
- * had to count down a list to work out which run they were looking at would be
- * guessing at the one thing that decides whether a frame is current.
- *
- * **A frame that is still being read draws its own space.** The box is sized
- * before the bytes arrive, so a chapter does not jump as three images land —
- * which is the reflow that makes a person lose the one they were reading.
+ * A frame that is still being read draws its own space — the box is
+ * sized before the bytes arrive, so a chapter does not jump as three
+ * images land, which is the reflow that makes a person lose the one they
+ * were reading.
  */
 export function FramesShown({ frames, emptyNote, onOpen }: FramesShownProps) {
   if (frames.length === 0) {

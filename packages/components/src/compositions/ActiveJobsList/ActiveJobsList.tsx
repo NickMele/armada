@@ -5,25 +5,18 @@ import { JOB_ROW_LIST, RovingOption } from "../JobRowStacked/JobRowStacked";
 
 /**
  * Active jobs list — the framed list of Job rows, and the header above it.
+ * Ordering carries the trigger, not a control: rows needing a person sort
+ * first, oldest first within each group. The list renders the order Fleet
+ * hands it and never re-sorts; the count-and-needs-you sentence is composed
+ * elsewhere and only placed here. The empty state is `Board empty state`,
+ * mounted at the `empty` slot — Fleet with no jobs and Fleet not running
+ * read differently, and that component carries the difference.
  *
- * **Ordering carries the trigger, not a control.** Rows that need a person sort
- * above rows that do not, and within each group the oldest first, because the
- * thing waiting longest is the thing most likely to have gone wrong. The list
- * renders the order it is handed: sorting is Fleet's, and a component that
- * re-sorted would be a second definition of the rule.
- *
- * The header states the count and how many need you. That sentence is written
- * where the counts are known; this composition places it and never composes it.
- *
- * **The empty state is `Board empty state`**, and it is not built here. The
- * `empty` slot is where it mounts — Fleet running with no jobs, and Fleet not
- * running, read differently and the difference is that component's to carry.
- *
- * **A listbox roves; it does not hand out one tab stop per row.** Tab reaches
- * the list once, Up and Down move within it, and Home and End jump to its ends.
- * Fourteen tab stops to cross a list is what a `listitem` with an `onClick`
- * produces, and it is why the role was wrong before the keys were.
+ * A listbox roves rather than giving each row its own tab stop: Tab reaches
+ * the list once, Up/Down move within it, Home/End jump to its ends — a
+ * `listitem` with `onClick` cost fourteen tab stops to cross it.
  */
+
 /**
  * A run of rows under one label, where the list is drawn grouped. Folded draws
  * the label and none of its rows; `onFold` makes the label the control that
@@ -88,22 +81,17 @@ export type ActiveJobsListProps = {
    */
   view?: "card" | "table";
   /**
-   * What each column is called, in order, drawn once above the rows. Table
-   * view only; a card labels its facts by where they sit in a run.
+   * What each column is called, in order, drawn once above the rows —
+   * table view only; a card labels facts by position instead.
    *
-   * **The header is what makes the table shorter than the card**: a fact named
-   * once at the top costs 32px for the whole Board where naming it on each row
-   * costs a line on every one of them.
+   * A name at the top costs 32px once; the same name on every row costs a
+   * line per row, which is what makes the table shorter than the card.
+   * The badge and action columns carry no name — a status needs none and
+   * a column of buttons names nothing — so this is the four in between.
    *
-   * The badge and the action columns are not named — a status needs no header
-   * to be read as one, and a column of buttons is not a fact about the Job. So
-   * this is the four in between, and the frame places them.
-   *
-   * **Read by both arrangements, though only one draws it.** The table places
-   * its header cells by this; the card draws no header and still sizes its
-   * tracks by how many facts were named, because a track reserved for a fact
-   * the rows do not carry is a floor nothing fills. Passing it is a caller
-   * naming its facts either way.
+   * Read by both arrangements though only one draws it: the card has no
+   * header row but still sizes its tracks by how many facts were named,
+   * so passing it is naming the facts either way.
    */
   columns?: ReactNode[];
 };

@@ -30,25 +30,24 @@ export type FramesPairedProps = {
 };
 
 /**
- * What the change did to the screen — the pairs that moved, drawn; the ones
- * that did not, folded to a line.
+ * What the change did to the screen — the pairs that moved, drawn; the
+ * ones that did not, folded to a line. Two screenshots of one app are
+ * about the same picture, and finding the difference is the whole job: a
+ * spec photographing ten screens touches one, so drawing all twenty side
+ * by side asks a person to do the comparison this surface exists to do.
  *
- * **Two screenshots of one app are about the same picture, and finding the
- * difference is the whole job.** A spec that photographs ten screens
- * photographs ten of which the change touched one, so drawing all twenty side
- * by side asks a person to do the comparison this surface exists to do for
- * them.
- *
- * **The pair that moved flips in place rather than sitting side by side.** At
- * the panel's width two plates are half a column each — smaller than a phone,
- * and unreadable for a picture of a screen. One plate at full width, swapping
- * under the eye, is also simply the better instrument: a difference nobody can
- * find by comparing two images is obvious the moment one replaces the other,
- * because the changed region is the only thing that moves.
- *
- * **It opens on the after.** That is the state a person came to see; the before
- * is what they reach for. Hover, click, or hold the key — the label always says
- * which is on screen, so the reading is never ambiguous even mid-flip.
+ * The pair that moved flips in place rather than sitting side by side: at
+ * the panel's width two plates are half a column each, smaller than a
+ * phone and unreadable for a picture of a screen. One plate at full
+ * width, swapping under the eye, is simply the better instrument — the
+ * changed region is the only thing that moves.
+ */
+
+/**
+ * It opens on the after — that is the state a person came to see, the
+ * before is what they reach for. Hover, click, or hold the key: the label
+ * always says which is on screen, so the reading is never ambiguous even
+ * mid-flip.
  */
 export function FramesPaired({ pairs, emptyNote }: FramesPairedProps) {
   if (pairs.length === 0) {

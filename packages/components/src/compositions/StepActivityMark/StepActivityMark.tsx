@@ -3,26 +3,31 @@ import { JOB_STATUS, STEP_STATE } from "../../generated/vocabulary";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
- * Step activity mark — the glyph one rail row carries, and the single place
- * the step-activity vocabulary is written down.
+ * Step activity mark — the glyph one rail row carries, and the single
+ * place the step-activity vocabulary is written down.
  *
- * Step activity answers **where the work is**, one level below the Job badge.
- * Six of these are `job_steps.state` values; `failed` and `killed` are not — a
- * refusal lands in `last_verdict`, and the split is the point: a step retrying
- * after a refusal is `running` in activity and `failed` in verdict at the same
- * moment, so one column cannot say both. `killed` is the Job's status showing
- * through, freezing the step where it stood.
+ * Step activity answers where the work is, one level below the Job
+ * badge. Six of these are `job_steps.state` values; `failed` and
+ * `killed` are not — a refusal lands in `last_verdict`, and the split
+ * is the point: a step retrying after a refusal is `running` in
+ * activity and `failed` in verdict at the same moment, so one column
+ * cannot say both. `killed` is the Job's status showing through,
+ * freezing the step where it stood.
+ */
+
+/**
+ * The glyphs are borrowings, under
+ * `[conventions.step_activity_borrowing]` in `packages/icons/icons.toml`
+ * — a step carries the Job glyph that means the same thing one level
+ * down, since a rail row and the badge above it stating the same claim
+ * must show the same mark. Two values are not borrowings: `flag` for
+ * `stopped`, reserved to it alone, and `circle-dashed` for
+ * `not_started`, minted because every borrowing claims something
+ * happened.
  *
- * The glyphs are borrowings, under `[conventions.step_activity_borrowing]` in
- * `packages/icons/icons.toml` — a step carries the Job glyph that means the
- * same thing one level down, because a rail row and the badge above it stating
- * the same claim must show the same mark. Two values are not borrowings:
- * `flag` for `stopped`, reserved to it alone, and `circle-dashed` for
- * `not_started`, minted because every borrowing claims something happened.
- *
- * Hue lives in the stylesheet beside the geometry, keyed off `data-activity`.
- * That is the split `Badge` uses, and it keeps one file to read when a value's
- * treatment changes.
+ * Hue lives in the stylesheet beside the geometry, keyed off
+ * `data-activity`. That is the split `Badge` uses, and it keeps one
+ * file to read when a value's treatment changes.
  */
 export type StepActivity =
   | "not_started"
@@ -35,24 +40,29 @@ export type StepActivity =
   | "failed";
 
 /**
- * Activity to glyph. The roster is the registry's, not this file's — every
- * entry here names a glyph with a table in `packages/icons/icons.toml`.
+ * Activity to glyph. The roster is the registry's, not this file's —
+ * every entry here names a glyph with a table in
+ * `packages/icons/icons.toml`.
  *
- * `not_started` takes `circle-dashed`, minted for this value alone rather
- * than borrowed. It is a fallback, never a first choice: a step's position is
- * more informative than a silhouette, so wherever a caller supplies an
- * `ordinal` — `WorkflowRail` and `StepRow` both do today — the number wins
- * and the glyph never displaces it. The glyph draws only where no ordinal
- * reaches this component.
+ * `not_started` takes `circle-dashed`, minted for this value alone
+ * rather than borrowed. It is a fallback, never a first choice: a
+ * step's position is more informative than a silhouette, so wherever a
+ * caller supplies an `ordinal` — `WorkflowRail` and `StepRow` both do
+ * today — the number wins and the glyph never displaces it. The glyph
+ * draws only where no ordinal reaches this component.
+ */
+
+/**
+ * `awaiting_human` takes `eye`. The registry's borrowing convention
+ * lists `eye` and refuses `clock`, and the hue agrees: `--step-waiting`
+ * aliases `--status-awaiting-review`, whose badge is `eye`. `clock` is
+ * `queued`'s badge and would state a claim the hue does not.
+ * Iconography's prose said `clock` here until the two were reconciled;
+ * both now say `eye`.
  *
- * `awaiting_human` takes `eye`. The registry's borrowing convention lists
- * `eye` and refuses `clock`, and the hue agrees: `--step-waiting` aliases
- * `--status-awaiting-review`, whose badge is `eye`. `clock` is `queued`'s
- * badge and would state a claim the hue does not. Iconography's prose said
- * `clock` here until the two were reconciled; both now say `eye`.
- *
- * `killed` borrows `power`, the Job badge for the same decision one level
- * down. It is on the roster, which was short of it while this file drew it.
+ * `killed` borrows `power`, the Job badge for the same decision one
+ * level down. It is on the roster, which was short of it while this
+ * file drew it.
  */
 const GLYPH: Record<StepActivity, LucideIcon> = {
   not_started: CircleDashed,

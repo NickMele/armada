@@ -3,46 +3,51 @@ import { useState } from "react";
 import { Tabs } from "../../primitives/Tabs/Tabs";
 
 /**
- * Judge inputs — what the panel was shown, and the evidence that it was one
- * panel.
+ * Judge inputs — what the panel was shown, and the evidence that it was
+ * one panel. This is the view a log file could never give you: a panel
+ * is only a panel if the judges ran independently on identical inputs,
+ * and the digest is the evidence for that, the first thing to doubt when
+ * a unanimous verdict looks too easy.
  *
- * **This is the view a log file could never give you.** A panel is only a panel
- * if the judges ran independently on identical inputs. The digest is the
- * evidence for that guarantee, and it is the first thing to doubt when a
- * unanimous verdict looks too easy.
+ * You can open any judge's own object, not just be told they agreed: it
+ * carried one summary and a sentence saying whether they matched, asking
+ * a reader to take the most important claim on trust — and on the Job
+ * where they did differ, being told *j2 was shown something else*
+ * without seeing what j2 was shown is the least useful place to stop.
+ * The segmented control is the whole point: `Compare` is the reading,
+ * each judge is the object it was actually handed.
+ */
+
+/**
+ * `Compare` leads and is the default: whether the panel was a panel is
+ * the question the view exists to answer, and which paths j2 got is what
+ * you ask once the answer is no. A row that differs is marked in the
+ * per-judge views too, since reading j2's object alone tells you nothing
+ * about whether it is the odd one — the mark carries the comparison into
+ * the view that has lost it.
  *
- * **You can open any judge's own object, not just be told they agreed.** It
- * carried one summary and a sentence saying whether they matched, which asks a
- * reader to take the most important claim on the screen on trust — and on the
- * Job where they *did* differ, being told *j2 was shown something else* without
- * being able to see what j2 was shown is the least useful place to stop. The
- * segmented control is the whole point: `Compare` is the reading, and each
- * judge is the object it was actually handed.
+ * The assurance is never silent: it says every judge received the same
+ * object, or says they did not — a rows-with-no-verdict rendering is a
+ * set of facts with the one question about them unanswered.
+ */
+
+/**
+ * Every row is machine-derived, so every value is mono — nothing here
+ * was written by anybody, it is what Fleet handed the panel, read back.
  *
- * **`Compare` leads and is the default.** Whether the panel was a panel is the
- * question the view exists to answer; which paths j2 got is what you ask once
- * the answer is no.
- *
- * **A row that differs is marked in the per-judge views too.** Reading j2's
- * object alone, nothing about a digest says it is the odd one — the mark is
- * what carries the comparison into the view that has lost it.
- *
- * **The assurance is never silent.** It says every judge received the same
- * object, or it says they did not; a rows-with-no-verdict rendering is a set of
- * facts with the one question about them unanswered.
- *
- * **Every row is machine-derived, so every value is mono.** Nothing here was
- * written by anybody — it is what Fleet handed the panel, read back.
- *
- * **The wire serves this.** `Judged.given` arrived in protocol 8.3 — a digest
- * of the exact text one member's call was sent, beside its size and its model,
- * recorded per member so the comparison is a reading rather than a restatement
- * of Fleet's own loop. `screens`' `cited.ts` builds the rows and marks the ones
- * that differ. This block said fixtures only until 2026-09-09.
- *
- * **One block per criterion, never one per step.** Every criterion is its own
- * brief, so a digest folded across criteria would differ for a reason that says
- * nothing — and the one comparison worth making would be lost inside it.
+ * The wire serves this: `Judged.given` arrived in protocol 8.3, a digest
+ * of the exact text one member's call was sent, beside its size and
+ * model, recorded per member so the comparison is a reading rather than
+ * a restatement of Fleet's own loop. `screens`' `cited.ts` builds the
+ * rows and marks the ones that differ. This block said fixtures only
+ * until 2026-09-09.
+ */
+
+/**
+ * One block per criterion, never one per step: every criterion is its
+ * own brief, so a digest folded across criteria would differ for a
+ * reason that says nothing — and the one comparison worth making would
+ * be lost inside it.
  */
 
 export type JudgeInputRow = {

@@ -1,46 +1,44 @@
 import { Fragment, type ReactNode } from "react";
 
 /**
- * Text a model wrote, drawn as the structure it carries rather than as one
- * paragraph.
- *
- * **This is the half of "markdown or something" that markdown is the answer
- * to, and it is the smaller half.** Nearly everything Bridge shows is
- * assembled from typed values — a flag is a pattern and a citation, a verdict
- * is a criterion and a ruling — and those are drawn from their fields. What is
- * left is genuinely free text arriving as prose: a Judge's `produced` and
- * `consequence`, the citation on a gaming flag, a Drone's turn. Those are the
- * walls, and a renderer helps with those and with nothing else. Running this
- * over an assembled sentence would be parsing structure back out of prose that
- * had it thrown away.
- *
- * # The subset, and why it stops where it does
- *
- * **The scale is the surface's, not this component's.** Nothing here declares
- * a font size. A renderer that ships its own heading sizes, link colours and
- * code-block styling is a second design system inside the first, and
- * `docs/contracts/design-system.md` owns the type scale. So the constructs
- * that would need one are refused rather than approximated:
+ * Text a model wrote, drawn as the structure it carries rather than as
+ * one paragraph. This is the smaller half of "markdown or something":
+ * nearly everything Bridge shows is assembled from typed values — a flag
+ * is a pattern and a citation, a verdict is a criterion and a ruling —
+ * and drawn from their fields. What's left is genuinely free text, the
+ * walls this renders: a Judge's `produced` and `consequence`, the
+ * citation on a gaming flag, a Drone's turn.
+ */
+
+/**
+ * The scale is the surface's: a renderer shipping its own heading sizes,
+ * link colours and code-block styling is a second design system, and
+ * `docs/contracts/design-system.md` owns the type scale:
  *
  * | Written | Drawn |
  * |---|---|
  * | Paragraphs, blank-line separated | `<p>`, at the surrounding size |
  * | `` `inline code` `` | mono, in a `--bg-sunken` well |
- * | Fenced blocks | a mono block that wraps rather than clips — the failing render was an expression broken mid-token |
+ * | Fenced blocks | wraps rather than clips — a broken render was an expression split mid-token |
  * | `- ` and `* ` lists | one row per item, no marker glyph |
  * | `**bold**`, `*italic*` | weight and slant, both already tokens |
- * | `# heading` | the line at `--weight-medium` and full contrast — the structure without a second scale |
+ * | `# heading` | `--weight-medium` and full contrast, no second scale |
  * | Links, images, tables, blockquotes, raw HTML | the characters, literally |
- *
- * **Links are refused rather than unimplemented.** Bridge's CSP reaches
- * `'self'` and nothing else, an anchor needs a colour the accent is spoken for
- * by, and this text arrives from a model over the wire. A link that renders is
- * a link that can be clicked.
- *
- * **No dependency.** `packages/components` depends on React, lucide-react and
- * the token set. A markdown library brings a parser, a sanitiser and its own
- * default stylesheet, and the third is the thing this file exists to keep out.
- * The subset above is what the text actually contains.
+ */
+
+/**
+ * Links are refused rather than unimplemented: Bridge's CSP reaches
+ * `'self'` and nothing else, an anchor needs a colour the accent is
+ * spoken for by, and this text arrives from a model over the wire — a
+ * link that renders is a link that can be clicked.
+ */
+
+/**
+ * No dependency: `packages/components` depends on React, lucide-react
+ * and the token set. A markdown library brings a parser, a sanitiser and
+ * its own default stylesheet, and the third is the thing this file
+ * exists to keep out — the subset above is what the text actually
+ * contains.
  */
 export type ProseProps = {
   /** The text as it arrived. Empty draws nothing rather than an empty block. */

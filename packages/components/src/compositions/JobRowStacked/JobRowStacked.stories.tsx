@@ -121,24 +121,24 @@ export const Queued: Story = {
 };
 
 /**
- * **A queued Job a person put back, which the row above cannot be told from.**
- * Press restart while every place is taken and the Job lands here: `queued`,
- * `waiting_on_resources`, and — until the headline said so — identical to a Job
- * approved an hour ago and never started. The press moved nothing on screen,
- * which is the worst reading of a correct system.
+ * A queued Job a person put back, which the row above cannot be told
+ * from: press restart while every slot is taken and the Job lands here —
+ * `queued`, `waiting_on_resources`, identical to a Job approved an hour
+ * ago and never started, until the headline says otherwise. The press
+ * moved nothing on screen, the worst reading of a correct system.
  *
- * It is new. A restart and an override spawned a drone on the spot until
- * re-admission put them behind the concurrency cap.
- *
- * **The word is a suffix on the title, not a sixth field**, which is where the
- * `Escalated, second time` story already puts a qualifier — the field run's
- * tracks are shared down the list and a conditional sixth would land in the
- * track reserved for spend. It comes from `resumption` in `enum-verbs.toml` and
- * carries no glyph, because a headline carries none.
- *
- * **The badge is unchanged and says what the Job is waiting for.** Two facts,
- * two channels: the badge answers "why has nothing started" and the headline
- * answers "did my press land". Folding either into the other loses one of them.
+ * The word is a suffix on the title, not a sixth field, where `Escalated,
+ * second time` already puts a qualifier — tracks are shared down the
+ * list and a conditional sixth would land in the track reserved for
+ * spend. It comes from `resumption` in `enum-verbs.toml` and carries no
+ * glyph, since a headline carries none.
+ */
+
+/**
+ * The badge is unchanged and says what the Job is waiting for: two
+ * facts, two channels — the badge answers "why has nothing started" and
+ * the headline answers "did my press land". Folding either into the
+ * other loses one of them.
  */
 export const QueuedAfterARestart: Story = {
   args: {
@@ -198,21 +198,18 @@ export const RunningFocused: Story = {
 };
 
 /**
- * The cursor's row, with the key that fires its control.
+ * The cursor's row, with the key that fires its control. One key per
+ * verb, one control per row, so at most one key ever applies to the row
+ * under the cursor: `o` opens, `r` reviews, `t` attests, `d` redirects.
+ * Every other verb key no-ops; each key is the verb's own initial except
+ * Redirect, since `r` is spent on Review.
  *
- * **One key per verb, and one control per row**, so at most one key ever
- * applies to the row under the cursor: `o` opens, `r` reviews, `t` attests,
- * `d` redirects. Every other verb key no-ops rather than acting on the wrong
- * one. Each key is the verb's own initial except Redirect, because `r` is
- * spent on Review.
- *
- * **The chip is drawn on every row and hidden until the cursor lands.** It
- * holds its width either way, so the run does not reflow as the cursor moves —
- * and the cost of that is a chip's width on rows that are not showing one.
- *
- * The row does not bind the key. A row cannot know whether a text input
- * elsewhere on the screen holds focus, and the contract suppresses every
- * single-key action while one does.
+ * The chip is drawn on every row and hidden until the cursor lands — it
+ * holds its width either way, so the run does not reflow as the cursor
+ * moves, at the cost of a chip's width on rows not showing one. The row
+ * does not bind the key: it cannot know whether a text input elsewhere
+ * holds focus, and the contract suppresses every single-key action while
+ * one does.
  */
 export const FocusedWithItsKey: Story = {
   args: { ...Running.args, focused: true, actionKey: "o" } as never,
@@ -422,29 +419,30 @@ export const Convoy: Story = {
 };
 
 /**
- * **The one exception on the Board: a sub-dispatched Job that is out of
- * headroom.** Almost every sub-dispatched Job is already running before
+ * The one exception on the Board: a sub-dispatched Job that is out of
+ * headroom. Almost every sub-dispatched Job is already running before
  * anything could render it — this is the single reason one appears here,
  * `waiting_on_resources`, still `queued` (`docs/concepts/job-board.md`,
  * "A sub-dispatched Job is usually already running").
  *
- * **No Approve, no Dispatch** — the approval already happened at the parent
- * Job named in the origin field, so a decision control here would offer a
- * choice that has no content. **Kill stays available**, and the row is
- * dimmed, the same visually-distinct treatment a blocked Job gets. Without
- * the origin field naming `job_2d90bb` — the parent, running in the
- * `Running` story above — a read-only row with no primary action would look
- * arbitrary; that is the whole reason this issue put origin on the row
- * rather than only on job detail.
- *
- * **The step field says the step, and does not repeat the reason.** It read
- * "Held for CPU headroom", which is a value the real surface cannot emit twice
- * over: no vocabulary in the repository contains those words, and the badge
- * beside it already carries the reason — which is exactly the correction
- * `Active jobs list` made to its own queued rows. The registry does have a word
- * for a Job the machine is holding, `admission_hold.cpu`, and it reads "waiting
- * on CPU"; it renders in the status bar, once for the whole fleet, because how
- * full the machine is is not a fact about one row.
+ * No Approve, no Dispatch: the approval already happened at the parent
+ * Job named in the origin field, so a decision control here would offer
+ * a choice with no content. Kill stays available, and the row is
+ * dimmed, the same treatment a blocked Job gets. Without the origin
+ * field naming `job_2d90bb` — the parent, running in the `Running` story
+ * above — a read-only row with no primary action would look arbitrary,
+ * the reason this issue put origin on the row rather than only job detail.
+ */
+
+/**
+ * The step field says the step, and does not repeat the reason. It read
+ * "Held for CPU headroom", a value the real surface cannot emit twice
+ * over: no vocabulary in the repository contains those words, and the
+ * badge beside it already carries the reason — the same correction
+ * `Active jobs list` made to its own queued rows. The registry has a
+ * word for a Job the machine is holding, `admission_hold.cpu`, reading
+ * "waiting on CPU"; it renders in the status bar, once for the whole
+ * fleet, because how full the machine is is not a fact about one row.
  */
 export const SubDispatchedWaitingOnResources: Story = {
   args: {
@@ -471,20 +469,19 @@ export const SubDispatchedWaitingOnResources: Story = {
 };
 
 /**
- * **The longest verb in the registry, at the width floor.** `a required
- * command did not succeed` is 34 characters — `enum-verbs.toml`'s longest, and
- * more than twice what the drawn 132px badge column holds.
+ * The longest verb in the registry, at the width floor: `a required
+ * command did not succeed` is 34 characters, `enum-verbs.toml`'s
+ * longest, more than twice the drawn 132px badge column.
+ * The column was a bare fixed value until #262 and this painted across
+ * the headline — `Badge` is `nowrap` and nothing clips it. It is
+ * `minmax(132px, max-content)` now, a floor like every other track's, so
+ * the list sizes the column to its widest badge.
  *
- * The column was a bare fixed value until #262 and this painted across the
- * headline: `Badge` is `nowrap` and nothing clips it. It is `minmax(132px,
- * max-content)` now, so the drawn width is a floor like every other track's
- * and the list sizes the column to its widest badge.
- *
- * **This story is against the registry, not against the bug report.** The
- * reported case was `evidence disputed` at 17 characters, and a story pinned to
- * that would pass again the next time a longer verb is added. Widening the
- * fixed value would also have passed it — which is why the drawing's own 184px
- * is not the fix.
+ * This story is against the registry, not the bug report: the reported
+ * case was `evidence disputed` at 17 characters, and a story pinned to
+ * that would pass again the next time a longer verb is added — widening
+ * the fixed value would also have passed it, which is why the drawing's
+ * own 184px is not the fix.
  */
 export const TheLongestVerbAtTheWidthFloor: StoryObj = {
   render: () => (

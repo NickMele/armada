@@ -9,57 +9,58 @@ import {
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
- * A refusal, whole — why the work was refused, the lines that rest on, and
- * whether the panel disagreed with itself.
+ * A refusal, whole — why the work was refused, the lines that rest on,
+ * and whether the panel disagreed with itself.
  *
- * **The finding is the contract's three fields, not prose.** It was one free
- * paragraph called `grounds` until 2026-09-08, which was a second vocabulary
- * for something `docs/contracts/agent-copy.md` already specifies: a refusal is
- * `expected`, `produced` and `consequence`, each one line. The contract says
- * why it is fields rather than shape — *"a structural rule gets satisfied
- * identically forever and produces twenty interchangeable paragraphs"* — and
- * `CriterionVerdicts` had been drawing the three correctly the whole time, one
- * level down. This component invented the paragraph.
+ * The finding is the contract's three fields, not prose: it was one free
+ * paragraph called `grounds` until 2026-09-08, a second vocabulary for
+ * something `docs/contracts/agent-copy.md` already specifies — a refusal
+ * is `expected`, `produced` and `consequence`, each one line, because "a
+ * structural rule gets satisfied identically forever and produces twenty
+ * interchangeable paragraphs." `CriterionVerdicts` had been drawing the
+ * three correctly the whole time, one level down; this component invented
+ * the paragraph.
+ */
+
+/**
+ * The three carry rules a reader can check: `expected` and `produced`
+ * must be the same class of artifact, a suite state against a suite
+ * state; `expected` names the action and its result together, since it's
+ * the half a Drone gets on a retry and `consequence` never reaches it;
+ * and each must cite something that could not appear in another Job's
+ * summary — a field that will not fit on a line is a finding nobody has
+ * made yet.
  *
- * **The three carry rules a reader can check.** `expected` and `produced` must
- * be the same class of artifact, a suite state against a suite state.
- * `expected` names the action and its result together, because it is the half
- * a Drone is given on a retry and `consequence` never reaches it. And every
- * one of them must cite something that could not appear in another Job's
- * summary. A field that will not fit on a line is a finding nobody has made
- * yet.
+ * The machinery is in tooltips, not standing sections: stacking six
+ * labelled prose blocks to explain a split, a met judge's silence and
+ * the citations buried the two that matter. The explanation is on hover
+ * now, against the thing it explains.
+ */
+
+/**
+ * The quoted lines are text this record carries, not a pointer into a
+ * file: cleanup takes a Job's run log with it, so a verdict citing
+ * `test_suite.log:2007` would stop resolving the day the worktree is
+ * reclaimed. The refusal quotes what it read; the log is where you go to
+ * check it, not where the finding lives.
  *
- * **The machinery is in tooltips, not in standing sections.** Every part of a
- * refusal needed a sentence of explanation — what a split is, why a met judge
- * wrote nothing, what the citations point into — and stacking six labelled
- * prose blocks to carry them buried the two that matter. The explanation is on
- * hover now, against the thing it explains, so the block reads as a finding and
- * answers questions only when asked.
- *
- * **The quoted lines are text this record carries, not a pointer into a file.**
- * Cleanup takes a Job's run log with it, so a verdict that cited
- * `test_suite.log:2007` would stop resolving the day the worktree is reclaimed.
- * The refusal quotes what it read; the log is where you go to check it, not
- * where the finding lives.
- *
- * **The overlap is the component's reason to exist, and it is not the inputs.**
- * The inputs view says what Fleet *handed* the panel — identical for all three
- * judges, or it is not a panel. The overlap says what each judge *cited*, which
- * is a subset of the inputs and differs between them. That difference is the
- * whole mechanism: one veto out of three means either that a judge caught
- * something the others missed, or that the criterion is ambiguous and they read
- * it differently, and comparing the cited sets tells those apart with no extra
- * model call. It was labelled *What each judge read* and a reviewer took that
- * for the inputs — fairly, since "read" is what you do to something you were
- * given. It names the disagreement now.
- *
- * **The overlap and the reading are one block.** What differs and what that
+ * The overlap is the component's reason to exist, and it is not the
+ * inputs: the inputs view says what Fleet handed the panel, identical for
+ * all three judges; the overlap says what each judge cited, a subset that
+ * differs between them — which tells apart a judge catching something the
+ * others missed from an ambiguous criterion read differently, with no
+ * extra model call. It was labelled *What each judge read* and a reviewer
+ * took that for the inputs, fairly; it names the disagreement now.
+ */
+
+/**
+ * The overlap and the reading are one block: what differs and what that
  * means for the next act is one thought, and splitting it left a generic
  * *What this means* stranded under the block it concluded.
  *
- * **Silence is a state and it is stated.** A judge that met the criterion
- * produced no text, and an empty region under two refusals would read as a
- * judge whose answer failed to load.
+ * Silence is a state and it is stated: a judge that met the criterion
+ * produced no text, and an empty region under two refusals would read as
+ * a judge whose answer failed to load.
  */
 
 /**

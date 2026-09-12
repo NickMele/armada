@@ -1,29 +1,31 @@
 /**
- * The Job's pulse: the last thing anyone did on it, and what it holds on this
- * machine, with the full reading one press away.
+ * The Job's pulse: the last thing anyone did on it, and what it holds
+ * on this machine, with the full reading one press away.
  *
- * **The run is what a person opens a Job to read.** `JobResources` is a card
- * with a verdict, a look, a process table and a disk figure, and above the run
- * it answered a question nobody had asked yet. So the reading moved to a sheet
- * and this took its place: five lines that say whether anything is wrong, and a
- * control for when the answer is yes.
+ * The run is what a person opens a Job to read: `JobResources` is a
+ * card with a verdict, a look, a process table and a disk figure, and
+ * above the run it answered a question nobody had asked yet. So the
+ * reading moved to a sheet and this took its place: five lines that say
+ * whether anything is wrong, and a control for when the answer is yes.
  *
- * **It reads after the run, not before it.** It is context for the steps rather
+ * It reads after the run, not before it — context for the steps rather
  * than a preface to them.
+ */
+
+/**
+ * The top is the last thing anyone did, from any voice: Fleet, the
+ * Drone and a person all act on a Job, and what a reader wants is the
+ * latest of them, not the last lines of one. The whole log is a press
+ * away.
  *
- * **The top is the last thing anyone did, from any voice.** Fleet, the Drone
- * and a person all act on a Job, and what a reader wants from this block is
- * the latest of them, not the last lines of one. The whole log is a press away.
- *
- * **Absence still speaks, in less room.** A read that has not answered and a
- * Job that holds nothing are different things — `JobResources` is careful about
- * that and so is this. `figures` is `null` for the first and `note` says which;
- * the second is a reading, with `None` against the processes and the worktree
- * saying what became of it.
- *
- * **No `Look now` here, and no button.** Going and looking is an act on the
- * reading, and the reading is in the sheet. The control that opens it sits on
- * the region's title line, where the run keeps its elapsed figure.
+ * Absence still speaks, in less room: a read that has not answered and
+ * a Job that holds nothing are different things — `JobResources` is
+ * careful about that and so is this. `figures` is `null` for the first
+ * and `note` says which; the second is a reading, with `None` against
+ * the processes and the worktree saying what became of it.
+ * No `Look now` here, and no button: the control that opens the reading
+ * sits on the region's title line, where the run keeps its elapsed
+ * figure.
  */
 
 /** One line of what happened on this machine, as the caller formatted it. */

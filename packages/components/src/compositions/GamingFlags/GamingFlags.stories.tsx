@@ -265,20 +265,19 @@ export const TheBriefWithNowhereToOpen: Story = {
 };
 
 /**
- * **The whole of #197, in one render.** Two flags with long citations, in the
- * dialog the owner was looking at when he reported it.
- *
- * What changed, and each of the three is visible here:
+ * The whole of #197, in one render: two flags with long citations, in
+ * the dialog the owner was looking at when he reported it. What
+ * changed, all three visible here:
  *
  * - the body scrolls, so the explanation no longer runs off the window;
- * - the reason field and both controls are pinned below it, reachable at any
- *   window height — shorten the preview and they stay;
- * - the flags are drawn from their two fields instead of being assembled into
- *   "It flagged X in Y, Z in W.", and the citations are rendered rather than
- *   printed, so a path is mono and an expression is a block that wraps.
- *
- * The confirm control is disabled because the reason is blank, which is the
- * 422 Fleet would answer — the dialog refuses it here rather than on the press.
+ * - the reason field and both controls are pinned below it, reachable
+ *   at any window height — shorten the preview and they stay;
+ * - the flags are drawn from their two fields instead of being
+ *   assembled into "It flagged X in Y, Z in W.", and the citations
+ *   render rather than print, so a path is mono and an expression
+ *   wraps.
+ * The confirm control is disabled because the reason is blank, the 422
+ * Fleet would answer.
  */
 export const OverrulingTwoFlags: Story = {
   args: TwoFlagsReadInFull.args,

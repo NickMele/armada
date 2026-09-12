@@ -2,24 +2,18 @@ import type { MouseEvent, ReactNode } from "react";
 import { useCallback } from "react";
 
 /**
- * Board empty state — one line, and the thing to do about it.
+ * Board empty state — one line, and the thing to do about it. No centred
+ * glyph, no illustration — decoration hard rule six rules that out. What's
+ * left is a sentence, an optional command, and at most one control.
  *
- * **No centred glyph and no illustration.** The empty state points at the work
- * available and nothing else: this is an instrument panel, and empty-state art
- * is the decoration hard rule six rules out. What is left is a sentence, an
- * optional command, and at most one control.
+ * The two states differ because the situations do: Fleet up with no work
+ * is a null result, so the line sets back and the action is the only
+ * bright thing; Fleet not running is a fault Bridge cannot fix, so the
+ * line states it flatly and a terminal command follows.
  *
- * **The two states differ because the two situations do.** A Fleet that is up
- * with no work is a null result — nothing is wrong, so the line is set back and
- * the action beneath it is the only bright thing. A Fleet that is not running
- * is a fault Bridge cannot fix: the line states it flatly, and what follows is
- * the command a person runs in a terminal. Rendering the two alike would make a
- * connection Bridge is waiting on look like a list that happens to be empty.
- *
- * **The command is a value, not a button.** Bridge does not start Fleet at this
- * milestone, so a button offering to would be a control that cannot act. It is
- * machine-derived, so it is mono, and like every machine value it copies on
- * click and carries no `copy` glyph.
+ * The command is a value, not a button — Bridge cannot start Fleet at this
+ * milestone. It is mono, and like every machine value it copies on click
+ * and carries no `copy` glyph.
  */
 export type BoardEmptyStateProps = {
   /** The one line. The whole reading, before anything beneath it. */

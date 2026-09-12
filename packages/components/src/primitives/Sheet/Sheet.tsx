@@ -4,51 +4,60 @@ import { Button } from "../Button/Button";
 import { Kbd } from "../Kbd/Kbd";
 
 /**
- * A panel that enters from an edge. The contract gives it exactly one line —
- * "Sheet and dialog use the same surface treatment at `--radius-lg`" — and the
- * component sheet draws it nowhere, so everything below the surface treatment
- * is read off Dialog and reported as underspecified.
+ * A panel that enters from an edge. The contract gives it exactly one
+ * line — "Sheet and dialog use the same surface treatment at
+ * `--radius-lg`" — and the component sheet draws it nowhere, so
+ * everything below the surface treatment is read off Dialog and
+ * reported as underspecified.
  *
- * `x` is the shadcn dialog close, which the icon registry sanctions as chrome.
+ * `x` is the shadcn dialog close, which the icon registry sanctions as
+ * chrome.
+ */
+
+/**
+ * The trailing sheet, and why the parts are slots. Journey 4's frames
+ * `4i`–`4m` put two readings on this layer — a step's activity log and
+ * the Job's whole patch — and neither is a longer version of something
+ * a panel can hold: 1676 entries pushes the rest of the screen off the
+ * bottom and a patch in a 602px column is unreadable. The frames draw
+ * four parts this component had no slot for, so each is a slot rather
+ * than a second component: a subtitle under the title, controls in the
+ * header, full-width bands under it, and a body that carries its own
+ * padding.
+ */
+
+/**
+ * Two exits and no third: the labelled control and `Esc`. A click on
+ * the ground behind does not close a sheet — a 1676-entry read must not
+ * be dismissed by a stray click, so the scrim takes no press.
  *
- * # The trailing sheet, and why the parts are slots
- *
- * Journey 4's frames `4i`–`4m` put two readings on this layer — a step's
- * activity log and the Job's whole patch — and neither is a longer version of
- * something a panel can hold: 1676 entries pushes the rest of the screen off
- * the bottom and a patch in a 602px column is unreadable. The frames draw four
- * parts this component had no slot for, so each is a slot rather than a second
- * component: a subtitle under the title, controls in the header, full-width
- * bands under it, and a body that carries its own padding.
- *
- * **Two exits and no third.** The labelled control and `Esc`. A click on the
- * ground behind does not close a sheet — a 1676-entry read must not be
- * dismissed by a stray click, so the scrim takes no press.
- *
- * **`Esc` is caught in the capture phase and stopped there.** The registry row
- * reads *closes an overlay, or returns to the list from a detail route*, and
- * both clauses are bound on `window`: without the stop, one press would close
- * the sheet and leave the Job at the same time.
+ * `Esc` is caught in the capture phase and stopped there: the registry
+ * row reads *closes an overlay, or returns to the list from a detail
+ * route*, and both clauses are bound on `window` — without the stop,
+ * one press would close the sheet and leave the Job at the same time.
  */
 export type SheetSide = "right" | "left";
 
 /**
- * How much of the ground the sheet takes. The drawing measures both as a
- * fraction rather than a width, because what has to fit is the reading and not
- * a column: `wide` is `4i`'s 62% and `widest` is `4j`'s 76%, which is the file
- * rail plus a patch line that does not wrap.
+ * How much of the ground the sheet takes. The drawing measures both as
+ * a fraction rather than a width, because what has to fit is the
+ * reading and not a column: `wide` is `4i`'s 62% and `widest` is `4j`'s
+ * 76%, which is the file rail plus a patch line that does not wrap.
+ * `default` is the sheet the component sheet already drew, at
+ * `--w-sheet`.
+ */
+
+/**
+ * `reading` is the run sheet's own, at 88% — Journey 9, running a
+ * Manifest entry against a real Fleet. Nick's own note, watching it
+ * work: it opened far too narrow. The run sheet's list column is a
+ * fixed 240px and everything past it is the run's own output, which is
+ * most of the reading — 62% leaves the output the same narrow column
+ * `wide` gives a log with a file rail beside it, and this sheet has no
+ * rail to share that width with.
  *
- * `default` is the sheet the component sheet already drew, at `--w-sheet`.
- *
- * `reading` is the run sheet's own, at 88% — Journey 9, running a Manifest
- * entry against a real Fleet. Nick's own note, watching it work: it opened far
- * too narrow. The run sheet's list column is a fixed 240px and everything past
- * it is the run's own output, which is most of the reading — 62% leaves the
- * output the same narrow column `wide` gives a log with a file rail beside it,
- * and this sheet has no rail to share that width with.
- *
- * MISSING TOKEN, reported: `--w-sheet` is 480px and describes none of these.
- * A fraction of the ground is not a width and has no token to be.
+ * MISSING TOKEN, reported: `--w-sheet` is 480px and describes none of
+ * these. A fraction of the ground is not a width and has no token to be.
  */
 export type SheetSize = "default" | "wide" | "widest" | "reading";
 

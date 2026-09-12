@@ -3,34 +3,30 @@ import type { MouseEvent, ReactNode } from "react";
 import { Fragment, useCallback } from "react";
 
 /**
- * Criterion verdicts — what the Judge answered, beneath the step it judged.
+ * Criterion verdicts — what the Judge answered, beneath the step it
+ * judged. A refusal is not a failed Check and must not look like one: a
+ * Check says the work is broken, a refusal says the work runs and is not
+ * what was asked — which is why one ends a Job and the other escalates
+ * it. The surface carries the difference three ways: `circle-*` instead
+ * of `shield-*`, the criterion's own words instead of a command, and three
+ * labelled citation lines instead of an exit code.
  *
- * **A refusal is not a failed Check and must not look like one.** A Check says
- * the work is broken; a refusal says the work runs and is not what was asked
- * for. That difference is why one ends a Job and the other escalates it, and
- * the surface carries it three ways: the `circle-*` family instead of
- * `shield-*`, the criterion's own words instead of a command, and three
- * labelled lines of citation instead of an exit code.
+ * A verdict is a measured fact and renders as flatly as one: hue sits on
+ * the glyph and the verb, per criterion, and never sums onto the step or
+ * the Job, which is what lets a red cross sit under a running step beneath
+ * an escalated badge without the three contradicting each other.
+ */
+
+/**
+ * Refusals sort first and every row carries its number — the criterion's
+ * frozen position in `acceptance_criteria[]`, so "criterion 4" still
+ * resolves after the rows reorder. Sorted here rather than by the caller,
+ * since a caller that forgot would bury the row the screen was opened for.
  *
- * **A verdict is a measured fact and renders as flatly as one.** Hue is on the
- * glyph and the verb, per criterion, and never sums onto the step or the Job —
- * which is what lets a red cross sit under a running step beneath an escalated
- * badge without the three contradicting each other.
- *
- * **Refusals sort first and every row carries its number.** The number is the
- * criterion's frozen position in `acceptance_criteria[]`, so a citation to
- * "criterion 4" still resolves after the rows reorder. Sorted here rather than
- * by the caller: it is a rule about how this reads, and a caller that forgot it
- * would bury the row the screen was opened for.
- *
- * A `met` row is one line. Nothing more is owed — a step that passed its Judge
- * is an ordinary advanced step, and the design is spent on the refusal.
- *
- * **`briefPath` is on every row, including the met ones.** A Judge that refuses
- * something it should have passed gets argued with the same day; a Judge that
- * *passes* something it should have refused is the quiet failure, and that one
- * is only visible against what it was shown. It sits in the head line so a met
- * row is still one line.
+ * A `met` row is one line; the design is spent on the refusal instead.
+ * `briefPath` is on every row, including met ones: a Judge that wrongly
+ * refuses gets argued with the same day, but one that wrongly passes is
+ * the quiet failure, visible only against what it was shown.
  */
 export type CriterionVerdict = {
   /**

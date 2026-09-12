@@ -4,25 +4,28 @@ import { DroneTurns, type DroneTurn, type TurnStep } from "./DroneTurns";
 /**
  * One Drone's turns, read while it is still working.
  *
- * **Every row kind renders as the wire's own word.** `Saw` is an `ipc` enum
- * with no `crates/core-model/domain/enum-verbs.toml` rows, so there is no
- * sanctioned verb, glyph or hue for `called`, `said`, `refused`,
- * `unrecognised` or `unreadable` — the spelling renders and nothing is invented
- * here. That gap is the finding; the rows below are what it looks like.
+ * Every row kind renders as the wire's own word: `Saw` is an `ipc` enum
+ * with no `enum-verbs.toml` rows, so there is no sanctioned verb, glyph
+ * or hue for `called`, `said`, `refused`, `unrecognised` or `unreadable` —
+ * the spelling renders and nothing is invented here. That gap is the
+ * finding.
  *
- * **A call and its answer are one row**, joined on the call id by whoever
- * builds these. Fleet puts both on the wire because joining them there would
- * mean holding a call open until its result arrived.
+ * A call and its answer are one row, joined on the call id by whoever
+ * builds these — Fleet puts both on the wire since joining them there
+ * would mean holding a call open until its result arrived.
+ */
+
+/**
+ * A run of the Drone thinking is one line: measured on one real
+ * transcript, 106 of 149 rows were kinds the decoder could not place, so
+ * three lines in four described the plumbing rather than the work. They
+ * collapse, keep their count, and open.
  *
- * **A run of the Drone thinking is one line.** Measured on one real transcript:
- * 106 of 149 rows were kinds the decoder could not place, so three lines in
- * four described the plumbing rather than the work. They collapse, keep their
- * count, and open.
- *
- * **The step is a boundary, not a column.** One Drone works several steps, and
- * a name repeated down every row would be the same string forty times over. The
- * line is drawn where the step changed and every row beneath it is answered by
- * position — including a step that runs, stops and runs again.
+ * The step is a boundary, not a column: one Drone works several steps,
+ * and a name repeated down every row would be the same string forty
+ * times over. The line is drawn where the step changed, and every row
+ * beneath is answered by position — including a step that runs, stops
+ * and runs again.
  */
 const meta: Meta<typeof DroneTurns> = {
   title: "Compositions/Drone turns",
@@ -240,22 +243,18 @@ export const AFinishedRun: Story = {
 };
 
 /**
- * What the run cost, on the run's own last row.
+ * What the run cost, on the run's own last row. This is the only place a
+ * spend figure appears, by decision: `ended` is one Drone's total, so a
+ * retried Job has one per Drone, and a number on the Job would be a sum
+ * the wire declines to compute. It also arrives on the Observe socket
+ * alone, so an outcome region drawn with that socket closed could only
+ * carry a labelled blank.
  *
- * **This is the only place a spend figure appears**, and that is the decision
- * rather than an omission. `ended` is one Drone's total, so a Job that retried
- * has one of these per Drone — a number on the Job would be a sum the wire
- * declines to compute, and the board is not where a figure nobody is deciding
- * on belongs. It also arrives on the Observe socket alone, so an outcome region
- * drawn with that socket closed could only carry a labelled blank.
- *
- * **The figure hedges and the counts do not.** P4 of the design contract:
- * spend is estimated and is spelled `~$1.53`, a turn count is measured and
- * speaks flatly. Rendering the two alike would destroy trust in both.
- *
- * The two rows are the pair #161 was filed over — a run that burned a dollar
- * over forty-one turns and one that gave up in four, which read identically
- * until this row existed.
+ * The figure hedges and the counts do not — P4 of the design contract:
+ * spend is estimated, spelled `~$1.53`, and a turn count is measured and
+ * speaks flatly. The two rows are the pair #161 was filed over: a run
+ * that burned a dollar over forty-one turns and one that gave up in four,
+ * which read identically until this row existed.
  */
 export const WhatTheRunCost: Story = {
   args: {
@@ -292,21 +291,17 @@ const REPRO: TurnStep = { id: "repro", label: "Reproduce the bug" };
 const FIX: TurnStep = { id: "fix", label: "Fix the root cause" };
 
 /**
- * One Drone across three runs of two steps.
+ * One Drone across three runs of two steps. The boundary is drawn where
+ * the step changed and nowhere else — a label on every row would be the
+ * same string down forty consecutive lines, taking width from the body
+ * that carries what the Drone actually did.
  *
- * **The boundary is drawn where the step changed, and nowhere else.** A label on
- * every row would be the same string down forty consecutive lines, taking width
- * from the body that carries what the Drone actually did; the question a reader
- * asks is where one step stopped and the next began.
- *
- * **A step that runs twice draws two boundaries.** The transcript records the
- * step that was running when each row was written, not a range, so `fix` failing
- * its gate and being retried is two separate stretches — and a component that
- * marked only first appearances would fold the retry into the original.
- *
- * A boundary also breaks a run of quiet rows, because one collapsed line
- * spanning two steps would attribute the whole of it to whichever the reader
- * guessed at.
+ * A step that runs twice draws two boundaries: the transcript records the
+ * step running when each row was written, not a range, so `fix` failing
+ * its gate and being retried is two separate stretches, and marking only
+ * first appearances would fold the retry into the original. A boundary
+ * also breaks a run of quiet rows, since one collapsed line spanning two
+ * steps would attribute the whole of it to whichever the reader guessed.
  */
 export const TurnsUnderTheirSteps: Story = {
   args: {

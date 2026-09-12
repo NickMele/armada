@@ -10,26 +10,30 @@ import { ConsoleOutput, type ConsoleOutputProps } from "../ConsoleOutput/Console
 import { ChangedFiles, type ChangedFile } from "../ChangedFiles/ChangedFiles";
 
 /**
- * The run sheet — Journey 9's *Running one inside a Job*, on the layer that
- * can hold it.
+ * The run sheet — Journey 9's *Running one inside a Job*, on the layer
+ * that can hold it.
  *
- * **It rehearses the Manifest the Job froze, in that Job's own worktree.**
- * There is no throwaway copy and no "Where" control — a run from here goes in
- * the tree the gate will judge, which is the one the Job's work is already in.
+ * It rehearses the Manifest the Job froze, in that Job's own worktree:
+ * there is no throwaway copy and no "Where" control — a run from here
+ * goes in the tree the gate will judge, the one the Job's work is
+ * already in.
  *
- * **A run from this sheet writes no Evidence and moves nothing on the Job.**
- * The result line and the run list both stay unhued for that reason: a run
- * from here is a rehearsal, not a verdict, and the Job state machine is the
- * only thing status colour ever maps onto.
+ * A run from this sheet writes no Evidence and moves nothing on the
+ * Job: the result line and the run list both stay unhued for that
+ * reason — a run from here is a rehearsal, not a verdict, and the Job
+ * state machine is the only thing status colour ever maps onto.
+ */
+
+/**
+ * Data in, callbacks out: this component holds no protocol type and no
+ * fetch — a caller resolves the Manifest, starts the run and streams
+ * the output, this only draws what it is handed and reports what was
+ * pressed.
  *
- * **Data in, callbacks out.** This component holds no protocol type and no
- * fetch — a caller resolves the Manifest, starts the run and streams the
- * output; this only draws what it is handed and reports what was pressed.
- *
- * **Built on `Sheet`, `ConsoleOutput`, `CheckRuns`, `ChangedFiles`.** The rail
- * is new — Setup, Checks and Commands have no existing composition, since
- * nothing before this drew a Manifest as something a person runs rather than
- * something Fleet reads.
+ * Built on `Sheet`, `ConsoleOutput`, `CheckRuns`, `ChangedFiles`. The
+ * rail is new — Setup, Checks and Commands have no existing
+ * composition, since nothing before this drew a Manifest as something
+ * a person runs rather than something Fleet reads.
  */
 
 export type RunSheetGroupKind = "setup" | "checks" | "commands";

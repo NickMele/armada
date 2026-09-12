@@ -6,36 +6,41 @@ import { Button } from "../../primitives/Button/Button";
 import { FailureNotice } from "./FailureNotice";
 
 /**
- * The failures Bridge has to tell apart, drawn side by side so nobody has to
- * break the app to see one.
- *
- * They look identical today and demand different things: Fleet unreachable
- * needs to say *which* of the four answers the runtime file gave, a renderer
- * throw needs the component and the rest of the app still usable, and a Job
- * that will not load is one bad row rather than a broken board.
- *
- * **Every one of them carries a code, and only one of them was given one.**
- * The chip is what says *error rather than status* on a surface where an error
- * and a failed Job are the same red, so the code is required — and the four
- * that never crossed the wire mint their own in the `bridge.` namespace. A
- * story here is the visible half of that: `ARM-0412` came off a `WireError`,
- * and every `bridge.*` value below was minted by the process that raised it.
- *
- * **Every one of them also carries a class, and for a while every one of them
- * drew the same class.** `kind` was a literal inside the component, so a Fleet
- * that is up and working rendered in the same red as a Fleet that is gone —
- * and the two need opposite things done about them. The stories below are the
- * visible half of the repair: `Fleet is unreachable` and `Fleet speaks another
- * protocol` are degraded, and `The two classes, side by side` puts one against
- * a fault so the difference is something you look at rather than infer.
- *
- * Every story points at a log as a machine value — mono, copy on click, no
- * `copy` glyph, a toast confirms. A run id appears on the one failure that
- * really has one, labelled as what it is: Fleet mints it once per process, so
- * it names a session rather than a failure, and the rest show none rather than
- * a labelled blank. **A minted code and no run id is not an inconsistency** —
- * a code names a kind of failure Bridge knows, and a run id would have named a
- * Fleet process it never reached.
+ * The failures Bridge has to tell apart, drawn side by side so nobody has
+ * to break the app to see one. They look identical today and demand
+ * different things: Fleet unreachable needs to say which of the four
+ * answers the runtime file gave, a renderer throw needs the component and
+ * the rest of the app still usable, and a Job that will not load is one
+ * bad row rather than a broken board.
+ */
+
+/**
+ * Every one of them carries a code, and only one of them was given one:
+ * the chip is what says error rather than status on a surface where an
+ * error and a failed Job are the same red, so the code is required, and
+ * the four that never crossed the wire mint their own in the `bridge.`
+ * namespace. `ARM-0412` came off a `WireError`, and every `bridge.*`
+ * value below was minted by the process that raised it.
+ */
+
+/**
+ * Every one of them also carries a class, and for a while every one drew
+ * the same class: `kind` was a literal inside the component, so a Fleet
+ * that is up and working rendered in the same red as a Fleet that is
+ * gone. The stories below are the visible half of the repair: `Fleet is
+ * unreachable` and `Fleet speaks another protocol` are degraded, and
+ * `The two classes, side by side` puts one against a fault so the
+ * difference is something you look at rather than infer.
+ */
+
+/**
+ * Every story points at a log as a machine value — mono, copy on click,
+ * no `copy` glyph, a toast confirms. A run id appears on the one failure
+ * that really has one, labelled as what it is: Fleet mints it once per
+ * process, so it names a session rather than a failure, and the rest
+ * show none rather than a labelled blank. A minted code and no run id is
+ * not an inconsistency — a code names a kind of failure Bridge knows, a
+ * run id would have named a Fleet process it never reached.
  */
 const meta: Meta<typeof FailureNotice> = {
   title: "Compositions/Failure notice",
@@ -196,22 +201,19 @@ export const FleetIsUnreachable: Story = {
 };
 
 /**
- * **The renderer threw.** The failure this whole notice exists for: a React
+ * The renderer threw — the failure this whole notice exists for: a React
  * error with no boundary blanks the window, and a title bar over an empty
  * window says nothing about which of the three happened.
  *
- * The headline names the region in the app's voice; the component the stack
- * names is folded away with the message and the stack itself. Reloading is
- * safe to state flatly, because Bridge and Fleet have independent lifetimes.
- *
- * **No run id row, and no labelled blank where one would go.** This never
- * reached Fleet, so there is no run to name; the note says what identifies it
- * instead.
- *
- * **One code for every boundary, not one per region.** The region names what
- * stopped drawing rather than what went wrong, so it travels as a field where
- * it can be joined to the component — which is the objection to the version of
- * this that drew the region in the chip.
+ * The headline names the region in the app's voice; the component the
+ * stack names is folded away with the message and the stack itself.
+ * Reloading is safe to state flatly, since Bridge and Fleet have
+ * independent lifetimes. No run id row and no labelled blank where one
+ * would go: this never reached Fleet, so the note says what identifies it
+ * instead. One code for every boundary, not one per region: the region
+ * names what stopped drawing rather than what went wrong, so it travels
+ * as a field that can be joined to the component — the objection to the
+ * version that drew the region in the chip.
  */
 export const TheRendererThrew: Story = {
   args: {

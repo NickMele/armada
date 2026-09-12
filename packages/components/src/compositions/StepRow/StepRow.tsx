@@ -10,34 +10,39 @@ import {
 } from "../StepActivityMark/StepActivityMark";
 
 /**
- * One row of the run — a step, its mark, its elapsed figure, and the short
- * facts the chevron opens beneath it.
+ * One row of the run — a step, its mark, its elapsed figure, and the
+ * short facts the chevron opens beneath it.
  *
- * **Four columns, and the widths are the drawing's**: a chevron, a mark, the
- * name, and the duration. The name is the only one that flexes, so a long step
- * name clips and nothing else on the row moves — which is what stops the
- * duration column from flip-flopping between renders, the complaint the v1
- * failure log recorded nine times.
+ * Four columns, and the widths are the drawing's: a chevron, a mark,
+ * the name, and the duration. The name is the only one that flexes, so
+ * a long step name clips and nothing else on the row moves — what stops
+ * the duration column from flip-flopping between renders, the
+ * complaint the v1 failure log recorded nine times.
  *
- * **The chevron opens the facts; the row selects the step.** Two controls, on
- * purpose: the tree holds the short facts a step produced and the panel beside
- * it holds anything that is a sentence. A tree that opened into prose is the
- * panel, badly.
+ * The chevron opens the facts; the row selects the step. Two controls,
+ * on purpose: the tree holds the short facts a step produced and the
+ * panel beside it holds anything that is a sentence. A tree that opened
+ * into prose is the panel, badly.
+ */
+
+/**
+ * Waiting, stopped and failed must never look alike — three kinds of
+ * stopped: waiting on you is the workflow working, stopped is a Drone
+ * that tried and cannot get further, failed is over. Stopped and failed
+ * carry a row surface as well as a mark, since a glyph only holds while
+ * its row is selected and the row that ended the run has to stay
+ * findable while its refusals are read beside it. Waiting carries
+ * neither: a tint would make the workflow working look like it failed.
  *
- * **Waiting, stopped and failed must never look alike.** They are three kinds
- * of stopped — waiting on you is the workflow working, stopped is a Drone that
- * tried and cannot get further, failed is over. Stopped and failed carry a row
- * surface as well as a mark, because a glyph only holds while its row is
- * selected and the row that ended the run has to stay findable while its
- * refusals are read beside it. Waiting carries neither: a tint would make the
- * workflow working look like the workflow failing.
- *
- * **A fact is a value.** `FactChip` and `PathChip` are what a caller puts in
- * one, and this row draws the name beside them and nothing else — a row that
- * formatted its own values would be the second place a chip is drawn.
- *
- * **The duration slot is always drawn.** A step that has not run shows `—`
- * rather than a blank, because a blank in a column of figures reads as a
+ * A fact is a value: `FactChip` and `PathChip` are what a caller puts
+ * in one, and this row draws the name beside them and nothing else — a
+ * row that formatted its own values would be a second place a chip is
+ * drawn.
+ */
+
+/**
+ * The duration slot is always drawn: a step that has not run shows `—`
+ * rather than a blank, since a blank in a column of figures reads as a
  * value that failed to load.
  */
 

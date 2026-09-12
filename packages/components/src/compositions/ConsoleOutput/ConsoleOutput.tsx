@@ -1,35 +1,28 @@
 import type { ReactNode } from "react";
 
 /**
- * Console output — a Check's own stdout, read where the Check is.
+ * Console output — a Check's own stdout, read where the Check is. A
+ * Check's output is an artifact and this is its renderer: the run log
+ * already exists on disk, so Bridge reads and tails it, keeps nothing, and
+ * it is cleaned up when the Job is — no new store, no retention policy.
  *
- * **A Check's output is an artifact and this is its renderer.** The screen
- * showed that Checks passed or failed and gave no way to see what they wrote,
- * which is unauditable the moment a suite goes green for the wrong reason. The
- * run log already exists on disk: Bridge reads and tails it, keeps nothing,
- * and it is cleaned up when the Job is. No new store, no retention policy.
+ * Verbatim output is never glossed — a line is quoted exactly as written,
+ * which is why a suite's own identifier appears bare here and nowhere
+ * else. Anything the surface adds is a `note` beside the line or its own
+ * `marker` row, never words inserted into one.
+ */
+
+/**
+ * A fold is a run of lines standing as one: 2,180 lines is not a reading,
+ * the compile is 62 of them, and a fold carries its own line count so what
+ * is hidden is stated rather than implied.
  *
- * **Verbatim output is never glossed.** A line is quoted exactly as it was
- * written — which is why the identifier a suite prints appears bare here and
- * nowhere else on the screen. Anything the surface has to add is a `note`
- * beside the line or a `marker` row of its own, never words inserted into
- * one.
+ * The comparison is emitted, not reconstructed: a line present at the
+ * parent commit and absent here is drawn as a deletion because the check
+ * ran at both commits and said so, not because Bridge diffed two logs.
  *
- * **A fold is a run of lines standing as one.** 2,180 lines is not a reading;
- * the compile is 62 of them and nobody opened the Job for it. A fold carries
- * its own line count so what is hidden is stated rather than implied — and a
- * search that could not reach inside one would be the failure every code host
- * ships.
- *
- * **The comparison is emitted, not reconstructed.** A line present at the
- * parent commit and absent here is drawn as a deletion because the check ran
- * at both commits and said so; Bridge is not diffing two stored logs. That is
- * the whole value of exposing output, because the transcript alone still says
- * `315 passed`.
- *
- * **Following is a state of this component and pauses on a scroll.** A stream
- * that scrolls itself cannot be read — the same rule `ActivityLogSheet` holds
- * one layer out, spelled the same way.
+ * Following is a state of this component and pauses on scroll — the same
+ * rule `ActivityLogSheet` holds one layer out.
  */
 
 /** One row of the reading: a line of the file, or a fold standing for many. */

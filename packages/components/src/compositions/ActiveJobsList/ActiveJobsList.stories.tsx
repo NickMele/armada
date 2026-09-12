@@ -219,20 +219,17 @@ export const AtAWideWindow: StoryObj = {
 /**
  * The list Bridge draws: every row opens a Job, so the frame is a listbox and
  * the rows are options. Tab reaches a row, Enter and Space open it, and the
- * open one carries `aria-selected` as well as the accent fill.
+ * open one carries `aria-selected` and the accent fill.
  *
- * **This is also the roving state.** Tab lands on one row and one only; Up and
- * Down move the cursor, Home and End go to the ends, and the row the cursor
- * leaves gives up its tab stop. Read it with the keyboard rather than the eye —
- * the difference from a list of six tab stops is invisible in a screenshot.
+ * This is also the roving state: Tab lands on one row only, Up/Down move the
+ * cursor, Home/End go to the ends, and the row the cursor leaves gives up its
+ * tab stop — invisible in a screenshot, so read it with the keyboard. Clamped
+ * rather than wrapped: Down on the last row stays there, since a Board is
+ * scanned rather than cycled.
  *
- * Clamped rather than wrapped: Down on the last row stays there. A Board is
- * scanned, and a list that jumps back to the top loses the reader's place.
- *
- * **The running row does not pulse here and the approval row is where the
- * cursor is.** A cursor exists in this list, so the mark is its to carry;
- * arrow down twice and the pulse arrives with it. `Six states` is the same
- * rows with no cursor at all, and there the running row keeps it.
+ * The running row does not pulse here; the cursor carries the mark instead,
+ * and it starts on the approval row. `Six states` is the same rows with no
+ * cursor, where the running row keeps the pulse.
  */
 export const Selectable: Story = {
   args: {
@@ -284,25 +281,19 @@ export const Selectable: Story = {
 };
 
 /**
- * Two jobs running at once, which is a board this list could not hold until
- * Fleet's working slot became a roster of them.
+ * Two jobs running at once — a board this list could not hold until Fleet's
+ * working slot became a roster of them. Both rows read as running and one
+ * breathes: hue says which are running, the pulse says *still working*.
+ * Two marks at `--duration-pulse` is what that forbids — this list drew it
+ * as long as the pulse followed status instead of the cursor, invisibly,
+ * since a second running row was unreachable until now. The cursor starts
+ * on the first row so the pulse does too, and follows it onto the second
+ * running row when the arrow moves there.
  *
- * **Both rows read as running and one of them breathes.** Hue says which Jobs
- * are running, on both; the pulse says *still working*, and the Motion section
- * asks that of the row being read and no other. Two marks at
- * `--duration-pulse` is what its first sentence forbids, and it is what this
- * list drew for as long as the pulse followed the status — invisibly, because
- * a second running row was unreachable.
- *
- * The cursor starts on the first row, so the pulse starts there. Arrow down
- * onto the second running row and the mark moves with it: one screen, one
- * animated mark, wherever the eye is.
- *
- * **Nothing here says two is the ceiling.** The bound is
- * `settings.concurrency-cap`, resolved in Fleet's composition root, and no
- * route or event carries it — so a list cannot say "2 of 2" without inventing
- * the number. A Job held back by the cap says so on its own row instead, which
- * is the `waiting on resources` badge above.
+ * Nothing here says two is the ceiling: the bound is
+ * `settings.concurrency-cap`, resolved in Fleet's composition root and
+ * carried by no route or event — a Job held back by it says so on its own
+ * row, the `waiting on resources` badge above.
  */
 export const TwoRunning: Story = {
   args: {

@@ -8,44 +8,51 @@ import { ErrorCode } from "../../errors/ErrorCode/ErrorCode";
 import { JobLogReference } from "../JobLogReference/JobLogReference";
 
 /**
- * Failure notice — what broke, what to do, and the values that make a report
- * answerable.
- *
- * **One shape, never one message.** Three failures rendered through one shell
- * is the same discipline as six Job states rendered through one row shape; a
- * generic error screen is three failures given one *sentence*, which is the
- * thing this exists to stop. The caller supplies the sentence, the details and
- * the actions, and every one of the three differs in all three.
- *
- * **This takes the error treatment, in whichever of its two classes the
- * failure is.** It predated the treatment, and for a while drew a fault in the
- * escalation hue on a 12% tint inside a box, carrying no code — four
- * disagreements with a treatment whose whole argument is that an error and a
- * failed Job are both red and must never be mistaken for each other. All four
- * are closed: one red, a leading edge and never a box, no tint on a data
- * surface, and the code below. See #228.
- *
- * **The fifth disagreement was that the class was a literal.** `kind="fault"`
- * was passed to the chip from inside this component, so every failure Bridge
- * built drew red no matter what it was a claim about — and the contract's
- * separation of a fault from a degraded condition existed nowhere a person
- * could see it. `kind` is a required prop for the same reason `code` is: the
- * caller knows whether Fleet is alive and this does not, and a default would
- * have restored the literal under another name. See #344.
- *
- * **The code is required, and a boundary fallback has one.** The treatment
- * says the code is always shown, and the reason it can say *always* is that
- * the code is one of the two channels separating an error from a failed Job —
- * an optional prop here would have made the separation optional. Only one of
- * Bridge's five failures crosses the wire, so the other four mint their own in
- * the `bridge.` namespace; `codes.ts` beside `ErrorCode` carries why, and
- * `failures.ts` in `@armada/shell` carries the declarations. This drew the
- * **region** in the chip's place for a while, which kept the fill and lost the
- * meaning: a region names what stopped drawing, not what went wrong.
- *
- * **No glyph.** `triangle-alert` is reserved to Doctor and `octagon-alert` to
- * `stalled`, and the registry carries no mark for a Bridge failure. The code
- * and the sentence do the work rather than a glyph that means something else.
+ * Failure notice — what broke, what to do, and the values that make a
+ * report answerable. One shape, never one message: three failures
+ * rendered through one shell is the same discipline as six Job states
+ * through one row shape, and the caller supplies the sentence, the
+ * details and the actions — every one of the three differs in all three.
+ */
+
+/**
+ * This takes the error treatment, in whichever of its two classes the
+ * failure is. It predated the treatment, and for a while drew a fault in
+ * the escalation hue on a 12% tint inside a box, carrying no code — four
+ * disagreements with a treatment whose whole argument is that an error
+ * and a failed Job are both red and must never be mistaken for each
+ * other. All four are closed: one red, a leading edge and never a box,
+ * no tint on a data surface, and the code below. See #228.
+ */
+
+/**
+ * The fifth disagreement was that the class was a literal: `kind="fault"`
+ * was passed to the chip from inside this component, so every failure
+ * Bridge built drew red no matter what it was a claim about — and the
+ * contract's separation of a fault from a degraded condition existed
+ * nowhere a person could see it. `kind` is a required prop for the same
+ * reason `code` is: the caller knows whether Fleet is alive and this does
+ * not, and a default would have restored the literal under another name.
+ * See #344.
+ */
+
+/**
+ * The code is required, and a boundary fallback has one: the treatment
+ * says the code is always shown, because it is one of the two channels
+ * separating an error from a failed Job — optional here would make the
+ * separation optional. Only one of Bridge's five failures crosses the
+ * wire; the other four mint their own in the `bridge.` namespace —
+ * `codes.ts` beside `ErrorCode` carries why, `failures.ts` in
+ * `@armada/shell` carries the declarations. This drew the region in the
+ * chip's place for a while, which kept the fill and lost the meaning: a
+ * region names what stopped drawing, not what went wrong.
+ */
+
+/**
+ * No glyph: `triangle-alert` is reserved to Doctor and `octagon-alert` to
+ * `stalled`, and the registry carries no mark for a Bridge failure. The
+ * code and the sentence do the work rather than a glyph that means
+ * something else.
  */
 export type FailureDetail = {
   /**

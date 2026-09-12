@@ -4,26 +4,29 @@ import { expect, fn } from "storybook/test";
 import { ReviewComments } from "./ReviewComments";
 
 /**
- * Somebody reviewed the pull request. This is where their comments reach a
- * drone, and where a person decides which of them should.
+ * Somebody reviewed the pull request. This is where their comments
+ * reach a drone, and where a person decides which of them should.
  *
- * Before this, the loop broke here: a reviewer left three comments, Armada did
- * nothing with them, and the person had to read them, decide which mattered and
- * then say all of it again somewhere Armada could hear — which is the retyping
- * the system exists to remove.
+ * Before this, the loop broke here: a reviewer left three comments,
+ * Armada did nothing with them, and the person had to read them, decide
+ * which mattered and then say all of it again somewhere Armada could
+ * hear — which is the retyping the system exists to remove.
+ */
+
+/**
+ * A person chooses, and that is the whole reason this is a surface: not
+ * every comment is a change request, some are questions, some are
+ * agreement, some are about something else — a drone handed all of them
+ * tries to satisfy all of them.
  *
- * **A person chooses, and that is the whole reason this is a surface.** Not
- * every comment is a change request; some are questions, some are agreement,
- * some are about something else. A drone handed all of them tries to satisfy
- * all of them.
+ * Every word in a comment was written outside this machine: it is drawn
+ * as a text node and nothing else — no markdown, no clickable link, no
+ * attribute. The only value that goes back is the handle the forge
+ * gave it.
  *
- * **Every word in a comment was written outside this machine.** It is drawn as
- * a text node and as nothing else — no markdown, no clickable link, no
- * attribute. The only value that goes back is the handle the forge gave it.
- *
- * **No glyph.** `packages/icons/icons.toml` has no mark for a review comment
- * and nothing there means one, so this draws none rather than borrowing a
- * silhouette that means something else.
+ * No glyph: `packages/icons/icons.toml` has no mark for a review
+ * comment and nothing there means one, so this draws none rather than
+ * borrowing a silhouette that means something else.
  */
 const meta: Meta<typeof ReviewComments> = {
   title: "Compositions/Review comments",

@@ -1,36 +1,41 @@
 import type { ReactNode } from "react";
 
 /**
- * Judge citations — every pointer the panel made, as selectors.
+ * Judge citations — every pointer the panel made, as selectors. A
+ * judgment is mostly a set of pointers into other artifacts: the
+ * verdict grid says which way each judge went, this says what each
+ * looked at to get there. Pressing one puts that artifact in the
+ * viewer, scrolled to the cited region — the densest navigation surface
+ * on the screen.
  *
- * **A judgment is mostly a set of pointers into other artifacts.** The verdict
- * grid says which way each judge went; this says what each of them looked at
- * to get there. Pressing one puts that artifact in the viewer, scrolled to the
- * cited region — which makes this the densest navigation surface on the
- * screen.
+ * A judge that met a criterion is here too, wherever there is anything
+ * to put in a row: that separates *a judge caught something* from *the
+ * criterion is ambiguous*, and without it a lone dissent is unreadable
+ * — a list showing only refusals would throw away the half of the
+ * comparison that does the work.
+ */
+
+/**
+ * What the wire cannot fill that in from, today: `Judged.cited` places
+ * every quotation a member made, and a `met` answer is one line under
+ * the Judge's answer format — no prose, so nothing to quote and nothing
+ * to place. So a screen fed by Fleet draws refusals here, and a judge
+ * that met a criterion appears only where something else recorded what
+ * it read; `JudgeInputs` is the reading that carries across both
+ * verdicts.
  *
- * **A judge that met a criterion is here too**, wherever there is anything to
- * put in a row. That is what separates *a judge caught something* from *the
- * criterion is ambiguous*, and without it a lone dissent is unreadable — a
- * list that showed only refusals would throw away the half of the comparison
- * that does the work.
- *
- * **What the wire cannot fill that in from, today.** `Judged.cited` places
- * every quotation a member made, and a `met` answer is one line under the
- * Judge's answer format — no prose, so nothing to quote and nothing to place.
- * So a screen fed by Fleet draws refusals here and a judge that met a criterion
- * appears only where something else recorded what it read. `JudgeInputs` is the
- * reading that does carry across both verdicts.
- *
- * **Rows are grouped by nothing and sorted by nothing.** They are in the order
- * the panel recorded them, per criterion, per judge — a citation list that
- * reordered itself would be a second index over a record whose own order is
- * evidence of how the panel ran.
- *
- * **The wire serves this.** `Judged.cited` arrived in protocol 8.3: one entry
- * per quotation, carrying the labelled part of the brief that holds it and the
- * lines it is on, which is what `where` renders. `screens`' `cited.ts` is what
- * builds the rows. This block said fixtures only until 2026-09-09.
+ * Rows are grouped by nothing and sorted by nothing: they are in the
+ * order the panel recorded them, per criterion, per judge — a citation
+ * list that reordered itself would be a second index over a record
+ * whose own order is evidence of how the panel ran.
+ */
+
+/**
+ * The wire serves this: `Judged.cited` arrived in protocol 8.3, one
+ * entry per quotation, carrying the labelled part of the brief that
+ * holds it and the lines it is on, which is what `where` renders.
+ * `screens`' `cited.ts` is what builds the rows. This block said
+ * fixtures only until 2026-09-09.
  */
 
 export type JudgeCitation = {

@@ -2,27 +2,30 @@ import { useState } from "react";
 import { Kbd } from "../Kbd/Kbd";
 
 /**
- * Separate queues, each carrying how much is waiting. A separate component and
- * a separate row in the registry, because the count changes what the tab
- * claims: it answers how much is waiting before a tab is chosen.
+ * Separate queues, each carrying how much is waiting. A separate
+ * component and a separate row in the registry, since the count
+ * changes what the tab claims: it answers how much is waiting before a
+ * tab is chosen.
  *
- * A tab carries a count only if the number is a backlog. A stream always has
- * items and none of them want anything, so a number on it would read as work
- * outstanding. Counts belong to queues, not to feeds.
+ * A tab carries a count only if the number is a backlog: a stream
+ * always has items and none of them want anything, so a number on it
+ * would read as work outstanding. Counts belong to queues, not feeds.
  *
- * Zero renders as no count, never as `0`. An empty queue is the resting state
- * of a healthy fleet, and a row of zeros trains the eye to skip the number —
- * which is the one thing it must not do when the number changes.
+ * Zero renders as no count, never as `0`: an empty queue is the resting
+ * state of a healthy fleet, and a row of zeros trains the eye to skip
+ * the number — the one thing it must not do when the number changes.
+ */
+
+/**
+ * The count is a trailing mono value in `--fg-subtle`, never a filled
+ * pill: a pill is a badge and a badge carries status.
  *
- * The count is a trailing mono value in `--fg-subtle`, never a filled pill: a
- * pill is a badge and a badge carries status.
- *
- * **A tab may carry the key that selects it, and then the key is bordered and
- * the count is not.** Both are numerals in the same row on the Job Board —
- * `1` selects the tab and `15` is how many jobs are behind it — so the `kbd`
- * chip is the whole of what separates the key you press from the number, and
- * the two sit on opposite sides of the label besides. A tab with no shortcut
- * renders none; nothing here invents one from the tab's position.
+ * A tab may carry the key that selects it, and then the key is bordered
+ * and the count is not: both are numerals in the same row on the Job
+ * Board — `1` selects the tab and `15` is how many jobs are behind it —
+ * so the `kbd` chip is the whole of what separates the key you press
+ * from the number, and the two sit on opposite sides of the label
+ * besides. A tab with no shortcut renders none.
  */
 export type TabsWithCountsItem = {
   id: string;

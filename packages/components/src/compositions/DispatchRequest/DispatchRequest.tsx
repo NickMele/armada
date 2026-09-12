@@ -18,79 +18,69 @@ import type { StagedAttachment } from "@armada/protocol";
  * Dispatch a job by describing the work. One field, one press, and the Job
  * proposer decides the rest.
  *
- * **Describing the work is the path; the form is the override.** A person types
- * what they want done, or pastes a link, and dispatches. They pick no workflow
- * and write no title — `../../../../../docs/concepts/job-proposer.md` says
- * both, and says why: doing it by hand means knowing the workflow catalogue
- * before you can ask for anything. Hand entry is one control away and is the
- * exception.
+ * Describing the work is the path; the form behind `Enter by hand` is the
+ * override. `docs/concepts/job-proposer.md` says why: doing it by hand
+ * means knowing the workflow catalogue before you can ask for anything.
+ */
+
+/**
+ * The wait says what the call is doing, and offers a way out. Fleet
+ * publishes how far the call has reached and what may stop it, so the wait
+ * draws that instead of a dead button with a present-participle label.
  *
- * # The wait says what the call is doing, and offers a way out of it
+ * It still does not fill the proposal in progressively, and must not look
+ * as though it does: Jobs arrive whole, once, at the end. What moves is the
+ * call's own progress — reached the vendor, thinking, answering — a fact
+ * about the wait, not a preview of the answer. A skeleton of Job rows would
+ * claim rows are arriving one at a time, which is still not happening.
+ */
+
+/**
+ * A wait needs more than an elapsed count: "ninety seconds and thinking" and
+ * "ninety seconds and never reached the vendor" take opposite decisions and
+ * look identical as a bare number. So the reach is drawn, and past
+ * `slowAfterMs` the surface says so and offers the stop instead of waiting
+ * for somebody to wonder.
  *
- * This read, until the proposal wait was made watchable: "there is no stream
- * behind it, so the wait here is Bridge's own idiom for an act in flight — the
- * control takes a present-participle label and goes dead". There is a stream
- * now. Fleet publishes what the call has reached and what it may be stopped by,
- * so the wait draws that instead of a dead button.
+ * Stopping kills the call — it is not this window giving up. A wait
+ * abandoned instead leaves the proposer running inside Fleet and spending,
+ * with nobody left to read what it decides.
+ */
+
+/**
+ * Two refusals, drawn as two different things. No workflow resolved is
+ * Armada working: Fleet refused and returned the request unchanged, no red
+ * and no code, and the two ways on are editing the request or entering the
+ * job by hand.
  *
- * **It still does not fill the proposal in progressively, and must not look as
- * though it does.** The Jobs arrive whole, once, at the end. What moves here is
- * the call's own progress — reached the vendor, thinking, answering — which is
- * a fact about the wait rather than a preview of the answer. A skeleton of Job
- * rows would claim rows are arriving one at a time, which is still not
- * happening.
- *
- * # Why a wait needs more than an elapsed count
- *
- * A person watching one is deciding whether to keep waiting, and that turns
- * entirely on whether the call is getting anywhere. "Ninety seconds and
- * thinking" and "ninety seconds and never reached the vendor" take opposite
- * decisions and, under an elapsed count alone, are the same pixels. So the
- * reach is drawn, and after `slowAfterMs` the surface says so and offers the
- * stop rather than waiting for somebody to wonder.
- *
- * **Stopping kills the call.** It is not this window giving up: a wait
- * abandoned leaves the proposer running inside Fleet and spending, with nobody
- * left to read what it decides.
- *
- * # Two refusals, drawn as two different things
- *
- * **No workflow resolved is Armada working.** Fleet answered, refused, and
- * returned the request unchanged — no Job was created. It takes no red and no
- * code: it is the surface saying what it will not send, and the two ways on are
- * to edit the request or to enter the job by hand.
- *
- * **The call not being made at all is Armada failing.** That is a fault, it
- * carries the code every error carries, and it renders in the error treatment
- * inline — the placement blast radius picks, since a proposer that could not be
- * called stops this surface and nothing else. What to do about it is Fleet's
- * own sentence, because Fleet is what knows whether a budget ran out.
- *
- * # Nothing here decides scope, and nothing here may look like it did
- *
- * A Job reaches this gate with `write_targets` null — not empty. Null is scope
- * not yet determined; empty would claim the Job writes nothing. So no path, no
- * file count and no diff estimate appears on a proposed job, and the line under
- * the list says out loud what the gate approves: the workflow, the name and the
+ * The call not being made at all is Armada failing: a fault, carrying the
+ * code every error carries, rendered inline since a proposer that could not
+ * be called stops this surface and nothing else. What to do about it is
+ * Fleet's own sentence, since Fleet is what knows whether a budget ran out.
+ */
+
+/**
+ * Nothing here decides scope, and nothing here may look like it did. A Job
+ * reaches this gate with `write_targets` null, not empty — null is scope
+ * not yet determined, empty would claim the Job writes nothing. So no path,
+ * file count or diff estimate appears on a proposed job; the line under the
+ * list says what the gate approves instead: the workflow, the name and the
  * split.
+ */
+
+/**
+ * Approving happens here, on the job you just read. Every Job that comes
+ * back already exists, at `awaiting_approval`. The head of the proposal
+ * carries its own approval, since everything the gate approves — workflow,
+ * name, split — is already on this screen. Settled 2026-09-08, against the
+ * earlier reading that approval is always a second act from detail.
  *
- * # Approving happens here, on the job you just read
- *
- * Every Job that comes back already exists, at `awaiting_approval`. **The head
- * of the proposal carries its own approval**, because everything the gate
- * approves — the workflow, the name and the split — is on this screen already,
- * and sending somebody to detail to say yes to what they are looking at is a
- * second surface for no second fact. Settled 2026-09-08, against the earlier
- * reading that approval is always a second act from detail.
- *
- * **It is one approval, and only the head's.** Fleet's rule is strictly one by
- * one, and a chained Job is not at its gate until the one before it completes,
- * so every row under the first carries Review alone and nothing here approves
- * several at once. The Job Board is unchanged: a row somebody is browsing past
- * still only signposts, because there the proposal is not on screen.
- *
- * Review stays beside the approval, for the case where the title is not enough
- * and the Job itself is what somebody wants to read.
+ * It is one approval, and only the head's: Fleet's rule is strictly one by
+ * one, and a chained Job is not at its gate until the one before it
+ * completes, so every row under the first carries Review alone. The Job
+ * Board is unchanged — a row somebody is browsing past still only
+ * signposts, since the proposal is not on screen there. Review stays
+ * beside the approval, for when the title is not enough.
  */
 export type DispatchRequestProps = {
   /**

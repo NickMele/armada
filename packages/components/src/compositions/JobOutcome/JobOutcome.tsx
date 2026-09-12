@@ -5,27 +5,31 @@ import { useCallback } from "react";
 /**
  * Job outcome — what a finished Job produced, one row per part of it.
  *
- * **The region a finished Job is opened for.** A Job that stopped is read once,
- * to decide whether to take the work, and the parts of "produced" are the whole
- * of that decision: the branch, the commit, the pull request, the files that
- * changed, the evidence that was submitted.
+ * The region a finished Job is opened for: a Job that stopped is read
+ * once, to decide whether to take the work, and the parts of "produced"
+ * are the whole of that decision — the branch, the commit, the pull
+ * request, the files that changed, the evidence that was submitted.
  *
- * **A part nothing serves keeps its row and says so.** Four of the five are not
- * on the wire yet, and dropping them would draw a finished-looking outcome that
- * is a fifth of one. Each names the operation that would have to serve it, so
- * the hole is a finding rather than a silence — the same reason the screens
- * render a named absence instead of closing up.
+ * A part nothing serves keeps its row and says so: four of the five are
+ * not on the wire yet, and dropping them would draw a finished-looking
+ * outcome that is a fifth of one. Each names the operation that would
+ * have to serve it, so the hole is a finding rather than a silence —
+ * the same reason the screens render a named absence instead of closing up.
+ */
+
+/**
+ * Not `Absent` per row: that treatment is a dashed
+ * `--status-completed-failed` frame and is right for a whole region
+ * with nothing in it — four of them inside one region would make a Job
+ * that completed read as a Job that broke. The row stays, the value is
+ * replaced by the sentence, and the weight drops to `--fg-subtle` —
+ * which says "not here" without saying "wrong".
  *
- * **Not `Absent` per row.** That treatment is a dashed `--status-completed-failed`
- * frame and it is right for a whole region with nothing in it; four of them
- * inside one region would make a Job that completed read as a Job that broke.
- * The row stays, the value is replaced by the sentence, and the weight drops to
- * `--fg-subtle` — which is what says "not here" without saying "wrong".
- *
- * **Marks run at 12px**, like every other row mark, and the registry sizes
- * `git-branch`, `git-commit-horizontal` and `git-pull-request` at 12 as well. A
- * part the registry has no glyph for keeps its mark column and renders it
- * empty, rather than borrowing a silhouette that means something else.
+ * Marks run at 12px, like every other row mark, and the registry sizes
+ * `git-branch`, `git-commit-horizontal` and `git-pull-request` at 12 as
+ * well. A part the registry has no glyph for keeps its mark column and
+ * renders it empty, rather than borrowing a silhouette that means
+ * something else.
  */
 export type JobOutcomePart = {
   /** What this part is: `Branch`, `Commit`, `Pull request`. Sentence case. */

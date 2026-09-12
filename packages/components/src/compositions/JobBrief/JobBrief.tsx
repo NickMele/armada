@@ -3,26 +3,30 @@ import { Skeleton } from "../../primitives/Skeleton/Skeleton";
 import { Clamped } from "../Clamped/Clamped";
 
 /**
- * Job brief — what the Job was told, what done means for it, and whatever is
- * still waiting to be told to it.
+ * Job brief — what the Job was told, what done means for it, and
+ * whatever is still waiting to be told to it.
  *
- * **Both halves sit beside where the work is**, rather than in a region of
- * their own: a person chasing a stopped Job asks what it was asked to do in
- * the same breath as where its files are, and two regions would separate the
- * question from the answer.
+ * Both halves sit beside where the work is, rather than in a region of
+ * their own: a person chasing a stopped Job asks what it was asked to
+ * do in the same breath as where its files are, and two regions would
+ * separate the question from the answer.
  *
- * **Every criterion carries its number, and the order is the frozen order.**
- * The contract sorts refusals first; nothing serves a verdict per criterion
- * yet, so there is nothing to sort by and the `acceptance_criteria[]` order is
- * what a citation to "criterion 4" resolves against.
+ * Every criterion carries its number, and the order is the frozen
+ * order: the contract sorts refusals first, nothing serves a verdict
+ * per criterion yet, so there is nothing to sort by and the
+ * `acceptance_criteria[]` order is what a citation to "criterion 4"
+ * resolves against.
+ */
+
+/**
+ * No verdict hue, because no verdict is served: a criterion here is
+ * what was asked, not what was ruled — the day a ruling arrives it is
+ * per criterion and never sums onto the step or the Job.
  *
- * **No verdict hue, because no verdict is served.** A criterion here is what
- * was asked, not what was ruled — the day a ruling arrives it is per criterion
- * and never sums onto the step or the Job.
- *
- * The source is the verification source — the closed vocabulary of three. It
- * renders as the wire spells it: no registry carries a verb for
- * `criterion_source`, and one written here would be a second vocabulary.
+ * The source is the verification source — the closed vocabulary of
+ * three. It renders as the wire spells it: no registry carries a verb
+ * for `criterion_source`, and one written here would be a second
+ * vocabulary.
  */
 export type JobBriefCriterion = {
   /**
@@ -44,20 +48,19 @@ export type JobBriefProps = {
   /** Why there are none, where there are none. */
   factsAbsent?: ReactNode;
   /**
-   * An instruction written for this Job that nothing has taken yet — a person's
-   * reply at a gate, held until the next drone opens with it.
+   * An instruction written for this Job that nothing has taken yet — a
+   * person's reply at a gate, held until the next drone opens with it.
    *
-   * **There is no `waitingAbsent`, and that is the point.** Every other half of
-   * this block names its own absence, because a Job with no criteria and a Job
-   * whose criteria failed to load look alike. Here absent is the ordinary
-   * state of nearly every Job ever drawn, so a sentence explaining it would put
-   * a permanent paragraph on every screen to report that nothing is happening.
-   * The block is here while there is something to say and gone the rest of the
-   * time.
+   * There is no `waitingAbsent`, and that is the point: every other half
+   * of this block names its own absence, since a Job with no criteria and
+   * one whose criteria failed to load look alike. Here absent is the
+   * ordinary state of nearly every Job ever drawn, so explaining it would
+   * put a permanent paragraph on every screen. The block is here while
+   * there is something to say and gone the rest of the time.
    *
-   * **It leads, and the two standing halves follow.** It is the newest thing
-   * about the Job and the only one that will not be here later, so it reads
-   * before the brief it is about to become part of.
+   * It leads, and the two standing halves follow: it is the newest thing
+   * about the Job and the only one that will not be here later, so it
+   * reads before the brief it is about to become part of.
    */
   waiting?: ReactNode;
   /**

@@ -1,44 +1,40 @@
 /**
  * The issue body an error becomes, and the review that composes it.
+ * Copying stays on the machine; filing leaves it. `copyDebugInfo` puts
+ * one artifact on the clipboard for a person to read or send to somebody
+ * they trust; this composes something different — the thing pasted into
+ * a tracker, public and permanent — so it differs in what stands between
+ * the press and the artifact: nothing, and a review.
+ */
+
+/**
+ * Nothing here sends: there is no transport, and this does not pretend
+ * to have one. Fleet holds no credential for an issue tracker and
+ * nothing on the wire names the repository's remote — the same wall
+ * `renderer/src/Report.tsx` met filing a report about a Job, answered
+ * the same way: produce the body, put it on the clipboard, say plainly
+ * that Armada opened nothing.
  *
- * **Copying stays on the machine. Filing leaves it.** `copyDebugInfo` puts one
- * artifact on the clipboard for a person to read, paste into a terminal or
- * send to somebody they already trust. This composes something different: the
- * thing a person pastes into a tracker, where it is public and permanent. The
- * two acts differ in where they end, so they differ in what stands between the
- * press and the artifact — nothing, and a review.
+ * That is why there is no Send, and why the drawing's Reported strip is
+ * not built: a strip carrying the issue link, time and count needs an
+ * issue number, and no issue number ever comes back to Bridge — same for
+ * offering an already-filed issue to a code's second occurrence. Neither
+ * is written here as a blank waiting to be filled in.
+ */
+
+/**
+ * The body carries what was attached and what was not, by name: the
+ * drawing wanted a count on a strip, since somebody coming back needs to
+ * know whether the transcript went and the issue body is the only other
+ * place that answer lives — with no strip it is the only place, and a
+ * list of names answers what a count only gestures at.
  *
- * # Nothing here sends
- *
- * **There is no transport, and this does not pretend to have one.** Fleet holds
- * no credential for an issue tracker and nothing on the wire names the
- * repository's remote — the same wall `renderer/src/Report.tsx` met when it
- * filed a report about a Job, and it answered it the same way: produce the body,
- * put it on the clipboard, and say plainly that Armada opened nothing.
- *
- * That is why there is no **Send**, and why the drawing's Reported strip is not
- * built. A strip carrying the issue link, the time and the count needs an issue
- * number, and no issue number ever comes back to Bridge. So does offering an
- * already-filed issue to the second occurrence of a code. Neither is written
- * here as a blank waiting to be filled in.
- *
- * # What the body says about itself
- *
- * **The body carries what was attached and what was not, by name.** The drawing
- * wanted the count on a strip, on the grounds that somebody coming back needs
- * to know whether the transcript went and the issue body is the only other
- * place that answer lives. With no strip it is the only place, and a list of
- * names answers the question a count only gestures at.
- *
- * # Fences, here and not in the payload
- *
- * `payload.ts` refuses fences because its artifact has to survive an issue
- * body, a chat message and a terminal scrollback, and a fence helps in one of
- * the three. This artifact has one destination, and it is the one where a
- * fence is the difference between aligned columns and a reflowed paragraph.
- * So this fences, and sizes the fence to the content rather than assuming
- * three backticks: an error's `message` is prose a Rust `Display` impl wrote,
- * and one containing a fence would otherwise break the block silently.
+ * `payload.ts` refuses fences because its artifact has to survive an
+ * issue body, a chat message and a terminal scrollback, and a fence
+ * helps in only one. This artifact has one destination, where a fence is
+ * the difference between aligned columns and a reflowed paragraph — so
+ * this fences, sized to the content rather than assuming three
+ * backticks, since an error's `message` is prose that could contain one.
  */
 
 import { debugInfo, SAFETY } from "../ErrorNotice/payload";
@@ -222,20 +218,18 @@ export function envelopeOf(payload: DebugPayload): Attachment {
 }
 
 /**
- * What a reader might expect in an Armada issue and will not find.
+ * What a reader might expect in an Armada issue and will not find. The
+ * transcript is the only one said on screen, and the only one of the
+ * drawing's five whose absence is a decision rather than a gap:
+ * `[observe-transcript-sharing]` on `docs/concepts/observe.md` asks
+ * whether an observed transcript may leave the machine at all, names
+ * attaching one to a bug report as removing today's bound, and has no
+ * answer — a row here default-on would answer it by shipping.
  *
- * **The transcript, and it is the only one said on screen.** It is the item
- * somebody looks for, and it is the only one of the drawing's five whose
- * absence is a decision rather than a gap: `[observe-transcript-sharing]` on
- * `docs/concepts/observe.md` asks whether an observed transcript may leave the
- * machine at all, names attaching one to a bug report as removing today's
- * bound, and has no answer. **A row here default-on would answer it by
- * shipping**, which is not a thing built in the course of something else.
- *
- * The other three the drawing named are absent for a duller reason and are
- * recorded in `docs/contracts/error-contract.md` rather than on screen: doctor
- * is not built, and a judge response and a diff belong to a Job read whole,
- * which no failure surface holds.
+ * The other three the drawing named are absent for a duller reason,
+ * recorded in `docs/contracts/error-contract.md` rather than on screen:
+ * doctor is not built, and a judge response and a diff belong to a Job
+ * read whole, which no failure surface holds.
  */
 export const NOT_OFFERED: readonly Withheld[] = [
   {

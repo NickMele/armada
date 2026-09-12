@@ -21,43 +21,44 @@ export type Roving = { index: number; active: number };
 export const RovingOption = createContext<Roving | null>(null);
 
 /**
- * Job row (stacked) — the most repeated element in the app, and one shape at
- * every width.
+ * Job row (stacked) — the most repeated element in the app, and one
+ * shape at every width. A badge leading, the headline sentence beside
+ * it, and a labelled field run beneath. No field is dropped at any
+ * width: every field exists because a decision depends on it, and
+ * responsive-hiding one contradicts the rule that the facts needed to
+ * decide are on screen without a click. Narrow changes nothing here — it
+ * was an eight-column table that reshaped below the breakpoint, retired
+ * because the Board and Alerts disagreed about what a job looks like.
  *
- * A badge leading, the headline sentence beside it, and a labelled field run
- * beneath. **No field is dropped at any width**: every field in the row exists
- * because a decision depends on it, and responsive-hiding one contradicts the
- * rule that the facts needed to decide are on screen without a click. Narrow
- * changes nothing here — it was an eight-column table that reshaped below the
- * breakpoint, and it was retired because the Board and Alerts disagreed about
- * what a job looks like.
+ * The honest cost is height: fewer jobs are visible at once than in a
+ * table row. That was accepted deliberately.
+ */
+
+/**
+ * A list row never takes a primary action: one secondary control, whose
+ * label names the act the row's state calls for. Fourteen rows offering
+ * a decision would be fourteen accent blocks; urgency is carried by the
+ * badge and the ordering, and the accent is spent on job detail.
  *
- * The honest cost is height: fewer jobs are visible at once than in a table
- * row. That was accepted deliberately.
+ * The badge carries the pulse; the bar never does. It sits in the same
+ * fixed column on every row, so the motion appears in one predictable
+ * place rather than moving with the workflow's length: one pulse per
+ * screen, on the most specific mark present, so on job detail the rail
+ * takes it and this badge goes static, which is what `pulsing` is for.
+ */
+
+/**
+ * Inside a roving list the pulse follows the cursor, not the status. This
+ * used to pulse every running row regardless of the cursor, until the
+ * Motion section of the design contract ("on the focused row only") and
+ * this disagreed — the contract wins. The disagreement was unobservable
+ * while Fleet worked one Job; there is a second running row now, and two
+ * marks breathing at `--duration-pulse` is what that section forbids in
+ * its first sentence. Hue still says which rows are running, on every
+ * one; the pulse says *still working*, asked only of the row being read.
  *
- * **A list row never takes a primary action.** One secondary control, whose
- * label names the act the row's state calls for. Fourteen rows offering a
- * decision would be fourteen accent blocks; urgency is carried by the badge
- * and the ordering, and the accent is spent on job detail.
- *
- * **The badge carries the pulse; the bar never does.** It sits in the same
- * fixed column on every row, so the motion appears in one predictable place
- * rather than moving with the workflow's length. The rule is one pulse per
- * screen, on the most specific mark present — so on job detail the rail takes
- * it and this badge goes static, which is what `pulsing` is for.
- *
- * **Inside a roving list the pulse follows the cursor, not the status.** This
- * paragraph used to say the opposite — "a running row pulses whether or not
- * the cursor is on it" — and the Motion section of the design contract says
- * "on the focused row only", so the two disagreed and the contract wins. The
- * disagreement was unobservable while Fleet worked one Job: there was never a
- * second running row to pulse. There is now, and two marks breathing at
- * `--duration-pulse` is the thing that section forbids in its first sentence.
- * Hue still says which rows are running, on every one of them; the pulse says
- * *still working*, and that is only asked of the row being read.
- *
- * A row standing outside a roving list keeps `pulsing` as given — it is the
- * only row there is, so the cursor cannot single one out.
+ * A row standing outside a roving list keeps `pulsing` as given — it is
+ * the only row there is, so the cursor cannot single one out.
  */
 
 export type JobRowField = {
@@ -358,23 +359,19 @@ export function JobRowStacked({
 export const JOB_ROW_LIST = "armada-job-row-list";
 
 /**
- * The field run's drawn track list — the field set, in order: the branch or
- * the workflow, the step bar, the step, elapsed, spend, origin.
+ * The field run's drawn track list — the field set, in order: the branch
+ * or the workflow, the step bar, the step, elapsed, spend, origin. This
+ * is the fallback: inside a list the tracks come from the list and these
+ * six widths are their floor; outside one, or without `subgrid`, this is
+ * the whole answer. Fixed widths align the list down as well as across,
+ * at the cost of truncating on a wide window; each track is composed
+ * from the spacing scale, with no token. Reported.
  *
- * **This is the fallback.** Inside a list the tracks come from the list and
- * these six widths are their floor; outside one, and on an engine without
- * `subgrid`, this is the whole answer. Fixed widths make the list read down as
- * well as across, so a column of elapsed figures lines up whatever precedes
- * it — but fixed is also why a row truncates on a wide window, which is what
- * the list's own tracks fix. None of the six has a token; each is composed
- * from the spacing scale in this component's stylesheet. Reported.
- *
- * Origin is sixth because the built row ran five — branch, step bar, step,
- * elapsed, spend — and the Board requires origin on every row besides. See
- * issue 218.
- *
- * A field set with a different shape passes its own `tracks`; a longer one
- * gets `auto` past the sixth, which is honest rather than silently wrong.
+ * Origin is sixth because the built row ran five — branch, step bar,
+ * step, elapsed, spend — and the Board requires origin on every row
+ * besides. See issue 218. A field set with a different shape passes its
+ * own `tracks`; a longer one gets `auto` past the sixth, honest rather
+ * than silently wrong.
  */
 const DRAWN_TRACKS = [
   "var(--armada-track-origin)",

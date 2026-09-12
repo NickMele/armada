@@ -6,40 +6,43 @@ import { Badge } from "../../primitives/Badge/Badge";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
- * Job detail header — what this Job is, and whatever you can do to it from
- * here. One component for every state job detail reaches: running, failed and
- * finished all render through this, so the block cannot drift between them.
+ * Job detail header — what this Job is, and whatever you can do to it
+ * from here. One component for every state job detail reaches: running,
+ * failed and finished all render through this, so the block cannot
+ * drift between them.
  *
- * **The badge is static here.** The pulse is one per screen, on the most
- * specific mark present, and job detail has a workflow rail — so the rail's
- * current step carries it and this badge does not. Two breathing marks on one
- * screen would be two answers to "what is still working".
+ * The badge is static here: the pulse is one per screen, on the most
+ * specific mark present, and job detail has a workflow rail — the
+ * rail's current step carries it and this badge does not. Two breathing
+ * marks on one screen would be two answers to "what is still working".
+ */
+
+/**
+ * The facts are a labelled run, not a table: step, branch, elapsed and
+ * spend are what a person needs to decide whether to leave a job alone,
+ * on screen without a click, and none is dropped at any width. The run
+ * changes with the state, the block does not — a running job reports the
+ * step it is on and the branch it writes to, a stopped one reports where
+ * it stopped and what it ran; the facts are the caller's, their type,
+ * spacing and order are not.
  *
- * **The facts are a labelled run, not a table.** Step, branch, elapsed and
- * spend are what a person needs to decide whether to leave a job alone, and
- * they are on screen without a click. None is dropped at any width.
+ * Hedge by source: elapsed is measured and speaks flatly, spend is
+ * estimated and marked approximate. Rendering the two alike would
+ * destroy trust in both.
+ */
+
+/**
+ * A fact may point somewhere, and the run is where that belongs: a pull
+ * request is read in the same breath as the branch it was opened from,
+ * so `href` makes a fact a link in place, beside the facts it is about,
+ * rather than moving to the other end of the header.
  *
- * **The run changes with the state, the block does not.** A running job reports
- * the step it is on and the branch it writes to; a stopped one reports where it
- * stopped and what it ran. The facts are the caller's; their type, spacing and
- * order are not.
- *
- * **Hedge by source.** Elapsed is measured and speaks flatly; spend is
- * estimated and is marked approximate. Rendering the two alike would destroy
- * trust in both.
- *
- * **A fact may point somewhere, and the run is where that belongs.** A pull
- * request is read in the same breath as the branch it was opened from, and a
- * control at the trailing edge would put going to read something among the
- * acts that end a Job. So `href` makes a fact a link in place, beside the
- * facts it is about, and nothing moves to the other end of the header.
- *
- * **What the header offers changes with the state; how it is arranged does
- * not.** The set is the caller's, and which state carries what is written where
- * that decision is made — `Acts` in Bridge's `JobDetail.tsx`. The arrangement
- * is this file's: ghost first, the acts that end something as one outlined
- * destructive group, and the one primary a Job detail ever carries last, at the
- * trailing edge where the shell head puts its own.
+ * What the header offers changes with the state; how it is arranged does
+ * not. The set is the caller's, decided in `Acts` in Bridge's
+ * `JobDetail.tsx`; the arrangement is this file's: ghost first, the acts
+ * that end something as one outlined destructive group, and the one
+ * primary a Job detail ever carries last, at the trailing edge where the
+ * shell head puts its own.
  */
 export type JobDetailField = {
   /** The label, where the fact needs one. `Dispatched by you` does not. */
@@ -56,22 +59,24 @@ export type JobDetailField = {
    */
   copyValue?: string;
   /**
-   * Where this fact goes, for a fact that names something outside Armada.
-   * Setting it draws the value in `--accent` — the token the design contract
-   * gives links — and hands the address to `onFollowed` when it is clicked.
+   * Where this fact goes, for a fact that names something outside
+   * Armada. Setting it draws the value in `--accent` and hands the
+   * address to `onFollowed` when clicked.
    *
-   * **The address is never the value.** A forge address is long, a person
-   * reads one number out of it, and a fact run is a line of short readings;
-   * what this carries is where the fact points, and the caller decides what it
-   * spells. The full address is on the element's `title`, which is the only
-   * place a person can still get at the whole of it.
-   *
-   * **This component does not navigate, and no fact here ever will.** The
-   * anchor's default is cancelled and the address goes back to the caller,
-   * because a surface that let a click load a page would be a surface that
-   * could be steered off the app by a value that arrived on a wire. Where a
-   * caller sets `href` and no `onFollowed`, the fact draws as a link and the
-   * click does nothing — which is a caller wiring only half of it, and is the
+   * The address is never the value: a forge address is long, a person
+   * reads one number out of it, and a fact run is a line of short
+   * readings — what this carries is where the fact points, and the
+   * caller decides what it spells. The full address is on the element's
+   * `title`, the only place to get at the whole of it.
+   */
+
+  /**
+   * This component does not navigate, and no fact here ever will: the
+   * anchor's default is cancelled and the address goes back to the
+   * caller, since a surface that let a click load a page could be
+   * steered off the app by a value that arrived on a wire. Where a
+   * caller sets `href` and no `onFollowed`, the fact draws as a link
+   * and the click does nothing — a caller wiring only half of it, the
    * one shape to look for when a link goes dead.
    */
   href?: string;

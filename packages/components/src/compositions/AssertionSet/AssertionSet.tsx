@@ -3,40 +3,18 @@ import type { ReactNode } from "react";
 
 /**
  * The assertion set — what a Check's suite actually asserted, one row each.
+ * `exit 0 · 315 passed` is not auditable: a suite can go green by deleting
+ * the failing assertion, and a summary line cannot tell that from a fix.
+ * The row list is the difference; the sentence is the row, the identifier
+ * only stands in where the harness gave none, and `against` marks a row
+ * worth reading rather than its position.
  *
- * **This exists because `exit 0 · 315 passed` is not auditable.** A suite can
- * go green by deleting the assertion that was failing, and a person reading a
- * summary line cannot tell that from a suite that was fixed. The list of what
- * ran is the difference, so it is drawn as rows rather than folded into a
- * count.
- *
- * **The row is the sentence and the identifier is not on it.** Sans names work
- * and mono names machinery, so an assertion a person scans reads as what it
- * asserts. `parses_loose_trailing_whitespace` survives only where a machine
- * reference is the point — in the output itself, and in a citation.
- *
- * **Where the harness supplied no sentence the identifier stands in, and the
- * row says why.** A de-snake-cased guess would read like a description the
- * harness wrote and be one nobody can check against the test. The gloss is
- * standing copy written once here rather than at each call site, because it is
- * true of every such row on every Job.
- *
- * **Rows keep the order they ran in.** This is a transcript's index, not a
- * ledger — refusals sort first on `CriterionVerdicts` because a verdict is an
- * answer to a question somebody asked, and an assertion is a thing that
- * happened at a moment. `against` is what marks the row worth reading, not its
- * position.
- *
- * **`absent` is not `failed`, and that is the whole finding.** A failed
- * assertion ran and came out wrong. An absent one did not run here and did run
- * at the parent commit — the suite is green because a case stopped existing.
- * Both take `--verdict-not-met`, because both are the work not being what was
- * asked; what tells them apart is `against`, in words.
- *
- * **Nothing on the wire serves this.** A Check reports an `outcome` and an
- * `output_path`; the assertions inside that output are unparsed, and the
- * comparison against the parent commit is not recorded anywhere. Fixtures
- * only.
+ * `absent` is not `failed`: a failed assertion ran and came out wrong, an
+ * absent one did not run here but did at the parent commit — both take
+ * `--verdict-not-met`, and `against` tells them apart, in words. Nothing on
+ * the wire serves this: a Check reports an `outcome` and an `output_path`,
+ * the assertions inside are unparsed, and the comparison is not recorded
+ * anywhere. Fixtures only.
  */
 
 /**

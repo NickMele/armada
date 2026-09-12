@@ -10,27 +10,27 @@ import { Checkbox } from "../../primitives/Checkbox/Checkbox";
 /**
  * One worktree fleet is holding disk for, and the test it did not pass.
  *
- * **Why is the component, not a label on it.** Not-provably-safe is one word
- * for four situations a person answers differently, and each one wants
- * different facts in front of the decision: how many commits and what they are
- * reachable from; which files were written and committed nowhere; what the job
- * is still doing; which job is still waiting on this one. A row that said
- * "cannot be reclaimed automatically" and stopped would be asking somebody to
- * go and find all of that themselves.
+ * Why is the component, not a label on it: not-provably-safe is one
+ * word for four situations a person answers differently, each wanting
+ * different facts in front of the decision — how many commits and what
+ * they are reachable from, which files were written and committed
+ * nowhere, what the job is still doing, which job is still waiting on
+ * this one. A row that said "cannot be reclaimed automatically" and
+ * stopped would be asking somebody to go find all of that themselves.
+ */
+
+/**
+ * No byte count, and that is the point of the row: bytes are not the
+ * decision — which commits go, whether anything else has them, and
+ * which files exist nowhere but this directory is. A size beside those
+ * facts would be the figure read first and meaning least.
  *
- * **No byte count, and that is the point of the row.** Bytes are not the
- * decision — which commits go, whether anything else has them, and which files
- * exist nowhere but this directory is. A size beside those facts would be the
- * figure read first and meaning least.
- *
- * **Nothing that could be lost is left unnamed.** There is no force on this
- * seam, so a branch holding commits the base cannot reach survives the reclaim
- * and the row says so; uncommitted files do not survive it, and the row names
- * them one by one.
- *
- * **A piloted job's checkout never reaches this component**, because fleet does
- * not serve one. There is no arm for it below and there cannot be: a person is
- * at an unrestricted toolset in that directory.
+ * Nothing that could be lost is left unnamed: there is no force on this
+ * seam, so a branch holding commits the base cannot reach survives the
+ * reclaim and the row says so; uncommitted files do not survive it, and
+ * the row names them one by one. A piloted job's checkout never reaches
+ * this component, since fleet does not serve one — there is no arm for
+ * it below, because a person is at an unrestricted toolset there.
  */
 export type HeldWorktreeProps = {
   /** One row of `GET /worktrees`, exactly as fleet answered it. */

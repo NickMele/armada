@@ -2,28 +2,19 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 /**
- * A passage held to a few lines, with the rest one press away.
+ * A passage held to a few lines, with the rest one press away — for the
+ * brief and the Drone's instructions, written at whatever length the work
+ * needed and sitting above what a reader is trying to reach.
  *
- * **The brief and the Drone's instructions are the reason.** Both are written
- * by a person or a model at whatever length the work needed, and both sit above
- * things a reader is trying to get to. A four-hundred-word brief pushes the run,
- * the phases and the whole story off the screen — so the passage is clamped and
- * the reader decides when to spend the room.
+ * The control exists only when text overflows, measured rather than
+ * guessed from a character count: the same words are two lines wide on
+ * one panel and five at `--window-floor`, so a length threshold can't
+ * know which. It re-measures on resize, since a sheet narrowing the panel
+ * can make a passage overflow that fit before.
  *
- * **The control only exists when the text overflows.** A *View more* under three
- * lines that were never truncated is a control that does nothing, and a reader
- * who presses it once learns the surface lies. So the overflow is measured
- * rather than guessed from a character count: the same words are two lines wide
- * on one panel and five at `--window-floor`, and a length threshold cannot know
- * which.
- *
- * **It re-measures on resize.** A sheet opening beside the panel narrows it, and
- * a passage that fitted at the old width does not at the new one. Without this
- * the control disappears exactly when it starts being needed.
- *
- * **Clamping is `-webkit-line-clamp`, and the lines are a count rather than a
- * height.** A `max-height` in pixels has to be recomputed against every type
- * scale it lands in and silently cuts a line in half when it is wrong.
+ * Clamping is `-webkit-line-clamp` — a line count rather than a
+ * `max-height`, which would need recomputing against every type scale and
+ * silently cut a line in half when wrong.
  */
 
 export type ClampedProps = {

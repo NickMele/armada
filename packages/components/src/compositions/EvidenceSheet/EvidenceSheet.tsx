@@ -4,44 +4,45 @@ import { Sheet } from "../../primitives/Sheet/Sheet";
 import { Tabs } from "../../primitives/Tabs/Tabs";
 
 /**
- * The evidence viewer — one artifact, at full size, on the layer that can hold
- * it.
+ * The evidence viewer — one artifact, at full size, on the layer that can
+ * hold it. One viewer, and everything on screen points into it: a check's
+ * output, a patch, a measurement, a panel's judgment are all artifacts
+ * with a kind and a file, so they get one renderer set and one layer. The
+ * check row's output control, a criterion's proof chip and a judge's
+ * citation are three selectors that all land here.
+ */
+
+/**
+ * It is a sheet for the reason the activity log is one: 2,180 lines of
+ * console output is not a longer version of the four rows the chapter
+ * previews, so the artifact leaves the panel and the chapter line is the
+ * way back — `Sheets.tsx` holds the one-sheet-at-a-time rule.
  *
- * **One viewer, and everything on the screen points into it.** A check's
- * output, a patch, a measurement, a panel's judgment: they are artifacts with a
- * kind and a file, so they get one renderer set and one layer rather than a
- * region each. The check row's output control, a criterion's proof chip and a
- * judge's citation are three selectors that all land here.
- *
- * **It is a sheet for the reason the activity log is one.** 2,180 lines of
- * console output is not a longer version of the four rows the chapter previews:
- * opened in place it pushes every chapter under it off the screen. So the
- * artifact leaves the panel, the panel stays exactly as it was, and the chapter
- * line is the way back — `Sheets.tsx` holds the one-sheet-at-a-time rule and
- * the two exits, unchanged.
- *
- * **Three sizes, and this is the middle one.** The chapter's preview composes
- * the page; this holds the whole artifact with its tools; *Open full page*
- * leaves for a route, for the genuinely huge. Nothing at any size covers the
- * criteria — the yardstick a person is reading against stays on the screen
- * behind the layer.
- *
- * **Views are alternate renderings of one artifact, never other artifacts.**
+ * Three sizes, and this is the middle one: the chapter's preview composes
+ * the page, this holds the whole artifact with its tools, and *Open full
+ * page* leaves for a route, for the genuinely huge. Nothing at any size
+ * covers the criteria — the yardstick stays on the screen behind the
+ * layer.
+ */
+
+/**
+ * Views are alternate renderings of one artifact, never other artifacts:
  * Output, Assertions and Timing are three ways of drawing one check run;
- * Verdicts, Citations and Inputs are three ways of drawing one judgment. Those
- * are in the header, because they are this artifact. A different artifact is a
- * different selection and it comes from the strip, which is on this layer so
- * the sheet does not have to be closed to reach it — but under the reading,
- * not over it.
- *
- * **There is no separate control for going back to what the page opened with,
- * and there was.** It read `Back to the default view`, sat beside `Close`, and
- * a reviewer could not tell the two apart — fairly, since both are the shape of
- * an escape and neither says what it leaves. The way back was always in the
- * strip: the artifact the page composed with is a chip like any other, marked
- * as the one it opens on. Pressing it restores. A second control doing that in
- * different words was a second vocabulary for one act, and the one that could
- * be mistaken for leaving.
+ * Verdicts, Citations and Inputs are three ways of drawing one judgment.
+ * Those sit in the header, since they are this artifact. A different
+ * artifact is a different selection, from the strip on this layer — under
+ * the reading, not over it.
+ */
+
+/**
+ * There is no separate control for going back to what the page opened
+ * with, and there was: `Back to the default view` sat beside `Close`, and
+ * a reviewer could not tell the two apart — both are the shape of an
+ * escape, and neither says what it leaves. The way back was always in the
+ * strip: the artifact the page composed with is a chip like any other,
+ * marked as the one it opens on, and pressing it restores. A second
+ * control saying that in different words was a second vocabulary for one
+ * act.
  */
 
 export type EvidenceView = { id: string; label: string };

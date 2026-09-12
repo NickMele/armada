@@ -6,28 +6,17 @@ import { CHANGE_KIND } from "../../generated/vocabulary";
 /**
  * Changed files — what a Drone has touched in its worktree, as of one reading.
  *
- * **Names and a change kind, never bytes.** What changed inside a file is the
- * patch, which is read only when a Judge fires and is deliberately not on this
- * seam. A file list is the cheapest answer to *is it doing what I asked* —
- * before the gate, before the Judge, before any evidence is submitted — and the
- * diff is a later and more expensive question.
+ * Names and a change kind, never bytes: the patch is read only when a Judge
+ * fires, and a file list is the cheapest answer to "is it doing what I
+ * asked" before the gate, before the Judge, before any evidence lands. The
+ * whole footprint is redrawn each reading rather than a delta, so a file
+ * that stopped changing just leaves the view.
  *
- * **The whole footprint, not a delta.** A reading replaces the list rather than
- * being folded into it, so a file that stopped being changed leaves the view by
- * not being in the next reading. Nothing here accumulates.
- *
- * **Wire order, and no sort.** The reading found them in an order and that
- * order is stable between readings; re-sorting on arrival is the column
- * flip-flop the failure log named, one level down.
- *
- * **No glyph, and the mark column is empty on purpose.** `file` is reserved to
- * the log row and `file-check` to a submission that landed, so a changed-file
- * row has nothing in the registry to take and none is invented here.
- *
- * **The word for a change kind is the registry's.** `enum-verbs.toml` carries
- * a `change_kind` row for each of the eight, the generated vocabulary carries
- * them here, and `wordFor` is the whole of the reading. Change a row and this
- * column changes.
+ * Wire order, no sort — re-sorting on arrival is the column flip-flop the
+ * failure log named. No glyph: `file` is reserved to the log row and
+ * `file-check` to a landed submission, so this row has nothing to take.
+ * The change-kind word is the registry's (`enum-verbs.toml`'s
+ * `change_kind`) — change a row there and this column changes.
  */
 export type ChangedFile = {
   /** Repository-relative, exactly as git spells it. Copies on click. */
@@ -53,20 +42,15 @@ export type ChangedFile = {
   outsidePlan?: boolean;
   /**
    * Lines added and lines removed in this file — the drawing's `+61 −4`.
+   * Both optional; a zero is not drawn, since `−0` reads as a value that
+   * failed to arrive rather than nothing to report.
    *
-   * **Both optional, and a zero is not drawn.** The drawing gives an added file
-   * `+21` with no deletion beside it, because `−0` is a measurement of nothing
-   * and reads as a value that failed to arrive. A file with neither is a row
-   * with an empty count cell, which is every row today.
-   *
-   * **`TouchedFile.lines` serves these.** `ChangedFile` on the wire is a path, a change
-   * kind and a drift mark — "the names, never the bytes" is that seam's own
-   * stated rule, and it holds for `Saw::Produced`, `job.files_changed` and the
-   * finished job's `TouchedFile` alike. The only route carrying line counts at
-   * all is `get_diff`, which serves the whole patch and is the expensive read
-   * the collapsed chapter exists to avoid. So this pair is drawn and cannot yet
-   * be filled. Reported rather than worked around: a component that computed
-   * them from a patch it fetched would spend the read the chapter is deferring.
+   * Nothing on the wire fills this yet: `ChangedFile` (`Saw::Produced`,
+   * `job.files_changed`, the finished job's `TouchedFile`) carries a path, a
+   * change kind and a drift mark only — the only route with line counts is
+   * `get_diff`, the expensive whole-patch read the collapsed chapter exists
+   * to avoid. Reported rather than worked around: computing this pair from a
+   * fetched patch would spend the read the chapter defers.
    */
   added?: number;
   deleted?: number;
@@ -108,21 +92,16 @@ function wordFor(change: string): string {
 }
 
 /**
- * The header line for a list of these files — `3 files · +94 −31 · all inside
- * the plan`.
+ * The header line for a list of these files — `3 files · +94 −31 · all
+ * inside the plan`. It lives beside the list rather than in the surface
+ * that draws the header, since a caller spelling its own summary is a
+ * second vocabulary that can disagree with the rows.
  *
- * **It lives beside the list, not in the surface that draws the header.** The
- * chapter header and the rows are two renderings of one reading, and a caller
- * spelling the summary itself is the second vocabulary that lets the two
- * disagree — a header claiming three files over a list of four.
- *
- * **`planDeclared` false says nothing about the plan.** False is "no step
- * declared one", not "nothing drifted", so the clause is omitted rather than
- * claiming everything is inside a plan that does not exist.
- *
- * `all inside the plan` is the drawing's own words. The drift counterpart is
- * not drawn anywhere — `2 outside the plan` is decided here, to answer the
- * drawn clause in the same grammar. Reported.
+ * `planDeclared` false means "no step declared one", not "nothing
+ * drifted", so the clause is omitted rather than claimed. `all inside the
+ * plan` is the drawing's own wording; `2 outside the plan` is decided here
+ * to answer it in the same grammar, since the drift counterpart is not
+ * drawn anywhere else. Reported.
  */
 export function changedFilesSummary(files: ChangedFile[], planDeclared?: boolean): string {
   const parts = [`${files.length} ${files.length === 1 ? "file" : "files"}`];

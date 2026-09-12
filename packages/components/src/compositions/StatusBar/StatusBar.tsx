@@ -1,29 +1,31 @@
 import type { ReactNode } from "react";
 
 /**
- * Status bar — fixed to the bottom, full window width, spanning **beneath**
- * the sidebar rather than inset to the content area.
+ * Status bar — fixed to the bottom, full window width, spanning
+ * beneath the sidebar rather than inset to the content area.
  *
- * Fixed because a healthy state has to say "Fleet running" out loud, and that
- * guarantee fails the moment the bar can scroll away — it is a liveness
- * indicator for a daemon that outlives the window. Full width because the bar
- * is app-level rather than Bridge-level: it appears on Helm too. Inset it and
- * it reads as belonging to whatever surface is open.
+ * Fixed because a healthy state has to say "Fleet running" out loud,
+ * and that guarantee fails the moment the bar can scroll away — a
+ * liveness indicator for a daemon that outlives the window. Full width
+ * because the bar is app-level rather than Bridge-level: it appears on
+ * Helm too. Inset it and it reads as belonging to whatever surface is
+ * open.
+ */
+
+/**
+ * Fleet's state is one of three, and the bar names which — plus
+ * `unknown`, for the readings that are neither: still connecting, and a
+ * runtime file or a protocol version Bridge refused. Those keep the
+ * neutral dot rather than taking a fourth hue. A leading 6px dot
+ * carries the hue, the one exception to everything else staying
+ * `--fg-muted`, on the same grounds Doctor's pass, warn and fail reuse
+ * the Job values.
  *
- * **Fleet's state is one of three, and the bar names which** — plus `unknown`,
- * for the readings that are neither: still connecting, and a runtime file or a
- * protocol version Bridge refused. Those keep the neutral dot rather than
- * taking a fourth hue. A leading 6px dot carries the hue, the one exception to
- * everything else in the bar staying `--fg-muted`, on the same grounds
- * Doctor's pass, warn and fail reuse the Job values. It is not a glyph, so
- * "the status bar carries no icons" is unaffected.
- *
- * The two failure states differ on the runtime file: a missing file is a Fleet
- * that is not there, a live pid with no answer is a Fleet that is wedged. Two
- * different things to do about it, so two sentences rather than one timeout
- * message.
- *
- * **Five items is the ceiling.** Collapsed when healthy, expanded when not.
+ * The two failure states differ on the runtime file: a missing file is
+ * a Fleet that is not there, a live pid with no answer is a Fleet that
+ * is wedged — two different things to do about it, so two sentences
+ * rather than one timeout message. Five items is the ceiling: collapsed
+ * when healthy, expanded when not.
  */
 export type FleetState = "running" | "not-running" | "unreachable" | "unknown";
 

@@ -6,25 +6,16 @@ import { useCallback, useState } from "react";
  * The activity log — one stream carrying the Drone's turns, Armada's injected
  * turns and Fleet's own events.
  *
- * **Every entry names who.** That is what keeps one stream honest: three
- * sources in one column with no attribution reads as one narrator, and the
- * whole point of folding Fleet's events in beside the Drone's turns is that a
- * Check failing and a Drone claiming it passed are visibly two different
- * voices.
+ * Every entry names who — three voices in one column need attribution, since
+ * a Check failing while a Drone claims it passed has to read as two voices —
+ * and opens to its payload: full text, output, exit code, where it ran.
  *
- * **Every entry opens to its payload.** A command opens to its full text, its
- * output, its exit code and where it ran — so the log answers "what did it
- * actually run" without a transcript being opened somewhere else.
+ * Not `DroneTurns`: that is one Drone's transcript, written live, on its own
+ * screen, one voice, no Fleet events, no exit code on its rows. This is a
+ * step's chapter, bounded to the step.
  *
- * **Not `DroneTurns`.** That is one Drone's transcript, read while it is being
- * written, on a screen of its own; it carries one voice and no Fleet events,
- * and its rows do not open to an exit code. This is a chapter of a step's
- * story, bounded to the step, and it is the surface the design means by "one
- * stream".
- *
- * **An opened payload is bounded and says so when it cut** — the same rule the
- * diff follows. A cut names the file on disk, because a payload a reader cannot
- * finish reading here has to be finishable somewhere.
+ * An opened payload is bounded and names the file it was cut from, the same
+ * rule the diff follows, so it stays finishable somewhere.
  */
 
 /**
@@ -115,20 +106,18 @@ const CHEVRON = 12;
 const STROKE = 2;
 
 /**
- * The line bound on an opened payload, and the answer to the second question
+ * The line bound on an opened payload — the answer to the second question
  * #186 left open.
  *
- * **The same rule as the diff, and the same number: a cut says so and names
- * where the rest is.** A log payload and a patch are the same kind of thing —
- * machine text read inside a panel — and the bound exists for the same reason,
- * which is that a 14,000-line block puts 14,000 nodes in the document and that
- * is the freeze the v1 failure log recorded nine times. Choosing a second,
- * smaller number for a log entry would need a measurement nobody has made.
+ * The same rule and number as the diff: a cut says so and names where the
+ * rest is. A 14,000-line block puts 14,000 nodes in the document, which is
+ * the freeze the v1 failure log recorded nine times, and no measurement
+ * justifies a different number for a log entry.
  *
- * **Bridge holds the authoritative copy**, as `DRAWN_LINES` in the renderer's
- * `review.ts`, and passes it in. This is the fallback for a caller that does
- * not — a component cannot import from the app, so the two numbers are two
- * statements of one value until something generates it. Reported.
+ * Bridge holds the authoritative copy, `DRAWN_LINES` in the renderer's
+ * `review.ts`; this is the fallback for a caller that cannot import from
+ * the app, so the two numbers are one value stated twice until something
+ * generates it. Reported.
  */
 const MAX_LINES = 2000;
 

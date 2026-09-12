@@ -1,27 +1,29 @@
 import type { ReactNode } from "react";
 
 /**
- * Verdict sheet — the record job detail shows at the one place a Job stops for
- * a person, and again once it is over. One page, read top to bottom: what was
- * asked for, what came back, what proves it, what was left alone, the figures,
- * then the buttons.
+ * Verdict sheet — the record job detail shows at the one place a Job
+ * stops for a person, and again once it is over. One page, read top to
+ * bottom: what was asked for, what came back, what proves it, what was
+ * left alone, the figures, then the buttons.
  *
- * **Chosen as Option B, 2026-09-08.** It is buildable on today's wire and it
- * moves between four scenarios — a gate before a pull request, a gate with one
- * open, a gate on a workflow that never delivers, and a finish nothing asked —
- * by adding or dropping a labelled block. Nothing else about the page shifts.
- * The cost, kept on record: a second arrangement on a screen whose whole
- * argument is that there is one.
+ * Chosen as Option B, 2026-09-08: it is buildable on today's wire and
+ * moves between four scenarios — a gate before a pull request, a gate
+ * with one open, a gate on a workflow that never delivers, and a finish
+ * nothing asked — by adding or dropping a labelled block. The cost, kept
+ * on record: a second arrangement on a screen whose whole argument is
+ * that there is one.
+ */
+
+/**
+ * The buttons decide nothing here: `actions` is `Decide`'s own region,
+ * unchanged, this component draws the record around it. Where `actions`
+ * is absent, nothing is being asked and the dashed `recordNote` says so
+ * instead of a row of controls with nothing to do.
  *
- * **The buttons decide nothing here.** `actions` is `Decide`'s own region,
- * unchanged — this component draws the record around it. Where `actions` is
- * absent, nothing is being asked and the dashed `recordNote` says so instead of
- * a row of controls that would have nothing to do.
- *
- * **`pullRequest` is the only block that comes and goes with a fact rather than
- * with the render.** It is drawn where a pull request is open, and it is not
- * there is where none is — a workflow that never delivers, or one whose Drone
- * has not pushed yet.
+ * `pullRequest` is the only block that comes and goes with a fact
+ * rather than with the render: drawn where a pull request is open, and
+ * not there where none is — a workflow that never delivers, or one
+ * whose Drone has not pushed yet.
  */
 export type VerdictFigure = {
   /** `Branch`, `Files`, `Took`, `Steps`, `Pull request`. */

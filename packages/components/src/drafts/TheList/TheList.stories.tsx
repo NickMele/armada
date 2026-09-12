@@ -11,40 +11,42 @@ import type { JobRowField, JobRowStackedProps } from "../../compositions/JobRowS
 import { TheListSixStatesOneRowShape } from "./TheList";
 
 /**
- * Journey · Monitor Active Work. Six Job states, one row shape, in the order
- * Fleet supplies: the one row that needs a person first, the rest newest work
- * first.
+ * Journey · Monitor Active Work. Six Job states, one row shape, in the
+ * order Fleet supplies: the one row that needs a person first, the rest
+ * newest work first.
  *
- * **One story per state, and then the six together.** The list is what a person
- * looks at, so it stays; the six are what a row is, and a row is what changes.
+ * One story per state, and then the six together: the list is what a
+ * person looks at, so it stays; the six are what a row is, and a row is
+ * what changes.
+ */
+
+/**
+ * The badge on the awaiting-approval row reads Needs approval, which is
+ * what `enum-verbs.toml` holds — the drawing writes "Awaiting approval".
+ * A status label is never written by hand, so the registry wins on the
+ * word and the drawing wins on everything else. Reported.
  *
- * The badge on the awaiting-approval row reads **Needs approval**, which is
- * what `enum-verbs.toml` holds. The drawing writes "Awaiting approval". A
- * status label is never written by hand, so the registry wins on the word and
- * the drawing wins on everything else. Reported.
- *
- * The queued row's glyph is `cpu`, not `clock`, **and its verb is the reason's
- * too**: the registry's rule replaces both where a reason is present, and this
- * row's reason is `waiting_on_resources`. It read "Queued" beside the cpu
- * glyph until the resource became a real one — Fleet bounds how many drones it
- * runs at once, and a Job past the bound is held at `queued` for that reason
- * and no other.
- *
- * **Every row carries origin now, which is the Board's requirement and was
- * true of one row here.** #218 gave `Job row (stacked)` its sixth track and
- * left this file alone; the four rows that had run stopped at spend, so origin
- * was drawn at the gate and nowhere else. The two gate rows keep their own
- * five-track list — a Job with no worktree has a timestamp where a running row
- * has elapsed, and no spend at all — and both lists compose the same named
- * properties rather than repeating widths.
- *
- * **The five origin sentences here are literals, and Bridge draws nothing in
- * that track on a real row.** `origin` is on `JobSummary` and `enum-verbs.toml`
- * carries a row for each of its five values, `sub_dispatched` included — that
- * one as the form `Sub-dispatched by {dispatched_by.job_id}` rather than a
- * word, which #234 settled before it closed. What no generator emits is a map
- * carrying any of them into Bridge, and `JobSummary` carries no
- * `dispatched_by` for the form to interpolate, so these fixtures are the
+ * The queued row's glyph is `cpu`, not `clock`, and its verb is the
+ * reason's too: the registry's rule replaces both where a reason is
+ * present, and this row's reason is `waiting_on_resources`. It read
+ * "Queued" beside the cpu glyph until the resource became a real one —
+ * Fleet bounds how many drones it runs at once, and a Job past the
+ * bound is held at `queued` for that reason and no other.
+ */
+
+/**
+ * Every row carries origin now, the Board's requirement, and was true
+ * of one row here: #218 gave `Job row (stacked)` its sixth track and
+ * left this file alone, so the four rows that had run stopped at spend
+ * and origin was drawn at the gate only. The two gate rows keep their
+ * own five-track list, sharing named track properties rather than
+ * repeating widths.
+ * The five origin sentences here are literals, and Bridge draws nothing
+ * in that track on a real row: `origin` is on `JobSummary`, and
+ * `enum-verbs.toml` carries a row for each of its five values,
+ * `sub_dispatched` included, as `Sub-dispatched by
+ * {dispatched_by.job_id}` rather than a word (#234). No generator emits
+ * a map carrying any of them into Bridge, so these fixtures are the
  * drawing rather than proof the track is filled.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
@@ -273,25 +275,25 @@ export const TheList: Story = {
 };
 
 /**
- * The Board with its controls and its keyboard model — sections 1 and 3 of the
- * drawing, which the six rows above were reproduced without.
+ * The Board with its controls and its keyboard model — sections 1 and 3
+ * of the drawing, which the six rows above were reproduced without.
  *
- * **The count states both numbers.** `1 job needs you. 6 on the Board.` The
- * first is the number a person is deciding whether to act on and the second is
- * what it is a fraction of; either alone is a number with nothing to compare
- * it against. The drawing's own fixture reads `4 jobs need you. 15 on the
- * Board.` — the shape is the sentence, not the numerals.
+ * The count states both numbers: `1 job needs you. 6 on the Board.` The
+ * first is the number a person is deciding whether to act on and the
+ * second is what it is a fraction of — the drawing's own fixture reads
+ * `4 jobs need you. 15 on the Board.`, the shape is the sentence, not
+ * the numerals.
  *
- * **Five tabs, and their counts are of what the search matched.** With no
- * search that is the whole board, which is why they read as the board here.
- *
- * **The cursor's row carries its key and no other row does.** The chip holds
- * its width on every row, so nothing moves as the cursor travels; what changes
- * is whether it is drawn.
- *
- * The keys are the contract's contextual tier — `docs/contracts/design-system.md`,
- * Keyboard and command palette — and none of them is decided here. What the
- * Board answers of it:
+ * Five tabs, with counts of what the search matched — the whole board
+ * with none. The cursor's row carries its key and no other row does:
+ * the chip holds its width on every row, so nothing moves as the
+ * cursor travels, only whether it is drawn.
+ */
+
+/**
+ * The keys are the contract's contextual tier —
+ * `docs/contracts/design-system.md`, Keyboard and command palette — and
+ * none of them is decided here. What the Board answers of it:
  *
  * | Key | Does |
  * |---|---|
@@ -302,19 +304,21 @@ export const TheList: Story = {
  * | `x` | Kill, and it confirms |
  * | `1`–`5` | Set the state filter, in tab order |
  * | `n` | New job, the one key that acts on nothing on screen |
- *
- * **There is no Approve key and no Approve control**, and `a` was deleted from
- * the map on 2026-08-31 for the reason this row shows: nothing on a list
- * approves. The row at the gate carries Review — see
+ */
+
+/**
+ * There is no Approve key and no Approve control, and `a` was deleted
+ * from the map on 2026-08-31 for the reason this row shows: nothing on
+ * a list approves. The row at the gate carries Review — see
  * `docs/concepts/job-board.md`.
  */
+
 /**
- * The Board, with a working switch.
- *
- * **The toggle holds real state rather than being drawn set**, because the one
- * thing worth checking about two arrangements is that the same six rows survive
- * moving between them. A story that hard-coded `view` could not show that, and
- * the switch was missing from this story entirely while the table had its own.
+ * The Board, with a working switch. The toggle holds real state rather
+ * than being drawn set, since the one thing worth checking about two
+ * arrangements is that the same six rows survive moving between them —
+ * a story that hard-coded `view` could not show that, and the switch
+ * was missing from this story entirely while the table had its own.
  */
 function Board({ start }: { start: "card" | "table" }) {
   const [view, setView] = useState<"card" | "table">(start);
@@ -399,26 +403,27 @@ export const Done: Story = { render: () => one(done) };
 export const Killed: Story = { render: () => one(killed) };
 
 /**
- * **The same six rows with every fact Bridge cannot fill taken out.** The
- * stories above are the drawing; this one is what a real Board can put on the
- * screen today, so the difference is something you look at rather than
- * something you have to be told.
- *
- * It was called `What the wire serves`, which named the subject and not the
- * question — it read like a protocol dump next to five state stories. The point
- * is the gap.
+ * The same six rows with every fact Bridge cannot fill taken out. The
+ * stories above are the drawing; this one is what a real Board can put
+ * on the screen today, so the difference is something you look at
+ * rather than something you have to be told. It was called `What the
+ * wire serves`, which named the subject and not the question — it read
+ * like a protocol dump next to five state stories. The point is the gap.
  *
  * | Taken out | Why Bridge cannot fill it |
  * |---|---|
- * | `Origin` | `origin` is on `JobSummary` and `enum-verbs.toml` carries all five rows, `sub_dispatched`'s form included. Nothing emits them: the wanted list in `apps/desktop/codegen/vocabulary.mjs` does not name `origin`. Adding it is not the whole fix — `JobSummary` carries no `dispatched_by`, so that form has no slot to fill |
+ * | `Origin` | `origin` is on `JobSummary` and `enum-verbs.toml` carries all five rows, `sub_dispatched`'s form included. Nothing emits them: the wanted list in `apps/desktop/codegen/vocabulary.mjs` does not name `origin`. `JobSummary` also carries no `dispatched_by`, so that form has no slot to fill |
  * | Run time on a Job that is over | `JobSummary` carries no instant the Job stopped at, and an elapsed running to now would read as still working |
+ */
+
+/**
+ * The step is its `step_id` rather than its name, in mono: `StepDetail`
+ * carries a label and a list row holds `JobSummary`, which carries only
+ * the id — the name is one click away, on the rail.
  *
- * **The step is its `step_id` rather than its name**, in mono: `StepDetail`
- * carries a label and a list row holds `JobSummary`, which carries only the id.
- * The name is one click away, on the rail.
- *
- * Absent rather than blank, in every case. A named cell with nothing in it
- * reads as a value that failed to load, which is worse than a shorter row.
+ * Absent rather than blank, in every case: a named cell with nothing in
+ * it reads as a value that failed to load, which is worse than a
+ * shorter row.
  */
 export const OnlyWhatBridgeCanFill: Story = {
   render: () => (
@@ -444,29 +449,30 @@ export const OnlyWhatBridgeCanFill: Story = {
 };
 
 /**
- * **The same six Jobs, in the table view.** Not a second component: these are
- * the rows above with their facts named and reordered, and the arrangement is
- * one prop on the list.
+ * The same six Jobs, in the table view. Not a second component: these
+ * are the rows above with their facts named and reordered, and the
+ * arrangement is one prop on the list.
  *
- * **The header is what buys the height back.** A card labels a fact by where it
- * sits in a run a person has to learn; a table names it once at the top for the
- * whole Board. So this row is `--h-row-table` at 52px against the card's 84px,
- * and it says more rather than less, because every column has a word over it.
+ * The header is what buys the height back: a card labels a fact by
+ * where it sits in a run a person has to learn, a table names it once
+ * at the top for the whole Board. So this row is `--h-row-table` at
+ * 52px against the card's 84px, and says more rather than less, since
+ * every column has a word over it.
+ */
+
+/**
+ * Three columns, not four: `Dispatched by` is the fourth fact the
+ * Board wants and cannot draw. `enum-verbs.toml` carries every `origin`
+ * row and `sub_dispatched`'s form, both settled when #234 closed; what
+ * is left is that no map reaches Bridge, and `JobSummary` carries no
+ * `dispatched_by` for that form to interpolate — a named column with
+ * nothing under it reads as a value that failed to load.
  *
- * **Three columns, not four.** `Dispatched by` is the fourth fact the Board
- * wants and the one it cannot draw. `enum-verbs.toml` carries every `origin`
- * row and `sub_dispatched`'s form, both settled when #234 closed; what is left
- * is that no map reaches Bridge, and that `JobSummary` carries no
- * `dispatched_by` for that form to interpolate. A named column with nothing
- * under it reads as a value that failed to load, which is the argument that
- * already keeps spend off the row.
- *
- * **Progress is one cell, where the card spends two tracks on it.** A column
- * called Progress answering in two places would need two names. The bar keeps
- * its 72px and the step sits beside it.
- *
- * The branch is not here either. On a card it shares track one with the
- * workflow and the row draws whichever it has; a named column cannot do that,
- * so the column says Workflow and carries the workflow.
+ * Progress is one cell, where the card spends two tracks on it — a
+ * column called Progress answering in two places would need two names;
+ * the bar keeps its 72px and the step sits beside it. The branch is not
+ * here either: on a card it shares track one with the workflow and the
+ * row draws whichever it has, but a named column cannot, so the column
+ * says Workflow and carries the workflow.
  */
 export const TheBoardAsATable: Story = { render: () => <Board start="table" /> };

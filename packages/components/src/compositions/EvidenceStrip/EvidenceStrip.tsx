@@ -4,25 +4,25 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
  * The evidence strip — everything else this step produced, one chip each.
+ * Every chip is a selector into the viewer: a measurement, a patch, a
+ * document, a test result are all artifacts with a kind and a file, so
+ * they enter one renderer set and one strip rather than four regions.
  *
- * **Every chip is a selector into the viewer.** A measurement, a patch, a
- * document, a test result: they are all artifacts with a kind and a file, so
- * they enter one renderer set and one strip rather than four regions that each
- * hold one sort of thing.
+ * A chip states its kind: `bench 1.42 → 1.19µs` and `−318 +94 · 5 files`
+ * are both values, and what tells a reader which viewer is behind them is
+ * the word under the value, not the shape of the chip, which is the same
+ * for all of them on purpose.
+ */
+
+/**
+ * The selected chip is where the viewer's current artifact lives: opening
+ * a check's output does not destroy what was showing, it moves into the
+ * strip marked, so one press puts it back — without that, three presses
+ * in and the page has lost the opinion it was composed with.
  *
- * **A chip states its kind.** `bench 1.42 → 1.19µs` and `−318 +94 · 5 files`
- * are both values, and what tells a reader which viewer is behind them is the
- * word under the value — not the shape of the chip, which is the same for all
- * of them on purpose.
- *
- * **The selected chip is where the viewer's current artifact lives.** Opening
- * a check's output does not destroy what was showing: that artifact moves into
- * the strip, marked, so one press puts it back. Without that, three presses in
- * and the page has lost the opinion it was composed with.
- *
- * **Not `FactChip`.** A fact chip is a value being read — the run tree is full
- * of them and none of them is a target. These are controls, and they are drawn
- * as controls: the accent on the edge, a hover state, a focus ring.
+ * Not `FactChip`: a fact chip is a value being read, none of them a
+ * target. These are controls and drawn as controls — the accent on the
+ * edge, a hover state, a focus ring.
  */
 
 export type EvidenceChip = {

@@ -10,38 +10,27 @@ import {
 /**
  * Board controls — the filter set above the Job Board's list.
  *
- * **Two axes, and the Manifest is neither.** The Board is already scoped to one
- * Manifest, so scope is not a control here; origin was drawn as a filter and
- * rejected, because *what needs me*, *what is running* and *why has that not
- * started* are all state. What is left is state, and one text match.
- *
- * **The text match sits above the tabs, with sort.** A text match is not a
- * state, and putting it in the same row as the tabs would read as a sixth one.
- * The arrangement is the argument: what narrows by state is on the state line,
- * and what cuts across every state is above it.
- *
- * **Search reads every job whatever tab is set, and the tab is suspended while
- * it does.** The sentence is about what search reaches, not an instruction to
- * move the tab: the surface bypasses the tab, passes `suspended`, and the strip
- * steps back without losing the selection — so clearing the field gives the
- * person their filter back. Resetting the tab to `All` instead would spend a
- * choice to make a sentence true and then have nothing to restore.
- *
- * The tab counts a surface passes in should be counts of what the search
- * already matched rather than of the whole board, so a suspended strip is still
- * a breakdown of what is on screen.
- *
- * **The search's key is drawn inside the field.** Beside it, the hint read as a
- * second control on the line and took the eye as one; inside, it is a property
- * of the box it focuses. `Input` owns the room it needs, because the padding
- * that makes it is `Input`'s to write.
- *
- * **Nothing here is bound to a key.** The tabs display their keys and this
- * displays the search's, because the surface is the only thing that knows
- * whether a text input holds focus — and a single-key shortcut that fires while
- * somebody is typing is the first failure the design contract's safety rules
- * name. `Esc` is the exception, and it is not a single-key action: it is the
- * field's own behaviour, so it lives here.
+ * Two axes, and the Manifest is neither — the Board is already scoped to
+ * one Manifest, and origin was drawn as a filter and rejected: what needs
+ * me, what is running, why has that not started are all state. What's left
+ * is state plus one text match, above the tabs with sort rather than beside
+ * them — a sixth tab is not what a text match is.
+ */
+
+/**
+ * Search reads every job whatever tab is set: the surface bypasses the tab,
+ * passes `suspended`, and the strip steps back without losing the
+ * selection, so the tab's counts reflect what search matched rather than
+ * the whole board. Resetting to `All` was the other reading and lost — it
+ * spends a choice to make the sentence true and has nothing to restore.
+ */
+
+/**
+ * The search's key is drawn inside the field, not beside it as a second
+ * control. Nothing else here is bound to a key — the surface alone knows
+ * whether the field holds focus, and a single-key shortcut firing while
+ * someone types is the first failure the safety rules name. `Esc` is the
+ * exception: it is the field's own behaviour, not a single-key action.
  */
 export type BoardSortOption = {
   /** The stored value: `critical_first`, `oldest_first`. */

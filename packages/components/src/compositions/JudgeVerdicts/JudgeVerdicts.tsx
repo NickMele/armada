@@ -13,52 +13,55 @@ import {
 } from "../../primitives/Table/Table";
 
 /**
- * Judge verdicts — the panel's answer, as criteria against judges.
+ * Judge verdicts — the panel's answer, as criteria against judges. A
+ * panel's output is not a stream, so it is not drawn as one: under the
+ * veto-only contract a Judge that meets a criterion writes nothing, so
+ * the output is a grid with its refusals opening out of it, not three
+ * opinions to read.
  *
- * **A panel's output is not a stream, so it is not drawn as one.** Every other
- * Check writes a transcript; a panel writes verdicts, and under the veto-only
- * contract a Judge that meets a criterion writes nothing at all. So the output
- * is not three opinions to read — it is a grid with its refusals opening out of
- * it, and the grid is the artifact.
+ * A refusal opens under the row it refuses. It sat in a block below the
+ * whole grid until 2026-09-08, which read acceptably with one refusal and
+ * fell apart with two: each block restated *Refused — 0N* and the reader
+ * mapped it back to a row scrolled past, twice over — and everything that
+ * block said about criterion 02 was a second description of 02 nowhere
+ * near 02. There is one place a criterion is discussed now: its own row.
+ */
+
+/**
+ * One open at a time, `StepStory`'s rule and holds here for the same
+ * reason: three refusals open at once is a wall of prose with a table
+ * lost at the top of it, and a collapsed refusal still carries its split
+ * so three can be triaged without opening any.
  *
- * **A refusal opens under the row it refuses.** It sat in a block below the
- * whole grid until 2026-09-08, which read acceptably with one refusal and falls
- * apart with two: each block restates *Refused — 0N* and the reader maps it
- * back to a row they have scrolled past, twice over. Worse, everything that
- * block said about criterion 02 — its grounds, its citations, the note about
- * criteria being frozen — was a second description of 02 on the screen and none
- * of it was near 02. There is one place a criterion is discussed now, and it is
- * the criterion's own row.
+ * The acts are not in here: Overrule, retry and redispatch act on the
+ * step rather than on a criterion — one Job is killed once however many
+ * criteria were refused — so they belong to the decision after the
+ * story. A set of acts per refusal would have offered to kill the same
+ * Job three times.
+ */
+
+/**
+ * The measured rows are the veto-only contract, drawn: a criterion a
+ * Check settled never reached the panel, and rendering that as one band
+ * across the judge columns says which parts of the verdict rest on a
+ * machine and which on a model, without a sentence.
  *
- * **One open at a time**, which is `StepStory`'s rule and holds here for the
- * same reason: the grid's job is to show the shape of a verdict, and three
- * refusals open at once is a wall of prose with a table lost at the top of it.
- * A collapsed refusal still carries its split, so three of them can be triaged
- * without opening any.
- *
- * **The acts are not in here.** Overrule, retry and redispatch act on the step
- * rather than on a criterion — one Job is killed once however many criteria
- * were refused — so they belong to the decision after the story. A set of acts
- * per refusal would have offered to kill the same Job three times.
- *
- * **The measured rows are the veto-only contract, drawn.** A criterion a Check
- * settled never reached the panel, and rendering that as one band across the
- * judge columns says which parts of the verdict rest on a machine and which on
- * a model — without a sentence.
- *
- * **The split is shown and never becomes the verdict.** One veto is a refusal
- * whatever its size, so hue here is per criterion and binary. But `2 of 3` and
- * `1 of 3` are different situations for the person deciding whether to rewrite
- * the brief or take the Job over. The count is a confidence signal, not a vote,
- * which is why it is a figure and never a second colour.
- *
- * **Rows are in the criteria's own frozen order and never sorted.** This is a
- * table with a numbered column, and a numbered column that runs 02, 01, 03, 04
- * reads as a bug rather than as an opinion. `CriterionVerdicts` sorts its
- * refusals to the top and is right to: it is an unnumbered list of one Judge's
- * answers, where nothing but the order can say which row matters. Here the
- * refused row is marked in three other ways, so the order is spent on the one
- * job only it can do.
+ * The split is shown and never becomes the verdict: one veto is a
+ * refusal whatever its size, so hue here is per criterion and binary. But
+ * `2 of 3` and `1 of 3` are different situations for the person deciding
+ * whether to rewrite the brief or take the Job over — the count is a
+ * confidence signal, not a vote, so it is a figure and never a second
+ * colour.
+ */
+
+/**
+ * Rows are in the criteria's own frozen order and never sorted: this is
+ * a table with a numbered column, and a numbered column that runs 02,
+ * 01, 03, 04 reads as a bug rather than an opinion. `CriterionVerdicts`
+ * sorts its refusals to the top and is right to — it is an unnumbered
+ * list of one Judge's answers, where nothing but order says which row
+ * matters. Here the refused row is marked in three other ways, so order
+ * is spent on the one job only it can do.
  */
 
 /** How one judge answered one criterion. Spelled as the wire spells it. */
@@ -112,23 +115,21 @@ export type JudgeVerdictsProps = {
    */
   judges: ReactNode[];
   /*
-   * **The panel is on the wire.** `Judged.member` arrived in protocol 7.7 —
-   * one row per criterion *per member*, absent at `panel_size: 1` — so the
-   * columns, the marks and the split all have a producer, and `screens`'
-   * `gates.ts` is what groups them. This block said the opposite until
-   * 2026-09-09, when the grid was built into the job detail screen.
+   * The panel is on the wire: `Judged.member` arrived in protocol 7.7, one
+   * row per criterion per member, absent at `panel_size: 1`, so the
+   * columns, marks and split all have a producer, grouped by `screens`'
+   * `gates.ts`. This block said otherwise until 2026-09-09.
    *
-   * **What each judge read is on the wire too**, since 8.3: `Judged.cited`
-   * places every quotation a member made in the brief it was shown, and
-   * `Judged.given` digests what that member was handed. `JudgeCitations` and
-   * `JudgeInputs` both draw served data now.
-   *
-   * What still has none: the per-judge citation *sets* `JudgeRefusal.overlap`
-   * draws — which is where two members' citations overlap and where they do
-   * not. `cited` carries each member's list and nothing computes the
-   * intersection, so the overlap is a reading nobody has written rather than a
-   * record nobody keeps.
+   * What each judge read is on the wire too, since 8.3: `Judged.cited`
+   * places every quotation a member made in the brief shown, and
+   * `Judged.given` digests what that member was handed — `JudgeCitations`
+   * and `JudgeInputs` both draw served data now. What still has none: the
+   * per-judge citation sets `JudgeRefusal.overlap` draws; `cited` carries
+   * each member's list and nothing computes the intersection, so the
+   * overlap is a reading nobody has written rather than a record nobody
+   * keeps.
    */
+
   /** The glyphs, from the `circle-*` family the Judge owns. */
   glyphs?: Partial<Record<JudgeMark, LucideIcon>>;
   /** What a mark means, for the reader who is not looking at the glyph. */

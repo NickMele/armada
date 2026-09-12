@@ -8,40 +8,41 @@ import { StepRow, type StepRowFact } from "../StepRow/StepRow";
 import type { StepActivity } from "../StepActivityMark/StepActivityMark";
 
 /**
- * The run — the workflow as a tree, on the left of job detail.
+ * The run — the workflow as a tree, on the left of job detail. The
+ * chevron opens a step's facts; the row selects it — separate controls
+ * because they answer different questions: the tree holds the short
+ * facts a step produced, the panel beside it holds anything that is a
+ * sentence. A tree that opened into prose is the panel, badly; a panel
+ * with no tree cannot say where in the run you are.
  *
- * **The chevron opens a step's facts; the row selects it.** The two are
- * separate controls on one row because they answer different questions: the
- * tree holds the short facts a step produced, and the panel beside it holds
- * anything that is a sentence. Building either alone loses that division —
- * a tree that opened into prose is the panel, badly, and a panel with no tree
- * cannot say where in the run you are.
+ * Not `WorkflowRail`: the rail draws every step's gate rows inline,
+ * always, since it was the only place a gate could be read. A step's
+ * gates are now the phase strip's, in the panel, where each tier is a
+ * control that says what it is waiting on. What is left here is what a
+ * step produced, cleared and tried — short facts, closed by default.
+ */
+
+/**
+ * Elapsed is a figure, never a chart: a filled bar reads as progress and
+ * a step has no percentage. An attempt is a row, not a counter: attempts
+ * beside each other show whether a Drone is trying different things or
+ * rephrasing one, a count shows neither.
  *
- * **Not `WorkflowRail`.** The rail draws every step's gate rows inline, always,
- * because it was the only place a gate could be read. A step's gates are now
- * the phase strip's, in the panel, where each tier is a control that says what
- * it is waiting on. What is left here is what a step *produced*, *cleared* and
- * *tried* — short facts, closed by default.
- *
- * **Elapsed is a figure, never a chart.** A filled bar reads as progress and a
- * step has no percentage.
- *
- * **An attempt is a row, not a counter.** Attempts beside each other show
- * whether a Drone is trying different things or rephrasing one; a count shows
- * neither.
- *
- * **Waiting, stopped and failed must never look alike.** They are three kinds
- * of stopped: waiting on you is the workflow working, stopped is a Drone that
- * tried and cannot get further, failed is over. `StepActivityMark` owns the
- * glyphs and the stylesheet owns the surfaces; both are the same values the
- * rail uses, so a step renders the same way on either.
- *
- * **The tree does not draw a row.** `StepRow` does, `FactChip` and `PathChip`
- * draw what is under it, and this holds the well and the order. It drew all
- * three itself while those components were also drawing them, which is two
- * answers to one question — and it passed a list number to a step that had not
- * run, where the drawing gives a hollow ring. In a tree of six rows a column
- * of numbers says only that the tree has six rows.
+ * Waiting, stopped and failed must never look alike — three kinds of
+ * stopped: waiting on you is the workflow working, stopped is a Drone
+ * that tried and cannot get further, failed is over. `StepActivityMark`
+ * owns the glyphs and the stylesheet owns the surfaces; both are the
+ * same values the rail uses, so a step renders the same way on either.
+ */
+
+/**
+ * The tree does not draw a row: `StepRow` does, `FactChip` and
+ * `PathChip` draw what is under it, and this holds the well and the
+ * order. It drew all three itself while those components were also
+ * drawing them, two answers to one question — and it passed a list
+ * number to a step that had not run, where the drawing gives a hollow
+ * ring. In a tree of six rows a column of numbers says only that the
+ * tree has six rows.
  */
 
 /**

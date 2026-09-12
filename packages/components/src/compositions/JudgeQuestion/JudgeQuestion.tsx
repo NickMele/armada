@@ -6,28 +6,32 @@ import { Textarea } from "../../primitives/Textarea/Textarea";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
- * A Judge criterion refused and a person is being asked about it, rather than
- * the step stopping over it — `docs/concepts/judge.md`'s asking design.
+ * A Judge criterion refused and a person is being asked about it,
+ * rather than the step stopping over it — `docs/concepts/judge.md`'s
+ * asking design.
  *
- * **Drawn where the verdict is drawn now.** A refusal on a criterion marked
- * `refuse` still stops the step exactly as it always has; this is what the
- * rest of them do instead, and it carries the same finding a stopped step's
- * refusal does — `expected`, `produced`, `consequence` — because a person
- * answering this needs exactly what a person overruling one needs.
- *
- * **One press is the whole answer.** There is no radio-then-send here, unlike
- * `DroneQuestion`: three presses, three outcomes, and a note that rides along
- * without gating any of them. Agreeing fails the step exactly as it would if
- * the criterion were marked `refuse`; either disagreement advances it, and
+ * Drawn where the verdict is drawn now: a refusal on a criterion marked
+ * `refuse` still stops the step exactly as it always has; this is what
+ * the rest of them do instead, and it carries the same finding a
+ * stopped step's refusal does — `expected`, `produced`, `consequence` —
+ * since a person answering this needs exactly what a person overruling
+ * one needs.
+ */
+
+/**
+ * One press is the whole answer: no radio-then-send here, unlike
+ * `DroneQuestion` — three presses, three outcomes, and a note that
+ * rides along without gating any of them. Agreeing fails the step
+ * exactly as `refuse` would; either disagreement advances it, and
  * "always" also stands the criterion down for the repository.
  *
- * **Nothing here times out.** An unanswered question holds — the same cost an
- * open human gate already has — so there is no countdown and no default.
- *
- * **One primary, and it is the one-step answer.** "Always disagree" changes
- * what this repository asks about forever, so it must not read as the
- * inviting press — it is secondary, beside "Agree with the refusal", and the
- * emphasis sits on "Disagree, just this step" alone.
+ * Nothing here times out: an unanswered question holds, the same cost
+ * an open human gate already has, so there is no countdown and no
+ * default. One primary, and it is the one-step answer: "Always
+ * disagree" changes what this repository asks about forever, so it
+ * must not read as the inviting press — it is secondary, beside "Agree
+ * with the refusal", and the emphasis sits on "Disagree, just this
+ * step" alone.
  */
 export type JudgeQuestionProps = {
   /** Which criterion refused — `Does the fix address the cause the note names?` */

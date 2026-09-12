@@ -10,58 +10,59 @@ import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepAct
 /**
  * Drone brief — what Armada told the Drone, in the blocks it was written in.
  *
- * **Named for whose brief it is.** `JobBrief` is the requester's half: what done
- * means and what context the Job carries. This is Fleet's turn into a Drone's
- * context, and a component called `Brief` beside that one would be one name
- * covering two different things.
+ * Named for whose brief it is: `JobBrief` is the requester's half — what
+ * done means, what context the Job carries — and this is Fleet's turn
+ * into a Drone's context.
  *
- * **A heading is a heading because the wire says which line it is.**
- * `crates/fleet/src/briefing.rs` writes every block as its heading, a blank
- * line, then the body, and it names the heading's line number on
- * `Saw.instructed.headings` as it writes it. So this draws a heading without
- * deciding what one looks like — no first line of a block, no line in capitals.
- * Both of those guesses are wrong on briefs Fleet already writes: the baseline
- * opens with prose, and what the part before produced opens its block with a
- * sentence. Before the marker existed the gap above a heading was the only
- * thing marking it, which is #318.
+ * A heading is a heading because the wire says which line it is:
+ * `crates/fleet/src/briefing.rs` names the heading's line number on
+ * `Saw.instructed.headings` as it writes it, so this draws a heading
+ * without guessing at shape — no first line of a block, no line in
+ * capitals, both wrong on briefs Fleet already writes. Before the marker
+ * existed the gap above a heading was the only thing marking it, which
+ * is #318.
+ */
+
+/**
+ * A block keeps its own line breaks, because those newlines carry the
+ * meaning: the parts rail is one part per line, indented, with `STOP.`
+ * under the part the Drone is on. Joined into a paragraph that boundary
+ * lands mid-sentence, and the parts list, the delivery path and the stop
+ * end up buried in prose — that was #306, a default `white-space`
+ * discarding newlines that were on the wire the entire time.
+ */
+
+/**
+ * Since protocol 9.7, a heading also carries a `kind`, and where every
+ * heading has one this draws one foldable section per heading, titled
+ * with the heading's own words, rather than a flat run of headings and
+ * paragraphs. Where `kind` is absent from every heading — a Fleet built
+ * before 9.7, or a turn with no headed blocks at all — this draws exactly
+ * as it always has, flat, since pairing the first few kinds and guessing
+ * the rest is worse than pairing none.
+ */
+
+/**
+ * The kind decides three things, never the title: whether a section opens
+ * or folds by default; whether `steps` or `checks` draws Bridge's own
+ * reading in place of raw text; and whether it reads as `standing` — the
+ * same on every Job — which folds shut and says so in its meta. The title
+ * is always the heading's own words, sentence-cased; a `kind → label` map
+ * would be a second vocabulary for a fact the heading's text already
+ * carries.
+ */
+
+/**
+ * Sectioned or flat, nothing the Drone was told disappears: a folded
+ * section keeps its body in the DOM, and `steps`/`checks` lead with a
+ * structured reading while the words Fleet actually sent stay reachable
+ * underneath, folded by default rather than replaced.
  *
- * **A block keeps its own line breaks, because those newlines carry the
- * meaning.** The parts rail is one part per line, indented, with `STOP.` under
- * the part the Drone is on. Joined into a paragraph that boundary lands
- * mid-sentence, and the parts list, the delivery path and the stop — the three
- * things a person opens this chapter to find — end up buried in prose. That is
- * the whole of #306, and it was a default `white-space` discarding newlines
- * that were on the wire the entire time.
- *
- * **Since protocol 9.7, a heading also carries a `kind`**, and where every
- * heading has one this draws one foldable section per heading, titled with
- * the heading's own words, rather than a flat run of headings and paragraphs.
- * **Where `kind` is absent from every heading — a turn from a Fleet built
- * before 9.7, or one with no headed blocks at all — this draws exactly as it
- * always has**, flat, because pairing the first few kinds and guessing at the
- * rest is worse than not pairing any.
- *
- * **The kind decides three things, and never the title.** Whether a section
- * opens or folds by default; whether `steps` or `checks` draws Bridge's own
- * reading of data it already holds, in place of the section's raw text; and
- * whether the section reads as `standing` — the same on every Job — which
- * folds shut and says so in its meta. The title is always the heading's own
- * words, sentence-cased. Two vocabularies for one heading is the cost a
- * `kind → label` map would have added for no fact the heading's own text does
- * not already carry; `sentenceCase` below is a text transform, not a second
- * naming of the thing.
- *
- * **Sectioned or flat, nothing the Drone was told disappears.** A folded
- * section keeps its body in the DOM; the `steps` and `checks` sections draw a
- * structured reading built from data Bridge already holds, but the words Fleet
- * actually sent stay reachable underneath it, folded by default — never
- * replaced, only led with.
- *
- * **No font size, for `Prose`'s reason.** The type scale belongs to
- * `docs/contracts/design-system.md`; this draws inside a chapter body at
- * `--text-xs` and reads at whatever size the surface around it sets. A heading
- * here is weight and colour and never a size, which is also what keeps it from
- * competing with the chapter's own title above it.
+ * No font size, for `Prose`'s reason: the type scale belongs to
+ * `docs/contracts/design-system.md`, so this draws at `--text-xs` inside a
+ * chapter body and reads at whatever size the surface sets. A heading here
+ * is weight and colour, never a size, which also keeps it from competing
+ * with the chapter's own title above it.
  */
 export type DroneBriefProps = {
   /**
@@ -129,19 +130,16 @@ const SAID_FOR: Record<BriefStep["position"], string> = {
 /**
  * One line of the payload, as the log's own `LogLine` shapes it.
  *
- * **`named` is a string here and a closed set there.** `screens` owns that
- * vocabulary — the echoed command, the result, the trailer — and this reads
- * exactly one of its values. Restating the set would be a second copy of it in
- * the package that does not decide it, and narrowing `named` to `"heading"`
- * would refuse the payload every caller actually holds.
+ * `named` is a string here and a closed set in `screens`, which owns that
+ * vocabulary (the echoed command, the result, the trailer); narrowing it
+ * to `"heading"` here would refuse the payload every caller actually
+ * holds. Every other value draws as body deliberately — `passed` and
+ * `failed` are a Check's outcome, and a brief has none, so hueing by this
+ * field would colour instructions as a result.
  *
- * **Every other value draws as body, deliberately.** `passed` and `failed` are
- * what a Check's run came to, and a brief has no outcomes in it — a component
- * that hued by this field would colour a block of instructions as a result.
- *
- * **`kind` is read only beside `named: "heading"`.** It is the wire's
- * `BlockKind`, paired by `story.ts`; a body line carries none, and the type
- * says so with an optional field rather than a second union.
+ * `kind` is read only beside `named: "heading"` — it is the wire's
+ * `BlockKind`, paired by `story.ts`; a body line carries none, hence the
+ * optional field rather than a second union.
  */
 export type BriefLine = {
   text: string;
@@ -375,24 +373,19 @@ function RawWords({ blocks }: { blocks: readonly BriefBlock[] }): ReactNode {
 }
 
 /**
- * Every leading space, doubled.
+ * Every leading space, doubled — a deliberate divergence from the text a
+ * Drone was sent. `briefing.rs` indents a part by two spaces and the stop
+ * under it by five, legible in a monospaced context window but not at
+ * `--text-xs` in a 602px panel (two spaces is roughly seven pixels there),
+ * so the same brief now has one shape for a person and another for the
+ * model.
  *
- * **This is a deliberate divergence from the text a Drone was sent, and it has
- * a cost worth stating.** `briefing.rs` indents a part of the rail by two
- * spaces and the stop under it by five, which is legible in a monospaced
- * context window and is not legible at `--text-xs` in a 602px panel — two
- * spaces there is roughly seven pixels, and the list read as prose that had
- * been nudged. Widened here, the same brief now has one shape for a person and
- * another for the model, so a person reading this rail and a person reading the
- * transcript Fleet sent are not looking at identical strings.
- *
- * **The alternative was widening it in `briefing.rs`, and that is worse.** The
- * indent would then be chosen for a panel it is never drawn in, and
- * `docs/contracts/agent-prompt.md` refuses shape rules in the baseline. A
- * rendering decision belongs on the surface that renders.
- *
- * A multiplier rather than a fixed pad, so relative depth survives: the stop
- * stays deeper than the part it sits under, at whatever depths Fleet wrote.
+ * Widening it in `briefing.rs` instead would choose the indent for a panel
+ * it is never drawn in, and `docs/contracts/agent-prompt.md` refuses shape
+ * rules in the baseline — a rendering decision belongs on the surface that
+ * renders. A multiplier rather than a fixed pad, so relative depth
+ * survives: the stop stays deeper than the part it sits under, at
+ * whatever depths Fleet wrote.
  */
 export function widenIndent(block: string): string {
   return block
@@ -414,22 +407,19 @@ const INDENT = 2;
 export type BriefBlock = { text: string; heading: boolean };
 
 /**
- * The lines, grouped into blocks at the blank ones.
+ * The lines, grouped into blocks at the blank ones — a run of blanks is
+ * one boundary, since an empty block would draw as an empty element, a
+ * gap a reader cannot tell from a block that failed to render.
  *
- * **A run of blank lines is one boundary.** An empty block draws as an empty
- * element, which is a gap a reader cannot tell from a block that failed to
- * render.
+ * A block is a heading when it is one line and that line is named one:
+ * every heading `briefing.rs` writes has a blank line under it, so
+ * grouping already leaves each one alone. A named line with body beside
+ * it stays body rather than dragging the body into a heading — the
+ * marker says which line, this says which block, neither guesses.
  *
- * **A block is a heading when it is one line and that line is named one.** Every
- * heading `briefing.rs` writes has a blank line under it, so grouping already
- * leaves each one alone in its block and there is nothing to split. A named
- * line that turned up with body beside it stays body rather than dragging the
- * body into a heading — the marker says which line, and this says which block,
- * and neither guesses.
- *
- * Exported because it is arithmetic and is tested as arithmetic — in
- * `packages/screens`, in node, where a hundred briefs cost what one costs. A
- * `play` that computed this would be a unit test paying a browser's price.
+ * Exported because it is arithmetic and is tested as arithmetic, in
+ * `packages/screens`, in node, where a hundred briefs cost what one does;
+ * a `play` here would be a unit test paying a browser's price.
  */
 export function briefBlocks(lines: readonly (string | BriefLine)[]): BriefBlock[] {
   const blocks: BriefBlock[] = [];

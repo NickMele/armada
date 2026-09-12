@@ -18,37 +18,43 @@ export type NothingToAsk = "no_answer" | "unreadable";
 
 /**
  * What this job holds on the machine, and the act that goes and looks.
- *
- * **Not a debug panel.** The moment it is for is a person worried about a job,
- * not an engineer instrumenting one, so the first thing on it is a sentence
- * answering *is this working* and the figures come after. A dump of numbers
+ * Not a debug panel: the moment it is for is a person worried about a
+ * job, not an engineer instrumenting one, so the first thing on it is a
+ * sentence answering *is this working*, figures after. A dump of numbers
  * makes a person do the reading; this does it and shows its working.
  *
- * **Nothing running is drawn as loudly as a failure.** A job that reads running
- * and holds no process is the state that took a terminal to establish, and an
- * empty list under a heading is exactly how it went unnoticed — so the absence
- * is a sentence in the failed treatment rather than a table with no rows.
+ * Nothing running is drawn as loudly as a failure: a job that reads
+ * running and holds no process is the state that took a terminal to
+ * establish, and an empty list under a heading is exactly how it went
+ * unnoticed — so the absence is a sentence in the failed treatment
+ * rather than a table with no rows.
+ */
+
+/**
+ * Every figure carries when it was read: a process can exit between the
+ * sample and the render, so the instant is the last line rather than a
+ * caption, since it qualifies everything above it.
  *
- * **Every figure carries when it was read.** A process can exit between the
- * sample and the render. The instant is the last line rather than a caption,
- * because it qualifies everything above it.
+ * What could not be told is on screen, never rounded up: an examination
+ * answering *everything looks fine* on a plainly hung job spends a
+ * person's suspicion and returns nothing, so a look that cannot separate
+ * working from not says so in its own row and keeps the headline off
+ * working.
+ */
+
+/**
+ * No byte count is drawn without its unit resolved: disk is the figure
+ * with a second reason to exist — seventy-four worktrees once took 220
+ * GB and three agents died at zero bytes free — and it is the one
+ * number here a person acts on directly.
  *
- * **What could not be told is on screen, never rounded up.** An examination
- * that answers *everything looks fine* on a plainly hung job spends a person's
- * suspicion and returns nothing, so a look that cannot separate working from
- * not says so in its own row and keeps the headline off working.
- *
- * **No byte count is drawn without its unit resolved.** Disk is the figure with
- * a second reason to exist — seventy-four worktrees once took 220 GB and three
- * agents died at zero bytes free — and it is the one number here a person acts
- * on directly.
- *
- * **The act is not offered where pressing it could not work.** Every reading
- * here is Fleet's and the button asks Fleet for one, so the panel has to know
- * when there is nothing on the other end to ask — `nothingToAsk`. Drawn as an
- * unpressed panel it read "Nobody has asked whether this job is working" over
- * a live control, which is the opposite of what was true, and a disabled
- * control with no sentence beside it is the same dead end drawn quieter.
+ * The act is not offered where pressing it could not work: every
+ * reading here is Fleet's and the button asks Fleet for one, so the
+ * panel has to know when there is nothing on the other end to ask —
+ * `nothingToAsk`. Drawn as an unpressed panel it read "Nobody has asked
+ * whether this job is working" over a live control, the opposite of
+ * what was true, and a disabled control with no sentence beside it is
+ * the same dead end drawn quieter.
  */
 export type JobResourcesProps = {
   /**
@@ -69,24 +75,25 @@ export type JobResourcesProps = {
   /** Why the last look failed, where it did. Drawn instead of a finding. */
   lookFailed?: string;
   /**
-   * There is nothing to ask, and which of the two reasons it is. **The act is
-   * not drawn at all**, and the panel says why rather than leaving a dead
-   * control on screen.
+   * There is nothing to ask, and which of the two reasons it is. The act
+   * is not drawn at all, and the panel says why rather than leaving a
+   * dead control on screen.
    *
-   * **Not `lookFailed`, and the difference is what to do next.** A failed look
-   * is one attempt that did not come back, which invites another; both of
-   * these say attempts are not the shape of the problem. The caller decides it
-   * from what the failure was, never from the fact that something failed — a
-   * read Fleet refused or answered late is a read worth sending again.
-   *
-   * **Two readings and not one**, because the fixes are opposite. `no_answer`
-   * is a Fleet that may only need starting; `unreadable` is a Fleet that is
-   * running and would come back the same, so restarting it is the wrong move
-   * and the pair has to be rebuilt. One sentence covering both would send
-   * somebody to do the wrong one half the time.
-   *
-   * **A reading rather than a sentence**, because the copy is fixed and
-   * belongs to one producer.
+   * Not `lookFailed`: a failed look is one attempt that did not come
+   * back, which invites another; this says attempts are not the shape of
+   * the problem. The caller decides it from what the failure was, never
+   * from the fact that something failed — a read Fleet refused or
+   * answered late is worth sending again.
+   */
+
+  /**
+   * Two readings and not one, because the fixes are opposite: `no_answer`
+   * is a Fleet that may only need starting, `unreadable` is a Fleet that
+   * is running and would come back the same, so restarting is the wrong
+   * move and the pair has to be rebuilt. One sentence covering both
+   * would send somebody to do the wrong one half the time. A reading
+   * rather than a sentence, since the copy is fixed and belongs to one
+   * producer.
    */
   nothingToAsk?: NothingToAsk;
   onExamine: () => void;
@@ -216,22 +223,23 @@ const SILENT: Record<NothingToAsk, string> = {
 
 /**
  * What stands in for the reading, and neither of them is a reading.
+ * Unknown rather than absent, said out loud in both, since everything
+ * else on this panel is a figure and an empty panel reads as a job
+ * holding nothing.
  *
- * **Unknown rather than absent**, said out loud in both, because everything
- * else on this panel is a figure and an empty panel reads as a job holding
- * nothing.
- *
- * **`no_answer` points at the status bar and `unreadable` must not.** The bar
- * names which Fleet state a silent one is and what to do about it, and on the
- * second of these it says "Fleet running" — which is true, and would read as
- * this panel and the bar disagreeing about the same moment. So the sentence
+ * `no_answer` points at the status bar and `unreadable` must not: the
+ * bar names which Fleet state a silent one is and what to do, and on
+ * the second it says "Fleet running" — true, and would read as this
+ * panel and the bar disagreeing about the same moment. So the sentence
  * carries its own next step.
- *
- * **The wrong move is named, because it is the one somebody reaches for.** A
- * Fleet that is up and unreadable comes back the same after a restart: the two
- * were built apart, and building them together is the fix. No version and no
- * word for the disagreement — a number here is machinery, and the person
- * reading this needs the act.
+ */
+
+/**
+ * The wrong move is named, because it is the one somebody reaches for: a
+ * Fleet that is up and unreadable comes back the same after a restart —
+ * the two were built apart, and building them together is the fix. No
+ * version and no word for the disagreement — a number here is
+ * machinery, and the person reading this needs the act.
  */
 const INSTEAD: Record<NothingToAsk, string> = {
   no_answer:

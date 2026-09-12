@@ -225,27 +225,18 @@ const STEP_BRIEF = [
 ].join("\n");
 
 /**
- * `TheBriefAndItsEcho` drew a pair: the step's opening `instructed` row,
- * first-hand and with its occasion, and beside it a one-line `said` row
- * reading exactly `REPLAYED`, with the same text folded behind it instead of
- * in front of it — Fleet's own turn, come back off the Drone's input channel.
- * That story asked whether the second row earned its place beside
- * `quota_moved` and `missed` without deciding it.
+ * `TheBriefAndItsEcho` drew the step's `instructed` row beside a `said` row
+ * reading `REPLAYED` — Fleet's own turn, echoed back off the Drone's input
+ * channel — and left open whether it earned its place beside `quota_moved`
+ * and `missed`.
  *
- * **It is decided.** `crates/ipc/src/turn.rs`'s `Shown::of` refuses
- * `quota_moved` and `missed` before either leaves Fleet; `story.ts`'s
- * `entriesOf` now refuses an `armada`-voiced `said` row the same way, one
- * layer up, because Fleet owns the Drone's input channel outright and never
- * puts a turn there without an `instructed` row first — the echo names
- * nothing the first-hand row does not already carry. This pane never draws
- * it, so this story draws what a step's stream now reads as: the brief once,
- * first-hand, with nothing folded behind a second sentence quoting it back.
- *
- * **The Drone's own prose is not this.** Its `said` rows are untouched —
- * #110 attributed them rather than dropping them, and nothing here reverses
- * that. What is withheld is a row whose only content was already on the
- * transcript under its own author's name; a Drone's words have no such
- * duplicate.
+ * It is decided: `crates/ipc/src/turn.rs`'s `Shown::of` refuses those two
+ * before they leave Fleet, and `story.ts`'s `entriesOf` now refuses an
+ * `armada`-voiced `said` row the same way — Fleet always writes an
+ * `instructed` row first, so the echo carries nothing new. This story draws
+ * the brief once, first-hand, with no echo folded behind it. The Drone's own
+ * `said` rows are untouched — #110 attributed rather than dropped them; only
+ * a row whose content already sits on the transcript is withheld.
  */
 export const TheBriefWithoutItsEcho: Story = {
   args: {

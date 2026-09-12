@@ -115,20 +115,16 @@ export type RefusalsProps = {
    */
   note?: ReactNode;
   /**
-   * What a fresh drone meets when it reaches for these again, and what would
-   * change it.
+   * What a fresh drone meets when it reaches for these again, and what
+   * would change it. The rows said what was stopped and nothing said
+   * whether it stays stopped: a person reading a refusal beside a
+   * restart button is being asked to spend a drone on a repeat, since a
+   * toolset is rendered at spawn and a restart renders the same one — so
+   * the list alone invites the press that reproduces it.
    *
-   * **The rows said what was stopped and nothing said whether it stays
-   * stopped.** A person reading a refusal beside a restart button is being
-   * asked to spend a drone on a repeat, because a toolset is rendered at spawn
-   * and a restart renders the same one — so the list alone invites the press
-   * that reproduces it.
-   *
-   * **Last, and under the size note rather than over it.** The note is a
-   * caveat about the list; this is what follows from the list, and it sits
-   * against whatever the surface says about the acts on offer.
-   *
-   * Absent draws nothing, which is a surface that has no reading of the rows.
+   * Last, and under the size note rather than over it: the note is a
+   * caveat about the list, this is what follows from it. Absent draws
+   * nothing, a surface with no reading of the rows.
    */
   again?: ReactNode;
   /**
@@ -146,37 +142,41 @@ export type RefusalsProps = {
 };
 
 /**
- * What a job reached for and was refused, as rows.
+ * What a job reached for and was refused, as rows. The trigger's
+ * evidence, drawn where the trigger is named: `stopped_by`, `recourse`
+ * and `worktree_on_disk` already render in the band above a stopped
+ * step's story; this answers *unblock it from what*, and sits beside
+ * them for the reason the gaming check's findings do — a person told a
+ * machine stopped their job needs what the machine stopped.
+ */
+
+/**
+ * A command wraps and is never clipped: Fleet bounds the argument at
+ * 200 characters with whitespace collapsed, so the longest row is a few
+ * lines in the panel — and the tail of a command is the part pasted
+ * into an allowlist, so an ellipsis takes away the thing the row is
+ * for. Nothing here is laid out to a width, so no row can scroll the
+ * panel sideways.
  *
- * **The trigger's evidence, drawn where the trigger is named.** `stopped_by`,
- * `recourse` and `worktree_on_disk` already render in the band above a stopped
- * step's story; this is the one thing that answers *unblock it from what*, and
- * it sits beside them for the reason the gaming check's findings do — a person
- * told a machine stopped their job needs what the machine stopped.
+ * A row that was cut says so on a line of its own — the same fact the
+ * list's own note carries one level up, so the two are written in one
+ * grammar: *showing 200 of 14,320 characters* under a command, *showing
+ * 50 of 137 refused calls* under the list.
+ */
+
+/**
+ * The list does not finish its own job, and `again` is what finishes
+ * it: a refusal drawn beside a restart button says what was stopped and
+ * nothing about whether restarting meets it again — so the rows read as
+ * a diagnosis and the press reads as the cure, and it is not one. What
+ * is true is a mechanism rather than advice, and the caller states it.
  *
- * **A command wraps and is never clipped.** Fleet bounds the argument at 200
- * characters with whitespace collapsed, so the longest row is a few lines in
- * the panel — and the tail of a command is the part that gets pasted into an
- * allowlist, so an ellipsis takes away the thing the row is for. Nothing here
- * is laid out to a width, so no row can scroll the panel sideways.
- *
- * **A row that was cut says so on a line of its own.** That is the same fact
- * the list's own note carries one level up, so the two are written in one
- * grammar rather than as two inventions: *showing 200 of 14,320 characters*
- * under a command, *showing 50 of 137 refused calls* under the list.
- *
- * **The list does not finish its own job, and `again` is what finishes it.** A
- * refusal drawn beside a restart button says what was stopped and says nothing
- * about whether restarting meets it again — so the rows read as a diagnosis
- * and the press reads as the cure, and it is not one. What is true is a
- * mechanism rather than advice, and the caller states it.
- *
- * **A refused command can be answered on its row.** Where the caller offers
- * answers, each is a control under the command, in its column — beside the
- * thing it is about rather than in a panel of its own, so allowing one command
- * is one press and not an edit to armada.yml by hand. Ghost, the variant the
- * contract gives row actions, because three rows of three controls at a louder
- * variant would be a column of fills.
+ * A refused command can be answered on its row: where the caller offers
+ * answers, each is a control under the command, in its column — beside
+ * the thing it is about rather than in a panel of its own, so allowing
+ * one command is one press and not an edit to armada.yml by hand.
+ * Ghost, the variant the contract gives row actions, since three rows
+ * of three controls at a louder variant would be a column of fills.
  */
 export function Refusals({
   refused,

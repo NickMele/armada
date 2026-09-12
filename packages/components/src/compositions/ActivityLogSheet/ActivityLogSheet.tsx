@@ -5,45 +5,40 @@ import { Tabs } from "../../primitives/Tabs/Tabs";
 
 /**
  * A step's activity log, on the layer that can hold it — Journey 4, frames
- * `4i`, `4l` and `4m`.
+ * `4i`, `4l` and `4m`. A sheet because the reading has no end: 1676 entries
+ * on a real Job would push every chapter below it off screen if opened in
+ * place, so the log leaves the panel and the panel stays as it was.
  *
- * **It is a sheet because the reading has no end.** 1676 entries on a real Job
- * is not a longer version of the five the panel previews: opened in place it
- * pushes every chapter under it off the screen, and the chapter line a reader
- * came back to goes with them. So the log leaves the panel and the panel stays
- * exactly as it was, which is the way back.
+ * Holds position rather than following the tail — a stream that scrolls
+ * itself cannot be read, one that silently stops cannot be trusted. *Jump to
+ * now* carries the count of what arrived while reading, repeated under the
+ * last entry since the strip sits at the top and the reader at the bottom.
+ */
+
+/**
+ * The stream itself is a slot: `ActivityLog` and `LogEntry` both exist and
+ * Bridge draws the second, so this sheet takes rows as children rather than
+ * importing either. Which a step's story should use is a question for those
+ * two components. Reported.
+ */
+
+/**
+ * The notice carries no glyph — the drawing draws `triangle-alert`, which
+ * the icon registry reserves to Doctor (a reservation withdrawn once and
+ * reinstated), so the contract wins and the band states itself by hue and
+ * surface instead, as the panel's own notice band already does. Reported.
  *
- * **The log holds position and does not follow the tail.** A stream that
- * scrolls itself cannot be read, and a stream that silently stops arriving
- * cannot be trusted — so it does both: the reading is held where you left it,
- * the strip says so, and *Jump to now* carries the count of what arrived while
- * you were reading. The same count is repeated under the last entry, because
- * the strip is at the top and the reader is at the bottom.
- *
- * **The stream itself is a slot.** Two log renderings exist in this package —
- * `ActivityLog` and `LogEntry` — and Bridge draws the second. A sheet that
- * imported one of them would be the sheet for one of the two surfaces, so it
- * takes the rows as children and the caller brings whichever log it already
- * draws in the panel. Which one a step's story should use is a question for
- * those two components, not for this layer. Reported.
- *
- * **The notice carries no glyph.** The drawing draws `triangle-alert` on it and
- * the icon registry reserves that glyph to Doctor — the reservation was
- * withdrawn once and reinstated — so the contract wins and the band says what
- * it is with the escalated hue and surface, as the panel's own notice band
- * already does. Reported.
- *
- * **An escalation states itself in a notice inside the sheet and does not grow
- * the act.** Pilot keeps the accent in the Job header, behind the layer — one
- * primary per view, and this view is the log.
- *
- * **The notice's control carries no key**, though it did. *Show me* falls back
- * to closing the sheet, which is what `Esc` does, and it was captioned `Esc` on
- * that reasoning — one act with two faces. On screen it reads as two controls
- * bound to one key, next to a *Close* captioned `Esc` and under a *Back to the
- * list* captioned `Esc`: three of them, and a person cannot tell which one the
- * key will reach. A caption is a promise about what a key does, so the key is
- * captioned once, on the control whose whole job it is.
+ * An escalation states itself here rather than growing the act: Pilot keeps
+ * the accent in the Job header, one primary per view, and this view is the
+ * log.
+ */
+
+/**
+ * The notice's *Show me* carries no key caption, though it once did — it
+ * falls back to closing the sheet, same as `Esc`, and three controls
+ * captioned `Esc` on one screen (this one, *Close*, *Back to the list*) is a
+ * promise a person cannot tell apart. A key is captioned once, on the
+ * control whose job it is.
  */
 
 /** One filter over the stream. The set is closed by who can write into a log. */

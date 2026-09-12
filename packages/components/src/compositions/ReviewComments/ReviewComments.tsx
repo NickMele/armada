@@ -7,52 +7,44 @@ import { Checkbox } from "../../primitives/Checkbox/Checkbox";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
- * The comments people left on this job's pull request, and the ones a drone
- * should act on.
+ * The comments people left on this job's pull request, and the ones a
+ * drone should act on. A person chooses, and that is the whole reason
+ * this exists: not every comment is a change request — some are
+ * questions, some agreement, some about something else — and a drone
+ * handed all of them will try to satisfy all of them, so the list is
+ * drawn and nothing is preselected.
  *
- * **A person chooses, and that is the whole reason this exists.** Not every
- * comment on a pull request is a change request — some are questions, some are
- * agreement, some are about something else entirely — and a drone handed all of
- * them will try to satisfy all of them. So the list is drawn and nothing is
- * preselected.
+ * It sits under the decision, in the same block: review and reply are
+ * one loop — the diff, then what to do about it, then what other people
+ * said, one scroll apart and never a second surface.
+ */
+
+/**
+ * Every word here except Armada's own was written by somebody outside:
+ * a comment is drawn as a text node and nothing else — no markdown, no
+ * link made clickable out of its own text. What a person does with it is
+ * pick it or not, and the only value that goes back is the handle the
+ * forge gave it.
  *
- * **It sits under the decision, in the same block.** Review and reply are one
- * loop: the diff, then what to do about it, then what other people said about
- * it, one scroll apart and never a second surface.
+ * Two things Armada adds, neither drawn from the comment's words: the
+ * code an inline comment is about (its file, line and diff) comes ahead
+ * of the words exactly as the forge answered it, no syntax highlighting;
+ * and a link to the comment on the forge is its own control, drawn from
+ * `id` through `onOpenLink` rather than a `url` handed straight to an
+ * anchor — the same discipline `WhereRow`'s `open` act keeps.
+ */
+
+/**
+ * A comment already sent is drawn and cannot be picked: the forge has no
+ * memory of what Armada did, so it stays on the pull request reading the
+ * same forever. One a drone has already been handed is shown and marked
+ * sent rather than hidden — hiding it would leave a person looking at a
+ * review with holes in it. Fleet refuses a press naming one, so offering
+ * it as choosable would be offering a press that fails.
  *
- * # Every word here except Armada's own was written by somebody outside
- *
- * A comment is written by whoever can see the pull request. It is drawn as a
- * text node and as nothing else — no markdown is rendered, no link is made
- * clickable *out of its own text*, no attribute carries one. What a person
- * does with it is pick it or not, and the only value that goes back on a pick
- * is the handle the forge gave it.
- *
- * # Two things Armada adds, and neither is drawn from the comment's words
- *
- * **The code an inline comment is about** — its file, its line, and the diff
- * around it — comes ahead of the words, exactly as the forge answered it: no
- * syntax highlighting, a `pre` block same as the comment's own paragraphs are
- * `pre-wrap`. **A link to the comment on the forge** is its own control, drawn
- * from `id` through `onOpenLink` rather than from a `url` string handed
- * straight to an anchor — the same discipline `WhereRow`'s `open` act keeps,
- * so nothing this surface was given reaches the OS without main resolving it
- * again.
- *
- * # A comment already sent is drawn and cannot be picked
- *
- * The forge has no memory of what Armada did, so a comment stays on a pull
- * request reading exactly the same forever. One a drone has already been handed
- * is shown with what it says and marked as sent, rather than hidden: hiding it
- * would leave a person looking at a review with holes in it and wondering what
- * happened to the rest. Fleet refuses a press naming one, so offering it as
- * choosable would be offering a press that fails.
- *
- * # No glyph
- *
- * `packages/icons/icons.toml` has no mark for a review comment. `message-*` is
- * not in the registry and nothing else there means it, so this draws none —
- * a state with no glyph gets the words, never an invented mark.
+ * No glyph: `packages/icons/icons.toml` has no mark for a review comment,
+ * `message-*` is not in the registry, so this draws none — a state with
+ * no glyph gets the words, never an invented mark.
  */
 export type ReviewCommentsProps = {
   /** Oldest first, as the forge ordered them. Empty draws `emptyNote`. */

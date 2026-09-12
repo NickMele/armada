@@ -78,23 +78,19 @@ function Live(props: Partial<BoardControlsProps>) {
 export const Resting: Story = { render: () => <Live /> };
 
 /**
- * Typing, with the tab suspended. **The strip is bypassed, not changed** — it
- * steps back to `--fg-subtle` and the selected tab gives up its underline,
- * because an underline says "this is what you are looking at" and while a
- * search runs that is not true. The selection survives, so clearing the field
- * gives the person their filter back.
+ * Typing, with the tab suspended: the strip steps back to `--fg-subtle` and
+ * the selected tab gives up its underline, since an underline says "this is
+ * what you're looking at" and while search runs that isn't true. The
+ * selection survives, so clearing the field gives the filter back.
  *
- * Resetting the tab to `All` was the other reading and lost: it spends a choice
- * to make "search reads every job whatever tab is set" true, and then has
- * nothing to restore. Suspending makes the same sentence true for free.
+ * Resetting to `All` was the other reading and lost — it spends a choice to
+ * make "search reads every job" true and has nothing to restore; suspending
+ * makes the same sentence true for free.
  *
- * **The counts are of what the search matched, not of the board**, so a
- * suspended strip is still a breakdown of what is on screen — and the `Queued`
- * tab going to nothing answers "is there one I have not approved" without
- * pressing anything.
- *
- * Pressing a tab from here clears the search. A suspended control that did
- * nothing when pressed would be a dead one, and the way out has to work.
+ * Counts are of what search matched, not of the board, so `Queued` going to
+ * nothing answers "is there one I haven't approved" without pressing
+ * anything. Pressing a tab from here clears the search — a suspended
+ * control doing nothing when pressed would be dead.
  */
 export const Searching: Story = {
   render: () => (

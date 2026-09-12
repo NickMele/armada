@@ -1,27 +1,28 @@
 import type { ReactNode } from "react";
 
 /**
- * A fact chip — one short machine-derived value, on a raised surface.
+ * A fact chip — one short machine-derived value, on a raised surface. A
+ * fact is a value, never a sentence — `not run`, `2 criteria`,
+ * `3 files · +94 −31`, `refused · same criterion`; anything that reads as
+ * prose belongs in the panel beside the tree, which is the whole reason
+ * the tree and panel are two regions.
  *
- * **A fact is a value, never a sentence.** `not run`, `2 criteria`,
- * `3 files · +94 −31`, `refused · same criterion`. Anything that reads as
- * prose belongs in the panel beside the tree, where there is room for it; that
- * division is the whole reason the tree and the panel are two regions.
+ * A chip, not a table cell: the run tree carried its facts as plain mono
+ * text in a two-column table, drawing a grid the drawing has none of and
+ * making a one-word value the width of the column. A chip is the width
+ * of its value, so a row of them reads as a row of values.
+ */
+
+/**
+ * Mono, and neutral by default: everything a chip carries was measured or
+ * reported, so it speaks flatly. `named` is the exception, per fact and
+ * never summed — a refused attempt is red because the refusal is the
+ * fact, and a passing Check is green for the same reason.
  *
- * **A chip, not a table cell.** The run tree carried its facts as plain mono
- * text in a two-column table, which drew a grid the drawing has none of and
- * made a one-word value the width of the column. A chip is the width of its
- * value, so a row of them reads as a row of values.
- *
- * **Mono, and neutral by default.** Everything a chip carries was measured or
- * reported, so it speaks flatly. `named` is the exception and it is per fact,
- * never summed: a refused attempt is red because the refusal is the fact, and
- * a passing Check is green for the same reason.
- *
- * **It truncates, and it keeps its whole value in the title.** A chip is a
- * single line and clips; where the value is a path, use `PathChip` instead —
- * clipping a path from the right is what leaves six rows all reading
- * `packages/settings/src/…`.
+ * It truncates, and keeps its whole value in the title. A chip is a
+ * single line and clips; where the value is a path, use `PathChip`
+ * instead — clipping a path from the right is what leaves six rows all
+ * reading `packages/settings/src/…`.
  */
 
 /**

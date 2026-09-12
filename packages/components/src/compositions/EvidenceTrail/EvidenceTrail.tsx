@@ -3,26 +3,23 @@ import type { ReactNode } from "react";
 
 /**
  * Evidence trail — one entry per step, in submission order, with the Check
- * that let it pass.
+ * that let it pass. The trail is the reason to open the screen, so it is
+ * the largest element rather than a panel to expand: whether it is worth
+ * reading at all is the finding this milestone exists to produce, since
+ * merging without looking at it means the submission schema is wrong.
+ */
+
+/**
+ * The three fields are the schema's, not a layout choice: a submission
+ * carries `claimed` (what the work now does, as an observable), `shown_by`
+ * (the artifact demonstrating it) and `not_claimed` (required, may be
+ * empty). Rendering them as a paragraph would let a Drone report in
+ * prose, the failure this milestone is watching for.
  *
- * **The trail is the reason to open the screen, so it is the largest element
- * rather than a panel to expand.** If the trail is what a person came for, it
- * should not be the thing they have to open first. Whether it is worth reading
- * at all is the finding this milestone exists to produce: merging without
- * looking at it means the submission schema is wrong.
- *
- * **The three fields are the schema's, not a layout choice.** A work submission
- * carries `claimed` — what the work now does, as an observable — `shown_by`,
- * the artifact demonstrating it, and `not_claimed`, which is required and may
- * be empty. Rendering them as a paragraph would let a Drone report in prose,
- * which is the failure this milestone is watching for.
- *
- * **`not_claimed` always renders, and an empty one reads "Nothing".** A dash
- * would read as no answer, which is the reading the field exists to rule out.
- *
- * Hedge by source: `shown_by` names an artifact the system can point at, so it
- * is mono. `claimed` and `not_claimed` are the Drone's own words and render as
- * prose.
+ * `not_claimed` always renders, and an empty one reads "Nothing" — a dash
+ * would read as no answer. Hedge by source: `shown_by` names an artifact
+ * the system can point at, so it is mono; `claimed` and `not_claimed` are
+ * the Drone's own words and render as prose.
  */
 export type EvidenceTrailEntry = {
   /** The step's name, in sans. A step is a unit of work with a name. */

@@ -5,32 +5,19 @@ import { Button } from "../../primitives/Button/Button";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
- * Check runs — what each Check came to, and the output behind it.
+ * Check runs — what each Check came to, and the output behind it. A Check
+ * result is an evidence record like a Drone's, differing only in who
+ * produced it, so a row is a selector: pressing it opens that Check's
+ * output in the viewer, as a produced file opens a diff. This answers "we
+ * show checks pass or fail but can't see the output" — a suite can pass by
+ * deleting the failing assertion, so rows carry how much output there is,
+ * `2,180 lines`, before anyone presses anything.
  *
- * **A Check result is an evidence record.** It has a kind and a file, exactly
- * like a Drone's evidence, and the only difference is who produced it — which
- * is a field, not a screen. So a row here is a selector: pressing it puts that
- * Check's output in the viewer, the way a produced file puts a diff there.
- *
- * **This is the answer to "we show that checks pass or fail but we can't see
- * the output".** A suite can pass by deleting the assertion that was failing,
- * and `exit 0 · 315 passed` cannot be audited. The rows carry what the output
- * cost and how much of it there is — `2,180 lines` — so it is visibly *there*
- * before anyone presses anything.
- *
- * **Not `WorkflowRail`'s gate row.** That row draws a Check's id, its command
- * and the path its output was written to, for copying into a shell. This one
- * draws what the Check *came to*, as a sentence, and opens the output in
- * Bridge. The path stays where it is; a person who wants a terminal still has
- * it.
- *
- * **The sentence is the row and the identifier is under it.** Sans names work,
- * mono names machinery — so `All 315 tests passed` is what a person scans and
- * `check:test_suite` is what a citation resolves against.
- *
- * **A queued Check keeps its row and has no output affordance.** The shape of
- * what is still coming is part of reading a running Job, and hiding the rows
- * until they run would make a Job look like it has fewer gates than it has.
+ * Not `WorkflowRail`'s gate row, which draws a Check's id, command and
+ * output path for a shell — this draws what the Check *came to* and opens
+ * the output in Bridge. Sans names the sentence, mono the identifier a
+ * citation resolves against, and a queued Check keeps its row with no
+ * output affordance.
  */
 
 /**
@@ -55,20 +42,17 @@ export type CheckRun = {
    */
   identifier: ReactNode;
   /**
-   * Whether `identifier` is a name a person wrote rather than a machine's own,
-   * so it renders in sans and claims nothing about being joinable.
+   * Whether `identifier` is a name a person wrote rather than a machine's
+   * own, so it renders in sans and claims nothing about being joinable.
    *
-   * **The Judge's row is why this exists.** A Check's second line is its
-   * declared id — `check:test_suite`, out of the repository's own Manifest,
-   * and a citation resolves against it. A panel has no such id: it is one
-   * `judge_checks[]` entry on a step, so the row drew the *enum* — literally
-   * `judge_check` — in mono, which told a reader the surface had leaked its
-   * schema at them and offered a string that joins to nothing.
+   * Exists for the Judge's row: a Check's second line is its declared id
+   * (`check:test_suite`) a citation resolves against, but a panel is one
+   * `judge_checks[]` entry with no such id — it drew the literal enum
+   * `judge_check` in mono, leaking the schema at the reader.
    *
-   * Same convention as `RunTree`'s `labelIsAnIdentifier`, in the other
-   * direction: there the name is the default and the identifier is the
-   * exception, and here it is the reverse, because most rows on this list are
-   * commands.
+   * The inverse of `RunTree`'s `labelIsAnIdentifier`: there the name is
+   * default and the identifier the exception; here it's reversed, since
+   * most rows on this list are commands.
    */
   identifierIsAName?: boolean;
   /** The exit code or the state, in mono — `exit 0`, `refused`, `running`, `queued`. */

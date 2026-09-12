@@ -137,20 +137,19 @@ const INSTRUCTION: BriefLine[] = [
 ];
 
 /**
- * The turn Armada opened a step with, held to the twelve lines the panel holds
- * it to — a `DroneBrief` and not a string.
+ * The turn Armada opened a step with, held to the panel's twelve lines — a
+ * `DroneBrief`, not a string.
  *
- * **Every story above this one passes a string, and that is why the panel
- * shipped with no clamp at all.** `-webkit-line-clamp` counts line boxes, and
- * `DroneBrief` was a flex column, which is one box carrying none. The clamp did
- * nothing, the overflow measured false so no control drew either, and a step's
- * whole opening turn — brief, standing instructions and branch note, a screen
- * and a half of it — sat above the Checks and the Verdicts. A string cannot
- * catch that. Only the component the app actually wraps can.
+ * Every story above passes a string, which is why the panel shipped with
+ * no clamp at all: `-webkit-line-clamp` counts line boxes, and `DroneBrief`
+ * was a flex column — one box carrying none — so the clamp did nothing and
+ * a step's whole opening turn, a screen and a half of it, sat above the
+ * Checks and Verdicts. Only the component the app actually wraps catches
+ * that; a string cannot.
  *
- * The assertion is the clipped height and not just the control, because the
- * control is downstream of it: both go together, and reading only the control
- * would leave the mechanism untested.
+ * The assertion checks the clipped height, not just the control, since the
+ * control is downstream and reading it alone would leave the mechanism
+ * untested.
  */
 export const ClampsTheComponentTheAppWraps: Story = {
   args: {

@@ -5,19 +5,19 @@ import { Textarea } from "../../primitives/Textarea/Textarea";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
- * Review decision — the answers to a Job waiting at a human gate, and the note
- * one of them carries.
+ * Review decision — the answers to a Job waiting at a human gate, and the
+ * note one of them carries.
  *
- * **The note is on this surface, never behind a control.**
- * `docs/practices/bridge.md`: reviewing a Drone's output and replying to it is
- * one continuous interaction, and a design that puts the reply in a separate
- * route, tab or modal from the diff recreates v1's problem inside Electron. So
- * the field sits where the diff is, already open, with nothing to press to
- * reach it.
- *
- * **Four acts, and three of them are recoverable.** That difference is the
- * whole job of this component's arrangement, and it is carried by position and
- * by a sentence rather than by a shade of red:
+ * The note is on this surface, never behind a control: `docs/practices/bridge.md`
+ * says reviewing a Drone's output and replying to it is one continuous
+ * interaction, and a design that puts the reply in a separate route, tab
+ * or modal recreates v1's problem inside Electron — so the field sits
+ * where the diff is, already open, nothing to press to reach it.
+ */
+
+/**
+ * Four acts, and three of them are recoverable — carried by position and
+ * a sentence rather than a shade of red:
  *
  * | Act | Where it sits | What survives |
  * |---|---|---|
@@ -25,40 +25,45 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * | Approve | the group | the work is taken and the pull request is left open |
  * | Request changes | the group, secondary | the drone, the worktree and the step — it goes back to work |
  * | Reject | below a rule, alone | **nothing. Terminal, and it ends the drone** |
+ */
+
+/**
+ * Merge takes the primary fill from Approve when it is offered: a job
+ * holding an open pull request has one ordinary ending, and it is not
+ * "record this done and leave the branch on the forge" — that is the
+ * state the button exists to stop. Where there is no pull request the
+ * prop is absent, the control is not drawn, and Approve is primary again.
  *
- * **Merge takes the primary fill from Approve when it is offered, and that is
- * the point of it.** A job holding an open pull request has one ordinary
- * ending, and it is not "record this done and leave the branch on the forge" —
- * that is the state the button exists to stop. Where there is no pull request
- * to merge the prop is absent, the control is not drawn, and Approve is the
- * primary act again.
- *
- * **Reject is not in the group and is not behind a caret.** A split button
- * would make it a variant of the act on its face, which is exactly the reading
- * it must not have: `crates/api/src/routes.rs` calls it a verdict on the work,
- * and the operations inventory calls it a hard stop. It sits below a rule, with
+ * Reject is not in the group and is not behind a caret: a split button
+ * would make it a variant of the act on its face, which it must not be —
+ * `crates/api/src/routes.rs` calls it a verdict on the work, and the
+ * operations inventory calls it a hard stop. It sits below a rule, with
  * its own sentence, so what it costs is read before it is reached.
+ */
+
+/**
+ * Approve does not confirm; merge and reject do. Approving is the
+ * ordinary path — asking twice for the common case is a gate in the
+ * wrong place. Rejecting ends two things; merging writes into a
+ * repository Fleet did not make and nothing in Bridge takes it back.
+ * Both are the caller's to confirm, and this only asks.
  *
- * **Approve does not confirm; merge and reject do.** Approving is the ordinary
- * path — it is why the gate exists, and asking twice for the common case is a
- * gate in the wrong place. Rejecting ends two things. Merging is the one act
- * here that writes into a repository Fleet did not make, and nothing in Bridge
- * takes it back. Both are the caller's to confirm, and this only asks.
- *
- * **Request changes is refused with a blank note**, before the press, matching
- * the 422 Fleet gives it. A round trip to learn the field was empty is a
- * refusal a person reads as a failure.
- *
- * **Merge can be drawn and disabled at once.** `#663`: a branch behind main
+ * Request changes is refused with a blank note, before the press,
+ * matching the 422 Fleet gives it — a round trip to learn the field was
+ * empty is a refusal a person reads as a failure.
+ */
+
+/**
+ * Merge can be drawn and disabled at once: `#663`, a branch behind main
  * with conflicts is a pull request Fleet would refuse to merge, and
  * `mergeBlockedReason` says so beside the control rather than hiding it —
  * the caller's own conflict control is what fixes the branch, not this one.
  *
- * **No glyph on any of them.** Primary and secondary are label-only by
- * contract, and a mark on the destructive one alone would make the difference
- * between them a picture rather than a sentence — which is the reading that
- * lets a person press the terminal one thinking it is the loud version of the
- * mild one. The labels say what each does; the sentences say what survives.
+ * No glyph on any of them: primary and secondary are label-only by
+ * contract, and a mark on the destructive one alone would make the
+ * difference a picture rather than a sentence — the reading that lets a
+ * person press the terminal one thinking it is the loud version of the
+ * mild one.
  */
 export type ReviewDecisionProps = {
   /** The reviewer's own words. Controlled — the caller holds the draft. */

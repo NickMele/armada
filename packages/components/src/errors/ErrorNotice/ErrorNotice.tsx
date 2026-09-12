@@ -17,53 +17,59 @@ export type { DebugField, DebugPayload } from "./payload";
 export { COPIED, COPY_DEBUG_INFO, copyDebugInfo, debugInfo, SAFETY } from "./payload";
 
 /**
- * An error, in one of the four places an error may appear.
+ * An error, in one of the four places an error may appear. One treatment,
+ * four placements, picked by blast radius rather than severity: a
+ * critical failure with a narrow radius stays inline — approve-refused is
+ * red-serious and affects one row, so it renders there and nowhere else.
+ * Escalating placement for severity is the specific mistake this exists
+ * to stop, which is why `placement` has no default.
+ */
+
+/**
+ * Two classes, and only one is red: `fault` is Armada unable to do the
+ * thing, `degraded` is Armada unable to refresh what it is showing and
+ * takes no hue beyond an amber dot. Unreachable Fleet and dropped events
+ * are degraded, not faults — the fixes are opposite, so `kind` has no
+ * default either.
  *
- * **One treatment, four placements, and the placement is picked by blast
- * radius rather than by severity.** A critical failure with a narrow radius
- * stays inline: approve-refused is red-serious and affects one row, so it
- * renders in that row and nowhere else. Escalating placement for severity is
- * the specific mistake this component exists to stop, which is why
- * `placement` has no default — there is nothing safe to fall back to.
- *
- * **Two classes, and only one is red.** `fault` is Armada unable to do the
- * thing. `degraded` is Armada unable to refresh what it is showing, and takes
- * no hue at all beyond an amber dot. Unreachable Fleet and dropped events are
- * degraded, not faults. The fixes are opposite — restarting Fleet is the wrong
- * move when the process is alive and only the stream stopped — so `kind` has
- * no default either.
- *
- * **One value, not a ladder.** Placement already carries blast radius, so
- * severity picks nothing but the edge. There is no second red, no `critical`
- * variant, and the copy at every placement is the same size.
- *
- * **Every placement names the failure and the act**, with one exception the
- * type enforces: a toast may carry no act, because it is the only placement
+ * One value, not a ladder: placement already carries blast radius, so
+ * severity picks nothing but the edge. There is no second red, no
+ * `critical` variant, and the copy at every placement is the same size.
+ */
+
+/**
+ * Every placement names the failure and the act, with one exception the
+ * type enforces: a toast may carry no act, since it is the only placement
  * that reports something already over.
  *
- * **No glyph.** `triangle-alert` is Doctor's, `octagon-alert` is `stalled`'s,
+ * No glyph: `triangle-alert` is Doctor's, `octagon-alert` is `stalled`'s,
  * and there is no generic alarm mark. The code and the sentence do the work.
+ */
+
+/**
+ * Every error carries the debug payload, and the four placements differ
+ * only in whether it is shown, offered or expandable. Inline copies
+ * directly since a row has no room for an expanded view; a toast copies
+ * and dismisses in one press since it is often the only sighting; a
+ * banner offers both, since a standing condition gets read rather than
+ * only quoted; and a full-surface error shows it, since nothing else is
+ * on screen. The expanded view renders the exact string the control
+ * copies — see `payload.ts` for why there is one producer and not two.
+ */
+
+/**
+ * Filing is offered where the payload is expanded, and nowhere else:
+ * copying stays on the machine, filing leaves it and gets a review step,
+ * which needs the payload legible in full — no room inline, and a toast
+ * is gone before. `FileAnIssue` is the control and sends nothing; there
+ * is no transport, and `issue.ts` says why.
  *
- * **Every error carries the debug payload, and the four placements differ only
- * in whether it is shown, offered or expandable.** Inline copies directly
- * because a row has no room for an expanded view; a toast copies and dismisses
- * in one press because it is often the only sighting; a banner offers both,
- * because a standing condition gets read rather than only quoted; and a
- * full-surface error shows it, because nothing else is on the screen. The
- * expanded view renders the exact string the control copies — see `payload.ts`
- * for why there is one producer and not two.
- *
- * **Filing is offered where the payload is expanded, and nowhere else.**
- * Copying stays on the machine; filing leaves it, so it gets a review step —
- * and a review needs the payload legible in full, which an inline error has no
- * room for and a toast is gone before. `FileAnIssue` is the control, and it
- * sends nothing: there is no transport, and `issue.ts` says why.
- *
- * Where the thing sits is the caller's, and two classes are supplied for it:
+ * Where the thing sits is the caller's, and two classes are supplied:
  * `armada-error-toast-region` pins the bottom trailing corner inset
- * `--space-6` above the status bar, and `armada-error-surface-region` centres
- * a full-surface error in the region it replaces. Regions rather than props,
- * because a region holds several toasts and a component cannot own one.
+ * `--space-6` above the status bar, and `armada-error-surface-region`
+ * centres a full-surface error in the region it replaces. Regions rather
+ * than props, since a region holds several toasts and a component cannot
+ * own one.
  */
 export type ErrorPlacement = "inline" | "toast" | "banner" | "surface";
 

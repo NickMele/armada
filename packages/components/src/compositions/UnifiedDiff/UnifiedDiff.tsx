@@ -2,33 +2,38 @@ import type { MouseEvent, ReactNode } from "react";
 import { useCallback } from "react";
 
 /**
- * Unified diff — what moved inside the files, as the repository rendered it.
+ * Unified diff — what moved inside the files, as the repository
+ * rendered it. The expensive read, drawn in the one place it is worth
+ * paying for: `ChangedFiles` answers *is it doing what I asked* from
+ * names alone, which is what a running Job wants — this answers *do I
+ * take this work*, and nothing short of the bytes answers that.
+ * `crates/adapter-traits/src/work_product.rs` separates the patch from
+ * the file list for exactly that reason.
  *
- * **The expensive read, drawn in the one place it is worth paying for.**
- * `ChangedFiles` answers *is it doing what I asked* from names alone, which is
- * what a running Job wants. This answers *do I take this work*, and nothing
- * short of the bytes answers that. `crates/adapter-traits/src/work_product.rs`
- * separates the patch from the file list for exactly that reason.
+ * The marker renders, not just the hue: a `+` and a `-` are what the
+ * line is, colour restates it. A diff encoded only in colour is the
+ * illegible legend the v1 failure log named, unreadable to a reader who
+ * cannot tell `--diff-add-fg` from `--diff-del-fg` at all.
+ */
+
+/**
+ * No line numbers, and none are computed: the hunk header is git's own
+ * statement of position and renders as its own row; per-line numbering
+ * would be derived here from that header, and a derived number sitting
+ * beside machine output reads as something the repository said.
  *
- * **The marker renders, not just the hue.** A `+` and a `-` are what the line
- * is; colour restates it. A diff encoded only in colour is the illegible legend
- * the v1 failure log named, and it is unreadable to a reader who cannot tell
- * `--diff-add-fg` from `--diff-del-fg` at all.
- *
- * **No line numbers, and none are computed.** The hunk header is git's own
- * statement of position and renders as its own row; per-line numbering would be
- * derived here from that header, and a derived number sitting beside machine
- * output reads as something the repository said.
- *
- * **Wire order, and no sort.** Files come in the order the reading found them,
- * hunks in the order git wrote them. Re-ordering on arrival is the column
- * flip-flop the failure log named, one level down.
- *
- * **It is bounded, and it says so when it cut.** No virtualization library is
- * chosen — `docs/practices/bridge.md`, `[list-virtualization]` — so a patch too
- * long to draw is cut rather than rendered whole, and `cut` is what the surface
- * says about it. **A cut diff is a decision made on part of the work**, so the
- * sentence has to name the worktree rather than trail off.
+ * Wire order, and no sort: files come in the order the reading found
+ * them, hunks in the order git wrote them. Re-ordering on arrival is the
+ * column flip-flop the failure log named, one level down.
+ */
+
+/**
+ * It is bounded, and it says so when it cut. No virtualization library
+ * is chosen — `docs/practices/bridge.md`, `[list-virtualization]` — so
+ * a patch too long to draw is cut rather than rendered whole, and `cut`
+ * is what the surface says about it. A cut diff is a decision made on
+ * part of the work, so the sentence has to name the worktree rather
+ * than trail off.
  */
 export type DiffLine = {
   /**

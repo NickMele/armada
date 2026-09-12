@@ -5,32 +5,25 @@ import { Button } from "../../primitives/Button/Button";
 /**
  * Drone turns — one Drone's transcript, read while it is still being written.
  *
- * **Read-only, and it must not read as Pilot.** Observing changes nothing about
- * the Job: no status moves, no transition is recorded, the Drone is never told.
- * So nothing in this component takes a control, and a row carries no act —
- * `docs/concepts/observe.md` is the table that separates the two. The one
- * control here reveals rows this pane already holds.
+ * Read-only, and it must not read as Pilot: observing changes nothing about
+ * the Job, so nothing here takes a control and no row carries an act —
+ * `docs/concepts/observe.md` separates the two. The one control here
+ * reveals rows this pane already holds.
  *
- * **A call and its answer are one row.** They arrive as two events with the
- * tool running in the gap between them, and two rows would separate a command
- * from its output by everything that happened while it ran. The join is on the
- * call id and it happens here rather than in Fleet, where holding a call open
- * to wait for its result would be unbounded buffering in the loop that advances
- * the Job.
+ * A call and its answer are one row, joined on the call id here rather
+ * than in Fleet, where holding a call open to wait for its result would be
+ * unbounded buffering in the loop that advances the Job.
+ */
+
+/**
+ * A row kind is the wire's own word, in mono: `Saw` is the wire's enum
+ * with no `enum-verbs.toml` rows, so the spelling renders rather than
+ * copy invented here. Reported.
  *
- * **A row kind is the wire's own word, in mono.** No vocabulary in the
- * repository carries a verb, a glyph or a hue per turn kind — `Saw` is the
- * wire's enum and has no `enum-verbs.toml` rows — so the spelling renders
- * rather than copy invented here. Reported.
- *
- * **The step is a boundary, not a column.** One step's turns run to dozens, so
- * a name repeated down every row would be the same string forty times over
- * competing for the width the body absorbs. The question a reader asks is where
- * the step changed, and a line drawn there answers it for every row beneath.
- *
- * **It follows the tail, and stops the moment you scroll away from it.** A
- * pane that pulls you back to the bottom while you are reading is worse than
- * one that never moves. It resumes when you return to the bottom.
+ * The step is a boundary, not a column — one step's turns run to dozens,
+ * and a name repeated down every row would compete for the width the body
+ * absorbs. It follows the tail and stops the moment you scroll away,
+ * resuming when you return to the bottom.
  */
 export type DroneTurn = {
   /** Stable across re-renders. Rows arrive in order and nothing reorders them. */
@@ -221,20 +214,16 @@ type Entry =
   | { of: "step"; step?: TurnStep; above: string };
 
 /**
- * The rows, with consecutive quiet ones gathered and each change of step marked.
+ * The rows, with consecutive quiet ones gathered and each change of step
+ * marked. A run of one is still a run: left alone it renders the decoder's
+ * own words for a turn it could not place, and one line reading like its
+ * neighbours beats one that doesn't.
  *
- * **A run of one is still a run.** Left alone it renders the decoder's own
- * words for a turn it could not place, which is the reading this collapse
- * exists to remove, and one line that reads like its neighbours beats one that
- * does not.
- *
- * **A boundary breaks a run**, because a collapsed line spanning two steps
- * would attribute the whole of it to whichever the reader guessed.
- *
- * **Nothing is marked where no row anywhere carries a step.** Every row of such
- * a transcript predates the field, so "not recorded" would be the only line on
- * screen and would contrast with nothing. A transcript that gains a step
- * part-way through says so at the point it does.
+ * A boundary breaks a run, since a collapsed line spanning two steps would
+ * attribute the whole of it to whichever the reader guessed. Nothing is
+ * marked where no row anywhere carries a step — every row of such a
+ * transcript predates the field — but a transcript that gains one part-way
+ * through says so at the point it does.
  */
 function runs(turns: DroneTurn[]): Entry[] {
   const attributed = turns.some((turn) => turn.step !== undefined);

@@ -64,26 +64,30 @@ export type GamingFlag = {
    */
   at?: GamingFlagAt;
   /**
-   * The narrow question the check was actually asked about this pattern, word
-   * for word — *Does this change alter an existing assertion so that it
-   * asserts less than it did, and is that assertion made nowhere else in this
-   * change?*
+   * The narrow question the check was actually asked about this pattern,
+   * word for word — *Does this change alter an existing assertion so
+   * that it asserts less than it did, and is that assertion made
+   * nowhere else in this change?*
    *
-   * **The one thing on the row a flag can be judged against.** A spelling says
-   * what was looked for and a citation says what was seen, and neither says
-   * what was claimed — so `assertion_weakened` over a rustdoc sentence read as
-   * a finding until somebody spent an afternoon on the diff proving it was
-   * not. The clauses are the whole of it: the second one is why a sentence
-   * restated elsewhere in the change is not a weakened assertion.
+   * The one thing on the row a flag can be judged against: a spelling
+   * says what was looked for and a citation says what was seen, and
+   * neither says what was claimed — so `assertion_weakened` over a
+   * rustdoc sentence read as a finding until somebody spent an
+   * afternoon on the diff proving it was not. The clauses are the whole
+   * of it: the second is why a sentence restated elsewhere is not a
+   * weakened assertion.
+   */
+
+  /**
+   * Absent is an answer about the check rather than a gap: three
+   * patterns are decided by reading the diff and nothing was asked, and
+   * a flag recorded before Fleet kept this has none.
    *
-   * **Absent is an answer about the check rather than a gap.** Three patterns
-   * are decided by reading the diff and nothing was asked, and a flag recorded
-   * before Fleet kept this has none.
-   *
-   * **Drawn only where the citation is read whole.** A question is forty words
-   * and the rail's row is one line of pointers; the two surfaces a flag is
-   * judged on both read whole, and clipping a question to eight words would
-   * put half a test on screen — which is the failure the row already had.
+   * Drawn only where the citation is read whole: a question is forty
+   * words and the rail's row is one line of pointers, and the two
+   * surfaces a flag is judged on both read whole — clipping a question
+   * to eight words would put half a test on screen, the failure the row
+   * already had.
    */
   asked?: string;
   /**
@@ -145,21 +149,19 @@ export type GamingFlagsProps = {
 };
 
 /**
- * The flags on one step, as rows.
- *
- * **One component and not two renders of one shape.** Two flags used to reach
- * the override dialog as a single sentence assembled from their fields —
- * "It flagged X in Y, Z in W." — while the rail drew the same two as rows. The
- * wire has had `pattern` and `cited` as separate fields the whole time, so the
- * sentence was structure being thrown away and then read back out of prose.
- * Drawing it once is what stops the two surfaces from disagreeing about what a
- * flag looks like.
- *
- * **A row says what was asked as well as what was found.** Six of the nine
- * patterns cost a model call against a question written to be argued with, and
- * for as long as the row drew only the spelling and the citation that answer
- * was spent and discarded — leaving a reader to re-derive it off the diff, or
- * to take the flag on trust. #580.
+ * The flags on one step, as rows. One component and not two renders of
+ * one shape: two flags used to reach the override dialog as a single
+ * sentence assembled from their fields — "It flagged X in Y, Z in W."
+ * — while the rail drew the same two as rows. The wire has had
+ * `pattern` and `cited` as separate fields the whole time, so the
+ * sentence was structure thrown away and read back out of prose.
+ * Drawing it once stops the two surfaces disagreeing about what a flag
+ * looks like.
+ * A row says what was asked as well as what was found: six of the nine
+ * patterns cost a model call against a question written to be argued
+ * with, and the row drawing only the spelling and citation spent that
+ * answer and discarded it — leaving a reader to re-derive it off the
+ * diff, or take the flag on trust. #580.
  */
 export function GamingFlags({
   flags,

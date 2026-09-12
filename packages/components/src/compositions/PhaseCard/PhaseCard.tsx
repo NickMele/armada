@@ -15,34 +15,30 @@ import {
 import type { ReactNode } from "react";
 
 /**
- * What a stage of the phase strip opens to — what that stage is, what it is
- * waiting on, and where it stands.
+ * What a stage of the phase strip opens to — what that stage is, what it
+ * is waiting on, and where it stands. The explanation lives where the
+ * question is asked: a person looking at `build, test` and wondering what
+ * a Check is should not have to remember a page that says so.
  *
- * **The explanation lives where the question is asked.** That is the whole
- * argument for this component: a person looking at `build, test` and wondering
- * what a Check is should not have to remember a page that says so. Opening the
- * stage says it, beside the thing that prompted the question.
- *
- * **Checks and the Judge are different in kind, and this is where that shows.**
- * A Check is a command the repository declares and Fleet runs, judged by an
- * exit code, and it may pass or fail. The Judge is a model reading the work
- * against the step's acceptance criteria, and it may only refuse. Drawing them
- * as one row of chips risks reading as one kind of thing, so each carries a
- * standing sentence written once, here — `phaseSaid` below — rather than
- * retyped on every screen that draws a strip. **Keyed by state as well as
- * kind**, because a tier that can never hold a step cannot say what a tier
- * holding one says.
- *
- * **The standing sentence does not replace this step's facts.** It says what
- * the tier is; the rows say what happened. A card that showed only the
- * definition is the defect a Judge refusal had: two criterion ids, two
- * verdicts, and a paragraph about what a Judge is — a person reading it learnt
+ * Checks and the Judge differ in kind, and this is where that shows: a
+ * Check is a command Fleet runs, judged by an exit code, and may pass or
+ * fail; the Judge reads the work against the step's acceptance criteria
+ * and may only refuse. Each carries a standing sentence written once here
+ * (`phaseSaid` below), keyed by state as well as kind, since a tier that
+ * can never hold a step cannot say what a tier holding one says.
+ */
+
+/**
+ * The standing sentence does not replace this step's facts: it says what
+ * the tier is, the rows say what happened. A card showing only the
+ * definition is the defect a Judge refusal had — two criterion ids, two
+ * verdicts and a paragraph about what a Judge is, teaching a reader
  * nothing about their own Job.
  *
- * **Two shapes, one content.** `floating` is the card as it opens off the
- * strip: `--bg-overlay`, the strong edge, and the one shadow the contract
- * allows a floating layer. Without it the same card sits flat on the panel,
- * which is how the three are drawn side by side.
+ * Two shapes, one content: `floating` is the card as it opens off the
+ * strip (`--bg-overlay`, the strong edge, the one shadow the contract
+ * allows a floating layer); without it the same card sits flat on the
+ * panel, which is how the three are drawn side by side.
  */
 
 /**
@@ -70,30 +66,29 @@ export type PhaseStageKind = "phase" | "checks" | "judge" | "human";
 export type PhaseStageState = "cleared" | "current" | "waiting" | "failed" | "ahead" | "never";
 
 /**
- * The glyph a stage carries, keyed by what it is and where it stands.
+ * The glyph a stage carries, keyed by what it is and where it stands. The
+ * family says what the stage is and the member says where it stands — a
+ * registry split, not this file's: `shield-*` means gates and Checks,
+ * `circle-*` is reserved to Judge verdicts, `user-check` is the only human
+ * silhouette, and the three phases borrow the step-activity marks under
+ * the registry's borrowing convention.
  *
- * **The family says what the stage is and the member says where it stands.**
- * That split is the icon registry's, not this file's: `shield-*` means gates
- * and Checks throughout, `circle-*` is reserved to Judge verdicts, `user-check`
- * is the only human silhouette in the set, and the three phases borrow the
- * step-activity marks under the registry's borrowing convention.
- *
- * **A Check in flight takes `shield-minus`.** The drawing gives it a bare
- * shield outline and the registry has none — `shield-minus` is the nearest
- * declared member, reserved to Check results and meaning not reached, which is
- * true of a command still running. Reported.
- *
- * A phase still ahead carries no glyph. It is a position, not a state, and
- * there is nothing to depict.
- *
- * **A `never` tier carries none either, and for the human tier that is the
- * registry's rule rather than a choice.** `user-check` is reserved to *human
- * required, or actor=human*, and a step whose gate never asks for a person
- * requires none — so the one human silhouette in the set may not be drawn
- * there. Its absence beside the changed label is what tells the never-asks
- * tier from a tier not yet reached. Only the human tier can hold `never`; the
- * other three declare it because the record is total, and draw nothing rather
- * than borrow a mark that means something else.
+ * A Check in flight takes `shield-minus`: the drawing gives it a bare
+ * shield outline and the registry has none, so the nearest declared
+ * member (reserved to Check results, meaning not reached) stands in.
+ * Reported. A phase still ahead carries no glyph — it is a position, not
+ * a state.
+ */
+
+/**
+ * A `never` tier carries no glyph either, and for the human tier that is
+ * the registry's rule rather than a choice: `user-check` is reserved to
+ * human required or actor=human, and a step whose gate never asks for one
+ * requires none, so the silhouette may not be drawn there. Its absence
+ * beside the changed label tells the never-asks tier from one not yet
+ * reached. Only the human tier can hold `never`; the other three declare
+ * it because the record is total, drawing nothing rather than borrow a
+ * mark that means something else.
  */
 const GLYPHS: Record<PhaseStageKind, Record<PhaseStageState, LucideIcon | undefined>> = {
   phase: {
@@ -171,14 +166,11 @@ const CLOSES_WITH: Record<PhaseStageKind, string | undefined> = {
 };
 
 /**
- * Where the state changes what the tier *is*, and not only where it stands.
- *
- * **The human tier's closing line is a claim about the chip in front of you**,
- * not a description of the tier in general. *Amber, not red — it is waiting on
- * you, not broken* is true of a tier holding a step and false of every other
- * state, each for its own reason.
- *
- * # The human tier's four states, and which one takes the standing line
+ * Where the state changes what the tier *is*, and not only where it
+ * stands. The human tier's closing line is a claim about the chip in
+ * front of you, not a description of the tier in general — *Amber, not
+ * red, it is waiting on you, not broken* is true of a tier holding a
+ * step and false of every other state, each for its own reason.
  *
  * | State | The chip | What the closer has to say |
  * |---|---|---|
@@ -186,48 +178,44 @@ const CLOSES_WITH: Record<PhaseStageKind, string | undefined> = {
  * | `cleared` | a person answered | the gate does not ask twice |
  * | `ahead` | un-lit, will light | not amber yet, and why |
  * | `never` | un-lit, will not light | nobody is ever asked |
+ */
+
+/**
+ * Three of the four carried a false claim, and #320 named one of them:
+ * the lookup was keyed by kind, so every state a caller did not think
+ * about inherited a sentence written for one of them. A fifth state
+ * added to this tier would inherit the default silently, which is why
+ * the table above exists — reading the set off a map with one entry is
+ * how that goes unnoticed. `current` and `failed` are typeable on this
+ * tier and no caller produces either; a caller that starts to is the
+ * fifth state.
+ */
+
+/**
+ * Why each of the three differs. `cleared` is a tier a person has
+ * already answered: *it is waiting on you* is not merely the wrong tense
+ * there, it asks again for something already given — and it is the
+ * most-seen of the three wrong ones, since every approved step lands
+ * here. `ahead` is a tier that has not been reached: it will light and
+ * has not, so the card is not amber and nothing is on the person yet.
+ * `never` is a tier that will not light: a step whose `advance_gate`
+ * never asks for a person will never sit here, so the chip will never be
+ * amber and nobody is ever waited on — *waiting on you* is the exact
+ * claim #308 was filed to stop.
+ */
+
+/**
+ * Two rules the copy follows. None of the three says *waiting*,
+ * deliberately: avoiding the word outright is what lets all three
+ * stories assert one absent word, so a rewording that put the claim back
+ * fails on every un-waiting state at once. Copy describing what the card
+ * will become is refused — the alternative for `ahead`, and a card
+ * describing what it will become is a card that is wrong now.
  *
- * **Three of the four carried a false claim, and #320 named one of them.**
- * That is the defect behind all three rather than three defects: the lookup was
- * keyed by kind, so every state a caller did not think about inherited a
- * sentence written for one of them. The table is here so the set is readable at
- * a glance — **a fifth state added to this tier inherits the default silently**,
- * and reading it off a map with one entry is how that goes unnoticed.
- *
- * `current` and `failed` are typeable on this tier and no caller produces
- * either. A caller that starts to is the fifth state.
- *
- * # Why each of the three differs
- *
- * **`cleared` is a tier a person has already answered.** *It is waiting on you*
- * is not merely the wrong tense there — it asks again for something already
- * given. It is also the state every approved step lands in, which makes it the
- * most-seen of the three wrong ones rather than the most obscure.
- *
- * **`ahead` is a tier that has not been reached.** It will light, and it has
- * not, so the card is not amber and nothing is on the person yet. **The state
- * that has not been reached is not the state that is waiting.**
- *
- * **`never` is a tier that will not light.** A step whose `advance_gate` never
- * asks for a person will never sit here, so the chip will never be amber and
- * nobody is ever waited on — *waiting on you* is the exact claim #308 was filed
- * to stop.
- *
- * # Two rules the copy follows
- *
- * **None of the three says *waiting*, and that is deliberate rather than
- * incidental.** Each could have hedged the word and stayed true; avoiding it
- * outright is what lets all three stories assert one absent word, so a
- * rewording that put the claim back fails on every un-waiting state at once.
- *
- * **Copy that describes what the card will become is refused.** It was the
- * alternative for `ahead`: a card describing what it will become is a card that
- * is wrong now.
- *
- * **Sparse, and not a severity ordering.** A state that does not change what
- * the tier is takes the kind's own sentence, which is the property worth
- * keeping — the common tier says the standing line without any caller retyping
- * it. These differ because the facts differ, not because one is worse.
+ * Sparse, and not a severity ordering: a state that does not change what
+ * the tier is takes the kind's own sentence, so the common tier says the
+ * standing line without any caller retyping it — these differ because
+ * the facts differ, not because one is worse.
  */
 const WHEN: Record<"said" | "closesWith", Partial<Record<PhaseStageKind, Partial<Record<PhaseStageState, string>>>>> = {
   said: {

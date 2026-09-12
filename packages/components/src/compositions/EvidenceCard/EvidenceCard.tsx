@@ -4,26 +4,26 @@ import type { ReactNode } from "react";
 /**
  * Evidence card — one work submission, read while the job is still running.
  *
- * **The three fields are the tool's, not a layout choice.** A work submission
- * carries `claimed` — what the work now does, as an observable — `shown_by`,
- * the artifact demonstrating it, and `not_claimed`, everything the claim does
- * not assert. `crates/verification/src/submission.rs` takes exactly those
- * three and nothing else, and the labels here are those three words in
- * sentence case. Rendering them as a paragraph would let a Drone report in
- * prose, which is the failure this milestone is watching for.
+ * The three fields are the tool's, not a layout choice: a submission
+ * carries `claimed` (what the work now does, as an observable), `shown_by`
+ * (the artifact demonstrating it) and `not_claimed` (everything the claim
+ * doesn't assert) — `crates/verification/src/submission.rs` takes exactly
+ * those three, and the labels are those words in sentence case. Rendering
+ * them as a paragraph would let a Drone report in prose, the failure this
+ * milestone watches for.
+ */
+
+/**
+ * `not_claimed` always renders, and an empty one reads "Nothing": in the
+ * schema it is not an `Option`, empty is a legal value and absent is not
+ * a value at all — a dash would read as no answer.
  *
- * **`not_claimed` always renders, and an empty one reads "Nothing".** In the
- * schema it is not an `Option`: empty is a legal value and absent is not a
- * value at all. A dash would read as no answer, which is the reading the field
- * exists to rule out.
- *
- * **Hedge by source.** `shown_by` names an artifact Armada can reach — a file
- * set, a command and its exit code — so it is mono. `claimed` and
- * `not_claimed` are the Drone's own words and render as prose.
- *
- * The card is the trail's entry seen alone: on a running job there is one
- * submission per advanced step, and the newest is the whole reading. The
- * trail is what the same record becomes once the job is over.
+ * Hedge by source: `shown_by` names an artifact Armada can reach (a file
+ * set, a command, an exit code), so it is mono; `claimed` and
+ * `not_claimed` are the Drone's own words and render as prose. The card
+ * is the trail's entry seen alone — the newest submission is the whole
+ * reading on a running job; the trail is what the record becomes once
+ * the job is over.
  */
 export type EvidenceCardProps = {
   /**

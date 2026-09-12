@@ -205,20 +205,18 @@ export const MentionNotOpenedInsideAWord: Story = {
 };
 
 /**
- * A screenshot pasted straight into the Request field, without a trip to the
- * file picker — `onRequestPaste`'s own path, proven the way `WithAttachments`
- * below proves the picker's: `onStage` and `onAttach` both fire with what the
- * paste carried.
+ * A screenshot pasted straight into the Request field, without a trip to
+ * the file picker — proven the way `WithAttachments` below proves the
+ * picker's: `onStage` and `onAttach` both fire with what the paste carried.
  *
- * **A real `DataTransfer`, dispatched directly.** A real browser's
- * `ClipboardEvent` constructor requires `clipboardData` to be an actual
- * `DataTransfer` and throws otherwise, before the component ever sees the
- * paste. `fireEvent.paste` cannot carry it: `@testing-library/dom`'s
- * `createEvent` rebuilds `clipboardData` from `Object.getOwnPropertyNames`
- * of whatever is passed — a jsdom-era shim — and a real `DataTransfer`'s
- * `items`/`files` live on its prototype, not as own properties, so that
- * rebuild silently produces an empty one. Dispatching the `ClipboardEvent`
- * ourselves is the seam that keeps the real data.
+ * A real `DataTransfer`, dispatched directly: a browser's `ClipboardEvent`
+ * constructor requires an actual `DataTransfer` and throws otherwise.
+ * `fireEvent.paste` cannot carry one — `@testing-library/dom`'s
+ * `createEvent` rebuilds `clipboardData` via `Object.getOwnPropertyNames`,
+ * a jsdom-era shim, and a real `DataTransfer`'s `items`/`files` live on its
+ * prototype rather than as own properties, so that rebuild silently
+ * produces an empty one. Dispatching the event ourselves keeps the real
+ * data.
  */
 export const PastedScreenshot: Story = {
   play: async ({ args, canvas }) => {
@@ -554,20 +552,16 @@ export const SeveralJobs: Story = {
 };
 
 /**
- * Refusal one: no workflow resolved.
+ * Refusal one: no workflow resolved. Armada working, not Armada failing:
+ * Fleet could not resolve a workflow and returned the request unchanged,
+ * so it takes no red, no code chip and no solid fill — the rule on the
+ * left is `--step-waiting`, needs-you rather than urgent.
  *
- * **Armada working, not Armada failing.** Fleet read the request, could not
- * resolve a workflow and returned the request unchanged; no job was created.
- * So it takes no red, no code chip and no solid fill — the rule on the left is
- * `--step-waiting`, which means needs you and not urgent.
- *
- * **Nothing is assigned by default**, and the copy says why: the resolved
- * definition is frozen into the job at creation and becomes the yardstick the
- * work is judged against, so a default would be the standard a drone is held
- * to rather than a guess somebody could correct.
- *
- * The two ways on are both here: the request is still in the field, and
- * `Enter by hand` is the override it always was.
+ * Nothing is assigned by default: the resolved definition freezes into the
+ * job at creation and becomes the yardstick the work is judged against, so
+ * a default would be the standard a drone is held to rather than a guess
+ * somebody could correct. Both ways on are here: the request stays in the
+ * field, and `Enter by hand` is the override it always was.
  */
 export const NoWorkflowResolved: Story = {
   args: { request: REQUEST, proposal: { at: "unresolved" } },
@@ -581,20 +575,17 @@ export const NoWorkflowResolved: Story = {
 };
 
 /**
- * Refusal two: the call could not be made.
+ * Refusal two: the call could not be made. Armada failing, so it is the
+ * error treatment: it carries the code every error carries, it is the one
+ * solid fill on this surface, and it renders inline since a proposer that
+ * could not be called stops this surface and reaches nothing else.
  *
- * **Armada failing, so it is the error treatment.** It carries the code every
- * error carries, it is the one solid fill on this surface, and it renders
- * inline because blast radius picks the placement — a proposer that could not
- * be called stops this surface and reaches nothing else.
- *
- * **What to do about it is Fleet's own sentence.** Fleet is what knows whether
- * a budget ran out, a key is missing or the provider was down, and a second
- * sentence written here would be Bridge guessing at a cause it was told.
- *
- * Told apart from the refusal above on both channels the design contract gives:
- * the red is the only solid fill on a data surface, and an error always carries
- * a code where a status never does.
+ * What to do about it is Fleet's own sentence — Fleet knows whether a
+ * budget ran out, a key is missing or the provider was down, and a second
+ * sentence here would be Bridge guessing at a cause it was told. Told apart
+ * from the refusal above on both channels the design contract gives: red is
+ * the only solid fill on a data surface, and an error always carries a
+ * code where a status never does.
  */
 export const CallRefused: Story = {
   args: {

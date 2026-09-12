@@ -226,28 +226,30 @@ function shot(fill: string, said: string): string {
 }
 
 /**
- * **The story leads with what it looks like, and the diff is one level down.**
+ * The story leads with what it looks like, and the diff is one level
+ * down — the inverse of every story above, and the one arrangement the
+ * panel departs for. On a change whose point is not the code, the diff
+ * is the least useful thing on screen and it was the only thing
+ * offered: reviewing meant reading a patch to infer an outcome you
+ * could have been shown. `#209`.
  *
- * The inverse of every story above, and the one arrangement the panel departs
- * for. On a change whose point is not the code — a panel that should collapse,
- * a screen that should render differently — the diff is the least useful thing
- * on screen and it was the only thing offered: reviewing meant reading a patch
- * to infer an outcome you could have been shown. `#209`.
+ * The frames are in the preview, not behind an act: opening a chapter
+ * to find out there are pictures is the gesture this removes. Every
+ * other long chapter here opens; this one is already open by being drawn.
+ */
+
+/**
+ * The numbers move with it: Produced reads `4` here and `3` in every
+ * story above. An ordinal is the position in the story a reader
+ * navigates by, so it is counted over what was actually drawn — a
+ * fixed number per chapter was right until a chapter could appear
+ * before Produced.
  *
- * **The frames are in the preview, not behind an act.** Opening a chapter to
- * find out that there are pictures is the gesture this removes. Every other
- * long chapter here opens; this one is already open by being drawn.
- *
- * **The numbers move with it.** Produced reads `4` here and `3` in every story
- * above. An ordinal is the position in the story a reader navigates by, so it
- * is counted over what was actually drawn — a fixed number per chapter was
- * right until a chapter could appear before Produced.
- *
- * **No caption under any frame, and no field for one.** A screenshot of the
- * wrong state looks exactly like one of the right state; what makes a frame
- * checkable is the spec that produced it, which is code in the diff beside the
- * change. What each frame carries instead is the name its spec chose, the run
- * it came from, and what it weighs.
+ * No caption under any frame, and no field for one: a screenshot of the
+ * wrong state looks exactly like one of the right state, and what makes
+ * a frame checkable is the spec that produced it, code in the diff
+ * beside the change. What each frame carries instead is the name its
+ * spec chose, the run it came from, and what it weighs.
  */
 export const ShowingTheOutcome: Story = {
   args: {

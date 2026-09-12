@@ -54,37 +54,37 @@ export type FileAnIssueProps = {
 };
 
 /**
- * File an issue — the control, and the review that stands between it and the
- * clipboard.
+ * File an issue — the control, and the review that stands between it
+ * and the clipboard. Send is never one press from the error: the
+ * control opens this and does nothing else, the artifact is composed on
+ * the second press. That is why the button is offered where the payload
+ * is already legible in full — a full-surface error and an expanded
+ * view — and nowhere somebody is reading one line of it. A toast cannot
+ * host a review, and an inline error has no room for one.
+ */
+
+/**
+ * The review is per item, and one item cannot be removed: the error's
+ * own record is required, since an issue with it taken out is a
+ * sentence somebody typed — what this replaces. Required is not a
+ * safety claim: the drawing locked the envelope on because it was
+ * "structured and bounded; cannot carry a credential," true of the
+ * structured fields and false of the artifact — `message` and `chain`
+ * are prose written by whatever raised the error. So the row that
+ * cannot be taken out carries the same warning as every other, and its
+ * text is on screen in full — an item a person cannot remove is the
+ * item they had most better have read.
+ */
+
+/**
+ * No claim is made about what any of it holds: Armada makes no scrub
+ * claim, says so above the rows, and puts the exact text of each item
+ * behind a Read on its own row — a promise it cannot keep is worse than
+ * the work of reading.
  *
- * **Send is never one press from the error.** The control opens this and does
- * nothing else; the artifact is composed on the second press. That is why the
- * button is offered where the payload is already legible in full — a
- * full-surface error and an expanded view — and nowhere somebody is reading one
- * line of it. A toast cannot host a review, and an inline error has no room
- * for one.
- *
- * # The review is per item, and one item cannot be removed
- *
- * The error's own record is required, because an issue with it taken out is a
- * sentence somebody typed — which is what this replaces. **Required is not a
- * safety claim.** The drawing locked the envelope on because it was
- * "structured and bounded; cannot carry a credential", and that is true of the
- * structured fields and false of the artifact: `message` and `chain` are prose
- * written by whatever raised the error. So the row that cannot be taken out
- * carries the same warning as every other, and its text is on screen in full —
- * an item a person cannot remove is the item they had most better have read.
- *
- * # No claim is made about what any of it holds
- *
- * Armada makes no scrub claim, says so above the rows, and puts the exact text
- * of each item behind a **Read** on its own row. A promise it cannot keep is
- * worse than the work of reading.
- *
- * # Nothing here sends
- *
- * The confirm copies. `issue.ts` carries why there is no transport, and what
- * the drawing asked for that therefore is not built.
+ * Nothing here sends: the confirm copies. `issue.ts` carries why there
+ * is no transport, and what the drawing asked for that therefore is not
+ * built.
  */
 export function FileAnIssue({ compose, onCopied }: FileAnIssueProps) {
   /**

@@ -5,32 +5,38 @@ import { Kbd } from "../Kbd/Kbd";
 import { ScrollArea } from "../ScrollArea/ScrollArea";
 
 /**
- * A floating layer, so `--bg-overlay` plus a shadow — and never a second
- * elevation stacked on top of it. There is no blur anywhere: a dialog
- * separates from the canvas by a surface step and a shadow.
+ * A floating layer, so `--bg-overlay` plus a shadow — and never a
+ * second elevation stacked on top of it. There is no blur anywhere: a
+ * dialog separates from the canvas by a surface step and a shadow.
  *
- * The keyboard contract is `### Safety rules for single-key actions`, and it
- * used to say two things that disagreed: Cancel holds initial focus, and
- * `Enter` confirms. This component obeyed both literally — Cancel took focus
- * and a `window` handler confirmed past it — which is a destructive act one
- * keystroke from a focused row, the exact thing the rule above it refuses.
- *
- * **The contract was reworded rather than the guess kept.** `Enter` fires
- * whatever holds focus. On a plain confirmation that is Cancel, so Cancel is
- * what `Enter` fires and the kbd is drawn on Cancel. **A dialog that collects
- * is the exception**: the field is the confirmation, a person is typing in it
- * rather than resting on Cancel, and `Enter` sends what they wrote — so the
- * window handler stays for exactly that case and the kbd moves to the confirm.
- * Redirect, Overrule and Report are the three.
- *
- * **The layer is bounded by the window and its body is the part that gives.**
- * The dialog was a single column that grew with its content, so a
- * confirmation carrying findings ran off the top and bottom of the screen with
- * no way to reach either end — and the controls, which are the reason a dialog
- * exists, were the first thing off the bottom. Title, field and actions are
- * fixed; only `children` scrolls. That is what makes "reachable at any window
- * height" a property of the component rather than of the copy somebody wrote
- * into it.
+ * The keyboard contract is `### Safety rules for single-key actions`,
+ * and it used to say two things that disagreed: Cancel holds initial
+ * focus, and `Enter` confirms. This component obeyed both literally —
+ * Cancel took focus and a `window` handler confirmed past it — a
+ * destructive act one keystroke from a focused row, the exact thing the
+ * rule above it refuses.
+ */
+
+/**
+ * The contract was reworded rather than the guess kept: `Enter` fires
+ * whatever holds focus. On a plain confirmation that is Cancel, so
+ * Cancel is what `Enter` fires and the kbd is drawn on Cancel. A dialog
+ * that collects is the exception: the field is the confirmation, a
+ * person is typing in it rather than resting on Cancel, and `Enter`
+ * sends what they wrote — so the window handler stays for exactly that
+ * case and the kbd moves to the confirm. Redirect, Overrule and Report
+ * are the three.
+ */
+
+/**
+ * The layer is bounded by the window and its body is the part that
+ * gives: the dialog was a single column that grew with its content, so
+ * a confirmation carrying findings ran off the top and bottom of the
+ * screen with no way to reach either end — and the controls, the reason
+ * a dialog exists, were the first thing off the bottom. Title, field
+ * and actions are fixed; only `children` scrolls. That is what makes
+ * "reachable at any window height" a property of the component rather
+ * than of the copy somebody wrote into it.
  */
 export type DialogTone = "destructive" | "neutral";
 

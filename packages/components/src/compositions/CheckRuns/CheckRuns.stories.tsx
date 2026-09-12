@@ -199,22 +199,18 @@ export const RunItHereBesideTheOutput: Story = {
 };
 
 /**
- * **A skipped Check's reason, which is a sentence and not a measurement.**
+ * A skipped Check's reason is a sentence, not a measurement: `produced` is
+ * short, mono, measured (exit code, signal, budget outrun), but a skip
+ * reason names every path pattern it watches — a whole clause.
  *
- * `produced` is documented as *the exit code, the signal, the budget it
- * outran* — short, mono, measured. A Check that is skipped because nothing it
- * covers changed carries a whole clause there instead, naming every path
- * pattern it watches, and this row is where that turned up in the app.
+ * That broke the row two ways: the result column was `max-content nowrap`,
+ * sizing the grid wider than the pane over the finding beside it, and the
+ * squeezed finding column took an identifier set to break `anywhere` down
+ * to one character a line (`t`, `y`, `p`, `e`, `c`, `h`, `e`, `c`, `k`).
  *
- * It broke the row in two ways at once. The result column was `max-content`
- * with `nowrap`, so the sentence sized the grid wider than the pane and drew
- * itself over the finding beside it; and the finding's column, squeezed to
- * nothing, took an identifier set to break `anywhere` down to one character a
- * line — `t`, `y`, `p`, `e`, `c`, `h`, `e`, `c`, `k` straight down the panel.
- *
- * Both halves give way here: the reason wraps against a right edge the short
- * results still line up on, and the name keeps its own width as the column's
- * floor.
+ * Both give way here: the reason wraps against the right edge the short
+ * results still line up on, and the name keeps its own width as the
+ * column's floor.
  */
 export const ASkippedCheckSaysWhy: Story = {
   args: {

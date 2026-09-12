@@ -4,27 +4,28 @@ import type { ReactNode } from "react";
 /**
  * One line of the activity log, and the payload it opens to.
  *
- * **Every line opens.** That is the promise the header makes, so a line that
- * opens to nothing breaks it — and a line that opens to a sentence explaining
- * that the payload was cut breaks it worse, because the entire purpose of the
- * gesture is seeing the payload. Where an argument is genuinely too large to
- * send whole, the payload shows what was sent with its real size and offers
- * the rest. It never reports that Bridge was given nothing.
+ * Every line opens: that is the promise the header makes, so a line
+ * that opens to nothing breaks it, and a line explaining that the
+ * payload was cut breaks it worse, since the whole point is seeing the
+ * payload. Where an argument is too large to send whole, the payload
+ * shows what was sent with its real size and offers the rest — never
+ * that Bridge was given nothing.
  *
- * **Every entry names who.** Armada, Drone, Fleet — three actors, in one
- * stream, in the order things happened. A stream carrying only the Drone's
- * turns is a transcript, and the reason the log is a log is that Armada's
- * injected turns and Fleet's own Check results and heartbeats sit between them
- * in time.
+ * Every entry names who: Armada, Drone, Fleet — three actors in one
+ * stream. A stream carrying only the Drone's turns is a transcript; the
+ * log is a log because Armada's injected turns and Fleet's own Check
+ * results and heartbeats sit between them in time.
+ */
+
+/**
+ * The payload keeps its own newlines and scrolls sideways: a build log
+ * reflowed is not a build log, and wrapping a column of compiler output
+ * turns one long line into three and loses which was which.
  *
- * **The payload keeps its own newlines and scrolls sideways.** A build log
- * reflowed is not a build log; wrapping a column of compiler output turns one
- * long line into three and loses which was which.
- *
- * **The row is four columns and the message is the only one that flexes.** A
- * timestamp column that moved when a message got longer is the "columns
- * flip-flopped between renders" line in the v1 failure log, and this is a
- * stream where a new row arrives every second.
+ * The row is four columns and the message is the only one that flexes:
+ * a timestamp column that moved when a message got longer is the
+ * "columns flip-flopped between renders" line in the v1 failure log,
+ * and this is a stream where a new row arrives every second.
  */
 
 /**

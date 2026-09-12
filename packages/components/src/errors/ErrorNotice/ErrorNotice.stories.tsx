@@ -246,20 +246,17 @@ export const FullSurfaceWithPayload: Story = {
 };
 
 /**
- * The payload of a failure that carries no code, which is the case the wire
- * does not describe: a renderer exception never reached Fleet, so there is no
- * `code` and no `run_id` to quote and no Fleet protocol version in the tail.
+ * The payload of a failure that carries no code, which is the case the
+ * wire does not describe: a renderer exception never reached Fleet, so
+ * there is no `code` and no `run_id` to quote and no Fleet protocol
+ * version in the tail.
  *
- * **The `code` row is present and reads `none`.** Every other absent field is
- * absent — that is the rule, and this is its one exception. The payload is
- * read away from the screen it came from, and the treatment guarantees a code
- * on every error, so a reader meeting one with no code row cannot tell whether
- * the failure carried none or whether the paste was cut short. `none` is a
- * fact; nothing here mints a code, because a code's declaration lives beside
- * the variant that raises it.
- *
- * What renders a codeless fault on screen is a separate question and is open.
- * This story is about the artifact, not the notice around it.
+ * The `code` row is present and reads `none` — every other absent field
+ * is absent, and this is the one exception: the payload is read away
+ * from the screen it came from, and the treatment guarantees a code on
+ * every error, so a reader meeting one with no code row cannot tell
+ * whether the failure carried none or the paste was cut short. What
+ * renders a codeless fault on screen is a separate, open question.
  */
 export const CodelessPayload: Story = {
   render: (args) => (

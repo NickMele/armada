@@ -1,26 +1,28 @@
 import type { ReactNode } from "react";
 
 /**
- * A path chip — the one value in the tree that keeps its basename at every
- * width.
+ * A path chip — the one value in the tree that keeps its basename at
+ * every width.
  *
- * **The directory truncates and the filename never does.** A run of six
- * produced paths clipped from the right all read `packages/settings/src/…`,
- * which is six rows saying nothing; clipped from the left they read
- * `…/selectors.ts`, `…/reducer.ts`, `…/index.ts`, which is what a person came
- * to the tree to learn. The drawing splits the chip into two spans for exactly
- * this, and the split is the component.
+ * The directory truncates and the filename never does: a run of six
+ * produced paths clipped from the right all read
+ * `packages/settings/src/…`, six rows saying nothing; clipped from the
+ * left they read `…/selectors.ts`, `…/reducer.ts`, `…/index.ts`, which
+ * is what a person came to the tree to learn. The drawing splits the
+ * chip into two spans for exactly this, and the split is the component.
+ */
+
+/**
+ * How the left clip is done, and why it is not a substring: the
+ * directory is laid out `direction: rtl` with an ordinary ellipsis, so
+ * the browser drops characters from the start of the run and keeps the
+ * end — the segment nearest the filename, the informative one. Cutting
+ * the string in JavaScript would need a width measurement the component
+ * does not have and would re-cut on every resize.
  *
- * **How the left clip is done, and why it is not a substring.** The directory
- * is laid out `direction: rtl` with an ordinary ellipsis, so the browser drops
- * characters from the *start* of the run and keeps the end — the segment
- * nearest the filename, which is the informative one. Cutting the string in
- * JavaScript would need a width measurement the component does not have and
- * would re-cut on every resize.
- *
- * **The directory recedes and the basename does not.** `--fg-subtle` against
- * `--fg-muted`: two values on one line, and the one that survives truncation
- * is the one that reads first.
+ * The directory recedes and the basename does not: `--fg-subtle`
+ * against `--fg-muted` — two values on one line, and the one that
+ * survives truncation is the one that reads first.
  */
 export type PathChipProps = {
   /**
