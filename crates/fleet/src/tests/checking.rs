@@ -381,14 +381,23 @@ async fn a_gate_check_sees_its_own_resolved_port_and_the_env_var_together() {
 }
 
 /// A Job whose Manifest declares no `ports:` hands the gate's Checks an empty
-/// map and an empty environment, which is what [`ruled`] already exercises on
-/// every other case in this file — named once, explicitly, so the absence is
-/// asserted rather than assumed from every other test's silence about it.
+/// map and an empty environment, named once here so the absence is asserted
+/// rather than assumed from every other case's silence about it.
+///
+/// **What the gate added, not what the name happens to hold.** A Check's
+/// environment is additive over Fleet's own and never a clear, so a process
+/// already carrying `ARMADA_PORT_STORYBOOK` passes it down whatever the gate
+/// does — and Fleet exports that name for a Job's claimed span, so the suite
+/// run inside a Job has it set. Asserting the name is *empty* would read the
+/// machine rather than the gate. The claim is that the child sees exactly what
+/// this process does: the gate put nothing on top.
 #[tokio::test]
 async fn a_check_against_no_claimed_port_gets_neither_channel() {
+    let inherited = std::env::var("ARMADA_PORT_STORYBOOK").unwrap_or_default();
+    let run = format!("/bin/sh -c 'test x$ARMADA_PORT_STORYBOOK = x{inherited}'");
     let gates = [Gate::Check {
         name: "asks_for_nothing",
-        run: "/bin/sh -c 'test x$ARMADA_PORT_STORYBOOK = x'",
+        run: &run,
         expect_exit_code: 0,
         when: &[],
     }];
