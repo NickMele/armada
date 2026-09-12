@@ -220,9 +220,11 @@ export function Composer({
             <Textarea
               label="Brief"
               value={brief}
+              {...mention.fieldAria}
               onChange={mention.onFieldChange}
               onKeyDown={mention.onFieldKeyDown}
               onSelect={mention.onFieldSelect}
+              onBlur={mention.onFieldBlur}
               onPaste={onBriefPaste}
               invalid={tried && emptyBrief}
               message="A job needs a brief. Write what the work is."
@@ -235,6 +237,8 @@ export function Composer({
                 query={mention.query}
                 results={mention.results}
                 active={mention.active}
+                listId={mention.listId}
+                optionId={mention.optionId}
                 onHover={mention.onHover}
                 onChoose={mention.onChoose}
               />
