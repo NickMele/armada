@@ -60,7 +60,9 @@ mod watching_run;
 #[cfg(test)]
 mod tests;
 
-pub use daemon::{Commands, Daemon, PermissionAnswer, Queries, Refusal, Tools};
+pub use daemon::{
+    Commands, Daemon, FramePart, FrameSpan, PermissionAnswer, Queries, Refusal, Tools,
+};
 pub use door::{offered, Scope, DOOR_PATH};
 pub use following::{Follow, Followed, LiveOutput};
 pub use journal::{Journal, Reading, FOLLOW};

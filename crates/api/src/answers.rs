@@ -9,12 +9,12 @@
 //! makes the set closed by collection rather than by a registry somebody has to
 //! keep in step.
 
-use axum::http::{header, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use ipc::{RunId, WireError};
 use serde::Serialize;
 
-use crate::daemon::Refusal;
+use crate::daemon::{FrameSpan, Refusal};
 
 /// A request body that would not parse.
 pub(crate) const UNDECODABLE_REQUEST: &str = "api.undecodable_request";
@@ -53,15 +53,108 @@ pub(crate) fn answer<T: Serialize>(status: StatusCode, value: &T, run_id: &RunId
 /// sniffing is how a file that is not an image comes to be treated as
 /// something executable.
 pub(crate) fn file(name: &str, bytes: Vec<u8>) -> Response {
-    (
-        StatusCode::OK,
-        [
-            (header::CONTENT_TYPE, media_type(name)),
-            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
-        ],
-        bytes,
-    )
-        .into_response()
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(media_type(name)),
+    );
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    // **A whole answer still says a span may be asked for.** A player reads
+    // this before it decides whether it can seek at all, so a recording that
+    // happened to be answered whole would otherwise be one nobody can scrub.
+    if streams(name) {
+        headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    }
+    (StatusCode::OK, headers, bytes).into_response()
+}
+
+/// Whether a frame is answered a span at a time.
+///
+/// **Video, and nothing else.** A recording is the one kind a person watches
+/// rather than reads, and the only one whose point is starting before the end
+/// of it has arrived. Everything else here is a file small enough to answer
+/// whole — and an SVG or an HTML file stays bytes for the reason
+/// [`media_type`] gives, which streaming does not change.
+pub(crate) fn streams(name: &str) -> bool {
+    media_type(name).starts_with("video/")
+}
+
+/// One span of a file, as the 206 it is.
+///
+/// **What came back, not what was asked for.** A read windows a long span
+/// rather than honouring it, so the header is composed from the bytes in hand
+/// — the one arithmetic a player checks, and the one a caller must not restate
+/// from its own request.
+pub(crate) fn file_span(name: &str, first: u64, bytes: Vec<u8>, total: u64) -> Response {
+    let last = first + (bytes.len() as u64).max(1) - 1;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(media_type(name)),
+    );
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    headers.insert(header::CONTENT_RANGE, said(first, last, total));
+    (StatusCode::PARTIAL_CONTENT, headers, bytes).into_response()
+}
+
+/// A span beginning at or past the end of the file, as the 416 it is.
+///
+/// **The length, and no body.** What reads this is a player asking again with
+/// a span it can satisfy, never a person — so there is nothing a `WireError`
+/// could tell anybody, and the one fact that helps is on the header the status
+/// is defined by.
+pub(crate) fn file_beyond(total: u64) -> Response {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    headers.insert(
+        header::CONTENT_RANGE,
+        HeaderValue::try_from(format!("bytes */{total}")).expect("digits and a slash"),
+    );
+    (StatusCode::RANGE_NOT_SATISFIABLE, headers).into_response()
+}
+
+fn said(first: u64, last: u64, total: u64) -> HeaderValue {
+    HeaderValue::try_from(format!("bytes {first}-{last}/{total}")).expect("digits and a slash")
+}
+
+/// What a `Range` header asked for, where it asked for something this serves.
+///
+/// **One span or nothing.** `bytes=a-b`, `bytes=a-` and `bytes=-n` are what a
+/// media element sends. A header naming several spans, a unit that is not
+/// `bytes`, or anything that will not parse answers `None` — which a caller
+/// reads as *answer it whole*, exactly as a request carrying no header at all.
+/// Ignoring a range is always legal; guessing at one is not.
+pub(crate) fn asked_for(header: Option<&str>) -> Option<FrameSpan> {
+    let spans = header?.trim().strip_prefix("bytes=")?;
+    if spans.contains(',') {
+        return None;
+    }
+    let (first, last) = spans.split_once('-')?;
+    let (first, last) = (first.trim(), last.trim());
+    if first.is_empty() {
+        // `bytes=-0` asks for the last nothing, which is not a span.
+        return last
+            .parse()
+            .ok()
+            .filter(|back| *back > 0)
+            .map(FrameSpan::Last);
+    }
+    let first: u64 = first.parse().ok()?;
+    if last.is_empty() {
+        return Some(FrameSpan::From { first, last: None });
+    }
+    let last: u64 = last.parse().ok()?;
+    (last >= first).then_some(FrameSpan::From {
+        first,
+        last: Some(last),
+    })
 }
 
 /// What a file's own name says it is.
@@ -95,6 +188,7 @@ fn media_type(name: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::media_type;
+    use crate::daemon::FrameSpan;
 
     #[test]
     fn every_declared_kind_answers_its_own_media_type() {
@@ -122,6 +216,53 @@ mod tests {
     fn svg_and_html_are_still_served_as_bytes() {
         assert_eq!(media_type("home.svg"), "application/octet-stream");
         assert_eq!(media_type("home.html"), "application/octet-stream");
+    }
+
+    /// **Only a recording is asked for a span at a time.** Everything else is
+    /// answered whole, which is what keeps a file a browser executes on the
+    /// one path that has always been bytes.
+    #[test]
+    fn video_is_the_only_kind_a_span_is_served_of() {
+        assert!(super::streams("walkthrough.webm"));
+        assert!(super::streams("walkthrough.mp4"));
+        assert!(!super::streams("home.png"));
+        assert!(!super::streams("home.svg"));
+        assert!(!super::streams("run.log"));
+    }
+
+    /// The three spellings a media element sends, and what each resolves to.
+    #[test]
+    fn the_spans_a_player_asks_for_are_read() {
+        let read = |said: &str| match super::asked_for(Some(said)) {
+            Some(FrameSpan::From { first, last }) => format!("{first}-{last:?}"),
+            Some(FrameSpan::Last(back)) => format!("last {back}"),
+            None => "whole".to_string(),
+        };
+        assert_eq!(read("bytes=0-"), "0-None", "opening a recording");
+        assert_eq!(read("bytes=1024-2047"), "1024-Some(2047)", "a seek");
+        assert_eq!(read("bytes=-512"), "last 512", "a container's index");
+    }
+
+    /// **Anything this cannot read answers whole**, which is what a request
+    /// with no header at all answers. Ignoring a range is legal; guessing at
+    /// one would serve bytes nobody asked for under a status saying they did.
+    #[test]
+    fn a_range_this_does_not_serve_is_answered_whole() {
+        assert!(super::asked_for(None).is_none(), "no header");
+        assert!(
+            super::asked_for(Some("bytes=0-9, 20-29")).is_none(),
+            "two spans"
+        );
+        assert!(super::asked_for(Some("items=0-9")).is_none(), "not bytes");
+        assert!(super::asked_for(Some("bytes=9-4")).is_none(), "backwards");
+        assert!(
+            super::asked_for(Some("bytes=-0")).is_none(),
+            "the last nothing"
+        );
+        assert!(
+            super::asked_for(Some("bytes=abc-")).is_none(),
+            "not a number"
+        );
     }
 
     #[test]
