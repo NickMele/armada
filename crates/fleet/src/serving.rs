@@ -30,8 +30,8 @@ use core_model::JobReference;
 use ipc::{
     AlertList, CallArguments, DroneDetail, DroneId, DroneList, FleetCapacity, FleetHealth,
     FleetUsage, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobRemarks, JobResources, JobReview, JobSpend, ManifestConfig, ManifestId, ManifestReading,
-    ManifestSummary, ModelChoices, Work, WorkflowSummary, WorktreesHeld,
+    JobRemarks, JobResources, JobReview, JobSpend, ManifestConfig, ManifestDrift, ManifestId,
+    ManifestReading, ManifestSummary, ModelChoices, Work, WorkflowSummary, WorktreesHeld,
 };
 use store::{LoadJobError, ResolveJobError};
 
@@ -186,6 +186,23 @@ where
     /// booted on.
     async fn get_manifest_reading(&self) -> Result<Option<ManifestReading>, Refusal> {
         Ok(self.last_reading())
+    }
+
+    /// Whether the repository still has what `armada.yml` names —
+    /// `crate::drifting`.
+    ///
+    /// **Against the main checkout, and not a Job's worktree.** The surface
+    /// this answers is the project's Manifest, read before anything has been
+    /// dispatched; a Job's own sheet rehearses the Manifest that Job froze, in
+    /// that Job's tree, and is a different question with a different answer.
+    ///
+    /// **No lock and no process.** It is a `stat` per path the file names,
+    /// which is what lets a surface make this call on opening.
+    async fn get_manifest_drift(&self) -> Result<ManifestDrift, Refusal> {
+        Ok(crate::drifting::drift(
+            self.manifest(),
+            std::path::Path::new(&self.host().repo_root),
+        ))
     }
 
     /// One Job in full, folded from its log like every other read.

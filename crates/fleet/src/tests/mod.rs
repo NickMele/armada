@@ -43,6 +43,7 @@ mod delivering;
 mod delivery;
 mod detach;
 mod detail;
+mod drifting;
 mod drone;
 mod dry_run;
 mod epic;
