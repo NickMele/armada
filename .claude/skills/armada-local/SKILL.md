@@ -83,6 +83,18 @@ dropped that line and detached twenty more.
   a minute, not a weekend.
 - **Say what you started and that you stopped it**, the same as a window.
 
+**A waiter is backgrounded work too.** A loop watching somebody else's output
+file does not look like the thing this rule covers, and it is the shape that
+survives longest. Confirmed 12 Sep 2026: two `until [ -f … ] && tail -1 … |
+grep -q …` shells were found sleeping three seconds at a time — one for fifteen
+hours — on task files that had finished that morning, whose text their grep
+could never match, so neither had a terminating condition left. Killing them was
+worse than finding them: the harness reports an agent complete when its last
+background child dies, so each kill fired a completion notice carrying that
+agent's final words, and one announced a branch as ready to merge that had
+merged before lunch. Give a waiter a deadline — a counted loop that breaks,
+never a bare `until` — and kill it with the work it waits on.
+
 The rule is the one two sections up, applied to something with no window: quit
 what you launched, and quit it by the handle you kept rather than by what it is
 called.

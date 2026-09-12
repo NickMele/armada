@@ -117,7 +117,7 @@ Why: it is the load-bearing half of the change — without it the Judge grades a
 
 **Citations name the criterion only.** Why: which judge raised a refusal is detail inside the record rather than part of the link, so the reference a Drone retries against keeps its shape whether `panel_size` is 1 or 3.
 
-**The verdict stays binary.** A refusal fails the step, and there is no `unresolved` third state (see Open questions).
+**A refusal can hold the step rather than fail it.** A criterion asks a person by default: the step waits at its gate with the Drone alive, and the answer is agree with the refusal, disagree for this step, or disagree for the repository — the last recorded against the criterion, so it is not asked again here. A `judge_checks[]` entry may carry `on_refusal: refuse` to stop the step outright, and a Job's own setting overrides in either direction. `declared_plan_drift` is the one criterion that can never fail a step: it tags, or it asks.
 
 ### Cost
 
@@ -247,7 +247,6 @@ Evidence Scope governs what the Judge may read — `context_paths` (what changed
 ## Open questions
 
 - **[judge-visual-evidence-reading]** What can a Judge conclude from a picture, and is it shown one at all or only the spec that produced it? Every other evidence type is text read against a criterion; a frame is not. The spec is the part that is checkable — it is code, it lands in the diff, and a wrong frame comes from a wrong spec a person can read — so a Judge shown only the spec is reading the same kind of artifact it always reads, and one shown the frame is doing something this system has never asked a model to do. Blocks the `shown` evidence type.
-- **[judge-unresolved-verdict-state]** Should there be an unresolved third verdict state, alongside pass and refuse? The verdict is currently strictly binary — a refusal fails the step.
 - **[judge-cost-cap-per-check]** Does a Judge call get a cost readout, and is a per-check dollar cap the right shape for the sub-limit? Reviewed 28 Aug 2026 alongside the model default and deliberately left open: nothing can read what a Judge call cost, because the call is rendered as one-shot text and emits no result envelope, so the figure a cap would compare against never reaches Armada. A number written into the row today would be enforced by nothing while reading as a limit that was set, which is worse than an absent cap because only the absent one is visible as missing. Without it verification bills against the Job budget and competes for spend with the work it verifies — bounded meanwhile by the call-count ceiling and the Machine budget cap, the first of which needs no price to enforce and the second of which is enforced at admission rather than at a gate.
 - **[judge-triggers-removal-guard]** What now guards a Manifest from removing Judge triggers entirely? A Manifest could once add Judge triggers and never remove them — a repo that removes them can opt out of semantic verification while every other signal still reads green, and Judge is the only tier measuring correctness. That protection was the config direction rule, since withdrawn, and nothing has replaced it.
 - **[judge-confidence-threshold-disposal]** Is the Judge confidence threshold config row deleted or repurposed? It is superseded and currently awaiting disposal.
