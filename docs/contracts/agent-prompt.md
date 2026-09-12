@@ -86,10 +86,13 @@ Six layers, assembled in order — section 3. Its wording is section 5.
 
 ### Helm
 
-**Told:** a strict subset of the Fleet MCP — all 14 queries, one of 12
-commands. The selected Manifest. Its resolved authority, a Machine setting
-between rung 1 and read-only with no Manifest tier. The obligation to call
-`get_events_since(cursor)` at the start of each turn. Voice.
+**Told:** a strict subset of the Fleet MCP — every operation whose access
+column in `crates/ipc/operations.toml` says Helm may reach it, and no other.
+That file is the authority and this sentence does not restate its totals: it
+held a count once, the count was wrong in both halves, and a number here is a
+second copy that drifts. The selected Manifest. Its resolved authority, a
+Machine setting between rung 1 and read-only with no Manifest tier. The
+obligation to call `get_events_since(cursor)` at the start of each turn. Voice.
 
 **Never told:** anything outside the selected Manifest. Secrets.
 
