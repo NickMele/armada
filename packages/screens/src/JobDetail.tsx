@@ -93,6 +93,7 @@ import { span } from "./duration";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
+import { wroteSoFar } from "./produced";
 import { checkEntryId, useRunSheet, type RunSheetSlice } from "./rehearsal";
 import { verdictSlotOf } from "./verdict-answered";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
@@ -400,8 +401,8 @@ export function JobDetail({
   // The diff, for every Job that is open rather than only for one at review.
   // **A produced file opens to what it actually wrote**, and it did that on one
   // status because the review block was the only thing asking for the read. It
-  // is still the expensive read and it is still made once, here, so the Produced
-  // chapter and the review decision draw from one answer.
+  // is still the expensive read, so the Produced chapter and the review
+  // decision draw from this one answer.
   useEffect(() => {
     onReadDiff(job.id);
     return () => {
@@ -428,6 +429,19 @@ export function JobDetail({
   const reading = whileReading(watched, job, workflow, selected);
   const watching = turnsOf(observed, job.id);
   const noted = logOf(journalled, job.id);
+  // What the live footprint last said this Job has written. **The sheet and the
+  // Produced chapter read one worktree**, and the sheet's reading was taken
+  // when the Job opened — so a Drone writing afterwards left `0 files` under a
+  // list naming seven. The effect below takes it again when this moves.
+  const wrote = wroteSoFar(watching?.rows ?? []);
+  // Take the patch again for the sheet somebody is looking at: on the press
+  // that opens it, and whenever the file list moves under it. **Only while it
+  // is open** — the patch is the megabyte, and Fleet republishes a footprint
+  // only where it changed, so a Drone editing the same files all night costs
+  // one read. `review.ts` holds why this does not blank the sheet.
+  useEffect(() => {
+    if (sheet === "diff") onReadDiff(job.id);
+  }, [sheet, wrote, job.id]);
   const holding = holdingOf(resources, job.id);
   const looked = lookOf(examination, job.id);
   // The finding itself, or none. Read twice — the summary asks whether an
