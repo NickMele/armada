@@ -12,7 +12,16 @@ import { describe, expect, it } from "vitest";
 
 import type { JobDetail, JobSummary, ManifestSummary, WorkflowSummary, Watched } from "@armada/protocol";
 import type { OpenArtifact } from "./opening";
-import { briefOf, stillReading, workOf } from "./work";
+import { briefOf, stillReading, workOf, type WorkRehearsal } from "./work";
+
+/** A Job with no server and nowhere the run sheet has opened. */
+const noRehearsal: WorkRehearsal = {
+  onRun: () => {},
+  worktreeOnDisk: undefined,
+  servers: [],
+  onStopServer: () => {},
+  onOpenServerLink: () => {},
+};
 
 function job(): JobSummary {
   return {
@@ -101,25 +110,25 @@ describe("where the work is", () => {
     // The Board's row carries the branch and the Drone, and the Manifest and
     // workflow holds are loaded for every job, so nothing here waits on the read.
     const withDrone: JobSummary = { ...job(), assigned_drone: "01M10B1V2A0011VRS6RA2SKPQ7" };
-    const rows = workOf(noOpen, withDrone, null, manifest(), workflow());
+    const rows = workOf(noOpen, withDrone, null, manifest(), workflow(), noRehearsal);
     expect(rows.map((row) => row.iconLabel)).toEqual(["Worktree", "Branch", "Manifest", "Workflow", "Drone"]);
   });
 
   it("says the worktree is not written yet where the board's row has no branch", () => {
     const undispatched: JobSummary = { ...job() };
     delete undispatched.branch;
-    const rows = workOf(noOpen, undispatched, null, manifest(), workflow());
+    const rows = workOf(noOpen, undispatched, null, manifest(), workflow(), noRehearsal);
     expect(rows.find((row) => row.iconLabel === "Worktree")?.meta).toBe("not written yet");
     expect(rows.map((row) => row.iconLabel)).not.toContain("Branch");
   });
 
   it("takes the branch from the job's own read once it answers", () => {
-    const rows = workOf(noOpen, job(), detail({ branch: "fix/settings-split-selectors" }), manifest(), workflow());
+    const rows = workOf(noOpen, job(), detail({ branch: "fix/settings-split-selectors" }), manifest(), workflow(), noRehearsal);
     expect(rows.find((row) => row.iconLabel === "Branch")?.value).toBe("fix/settings-split-selectors");
   });
 
   it("falls back to the wire's own ids while the manifest and workflow holds are not there yet", () => {
-    const rows = workOf(noOpen, job(), null, undefined, undefined);
+    const rows = workOf(noOpen, job(), null, undefined, undefined, noRehearsal);
     expect(rows.find((row) => row.iconLabel === "Manifest")?.value).toBe(job().owner_manifest_id);
     expect(rows.find((row) => row.iconLabel === "Workflow")?.value).toBe(job().workflow_id);
   });

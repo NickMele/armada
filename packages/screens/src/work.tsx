@@ -210,6 +210,52 @@ export function workOf(
 }
 
 /**
+ * How long a value can be before the 380px column — the shared label column,
+ * narrowed further by a server's own action buttons beside it — has no room
+ * left to read it in full. `localhost:41207`, a leased-span address at its
+ * typical length, is already past it: measured against the row as drawn,
+ * past this the row falls back to the port alone rather than truncating a
+ * value Nick's standing decision says must read in full.
+ */
+const SERVING_VALUE_BUDGET = 9;
+
+/** The host and port a server's link resolves to, exactly as declared. */
+function addressOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** The port alone, where the address itself does not fit. */
+function portOf(url: string): string | undefined {
+  try {
+    return new URL(url).port || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The row's value. **The same link its button opens** — never a `localhost`
+ * guess reconstructed from `ports[0]`, which can name a host the server never
+ * declared and a port that is not the one the button beside it opens. No
+ * links at all falls back to the port alone, or the server's name where it
+ * has not even leased one — never the raw `serve` line, which is a command
+ * and not a place.
+ */
+function servingValueOf(server: ServerState): string {
+  const link = server.links[0];
+  if (link === undefined) {
+    return server.ports[0] === undefined ? server.name : String(server.ports[0].port);
+  }
+  const address = addressOf(link.url);
+  if (address.length <= SERVING_VALUE_BUDGET) return address;
+  return portOf(link.url) ?? address;
+}
+
+/**
  * A row per server this Job is running or has running — Journey 9's *A
  * server*. **The sheet closed stops nothing**, so this draws for as long as
  * the server itself is up, independent of whether anybody has the sheet
@@ -225,8 +271,7 @@ function servingRows(jobId: string, rehearsal: WorkRehearsal): JobLogReferenceRo
       // wide enough for "Size on disk" leaves this row's value area narrow,
       // and a note here squeezed the address down to one character before
       // its own ellipsis. The name is still on the sheet and on hover.
-      value: server.ports[0] === undefined ? server.serve : `localhost:${server.ports[0].port}`,
-      ...(server.phase === "starting" ? { meta: "starting" } : {}),
+      value: servingValueOf(server),
       actions: (
         <>
           {server.links.map((link) => (
