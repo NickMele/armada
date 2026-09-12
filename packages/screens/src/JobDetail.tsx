@@ -764,7 +764,12 @@ export function JobDetail({
         whole,
         manifest,
         workflow,
-        workRehearsalOf(runHook.open, runHook.worktreeOnDisk, rehearsal),
+        // **Wrapped, never passed bare.** `open` takes an entry id, and this
+        // reaches `WhereRow`'s `Run…` as its `onClick` — which React calls with
+        // the click event, so a bare reference selected the event itself and
+        // the next render asked it for `.indexOf`. `onOpenRun` above has always
+        // wrapped it for the same reason.
+        workRehearsalOf(() => runHook.open(), runHook.worktreeOnDisk, rehearsal),
       )}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
