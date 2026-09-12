@@ -609,6 +609,22 @@ where
             .ok_or_else(|| self.refusal(Adrift::NoSuchCall { named: call_id }))
     }
 
+    /// What one command a Drone was not granted does, read by a model.
+    ///
+    /// **The one read on this trait that spends money**, and it still moves
+    /// nothing: `crate::explaining` makes the call, resolves the call id
+    /// against the two places a still-answerable command lives, and names every
+    /// refusal it can answer with. This only carries one out.
+    async fn explain_command(
+        &self,
+        job_id: JobId,
+        call_id: String,
+    ) -> Result<ipc::CommandExplained, Refusal> {
+        self.explained(&job_id.to_domain(), &call_id)
+            .await
+            .map_err(|why| self.refusal(why))
+    }
+
     /// One Check's own output, read back out of the file its row points at.
     ///
     /// **The other end of a path that opened nothing in Armada.** A row has

@@ -159,6 +159,17 @@ const MERGE_REFUSED: &str = "fleet.merge_refused";
 /// caller mistake** — asking again is reasonable, and the command that timed
 /// out may already have landed. `#712`.
 const COMMAND_TIMED_OUT: &str = "fleet.command_timed_out";
+/// A reading asked for on a call this Job is neither waiting on nor refused.
+/// **A 404**, which `crates/ipc/operations.toml` states and which is this
+/// seam's one exception to [`UNACCEPTABLE`]'s reading of "the Job is there and
+/// the id names nothing": the id is only nameable off a command still open, so
+/// one that names none is a person acting on a screen that has moved on.
+const NOTHING_TO_EXPLAIN: &str = "fleet.nothing_to_explain";
+/// The model would not read a command a person is deciding about. **A 500**,
+/// for [`MERGE_NO_TOOL`]'s reason: nothing about the request is wrong and
+/// asking again is reasonable — and the command is exactly as it was, so the
+/// decision is still open on what the person already had.
+const NOT_EXPLAINED: &str = "fleet.not_explained";
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -426,6 +437,16 @@ where
                     None => raised,
                 })
             }
+            // The one 404 on this seam that is not about a missing Job, and the
+            // code is what says so rather than the status.
+            Adrift::NothingToExplain { job, .. } => Refusal::NoSuchJob(
+                WireError::raised(NOTHING_TO_EXPLAIN, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::NotExplained { job, .. } => Refusal::Fault(
+                WireError::raised(NOT_EXPLAINED, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
             _ => Refusal::Fault(WireError::raised(FAULT, said, self.run_id())),
         }
     }

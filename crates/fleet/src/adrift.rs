@@ -36,6 +36,7 @@ use core_model::{
 };
 use store::{LoadAllError, LoadJobError, ResolveJobError, WriteError};
 
+use crate::judging::CallFailed;
 use crate::preparing::NotPrepared;
 use crate::proposing::{NotProposed, Unresolved};
 use crate::reporting::NotFiled;
@@ -562,6 +563,25 @@ pub enum Adrift {
     ///
     /// [`NoSuchCheckOutput`]: Adrift::NoSuchCheckOutput
     NoSuchFrame { named: String },
+    /// A reading was asked for on a call this Job is neither waiting on nor
+    /// refused.
+    ///
+    /// **Not [`NoSuchCall`](Adrift::NoSuchCall)**, which is about the
+    /// transcripts. This is about the two live places a still-answerable
+    /// command lives — a question held open, and a refused row on the step the
+    /// Job stopped on — which are the two `answer_command` looks in, so the
+    /// same id is a 409 there and this here.
+    NothingToExplain { job: JobId, call: String },
+    /// The model would not read a command a person is deciding about.
+    ///
+    /// **Nothing about the command changed.** The Drone is still held, the
+    /// offers are still the whole set, and the person decides on what they
+    /// already had — which is where they stood a moment before they asked.
+    NotExplained {
+        job: JobId,
+        call: String,
+        cause: CallFailed,
+    },
     /// A proposal named no model and nothing configured supplies one.
     ///
     /// Refused **at creation**, which is the whole point: the same value used

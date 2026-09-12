@@ -20,7 +20,7 @@ use core_model::Timestamp;
 use tokio::sync::oneshot;
 
 use crate::converging::Chain;
-use crate::permitting::Waiting;
+use crate::permitting::{Answered, Waiting};
 use crate::questioning::Question;
 use crate::working::Working;
 
@@ -129,7 +129,7 @@ impl Working {
 
     /// The held tool call, taken to answer it. `None` where the hold has
     /// already ended and the answer has to go as a turn.
-    pub(crate) fn permission_reply(&mut self) -> Option<oneshot::Sender<ipc::CommandAnswer>> {
+    pub(crate) fn permission_reply(&mut self) -> Option<oneshot::Sender<Answered>> {
         self.permission
             .as_mut()
             .and_then(|waiting| waiting.reply.take())

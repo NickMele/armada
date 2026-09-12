@@ -15,13 +15,13 @@
 
 use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
-    Actor, Alert, AlertList, Asked, CallArguments, CheckOutput, DroneDetail, DroneId, DroneSummary,
-    EvidenceType, Finding, FleetCapacity, FleetHealth, FleetUsage, Held, Instant, JobDetail,
-    JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks, JobResources,
-    JobStatus, JobSummary, KeptFrame, Look, ManifestConfig, ManifestId, ManifestSummary,
-    ModelChoices, Movement, NotedField, Origin, Overspending, Probe, ReclaimedBranch,
-    ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted, Unprobed, Urgency, Work,
-    WorkflowId, WorkflowSummary, WorktreeReclaimed,
+    Actor, Alert, AlertList, Asked, CallArguments, CheckOutput, CommandExplained, DroneDetail,
+    DroneId, DroneSummary, EvidenceType, Finding, FleetCapacity, FleetHealth, FleetUsage, Held,
+    Instant, JobDetail, JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess,
+    JobRemarks, JobResources, JobStatus, JobSummary, KeptFrame, Look, ManifestConfig, ManifestId,
+    ManifestSummary, ModelChoices, Movement, NotedField, Origin, Overspending, Probe,
+    ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted, Unprobed,
+    Urgency, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
 
 /// A spelling the registry has. Panics in a test rather than returning an
@@ -455,6 +455,18 @@ pub fn call(call_id: String) -> CallArguments {
         arguments: THE_ARGUMENT.to_string(),
         whole: true,
         length: Some(THE_ARGUMENT.chars().count()),
+    }
+}
+
+/// One command, as a model read it. **The fake holds exactly one**, keyed by
+/// [`THE_CALL`]: what the route has to prove is that the reading comes back
+/// with the model that gave it beside it, because a reading is a claim.
+pub fn explained() -> CommandExplained {
+    CommandExplained {
+        explanation: "It publishes this package to the public registry under the `next` tag. \
+                      Nothing about it can be undone: a published version cannot be replaced."
+            .to_string(),
+        model: "the-cheap-model".to_string(),
     }
 }
 

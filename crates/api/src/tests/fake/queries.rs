@@ -9,10 +9,10 @@
 //! `ipc` alone.
 
 use ipc::{
-    AlertList, CallArguments, CheckOutput, DroneDetail, DroneId, DroneList, FilesFound,
-    FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestId, ManifestReading,
-    ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
+    AlertList, CallArguments, CheckOutput, CommandExplained, DroneDetail, DroneId, DroneList,
+    FilesFound, FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence,
+    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestId,
+    ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
 };
 
 use super::FakeDaemon;
@@ -248,6 +248,30 @@ impl Queries for FakeDaemon {
             )));
         }
         Ok(shapes::call(call_id))
+    }
+
+    /// **Two refusals again, and both are 404s here**: a Job that is not there,
+    /// and a call this fake holds no open command for. The second is a 404
+    /// rather than the 422 `get_call` answers, because the id is only nameable
+    /// while the command is open — `crates/ipc/operations.toml`. No model is
+    /// reached; what the route has to prove is the shape and the two answers.
+    async fn explain_command(
+        &self,
+        job_id: JobId,
+        call_id: String,
+    ) -> Result<CommandExplained, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        if call_id != shapes::THE_CALL {
+            return Err(Refusal::NoSuchJob(ipc::WireError::raised(
+                "fleet.nothing_to_explain",
+                format!("this Job is neither waiting on nor refused the call `{call_id}`"),
+                run_id(),
+            )));
+        }
+        Ok(shapes::explained())
     }
 
     /// **The same two refusals one record over**: a Job that is not there, and

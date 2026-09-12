@@ -20,12 +20,12 @@ use ipc::{CommandAnswer, CommandInFlight};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
 use crate::daemon::Fleet;
-use crate::permitting::{NotPermitted, Refusing};
+use crate::permitting::{Answered, NotPermitted, Refusing};
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 
-type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+pub(super) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 const IMPLEMENT: &str = "implement";
 
@@ -43,7 +43,7 @@ fn one_step() -> ResolvedWorkflow {
 
 /// What the harness sends the permission tool, read the way the transport
 /// reads it — so the arguments are the ones the tool would have parsed.
-fn asked(tool: &str, command: &str, call: &str) -> PermissionAsked {
+pub(super) fn asked(tool: &str, command: &str, call: &str) -> PermissionAsked {
     let body = format!(
         r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"permission","arguments":{{"tool_name":"{tool}","input":{{"command":"{command}"}},"tool_use_id":"{call}"}}}}}}"#
     );
@@ -55,7 +55,7 @@ fn asked(tool: &str, command: &str, call: &str) -> PermissionAsked {
 
 /// A Drone whose first line is the call it reached for, and which reads
 /// whatever is written to it afterwards.
-fn a_drone_that_reached_for(call: &str) -> FakeHarness {
+pub(super) fn a_drone_that_reached_for(call: &str) -> FakeHarness {
     FakeHarness::running(
         "/bin/sh",
         &[
@@ -81,14 +81,29 @@ fn a_drone_that_reached_for(call: &str) -> FakeHarness {
     )
 }
 
-fn a_fleet_with(home: &TempDir, harness: FakeHarness) -> Fixture {
+pub(super) fn a_fleet_with(home: &TempDir, harness: FakeHarness) -> Fixture {
+    a_fleet_judged_by(
+        home,
+        harness,
+        Arc::new(FakeJudge::that_fails("no model is asked about a command")),
+    )
+}
+
+/// The same Fleet, with the model call scripted. **The judge is handed in and
+/// kept by the caller**, so a case about a reading can ask what the model was
+/// actually asked — and answer that it was not asked at all.
+pub(super) fn a_fleet_judged_by(
+    home: &TempDir,
+    harness: FakeHarness,
+    judge: Arc<FakeJudge>,
+) -> Fixture {
     let mut fittings = fitted_with(home, FakeWorkProduct::changed(&["src/parse.rs"]), harness);
     fittings.workflows = one(one_step());
-    fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about a command"));
+    fittings.judge = judge;
     Fleet::assembled(fittings)
 }
 
-async fn started(fleet: &Fixture, home: &TempDir) -> JobId {
+pub(super) async fn started(fleet: &Fixture, home: &TempDir) -> JobId {
     let job = fleet
         .propose(a_proposal("publish the package"))
         .await
@@ -115,7 +130,7 @@ async fn settled(fleet: &Fixture) {
     panic!("the Drone never stopped talking");
 }
 
-async fn heard(fleet: &Fixture) -> Vec<DroneEvent> {
+pub(super) async fn heard(fleet: &Fixture) -> Vec<DroneEvent> {
     let held = fleet.the_only_slot().await;
     let slot = held.lock().await;
     slot.as_ref().map(|at| at.heard()).unwrap_or_default()
@@ -128,7 +143,7 @@ fn refused(heard: &[DroneEvent], call: &str) -> bool {
 }
 
 /// Wait until a person is being asked, and hand back what they would see.
-async fn until_waiting(fleet: &Fixture, job: &JobId) -> CommandInFlight {
+pub(super) async fn until_waiting(fleet: &Fixture, job: &JobId) -> CommandInFlight {
     for _ in 0..400 {
         if let Some(waiting) = fleet.command_awaited(job).await {
             return waiting;
@@ -181,14 +196,14 @@ async fn a_new_job_asks_first_by_default() {
     let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
         until_waiting(&fleet, &job).await;
         fleet
-            .answer_command(&job, "c1", CommandAnswer::Reject)
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::Reject, None))
             .await
     });
 
     answered.expect("a person was asked, unprompted by any setting");
     assert_eq!(
         answer,
-        PermissionAnswer::Deny(Refusing::Rejected.to_the_drone("npm publish"))
+        PermissionAnswer::Deny(Refusing::Rejected { note: None }.to_the_drone("npm publish"))
     );
 }
 
@@ -215,7 +230,7 @@ async fn ask_me_holds_the_call_until_a_person_allows_it() {
             "allow for this job, always, reject"
         );
         fleet
-            .answer_command(&job, "c1", CommandAnswer::AllowForJob)
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
             .await
     });
 
@@ -348,7 +363,7 @@ async fn a_rejected_command_is_refused_and_the_fold_sees_it() {
     let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
         until_waiting(&fleet, &job).await;
         fleet
-            .answer_command(&job, "c1", CommandAnswer::Reject)
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::Reject, None))
             .await
     });
 
@@ -388,7 +403,7 @@ async fn the_board_says_a_job_waits_on_a_command() {
             .iter()
             .any(|row| row.id.as_str() == job.as_str() && row.asking);
         fleet
-            .answer_command(&job, "c1", CommandAnswer::AllowForJob)
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
             .await
             .unwrap();
         waiting
@@ -418,11 +433,11 @@ async fn an_answer_naming_another_call_is_refused_and_the_question_stands() {
     let (answer, wrong) = tokio::join!(fleet.permission(&job, &asking), async {
         until_waiting(&fleet, &job).await;
         let wrong = fleet
-            .answer_command(&job, "c9", CommandAnswer::AllowForJob)
+            .answer_command(&job, "c9", Answered::of(CommandAnswer::AllowForJob, None))
             .await;
         assert!(fleet.command_awaited(&job).await.is_some(), "still waiting");
         fleet
-            .answer_command(&job, "c1", CommandAnswer::AllowForJob)
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
             .await
             .unwrap();
         wrong
@@ -474,7 +489,7 @@ async fn a_second_command_waits_behind_the_first() {
             .permission(&job, &asked("Bash", "cargo publish", "c2"))
             .await;
         fleet
-            .answer_command(&job, "c1", CommandAnswer::AllowForJob)
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
             .await
             .unwrap();
         second
