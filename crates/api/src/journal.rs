@@ -1,5 +1,12 @@
-//! Watching one Job's own log: a reader Fleet implements, and the socket that
-//! follows it.
+//! One Job's own log: a reader Fleet implements, the socket that follows it,
+//! and the settled read that answers once.
+//!
+//! **Two halves of one stream, and only one of them needs a socket.**
+//! `observe_job_log` is the lines already written followed by the ones that
+//! come next; `get_job_log` is the first half on its own, for a caller that
+//! cannot be interrupted mid-turn and so cannot follow anything. One trait,
+//! one file, two questions — the alternative was a row in the inventory that
+//! said `Yes` for its backfill and `No` for its tail.
 //!
 //! **The file is the channel.** Every other stream here is a broadcast; this
 //! one reads the file Fleet already writes. A Job's log has twenty-six write
@@ -57,6 +64,19 @@ pub trait Journal: Send + Sync + 'static {
     /// calls the Job. The socket resolves the route's segment once and passes
     /// what came back.
     fn read(&self, handle: &str, from: u64) -> Reading;
+
+    /// The whole log, once, as a window that says it is one — `get_job_log`.
+    ///
+    /// **The same file and the same reader as [`Journal::read`]**, which is why
+    /// it is a second method here rather than a second implementation
+    /// somewhere else. What differs is what the caller is owed: a viewer
+    /// following the log needs a cursor, and a caller reading it once needs the
+    /// facts that say what it was handed is not the whole — how many notes the
+    /// log holds, which one the window starts at, and what the file weighs.
+    ///
+    /// **A Job with no log yet is an empty window and not a fault**, for the
+    /// reason above it: a Job at the approval gate has written no line.
+    fn window(&self, handle: &str) -> Window;
 }
 
 /// What one pass over a Job's log came to.
@@ -78,6 +98,44 @@ pub struct Reading {
     /// above; this is a directory that went away or a permission that changed,
     /// and it ends the stream with a sentence rather than a silence.
     pub unreadable: bool,
+}
+
+/// One settled reading of a Job's whole log.
+///
+/// **`ipc::JobLog` without the id**, which the handler holds already: the route
+/// resolved the Job before anything was opened, so the reader is handed a
+/// handle and never has to answer with the record's key.
+pub struct Window {
+    /// The notes, oldest first — the tail of the log where it has more than
+    /// the window holds.
+    pub notes: Vec<LogNote>,
+    /// Which note `notes[0]` is in the whole log, counted from one.
+    pub from_note: u32,
+    /// How many notes the log holds, counted by reading it.
+    pub total_notes: u32,
+    /// Lines that would not decode, counted rather than dropped in silence.
+    pub undecodable: u32,
+    /// What the log weighs.
+    pub bytes: u64,
+    /// The log is there and would not read the whole way. What was read is
+    /// still carried.
+    pub unreadable: bool,
+    /// The log's path, relative to the records root. **Fleet's to state**:
+    /// this crate does not know `.armada/logs/` exists.
+    pub path: String,
+}
+
+impl Window {
+    /// Whether the notes are all of them.
+    ///
+    /// **Two conditions and not one.** A window that starts at the first note
+    /// left nothing in front of it; a read that stopped on an error left
+    /// whatever was behind it, however far in it got. Either one makes the
+    /// answer a window, and a caller that inferred this from `from_note` alone
+    /// would call a truncated read whole.
+    pub fn whole(&self) -> bool {
+        self.from_note == 1 && !self.unreadable
+    }
 }
 
 /// Serve one viewer: what the log already holds, then what is appended to it.

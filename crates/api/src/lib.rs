@@ -65,7 +65,7 @@ pub use daemon::{
 };
 pub use door::{offered, Scope, DOOR_PATH};
 pub use following::{Follow, Followed, LiveOutput};
-pub use journal::{Journal, Reading, FOLLOW};
+pub use journal::{Journal, Reading, Window, FOLLOW};
 pub use mcp::{Caller, MCP_PATH};
 pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};
 pub use reference::Resolved;

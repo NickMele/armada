@@ -83,6 +83,18 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/jobs/:job_id/events",
     },
+    // What Fleet did to the Job, settled: the socket's backfill, answered once.
+    // **The one row whose last segment is not its key**, and the reason is the
+    // route next door. Elsewhere a log has two routes — `<noun>/output` for the
+    // reading and `<noun>/observe` for the stream — and here the stream took
+    // the bare noun before there was a reading to tell it from. So the noun
+    // stays where Bridge already calls it and the settled half names itself,
+    // rather than moving a route Bridge is drawing from.
+    Route {
+        operation: "get_job_log",
+        method: "GET",
+        path: "/jobs/:job_id/log/read",
+    },
     // The two halves of the work product, on two routes and not one. Evidence
     // is a handful of sentences per step and the patch is however large the
     // work is, so a surface wanting only the claims does not fetch the bytes.

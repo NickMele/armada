@@ -174,7 +174,7 @@ pub use job::{
     UnreadableJob,
 };
 pub use journal::{
-    JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
+    JobLog, JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
 pub use judged::{Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};

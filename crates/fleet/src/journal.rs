@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
-use api::{Journal, Reading};
+use api::{Journal, Reading, Window};
 use core_model::Level;
 use ipc::{DroneId, Instant, LogNote, NoteLevel, NotedField, StepId, Voice};
 use serde::Deserialize;
@@ -61,6 +61,10 @@ impl JobLogs {
 impl Journal for JobLogs {
     fn read(&self, handle: &str, from: u64) -> Reading {
         read_from(&self.records_root, handle, from)
+    }
+
+    fn window(&self, handle: &str) -> Window {
+        window_of(&self.records_root, handle)
     }
 }
 
@@ -128,6 +132,92 @@ fn read_from(records_root: &str, handle: &str, from: u64) -> Reading {
         skipped,
         unreadable: false,
     }
+}
+
+/// The whole log, once: the last [`NOTES`] notes and the facts that say so.
+///
+/// **One pass, and the same [`NOTES`] bound the stream's first read uses.** A
+/// second number here would be a second answer to *how much of a Job's log is
+/// a reading*, and there is only one such question; what this adds over
+/// [`read_from`] is the count of everything the window left in front of it, so
+/// a caller can say which note it is looking at rather than only that some are
+/// missing.
+///
+/// **Bounded by notes and not also by bytes**, which is where this parts from
+/// `rehearsing::records::output`. A run's log is a test runner's output and a
+/// single line of it can be arbitrarily long; every line here is Fleet's own
+/// writing about one Job, which `ipc::journal` already argues is why nothing
+/// on this stream is cut per note.
+fn window_of(records_root: &str, handle: &str) -> Window {
+    let path = relative_log(handle);
+    let at = log_of(records_root, handle);
+    // A log that is not there is an empty window, never a fault — [`read_from`]'s
+    // rule, and for its reason: a Job at the approval gate has written no line.
+    let Ok(file) = File::open(&at) else {
+        return empty(path);
+    };
+    let bytes = file.metadata().map(|held| held.len()).unwrap_or_default();
+    let mut reader = BufReader::new(file);
+    let mut kept: VecDeque<LogNote> = VecDeque::new();
+    let (mut total, mut from_note, mut undecodable, mut unreadable) = (0u32, 1u32, 0u32, false);
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            // A write in flight, for [`read_from`]'s reason: the tail of a line
+            // with no newline on it yet is not a line, and this read ends here
+            // rather than decoding half an object.
+            Ok(_) if !line.ends_with('\n') => break,
+            Ok(_) => match ipc::decode::<Line>("a Job log line", line.as_bytes()) {
+                Ok(entry) => {
+                    total = total.saturating_add(1);
+                    kept.push_back(LogNote::from(entry));
+                    if kept.len() > NOTES {
+                        kept.pop_front();
+                        from_note = from_note.saturating_add(1);
+                    }
+                }
+                Err(_) => undecodable = undecodable.saturating_add(1),
+            },
+            // What was read is answered, with the fact that it is not all of
+            // it. A refusal would throw away the notes that did read, on the
+            // one call somebody makes when something is already wrong.
+            Err(_) => {
+                unreadable = true;
+                break;
+            }
+        }
+    }
+    Window {
+        notes: Vec::from(kept),
+        from_note,
+        total_notes: total,
+        undecodable,
+        bytes,
+        unreadable,
+        path,
+    }
+}
+
+/// A Job that has written no line: the answer, not an error.
+fn empty(path: String) -> Window {
+    Window {
+        notes: Vec::new(),
+        from_note: 1,
+        total_notes: 0,
+        undecodable: 0,
+        bytes: 0,
+        unreadable: false,
+        path,
+    }
+}
+
+/// The log's path relative to the records root, as `get_job_log` answers with
+/// it. **The one spelling of the layout stays in [`log_of`]**; this is the same
+/// three components with the root left off, because a path on the wire that
+/// named somebody's home directory would put it in every reader's session.
+fn relative_log(handle: &str) -> String {
+    format!(".armada/logs/{handle}.jsonl")
 }
 
 fn nothing(from: u64) -> Reading {

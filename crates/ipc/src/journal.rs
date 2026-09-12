@@ -100,6 +100,65 @@ pub struct LogNote {
     pub fields: Vec<NotedField>,
 }
 
+/// `get_job_log`: what Fleet did to one Job, read back once as a window that
+/// says it is one.
+///
+/// **The backfill without the tail.** [`JournalMessage`] is the lines already
+/// written followed by the ones that come next, and only the second half needs
+/// a socket. The stream is Bridge's because an agent cannot be interrupted
+/// mid-turn — reasoning about the tail, which left the settled half reachable
+/// by nobody who was not watching a screen.
+///
+/// **A second operation and never a widening of `observe_job_log`**, whose row
+/// would then read `Yes` for its backfill and `No` for its tail and mean two
+/// things at once.
+///
+/// **[`crate::RunOutput`]'s shape, one file over**: the tail of the record,
+/// numbered as the record numbers it, with the facts that say it is a window.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobLog {
+    pub job_id: JobId,
+    /// Where it was read from, relative to `ManifestSummary::records_root`.
+    /// [`crate::CheckOutput::path`]'s field and its reason: a reader drawing
+    /// the path beside the reading takes it off the answer rather than
+    /// composing it and hoping the two agree.
+    pub path: String,
+    /// The window, oldest note first. **The tail**, which is
+    /// [`crate::RunOutput`]'s choice one file over: what a person opens a Job's
+    /// log to find out is what Fleet did to it last.
+    pub notes: Vec<LogNote>,
+    /// Which note [`notes`](JobLog::notes)`[0]` is in the whole log, counted
+    /// from one. **The log's own numbering and never the window's**, because a
+    /// citation names the record.
+    pub from_note: u32,
+    /// How many notes the log holds. Counted by reading it, so it is exact
+    /// even where the window is not the whole.
+    pub total_notes: u32,
+    /// Lines the log holds that would not decode, and so are notes in no
+    /// count above.
+    ///
+    /// **Counted rather than dropped in silence**, which is the rule the
+    /// stream's reader already keeps: every line here was an event, and a gap
+    /// nobody was told about reads as a Job nothing was happening to.
+    pub undecodable: u32,
+    /// What the log weighs, in bytes.
+    pub bytes: u64,
+    /// Whether [`notes`](JobLog::notes) is all of them.
+    ///
+    /// **Stated rather than inferred from `from_note == 1`**, which is
+    /// [`crate::CheckOutput::whole`]'s reason: a surface deriving completeness
+    /// from another field would call a partial answer whole the first time that
+    /// field's meaning moved.
+    pub whole: bool,
+    /// The log is there and Fleet could not read the whole of it.
+    ///
+    /// **[`Quiet::Unreadable`] as a settled answer**, and never a Job with no
+    /// log yet — that one is ordinary and comes back with no notes at all. What
+    /// was read is still carried: a refusal here would throw away the notes
+    /// that did read, on the one call somebody makes when something is wrong.
+    pub unreadable: bool,
+}
+
 /// The first message on a Job's log socket: what the reader is about to be
 /// handed, and what it left behind.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
