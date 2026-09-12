@@ -11,9 +11,7 @@ use std::path::Path;
 use ipc::ProtocolVersion;
 
 use crate::process::{holder_of, Holder, StartedAt};
-use crate::runtime::{
-    self, provisional_address, Presence, RuntimeFile, Staleness, PROVISIONAL_PORT,
-};
+use crate::runtime::{self, listener_address, Presence, RuntimeFile, Staleness};
 use crate::tests::tmp::TempDir;
 
 const VERSION: ProtocolVersion = ProtocolVersion::new(1, 0);
@@ -84,11 +82,17 @@ fn the_file_carries_the_port_that_was_actually_bound() {
     assert_ne!(published.file().port, 0);
 }
 
+/// **The host is a constant and the port is an argument.** Fleet's port comes
+/// from the lease now, so the only thing this function decides is that the
+/// bind is on loopback — and it has to decide that for every port it is given,
+/// not for one number written here.
 #[test]
-fn the_provisional_address_is_loopback_and_carries_the_provisional_port() {
-    let address = provisional_address();
-    assert!(address.ip().is_loopback());
-    assert_eq!(address.port(), PROVISIONAL_PORT);
+fn the_listener_address_is_loopback_at_whatever_port_it_is_given() {
+    for port in [1_024u16, 40_000, 47_821] {
+        let address = listener_address(port);
+        assert!(address.ip().is_loopback());
+        assert_eq!(address.port(), port);
+    }
 }
 
 #[test]

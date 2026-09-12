@@ -5,18 +5,19 @@
 //! 1. Read any runtime file there: refuse over a live Fleet, replace a stale one.
 //! 2. Read the repository's own setup — no `--manifest` flag, [`crate::setup`]
 //!    for why — and **refuse before taking anything.** An `armada.yml` found
-//!    wrong after the bind costs a port and a runtime file, and both would have
-//!    to be given back.
-//! 3. Bind the listener: loopback, provisional port.
-//! 4. Write the runtime file carrying the port **read back from the bound
+//!    wrong after the bind costs a port and a runtime file, both given back.
+//! 3. Open the store and **claim the listener's port out of it** —
+//!    `fleet::listener`. After the refusal above, for step 2's reason.
+//! 4. Bind the listener: loopback, at the port just claimed.
+//! 5. Write the runtime file carrying the port **read back from the bound
 //!    listener**. Publishing a number nobody listens on gives Bridge a socket
 //!    that refuses and no way to tell that from a wedged Fleet.
-//! 5. Assemble a Fleet over that repository; reconcile the store against what
-//!    this process can see.
-//! 6. Serve, turning the same `Arc` the router holds. The loop starts first,
+//! 6. Assemble a Fleet over that repository, on the store already open;
+//!    reconcile it against what this process can see.
+//! 7. Serve, turning the same `Arc` the router holds. The loop starts first,
 //!    because reconciliation can admit a queued Job that needs turning whether
 //!    or not anything ever connects.
-//! 7. Wait to be stopped; the file's guard removes it.
+//! 8. Wait to be stopped; the port goes back and the file's guard removes it.
 //!
 //! **`exit 0` on a permanent refusal is deliberately not implemented.**
 //! `docs/concepts/fleet.md` requires it of a supervised Fleet; started by hand,
@@ -32,9 +33,9 @@ use adapters::{GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    detect_ceiling, Allowance, Bytes, CheckBudget, Clock, Concurrency, DryRuns, Fittings, Fleet,
-    Headroom, Host, JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, PortRange, Reclaiming,
-    Spare, StepNorms, SystemClock, TheMachine, UlidMint,
+    detect_ceiling, Allowance, BindConnectProbe, Bytes, CheckBudget, Clock, Concurrency, DryRuns,
+    Fittings, Fleet, Headroom, Host, JudgeBudget, Liveness, Micros, Mint, Noticing, Polling,
+    PortRange, Reclaiming, Spare, StepNorms, SystemClock, TheMachine, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -60,8 +61,9 @@ pub const STORE_FILE: &str = "armada.db";
 /// could write it could name a different server.
 pub const MCP_FILE: &str = "mcp.json";
 
-/// What a Drone's `PATH` is set to. **Provisional**, in the sense
-/// `runtime::PROVISIONAL_PORT` is: nothing owns this value yet.
+/// What a Drone's `PATH` is set to. **Provisional**: nothing owns this value
+/// yet. Fleet's own port was provisional in the same sense and is not any
+/// more — it is leased, per `fleet::listener`.
 ///
 /// Fleet's choice and never Fleet's own. A Drone that inherited the operator's
 /// `PATH` would find a different toolchain on two machines, and a different one
@@ -392,9 +394,32 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         None => {}
     }
 
-    // Bound first. The port in the file is read back from here, so it is a port
-    // something is listening on by construction.
-    let listener = tokio::net::TcpListener::bind(runtime::provisional_address()).await?;
+    // The store, opened here rather than inside `assemble`: the port this
+    // process binds is claimed out of it, and a claim needs a store to be made
+    // in. Everything above this line refuses without having taken anything.
+    let machine = path
+        .parent()
+        .expect("the runtime file has a directory")
+        .to_path_buf();
+    std::fs::create_dir_all(&machine)?;
+    let mut store = Store::open(&machine.join(STORE_FILE))?;
+
+    // One range for every claim on this machine — a Job's span, the main
+    // checkout's, and this one. Its ceiling is detected from the platform's
+    // ephemeral floor, so nothing here hands out a port the kernel will also
+    // assign. See `fleet::ports`.
+    let port_range = PortRange::of(PORT_RANGE_BASE, detect_ceiling(), PORT_BLOCK_GRANULE);
+    let claimed = fleet::claimed_listener_port(
+        &mut store,
+        port_range,
+        &BindConnectProbe,
+        SystemClock::new().now(),
+    )?;
+
+    // Bound at the port just claimed. The port written into the file is still
+    // read back from the listener rather than taken from the claim, so it is a
+    // port something is listening on by construction.
+    let listener = tokio::net::TcpListener::bind(runtime::listener_address(claimed)).await?;
     let bound = listener.local_addr()?;
 
     let published = RuntimeFile::publish(vacancy, bound.port(), PROTOCOL_VERSION)?;
@@ -406,11 +431,6 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         published.path().display()
     );
 
-    let machine = published
-        .path()
-        .parent()
-        .expect("the runtime file has a directory")
-        .to_path_buf();
     // Two things need this Fleet and both get it. The router serves it and the
     // loop below turns it; a Fleet only one of them could hold would be either
     // unserved or — as it was — dispatched and never settled.
@@ -418,7 +438,14 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         fleet,
         reloads,
         migrated,
-    } = assemble(&machine, setup, bound.port(), machine_facts)?;
+    } = assemble(
+        &machine,
+        store,
+        setup,
+        bound.port(),
+        port_range,
+        machine_facts,
+    )?;
     let fleet = Arc::new(fleet);
 
     // Said whatever it found, including nothing: a boot that stayed quiet
@@ -556,6 +583,11 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // for as long as Fleet runs, and released once, here.
     fleet_for_shutdown.stopped_every_server().await;
     fleet_for_shutdown.released_main_checkout_ports().await;
+    // Fleet's own listener port, given back beside the main checkout's span
+    // and at the same moment. A release that does not happen — a crash — is
+    // not a port lost: the next start reads the row and takes the port up
+    // again once the probe agrees nothing is on it. See `fleet::listener`.
+    fleet_for_shutdown.released_listener_port().await;
 
     // Dropping it removes the file, which is what makes this a clean exit. An
     // exit that skips the drop leaves the file stale, and the next start
@@ -640,8 +672,10 @@ struct Assembled {
 
 fn assemble(
     machine: &std::path::Path,
+    store: Store,
     setup: Setup,
     port: u16,
+    port_range: PortRange,
     facts: MachineFacts,
 ) -> Result<Assembled, Box<dyn Error>> {
     let MachineFacts {
@@ -652,7 +686,7 @@ fn assemble(
         models,
     } = facts;
 
-    std::fs::create_dir_all(machine)?;
+    // The machine directory was created before the store was opened in it.
     // Where Fleet keeps its own copy of a Job's attachments, outside every
     // worktree — `drafted()` writes here at proposal time and `dispatch`
     // copies from here into the worktree a Drone can see.
@@ -699,7 +733,7 @@ fn assemble(
     let records_root = records_root.to_string_lossy().to_string();
 
     let fleet = Fleet::assembled(Fittings {
-        store: Store::open(&machine.join(STORE_FILE))?,
+        store,
         harness: agent,
         vcs: GitVcs::new(),
         work: GitVcs::new(),
@@ -721,7 +755,7 @@ fn assemble(
             // matches its port against. See `fleet::peer`.
             port,
         },
-        port_range: PortRange::of(PORT_RANGE_BASE, detect_ceiling(), PORT_BLOCK_GRANULE),
+        port_range,
         run_log_retention: RUN_LOG_RETENTION,
         // The kernel, because the question is which process holds a socket.
         // `fleet::peer` holds the measurement that chose it over `lsof`.

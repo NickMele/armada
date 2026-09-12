@@ -78,6 +78,7 @@ pub mod journal;
 pub mod judging;
 pub mod keeping;
 mod landing;
+pub mod listener;
 /// The one act that writes into a repository Fleet did not make: a person
 /// presses, and Fleet merges the pull request their Job opened.
 mod merging;
@@ -206,6 +207,7 @@ pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spa
 pub use holding::{GaveBack, Held, Holding, Reclaiming};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
 pub use keeping::{deliverables_dir, kept_deliverables, Keeping};
+pub use listener::claimed_listener_port;
 pub use mint::{Mint, UlidMint};
 pub use noticing::{Noticed, Noticing};
 pub use overruling::Overruling;
@@ -223,8 +225,8 @@ pub use redispatch::Replacement;
 pub use reporting::{Counted, Filed, NotFiled};
 pub use resume::Roused;
 pub use runtime::{
-    machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,
-    Staleness, Vacancy, FILE_NAME, PROVISIONAL_PORT,
+    listener_address, machine_path, Presence, PublishError, Published, ReadError, RuntimeFile,
+    Staleness, Vacancy, FILE_NAME,
 };
 pub use scope::{Declared, Drifting, NotDeclared};
 pub use session::{DroneSession, LiveSession, Turn};
