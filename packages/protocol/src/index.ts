@@ -19,6 +19,7 @@ export * from "./commanding";
 export * from "./connection";
 export * from "./detail";
 export * from "./drift";
+export * from "./editing";
 export * from "./events";
 export * from "./explaining";
 export * from "./files";

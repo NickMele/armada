@@ -55,6 +55,9 @@ mod drift;
 /// The processes Fleet is holding, and what one of them has been doing.
 /// **Read off the roster, never off the Jobs.**
 mod drones;
+/// The Manifest file itself, read and written — the half of Journey 9's
+/// *Editing* a person acts with, where `reading` is the half that reports.
+mod editing;
 mod enums;
 mod error;
 mod event;
@@ -148,6 +151,7 @@ pub use detail::{
 };
 pub use drift::{Declaration, Drift, ManifestDrift};
 pub use drones::{DroneDetail, DroneList, DroneSummary};
+pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
     DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
