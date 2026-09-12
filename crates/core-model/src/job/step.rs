@@ -137,21 +137,18 @@ impl JobStep {
     }
 
     /// The row as the move leaves it. **Never called except by
-    /// [`Job::transition_step`](crate::Job::transition_step)**, which is what
-    /// asks the machine whether the move is admitted; this only writes down
-    /// the answer.
+    /// [`Job::transition_step`](crate::Job::transition_step)**, which asks the
+    /// machine whether the move is admitted; this only writes down the answer.
     ///
     /// `entered_at` moves only on entering [`Running`](StepTarget::Running),
-    /// because the field is "when this step was entered" and a step is entered
-    /// when it starts being worked. Advancing writes `updated_at` alone, so the
-    /// time a step took stays readable from the pair.
+    /// since a step is entered when it starts being worked; advancing writes
+    /// `updated_at` alone, so the time a step took stays readable from the pair.
     ///
-    /// `last_verdict` follows the destination rather than a caller:
-    /// `advanced`'s meaning is "the step passed its advance gate", which is
-    /// what `passed` records, and `stopped` is `failed` carrying the trigger
-    /// the target already had to name. Entering `running` leaves the previous
-    /// verdict standing — the registry is explicit that activity and verdict
-    /// are separate fields, so starting work does not erase the last ruling.
+    /// `last_verdict` follows the destination rather than a caller: `advanced`
+    /// means "the step passed its advance gate", which `passed` records, and
+    /// `stopped` is `failed` carrying the trigger the target already had to
+    /// name. Entering `running` leaves the previous verdict standing — activity
+    /// and verdict are separate fields, so starting work does not erase it.
     pub(crate) fn moved_to(&self, to: &StepTarget, at: Timestamp) -> JobStep {
         JobStep {
             job_id: self.job_id.clone(),
@@ -343,40 +340,34 @@ pub struct StepFrame {
     /// A digest over the file's own bytes, taken when the copy was made.
     ///
     /// **What decides whether a pair is worth drawing.** Two frames of one name
-    /// from the two sides are a before and an after; most of them are the same
-    /// picture, because a spec that photographs ten screens is photographing
-    /// ten screens of which the change touched one. This is how a surface folds
-    /// the nine away without opening a file.
+    /// from the two sides are a before and an after; most are the same picture,
+    /// since a spec photographing ten screens is photographing ten of which the
+    /// change touched one — this is how a surface folds the nine away without
+    /// opening a file.
     ///
-    /// **It is sound in one direction only, and that is the direction that
-    /// matters.** Digests that differ mean *draw it*, which is at worst noise —
-    /// a PNG encoder may spell one picture two ways, and the pair is shown
-    /// looking identical. Digests that agree mean *fold it*, and being wrong
-    /// there would hide the change a person came to see. Bytes are compared
-    /// beside it for that reason.
+    /// **Sound in one direction only, and that is the direction that matters.**
+    /// Digests that differ mean *draw it*, at worst noise — a PNG encoder may
+    /// spell one picture two ways. Digests that agree mean *fold it*, and being
+    /// wrong there would hide the change a person came to see; bytes are
+    /// compared beside it for that reason.
     ///
-    /// **Never a signature**, which is `verification::digest`'s rule one record
-    /// over: both values are written by one Fleet in one turn, and nothing
-    /// authenticates anything with it.
+    /// **Never a signature** — both values are written by one Fleet in one turn.
     pub digest: String,
 }
 
 /// Which of the two checkouts a frame was taken against.
 ///
-/// **The whole of what makes a pair a pair.** `#209` asks for the branch *and*
-/// the base so a reviewer sees what changed rather than what is, and two frames
-/// called `home.png` are only a before and an after if something says which is
-/// which. Nothing else on [`StepFrame`] could: the name is the harness's, and
-/// both runs are one attempt of one step.
+/// **The whole of what makes a pair a pair.** `#209` asks for the branch
+/// *and* the base so a reviewer sees what changed rather than what is, and
+/// two frames called `home.png` are only a before and an after if something
+/// says which is which.
 ///
-/// **Two variants and no third for "the only one there was".** `#602` switched
+/// **Two variants, no third for "the only one there was".** `#602` switched
 /// the base run off, so every Job today produces branch frames and no base
-/// frames — a set with one side in it, readable from what is there, and a
-/// variant for it would be a second way to say the same thing. The variant
-/// stays rather than being deleted: a repository with no base, or a base run
-/// that would not start, was always this same shape, and it is the shape a
-/// base run reaches again once something can tell a spec which tree it is
-/// aimed at.
+/// frames — a set with one side in it, and a variant for it would be a
+/// second way to say the same thing. It stays rather than being deleted: this
+/// was always the shape a repository with no base run, and it is the shape a
+/// base run reaches again once a spec can be told which tree it is aimed at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Side {
     /// The base checkout — what the screen looked like before this Job.

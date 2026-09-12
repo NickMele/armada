@@ -1,20 +1,17 @@
 //! The field contract every log line carries.
 //!
 //! Armada emits from three independent places — Fleet, Bridge and a Drone —
-//! into three sinks that already exist. Nothing else guarantees a line from one
-//! can be joined to a line from another. This is that guarantee.
+//! into three sinks that already exist. This is the guarantee that a line from
+//! one can be joined to a line from another.
 //!
-//! # Why this exists in M0 rather than when logging is written
+//! Written now rather than after logging exists, because retrofitting a line
+//! shape across five already-logging crates is a rewrite of all five — and
+//! `actor` cannot be reconstructed afterwards: **a line that did not record
+//! who caused it never will.**
 //!
-//! Retrofitting a line shape after five crates are already logging is a rewrite
-//! of all five. And `actor` is the field that cannot be reconstructed
-//! afterwards at all: **a line that did not record who caused it never will.**
-//!
-//! # What this module does not own
-//!
-//! Sink paths, retention and redaction. `Redactor` runs *after* an envelope is
-//! assembled, never before, and nothing here is exempt from it — `fields` is
-//! where a leaked credential would most plausibly land.
+//! Sink paths, retention and redaction are not owned here. `Redactor` runs
+//! *after* an envelope is assembled, never before — `fields` is where a leaked
+//! credential would most plausibly land.
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;

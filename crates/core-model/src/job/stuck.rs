@@ -200,19 +200,17 @@ pub struct Refusal {
 /// What a Job's Drones reached for and were refused, bounded.
 ///
 /// **The trigger's evidence, and nothing carried it.** `blocked_by_policy`
-/// named a policy and no surface named what the policy stopped, so a person was
-/// told to widen an allowlist without being told what to widen it to. It is
-/// carried here and read by no rule below, which is why it is an argument to
+/// named a policy and no surface named what it stopped, so a person was told
+/// to widen an allowlist without being told what to widen it to. Carried
+/// here and read by no rule below, which is why it is an argument to
 /// [`Stuck::of`] rather than a fifth field on [`Standing`].
 ///
-/// **The pair is one value because neither half is readable alone.** A list of
-/// fifty says nothing about whether it is the whole list, and a truncated list
-/// nobody was told about reads as the whole one — the rule
-/// `adapter_traits::DroneEvent::Unreadable` states for a decoder, applied to a
-/// read.
+/// **The pair is one value because neither half is readable alone.** A list
+/// of fifty says nothing about whether it is the whole list, and a truncated
+/// list nobody was told about reads as the whole one.
 ///
-/// **Private fields and one constructor**, so [`in_all`](Refusals::in_all) can
-/// never be spelled smaller than what is kept.
+/// **Private fields and one constructor**, so [`in_all`](Refusals::in_all)
+/// can never be spelled smaller than what is kept.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Refusals {
     kept: Vec<Refusal>,

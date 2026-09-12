@@ -1,20 +1,17 @@
 //! How much of the tree a Check reads when a Drone asks about its own change.
 //!
 //! **A second question, not a second `when`.** `when` answers whether a Check
-//! applies at all given the paths; this answers what it reads given that it
-//! does. The two are independent — `format` applies to every step and still has
-//! a narrower way to be run — so they are two keys rather than one.
+//! applies at all; this answers what it reads given that it does — independent
+//! keys, since `format` applies to every step and still has a narrower run.
 //!
-//! **The derivation from a path to an argument is the repository's to declare.**
-//! `-p ipc` from `crates/ipc/src/mcp/tools.rs` is a fact about Cargo's layout,
-//! and a runner that knew it would be wrong about `pnpm` the first time it met
-//! one. So the Manifest writes the derivation down and nothing else knows it:
-//! [`Narrowing::under`] is a directory whose child names the value, and
-//! [`Narrowing::each`] is how one value is spelled as an argument.
+//! **The path-to-argument derivation is the repository's to declare, not a
+//! runner's.** `-p ipc` from `crates/ipc/src/mcp/tools.rs` is a fact about
+//! Cargo's layout that a runner would get wrong for `pnpm`. The Manifest
+//! writes it down instead: [`Narrowing::under`] is a directory whose child
+//! names the value, [`Narrowing::each`] spells it as an argument.
 //!
-//! **Nothing here assembles a command line.** That is `checks_runner::narrowed`,
-//! beside the splitter it has to agree with about quoting — two files deciding
-//! how a path becomes one argument is two files that can disagree.
+//! Command-line assembly lives in `checks_runner::narrowed`, beside the
+//! splitter it must agree with about quoting.
 
 use alloc::string::String;
 use alloc::vec::Vec;

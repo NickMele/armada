@@ -4,16 +4,14 @@
 //! the terminality and the trigger-bound edges are the registry's claims,
 //! asserted here rather than trusted.
 //!
-//! # What [`EDGES`] itself holds is not asserted here, and no longer can be
-//!
+//! **What [`EDGES`] itself holds is not asserted here, and no longer can be.**
 //! It was, by `EDGES.len() == 34` — a number this file could compare against
 //! nothing, since a `no_std` crate cannot read the TOML it was transcribed
 //! from. Thirty-four entries with one `from` wrong is still thirty-four, and
 //! the assertion passed on exactly that. The gate's `the transition registry
 //! and the edge table name the same edges` now matches the two sets both ways,
-//! pair by pair, and reports the duplicate and the self-edge that assertion
-//! also carried. Everything below tests what the machine *does* with the table,
-//! which is the half a comparison rule cannot reach.
+//! pair by pair. Everything below tests what the machine *does* with the
+//! table, which a comparison rule cannot reach.
 
 use super::*;
 

@@ -58,18 +58,14 @@ impl core::fmt::Display for JobNumber {
 /// substring, so `AWS_SECRET_ACCESS_KEY` is caught by `secret`.
 ///
 /// **One list, two readers.** `fleet::redaction` scrubs a filed report with it
-/// and [`handle_of`] refuses to slug a title that trips it. It was the
-/// redactor's alone until a handle carried into a branch name what the report
-/// had just redacted out of the title beside it — so it is a fact about what a
-/// credential is called, which is the domain's, rather than a fact about
-/// reports.
+/// and [`handle_of`] refuses to slug a title that trips it — a fact about what
+/// a credential is called belongs to the domain, not to reports alone.
 ///
-/// **Deliberately narrow, and `auth` is not here.** `auth` catches `author`,
-/// and a report about a Job whose commit author was redacted is a report
-/// missing the fact somebody filed it to explain. `authorization` is the
-/// spelling that means the header. No vendor prefixes: that list is a better
-/// detector *and* a list of credential shapes committed to a public
-/// repository, which this repository's own guard refuses.
+/// **Deliberately narrow: `auth` is not here.** It catches `author`, and a
+/// report whose commit author was redacted is missing the fact somebody filed
+/// it to explain; `authorization` is the spelling that means the header. No
+/// vendor prefixes either — that list is both a better detector and a list of
+/// credential shapes this repository's own guard refuses to commit.
 pub const CREDENTIAL_NAMES: &[&str] = &[
     "token",
     "secret",

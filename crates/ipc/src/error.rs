@@ -1,21 +1,17 @@
 //! `WireError` — a failure, once it has stopped being a cause chain.
 //!
 //! `docs/contracts/error-contract.md` is the authority here, and the shape
-//! below is that contract's table. Five fields are always present, three are
-//! present when they apply, and **`level` and `component` are not among either
-//! set: this is an error, not a log line.**
+//! below is that contract's table. Five fields are always present, three
+//! are present when they apply, and **`level` and `component` are not
+//! among either set: this is an error, not a log line.**
 //!
-//! # What is not here yet
-//!
-//! `From<ArmadaError>` — the conversion this type exists for — because
-//! `core-model` has no `ArmadaError` to convert from. When it lands, that impl
-//! belongs here, beside the type it flattens into, and it is the one place a
-//! traversable cause chain becomes an array of strings.
-//!
-//! No code is declared in this crate either. A code's declaration stays beside
-//! the variant that raises it, and `cargo xtask verify-error-codes` collects
-//! them; a code invented here would be in no manifest and mean nothing to the
-//! lookup Bridge does.
+//! **What is not here yet: `From<ArmadaError>`** — the conversion this
+//! type exists for — because `core-model` has no `ArmadaError` to convert
+//! from. When it lands, that impl belongs here, beside the type it
+//! flattens into, and it is the one place a traversable cause chain
+//! becomes an array of strings. No code is declared in this crate either:
+//! a code's declaration stays beside the variant that raises it, and
+//! `cargo xtask verify-error-codes` collects them.
 
 use std::collections::BTreeMap;
 

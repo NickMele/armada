@@ -154,19 +154,18 @@ pub const ADVANCING_STATUSES: &[JobStatus] = &[JobStatus::Running, JobStatus::Aw
 /// The one move a person may make on a step the outer machine has frozen:
 /// `stopped -> advanced` as an override, beneath `escalated`.
 ///
-/// **A predicate and not a third entry in [`ADVANCING_STATUSES`]**, because
-/// those are different changes. The list says a step moves *freely* beneath a
-/// status, so `escalated` in it would let the gate stop a step and a dispatch
-/// enter one under a Job parked for a person — the whole of what the freeze
-/// keeps out. This admits the one move the freeze cannot be right about: an
-/// override **is** the ruling the escalation asked for, and there is no status
-/// to make it from first, because where the Job goes next follows from it.
+/// **A predicate, not a third entry in [`ADVANCING_STATUSES`].** That list
+/// says a step moves *freely* beneath a status, so `escalated` in it would
+/// let the gate stop a step and a dispatch enter one under a Job parked for
+/// a person — the whole of what the freeze keeps out. This admits the one
+/// move the freeze cannot be right about: an override **is** the ruling the
+/// escalation asked for, and there is no status to make it from first.
 ///
-/// The capability is [`StepTarget::Overridden`], which is already the only
-/// target that may walk `stopped -> advanced` and carries the trigger it
-/// overrules. All three conditions are load-bearing; drop any one and this
-/// admits a resume, an advance of a step that never stopped, or a pass written
-/// over a verdict a person was disagreeing with.
+/// The capability is [`StepTarget::Overridden`], the only target that may
+/// walk `stopped -> advanced`, carrying the trigger it overrules. All three
+/// conditions are load-bearing; drop any one and this admits a resume, an
+/// advance of a step that never stopped, or a pass written over a verdict a
+/// person was disagreeing with.
 fn overruled_while_frozen(status: JobStatus, from: StepState, to: &StepTarget) -> bool {
     status == JobStatus::Escalated
         && from == StepState::Stopped
