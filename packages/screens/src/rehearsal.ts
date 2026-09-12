@@ -131,9 +131,26 @@ function statusOf(instance: ServerState | undefined, now: number): RunSheetServe
   };
 }
 
-/** The run a window is following, as `RunSheet.output`. `undefined` where it is reading no run. */
-export function runOutputOf(followed: RunFollowed): ConsoleOutputProps | undefined {
+/**
+ * The run a window is following, as `RunSheet.output`. `undefined` where it is
+ * reading no run, or where what it is following is not the entry now
+ * selected.
+ *
+ * **Keyed to the selection, so it cannot outlive it.** `RunFollowed` is one
+ * subscription and it does not clear itself the instant a person picks a
+ * different row — a Drone's own turn on this same socket would look no
+ * different from a stale one. Selecting a server and starting it was the case
+ * that surfaced it: the serving bar came up live and correct while the pane
+ * beneath it still read the Command run before it, because nothing had told
+ * `output` those two facts were no longer about the same entry. `selectedName`
+ * absent is the one case this does not gate — a run already under way when
+ * the sheet opens onto no chosen row yet, which is `useRunSheet`'s call for
+ * `selected === null` and reads as "nothing to compare against" rather than
+ * "compare against nothing."
+ */
+export function runOutputOf(followed: RunFollowed, selectedName?: string): ConsoleOutputProps | undefined {
   if (followed.state !== "following") return undefined;
+  if (selectedName !== undefined && followed.name !== selectedName) return undefined;
   return {
     rows: followed.lines.map((text, at) => ({ row: "line" as const, at: followed.fromLine + at, text })),
     region: { says: followed.name, path: followed.path },
@@ -346,7 +363,7 @@ export function useRunSheet(
                   }),
             },
           }),
-      output: viewing?.output ?? runOutputOf(runFollowed),
+      output: viewing?.output ?? runOutputOf(runFollowed, selected === null ? undefined : nameOf(selected)),
       ...(runningNow === undefined
         ? {}
         : {
