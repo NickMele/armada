@@ -15,7 +15,7 @@ import sys
 # `xtask/src/rules.rs` carries the same numbers; the two must not drift.
 FAIL_LINES = 900
 CLAUDE_MD_FAIL = 50
-COMMENT_BLOCK_CAP = 5
+COMMENT_BLOCK_CAP = 15
 
 # Where bytes enter the process, plus the gate that names the pattern it bans.
 JSON_ALLOWED = ("crates/store/", "crates/ipc/", "xtask/")
@@ -109,7 +109,7 @@ def main() -> None:
                        "belongs to `store` and `ipc`, the two places bytes enter "
                        "the process; everywhere else a value arrives typed.")
 
-    # ---- rule: a comment block runs to five lines and no further ---------
+    # ---- rule: a comment block runs to fifteen lines and no further ------
     # Same cap as the gate, refused rather than warned: new writes should not
     # add to a backlog the gate merely reports. Judges the fragment being
     # written, not the file it lands in.

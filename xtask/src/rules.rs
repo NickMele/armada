@@ -445,15 +445,14 @@ pub fn nothing_writes_its_own_log_format(root: &Path) -> Report {
 
 // -------------------------------------------------------- rule twenty-three
 
-/// A comment is a line or two; five is where a block asks a question rather
-/// than gets refused.
-///
-/// This is a warning, not a failure — the backlog was measured at over five
-/// thousand blocks and none of them are being rewritten today.
-/// `.claude/skills/comments/SKILL.md` has the reduce-then-file order.
+/// A comment is a line or two; fifteen is where a block stops being one
+/// argument and starts being a document — `.claude/skills/comments/SKILL.md`'s
+/// own line. Five warned on 4,584 of the 5,714 blocks it found, which the skill
+/// calls correct, so it never said which block to open; 1,130 are over fifteen.
+/// Measured 11 Sep 2026. Still a warning: that backlog is not rewritten today.
 pub fn no_comment_block_too_long(root: &Path) -> Report {
-    let mut report = Report::new("no comment block over 5 lines");
-    const CAP: usize = 5;
+    let mut report = Report::new("no comment block over 15 lines");
+    const CAP: usize = 15;
 
     for source_root in SOURCE_ROOTS {
         for path in files_with_ext(root, &root.join(source_root), SOURCE_EXTS) {
