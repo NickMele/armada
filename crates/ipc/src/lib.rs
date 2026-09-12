@@ -149,7 +149,7 @@ pub use detail::{
     Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
     PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
 };
-pub use drift::{Declaration, Drift, ManifestDrift};
+pub use drift::{Declaration, Drift, ManifestDrift, Unfollowed};
 pub use drones::{DroneDetail, DroneList, DroneSummary};
 pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
