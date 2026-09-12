@@ -20,9 +20,9 @@ use std::future::Future;
 use crate::daemon::Refusal;
 use ipc::{
     AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten,
-    JobId, JobSummary, NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report,
-    RestartRequested, RunRecord, RunUnderway, SetWhenBlocked, StartRun, TurnRaise,
-    WorktreeReclaimed,
+    JobId, JobSummary, JudgeAnswered, NamedRun, ProposeJob, Redirection, Redispatched,
+    RemarksTakenUp, Report, RestartRequested, RunRecord, RunUnderway, SetWhenBlocked, StartRun,
+    TurnRaise, WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -587,6 +587,18 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         job_id: JobId,
         setting: SetWhenBlocked,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `answer_judge` — a person answers the question a Judge refusal opened:
+    /// agree with it, disagree for this step, or disagree and stand the
+    /// criterion down for the repository. **The Job comes back moved**: the
+    /// step fails exactly as it would have without this design, or advances.
+    ///
+    /// [`Refusal::IllegalMove`] where the Job is not holding a question open.
+    fn answer_judge(
+        &self,
+        job_id: JobId,
+        answered: JudgeAnswered,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `set_model` — the model this Job's later steps spawn on, chosen by a

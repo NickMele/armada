@@ -41,6 +41,7 @@ import type {
   CommandInFlight,
   WhenBlocked,
 } from "./commanding";
+import type { JudgeQuestion } from "./asking";
 
 /**
  * One Job, whole. The answer to `GET /jobs/:job_id`. `crates/ipc/src/detail.rs`.
@@ -183,6 +184,15 @@ export type JobDetail = {
    * nothing waits there, and a refused command is answered on `stuck.refused`.
    */
   command_waiting?: CommandInFlight;
+  /**
+   * The judge question this job is holding open, right now. Since protocol
+   * 11.1.
+   *
+   * **Absent is the ordinary case.** Draw it where the verdict is drawn now —
+   * the criterion, the judge's own `expected` / `produced` / `consequence`,
+   * three buttons, an optional note. `answer_judge` is one press.
+   */
+  judge_question?: JudgeQuestion;
   /**
    * The commands a person allowed for this job, oldest first. Since protocol
    * 11.0.

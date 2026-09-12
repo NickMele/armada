@@ -25,6 +25,7 @@
 //! way there asserts nothing about the machine it claims to be testing.
 
 mod allowed;
+mod asking;
 mod attempt;
 mod check;
 mod collision;
@@ -56,6 +57,7 @@ mod workflow;
 mod tests;
 
 pub use allowed::{AllowedCommand, Reach, WhenBlocked};
+pub use asking::WhenRefused;
 pub use attempt::{Attempt, Iteration, Spent};
 pub use check::{CheckOutcome, StepCheck};
 pub use collision::{collisions, Collision, ScopeClaim};
@@ -76,7 +78,7 @@ pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, ProposalId,
     RepoPath, StepId, Title, WorkflowId,
 };
-pub use judge::{Citation, Given, JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment};
+pub use judge::{Citation, Given, JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment, OnRefusal};
 pub use narrowing::Narrowing;
 pub use note::{RedirectAlreadyWaiting, RedirectWaiting};
 pub use policy::{AutoMerge, ReviewGate};

@@ -224,6 +224,7 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // Absent for the question's reason: a command waiting on a person is
         // held on a working slot too, and so is the setting a Fleet reads.
         command_waiting: None,
+        judge_question: None,
         when_blocked: None,
         // Absent for the setting's reason: a person's allows and model choice
         // are a Fleet's store, and this daemon holds none.

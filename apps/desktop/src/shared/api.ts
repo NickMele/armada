@@ -16,6 +16,7 @@ import type {
   FileReport,
   Followed,
   FrameRead,
+  JudgeAnswer,
   Opened,
   Outcome,
   Proposed,
@@ -179,6 +180,12 @@ export type BridgeApi = {
    * next command the drone reaches for reads it, and no drone is respawned.
    */
   setWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => Promise<Outcome>;
+  /**
+   * Answer the question a judge refusal opened. One press is the whole
+   * answer; `note` is never required. Fleet refuses 409 where the job is not
+   * holding a question open.
+   */
+  answerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => Promise<Outcome>;
   /**
    * Choose the model one job's later steps start on, or `null` for the one its
    * workflow gives each. **Live**: the step running now keeps its model.

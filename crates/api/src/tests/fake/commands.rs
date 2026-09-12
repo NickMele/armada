@@ -208,6 +208,13 @@ impl Commands for FakeDaemon {
     ) -> Result<JobSummary, Refusal> {
         self.unmoved(&job_id)
     }
+    async fn answer_judge(
+        &self,
+        job_id: JobId,
+        _answered: ipc::JudgeAnswered,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
     async fn set_model(
         &self,
         job_id: JobId,

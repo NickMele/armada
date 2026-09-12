@@ -75,6 +75,8 @@ pub async fn gate_against(
         &fleet::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
     let mut held = bench.recorded.borrow_mut();

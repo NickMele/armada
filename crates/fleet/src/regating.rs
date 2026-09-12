@@ -143,6 +143,18 @@ where
         let announcing = self.announcing(&job, &step, attempt);
         let ports = self.port_map(&job).await;
         let port_env = self.port_env(&job).await;
+        let refusal_policy = self
+            .store()
+            .lock()
+            .await
+            .when_refused(job_id)
+            .unwrap_or_default();
+        let tolerated = self
+            .store()
+            .lock()
+            .await
+            .tolerated_criteria()
+            .unwrap_or_default();
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             Request::of(&job),
@@ -162,6 +174,8 @@ where
             &announcing,
             &ports,
             &port_env,
+            refusal_policy,
+            &tolerated,
         )
         .await;
 
@@ -323,6 +337,7 @@ fn came_to(ruling: &Ruling) -> &'static str {
         Ruling::HandedBack { .. } => "handed_back",
         Ruling::Failed { .. } => "failed",
         Ruling::Refused { .. } => "refused",
+        Ruling::Questioned { .. } => "questioned",
         Ruling::Suspect { .. } => "suspect",
         Ruling::NotWhatTheStepAsked(_) => "not_what_the_step_asked",
         Ruling::CouldNotDecide { .. } => "undecided",

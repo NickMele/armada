@@ -183,7 +183,8 @@ fn two_steps_gated(
         // inside `adapters`.
         Some(question) => format!(
             "    judge_checks:\n      - criteria:\n          - \
-             criterion_id: c1\n            question: {question}\n"
+             criterion_id: c1\n            question: {question}\n            \
+             on_refusal: refuse\n"
         ),
     };
     let sends = |step: &str| delivers == Some(step);

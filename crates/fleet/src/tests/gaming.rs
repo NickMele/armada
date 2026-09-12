@@ -122,6 +122,8 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await
 }
@@ -232,6 +234,8 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");
@@ -311,6 +315,8 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;
@@ -449,6 +455,8 @@ async fn a_judged_flag_carries_the_question_it_answered_and_the_call_it_came_fro
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;

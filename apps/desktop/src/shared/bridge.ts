@@ -333,6 +333,7 @@ export const CHANNELS = {
   answerQuestion: "bridge:answer-question",
   answerCommand: "bridge:answer-command",
   setWhenBlocked: "bridge:set-when-blocked",
+  answerJudge: "bridge:answer-judge",
   setModel: "bridge:set-model",
   removeAllowedCommand: "bridge:remove-allowed-command",
   restartStep: "bridge:restart-step",

@@ -178,6 +178,31 @@ pub enum Ruling {
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
     },
+    /// Every Check passed, and one criterion refused that `docs/concepts/judge.md`'s
+    /// asking design says to ask a person about rather than stop the step
+    /// over. **Nothing about the Job moves yet.** The step holds at
+    /// `awaiting_human`, the Job at `awaiting_review` — the same edge and the
+    /// same status [`Ruling::HeldForReview`] uses, because both are "a person
+    /// answers, not the machine" — and, unlike that ruling, **the Drone is not
+    /// stood down**: a person's answer either fails the step exactly as
+    /// [`Ruling::Refused`] would have, or advances it, and either way the same
+    /// Drone that is already holding the worktree carries on rather than a
+    /// fresh one being spawned to redo work nothing found wrong with.
+    ///
+    /// `question` is the first ask-eligible refusal this pass produced —
+    /// [`crate::judging::looks::JudgeFold`] asks about one at a time. Every
+    /// refusal this pass produced, asked or not, is still in `judged` and
+    /// still reaches `job_step_judgments`: this ruling changes what happens
+    /// next, not what was recorded.
+    Questioned {
+        question: Judgment,
+        /// The plain question the criterion asked. Neither `question` nor its
+        /// citations carry this — see `crate::judging::looks::question_text_of`.
+        question_text: String,
+        checks: Vec<StepCheck>,
+        output: Vec<CheckOutput>,
+        judged: Vec<Judgment>,
+    },
     /// Every Check passed, the Judge did not refuse, and the gaming check
     /// flagged the evidence. **The Job escalates as `evidence_suspect`**, which
     /// is a different claim from a refusal: the work satisfies the step as
@@ -273,6 +298,7 @@ impl Ruling {
             | Ruling::HandedBack { checks, .. }
             | Ruling::Failed { checks, .. }
             | Ruling::Refused { checks, .. }
+            | Ruling::Questioned { checks, .. }
             | Ruling::Suspect { checks, .. }
             | Ruling::CouldNotDecide { checks, .. } => checks,
             Ruling::NotWhatTheStepAsked(_) => &[],
@@ -298,6 +324,7 @@ impl Ruling {
             | Ruling::Finished { judged, .. }
             | Ruling::HeldForReview { judged, .. }
             | Ruling::Refused { judged, .. }
+            | Ruling::Questioned { judged, .. }
             | Ruling::Suspect { judged, .. } => judged,
             Ruling::Failed { .. }
             | Ruling::HandedBack { .. }
@@ -320,6 +347,7 @@ impl Ruling {
             | Ruling::HandedBack { output, .. }
             | Ruling::Failed { output, .. }
             | Ruling::Refused { output, .. }
+            | Ruling::Questioned { output, .. }
             | Ruling::Suspect { output, .. }
             | Ruling::CouldNotDecide { output, .. } => output,
             Ruling::NotWhatTheStepAsked(_) => &[],

@@ -22,6 +22,7 @@ fn gated_workflow() -> FrozenWorkflow {
     let criterion = |id: &str| JudgeCriterion {
         criterion_id: CriterionId::new(id),
         question: "does the diff do what the step said it would".to_string(),
+        on_refusal: core_model::OnRefusal::Ask,
     };
     let step = |id: &str, gate: AdvanceGate, judge: Vec<JudgeCheck>| {
         ResolvedStep::frozen(

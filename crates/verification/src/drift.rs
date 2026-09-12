@@ -6,7 +6,7 @@
 //! other Judge question already has — so a drift refusal cites, folds and is
 //! stored exactly like a criterion the workflow declared.
 
-use core_model::{CriterionId, JudgeCriterion, RepoPath};
+use core_model::{CriterionId, JudgeCriterion, OnRefusal, RepoPath};
 
 /// What a drift verdict is cited under.
 ///
@@ -36,6 +36,14 @@ pub fn drift_criterion(off_plan: &[RepoPath]) -> Option<JudgeCriterion> {
              step's own task required?",
             paths.join(", ")
         ),
+        // Always `Ask`, and nothing constructed anywhere else can change it:
+        // this is Fleet's own criterion rather than a workflow's, so it has no
+        // `judge_checks[]` entry to author `refuse` on, and `WhenRefused`
+        // cannot reach it either -- `crate::gate` resolves this criterion's
+        // policy at the call site rather than through the Job's setting.
+        // `docs/concepts/judge.md`'s own header: drift tags the step and does
+        // not fail it.
+        on_refusal: OnRefusal::Ask,
     })
 }
 

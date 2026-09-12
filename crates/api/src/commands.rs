@@ -14,9 +14,9 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
-    AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobRequest, Overruled,
-    ProposeJob, Redirection, RemarksTakenUp, RestartRequested, SetWhenBlocked, StopProposal,
-    TurnRaise,
+    AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobRequest, JudgeAnswered,
+    Overruled, ProposeJob, Redirection, RemarksTakenUp, RestartRequested, SetWhenBlocked,
+    StopProposal, TurnRaise,
 };
 
 use crate::answers::{answer, refused, undecodable};
@@ -450,6 +450,24 @@ pub(crate) async fn answer_command<D: Commands>(
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served.daemon().answer_command(job.id(), answered).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Answer the question a Judge refusal opened: agree with it, disagree for
+/// this step, or disagree and stand the criterion down for the repository.
+/// **The Job comes back moved.** 409 where it is not holding a question open.
+pub(crate) async fn answer_judge<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let answered: JudgeAnswered = match ipc::decode("an answer to a judge question", &body) {
+        Ok(answered) => answered,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().answer_judge(job.id(), answered).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }

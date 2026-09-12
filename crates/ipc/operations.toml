@@ -522,6 +522,21 @@ It replaces `approve_command`, a placeholder row for confirm-before-destructive 
 `helm_access` is `No`, on `answer_question`'s argument: an allow becomes something a Drone runs, and `always_allow` a line every later Job is given.
 """
 
+[operations.answer_judge]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "A person agrees with a judge's refusal, disagrees for this step, or disagrees and stands the criterion down for the repository"
+notes = """
+`docs/concepts/judge.md`'s asking design: a Judge criterion that refuses and is not marked `refuse` holds the step open at a question rather than stopping it. The body is `answer` -- `agree`, `disagree_once` or `disagree_always` -- and an optional `note` that rides along for the record and nothing else.
+
+`agree` fails the step exactly as it would have if the criterion were marked `refuse`. `disagree_once` advances the step, and the next Job's gate asks about the same criterion again. `disagree_always` advances it and also stands the criterion down for the repository, so no later Job is asked about it either.
+
+Refused with a 409 where the Job is not holding a question open.
+
+`helm_access` is `No`, for `answer_command`'s reason: whether a refusal stands is the owner's to decide.
+"""
+
 [operations.set_when_blocked]
 kind = "command"
 transport = "HTTP"

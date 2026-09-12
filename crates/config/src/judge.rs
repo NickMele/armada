@@ -21,7 +21,7 @@
 //! is refused rather than dropped: a silently ignored entry is a gate the
 //! author believes is watching and nothing is.
 
-use core_model::{EvidenceRef, GamingCheck, GamingPattern, JudgeCheck, JudgeCriterion};
+use core_model::{EvidenceRef, GamingCheck, GamingPattern, JudgeCheck, JudgeCriterion, OnRefusal};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, Refusal};
@@ -31,7 +31,9 @@ use crate::yaml::{self, Table};
 /// The keys read inside one `judge_checks` entry.
 const JUDGE_KEYS: &[&str] = &["enabled", "model", "panel_size", "criteria", "gaming_check"];
 /// The keys read inside one criterion.
-const CRITERION_KEYS: &[&str] = &["criterion_id", "question"];
+const CRITERION_KEYS: &[&str] = &["criterion_id", "question", "on_refusal"];
+/// The legal values of `on_refusal`.
+const ON_REFUSAL: &[&str] = &["ask", "refuse"];
 /// The keys read inside a `gaming_check`.
 const GAMING_KEYS: &[&str] = &["enabled", "baseline_ref", "flag_if"];
 /// Every `flag_if` entry, for the message a wrong one draws.
@@ -188,9 +190,32 @@ fn criterion(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<JudgeCri
     let question = table
         .required("question", out)
         .and_then(|value| yaml::text(&table.at("question"), value, out));
+    // Absent means `Ask`, per `docs/concepts/judge.md`'s asking design: every
+    // criterion asks by default, and `refuse` is what a step author opts
+    // into where stopping the step outright is the only sane answer.
+    let on_refusal = match table
+        .optional("on_refusal")
+        .and_then(|value| yaml::text(&table.at("on_refusal"), value, out))
+    {
+        None => OnRefusal::Ask,
+        Some(named) => match OnRefusal::from_wire(&named) {
+            Some(on_refusal) => on_refusal,
+            None => {
+                out.push(Refusal::new(
+                    table.at("on_refusal"),
+                    Fault::NotInTheSchema {
+                        value: named,
+                        legal: ON_REFUSAL,
+                    },
+                ));
+                OnRefusal::Ask
+            }
+        },
+    };
     table.close(CRITERION_KEYS, out);
     Some(JudgeCriterion {
         criterion_id: core_model::CriterionId::new(criterion_id?),
         question: question?,
+        on_refusal,
     })
 }

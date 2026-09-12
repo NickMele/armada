@@ -80,6 +80,7 @@ pub const MIGRATIONS: &[&str] = &[
     crate::model_override::V49,
     crate::ports::V50,
     crate::delivery::V51,
+    crate::asking::V52,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than

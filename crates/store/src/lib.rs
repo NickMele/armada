@@ -27,6 +27,7 @@
 /// How a Job meets a command its Drone was not granted, and what a person
 /// allowed it.
 mod allowing;
+mod asking;
 mod attempt;
 mod columns;
 /// The Drone pointer, where it now lives: one column per step.
@@ -90,6 +91,7 @@ mod write;
 #[cfg(test)]
 mod tests;
 
+pub use asking::OpenJudgeQuestion;
 pub use attempt::Attempted;
 pub use delivery::{Currency, Delivery, Unsettled};
 pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, WriteError};

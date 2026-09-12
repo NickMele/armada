@@ -26,7 +26,7 @@ mod looks;
 mod marking;
 mod running;
 
-pub(crate) use looks::{converging, gaming, judged, widening};
+pub(crate) use looks::{converging, gaming, judged, widening, JudgeFold};
 pub use marking::{Aloft, Marking};
 pub(crate) use running::{said, watched};
 

@@ -321,6 +321,8 @@ async fn evidence_and_every_check_passing_advances_the_step() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -355,6 +357,8 @@ async fn evidence_with_every_check_failing_advances_nothing() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;
@@ -403,6 +407,8 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -438,6 +444,8 @@ async fn a_hanging_check_fails_rather_than_hanging() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;
@@ -483,6 +491,8 @@ async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -524,6 +534,8 @@ async fn the_check_output_comes_back_for_a_person_to_read() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -557,6 +569,8 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;
@@ -599,6 +613,8 @@ async fn a_diff_that_cannot_be_read_decides_nothing_and_stops_the_job() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;
@@ -647,6 +663,8 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -681,6 +699,8 @@ async fn a_failed_check_holds_the_job_and_fleet_is_the_actor() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;
@@ -724,6 +744,8 @@ async fn an_advancing_step_does_not_move_the_job() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
     assert!(apply(&running_job(), &ruling, at(NOW)).is_none());
@@ -752,6 +774,8 @@ async fn the_last_step_advancing_completes_the_job() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;

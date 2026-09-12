@@ -26,6 +26,7 @@
 
 /// How many times a step was worked, and what each run came to. **The record
 /// held it and nothing served it** — see the module.
+mod asking;
 mod attempt;
 /// How many Drones Fleet may run, how many it is running, and what holds the
 /// next one back. **Fleet-wide, and not a Job's field.**
@@ -99,6 +100,7 @@ mod work;
 #[cfg(test)]
 mod tests;
 
+pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion};
 pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};

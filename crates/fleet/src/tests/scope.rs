@@ -14,8 +14,7 @@ use std::sync::Arc;
 
 use adapter_traits::Footprint;
 use core_model::{
-    CheckOutcome, CriterionId, DeclaredPaths, EscalationTrigger, JobStatus, JudgeVerdict, RepoPath,
-    Timestamp, TransitionReason,
+    CheckOutcome, CriterionId, DeclaredPaths, JobStatus, JudgeVerdict, RepoPath, Timestamp,
 };
 use ipc::mcp::DeclareScope;
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Scoped, Sketch};
@@ -107,6 +106,8 @@ pub(super) async fn ruled_by(
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await
 }
@@ -142,11 +143,14 @@ async fn a_step_that_changed_what_it_did_not_declare_reaches_the_judge() {
     );
 }
 
-/// **Escalated, never terminal.** Job `01M148ZF0D001BYXWN9XWHYGYF` reached
-/// `completed_failed` on drift, which `restart_step` cannot come back from. A
-/// refusal is a person's to answer.
+/// **Asked, never a gate failure and never terminal.** Job
+/// `01M148ZF0D001BYXWN9XWHYGYF` reached `completed_failed` on drift before
+/// `#191`'s escalation existed; the asking design goes one step further —
+/// `docs/concepts/judge.md`'s own header says drift tags the step and never
+/// fails it, so a refusal on it does not even reach `Ruling::Refused` any
+/// more, and nothing about the Job moves until a person answers.
 #[tokio::test]
-async fn drift_the_judge_refuses_escalates_rather_than_ending_the_job() {
+async fn drift_the_judge_refuses_holds_a_question_rather_than_failing() {
     let workflow = scoped(true, &[]);
     let ruling = ruled_by(
         &judged_by(FakeJudge::refusing(
@@ -161,30 +165,23 @@ async fn drift_the_judge_refuses_escalates_rather_than_ending_the_job() {
     .await;
 
     assert!(!ruling.advanced());
-    let Ruling::Refused { refusals, .. } = &ruling else {
-        panic!("a drift refusal is a refusal, not a gate failure: {ruling:?}");
+    let Ruling::Questioned { question, .. } = &ruling else {
+        panic!("a drift refusal asks, and never fails the gate: {ruling:?}");
     };
-    assert_eq!(
-        refusals.criteria(),
-        vec![&CriterionId::new(DECLARED_PLAN_DRIFT)]
-    );
+    assert_eq!(question.criterion_id, CriterionId::new(DECLARED_PLAN_DRIFT));
     assert!(
         !ruling.ends_the_drone(),
-        "the Drone stays alive and idle, which is what a redirect resumes"
+        "the Drone stays alive, which is what answering resumes without a respawn"
     );
     let moved = apply(
         &running_job(),
         &ruling,
         Timestamp::from_rfc3339("2026-08-26T09:00:00.000Z"),
     )
-    .expect("a refusal moves the Job")
+    .expect("a question moves the Job")
     .expect("a legal move");
-    assert_eq!(moved.job.status(), JobStatus::Escalated);
+    assert_eq!(moved.job.status(), JobStatus::AwaitingReview);
     assert!(!moved.job.status().is_terminal(), "drift is answerable");
-    assert_eq!(
-        moved.event.reason(),
-        &TransitionReason::Escalation(EscalationTrigger::GateFailure)
-    );
 }
 
 /// Drift writes no failed Check row. `CheckOutcome` has no value meaning "seen
@@ -272,13 +269,13 @@ async fn a_job_that_drifted_is_answerable_rather_than_over() {
     submitted_by_the_one(&fleet, a_diff_call()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(
-        matches!(turned.ruled(), Some(Ruling::Refused { .. })),
+        matches!(turned.ruled(), Some(Ruling::Questioned { .. })),
         "{:?}",
         turned.ruled()
     );
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
-        JobStatus::Escalated
+        JobStatus::AwaitingReview
     );
 }
 
@@ -664,6 +661,8 @@ async fn a_step_with_no_scope_is_asked_nothing_it_did_not_declare() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -708,6 +707,8 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;

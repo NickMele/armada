@@ -220,6 +220,18 @@ where
         let announcing = self.announcing(&job, &step, attempt);
         let ports = self.port_map(&job).await;
         let port_env = self.port_env(&job).await;
+        let refusal_policy = self
+            .store()
+            .lock()
+            .await
+            .when_refused(&job_id)
+            .unwrap_or_default();
+        let tolerated = self
+            .store()
+            .lock()
+            .await
+            .tolerated_criteria()
+            .unwrap_or_default();
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             request,
@@ -236,6 +248,8 @@ where
             &announcing,
             &ports,
             &port_env,
+            refusal_policy,
+            &tolerated,
         )
         .await;
         // **Before anything is recorded, and only for a delivering step.**
