@@ -584,10 +584,10 @@ where
     /// look at, which is a fact to read beside the verdict rather than a
     /// fourth thing that can stop a step.
     ///
-    /// **`Warn` and not `Info`**, because it names a repository whose declared
-    /// harness does not work, which is an edit somebody has to make.
-    /// [`NotShown::said`] is the sentence, and it lives on the type so this and
-    /// any later surface say the same thing.
+    /// **`Warn` and not `Info`.** A captured step that shows nothing, whether
+    /// the harness is broken or was never declared, is worth a person's
+    /// notice. [`NotShown::said`] is the sentence, and it lives on the type
+    /// so this and any later surface say the same thing.
     ///
     /// [`NotShown::said`]: crate::NotShown::said
     fn noted_not_shown(&self, job: &JobId, step: &StepId, why: &crate::NotShown) {
