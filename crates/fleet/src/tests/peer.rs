@@ -126,18 +126,18 @@ fn a_call_is_attributed_to_the_drone_holding_its_connection() {
     let one = JobId::carried(Ulid::carried("01JOBAAAAAAAAAAAAAAAAAAAAA"));
     let two = JobId::carried(Ulid::carried("01JOBBBBBBBBBBBBBBBBBBBBBB"));
     let drones = vec![(one.clone(), 4001), (two.clone(), 4002)];
-    peers.holding(4001, 51000, 47821);
-    peers.holding(4002, 51001, 47821);
+    peers.holding(4001, 51000, 12345);
+    peers.holding(4002, 51001, 12345);
 
     let caller = Caller::at("127.0.0.1:51001".parse::<SocketAddr>().expect("an address"));
     assert_eq!(
-        attributed(&caller, 47821, &drones, peers.as_ref()),
+        attributed(&caller, 12345, &drones, peers.as_ref()),
         Some(two),
         "the second Drone opened that port"
     );
     let first = Caller::at("127.0.0.1:51000".parse::<SocketAddr>().expect("an address"));
     assert_eq!(
-        attributed(&first, 47821, &drones, peers.as_ref()),
+        attributed(&first, 12345, &drones, peers.as_ref()),
         Some(one),
         "and the first opened the other"
     );
@@ -148,16 +148,16 @@ fn a_call_nothing_holds_is_refused_rather_than_guessed_at() {
     let peers = Placing::nothing();
     let one = JobId::carried(Ulid::carried("01JOBAAAAAAAAAAAAAAAAAAAAA"));
     let drones = vec![(one, 4001)];
-    peers.holding(4001, 51000, 47821);
+    peers.holding(4001, 51000, 12345);
 
     // The shape spike 10 measured: a `curl` the Drone started, from a port no
     // Drone holds. It attributes to nothing rather than to the Drone whose
     // shell started it.
     let bypass = Caller::at("127.0.0.1:51999".parse::<SocketAddr>().expect("an address"));
-    assert_eq!(attributed(&bypass, 47821, &drones, peers.as_ref()), None);
+    assert_eq!(attributed(&bypass, 12345, &drones, peers.as_ref()), None);
     // And a request that arrived with no connection information at all.
     assert_eq!(
-        attributed(&Caller::unplaceable(), 47821, &drones, peers.as_ref()),
+        attributed(&Caller::unplaceable(), 12345, &drones, peers.as_ref()),
         None
     );
 }

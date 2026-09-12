@@ -311,3 +311,127 @@ fn forgetting_a_job_forgets_its_port_claim() {
     );
     assert_eq!(forgotten.other, 0, "no table went uncounted");
 }
+
+/// Fleet's own listener — the one port Bridge connects to — gets a claim of
+/// its own, keyed by neither a Job nor the main checkout.
+#[test]
+fn the_fleet_listener_gets_a_claim_of_its_own() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    store
+        .claim_port_span(&PortClaim {
+            claimant: PortClaimant::FleetListener,
+            base: 43000,
+            width: 1,
+            claimed_at: claimed_at(),
+        })
+        .expect("Fleet's own claim is recorded");
+
+    let read = store
+        .port_span_for_fleet_listener()
+        .expect("the read succeeds")
+        .expect("a claim is there");
+    assert_eq!(read.claimant, PortClaimant::FleetListener);
+    assert_eq!(read.base, 43000);
+    assert_eq!(read.width, 1, "one listener, one port");
+
+    store
+        .release_port_span(&PortClaimant::FleetListener)
+        .expect("Fleet's own claim is released");
+    assert!(
+        store
+            .every_port_claim()
+            .expect("every claim is read")
+            .is_empty(),
+        "the release takes it with no Job and no main checkout involved"
+    );
+}
+
+/// A second claim for Fleet's listener is refused rather than silently
+/// replacing the first — **one Fleet per store**, which is what the partial
+/// unique index says and what the runtime file says from the other side.
+#[test]
+fn a_second_claim_for_the_fleet_listener_is_refused() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    store
+        .claim_port_span(&PortClaim {
+            claimant: PortClaimant::FleetListener,
+            base: 43000,
+            width: 1,
+            claimed_at: claimed_at(),
+        })
+        .expect("the first claim is recorded");
+    let refused = store.claim_port_span(&PortClaim {
+        claimant: PortClaimant::FleetListener,
+        base: 43010,
+        width: 1,
+        claimed_at: claimed_at(),
+    });
+    assert!(
+        matches!(refused, Err(WriteError::Database(_))),
+        "a second claim for one Fleet's listener is a conflict, not a replacement: {refused:?}"
+    );
+}
+
+/// **Three claimants, one table, told apart by the type.** A Fleet serving a
+/// repository holds its listener's port *and* the main checkout's span, and a
+/// Job it is working holds a third — so all three coexist and each reads back
+/// as itself.
+#[test]
+fn a_job_the_main_checkout_and_the_fleet_listener_are_three_separate_claims() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01PORT000000000000000011");
+    let job = job_id("01PORT000000000000000011");
+    for claim in [
+        PortClaim {
+            claimant: PortClaimant::Job(job.clone()),
+            base: 41000,
+            width: 4,
+            claimed_at: claimed_at(),
+        },
+        PortClaim {
+            claimant: PortClaimant::MainCheckout,
+            base: 41004,
+            width: 4,
+            claimed_at: claimed_at(),
+        },
+        PortClaim {
+            claimant: PortClaimant::FleetListener,
+            base: 41008,
+            width: 1,
+            claimed_at: claimed_at(),
+        },
+    ] {
+        store
+            .claim_port_span(&claim)
+            .expect("each claim is written");
+    }
+
+    assert_eq!(store.every_port_claim().expect("read").len(), 3);
+    assert_eq!(
+        store
+            .port_span_for_job(&job)
+            .expect("read")
+            .expect("a claim")
+            .base,
+        41000
+    );
+    assert_eq!(
+        store
+            .port_span_for_main_checkout()
+            .expect("read")
+            .expect("a claim")
+            .base,
+        41004
+    );
+    assert_eq!(
+        store
+            .port_span_for_fleet_listener()
+            .expect("read")
+            .expect("a claim")
+            .base,
+        41008
+    );
+}

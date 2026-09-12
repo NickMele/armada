@@ -81,7 +81,7 @@ pub fn fitted_with(
             // A port nothing is listening on. Attribution is planted in these
             // fixtures, so this is the other half of a pair no fake ever
             // matches on.
-            port: 47821,
+            port: 12345,
             attachments_dir: home
                 .path()
                 .join("attachments")

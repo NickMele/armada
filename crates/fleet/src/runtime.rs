@@ -34,19 +34,20 @@ use ipc::ProtocolVersion;
 
 use crate::process::{holder_of, Holder, ProbeFailed, StartedAt};
 
-/// The address Fleet binds. **Provisional**: hardcoded for M1, and the number
-/// is not owned by anything yet.
+/// The address Fleet binds, at a port the lease handed out.
+///
+/// **The port is an argument and no longer a constant.** It was
+/// `PROVISIONAL_PORT`, a number owned by nothing — so two Fleets on one
+/// machine both bound it and the second stopped at `Address already in use`.
+/// Fleet claims its port through [`crate::listener`] now, out of the same
+/// range a Job's span is claimed from, and this function only says where.
 ///
 /// Loopback, never `0.0.0.0`. Fleet answers commands that spawn processes
 /// against a real repository, so a routable bind is a remote code execution
-/// surface rather than a convenience, and the constant is the only place the
-/// host is expressible.
-pub const PROVISIONAL_PORT: u16 = 47821;
-
-/// The bind address. Assembled here from [`PROVISIONAL_PORT`] so no caller
-/// writes a host of its own.
-pub fn provisional_address() -> SocketAddr {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PROVISIONAL_PORT)
+/// surface rather than a convenience, and this function is the only place the
+/// host is expressible — no caller writes a host of its own.
+pub fn listener_address(port: u16) -> SocketAddr {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)
 }
 
 /// The file name under the machine directory.

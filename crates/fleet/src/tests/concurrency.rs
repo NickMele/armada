@@ -36,7 +36,12 @@ pub(crate) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 /// The port Fleet is listening on in these fixtures — the far half of every
 /// pair below, and the same number `daemon::fittings` puts on the `Host`.
-pub(crate) const SERVED_ON: u16 = 47821;
+///
+/// **Arbitrary test data, and not Fleet's port.** Fleet claims the port it
+/// serves on out of the lease — `crate::listener` — so there is no number that
+/// could be written here and be the real one. This is a value the fake peer
+/// table and the fixture `Host` agree on, and it means nothing else.
+pub(crate) const SERVED_ON: u16 = 12345;
 
 /// One step that declares a scope, so a Drone has something to say that lands
 /// on its own step and nowhere else.

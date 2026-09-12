@@ -261,7 +261,7 @@ Fleet asks about **one** pull request per sweep and rotates, because the turn in
 
 ## Ports
 
-A Job claims a contiguous span of ports for the life of its worktree. The main checkout claims one too, held while Fleet runs; the proof run after a merge and any server started with no Job draw from it.
+A Job claims a contiguous span of ports for the life of its worktree. The main checkout claims one too, held while Fleet runs; the proof run after a merge and any server started with no Job draw from it. Fleet's own listener claims a single port the same way, out of the same range.
 
 ### The range
 
@@ -275,9 +275,23 @@ This is the first place Armada reads a kernel parameter. Where that dependency b
 
 ### Claiming
 
-A claim carries a `job_id`, or marks the main checkout, so who holds which span is a query rather than an inspection of directories.
+A claim names a Job, the main checkout or Fleet's own listener, so who holds which span is a query rather than an inspection of directories.
 
 **A bind-and-connect probe gates every hand-out**, and it is load-bearing rather than defensive. Why: teardown that silently failed, teardown never declared, and a process outside every tree are indistinguishable to the store.
+
+### Fleet's own listener
+
+**Fleet claims the port it serves on.** It was a constant, and the constant is why two Fleets could not run on one machine: both bound the same number and the second stopped at `Address already in use`, which is what stopped a development Fleet running beside the owner's.
+
+> **Rule.** Fleet claims its listener port before it binds, and publishes the port read back from the bound listener.
+> Why: the claim is what stops a second Fleet taking the same number, and reading the port back from the listener rather than from the claim is what stops the runtime file naming a port nothing is listening on.
+
+> **Rule.** The claim is taken after Fleet has refused a repository it cannot serve, and given back when Fleet stops.
+> Why: a claim taken before a refusal would have to be given back, which is the reason the bind already happens after it.
+
+**Two Fleets on one machine are two homes, so neither can read the other's claim.** A store is found through `HOME`, so what keeps their ports apart is the probe rather than a row either of them can see. A Fleet starting over a claim its own crash left behind takes that port up again where the probe agrees nothing is on it, and gives the row back and picks another where something is.
+
+Starting a second Fleet over a **live** one is a different act and stays refused; the runtime file is what refuses it, and this section is about two Fleets with different homes and different stores.
 
 ### Servers
 

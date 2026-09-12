@@ -158,6 +158,15 @@ running and the network is just being slow," which is exactly the ambiguity
 this check exists to resolve. A bare connection timeout cannot distinguish
 those two cases; the pid check can, before a socket is even opened.
 
+**Fleet chooses its own port and records it; Bridge never has one to assume.**
+One loopback listener carries the WebSocket and the HTTP surface together, and
+its port is claimed at startup out of the same lease a Job's port span comes
+from — `docs/concepts/fleet.md`, *Ports*. So the number differs between two
+machines and may differ between two runs on one, and reading it out of the
+runtime file is the only way to find it. That is also what lets two Fleets run
+at once on one machine: a development Fleet beside your own is two claims rather
+than a collision.
+
 The runtime file's exact location and format are not decided yet — that's an
 open question for whoever lands the connection layer, not something this doc
 should presume.
@@ -306,8 +315,6 @@ Name these rather than deciding them by writing code that assumes an answer:
 
 - **[runtime-file-format]** The runtime file's exact path, filename, and
   on-disk format (JSON? TOML?) — not fixed anywhere in the repo yet.
-- **[fleet-ports]** Which HTTP/WebSocket ports Fleet binds to, and whether
-  that's fixed or Fleet-chosen-and-recorded-in-the-runtime-file.
 - **[list-virtualization]** The virtualization approach for lists, logs and
   diffs. No library chosen.
 - **[shadcn-and-tokens]** How shadcn primitives take their values from the

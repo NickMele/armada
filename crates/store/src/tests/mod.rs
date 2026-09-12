@@ -29,6 +29,7 @@ mod plan;
 mod ports;
 mod process;
 mod proving;
+mod rebuilding;
 mod reconstruct;
 mod report;
 mod resolving;
