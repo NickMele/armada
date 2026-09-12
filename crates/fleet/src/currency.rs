@@ -18,6 +18,8 @@
 //! is what a person reads, and `crate::conflict_resolution` is where they may
 //! act on it.
 
+use std::sync::Arc;
+
 use adapter_traits::{
     AgentHarness, Delivery, KeptCurrent, Landing, Rendering, Vcs, WhatBecameOfIt, WorkProduct,
 };
@@ -65,7 +67,16 @@ where
         // failing is not a licence to skip — an unreadable tip is
         // indistinguishable from one nobody has seen, so this falls through
         // to attempting it.
-        if let Some(tip) = self.vcs().base_tip(&self.host().repo_root, base) {
+        // Off the runtime, not straight on the turn loop's own thread. `#693`.
+        let (vcs, repo_root, owned_base) = (
+            Arc::clone(self.vcs()),
+            self.host().repo_root.clone(),
+            base.to_string(),
+        );
+        let tip = tokio::task::spawn_blocking(move || vcs.base_tip(&repo_root, &owned_base))
+            .await
+            .expect("git panicked reading the base's tip");
+        if let Some(tip) = tip {
             let already = self
                 .store()
                 .lock()
@@ -82,8 +93,15 @@ where
         // and push.
         let outcome = {
             let _at_the_merge_end = self.merge_end().lock().await;
-            self.vcs()
-                .kept_current(&self.host().repo_root, &job.handle(), base)
+            let (vcs, repo_root, handle, owned_base) = (
+                Arc::clone(self.vcs()),
+                self.host().repo_root.clone(),
+                job.handle(),
+                base.to_string(),
+            );
+            tokio::task::spawn_blocking(move || vcs.kept_current(&repo_root, &handle, &owned_base))
+                .await
+                .expect("git/gh panicked keeping the branch current")
         };
         self.recorded_currency(job_id, outcome).await;
     }

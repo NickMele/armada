@@ -25,6 +25,7 @@
 //! Every question is asked from the repository root, never a Job's worktree.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{
@@ -172,7 +173,15 @@ where
         // The Job's own worktree is long gone by the time anybody merges, so
         // the question is asked from the repository it was cut from, and about
         // the address rather than the branch — which the merge usually deleted.
-        let read = self.vcs().landed(&self.host().repo_root, &asking.url);
+        // Off the runtime, not straight on the turn loop's own thread. `#693`.
+        let (vcs, repo_root, url) = (
+            Arc::clone(self.vcs()),
+            self.host().repo_root.clone(),
+            asking.url.clone(),
+        );
+        let read = tokio::task::spawn_blocking(move || vcs.landed(&repo_root, &url))
+            .await
+            .expect("the forge process panicked");
         match &read.landing {
             // Still open, so the merge question has no news — and the second
             // question this call answers does. `#427`/`#663`: the forge pins
@@ -371,9 +380,16 @@ where
     /// standing in with uncommitted work is left alone and said so.
     async fn caught_the_repository_up(&self, job: &JobId, base: &str) -> RepositoryStanding {
         let _at_the_merge_end = self.merge_end().lock().await;
-        let standing = self
-            .vcs()
-            .caught_the_repository_up(&self.host().repo_root, base);
+        let (vcs, repo_root, owned_base) = (
+            Arc::clone(self.vcs()),
+            self.host().repo_root.clone(),
+            base.to_string(),
+        );
+        let standing = tokio::task::spawn_blocking(move || {
+            vcs.caught_the_repository_up(&repo_root, &owned_base)
+        })
+        .await
+        .expect("git panicked bringing the repository up to date");
         let (level, wording) = match &standing {
             RepositoryStanding::MovedOn { .. } => (
                 Level::Info,

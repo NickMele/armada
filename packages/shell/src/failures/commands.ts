@@ -177,7 +177,7 @@ export function transportFailure(
         // ran out on this side, so the act may have been carried out — and a
         // sentence telling somebody to send it again would be how a request
         // becomes two Jobs. The board is the thing that knows.
-        next: "The command may still have been carried out. Read the board before sending it again.",
+        next: "The command may still have been carried out. Bridge will read the board again shortly; read it yourself before sending it a second time.",
         payload: {
           code: COMMAND_TIMED_OUT,
           message: `Fleet did not answer ${asked} inside ${waited}`,
@@ -185,7 +185,7 @@ export function transportFailure(
           ...versions(bridge),
         },
         details: [...details, { label: "Waited", value: waited }],
-        note: "The wait is Bridge's, not Fleet's. Fleet has its own budget on a call it makes, and a refusal from it would have arrived with a code — this is Bridge giving up first, so there is no Fleet run id to quote.",
+        note: "The wait is Bridge's, not Fleet's. A route with a model call inside it answers within a budget of its own and a refusal from it would carry a code — an ordinary command has no such budget, so a slow answer here is not necessarily a stuck Fleet. There is no Fleet run id to quote either way: this is Bridge giving up first.",
       };
     }
 
