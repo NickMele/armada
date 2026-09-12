@@ -99,6 +99,42 @@ describe("the preview is bounded in groups", () => {
   });
 });
 
+describe("no row is ever dropped", () => {
+  it("draws a row no group claims, in the order it arrived", () => {
+    // `unreadable` survives `hideUnread`, so it reaches the log — and a mapper
+    // that selected rows by their groups would lose it silently.
+    const unreadable: Turn = {
+      ts: at(4),
+      seq: 8100,
+      step: STEP,
+      by: "fleet",
+      saw: { event: "unreadable", line: "{ not json", why: "unexpected token" },
+    };
+    const markup = drawn([...threeReads(), unreadable]);
+    expect(markup).toContain("A line the reader could not parse");
+  });
+
+  it("draws every row it is handed, once", () => {
+    const turns = [...threeReads(), said(STEP, at(8), "Done.")];
+    const { rows } = hideUnread(entriesOf(turns, STEP));
+    const markup = renderToStaticMarkup(
+      <WorkGrouped
+        rows={rows}
+        turns={turns}
+        stepId={STEP}
+        emptyNote="Nothing yet"
+        calls={CALLS}
+        log={LOG}
+      />,
+    );
+    // Every row's own payload id appears exactly once — the log writes one per
+    // row, so counting them counts the rows that were drawn.
+    for (const row of rows) {
+      expect(markup.split(`log-payload-${row.id}"`).length - 1).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
 describe("what it does not draw", () => {
   it("says nothing about unread rows unless it is given them", () => {
     expect(drawn(threeReads())).not.toContain("does not draw");

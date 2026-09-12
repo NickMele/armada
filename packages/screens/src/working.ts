@@ -36,7 +36,8 @@ export type WorkingKind =
   | "produced"
   | "refused"
   | "waited"
-  | "ended";
+  | "ended"
+  | "unreadable";
 
 /** One thing the Drone did, with its answer already folded in. */
 export type WorkingAct = {
@@ -207,6 +208,11 @@ function actOf(
         ts: turn.ts,
         said: `${saw.outstanding} running in the background`,
       };
+    case "unreadable":
+      // **The log draws this and `hideUnread` keeps it**, so an act has to
+      // exist for it or the row has nowhere to sit. The wording is `story.ts`'s
+      // own, because two sentences for one row is two sentences to disagree.
+      return { id, kind: "unreadable", ts: turn.ts, said: "A line the reader could not parse" };
     default:
       return undefined;
   }

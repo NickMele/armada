@@ -17,7 +17,7 @@ import type { DetailKeys } from "./detail-keys";
 import { briefly } from "./duration";
 import { Log } from "./Log";
 import type { LogRow } from "./story";
-import { runsOf, workingOf } from "./working";
+import { runsOf, workingOf, type WorkingRun } from "./working";
 
 export function WorkGrouped({
   rows,
@@ -25,7 +25,7 @@ export function WorkGrouped({
   stepId,
   unread,
   emptyNote,
-  calls,
+  calls: fetched,
   log,
   most,
 }: {
@@ -49,34 +49,51 @@ export function WorkGrouped({
    */
   most?: number;
 }) {
-  const held = new Map(rows.map((row) => [row.id, row]));
-  const groups: WorkGroup[] = [];
+  // **Which run each row belongs to**, the call's row and its answer's alike.
+  // The derivation folds an answer into its call to count one thing that
+  // happened; a surface drawing the transcript still has to draw both.
+  const runOf = new Map<string, WorkingRun>();
+  const calls = new Set<string>();
   for (const run of runsOf(workingOf(turns, stepId).acts)) {
-    // A run whose rows are not in hand draws nothing. The two derivations drop
-    // the same rows, so this is empty in practice and never an assumption.
-    // **The call's row and its answer's.** The derivation folds an answer into
-    // its call to count one thing that happened; a surface drawing the
-    // transcript still has to draw both, and selecting on the call alone
-    // dropped every answer row — 351 of them on one real step.
-    const mine = run.acts.flatMap((act) => {
-      const row = held.get(act.id);
-      const answer = act.answeredId === undefined ? undefined : held.get(act.answeredId);
-      return [...(row === undefined ? [] : [row]), ...(answer === undefined ? [] : [answer])];
-    });
-    if (mine.length === 0) continue;
-    groups.push({
-      id: run.id,
-      name: run.tool ?? "",
-      mono: true,
-      // **Counted in calls, not in rows.** `mine` holds each call's answer
-      // beside it, so counting rows here said six for a run of three.
-      meta: `${run.acts.length} ${run.acts.length === 1 ? "call" : "calls"} · ${briefly(run.ms)}`,
-      // Folded only where the derivation says so, which is a run of more than
-      // one with nothing wrong in it.
-      folded: run.folded,
-      body: <Log rows={mine} emptyNote={emptyNote} calls={calls} {...log} />,
-    });
+    for (const act of run.acts) {
+      runOf.set(act.id, run);
+      if (act.kind === "call") calls.add(act.id);
+      if (act.answeredId !== undefined) runOf.set(act.answeredId, run);
+    }
   }
+
+  // **Walked in row order, and the run is what breaks it.** Selecting rows by
+  // the groups would silently drop any row no group claimed — an `unreadable`
+  // line today, and whatever the wire adds next. Walking the rows cannot: a
+  // row belonging to no run becomes a chunk that draws bare, and every row is
+  // drawn exactly once, in the order it arrived.
+  const chunks: { run?: WorkingRun; rows: LogRow[] }[] = [];
+  for (const row of rows) {
+    const run = runOf.get(row.id);
+    const last = chunks[chunks.length - 1];
+    if (last !== undefined && last.run === run) last.rows.push(row);
+    else chunks.push({ ...(run === undefined ? {} : { run }), rows: [row] });
+  }
+
+  const groups: WorkGroup[] = chunks.map((chunk) => {
+    // **Counted in calls, and only the ones in hand.** The sheet filters its
+    // rows by actor, so a run of nine can arrive with two of its calls drawn —
+    // and a heading counting the run rather than what is under it would say
+    // nine above two rows.
+    const held = chunk.rows.filter((row) => calls.has(row.id)).length;
+    const first = chunk.rows[0];
+    return {
+      id: first === undefined ? "" : first.id,
+      name: chunk.run?.tool ?? "",
+      mono: true,
+      meta: `${held} ${held === 1 ? "call" : "calls"} · ${briefly(chunk.run?.ms ?? 0)}`,
+      // Folded where the derivation says so, and never over a single call: a
+      // heading over one row hides nothing and costs a press.
+      folded: chunk.run?.folded === true && held > 1,
+      body: <Log rows={chunk.rows} emptyNote={emptyNote} calls={fetched} {...log} />,
+    };
+  });
+
   return (
     <WorkGroups
       groups={most === undefined ? groups : groups.slice(-most)}

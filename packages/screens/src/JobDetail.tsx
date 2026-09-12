@@ -827,6 +827,10 @@ export function JobDetail({
             whole={whole}
             step={open}
             rows={rows}
+            // The turns those rows were folded from, which carry the tool and
+            // the timing a row no longer does. The sheet folds runs of one tool
+            // the way the chapter does, and this is what it folds them by.
+            turns={watching === null ? [] : watching.rows}
             observed={observed}
             diff={recorded.diff}
             calls={calls}
