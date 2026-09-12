@@ -117,7 +117,13 @@ pub struct CommandInFlight {
 /// Job stopped at `blocked_by_policy` restarts the step. A second route would
 /// be a surface deciding which path a command is on, which Fleet already knows.
 ///
-/// **It carries no prose**, for [`ChosenAnswer`](crate::ChosenAnswer)'s reason.
+/// **It carries prose on a reject, since 11.5.** It did not until then, on
+/// [`ChosenAnswer`](crate::ChosenAnswer)'s reason, with `redirect_drone` named
+/// as where words go. What falsified that is the shape of the moment: a person
+/// looking at a command they are about to refuse has the reason in mind right
+/// then, and telling them to reject first and redirect second is two acts
+/// across two boxes for one thought. The owner asked for it on 12 Sep 2026,
+/// having just rejected a command and wanted to say why.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnswerCommand {
     /// [`CommandInFlight::call`], or [`Refusal::call`](crate::Refusal::call).
@@ -125,6 +131,12 @@ pub struct AnswerCommand {
     pub call: String,
     /// One of that command's offers. Anything else is a 409.
     pub answer: CommandAnswer,
+    /// Why, in the person's own words, carried to the Drone inside the
+    /// refusal. **Only a reject reads it** — an allow needs no reason and a
+    /// Drone told why it was allowed learns nothing it can act on. Absent is
+    /// the bare refusal, which is what every Fleet before 11.5 sent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 /// The request half of `set_when_blocked`. **A live setting on one Job**: the

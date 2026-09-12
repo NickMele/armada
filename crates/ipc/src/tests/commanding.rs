@@ -115,6 +115,10 @@ fn the_two_bodies_read_as_sent_and_ignore_what_they_do_not_know() {
         crate::AnswerCommand {
             call: String::from("toolu_01"),
             answer: CommandAnswer::AlwaysAllow,
+            // An older Bridge sends no `note`, which reads as none rather
+            // than refusing the body — the same minor-skew rule `later` above
+            // is testing from the other direction.
+            note: None,
         }
     );
 
