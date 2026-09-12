@@ -84,6 +84,32 @@ Two rules, and the second is the one nobody thinks of:
   depends on which branch is checked out — a rebase, a stash, a `checkout --`.
   The session that lost work here had been in that worktree for hours.
 
+**A `cd` does not survive to the next tool call.** This is how a correctly cut
+worktree still ends up unused. The agent runs `cd <worktree>`, writes with
+relative paths, and every call after the first resolves against the main
+checkout instead. Confirmed twice on 12 Sep 2026, in one session: one agent left
+13 files on `main` this way and another 22, and both had been told in their brief
+to use absolute paths. Neither noticed; the dispatching session found it.
+
+Three habits, and they are cheap:
+
+- **Prove the worktree, with output you read.** `git -C <repo root> worktree list`
+  says the path exists, and `git -C <worktree> rev-parse --abbrev-ref HEAD` says
+  it is your branch. Before the first edit, not after.
+- **Every path written starts with the worktree's own prefix**, and every git
+  call is `git -C <absolute worktree path>`. Where a `cd` is unavoidable, keep it
+  inside a subshell in the same call: `(cd <worktree> && …)`.
+- **Check `git -C <repo root> status --porcelain` prints nothing before you
+  report.** It is the one line that catches this, and it catches it while the
+  work is still yours to move.
+
+**The hook refuses it now.** `.claude/hooks/guard_write.py` denies an `Edit` or
+`Write` whose path lands in a checkout that has `main` checked out, and says how
+to cut a worktree instead. It has no gate half and cannot have one: writing in
+the wrong checkout leaves no trace in a diff, so there is nothing to catch
+afterwards — which is why it was written into prose three times before it was
+written into a hook.
+
 **A harness that pins a shell to a worktree makes this worse, not better.** When
 the dispatching session moved itself out, every agent still pinned to the old
 path had its next command refused, mid-task. Moving is safe only once nothing

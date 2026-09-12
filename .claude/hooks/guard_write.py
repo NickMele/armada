@@ -1,36 +1,22 @@
 #!/usr/bin/env python3
-"""PreToolUse: the three write rules, enforced before the write happens.
+"""PreToolUse: the write rules, enforced before the write happens.
 
-Reads the hook payload on stdin and answers with a permission decision:
-
-  deny  — the write must not happen
-  ask   — the write may happen once a human says so
-  allow — say nothing, let it through
-
-The rules are the gate's rules, moved earlier. `cargo xtask verify-foundations`
-catches a violation after it is committed; this catches it before it is written,
-which is the difference between a gate and a habit.
-
-**This hook may not reach outside the plugin.** A copied plugin has no path back
-to the repository it was installed from, so the repo is located through
-`CLAUDE_PROJECT_DIR`, which the harness sets. With no project directory there is
-nothing to police and the hook stays silent.
+Reads the hook payload on stdin and answers `deny`, `ask` or `allow` — `allow`
+silently. These are the gate's rules moved earlier, where a violation costs a
+sentence rather than a turn. The repo is found through `CLAUDE_PROJECT_DIR`;
+with none set there is nothing to police and this stays silent.
 """
 import json
 import os
 import sys
 
-# Only the refusals live here. Both warnings — 500 lines of source, 30 lines of
-# a CLAUDE.md — are the gate's, because a warning is something you read and a
-# hook is something you answer, and a hook's `ask` overrides every permission
-# mode by design. `xtask/src/rules.rs` carries all four numbers and the
-# reasoning; the two files must not drift on the ones they share.
+# Refusals only. The warnings at 500 lines and 30 lines of a CLAUDE.md are the
+# gate's, because a hook's `ask` overrides every permission mode by design.
+# `xtask/src/rules.rs` carries the same numbers; the two must not drift.
 FAIL_LINES = 900
 CLAUDE_MD_FAIL = 50
 
-# Untyped JSON is allowed exactly where bytes enter the process — plus the
-# gate itself, which names the pattern it forbids and so always matches itself.
-# `xtask/src/rules.rs` carries the same exemption; the two must not drift.
+# Where bytes enter the process, plus the gate that names the pattern it bans.
 JSON_ALLOWED = ("crates/store/", "crates/ipc/", "xtask/")
 
 
@@ -68,17 +54,31 @@ def main() -> None:
     if rel.startswith(".."):
         sys.exit(0)  # outside the repo: not this gate's business
 
+    # A worktree is a checkout of its own: every rule below judges a path by
+    # the checkout it is in, not by the session's root.
+    checkout, rel = in_checkout(root, rel)
+
+    # ---- rule: nothing is written into a checkout that is on `main` ------
+    #
+    # No gate can catch this — the wrong checkout leaves no trace in a diff. 35
+    # files landed on `main` in one session, from a `cd` that did not persist.
+    if on_main(checkout):
+        answer(
+            "deny",
+            f"{rel} is in the checkout at `main`, which is never edited. Cut a "
+            "worktree and write there instead:\n"
+            f"  git -C {checkout} worktree add {checkout}/.claude/worktrees/<name> -b <branch>\n"
+            "Then give every path you write the worktree's own prefix. A `cd` "
+            "does not survive to the next tool call — the call after it runs "
+            "from the main checkout again, which is how a relative path ends up "
+            "here.",
+        )
+
     # ---- rule: a generated file is not hand-edited -----------------------
     #
-    # The gate already fails on a stale or hand-edited output, but that is
-    # after the fact: a whole turn can go into editing a file whose next
-    # regeneration throws the edit away, and the report arrives too late to
-    # stop it. This refuses the write instead.
-    #
-    # There is deliberately no list of generated files here. Every generator
-    # writes the same marker into its own output, so the hook asks the file
-    # rather than asking a list that would have to be kept in step with the
-    # generators — which is the drift this repo keeps removing.
+    # The gate fails on a hand-edited output only after it is committed, by
+    # which time the turn is spent. There is no list here: every generator
+    # writes the same marker, so the hook asks the file rather than a list.
     if os.path.exists(path):
         try:
             with open(path, encoding="utf-8", errors="ignore") as f:
@@ -97,11 +97,8 @@ def main() -> None:
 
     # ---- rule: no serde_json::from_* outside store and ipc ---------------
     #
-    # Rust source only, matching the gate rule exactly. This checked every file
-    # and the gate checked `.rs` under the source roots, so a contract that
-    # described the ban was refused while the gate would have passed it — and
-    # the document got reworded into something less precise to get past the
-    # hook. A rule its own documentation cannot state is a rule that decays.
+    # Rust source only, matching the gate rule exactly. Wider once, and it
+    # refused a contract describing the ban that the gate would have passed.
     written = tool_input.get("content") or tool_input.get("new_string") or ""
     rust_source = rel.endswith(".rs") and rel.split("/", 1)[0] in (
         "crates", "apps", "packages", "xtask",
@@ -122,24 +119,10 @@ def main() -> None:
                            "file reached 328 lines one reasonable paragraph at "
                            "a time.")
 
-    # ---- rule: 500 warns and needs acknowledgment, 900 fails -------------
+    # ---- rule: 900 lines of source fails ---------------------------------
     #
-    # Source only, matching `no_file_too_long` exactly. This applied to every
-    # file, and the second-largest contract in the repository was compressed by
-    # a quarter to get past it — a real loss, to satisfy a ceiling the gate
-    # would never have applied to a markdown document.
-    #
-    # A hook stricter than the gate is worse than no hook: it is invisible in
-    # CI, it fires at the moment somebody is mid-task, and what it produces is
-    # a workaround rather than a fix. This is the second one found in a day.
-    #
-    # It also no longer asks, only refuses. A hook's `ask` overrides every
-    # permission mode by design, so the warning at 500 stopped every write of a
-    # large Rust file and no setting could quiet it — while a workspace was
-    # being written from nothing. The gate still warns at 500, where a warning
-    # is read rather than answered, and the hook keeps the refusal at 900 that
-    # a gate run would only catch afterwards.
-    # If a rule exists in both places, the scopes are part of the rule.
+    # Source only, matching `no_file_too_long`. A hook stricter than the gate
+    # produces workarounds, not fixes — the scopes are part of the rule.
     if lines is not None and rel.endswith((".rs", ".ts", ".tsx")) and rel.split("/", 1)[0] in (
         "crates", "apps", "packages", "xtask",
     ):
@@ -150,14 +133,47 @@ def main() -> None:
     sys.exit(0)
 
 
+def in_checkout(root: str, rel: str) -> "tuple[str, str]":
+    """The checkout a repo-relative path is in, and the path within that checkout.
+
+    A worktree under `.claude/worktrees/` or `.armada/worktrees/` is its own.
+    """
+    for prefix in (".claude/worktrees/", ".armada/worktrees/"):
+        if rel.startswith(prefix):
+            name, _, within = rel[len(prefix):].partition("/")
+            if within:
+                return os.path.join(root, prefix, name), within
+    return root, rel
+
+
+def on_main(root: str) -> bool:
+    """Whether the checkout at `root` has `main` checked out.
+
+    Read from `.git` to keep a subprocess off every write. Unreadable answers
+    `False`: a hook that cannot tell where it is must not refuse a write.
+    """
+    git = os.path.join(root, ".git")
+    if os.path.isfile(git):
+        try:
+            with open(git, encoding="utf-8") as f:
+                pointer = f.read().strip()
+        except OSError:
+            return False
+        if not pointer.startswith("gitdir:"):
+            return False
+        git = pointer.split(":", 1)[1].strip()
+    try:
+        with open(os.path.join(git, "HEAD"), encoding="utf-8") as f:
+            return f.read().strip() == "ref: refs/heads/main"
+    except OSError:
+        return False
+
+
 def projected_lines(root: str, rel: str, tool_input: dict) -> "int | None":
     """Line count the file would have after this write.
 
-    Exact for `Write`, which carries the whole file. **Estimated for `Edit`**,
-    from the delta between the strings being swapped — the hook runs before the
-    edit, so the real result does not exist yet. The estimate is only ever used
-    against a threshold, and being a line or two out at 500 does not change the
-    answer.
+    Exact for `Write`; estimated for `Edit` from the delta between the strings,
+    since the hook runs before the edit and only ever compares to a threshold.
     """
     content = tool_input.get("content")
     if content is not None:
