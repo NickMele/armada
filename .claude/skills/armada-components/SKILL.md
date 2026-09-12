@@ -104,6 +104,26 @@ passes either way asserts nothing and reads exactly like one that works.
 Wrapping `ActiveJobsList`'s clamp and mounting `JobRecord`'s closed sections
 behind `hidden` are the two breaks the plays there were checked against.
 
+## Standing in for data that has not arrived
+
+**Draw what is already in memory; stand in only for what is not.** Confirmed
+2026-09-11 on job detail: a loading state drew six invented run rows, hid the
+elapsed figure and held the Branch row back — while the workflow's step names,
+the Job's start time and its branch were all on the Board's row the screen was
+already holding. The owner's word for it was *awful*. The second pass drew the
+names and stood in only for what the read answers.
+
+**A placeholder reusing a component's classes keeps that component's wrapper.**
+The run's row is a grid whose tracks are declared on `.armada-srow-group`, so a
+row written without that wrapper collapsed to a single column: every name lost
+its column and every bar wrapped underneath it. `pnpm test` stayed green — a
+`play` reads roles and text, and nothing here asserts geometry — so **the
+screenshot is what caught it, and nothing else would have.**
+
+**A placeholder is `--bg-hover`, and so is a selected row.** A bar drawn on the
+row a reader is looking at is invisible against it, which takes the one row that
+matters out of the tree. On that row it steps up to `--border-default`.
+
 ## The hard rules, and what enforces them
 
 - **No arbitrary values.** No raw hex, no off-scale px, no Tailwind `-[…]`.
