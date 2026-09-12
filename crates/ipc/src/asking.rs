@@ -1,20 +1,17 @@
 //! A Judge criterion that refused and a person is being asked about, rather
 //! than the step stopping over it. `docs/concepts/judge.md`'s asking design.
 //!
-//! # It is not a status, and neither registry is touched
+//! **It is not a status, and neither registry is touched.** Same argument
+//! as [`crate::CommandInFlight`]'s: the step is `awaiting_human` and the
+//! Job `awaiting_review` — the states a `human_always` review gate already
+//! reaches — so a question rides beside them rather than adding a seventh
+//! state or status. What tells the two apart on a screen is this field
+//! being present, not a new value either registry would have to grow.
 //!
-//! Same argument as [`crate::CommandInFlight`]'s: the step is `awaiting_human`
-//! and the Job `awaiting_review` — the states a `human_always` review gate
-//! already reaches — so a question rides beside them rather than adding a
-//! seventh state or status. What tells the two apart on a screen is this
-//! field being present, not a new value either registry would have to grow.
-//!
-//! # One question at a time
-//!
-//! Only one criterion is ever asked about per pass over a step — Fleet asks
-//! about the first ask-eligible refusal and records the rest — so `job_id`
-//! alone is enough to hold it, and this type carries no id of its own beyond
-//! [`JudgeQuestion::criterion_id`].
+//! **One question at a time.** Only one criterion is ever asked about per
+//! pass over a step — Fleet asks about the first ask-eligible refusal and
+//! records the rest — so `job_id` alone is enough to hold it, and this
+//! type carries no id of its own beyond [`JudgeQuestion::criterion_id`].
 
 use serde::{Deserialize, Serialize};
 
