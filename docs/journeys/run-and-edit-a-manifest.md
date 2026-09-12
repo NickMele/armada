@@ -36,8 +36,14 @@ A monorepo's root `armada.yml` appears as its own entry in the switcher, since i
 
 ## Running one
 
-> **Rule.** The run panel asks where to run — the working tree as it is on disk, or a throwaway copy — before every run, on the panel itself rather than behind a split-button caret, and never remembered per command.
-> Why: a migration and a lint want different answers, and asking costs one click on a screen already reached deliberately.
+> **Rule.** A run from this surface executes in the working tree as it is on disk, and there is no Where control.
+> Why: a throwaway copy is a worktree by another name, and a Job's own run sheet is already that tree — a second way to make one answers a question a Job has answered.
+
+> **Rule.** A destructive Command confirms once, naming the command, before it runs.
+> Why: the flag says nothing in a worktree that is about to be thrown away and everything in the tree you are working in. It is a confirmation and not an approval — you are the one who pressed it, which is what the Manifest concept page settles.
+
+> **Rule.** After a run that changed the checkout, the panel lists the changed files and offers Open the diff and Undo this run. Undo confirms, naming what it would discard.
+> Why: the snapshot restores the tree as it was just before the run, and this tree holds work of your own that no Job's worktree ever holds.
 
 > **Rule.** Output goes to a panel on this surface — exit code, duration, and the output — and stays until dismissed.
 > Why: there is no Job, so no Job Board row and no Evidence, and a toast would throw away the thing you ran it to read.
@@ -94,7 +100,7 @@ Setup rows show no time, because nothing records when setup finished in a worktr
 ### Running one
 
 > **Rule.** A run from the sheet executes in the Job's own worktree.
-> Why: a throwaway copy waits on `runedit-adhoc-run-location`, below.
+> Why: it is the tree the gate will judge, and the one the Job's work is already in.
 
 | Case | Behaviour |
 |---|---|
@@ -103,7 +109,7 @@ Setup rows show no time, because nothing records when setup finished in a worktr
 | Output | Streams live while the elapsed time counts up |
 | Stop | Ends the run's process group; the log keeps what printed |
 | A Drone working in the tree | Nothing locks; a notice says the run shares its tree and build directory |
-| Approval | None, destructive or not; `runedit-destructive-command-warning` applies |
+| Approval | None, destructive or not — the worktree is thrown away, which is what the checkout's own confirmation is for and this is not |
 
 ### A server
 
@@ -170,7 +176,7 @@ Both halves belong on this surface: **drift detection** (re-scan and flag) and t
 
 > **Rule.** Drift is a read — whether everything the file names still exists — and runs on opening, at no cost.
 
-> **Rule.** Verify is an act — it runs the file, behind its own button, and asks where to run once for the whole set.
+> **Rule.** Verify is an act — it runs the file, behind its own button, in the working tree.
 
 Running Verify straight after Write, as [Set Up a Project (Manifest)](set-up-a-project-manifest.md) does, is correct: a brand-new file is exactly the case Verify exists for.
 
@@ -185,7 +191,7 @@ Running Verify straight after Write, as [Set Up a Project (Manifest)](set-up-a-p
 
 > **Rule.** Drift's two verdicts are `gone` and `current`, answering *is this file still true* — a different question from the dry-run's *does this file still work*.
 
-> **Rule.** The dry-run never runs automatically — not on opening the surface, and not as part of drift — and always asks where to run, once for the whole set.
+> **Rule.** The dry-run never runs automatically — not on opening the surface, and not as part of drift.
 > Why: it runs real Checks and a real test suite, which is expensive, while drift is a free read that can run on opening.
 
 > **Rule.** Verify reports and never fixes — no Apply, no Accept all — and acting on a row means going to Edit, where the consequence is stated.
@@ -204,11 +210,8 @@ Verdicts render as words in the status colour, matching Doctor: `gone` and `curr
 
 ## Open questions
 
-- **[runedit-adhoc-run-location]** Where does an ad-hoc run execute — a real worktree, or a simpler temporary checkout?
-  A throwaway copy is a worktree by another name, and Fleet owns worktree lifecycle. Whether this reuses Fleet's worktree machinery or is a simpler temporary checkout is an implementation question with a UI consequence: how long "a throwaway copy" takes to prepare, and whether the panel needs a preparing state.
-
-- **[runedit-destructive-command-warning]** Does a destructive Command warn on manual invocation against the working tree?
-  The Manifest concept page says your own invocation needs no approval, which is right — but a destructive Command run against the working tree rather than a copy is the one case where the flag still carries information. The destructive flag itself is settled as the one field that is a judgement rather than an observation — Scan can only propose it by matching against Kit's destructive defaults, propose-and-confirm, and Verify cannot check it at all, so a person sets it and this surface's edit screen is the only place it can be set. Also unstated anywhere: where one Manifest flags a Command destructive and another does not across a Convoy, most-restrictive-wins is the obvious answer and no page says it.
+- **[runedit-destructive-command-warning]** Across a Convoy, where one Manifest flags a Command destructive and another does not, which flag holds?
+  Most-restrictive-wins is the obvious answer and no page says it. The flag itself is settled as the one field that is a judgement rather than an observation — Scan can only propose it by matching against Kit's destructive defaults, propose-and-confirm, and Verify cannot check it at all, so a person sets it and this surface's edit screen is the only place it can be set.
 
 - **[runedit-no-manifest-state]** What does this surface show when no Manifest exists for the selected project?
   Setup's territory, and this journey meets Set Up a Project (Manifest) here without either page claiming ownership of the empty state.
