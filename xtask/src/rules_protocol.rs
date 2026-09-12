@@ -28,6 +28,11 @@
 //! `SERVED` row — **this is what #124 found**, `drone.spawned` and
 //! `drone.exited` crossing the wire and invisible to every rule reading
 //! `SERVED`, tolerated because nothing compared the two.
+//!
+//! **#645 is that check's other direction.** A declared `kind = "event"` row
+//! is sent, or names, in `unbuilt`, the issue that will send it — refused the
+//! same way `actions.toml`'s `unbuilt` is: not an issue reference, or sitting
+//! on an event already sent, both fail.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -137,7 +142,7 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
     }
 
     let operations: Vec<&str> = served.iter().map(|(op, _, _)| op.as_str()).collect();
-    for kind in published {
+    for kind in &published {
         if !operations.contains(&kind.as_str()) {
             report.fail(format!(
                 "{EVENT_ENUM} declares `{kind}`, which {SERVED_TABLE} does not list — a kind \
@@ -145,6 +150,71 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
             ));
         }
     }
+
+    for (name, marker) in declared_events(inventory) {
+        let sent = published.contains(&name);
+        match (sent, marker) {
+            (true, Some(marker)) => report.fail(format!(
+                "{INVENTORY} marks `{name}` `unbuilt = \"{marker}\"` and {EVENT_ENUM} already \
+                 publishes it — a mark on an event that is sent is the same lie the other way \
+                 round"
+            )),
+            (false, None) => report.fail(format!(
+                "{INVENTORY} declares `{name}` as an event, {EVENT_ENUM} has no variant for it, \
+                 and it carries no `unbuilt`. Send it, or name the issue that will in `unbuilt`"
+            )),
+            (false, Some(marker)) if !is_issue_reference(&marker) => report.fail(format!(
+                "{INVENTORY} — `unbuilt = \"{marker}\"` on `{name}` is not an issue reference. \
+                 A planned event names the issue that will send it, as `#812`"
+            )),
+            (false, Some(marker)) => report.warn(format!(
+                "{INVENTORY} — `{name}` is declared and not sent yet, deliberately: {marker} \
+                 will send it"
+            )),
+            (true, None) => {}
+        }
+    }
+}
+
+/// Whether `unbuilt`'s value names an issue, on `actions.toml`'s own rule for
+/// its column of the same name.
+fn is_issue_reference(value: &str) -> bool {
+    value
+        .strip_prefix('#')
+        .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// Every `[operations.<name>]` table declaring `kind = "event"`, with its
+/// `unbuilt` marker if it carries one. Read apart from [`operations`], which
+/// must keep ignoring every key past `kind` for the callers that rely on that.
+fn declared_events(inventory: &str) -> BTreeMap<String, Option<String>> {
+    let mut found = BTreeMap::new();
+    let mut current: Option<(String, bool)> = None;
+    for line in inventory.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("[operations.") {
+            current = Some((
+                rest.trim_end_matches(']').trim_matches('"').to_string(),
+                false,
+            ));
+        } else if let Some((name, is_event)) = current.as_mut() {
+            if let Some(rest) = line.strip_prefix("kind") {
+                let kind = rest.trim_start_matches(['=', ' ']).trim_matches('"');
+                *is_event = kind == "event";
+                if *is_event {
+                    found.insert(name.clone(), None);
+                }
+            } else if *is_event {
+                if let Some(rest) = line.strip_prefix("unbuilt") {
+                    let value = rest
+                        .trim_start_matches(['=', ' '])
+                        .trim_matches('"')
+                        .to_string();
+                    found.insert(name.clone(), Some(value));
+                }
+            }
+        }
+    }
+    found
 }
 
 /// Every `[operations.<name>]` key, with its `kind`. No TOML parser: the gate
