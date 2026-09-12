@@ -148,8 +148,12 @@ impl Checking {
         }
         block.push_str(
             "\n\nYou can ask for them to be run against your worktree, and you \
-             will be told what each one did and where its output was written. \
-             One ask runs the whole list and you do not choose from it.",
+             will be told what each one did. A check that fails carries its \
+             own output back with the answer — you do not need to run the \
+             command yourself or go looking for a log to read it. One ask \
+             runs the whole list and you do not choose from it. A build or \
+             test command run directly is not granted; asking is how you \
+             get the same answer.",
         );
         if step.checks().iter().any(ResolvedCheck::needs_changed_paths) {
             block.push_str(

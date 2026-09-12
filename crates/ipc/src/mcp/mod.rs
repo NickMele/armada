@@ -37,7 +37,7 @@ use crate::codec::{encode, Unencodable};
 pub use ask::{AskQuestion, AskedOption, ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 pub use dispatch::{DispatchJob, DISPATCH_FIELDS, DISPATCH_TOOL};
 pub use permission::{PermissionAsked, PERMISSION_FIELDS, PERMISSION_TOOL};
-pub use report::{CheckRan, CheckReport};
+pub use report::{CheckExcerpt, CheckRan, CheckReport};
 pub use serving::{ServerReport, SERVER_FIELDS, SERVER_TOOL};
 pub use tools::{
     DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,

@@ -167,10 +167,40 @@ pub enum Refusing {
     Withheld(Withheld),
 }
 
+/// Programs whose whole job is build, test or typecheck — exactly what
+/// `run_checks` already runs under the step's own frozen Checks.
+///
+/// **Named rather than pattern-matched on the command's flags.** A Drone
+/// reaching for one of these by name is reaching around a tool that does the
+/// same job, whatever it passed after the program — naming the runner is
+/// enough to point at the tool without parsing what it was asked to do.
+const CHECK_RUNNERS: &[&str] = &[
+    "cargo", "pnpm", "npm", "yarn", "go", "pytest", "make", "tox", "rustc",
+];
+
+/// Whether a command's own first word names a program `run_checks` already
+/// covers, so the refusal can name the tool instead of only the person.
+fn runs_what_checks_already_run(command: &str) -> bool {
+    command
+        .split_whitespace()
+        .next()
+        .is_some_and(|program| CHECK_RUNNERS.contains(&program))
+}
+
 impl Refusing {
     /// The tool's reply. `what` is the command, or the tool where there is none.
     pub fn to_the_drone(&self, what: &str) -> String {
         match self {
+            // **Points at the tool, where the command is one `run_checks`
+            // already runs.** "A person decides" is true and teaches a Drone
+            // nothing it can act on; naming `run_checks` is the same
+            // refusal with something to do about it — `#737`, where the
+            // Drone reached for `cargo check` instead of asking.
+            Refusing::NotGranted if runs_what_checks_already_run(what) => format!(
+                "This task is not granted `{what}`. Fleet already runs this part's checks \
+                 under `run_checks`, and its answer names what failed. Ask for that instead \
+                 of running the command yourself."
+            ),
             Refusing::NotGranted => format!(
                 "This task is not granted `{what}`. A person decides whether to allow it. \
                  Do not try to get the same result another way."
@@ -246,7 +276,31 @@ impl Permitted {
 mod tests {
     use core_model::{Actor, AllowedCommand, Reach, Timestamp, WhenBlocked};
 
-    use super::{covers, first, First, Withheld};
+    use super::{covers, first, First, Refusing, Withheld};
+
+    /// **`#737`'s other half.** "A person decides" told a Drone that reached
+    /// for `cargo check` nothing it could act on; naming the tool that runs
+    /// the same checks does.
+    #[test]
+    fn a_refused_check_runner_is_pointed_at_run_checks() {
+        let said = Refusing::NotGranted.to_the_drone("cargo check --tests -p fleet");
+        assert!(
+            said.contains("run_checks"),
+            "the refusal names the tool: {said}"
+        );
+    }
+
+    /// A command that is not one `run_checks` already covers gets the plain
+    /// refusal — naming a tool that does not do the same job would teach the
+    /// wrong lesson.
+    #[test]
+    fn an_unrelated_refusal_still_names_no_tool() {
+        let said = Refusing::NotGranted.to_the_drone("git push origin HEAD");
+        assert!(
+            !said.contains("run_checks"),
+            "this command is not one of the checks: {said}"
+        );
+    }
 
     fn allowed(run: &str) -> AllowedCommand {
         AllowedCommand {

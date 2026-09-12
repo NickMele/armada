@@ -604,6 +604,7 @@ pub fn check_report() -> CheckReport {
                 took: std::time::Duration::from_millis(300),
                 log: Some(".armada/checks/a-job/implement.dry.0.log".to_string()),
                 narrowed_to: None,
+                output: None,
             },
             CheckRan {
                 name: "tests".to_string(),
@@ -612,6 +613,7 @@ pub fn check_report() -> CheckReport {
                 took: std::time::Duration::from_secs(12),
                 log: Some(".armada/checks/a-job/implement.dry.1.log".to_string()),
                 narrowed_to: None,
+                output: None,
             },
         ],
         narrowed: false,

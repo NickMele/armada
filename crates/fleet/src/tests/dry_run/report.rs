@@ -158,6 +158,57 @@ async fn every_check_the_step_declares_gets_a_row_however_many_there_are() {
     );
 }
 
+/// **`#737`'s whole claim, made concrete.** A Drone hunted for a failing
+/// Check's log for seven minutes and six permission questions because a path
+/// named on its own report opens nowhere inside its worktree. This is the
+/// same call, and the answer now carries the words rather than only the path.
+#[tokio::test]
+async fn a_failing_checks_own_output_rides_the_report_and_names_no_file_to_open() {
+    let home = TempDir::new();
+    let fleet = Arc::new(a_fleet_checking(
+        &home,
+        one_step("/bin/sh -c 'echo distinctive-failure-marker-31417 1>&2; exit 1'"),
+        Arc::new(Held::started()),
+        3,
+    ));
+    let app = router(&fleet);
+    let _job = started(&fleet, &home).await;
+
+    let said = ask(&app).await;
+    assert!(!said.is_error, "{}", said.text);
+    // The whole of the claim: this is the Check's own stderr, read out of the
+    // capture `checks_runner` already held rather than off any path — the
+    // call that ran the Check is the only one a Drone had to make.
+    assert!(
+        said.text.contains("distinctive-failure-marker-31417"),
+        "the failing check's own output rides the tool's answer: {}",
+        said.text
+    );
+}
+
+/// A Check that passed carries no excerpt: there is nothing to explain, and a
+/// pass is not where a Drone's context is worth spending.
+#[tokio::test]
+async fn a_passing_checks_output_does_not_ride_the_report() {
+    let home = TempDir::new();
+    let fleet = Arc::new(a_fleet_checking(
+        &home,
+        one_step("/bin/sh -c 'echo a-passing-checks-own-marker; exit 0'"),
+        Arc::new(Held::started()),
+        3,
+    ));
+    let app = router(&fleet);
+    let _job = started(&fleet, &home).await;
+
+    let said = ask(&app).await;
+    assert!(!said.is_error, "{}", said.text);
+    assert!(
+        !said.text.contains("a-passing-checks-own-marker"),
+        "a pass has nothing to explain, and carries none of its own output: {}",
+        said.text
+    );
+}
+
 /// One step whose named Check covers `packages/**` — paths the fixture Fleet's
 /// worktree, which holds `src/parse.rs`, does not touch.
 fn one_scoped_step() -> ResolvedWorkflow {
