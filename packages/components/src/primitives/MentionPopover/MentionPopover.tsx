@@ -21,19 +21,37 @@ export type MentionPopoverProps = {
   results: readonly string[];
   /** The row `Enter` or `Tab` would choose. */
   active: number;
+  /** This popup's own id, which the field points `aria-controls` at. */
+  listId: string;
+  /** One row's id, which the field points `aria-activedescendant` at. */
+  optionId: (index: number) => string;
   onHover: (index: number) => void;
   onChoose: (path: string) => void;
 };
 
-export function MentionPopover({ query, results, active, onHover, onChoose }: MentionPopoverProps) {
+export function MentionPopover({
+  query,
+  results,
+  active,
+  listId,
+  optionId,
+  onHover,
+  onChoose,
+}: MentionPopoverProps) {
   return (
-    <div className="armada-mention" role="listbox" aria-label="Files matching the mention">
+    <div
+      className="armada-mention"
+      id={listId}
+      role="listbox"
+      aria-label="Files matching the mention"
+    >
       {results.length === 0 ? (
         <p className="armada-mention__empty">{`No file matches “${query}”.`}</p>
       ) : (
         results.map((path, index) => (
           <div
             key={path}
+            id={optionId(index)}
             role="option"
             aria-selected={index === active}
             className={

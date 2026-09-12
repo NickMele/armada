@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, KeyboardEvent, SyntheticEvent } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { AriaAttributes, ChangeEvent, KeyboardEvent, SyntheticEvent } from "react";
 
 /**
  * The `@` mention a person is in the middle of typing, or `null` where the
@@ -37,10 +37,17 @@ export function useMention(
   query: string;
   results: readonly string[];
   active: number;
+  /** The popup's own id, which the field points `aria-controls` at. */
+  listId: string;
+  /** One row's id, which the field points `aria-activedescendant` at. */
+  optionId: (index: number) => string;
+  /** What the field spreads onto itself. Empty while the popup is closed. */
+  fieldAria: AriaAttributes & { role?: "combobox" };
   onHover: (index: number) => void;
   onFieldChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
   onFieldKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onFieldSelect: (event: SyntheticEvent<HTMLTextAreaElement>) => void;
+  onFieldBlur: () => void;
   onChoose: (path: string) => void;
 } {
   const [mention, setMention] = useState<Mention | null>(null);
@@ -54,6 +61,13 @@ export function useMention(
   // insertion — see `onChoose`. Not a ref onto `Textarea`, which this module's
   // own note says a plain function component cannot take in this React.
   const field = useRef<HTMLTextAreaElement | null>(null);
+  // Two fields on one screen open this — the request composer and the dispatch
+  // panel — so the ids the field and the popup agree on are per-instance
+  // rather than constants, which is where `CommandPalette` can stop because
+  // only one palette exists at a time.
+  const baseId = useId();
+  const listId = `${baseId}-mention-list`;
+  const optionId = (index: number): string => `${baseId}-mention-option-${index}`;
 
   useEffect(() => {
     if (mention === null) {
@@ -103,7 +117,17 @@ export function useMention(
 
   function onFieldKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
     field.current = event.currentTarget;
-    if (mention === null || results.length === 0) return;
+    if (mention === null) return;
+    // **Escape first, and before anything counts the results.** It used to sit
+    // last, behind a guard that returned on an empty list, so the one state a
+    // person most wants dismissed — "No file matches" — was the one state the
+    // key could not close.
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMention(null);
+      return;
+    }
+    if (results.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActive((n) => (n + 1) % results.length);
@@ -113,10 +137,17 @@ export function useMention(
     } else if (event.key === "Enter" || event.key === "Tab") {
       event.preventDefault();
       onChoose(results[active] ?? results[0] ?? "");
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      setMention(null);
     }
+  }
+
+  /**
+   * Leaving the field closes the popup. A row press never reaches this — the
+   * popup prevents its own `mousedown`, so the field keeps focus through a
+   * choice — which leaves this for the cases that should close it: a click
+   * elsewhere, a tab out, a window that lost focus.
+   */
+  function onFieldBlur(): void {
+    setMention(null);
   }
 
   function onChoose(path: string): void {
@@ -139,15 +170,35 @@ export function useMention(
     }
   }
 
+  // **Only while the popup is open.** A brief is prose first, and a field left
+  // as a combobox for the whole time somebody writes one is announced as a
+  // combobox rather than as the multi-line field it mostly is.
+  // `CommandPalette`'s input carries the role permanently because searching is
+  // the only thing that input does.
+  const fieldAria: AriaAttributes & { role?: "combobox" } =
+    mention === null
+      ? {}
+      : {
+          role: "combobox",
+          "aria-expanded": true,
+          "aria-controls": listId,
+          "aria-activedescendant": results.length > 0 ? optionId(active) : undefined,
+          "aria-autocomplete": "list",
+        };
+
   return {
     open: mention !== null,
     query: mention?.query ?? "",
     results,
     active,
+    listId,
+    optionId,
+    fieldAria,
     onHover: setActive,
     onFieldChange,
     onFieldKeyDown,
     onFieldSelect,
+    onFieldBlur,
     onChoose,
   };
 }
