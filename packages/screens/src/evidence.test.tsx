@@ -292,10 +292,12 @@ test("the Checks chapter says what each declared Check came to", async () => {
   // point: one reading, two surfaces.
   await expect.element(page.getByText("check:test_suite", { exact: true })).toBeVisible();
   await expect.element(page.getByText("check:public_api", { exact: true })).toBeVisible();
-  // The tier's own sentence, and the chapter's header — one call in
-  // `gates.ts`, two surfaces, so they cannot come to different counts.
+  // The tier's own sentence, its stage on the strip, and the chapter's
+  // header — one call in `gates.ts`, three surfaces, so they cannot come to
+  // different counts. The strip's own stage began saying it on 11 Sep 2026,
+  // when a stage gained a second line for where it stands.
   await expect.element(page.getByText("2 of 2 passed").first()).toBeVisible();
-  expect(page.getByText("2 of 2 passed").elements().length).toBe(2);
+  expect(page.getByText("2 of 2 passed").elements().length).toBe(3);
   // And the chapter opens onto more than its preview, which is what makes the
   // reading below reachable rather than only built.
   await expect

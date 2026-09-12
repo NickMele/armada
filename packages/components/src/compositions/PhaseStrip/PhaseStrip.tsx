@@ -184,7 +184,7 @@ const STROKE = 2;
  * other — a mismatch does not fail, it squashes the chevrons.
  */
 const EDGE = 20;
-const NODE = 24;
+const NODE = 46;
 /** Where a loop turns: the corner's box, half a node tall. */
 const TURN = NODE / 2;
 /** The arrowhead's box. Small enough that the stem above it still reads. */
@@ -395,12 +395,23 @@ export function PhaseStrip({
               .filter((loop) => loop.to === at || loop.from === at)
               .map((loop) => `${panelId}-loop-${loop.key}`);
 
+            // The name, and under it where the stage stands. **The second line is
+            // `aria-hidden`**: a stage's spoken name is what it is called, and
+            // reading "Judge · 2 of 2 refused, 2 of 2 refused" is the same fact
+            // twice. The card the node opens says it where it can be read whole.
             const node = (
               <>
-                {Mark === undefined ? null : (
-                  <Mark size={GLYPH} strokeWidth={STROKE} aria-hidden />
+                <span className="armada-phases__name">
+                  {Mark === undefined ? null : (
+                    <Mark size={GLYPH} strokeWidth={STROKE} aria-hidden />
+                  )}
+                  {stage.label}
+                </span>
+                {stage.stands === undefined || stage.stands === null ? null : (
+                  <span className="armada-phases__stands" aria-hidden>
+                    {stage.stands}
+                  </span>
                 )}
-                {stage.label}
               </>
             );
             const place: CSSProperties = { gridColumn: nodeAt(at), gridRow: NODE_ROW };

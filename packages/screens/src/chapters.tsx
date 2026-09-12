@@ -67,6 +67,7 @@ import {
   type Paired,
 } from "./frames";
 import { readingFor, whyNoFootprint } from "./files";
+import { WorkGrouped } from "./grouped";
 import { Log } from "./Log";
 import type { Following, Outputs } from "./outputs";
 import { keptOf, type KeptRead, type Opens } from "./phases";
@@ -346,11 +347,19 @@ export function chaptersOf({
           {transcript === undefined || rows.length === 0 ? null : (
             <p className="text-2xs text-fg-muted">{transcript}</p>
           )}
-          <Log
-            rows={rows.slice(-PREVIEWED)}
+          {/* Folded, and the rows inside a group are the same `Log` chapter
+              one draws — so the region and payload names the keyboard reads
+              are the ones that were always there. The unread count is not
+              passed: the header summary above already carries it, and one
+              fact twice on one chapter is two places to disagree. */}
+          <WorkGrouped
+            rows={rows}
+            turns={watching === null ? [] : watching.rows}
+            stepId={step.step_id}
+            most={PREVIEWED}
             emptyNote={transcript ?? NOTHING_YET_ON_THIS_STEP}
             calls={calls}
-            {...log("log")}
+            log={log("log")}
           />
         </>
       ),
@@ -560,8 +569,14 @@ function readable(diff: Diff, jobId: string): boolean {
   return diff.work !== undefined;
 }
 
-/** How many entries the log's collapsed preview shows. The drawing's own five. */
-const PREVIEWED = 5;
+/**
+ * How many groups the log's collapsed preview shows.
+ *
+ * **Counted in groups now, not in entries.** It was the drawing's own five
+ * rows, and five rows of a real step is five consecutive `Read` calls — the
+ * same height in groups is eight different things the Drone did.
+ */
+const PREVIEWED = 8;
 
 /** What chapter one says before Armada has opened the step. */
 /**

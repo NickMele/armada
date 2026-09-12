@@ -14,13 +14,15 @@
      --phase-edge is wider than the 14px connector it replaces because an edge
      now carries a chevron and a loop's corner, neither of which fits in 14. */
   --phase-edge: calc(var(--space-4) + var(--space-1));
-  /* A node's height, fixed at one line of --text-2xs with 3px above and below.
+  /* A node's height: its name on one line and where it stands under it, with
+     4px above and below. 20 + 18 + 8 = 46, which is `NODE` in PhaseStrip.tsx.
      Fixed because a loop's stem is drawn down to the chain line: a stem that
      had to be measured is a stem that is wrong for one frame on every resize,
      and reflow on resize is the failure this app exists to escape. */
-  --phase-node: calc(var(--leading-2xs) + var(--space-1) + var(--space-1) / 2);
-  /* A loop's lane: the edge, and its words underneath. */
-  --phase-loop: calc(var(--leading-2xs) + var(--space-2));
+  --phase-node: calc(var(--leading-xs) + var(--leading-2xs) + var(--space-2));
+  /* A loop's lane: the edge, and its words underneath, with room between the
+     words and the nodes. It was --space-2 and the label sat on the chips. */
+  --phase-loop: calc(var(--leading-2xs) + var(--space-4));
 }
 
 /* Sentence case, plain text. Not a caption: a caption announces a region, and
@@ -65,10 +67,13 @@
    well as the text so the reading survives at a glance. */
 .armada-phases__node {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(var(--space-1) + var(--space-1) / 2);
   height: var(--phase-node);
+  /* Four --space-12. A stage that stands in a sentence gives up its end
+     rather than widening the graph, which scrolls. */
+  max-width: calc(var(--space-12) * 4);
   /* The drawn 9px sides. --space-2 plus a quarter: wider than it is tall,
      because the label is a phrase and not a word. The vertical padding is the
      fixed height's now, so that the stems have something to end at. */
@@ -76,10 +81,10 @@
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
-  color: var(--fg-subtle);
+  color: var(--fg-muted);
   font-family: var(--font-sans);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
   white-space: nowrap;
   transition:
     color var(--duration-fast) var(--ease),
@@ -95,20 +100,18 @@ button.armada-phases__node:focus-visible {
   outline-offset: var(--focus-ring-offset);
 }
 
-/* Hue below Job level, only where tokens/status.css declares it, and the tint
-   is that hue's own 12% fill — the same value a status badge takes, so a
-   cleared stage and a completed Job are visibly the same claim at two scales.
+/* **A cleared stage is neutral, and its glyph carries the hue.** Every stage
+   filled with its own tint made five or six tinted chips in a row, and the one
+   a person is looking for — where the step is now, or what stopped it — had to
+   compete with the four that had already gone right. Hue is spent on what
+   differs: running, waiting on you, failed. The owner asked for this on
+   11 Sep 2026, off a diagram that did the same.
 
-   A stage still ahead takes none. It is a position, not a state.
-
-   A `never` stage takes none either, and takes this same neutral ground on
-   purpose: amber is spent on waiting on you, and hue below Job level exists
-   only where tokens/status.css declares it. It is told from `ahead` by its
-   label and by carrying no glyph, which is how every same-hue state in this
-   system differentiates. */
-.armada-phases__node[data-state="cleared"] {
+   A stage still ahead takes none. It is a position, not a state. A `never`
+   stage takes none either: amber is spent on waiting on you, and it is told
+   from `ahead` by its label and by carrying no glyph. */
+.armada-phases__node[data-state="cleared"] svg {
   color: var(--step-advanced);
-  background: var(--status-completed-success-bg);
 }
 
 /* The live stage takes an inset ring as well as the tint. It is the only ring
@@ -303,3 +306,25 @@ button.armada-phases__node:focus-visible {
   width: var(--space-12);
 }
 
+/* A node's first line: its glyph and its name. */
+.armada-phases__name {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--space-1) + var(--space-1) / 2);
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Where the stage stands, under its name. Subtle at every state, including
+   inside a tinted node: the name carries the hue, and a second line in it
+   would make the node a block of colour. The card carries the rest. */
+.armada-phases__stands {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

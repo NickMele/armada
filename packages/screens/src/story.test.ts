@@ -29,8 +29,9 @@ import { describe, expect, it } from "vitest";
 import { SILENCE } from "@armada/components";
 import type { BlockKind, Observed, Turn, Turns } from "@armada/protocol";
 
+import { answered, called } from "./fixtures/build/base";
 import { leading } from "./reading";
-import { NOTHING_YET_ON_THIS_STEP, entriesOf, hideUnread, whyNotWatching } from "./story";
+import { NOTHING_YET_ON_THIS_STEP, entriesOf, hideUnread, inside, whyNotWatching } from "./story";
 
 const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
 
@@ -297,5 +298,83 @@ describe("a kind this Bridge has no reading for", () => {
   it("keeps the kind on the payload, so the row still opens to something", () => {
     const lines = payload(unrecognised("thinking_delta"));
     expect(lines.map((line) => line.text)).toEqual(["thinking_delta"]);
+  });
+});
+
+describe("a call's argument loses the worktree it was read in", () => {
+  it("leaves the path as the repository spells it", () => {
+    expect(inside("~/Development/armada/.armada/worktrees/1-a-job/crates/ipc/src/turn.rs")).toBe(
+      "crates/ipc/src/turn.rs",
+    );
+  });
+
+  it("drops the prefix from every path in one argument", () => {
+    const both =
+      "grep -n foo ~/x/.armada/worktrees/1-a-job/crates/a.rs ~/x/.armada/worktrees/1-a-job/crates/b.rs";
+    expect(inside(both)).toBe("grep -n foo crates/a.rs crates/b.rs");
+  });
+
+  it("leaves an argument that names no worktree alone", () => {
+    expect(inside("select:mcp__armada__declare_scope")).toBe("select:mcp__armada__declare_scope");
+  });
+
+  it("leaves a path that is already relative alone", () => {
+    expect(inside("crates/store/src/read.rs")).toBe("crates/store/src/read.rs");
+  });
+
+  it("keeps the whole argument on the payload, which is what a row opens to", () => {
+    const whole = "~/Development/armada/.armada/worktrees/1-a-job/crates/ipc/src/turn.rs";
+    const [row] = entriesOf(
+      [called("implement", "2026-09-10T14:00:00Z", "c1", "Read", whole)],
+      "implement",
+    );
+    expect(row?.message).toBe("Read  crates/ipc/src/turn.rs");
+    expect(row?.payload[0]?.text).toBe(whole);
+  });
+});
+
+describe("a call and its answer are one row", () => {
+  const STEP = "implement";
+
+  /** A call at `from`, answered `seconds` later. */
+  function pair(seconds: number, failed = false): Turn[] {
+    const from = "2026-09-10T14:00:00Z";
+    const to = new Date(Date.parse(from) + seconds * 1000).toISOString();
+    return [called(STEP, from, "c1", "Read", "crates/a.rs"), answered(STEP, to, "c1", failed)];
+  }
+
+  it("draws the call and not the answer", () => {
+    const rows = entriesOf(pair(0.142), STEP);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.kind).toBe("called");
+  });
+
+  it("puts how long it was open on the call's own row", () => {
+    expect(entriesOf(pair(0.142), STEP)[0]?.message).toBe("Read  crates/a.rs · 142ms");
+  });
+
+  it("keeps a failed answer, which is the row somebody opened the log for", () => {
+    const rows = entriesOf(pair(1, true), STEP);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]?.message).toBe("The call failed");
+  });
+
+  it("says nothing about the duration of a call still open", () => {
+    const rows = entriesOf([called(STEP, "2026-09-10T14:00:00Z", "c2", "Read", "crates/b.rs")], STEP);
+    expect(rows[0]?.message).toBe("Read  crates/b.rs");
+  });
+
+  it("pairs each call with its own answer, not with the nearest one", () => {
+    const from = "2026-09-10T14:00:00Z";
+    const rows = entriesOf(
+      [
+        called(STEP, from, "c1", "Read", "crates/a.rs"),
+        called(STEP, "2026-09-10T14:00:01Z", "c2", "Bash", "ls"),
+        answered(STEP, "2026-09-10T14:00:03Z", "c2"),
+        answered(STEP, "2026-09-10T14:00:10Z", "c1"),
+      ],
+      STEP,
+    );
+    expect(rows.map((row) => row.message)).toEqual(["Read  crates/a.rs · 10s", "Bash  ls · 2s"]);
   });
 });

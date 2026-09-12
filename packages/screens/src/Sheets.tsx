@@ -28,12 +28,16 @@ import {
 } from "@armada/components";
 import { useMemo, useState, type ReactNode } from "react";
 
-import type { Diff, Observed } from "@armada/protocol";
+import type {
+  Diff,
+  Observed,
+  Turn,
+} from "@armada/protocol";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
 import { clock } from "./duration";
-import { Log } from "./Log";
+import { WorkGrouped } from "./grouped";
 import { recourseOf } from "./recovery";
 import { drawn, WORKTREE_GIVEN_BACK } from "./review";
 import { SettingsSheet, type SettingsSheetProps } from "./settings";
@@ -76,6 +80,12 @@ export type DetailSheetProps = {
   step: StepDetail;
   /** The step's rows, in the order they arrived. */
   rows: LogRow[];
+  /**
+   * The same turns those rows were folded from, which carry the tool and the
+   * timing the rows no longer do. **The sheet is where the folding earns its
+   * keep**: one real step put 1763 rows behind this layer.
+   */
+  turns: readonly Turn[];
   observed: Observed;
   diff: Diff;
   calls: Calls;
@@ -116,6 +126,7 @@ export function DetailSheet({
   whole,
   step,
   rows,
+  turns,
   observed,
   diff,
   calls,
@@ -164,11 +175,13 @@ export function DetailSheet({
         {/* The sheet is the whole log, so a socket that stopped says so here
             for the reason the chapter's preview does: an empty sheet reading as
             a step that has not started is the panel's defect one layer out. */}
-        <Log
+        <WorkGrouped
           rows={shown}
+          turns={turns}
+          stepId={step.step_id}
           emptyNote={whyNotWatching(observed) ?? NOTHING_YET_ON_THIS_STEP}
           calls={calls}
-          {...log}
+          log={log}
         />
       </ActivityLogSheet>
     );

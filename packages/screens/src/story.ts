@@ -33,10 +33,11 @@
 // carries no size the row says nothing about size at all — an old transcript
 // cannot recover one, and a number nobody measured is worse than no number.
 
+import { ARMADA } from "@armada/protocol";
 import type { BlockKind, Observed, Turn } from "@armada/protocol";
 import type { ChangedFile, CheckRun } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME, SILENCE } from "@armada/components";
-import { clock } from "./duration";
+import { briefly, clock, instant } from "./duration";
 import { leading } from "./reading";
 
 /** Who wrote the line. The wire's own three, as `LogEntry` spells them. */
@@ -109,6 +110,28 @@ export type LogRow = {
   call?: CutCall;
 };
 
+/**
+ * A call's argument with the Job's own worktree prefix dropped.
+ *
+ * **The line is the argument, and the prefix is the same on every row.** A
+ * Drone works inside one worktree, so every path it read began with the same
+ * forty characters and a `Read` row was most of the way across the panel before
+ * it said which file. What is left is the path as the repository spells it,
+ * which is how the diff and the footprint already name a file.
+ *
+ * **Derived from the layout, not guessed at.** `artifacts.ts` fixes it as
+ * `<repo>/.armada/worktrees/<job>`, and says it is not configurable — so the
+ * segment after `worktrees` is the worktree and everything before it is the
+ * machine. **The message only**: the payload keeps the argument whole, because
+ * a row that opens is a row somebody wants the real path from.
+ */
+export function inside(detail: string): string {
+  return detail.replace(WORKTREE, "");
+}
+
+/** `<anything>/.armada/worktrees/<one segment>/`, wherever it appears. */
+const WORKTREE = new RegExp(`\\S*/${ARMADA.replace(".", "\\.")}/worktrees/[^/\\s]+/`, "g");
+
 /** A cut argument: which call, how much of it the row has, and how much there is. */
 export type CutCall = {
   /** The call id, which is what `readCall` asks for. */
@@ -143,7 +166,7 @@ export type CutCall = {
  * Drone's prose has, kept, beside a second row of Fleet's own prose that had
  * two.
  */
-function isEcho(row: Turn): boolean {
+export function isEcho(row: Turn): boolean {
   return row.saw.event === "said" && row.by === "armada";
 }
 
@@ -216,10 +239,50 @@ function whyItEnded(because: string): string {
  * the step being read.
  */
 export function entriesOf(rows: readonly Turn[], stepId: string | undefined): LogRow[] {
-  return rows
+  const mine = rows
     .filter((row) => stepId === undefined || row.step === undefined || row.step === stepId)
-    .filter((row) => !isEcho(row))
-    .map(rowOf);
+    .filter((row) => !isEcho(row));
+
+  // **A call and its answer are one thing that happened.** They arrive as two
+  // events with the tool running in the gap, and drawn as two the log was half
+  // one sentence: 351 calls on one real step put 351 rows reading *The call
+  // answered* between the things the Drone actually did. So the answer's two
+  // facts move onto the call's own row — how long it was open, and whether it
+  // came back — and the plain successful answer stops drawing.
+  //
+  // **A failure still draws its own row.** It carries what came back and it is
+  // the row somebody opened the log for; folding that away to save a line
+  // would be hiding the one event worth the space.
+  //
+  // This is the rule `DroneTurns` states for the same two events, applied
+  // where every surface reads rather than in one component nothing renders.
+  const opened = new Map<string, string>();
+  const answers = new Map<string, { ms: number | null; failed: boolean }>();
+  for (const row of mine) {
+    if (row.saw.event === "called") opened.set(row.saw.call, row.ts);
+    if (row.saw.event === "answered") {
+      const from = opened.get(row.saw.call);
+      answers.set(row.saw.call, { ms: took(from, row.ts), failed: row.saw.failed });
+    }
+  }
+
+  const drawn: LogRow[] = [];
+  for (const row of mine) {
+    // The answer that said nothing but that it answered.
+    if (row.saw.event === "answered" && answers.get(row.saw.call)?.failed === false) continue;
+    const made = rowOf(row);
+    const answer = row.saw.event === "called" ? answers.get(row.saw.call) : undefined;
+    drawn.push(answer?.ms == null ? made : { ...made, message: `${made.message} · ${briefly(answer.ms)}` });
+  }
+  return drawn;
+}
+
+/** How long a call was open, or nothing where either instant will not parse. */
+function took(from: string | undefined, to: string): number | null {
+  if (from === undefined) return null;
+  const start = instant(from);
+  const end = instant(to);
+  return start === null || end === null ? null : Math.max(0, end - start);
 }
 
 /**
@@ -290,7 +353,8 @@ function rowOf(row: Turn): LogRow {
         at,
         actor,
         kind,
-        message: saw.detail === "" ? `${saw.tool}  ${saw.call}` : `${saw.tool}  ${saw.detail}`,
+        message:
+          saw.detail === "" ? `${saw.tool}  ${saw.call}` : `${saw.tool}  ${inside(saw.detail)}`,
         mono: true,
         // What was sent, and how much of it there is where the wire said. The
         // row never reports an absence: `detail` is what arrived, and the size

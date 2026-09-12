@@ -255,3 +255,6 @@ export * from "./compositions/ShownAgain/ShownAgain";
 // Journey 9's rehearsal, run in the Job's own worktree. Writes no Evidence and
 // moves nothing on the Job — a rehearsal, never a verdict.
 export * from "./compositions/RunSheet/RunSheet";
+// A step's work with runs of one tool folded to a line. The rows inside a group
+// are the caller's own log, drawn unfolded everywhere else.
+export * from "./compositions/WorkGroups/WorkGroups";
