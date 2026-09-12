@@ -98,7 +98,7 @@ export type StepPanel = {
   onOpenRow?: (rowId: string | null) => void;
   /**
    * Anything above the timeline — the failure every attempt hit, what the Drone
-   * tried, the box that drafts a redirect. **It comes before the record**
+   * tried, the box that drafts a redirect. **It comes before the story**
    * because you cannot write a useful sentence until you have read it.
    */
   before?: ReactNode;
@@ -170,7 +170,7 @@ export type InsideAJobProps = {
    * the Drone's turns and a person's moves, whichever came last.
    *
    * Absent draws nothing. A Job with nothing read and nothing recorded is not a
-   * hole in the screen — the same rule `record` below keeps.
+   * hole in the screen — the same rule `where` above keeps.
    */
   machine?: ReactNode;
   machineLabel?: ReactNode;
@@ -219,14 +219,6 @@ export type InsideAJobProps = {
    * Everything the Job left behind, folded — its moves, its Drone's turns, what
    * it touched, what it changed, what it claimed.
    *
-   * **A Job-level region, in a Job-level column, at every state.** It sat in
-   * the finished render with eight sections and the stopped render with five,
-   * and the difference was never about the Job — it was about which screen a
-   * status happened to route to. Absent draws nothing rather than an empty
-   * frame: a Job with nothing recorded is not a hole in the screen.
-   */
-  record?: ReactNode;
-  recordLabel?: ReactNode;
   /** The Job's brief, above the step on the panel's raised surface. */
   brief?: JobBriefProps;
   /** Why there is no brief, where there is none. */
@@ -283,8 +275,6 @@ export function InsideAJob({
   where,
   whereLabel = "Where things are",
   whereAbsent = "Paths unknown",
-  record,
-  recordLabel = "What it left behind",
   brief,
   briefAbsent = "No brief",
   briefLoading = false,
@@ -346,13 +336,6 @@ export function InsideAJob({
             </p>
           ) : (
             <WhereRegion rows={where} onCopied={onCopied} />
-          )}
-
-          {record === undefined ? null : (
-            <>
-              <Eyebrow spaced>{recordLabel}</Eyebrow>
-              {record}
-            </>
           )}
         </div>
 
@@ -437,7 +420,7 @@ export function InsideAJob({
                 </div>
               )}
 
-              {/* The box a person acts in comes before the record: you cannot
+              {/* The box a person acts in comes before the story: you cannot
                   write a useful sentence until you have read it. */}
               {step.before === undefined ? null : (
                 <div className="armada-inside__before">{step.before}</div>
