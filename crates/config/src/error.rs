@@ -729,7 +729,7 @@ pub enum ResolveError {
         manifest: PathBuf,
         disagreements: Vec<Disagreement>,
     },
-    /// One or more steps declare `evidence_type: shown` and the Manifest
+    /// One or more steps declare `evidence.captured` and the Manifest
     /// declares no `evidence:` harness to capture with.
     ///
     /// **Its own variant rather than a [`Disagreement`]**, which is two files

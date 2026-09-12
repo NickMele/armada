@@ -720,7 +720,7 @@ where
             return Ok(None);
         }
         // Unreachable on a Job that was resolved — `ResolvedWorkflow::resolve`
-        // refuses a `shown` step against a Manifest with no harness — and
+        // refuses a captured step against a Manifest with no harness — and
         // checked because the Job froze its workflow and the Manifest is read
         // live. A repository that deleted the section under a running Job
         // reaches here, and saying so beats capturing nothing quietly.

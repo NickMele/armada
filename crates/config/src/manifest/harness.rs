@@ -263,7 +263,7 @@ impl Manifest {
     /// How this repository shows its work, or `None` where it does not say.
     ///
     /// **Absent is not a default and there is nothing to fall back to.** A
-    /// repository that declares no harness cannot run a `shown` step, which is
+    /// repository that declares no harness cannot capture a step, which is
     /// what `ResolvedWorkflow::resolve` refuses before anything is dispatched —
     /// so absence reaches a Job as a refusal a person reads, never as a capture
     /// that quietly produced nothing.

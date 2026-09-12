@@ -1288,8 +1288,8 @@ transport = "HTTP"
 agent_access = "Yes"
 description = "A person asks a Job to show its work: the repository's harness runs the last spec a Drone named, in the Job's worktree, and the frames are kept as a set of their own"
 notes = """
-**The other half of #603's "both".** A step whose evidence is `shown` runs the
-harness while it settles; this runs it when a person asks, on any Job whose
+**The other half of #603's "both".** A step declaring `evidence.captured` runs
+the harness while it settles; this runs it when a person asks, on any Job whose
 worktree is still on disk. The mechanism is the step's own —
 `fleet::showing::show` and `kept` — called from outside settling.
 
@@ -1312,9 +1312,9 @@ when it ran. So the frames go into `job_shown_again` under a press number, and
 the copies into a run directory of their own, `<step>.again<press>.<attempt>.branch`,
 beside the step's `<step>.<attempt>.branch`. `get_frame` resolves both.
 
-**Which spec.** The last `shown_by` a Drone submitted on a step whose evidence is
-`shown`. Every submission carries a `shown_by`, but only on a `shown` step does it
-name a spec; anywhere else it is a sentence pointing at a test or a file, and
+**Which spec.** The last `shown_by` a Drone submitted on a step the workflow asks
+to capture. Every submission carries a `shown_by`, but only on a captured step
+does it name a spec; anywhere else it is a sentence pointing at a test or a file, and
 substituting that into `evidence.run` would put a Drone's words into a command
 line the repository wrote for a spec.
 

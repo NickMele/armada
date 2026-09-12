@@ -63,6 +63,7 @@ pub use attempt::{Attempt, Iteration, Spent};
 pub use check::{CheckOutcome, StepCheck};
 pub use collision::{collisions, Collision, ScopeClaim};
 pub use covers::{BadPattern, Covers, PathPattern};
+pub use declared::{AdvanceGate, EvidenceType};
 pub use drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
 pub use escalation::{EscalationTrigger, StepLevelTrigger, TriggerKind, TriggerLevel};
 pub use event::{JobEvent, StepEvent};
@@ -96,7 +97,6 @@ pub use transition::{
     CriteriaOwed, Edge, IllegalTransition, PilotReason, Target, TransitionReason, EDGES,
 };
 pub use verdict::GateVerdict;
-pub use declared::{AdvanceGate, EvidenceType};
 pub use workflow::{
     FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS, DIFF_NONEMPTY,
     EVERY_MANIFEST_CHECK, MANIFEST_CHECK,

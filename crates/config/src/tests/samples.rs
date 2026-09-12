@@ -169,8 +169,10 @@ fn the_code_review_sample_names_an_evidence_type_the_schema_does_not_have() {
     // against itself. The parser surfaces it rather than widening the set.
     let refusals = load("code-review.json");
     assert!(
-        refusals.iter().any(|r| r.key == "steps[1].evidence_type"
-            && matches!(r.fault, Fault::NotInTheSchema { .. })),
+        refusals
+            .iter()
+            .any(|r| r.key == "steps[1].evidence.submitted.type"
+                && matches!(r.fault, Fault::NotInTheSchema { .. })),
         "{refusals:?}"
     );
 }

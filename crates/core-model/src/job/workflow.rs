@@ -248,6 +248,20 @@ pub struct ResolvedStep {
     /// Whether a Drone on this step is given the tool that creates Jobs.
     /// **False on every step that does not say otherwise.**
     may_dispatch_jobs: bool,
+    /// Whether Fleet runs the repository's own `evidence:` harness for this
+    /// step and keeps what it produced.
+    ///
+    /// **It names no medium.** These workflows ship with the app and run
+    /// against any repository, so what a capture produces is that repository's
+    /// decision — a screenshot, a recording, terminal output, a table.
+    ///
+    /// **It gates nothing**, which is `fleet::showing`'s standing argument: a
+    /// capture that fails has established nothing about the work.
+    ///
+    /// **Separate from [`evidence_type`](ResolvedStep::evidence_type)**, which
+    /// is what the Drone hands in and the gate measures. One value holding both
+    /// is what stopped a step doing both. `#777`.
+    captured: bool,
     /// Whether the definition said `every_manifest_check` rather than naming
     /// Checks one at a time.
     ///
@@ -395,6 +409,14 @@ impl ResolvedStep {
         self
     }
 
+    /// Whether Fleet captures this step, for
+    /// [`dispatching`](Self::dispatching)'s reason: one step of a workflow
+    /// asks, and every other would be restating a `false`.
+    pub fn capturing(mut self, captured: bool) -> ResolvedStep {
+        self.captured = captured;
+        self
+    }
+
     /// Whether the definition said `every_manifest_check`, for
     /// [`dispatching`](Self::dispatching)'s reason.
     ///
@@ -482,6 +504,12 @@ impl ResolvedStep {
 
     pub fn evidence_type(&self) -> Option<EvidenceType> {
         self.evidence_type
+    }
+
+    /// Whether Fleet runs the repository's harness for this step and keeps
+    /// what came back. See [the field](ResolvedStep::captured).
+    pub fn captured(&self) -> bool {
+        self.captured
     }
 
     /// All entries must pass. Empty on the common case of an ungated step.

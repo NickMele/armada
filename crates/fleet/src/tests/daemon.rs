@@ -451,7 +451,7 @@ async fn a_shown_step_runs_its_spec_once_and_makes_no_base_checkout() {
     submitted_by_the_one(
         &fleet,
         Call {
-            evidence_type: EvidenceType::Shown,
+            evidence_type: EvidenceType::Diff,
             claimed: Claimed("the panel now collapses"),
             shown_by: ShownBy("e2e/panel.spec.ts"),
             not_claimed: NotClaimed(""),

@@ -517,7 +517,7 @@ fn a_step_may_declare_no_evidence_type() {
 #[test]
 fn a_step_may_hand_in_a_patch_and_be_captured() {
     let def = bug_with(
-        "  - id: implement\n    label: Implement\n    evidence:\n      submitted:\n        type: diff\n      captured: true\n    delivers: false\n    advance_gate: auto\n",
+        "  - id: demonstrate\n    label: Demonstrate\n    evidence:\n      submitted:\n        type: diff\n      captured: true\n    delivers: false\n    advance_gate: auto\n",
     )
     .expect("a step that hands in a diff and is captured");
     assert_eq!(def.steps()[3].evidence_type(), Some(EvidenceType::Diff));

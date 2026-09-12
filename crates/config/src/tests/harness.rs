@@ -64,7 +64,7 @@ fn the_spec_goes_where_the_run_template_says_it_goes() {
 }
 
 /// **Absent is not a default.** A repository that declares no harness cannot
-/// run a `shown` step, and that is refused where the workflow is resolved —
+/// capture a step, and that is refused where the workflow is resolved —
 /// so absence reaches a Job as a refusal a person reads, never as a capture
 /// that quietly produced nothing.
 #[test]

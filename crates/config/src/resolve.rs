@@ -27,8 +27,7 @@
 use std::path::PathBuf;
 
 use core_model::{
-    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, StepId,
-    WorkflowId,
+    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, StepId, WorkflowId,
 };
 
 use crate::error::{Disagreement, ResolveError, UnknownCheck};

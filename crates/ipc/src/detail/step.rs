@@ -219,12 +219,11 @@ pub struct StepDetail {
     ///
     /// **The fourth record a step's work is read from**, beside the three
     /// above — and the first that is not an argument about a verdict. Nothing
-    /// gates on a frame: it is what a person looks at on a step whose evidence
-    /// is what it looks like, which is the whole of what `evidence_type:
-    /// shown` means.
+    /// gates on a frame: it is what a person looks at on a step the workflow
+    /// asked to capture, which is the whole of what `evidence.captured` means.
     ///
-    /// **Empty is the ordinary case and it is not a gap.** Every step of every
-    /// other type captures nothing, and so does a `shown` step whose harness
+    /// **Empty is the ordinary case and it is not a gap.** Every step nobody
+    /// asked to capture produces none, and so does a captured step whose harness
     /// would not run — what happened there is a line in the Job's own log,
     /// because a client cannot tell a repository with a broken harness from one
     /// with a spec that photographed nothing, and neither can this field.

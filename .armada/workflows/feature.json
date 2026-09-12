@@ -76,8 +76,7 @@
       "id": "implement",
       "label": "Implement",
       "evidence": {
-        "submitted": { "type": "diff" },
-        "captured": true
+        "submitted": { "type": "diff" }
       },
       "retry_limit": 2,
       "mechanical_checks": [

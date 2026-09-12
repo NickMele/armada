@@ -133,7 +133,7 @@ export type ShowAgain = {
   /** Whether the Job's worktree is on disk. A clean or a reclaim takes it. */
   worktree_on_disk: boolean;
   /**
-   * The spec a press reruns — the last one a Drone named on a `shown` step.
+   * The spec a press reruns — the last one a Drone named on a captured step.
    * **Absent where no Drone ever named one.**
    */
   spec?: NamedSpec;

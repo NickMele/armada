@@ -1,6 +1,6 @@
 //! A person asking a Job to show its work.
 //!
-//! **Every case starts from a real `shown` step.** The Job is proposed,
+//! **Every case starts from a real captured step.** The Job is proposed,
 //! approved, worked and submitted, and the step's own harness runs while it
 //! settles — so the spec a press reruns is one a Drone named and the gate
 //! recorded, and the step's own frames are there to be left alone.
@@ -50,7 +50,7 @@ fn a_fleet_showing(home: &TempDir, run: &str) -> Arc<Fixture> {
     Arc::new(Fleet::assembled(fittings))
 }
 
-/// A one-step workflow whose evidence is `shown`, holding at
+/// A one-step workflow that asks to be captured, holding at
 /// `awaiting_review` once the gate runs — `advance_gate: human_always`, unlike
 /// `shown_step`'s own `auto` — so the port span the step's harness ran against
 /// is still claimed when a press follows, rather than released the instant a
@@ -64,7 +64,7 @@ fn a_fleet_showing_a_claimed_port(home: &TempDir) -> Arc<Fixture> {
     let def = WorkflowDef::parse(
         std::path::Path::new("fixture-shown-port.yml"),
         "version: 1\nworkflow_id: fixture-shown-port\nname: fixture\nstructure: linear\nsteps:\n  \
-         - id: show\n    label: \"Show\"\n    evidence_type: shown\n    delivers: false\n    \
+         - id: show\n    label: \"Show\"\n    evidence: {submitted: {type: diff}, captured: true}\n    delivers: false\n    \
          advance_gate: human_always\n",
         &Roster::offering_nothing(),
     )
@@ -105,14 +105,14 @@ fn worktree_of(home: &TempDir, job: &Job) -> PathBuf {
 
 fn shown(spec: &'static str) -> Call<'static> {
     Call {
-        evidence_type: EvidenceType::Shown,
+        evidence_type: EvidenceType::Diff,
         claimed: Claimed("the panel now collapses"),
         shown_by: ShownBy(spec),
         not_claimed: NotClaimed(""),
     }
 }
 
-/// A Job whose one `shown` step was worked, submitted and ruled on, its own
+/// A Job whose one captured step was worked, submitted and ruled on, its own
 /// harness having photographed `marker` as it stood — so the Job has finished
 /// and its worktree is still on disk, which is the moment a reviewer presses.
 async fn shown_once(fleet: &Fixture, home: &TempDir, title: &str, marker: &str) -> Job {

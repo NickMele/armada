@@ -1,6 +1,6 @@
 //! A person asking a Job to show its work, off the turn loop.
 //!
-//! The other half of `#603`'s *both*: a step whose evidence is `shown` runs the
+//! The other half of `#603`'s *both*: a captured step runs the
 //! harness while it settles, and this reruns the last spec a Drone named when a
 //! person presses. [`show`] and [`kept`] are the mechanism, unchanged.
 //!
