@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+import { Chapter } from "../Chapter/Chapter";
 import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
 
 /**
@@ -153,7 +154,14 @@ function Attempt({
   );
 }
 
-/** One phase of one attempt. */
+/**
+ * One phase of one attempt.
+ *
+ * **A `Chapter`, which is what the draft drew.** The card, the right-aligned
+ * meta, the running dot, the act on the header line and the body in its own
+ * well are all already built and already agreed — drawing a bare line here
+ * instead was a second answer to a question this package had settled.
+ */
 function Row({
   row,
   open,
@@ -163,42 +171,24 @@ function Row({
   open: boolean;
   onToggle: () => void;
 }) {
-  const line = (
-    <>
+  const name = (
+    <span className="armada-steps__mark" {...row.marker}>
       <StepActivityMark activity={row.activity} label={rowLabel(row)} pulsing={row.live} />
-      <span className="armada-steps__name">{row.name}</span>
-      {row.meta === undefined ? null : <span className="armada-steps__meta">{row.meta}</span>}
-    </>
+      {row.name}
+    </span>
   );
-  const act = row.act === undefined ? null : <span className="armada-steps__act">{row.act}</span>;
-  if (row.body === undefined) {
-    return (
-      <div className="armada-steps__row" data-open="false">
-        <div className="armada-steps__lid">
-          <div className="armada-steps__line">{line}</div>
-          {act}
-        </div>
-      </div>
-    );
-  }
   return (
-    <div className="armada-steps__row" data-open={open}>
-      <div className="armada-steps__lid">
-        <button
-          type="button"
-          className="armada-steps__line armada-steps__line--opens"
-          aria-expanded={open}
-          onClick={onToggle}
-          {...row.marker}
-        >
-          {line}
-        </button>
-        {act}
-      </div>
-      <div className="armada-steps__body" hidden={!open}>
-        {row.body}
-      </div>
-    </div>
+    <Chapter
+      name={name}
+      {...(row.meta === undefined ? {} : { meta: row.meta })}
+      {...(row.live === true ? { live: true } : {})}
+      {...(row.act === undefined ? {} : { act: row.act })}
+      // A phase with nothing recorded draws its header as a label: `Chapter`
+      // takes no `onToggle` there, so no control opens an empty box.
+      {...(row.body === undefined ? {} : { open, onToggle })}
+    >
+      {row.body}
+    </Chapter>
   );
 }
 

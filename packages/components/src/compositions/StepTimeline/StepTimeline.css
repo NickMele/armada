@@ -1,16 +1,17 @@
-/* A step as one timeline: the phases in order, repeated per attempt.
+/* A step as one timeline: the phases in order, an attempt per section.
 
-   A rail down the left, drawn on the rows' container rather than per row, so
-   the line is continuous between phases instead of restarting at each one. */
+   **Almost nothing is drawn here.** Each phase is a `Chapter`, which already
+   owns the card, the header line, the meta and the body's well — what is left
+   is the rail the phases hang off and the header an earlier attempt folds to. */
 .armada-steps {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
   min-width: 0;
 }
 
-/* The line over the timeline. Sentence case, the same voice the strip's label
-   used, because it introduces a region rather than captioning one. */
+/* The line over the timeline. Sentence case: it introduces a region rather
+   than captioning one, which is the voice the strip's own label used. */
 .armada-steps__label {
   color: var(--fg-muted);
   font-size: var(--text-2xs);
@@ -20,23 +21,24 @@
 .armada-steps__attempt {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-/* An earlier attempt's header. Quiet: it is a way back to a record, not an
-   event competing with the phases under it. */
+/* An earlier attempt's header: a way back into a record, not an event
+   competing with the phases under it, so it stays quiet and unboxed. */
 .armada-steps__attempt-head {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   align-self: flex-start;
-  padding: var(--space-1) 0;
+  padding: 0;
   border: 0;
-  background: transparent;
+  background: none;
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
   color: var(--fg-muted);
 }
 
@@ -44,8 +46,7 @@
   color: var(--fg-default);
 }
 
-.armada-steps__said,
-.armada-steps__meta {
+.armada-steps__said {
   color: var(--fg-subtle);
   min-width: 0;
   overflow: hidden;
@@ -58,73 +59,22 @@
   color: var(--fg-subtle);
 }
 
-/* The rail. On the container, so it runs the height of the attempt's phases. */
+/* The rail. On the container, so one line runs the height of the attempt's
+   phases rather than restarting at each card. */
 .armada-steps__rows {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
   margin-left: var(--space-2);
   padding-left: var(--space-3);
   border-left: var(--border-width) solid var(--border-subtle);
   min-width: 0;
 }
 
-.armada-steps__row {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-/* The row's lid: the control that opens it and the act that leaves it, as two
-   siblings. The surface belongs to the lid so a row with an act still reads as
-   one line. */
-.armada-steps__lid {
-  display: flex;
+/* The mark and the phase's name, as one thing inside the chapter's header. */
+.armada-steps__mark {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding-right: var(--space-2);
-  min-width: 0;
-}
-
-.armada-steps__lid:hover {
-  background: var(--bg-hover);
-}
-
-/* The act sits at the trailing edge and never grows. */
-.armada-steps__act {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.armada-steps__line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-2) 0;
-  flex: 1;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  color: var(--fg-default);
-  min-width: 0;
-}
-
-.armada-steps__line--opens {
-  cursor: pointer;
-}
-
-.armada-steps__name {
-  flex: none;
-}
-
-/* The body sits under its phase and inside the rail, so what happened stays
-   attached to the phase it happened in. */
-.armada-steps__body {
-  padding: 0 0 var(--space-3) var(--space-4);
   min-width: 0;
 }
