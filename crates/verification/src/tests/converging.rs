@@ -6,7 +6,7 @@
 
 use adapter_traits::Patch;
 use config::ResolvedWorkflow;
-use core_model::{DeclaredPaths, RepoPath, Timestamp};
+use core_model::{CheckOutcome, DeclaredPaths, RepoPath, StepCheck, Timestamp};
 use testkit::{Gate, Sketch};
 
 use crate::{Convergence, ConvergenceBrief, NotConverging, Unreadable, A_DELIVERABLE};
@@ -41,6 +41,10 @@ fn written() -> ResolvedWorkflow {
 const ARTIFACT: &str = ".armada/artifacts/scope.md";
 
 fn brief(off_plan: &[&str]) -> ConvergenceBrief {
+    brief_with_precedent(off_plan, &[])
+}
+
+fn brief_with_precedent(off_plan: &[&str], precedent: &[StepCheck]) -> ConvergenceBrief {
     let workflow = workflow();
     ConvergenceBrief::about(
         &workflow.steps()[0],
@@ -51,6 +55,7 @@ fn brief(off_plan: &[&str]) -> ConvergenceBrief {
             .map(|path| RepoPath::new(*path))
             .collect::<Vec<RepoPath>>(),
         None,
+        precedent,
     )
 }
 
@@ -64,6 +69,7 @@ fn about_the_file(held: Option<&str>) -> String {
         Some(&DeclaredPaths::of(vec![RepoPath::new(ARTIFACT)])),
         &[],
         held,
+        &[],
     )
     .question()
     .to_string()
@@ -90,7 +96,7 @@ fn work_outside_the_plan_is_named_and_asked_about() {
 }
 
 #[test]
-fn the_three_states_read_back_as_themselves() {
+fn the_four_states_read_back_as_themselves() {
     assert_eq!(
         brief(&[]).read("state: converging"),
         Ok(Convergence::Converging)
@@ -99,6 +105,58 @@ fn the_three_states_read_back_as_themselves() {
         brief(&[]).read("state: justified_drift"),
         Ok(Convergence::JustifiedDrift)
     );
+    assert_eq!(
+        brief(&[]).read("state: cannot_tell"),
+        Ok(Convergence::CannotTell)
+    );
+}
+
+/// **The defect, closed at the source.** A forced choice among three answers
+/// with no way to abstain is what read an uncertain look as `converging` on
+/// Job `01M28RVVN200232YNHWF8CFFKH`, three times over a step that failed the
+/// same way every time.
+#[test]
+fn a_look_that_cannot_tell_is_not_forced_into_converging() {
+    assert_ne!(
+        brief(&[]).read("state: cannot_tell"),
+        Ok(Convergence::Converging)
+    );
+}
+
+fn once_failed(name: &str, produced: &str) -> StepCheck {
+    StepCheck {
+        name: name.to_string(),
+        outcome: CheckOutcome::Failed,
+        expected: None,
+        produced: Some(produced.to_string()),
+        output_path: None,
+    }
+}
+
+/// **What the look could not see before.** The finding a step's own last
+/// attempt left behind now rides the question a later attempt is asked, so a
+/// `converging` answer has to reckon with the step's own history.
+#[test]
+fn what_the_last_attempt_did_not_pass_is_shown_and_asked_about() {
+    let asked = brief_with_precedent(&[], &[once_failed("suite", "it exited 101")])
+        .question()
+        .to_string();
+    assert!(
+        asked.contains("What failed the last time this step ran"),
+        "{asked}"
+    );
+    assert!(asked.contains("suite: it exited 101"), "{asked}");
+    assert!(
+        asked.contains("cannot_tell rather than converging"),
+        "{asked}"
+    );
+}
+
+/// A first attempt has no history, and the question must not invent one.
+#[test]
+fn a_first_attempt_is_asked_nothing_about_history() {
+    let asked = brief(&[]).question().to_string();
+    assert!(!asked.contains("last time this step ran"), "{asked}");
 }
 
 /// A finding that names no observable is nothing the Drone could act on, and
@@ -237,4 +295,8 @@ If it is not converging:
     produced: <the observable that has not moved>
     consequence: <what that difference does to whoever consumes it>
 
-Each of the three is one line and names something in the diff above. A finding that could be written about any other change is not a finding.";
+If none of the above is true from what is shown here:
+
+    state: cannot_tell
+
+Every state but the last names something in the diff above. A finding that could be written about any other change is not a finding, and a guess is not a finding either.";

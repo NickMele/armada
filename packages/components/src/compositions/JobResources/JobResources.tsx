@@ -260,6 +260,8 @@ const ASKED: Record<Look["asked"], string> = {
   writing: "What was written",
   span: "Where the job is",
   silence: "The liveness watch",
+  repeating: "The last two attempts",
+  scope_drift: "Work outside the declared scope",
 };
 
 /** Every look, with the ones that could not tell marked as such. */

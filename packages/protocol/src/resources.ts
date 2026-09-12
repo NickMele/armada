@@ -96,8 +96,15 @@ export type JobResources = {
  */
 export type Finding = "working" | "not_working" | "cannot_tell";
 
-/** Which question one look asked. Five, and every examination asks all five. */
-export type Asked = "process" | "worktree" | "writing" | "span" | "silence";
+/** Which question one look asked. Seven, and every examination asks all seven. */
+export type Asked =
+  | "process"
+  | "worktree"
+  | "writing"
+  | "span"
+  | "silence"
+  | "repeating"
+  | "scope_drift";
 
 /** One question asked of the Job, and what was found. */
 export type Look = {

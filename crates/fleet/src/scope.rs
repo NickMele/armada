@@ -233,11 +233,38 @@ where
             None => false,
         };
         self.noted_drift(&job, &step, &fresh, told);
+        self.kept_drift(&job, &step, &fresh).await;
         Some(Drifting {
             job,
             step,
             paths: fresh,
         })
+    }
+
+    /// Keep a live drift finding past the turn that saw it. A store that will
+    /// not take it does not refuse the turn, for [`Fleet::kept_plan`]'s
+    /// reason: the log already has the finding.
+    async fn kept_drift(&self, job: &JobId, step: &StepId, paths: &[RepoPath]) {
+        let at = self.now();
+        let Err(why) = self
+            .store()
+            .lock()
+            .await
+            .record_scope_drift(job, step, paths, &at)
+        else {
+            return;
+        };
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "a step's live drift was not kept",
+        )
+        .in_job(job.as_ulid().clone())
+        .at_step(step.as_str())
+        .with_field("cause", FieldValue::Str(why.to_string()));
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Say it, into the session the slot is holding, and answer whether the

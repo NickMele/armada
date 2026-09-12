@@ -149,7 +149,8 @@ pub enum Finding {
 
 /// Which question one look asked.
 ///
-/// Five, and each is a thing only Fleet can answer about a Job on this machine.
+/// Seven, each a thing only Fleet can answer about a Job on this machine.
+/// `Repeating` and `ScopeDrift` are new since 11.4.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Asked {
@@ -163,6 +164,10 @@ pub enum Asked {
     Span,
     /// What Fleet's own liveness watch currently reads on this Job.
     Silence,
+    /// Whether the current step's last two attempts failed the same Check.
+    Repeating,
+    /// Whether a step has edited outside its declared plan, unresolved.
+    ScopeDrift,
 }
 
 /// One question asked of the Job, and what was found.

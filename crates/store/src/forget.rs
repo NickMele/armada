@@ -93,6 +93,9 @@ pub struct Forgotten {
     /// The question the Job was holding open, if any. One row while a
     /// question is open, none otherwise.
     pub judge_questions: usize,
+    /// Paths a step edited outside its declared plan, one row per path first
+    /// seen.
+    pub scope_drift: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -134,6 +137,7 @@ impl Forgotten {
             "job_allowed_commands" => &mut self.allowed_commands,
             "port_claims" => &mut self.port_claims,
             "job_judge_questions" => &mut self.judge_questions,
+            "job_scope_drift" => &mut self.scope_drift,
             _ => return None,
         })
     }

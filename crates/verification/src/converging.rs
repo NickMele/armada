@@ -26,7 +26,7 @@
 
 use adapter_traits::Patch;
 use config::ResolvedStep;
-use core_model::{DeclaredPaths, RepoPath, Timestamp};
+use core_model::{DeclaredPaths, RepoPath, StepCheck, Timestamp};
 
 use crate::judge::{field, Unreadable};
 use crate::product::Delivered;
@@ -57,8 +57,13 @@ If it is not converging:
     produced: <the observable that has not moved>
     consequence: <what that difference does to whoever consumes it>
 
-Each of the three is one line and names something in {cited}. A finding that \
-could be written about any other change is not a finding."
+If none of the above is true from what is shown here:
+
+    state: cannot_tell
+
+Every state but the last names something in {cited}. A finding that could be \
+written about any other change is not a finding, and a guess is not a finding \
+either."
     )
 }
 
@@ -73,6 +78,10 @@ could be written about any other change is not a finding."
 pub enum Convergence {
     Converging,
     JustifiedDrift,
+    /// Forced into being by Job `01M28RVVN200232YNHWF8CFFKH`: three choices
+    /// and no way to abstain read a look that could not tell as `converging`,
+    /// three times, over a step that failed the same way every time.
+    CannotTell,
     /// **The only variant anything follows from**, and what it carries is what
     /// the Drone is told.
     Thrashing(NotConverging),
@@ -156,18 +165,18 @@ impl ConvergenceBrief {
     /// declaration. It is given as an observation rather than as a charge: the
     /// question the Judge answers is whether the move serves the step.
     ///
-    /// `held` is what the caller read from the file the step declares as its
-    /// deliverable, and `None` where it could read nothing. **Whether the step
-    /// declares one at all is read off the step and never off `held`**, so a
-    /// file that is missing, empty or unreadable is named as an empty
-    /// deliverable rather than disappearing into the shape of a step that was
-    /// asked for no file — which are opposite findings.
+    /// `held` is what the caller read from the step's declared deliverable, or
+    /// `None` where it could read nothing — a missing file is named as an
+    /// empty deliverable rather than as a step that was asked for none, which
+    /// are opposite findings. `precedent` is what this step's own last
+    /// attempt did not pass, empty on a first attempt.
     pub fn about(
         step: &ResolvedStep,
         patch: &Patch,
         declared: Option<&DeclaredPaths>,
         off_plan: &[RepoPath],
         held: Option<&str>,
+        precedent: &[StepCheck],
     ) -> ConvergenceBrief {
         let mut question = String::new();
         question.push_str(
@@ -190,6 +199,9 @@ impl ConvergenceBrief {
             for path in off_plan {
                 question.push_str(&format!("  {}\n", path.as_str()));
             }
+        }
+        if !precedent.is_empty() {
+            question.push_str(&last_time(precedent));
         }
         match step.deliverable() {
             None => {
@@ -226,6 +238,7 @@ impl ConvergenceBrief {
         match field(answer, "state").as_deref() {
             Some("converging") => Ok(Convergence::Converging),
             Some("justified_drift") => Ok(Convergence::JustifiedDrift),
+            Some("cannot_tell") => Ok(Convergence::CannotTell),
             Some("thrashing") => {
                 let expected = field(answer, "expected").ok_or(Unreadable::FindingCitesNothing)?;
                 let produced = field(answer, "produced").ok_or(Unreadable::FindingCitesNothing)?;
@@ -240,6 +253,25 @@ impl ConvergenceBrief {
             _ => Err(Unreadable::NoState),
         }
     }
+}
+
+/// What this step's own last attempt did not pass, as the look is shown it.
+/// Non-empty only past a first attempt — see [`ConvergenceBrief::about`].
+fn last_time(precedent: &[StepCheck]) -> String {
+    let mut said = String::from("\nWhat failed the last time this step ran:\n");
+    for check in precedent {
+        let why = check
+            .produced
+            .as_deref()
+            .or(check.expected.as_deref())
+            .unwrap_or("(nothing recorded)");
+        said.push_str(&format!("  {}: {why}\n", check.name));
+    }
+    said.push_str(
+        "\nAnswer converging only if what is shown below plainly changes why. \
+         If you cannot tell, answer cannot_tell rather than converging.\n",
+    );
+    said
 }
 
 /// The file the step was asked to write, as the look is shown it.

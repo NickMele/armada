@@ -24,7 +24,7 @@
 use adapter_traits::{Ask, Model, Patch};
 use core_model::{
     CriterionId, DeclaredPaths, GamingFlag, Given, JudgeCheck, Judgment, OnRefusal, RepoPath,
-    ResolvedStep, StepEvidence, StepId, WhenRefused,
+    ResolvedStep, StepCheck, StepEvidence, StepId, WhenRefused,
 };
 use verification::{
     Accepted, Answered, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged,
@@ -421,20 +421,20 @@ pub(crate) async fn gaming(
 /// stricter, and unanimity over three opinions about "is this going anywhere"
 /// would fail loudly on a step that is merely slow.
 ///
-/// `held` is what the caller read from the step's declared deliverable. A
-/// written step's product is that file and never the diff, so a look given
-/// only the patch had nothing to answer about — `verification::converging`
-/// holds the directive that produced.
+/// `held` is what the caller read from the step's declared deliverable, and
+/// `precedent` is what the step's own last attempt failed on, where it had
+/// one — `crate::precedent::precedent_failures` reads it off the store.
 pub(crate) async fn converging(
     step: &ResolvedStep,
     patch: &Patch,
     declared: Option<&DeclaredPaths>,
     off_plan: &[RepoPath],
     held: Option<&str>,
+    precedent: &[StepCheck],
     judging: &Judging,
 ) -> Result<Convergence, CallFailed> {
     let model = fleets_model(step, &judging.default_model)?;
-    let brief = ConvergenceBrief::about(step, patch, declared, off_plan, held);
+    let brief = ConvergenceBrief::about(step, patch, declared, off_plan, held, precedent);
     let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
         .map_err(|_| CallFailed::NothingToAsk)?;
     // **One call, and it names neither a criterion nor a pattern**, because it
