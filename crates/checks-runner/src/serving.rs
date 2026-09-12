@@ -52,7 +52,16 @@ impl Served {
     /// build that is not there — is a successful spawn, and what tells a caller
     /// that is [`still_up`](Served::still_up). The two are different facts and
     /// the readiness probe is what turns the second into a sentence.
-    pub fn spawn(command: &str, worktree: &Path) -> Result<Served, NeverRan> {
+    ///
+    /// **`env` is additive over this process's own**, the same rule
+    /// [`run_writing_with_env`](crate::run_writing_with_env) states: a server
+    /// held for a caller that resolves no claim of its own passes an empty
+    /// slice, exactly as [`spawn_logging`](Served::spawn_logging)'s callers do.
+    pub fn spawn(
+        command: &str,
+        worktree: &Path,
+        env: &[(String, String)],
+    ) -> Result<Served, NeverRan> {
         let Some((program, args)) = split(command) else {
             return Err(NeverRan::NothingToRun);
         };
@@ -60,6 +69,10 @@ impl Served {
         spawning
             .args(&args)
             .current_dir(worktree)
+            .envs(
+                env.iter()
+                    .map(|(name, value)| (name.as_str(), value.as_str())),
+            )
             // A server that waits on input waits forever, and nothing here has
             // a budget to end it with.
             .stdin(Stdio::null())

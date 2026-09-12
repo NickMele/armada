@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::WorktreeSpec;
-use config::EvidenceType;
+use config::{EvidenceType, Manifest, ResolvedWorkflow, Roster, WorkflowDef};
 use core_model::{Job, JobStatus};
 use testkit::FakeWorkProduct;
 use verification::{Claimed, NotClaimed, ShownBy};
@@ -46,6 +46,53 @@ fn a_fleet_showing(home: &TempDir, run: &str) -> Arc<Fixture> {
     fittings.manifest = armada_yml;
     // A press held on a file is bounded by the Check budget, and the fixture's
     // five seconds would end one on a loaded machine before the test lifts it.
+    fittings.budget = CheckBudget::of(Duration::from_secs(600));
+    Arc::new(Fleet::assembled(fittings))
+}
+
+/// A one-step workflow whose evidence is `shown`, holding at
+/// `awaiting_review` once the gate runs — `advance_gate: human_always`, unlike
+/// `shown_step`'s own `auto` — so the port span the step's harness ran against
+/// is still claimed when a press follows, rather than released the instant a
+/// one-step `auto` workflow reaches `completed_success`.
+///
+/// **`ports: storybook: {}`, and a harness that names it three times.**
+/// `serve`, `ready` and the substituted `run` each carry `${port.storybook}`
+/// and `$ARMADA_PORT_STORYBOOK`, mirroring `armada.yml`'s own `storybook_dev`
+/// Command — `#753`'s whole point being that a repository names its port once.
+fn a_fleet_showing_a_claimed_port(home: &TempDir) -> Arc<Fixture> {
+    let def = WorkflowDef::parse(
+        std::path::Path::new("fixture-shown-port.yml"),
+        "version: 1\nworkflow_id: fixture-shown-port\nname: fixture\nstructure: linear\nsteps:\n  \
+         - id: show\n    label: \"Show\"\n    evidence_type: shown\n    delivers: false\n    \
+         advance_gate: human_always\n",
+        &Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    let armada_yml = Manifest::parse(
+        std::path::Path::new("fixture-shown-port-armada.yml"),
+        r#"version: 1
+id: 01FIXTUREMANIFEST
+ports:
+  storybook: {}
+evidence:
+  serve: >-
+    /bin/sh -c "echo ${port.storybook} $ARMADA_PORT_STORYBOOK > shots/serve.txt; sleep 30"
+  ready: >-
+    /bin/sh -c "test -s shots/serve.txt"
+  run: >-
+    /bin/sh -c "echo ${port.storybook} $ARMADA_PORT_STORYBOOK > shots/run.txt" {}
+  frames: shots
+"#,
+    )
+    .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
+    let resolved = ResolvedWorkflow::resolve(&def, &armada_yml)
+        .unwrap_or_else(|refused| panic!("the fixture did not resolve: {refused}"));
+
+    let mut fittings = fittings(home, FakeWorkProduct::untouched());
+    fittings.workflows = one(resolved);
+    fittings.manifest = armada_yml;
+    // A press held while `ready` is asked is bounded by the Check budget.
     fittings.budget = CheckBudget::of(Duration::from_secs(600));
     Arc::new(Fleet::assembled(fittings))
 }
@@ -97,6 +144,100 @@ async fn shown_once(fleet: &Fixture, home: &TempDir, title: &str, marker: &str) 
 
 fn read(home: &TempDir, path: &str) -> String {
     std::fs::read_to_string(home.path().join(path)).expect("the kept copy is there")
+}
+
+// ---------------------------------------------------- `#753`: a claimed port
+
+/// **`serve`, `ready` and `run` each reach the port this Job's own span
+/// claimed — in the step's own run, and again on a press against the same
+/// still-open claim.** `a_fleet_showing_a_claimed_port` holds the Job at
+/// `awaiting_review` rather than letting it finish, so the span is still held
+/// — `crate::dispatch::record` releases it only once the Job goes terminal —
+/// which is the "Watch for" this issue names: a press against a Job whose
+/// claim is already gone is a different case, not exercised here.
+#[tokio::test]
+async fn a_harness_naming_a_declared_port_reaches_the_claim_on_the_step_and_on_a_press() {
+    let home = TempDir::new();
+    let fleet = a_fleet_showing_a_claimed_port(&home);
+
+    let job = fleet
+        .propose(a_proposal_for(
+            "show the panel on its own port",
+            "fixture-shown-port",
+        ))
+        .await
+        .expect("a Job at the approval gate");
+    worktree_directory(&home, &job);
+    let tree = worktree_of(&home, &job);
+    std::fs::create_dir_all(tree.join("e2e")).expect("the spec's directory");
+    std::fs::create_dir_all(tree.join("shots")).expect("where the harness writes");
+    std::fs::write(tree.join(SPEC), b"the Drone's spec").expect("the spec");
+    dispatched(&fleet, job.id()).await.expect("released to run");
+    submitted_by_the_one(&fleet, shown(SPEC))
+        .await
+        .expect("the Drone names its spec");
+    let turned = fleet.turn().await.expect("the gate ran");
+    assert!(
+        matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })),
+        "a human_always gate holds rather than finishing the Job: {:?}",
+        turned.ruled()
+    );
+    let job = fleet.load(job.id()).await.expect("the Job reads");
+    assert_eq!(job.status(), JobStatus::AwaitingReview, "the span is kept");
+
+    let claim = fleet
+        .store()
+        .lock()
+        .await
+        .port_span_for_job(job.id())
+        .expect("the read succeeds")
+        .expect("the Job's span is still claimed");
+    let claimed = format!("{} {}", claim.base, claim.base);
+
+    let own = fleet
+        .store()
+        .lock()
+        .await
+        .step_frames_every_attempt(job.id())
+        .expect("reads");
+    let mut own_names: Vec<_> = own.iter().map(|held| held.frame.name.clone()).collect();
+    own_names.sort();
+    assert_eq!(
+        own_names,
+        vec!["run.txt".to_string(), "serve.txt".to_string()],
+        "`evidence.serve` and `evidence.run` both wrote into `shots`"
+    );
+    for held in &own {
+        assert_eq!(
+            read(&home, &held.frame.path).trim(),
+            claimed,
+            "`{}` saw `${{port.storybook}}` and `$ARMADA_PORT_STORYBOOK` resolved to the claim",
+            held.frame.name
+        );
+    }
+
+    // The press, against the very claim the step's own run just proved.
+    let pressed = Arc::clone(&fleet)
+        .show_again(job.id())
+        .await
+        .expect("the press ran");
+    let set = pressed.set.expect("the harness captured a frame");
+    assert_eq!(pressed.nothing, None);
+    let mut pressed_names: Vec<_> = set.frames.iter().map(|frame| frame.name.clone()).collect();
+    pressed_names.sort();
+    assert_eq!(
+        pressed_names,
+        vec!["run.txt".to_string(), "serve.txt".to_string()],
+        "a press reruns `evidence.serve` and `evidence.run` exactly as the step did"
+    );
+    for frame in &set.frames {
+        assert_eq!(
+            read(&home, &frame.path).trim(),
+            claimed,
+            "a press resolves against the same claim the step's own run did: `{}`",
+            frame.name
+        );
+    }
 }
 
 // ------------------------------------------------------------ the press

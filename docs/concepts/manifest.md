@@ -299,13 +299,15 @@ evidence:
 
 | Field | What it is |
 | --- | --- |
-| `serve` | Starts the thing being shown. Long-running: held for the run, ended after it. It names its own port — Armada assigns none. Optional, and goes with `ready` |
+| `serve` | Starts the thing being shown. Long-running: held for the run, ended after it. May reach a `ports:` declaration through `${port.NAME}`. Optional, and goes with `ready` |
 | `ready` | Exits zero once `serve` is up. Optional, paired with `serve` — one without the other is refused — and there is no sleep to fall back on |
 | `run` | Runs one spec. `{}` is where the spec's path goes, and a template without it is refused. Required |
 | `frames` | Where the harness writes, relative to the repo root. Fleet reads it after the run and keeps what it finds. Required |
 | `never` | Paths a spec must never visit. Optional, and Armada does not enforce it |
 
 **Command lines and a directory, and not one of them is Armada's.** Nothing in Fleet knows what a browser is or which framework wrote the frames, the same way nothing in the Checks runner knows cargo from pnpm. Reaching a state is what an end-to-end test already does, so the repository's existing harness is the mechanism and Armada gains no capture stack of its own. A repository needing a pipeline writes a script and names the script — there is no shell, so `run` cannot pipe or chain.
+
+`${port.NAME}` resolves in `serve`, `ready` and the substituted `run` from the Job's own claim, exactly as it does for a Command — see Ports, below. `ARMADA_PORT_<NAME>` reaches the same three as an environment variable, which is the only channel the Drone's own spec has to a port it did not read off its own command line.
 
 **`ready` is a command and not a duration, where it is declared.** A number would be a guess against a machine somebody else is using, and what it produces is a frame of a blank page that looks exactly like a frame of a broken one.
 

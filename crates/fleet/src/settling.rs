@@ -214,7 +214,9 @@ where
         // so the harness runs here rather than after a ruling that may hand the
         // step back. It costs the turn what a Check already costs it; nothing
         // else about the ruling changes, and a harness that would not run is
-        // said in the Job's log rather than folded into a verdict.
+        // said in the Job's log rather than folded into a verdict. `showed`
+        // resolves its own `${port.NAME}` claim from `job`, the same claim
+        // `ports` and `port_env` below resolve the gate's Checks against.
         if let Some(why) = self
             .showed(
                 &job_id,

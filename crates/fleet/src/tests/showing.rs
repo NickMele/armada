@@ -9,6 +9,7 @@
 //! Armada grows no capture stack, so a harness that serves with `sleep` and
 //! captures with `cp` exercises exactly the seam a Playwright one does.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::Duration;
 
@@ -313,6 +314,8 @@ evidence:
         Side::Branch,
         ComingUp::of(Duration::from_secs(5)),
         Duration::from_secs(30),
+        &BTreeMap::new(),
+        &[],
     )
     .await;
 
@@ -328,6 +331,107 @@ evidence:
         frames[1].bytes,
         "e2e/home.spec.ts".len() as u64,
         "the spec reached the command, so the substitution happened"
+    );
+}
+
+/// **`#753`: `serve`, `ready` and the substituted `run` each carry
+/// `${port.NAME}`, resolved against the claim before any of the three
+/// spawns** — the same substitution `crate::ports::resolve_ports` already
+/// gives every Check and Command. `env` rides beside it on all three, for
+/// `evidence.run`'s reason: it is what launches the Drone's own spec, and
+/// that spec is not itself substituted, so `ARMADA_PORT_<NAME>` is the only
+/// channel it has to a port it did not hardcode.
+#[tokio::test]
+async fn a_harness_naming_a_declared_port_resolves_it_in_serve_ready_and_run() {
+    let dir = TempDir::new();
+    let worktree = dir.path().join("worktree");
+    std::fs::create_dir_all(worktree.join("shots")).expect("the worktree");
+
+    let declared = harness(
+        r#"
+version: 1
+id: armada
+evidence:
+  serve: >-
+    /bin/sh -c "echo ${port.storybook} $ARMADA_PORT_STORYBOOK > shots/serve.txt; sleep 30"
+  ready: >-
+    /bin/sh -c "test -s shots/serve.txt"
+  run: >-
+    /bin/sh -c "echo ${port.storybook} $ARMADA_PORT_STORYBOOK > shots/run.txt" {}
+  frames: shots
+"#,
+    );
+    let mut ports = BTreeMap::new();
+    ports.insert("storybook".to_string(), 41_777u16);
+    let env = vec![("ARMADA_PORT_STORYBOOK".to_string(), "41777".to_string())];
+
+    let shown = show(
+        &declared,
+        "e2e/home.spec.ts",
+        Aimed::at(&worktree),
+        Side::Branch,
+        ComingUp::of(Duration::from_secs(5)),
+        Duration::from_secs(30),
+        &ports,
+        &env,
+    )
+    .await;
+
+    let Shown::Frames(frames) = shown else {
+        panic!("`serve` and `run` both wrote into `shots`: {shown:?}");
+    };
+    assert_eq!(
+        frames.iter().map(|at| at.name.as_str()).collect::<Vec<_>>(),
+        ["run.txt", "serve.txt"],
+    );
+    for name in ["run.txt", "serve.txt"] {
+        assert_eq!(
+            std::fs::read_to_string(worktree.join("shots").join(name))
+                .expect("the file")
+                .trim(),
+            "41777 41777",
+            "`{name}` saw the claim on both channels, not the placeholder"
+        );
+    }
+}
+
+/// **A name the Manifest does not declare is left exactly as written** — the
+/// same reading `crate::ports::resolve_ports` already gives a Check or a
+/// Command, per `an_unresolved_port_reference_is_left_alone` in
+/// `crates/fleet/src/tests/ports.rs`. A harness gets no second rule: the
+/// placeholder reaches the shell unresolved, and what a person reads is the
+/// ordinary failure of a command that does not parse — not a refusal invented
+/// here.
+#[tokio::test]
+async fn a_port_the_manifest_does_not_declare_is_left_unresolved_and_fails_ordinarily() {
+    let dir = TempDir::new();
+    let worktree = dir.path().join("worktree");
+    std::fs::create_dir_all(worktree.join("shots")).expect("the worktree");
+
+    let shown = show(
+        &harness(
+            r#"
+version: 1
+id: armada
+evidence:
+  run: >-
+    /bin/sh -c "echo ${port.unknown}" {}
+  frames: shots
+"#,
+        ),
+        "e2e/home.spec.ts",
+        Aimed::at(&worktree),
+        Side::Branch,
+        ComingUp::of(Duration::from_secs(5)),
+        Duration::from_secs(30),
+        &BTreeMap::new(),
+        &[],
+    )
+    .await;
+
+    assert!(
+        matches!(shown, Shown::NotShown(NotShown::SpecFailed(_))),
+        "the placeholder reached the shell unresolved and it failed on its own syntax: {shown:?}"
     );
 }
 
@@ -364,6 +468,8 @@ evidence:
         Side::Branch,
         ComingUp::of(Duration::from_secs(5)),
         Duration::from_secs(30),
+        &BTreeMap::new(),
+        &[],
     )
     .await;
 
@@ -409,6 +515,8 @@ evidence:
         Side::Branch,
         ComingUp::of(Duration::from_secs(5)),
         Duration::from_secs(30),
+        &BTreeMap::new(),
+        &[],
     )
     .await;
 
@@ -441,6 +549,8 @@ evidence:
         Side::Branch,
         ComingUp::of(Duration::from_secs(5)),
         Duration::from_secs(30),
+        &BTreeMap::new(),
+        &[],
     )
     .await;
 
@@ -476,6 +586,8 @@ evidence:
         Side::Branch,
         ComingUp::of(Duration::from_secs(2)),
         Duration::from_secs(30),
+        &BTreeMap::new(),
+        &[],
     )
     .await;
 
