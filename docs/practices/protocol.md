@@ -457,11 +457,14 @@ Fleet keeps producing tool-call and status events at Drone speed. Bridge
 drains them at UI-thread speed. There's no mechanism that notices the gap and
 does anything about it — the buffer absorbs the difference until it doesn't.
 
-The fix direction, not yet built: a **bounded broadcast channel with
-drop-oldest**, so a slow consumer loses old events instead of causing Fleet's
-memory to grow without limit. Bounded-and-lossy only works if the client knows
-it happened, so the drop has to come with a message: *you missed N events,
-resync.* The reason this matters as a protocol concern and not just a
+The fix is built and the risk is still unmeasured, which is the state to read
+this in. `crates/api/src/stream.rs` publishes through a **bounded broadcast
+with drop-oldest**, so a slow consumer loses old events instead of growing
+Fleet's memory without limit, and a drop comes with the message the paragraph
+below asks for: *you missed N events, resync*. What nobody has is a number —
+how many events a real fleet produces against a real minimised Bridge, and
+whether `BACKLOG` absorbs it. The reason this matters as a protocol concern
+and not just a
 performance one is what happens without it — a reconnecting Bridge that
 silently believes its event log is complete will render a Job Board that's
 quietly wrong, and "quietly wrong" is worse here than "visibly stale," because
@@ -470,6 +473,13 @@ nothing on screen tells the person to distrust it.
 If your change touches the event stream, say explicitly whether it makes this
 better (bounds something, adds a resync signal) or worse (adds another
 unbounded queue, another place assuming delivery is complete).
+
+**`get_events_since` made it better, and is the shape to copy.** An agent
+cannot hold a socket, so it polls, and what it polls is a second bounded
+window beside the channel: positions and kind names rather than events,
+`TALLIED` of them, and a caller whose cursor fell off the back is told how many
+it cannot be told about. Nothing is queued per client and nothing is retained
+for one that never comes back.
 
 ## The second socket: one Job's turns
 
@@ -676,6 +686,23 @@ for either would claim Bridge can call it. It also means the rule below does
 not cover it: the address is written into a Drone's `mcp.json` from `api`'s own
 constant, and that shared value is what stands between a typo and a Drone that
 can never report.
+
+**The rule that reads `operations.toml` runs both ways now.** One direction
+fails on a route serving a name the inventory does not have; the other fails on
+a name the inventory has and nothing serves. The second carries an allowance,
+and every entry in it states a reason the gate prints — a list of exemptions
+with no sentence each is the silent default the column was given reasons to
+remove.
+
+**A second route on the listener is not on this seam either, and it is this
+seam spoken differently.** `/agent/mcp` is the agent's door: an MCP client
+reaches it, and every tool on it is one row of `operations.toml` served at the
+route `SERVED` already names, so there is no second implementation to drift.
+What it adds over the HTTP surface is a cap — a tool answer over 64 KiB is cut,
+says so, and names the route that serves it whole — and a scope: every answer
+is inside one Manifest, and the handshake says which. It answers 405 to `GET`
+and `DELETE` for `/mcp`'s reason, so it adds nothing to the risk above. Who may
+open it is a separate question from what it serves.
 
 **The route table is hand-written, and that's an accepted cost, not an
 oversight.** A typo in a route path is a runtime 404/500, not a compile error,
