@@ -43,6 +43,7 @@ mod basing;
 mod commit;
 mod delivery;
 mod error;
+mod git_guard;
 mod harness;
 mod inline_comments;
 mod issue_lookup;
