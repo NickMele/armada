@@ -377,10 +377,9 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
 /// the gate runs, so what a person is shown cannot drift from what gates the
 /// step.
 ///
-/// **`ran` and `judged` are every attempt's rows, stamped with the attempt**,
-/// which is what tells a retried step's Checks and Judge answers apart by run
-/// rather than merging them into one. `flagged` stays latest-only: the run tree
-/// draws no Flagged fact.
+/// **`ran`, `judged` and `flagged` are every attempt's rows, stamped with the
+/// attempt**, which is what tells a retried step's Checks, Judge answers and
+/// gaming flags apart by run rather than merging them into one.
 ///
 /// `declares` is absent only where the frozen workflow does not declare the
 /// step, which this crate cannot produce — kept because "Fleet cannot say" and
@@ -396,7 +395,7 @@ pub(crate) fn step_facts(
     job: &Job,
     ran: Vec<Attempted<Vec<core_model::StepCheck>>>,
     judged: Vec<Attempted<Vec<core_model::Judgment>>>,
-    flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
+    flagged: Vec<Attempted<Vec<core_model::GamingFlag>>>,
     frames: Vec<store::KeptFrame>,
     moves: &[StepMove],
 ) -> Vec<StepFacts> {
@@ -445,9 +444,14 @@ pub(crate) fn step_facts(
                     .collect(),
                 flagged: flagged
                     .iter()
-                    .find(|(at, _)| at == step.step_id())
-                    .map(|(_, found)| found.iter().map(Flagged::from).collect())
-                    .unwrap_or_default(),
+                    .filter(|group| &group.step_id == step.step_id())
+                    .flat_map(|group| {
+                        group
+                            .record
+                            .iter()
+                            .map(|flag| Flagged::of(group.attempt.number(), flag))
+                    })
+                    .collect(),
                 // **The one fact here read off the filesystem, and a checked one.**
                 // Nothing writes the kept copy's path down: the name is a function
                 // of the step, the run and the target the frozen workflow declares,

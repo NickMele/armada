@@ -379,6 +379,10 @@ async fn a_gaming_finding_names_its_patterns_on_the_detail_view() {
         "the finding says which pattern, not only that there was one"
     );
     assert_eq!(detail.steps[0].flagged[0].pattern, "check_config_edited");
+    assert_eq!(
+        detail.steps[0].flagged[0].attempt, 1,
+        "a flag names the run that raised it, so an earlier run keeps its own"
+    );
     assert!(
         detail.steps[0].flagged[0].cited.contains("jest.config.js"),
         "an uncited flag is unactionable: {:?}",

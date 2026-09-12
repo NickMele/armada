@@ -176,6 +176,11 @@ export type KeptDeliverable = {
  * what it rests on.
  */
 export type Flagged = {
+  /**
+   * Which run of the step raised this flag, counted from one. Joins to
+   * `attempts`. Since 13.0, when `flagged` began holding every attempt's.
+   */
+  attempt: number;
   /** The pattern, spelled as `flag_if` spells it. */
   pattern: string;
   /** The file, line or assertion the flag is about. An uncited flag is unactionable. */

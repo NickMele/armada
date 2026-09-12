@@ -123,6 +123,7 @@ function regressionRefusedStep(): StepDetail {
     judged: [...C1_MEMBERS, ...C2_MEMBERS],
     flagged: [
       {
+        attempt: 1,
         pattern: "assertion_weakened",
         cited: "packages/settings/test/useColumnSelectors.test.ts:41",
         at: { file: "packages/settings/test/useColumnSelectors.test.ts", line: 41 },

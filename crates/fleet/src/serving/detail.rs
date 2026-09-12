@@ -55,8 +55,10 @@ where
             let ran = store
                 .step_checks(job.id())
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            // Every attempt's, for `judged_every_attempt`'s reason below: a
+            // flag that refused an earlier run belongs to that run's record.
             let flagged = store
-                .step_gaming_flags(job.id())
+                .step_gaming_flags_every_attempt(job.id())
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
             // The rows `get_job_events` serves, narrowed to the step moves.
             // **Read on every open, unlike the history**: one entry per run of

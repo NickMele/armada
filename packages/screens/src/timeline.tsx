@@ -195,8 +195,8 @@ export function timelineOf(
  * **The live gate belongs to the live run**: `checking` and `judging` are
  * Fleet's "right now", and an earlier run has no now.
  *
- * **`flagged` is not narrowed, because the wire does not stamp it** — a gaming
- * flag carries no attempt, so it stays whole rather than being guessed at.
+ * **`flagged` narrows with the rest** since protocol 13.0 stamped each flag
+ * with its attempt.
  */
 function asAttempt(
   step: StepDetail,
@@ -215,6 +215,7 @@ function asAttempt(
     state: attempt.outcome,
     check_runs: only(step.check_runs),
     judged: only(step.judged),
+    flagged: only(step.flagged),
     verdicts: only(step.verdicts),
     // Stamped where the next run's start is what ended this one, so a reading
     // downstream can ask whether the run it is drawing is over.

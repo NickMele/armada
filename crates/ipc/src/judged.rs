@@ -254,6 +254,11 @@ pub struct KeptDeliverable {
 /// authority for a list that has none.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Flagged {
+    /// Which run of the step raised this flag, counted from one. Since 13.0,
+    /// for [`Judged::attempt`]'s reason: [`StepDetail::flagged`](crate::StepDetail::flagged)
+    /// holds every attempt's flags, and a flag that refused an earlier run is
+    /// that run's record rather than the step's.
+    pub attempt: u32,
     /// The pattern, spelled as `flag_if` spells it.
     pub pattern: String,
     /// The file, line or assertion the flag is about, as the check worded it.
@@ -318,9 +323,14 @@ pub struct CitedAt {
     pub line: Option<u32>,
 }
 
-impl From<&core_model::GamingFlag> for Flagged {
-    fn from(flag: &core_model::GamingFlag) -> Flagged {
+impl Flagged {
+    /// The wire shape of one flag, stamped with the run it belongs to.
+    ///
+    /// A named function rather than a `From` impl, for [`Judged::of`]'s reason:
+    /// `core_model::GamingFlag` carries no attempt of its own.
+    pub fn of(attempt: u32, flag: &core_model::GamingFlag) -> Flagged {
         Flagged {
+            attempt,
             pattern: flag.pattern.as_wire().to_string(),
             cited: flag.cited.clone(),
             at: flag.at.as_ref().map(CitedAt::from),
