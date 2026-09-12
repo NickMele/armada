@@ -192,7 +192,7 @@ export function JobDetail({
   const watching = turnsOf(observed, job.id);
   const noted = logOf(journalled, job.id);
   // The open sheet's own reading of the patch, taken again as the Job writes.
-  useDiffAgain(onReadDiff, job.id, sheet, watching?.rows ?? []);
+  useDiffAgain(onReadDiff, job.id, sheet, watching?.rows ?? [], job.assigned_drone !== undefined);
   const holding = holdingOf(resources, job.id);
   const looked = lookOf(examination, job.id);
   // The finding itself, or none. Read twice — the summary asks whether an
