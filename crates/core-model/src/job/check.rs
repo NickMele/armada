@@ -1,22 +1,17 @@
 //! What one declared Check did, recorded against the step that declared it.
 //!
-//! # Four ways of not passing, not one
-//!
-//! A Check that returns the wrong code, one that hangs, one a signal ended and
-//! one whose command is not installed are four different things to do about it.
+//! **Four ways of not passing, not one.** A wrong exit code, a hang, a signal,
+//! and a command not installed are four different things to do about it.
 //! `verification`'s mechanical tier refuses all four into a pass; folding them
-//! into a single `failed` here would record *that* they failed and lose *which*,
-//! which is the only part a person opening the branch needs.
+//! into a single `failed` would record *that* it failed and lose *which* —
+//! the only part a person opening the branch needs.
 //!
-//! # Passed, skipped and did not run are three things
-//!
+//! **Passed, skipped and did not run are three things.**
 //! [`CheckOutcome::Skipped`] is a Check that declared which paths it covers and
-//! whose step touched none of them. It did not pass — nothing was measured —
-//! and it did not fail, so [`CheckOutcome::passed`] and
-//! [`CheckOutcome::advances`] stop being the same question and each call site
-//! has to say which it meant. A step that advances because every Check was
-//! skipped is a step that verified nothing, and the record has to be able to
-//! say so.
+//! whose step touched none of them — it did not pass (nothing was measured)
+//! and did not fail, so [`CheckOutcome::passed`] and [`CheckOutcome::advances`]
+//! are different questions. A step that advances because every Check was
+//! skipped verified nothing, and the record has to be able to say so.
 
 use alloc::string::String;
 

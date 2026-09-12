@@ -353,22 +353,19 @@ pub struct ResolvedStep {
     /// is right rather than a backfill: no workflow could say it, so no step
     /// did.
     gates_on_every_check: bool,
-    /// Whether entering this step sends the work out: the branch is committed,
-    /// pushed, and opened for review, and the step then holds while a person
-    /// reads what went out.
+    /// Whether entering this step sends the work out: the branch is
+    /// committed, pushed, and opened for review, and the step then holds
+    /// while a person reads what went out.
     ///
     /// **True on at most one step**, which `config` refuses in the file it
     /// parses. False on every step of a workflow that delivers nothing —
-    /// Design Plan, Code Review, Epic and Prototype produce something that is
-    /// read rather than merged, and a Job on one of them finishes with no
-    /// branch pushed.
+    /// Design Plan, Code Review, Epic and Prototype produce something read
+    /// rather than merged.
     ///
-    /// **False on every row frozen before the key existed**, and that is not
-    /// what those Jobs meant. `store::read_workflow` reads the whole step list
-    /// and puts the reading back where it was — the last step delivered, which
-    /// is what every Job in flight was created under — so the backfill is a
-    /// fact about the workflow rather than about one step, and lives where the
-    /// whole workflow is in hand.
+    /// **False on every row frozen before the key existed** is not a
+    /// backfill: `store::read_workflow` reads the whole step list and puts
+    /// the reading back where it was — the last step delivered, what every
+    /// Job in flight was created under.
     delivers: bool,
     /// How many passes over this step a loop may make before the cap is spent.
     /// **Zero on a step no verdict routes back to**, which is every step of
@@ -636,20 +633,18 @@ impl ResolvedStep {
     /// Whether a failure on the run `spent` may be handed back for another one.
     ///
     /// **The arithmetic is here and nowhere else.** `retry_limit` counts
-    /// hand-backs, not attempts, so a step with a limit of two is worked three
-    /// times: the first run plus two. A caller comparing the two itself would
-    /// be a second place the off-by-one lives.
+    /// hand-backs, not attempts, so a step with a limit of two is worked
+    /// three times: the first run plus two. A caller comparing the two
+    /// itself would be a second place the off-by-one lives.
     ///
-    /// [`Spent`] is the parameter rather than a bare number because there is no
-    /// constructor that invents one — it is derived from the step's own log —
+    /// [`Spent`] is the parameter rather than a bare number because there is
+    /// no constructor that invents one — derived from the step's own log —
     /// so a caller cannot hand this a run count that disagrees with the
-    /// history. **And it is `Spent` rather than [`Attempt`], which is the
-    /// defect #263 closes**: an `Attempt` climbs across a loop return, so a
-    /// looping step arrived here with an earlier pass's runs charged against a
-    /// budget nothing had failed against. `retry_limit`'s registry row is
-    /// explicit that it resets on a return, and the two types are what make
-    /// asking with the wrong one a compile error rather than a Job that stops
-    /// on its second honest draft.
+    /// history. **It is `Spent` rather than [`Attempt`], the defect #263
+    /// closes**: an `Attempt` climbs across a loop return, so a looping step
+    /// arrived here with an earlier pass's runs charged against a budget
+    /// nothing had failed against. `retry_limit` resets on a return, so the
+    /// two types make asking with the wrong one a compile error.
     pub fn may_hand_back(&self, spent: Spent) -> bool {
         spent.number() <= self.retry_limit
     }

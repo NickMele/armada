@@ -1,19 +1,17 @@
 //! A command a Drone reached for and was not given, and what a person answers.
 //!
-//! # Two paths, one set of answers
+//! **Two paths, one set of answers.** A Job set to [`WhenBlocked::AskMe`]
+//! holds its Drone inside the permission call and a person answers while
+//! it waits. A Job at [`WhenBlocked::RefuseAndHold`] refuses the call at
+//! once, stops at `blocked_by_policy`, and a person answers the
+//! [`Refusal`](crate::Refusal) row instead. `answer_command` takes both,
+//! and the call id says which.
 //!
-//! A Job set to [`WhenBlocked::AskMe`] holds its Drone inside the permission
-//! call and a person answers while it waits. A Job at
-//! [`WhenBlocked::RefuseAndHold`] refuses the call at once, stops at
-//! `blocked_by_policy`, and a person answers the [`Refusal`](crate::Refusal)
-//! row instead. `answer_command` takes both, and the call id says which.
-//!
-//! # Neither enum wraps a `core-model` value
-//!
-//! Unlike [`crate::enums`], and for [`Settled`](crate::Settled)'s reason: these
-//! are this seam's own closed sets with no registry behind them, so the
-//! spelling is declared here once. Bridge matches on both to choose which
-//! controls to draw, so a new value in either is a major bump —
+//! **Neither enum wraps a `core-model` value.** Unlike [`crate::enums`],
+//! and for [`Settled`](crate::Settled)'s reason: these are this seam's
+//! own closed sets with no registry behind them, so the spelling is
+//! declared here once. Bridge matches on both to choose which controls to
+//! draw, so a new value in either is a major bump —
 //! [`WhenBlocked::AllowAll`] was one, and is why the protocol is at 11.
 
 use serde::{Deserialize, Serialize};

@@ -47,18 +47,14 @@ pub enum EscalationTrigger {
     /// the Job stopped *for* is the ending's own classification —
     /// [`Stalled`](Self::Stalled), [`Interrupted`](Self::Interrupted),
     /// [`Silent`](Self::Silent), [`BlockedByPolicy`](Self::BlockedByPolicy) —
-    /// and stays on the Job's transition. This is what the step carries, so
-    /// that `fleet::resume` has a `stopped` row to restart and a person keeps
-    /// every step that already advanced.
+    /// and stays on the Job's transition, so `fleet::resume` has a `stopped`
+    /// row to restart and a person keeps every step that already advanced.
     ///
-    /// **Not [`Interrupted`](Self::Interrupted), and the two must not merge.**
-    /// That one is a process that was there and is not, found by Fleet, and it
-    /// is Job-level because nobody chose it. This is a person taking the
-    /// process away on purpose, from a step they mean to run again — which is
-    /// what makes it step-level.
-    ///
-    /// Nothing weighed the work, so there is no verdict to disagree with and
-    /// [`StepLevelTrigger::overrulable`] is false.
+    /// **Not [`Interrupted`](Self::Interrupted).** That one is a process that
+    /// was there and is not, found by Fleet, and is Job-level because nobody
+    /// chose it; this is a person taking the process away on purpose, from a
+    /// step they mean to run again, which makes it step-level. Nothing
+    /// weighed the work, so [`StepLevelTrigger::overrulable`] is false.
     DroneKilled,
     /// Mechanically passed, semantically flagged as likely gamed.
     /// Resubmission under the same instructions would reproduce the gaming, so
@@ -178,20 +174,16 @@ pub enum EscalationTrigger {
     /// The Drone's own run ended with nothing submitted, so Fleet took the
     /// process away and the step stopped where it stood.
     ///
-    /// **[`DroneKilled`](Self::DroneKilled)'s sibling**, and the pair is why
-    /// this exists. That one is a person taking the process away; this is Fleet
-    /// taking it away on the Drone's own word that its run is over. Both name a
-    /// step and never a Job, and what the Job stopped *for* —
-    /// [`Stalled`](Self::Stalled), [`Silent`](Self::Silent),
-    /// [`BlockedByPolicy`](Self::BlockedByPolicy) — stays on the Job's
-    /// transition, so one Job carries both readings.
+    /// **[`DroneKilled`](Self::DroneKilled)'s sibling.** That one is a person
+    /// taking the process away; this is Fleet taking it away on the Drone's
+    /// own word that its run is over. Both name a step and never a Job, and
+    /// what the Job stopped *for* stays on the Job's transition, so one Job
+    /// carries both readings.
     ///
-    /// **Not [`Interrupted`](Self::Interrupted)**, which is the other half of
-    /// that argument: there a process was there and is not, found after the
-    /// fact. Here the process is still there when Fleet acts, which is what
-    /// makes reaping it a decision rather than a discovery.
-    ///
-    /// Nothing weighed the work, so there is no verdict to disagree with and
+    /// **Not [`Interrupted`](Self::Interrupted).** There a process was there
+    /// and is not, found after the fact; here the process is still there
+    /// when Fleet acts, which makes reaping it a decision rather than a
+    /// discovery. Nothing weighed the work, so
     /// [`StepLevelTrigger::overrulable`] is false.
     RunEnded,
     /// A Drone asked for a path outside what the Job says it writes, and the
@@ -497,19 +489,18 @@ impl EscalationTrigger {
     /// The edge this trigger fires where it has one of its own, as
     /// `from -> to`.
     ///
-    /// A trigger with none fires `running -> escalated`, which that edge's own
-    /// registry row names as the default. This returns `None` for those rather
-    /// than filling the default in, because the edge table is where the default
-    /// lives and two copies of it would be one too many.
+    /// A trigger with none fires `running -> escalated`, which that edge's
+    /// own registry row names as the default. This returns `None` for those
+    /// rather than filling the default in, since the edge table is where the
+    /// default lives.
     ///
     /// **A declared edge is a second one, never the only one.** The default
-    /// admits every trigger — `the default escalation edge accepts every
-    /// trigger` in this module's tests is that claim — so what a declared edge
-    /// adds is a `from` no other trigger may arrive at `escalated` from. Read
-    /// as *the* edge it says `interrupted` can only happen at a human gate,
-    /// which is neither what the registry means nor what Fleet does: both
-    /// sites that raise it raise it from `running`, and the gate edge is there
-    /// for the reconciliation that has not been built.
+    /// admits every trigger, so what a declared edge adds is a `from` no
+    /// other trigger may arrive at `escalated` from. Read as *the* edge it
+    /// says `interrupted` can only happen at a human gate, which is neither
+    /// what the registry means nor what Fleet does — both sites that raise
+    /// it raise it from `running`, and the gate edge is for reconciliation
+    /// not yet built.
     pub fn declared_edge(&self) -> Option<(JobStatus, JobStatus)> {
         match self {
             EscalationTrigger::DependencyFailed => Some((JobStatus::Queued, JobStatus::Escalated)),

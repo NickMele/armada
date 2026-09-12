@@ -1,22 +1,17 @@
 //! The asking tool: what a Drone may ask a person, and what it will take back.
 //!
-//! # Its own module, and the fifth tool costs about six lines
+//! **Its own module, and the fifth tool costs about six lines.**
+//! [`tools`](mod@super::tools) holds the three tools a Drone has always had
+//! and the helpers every tool shares — [`closed`](super::tools::closed),
+//! [`text`](super::tools::text) and the field-list prose. The dispatch
+//! tool made that split and asked the next one to keep it. What stays
+//! next door is anything two tools share; nothing here is shared.
 //!
-//! [`tools`](mod@super::tools) holds the three tools a Drone has always had and
-//! the helpers every tool shares — [`closed`](super::tools::closed),
-//! [`text`](super::tools::text) and the field-list prose. The dispatch tool made
-//! that split and asked the next one to keep it, so this is the ask half doing
-//! that: a tool is a name, a field list, an argument type, a parser and a
-//! schema, and all five of one tool live together.
-//!
-//! What stays next door is anything two tools share. Nothing here is shared.
-//!
-//! # The one tool whose answer is not in the reply
-//!
-//! Every other tool on this seam is answered from something Fleet already
-//! holds. This one is answered when a person picks an option, which may be hours
-//! later and arrives as a turn injected into the Drone's session rather than as
-//! this call's return value. `crates/fleet/src/questioning.rs` is where that
+//! **The one tool whose answer is not in the reply.** Every other tool on
+//! this seam is answered from something Fleet already holds. This one is
+//! answered when a person picks an option, which may be hours later and
+//! arrives as a turn injected into the Drone's session rather than as this
+//! call's return value. `crates/fleet/src/questioning.rs` is where that
 //! happens and why it does not block.
 
 use serde_json::{json, Map, Value};
