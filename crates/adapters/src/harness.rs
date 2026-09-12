@@ -108,6 +108,20 @@ const TOOL_WAIT: &str = "MCP_TOOL_TIMEOUT";
 /// than passing a string it wrote down.
 const ON_PATH: &str = "claude";
 
+/// The verbs [`Grant::ReadTheRepository`] renders, none of which can change a
+/// repository. `branch --list` carries its flag because `branch` alone can
+/// also create one.
+const READ_ONLY_GIT_VERBS: &[&str] = &[
+    "status",
+    "diff",
+    "log",
+    "show",
+    "rev-parse",
+    "blame",
+    "branch --list",
+    "describe",
+];
+
 /// The models a Job may name, in the order a picker offers them.
 ///
 /// **`crates/config/settings.toml` names none.** Two rows bear on this —
@@ -274,6 +288,15 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
                 allowed.push("Glob".into());
                 allowed.push("Grep".into());
             }
+            // The verbs that cannot change a repository, each its own rule
+            // rather than a bare `git` prefix — a wide `Bash(git:*)` would
+            // allow every verb this grant deliberately does not, push
+            // included.
+            Grant::ReadTheRepository => {
+                for verb in READ_ONLY_GIT_VERBS {
+                    allowed.push(format!("Bash(git {verb}:*)"));
+                }
+            }
             Grant::ChangeTheWorktree => {
                 allowed.push("Edit".into());
                 allowed.push("Write".into());
@@ -331,13 +354,33 @@ fn command_rule(run: &str) -> Result<String, HarnessRefused> {
 /// credential and no agent socket, so a push that reached the network would
 /// have nothing to authenticate with. Two mechanisms, because the second one
 /// fails at the point of use where this one fails at the point of declaration.
+///
+/// **Matched on the git subcommand, never on the word.** `git stash push -u -m
+/// "…"` names `stash`, not `push`, and a refusal that fired on the word alone
+/// would deny it the same way it would deny `cargo test --features push`. A
+/// command is split on the operators a shell chains commands with first, so a
+/// push after `&&` on a segment whose own program is not `git` is still found.
 fn would_push(run: &str) -> bool {
-    let mut words = run.split_whitespace();
+    run.split(|c| matches!(c, '&' | '|' | ';'))
+        .any(is_a_git_push)
+}
+
+/// One shell segment: whether its git invocation, if it has one, is `push`.
+fn is_a_git_push(segment: &str) -> bool {
+    let mut words = segment.split_whitespace();
     let Some(program) = words.next() else {
         return false;
     };
     let program = program.rsplit('/').next().unwrap_or(program);
-    program == "git" && words.any(|word| word == "push")
+    if program != "git" {
+        return false;
+    }
+    // The subcommand is the first word that is not a flag of git's own —
+    // `--force`, `-u` and the like sit before or after it, never in place of
+    // it, so the first non-flag word after the program is always the verb.
+    words
+        .find(|word| !word.starts_with('-'))
+        .is_some_and(|subcommand| subcommand == "push")
 }
 
 /// Why a Drone could not be rendered.

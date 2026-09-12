@@ -179,6 +179,18 @@ pub const PERMISSION_WAIT: Duration = Duration::from_secs(5 * 60);
 pub enum Grant {
     /// Read any file inside the worktree.
     ReadTheWorktree,
+    /// Run the git verbs that cannot change a repository: `status`, `diff`,
+    /// `log`, `show`, `rev-parse`, `blame`, `branch --list`, `describe`.
+    ///
+    /// **In every toolbelt, granted the same way as [`Grant::ReadTheWorktree`]
+    /// rather than read off anyone's own settings file.** `git diff` is a read
+    /// a person asks the repository without a second thought; a Drone denied
+    /// it goes to the permission tool for a question the Job's own setting may
+    /// hold rather than answer, and is told to stop asking the repository
+    /// questions a person would ask. Nothing here can move a branch, write a
+    /// ref or reach a remote — the push refusal in `adapters` is unrelated and
+    /// still the only place a push is spoken at all.
+    ReadTheRepository,
     /// Create and change files inside the worktree.
     ChangeTheWorktree,
     /// Run one command the Manifest declared, spelled as its `run` string.

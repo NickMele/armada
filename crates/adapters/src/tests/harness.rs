@@ -431,6 +431,72 @@ fn a_command_a_person_allowed_renders_as_a_declared_one_and_a_push_is_still_refu
     );
 }
 
+/// The Done-when: each read-only verb is on the allowlist, and none of them
+/// is a rendering a Drone would be denied on silently.
+#[test]
+fn the_read_only_git_grant_renders_every_non_destructive_verb() {
+    let args = rendered(Toolbelt::evidence_only().and(Grant::ReadTheRepository));
+    let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+    let entries: Vec<&str> = allowed.split(',').collect();
+    for rule in [
+        "Bash(git status:*)",
+        "Bash(git diff:*)",
+        "Bash(git log:*)",
+        "Bash(git show:*)",
+        "Bash(git rev-parse:*)",
+        "Bash(git blame:*)",
+        "Bash(git branch --list:*)",
+        "Bash(git describe:*)",
+    ] {
+        assert!(entries.contains(&rule), "missing `{rule}`: {allowed}");
+    }
+}
+
+/// The grant carries no rule wide enough to cover a push. A `Bash(git:*)`
+/// entry would have, which is why each verb is its own rule.
+#[test]
+fn the_read_only_git_grant_never_renders_a_bare_git_prefix() {
+    let args = rendered(Toolbelt::evidence_only().and(Grant::ReadTheRepository));
+    let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+    assert!(
+        !allowed.split(',').any(|entry| entry == "Bash(git:*)"),
+        "{allowed}"
+    );
+}
+
+/// `git stash push` names `stash`, not `push` — the failure mode measured on
+/// Job `01M28RVVN200232YNHWF8CFFKH`, where the old word-match refused it.
+#[test]
+fn a_stash_push_is_not_a_push() {
+    for run in ["git stash push -u -m \"wip\"", "git stash push"] {
+        let rendered = HeadlessAgent::at("/usr/local/bin/agent").render(&config(
+            Toolbelt::evidence_only().and(Grant::RunADeclaredCommand(String::from(run))),
+        ));
+        assert!(rendered.is_ok(), "`{run}` was refused and should not be");
+    }
+}
+
+/// `git push`, a flagged push, and a push chained after another command are
+/// all still refused once the match is on the subcommand.
+#[test]
+fn a_push_is_still_refused_however_it_is_spelled() {
+    for run in [
+        "git push",
+        "git push --force",
+        "git remote add origin url && git push",
+        "cargo build && git push",
+        "git push ; echo done",
+    ] {
+        let refused = HeadlessAgent::at("/usr/local/bin/agent").render(&config(
+            Toolbelt::evidence_only().and(Grant::RunADeclaredCommand(String::from(run))),
+        ));
+        assert!(
+            matches!(refused, Err(HarnessRefused::CommandWouldPush { .. })),
+            "`{run}` was not refused: {refused:?}"
+        );
+    }
+}
+
 #[test]
 fn a_relative_mcp_path_is_refused_where_it_is_written() {
     // It would resolve against the Drone's own working directory, which is the

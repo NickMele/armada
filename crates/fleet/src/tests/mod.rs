@@ -89,6 +89,7 @@ mod proving;
 mod questioning;
 mod queued;
 mod raising;
+mod read_only_git;
 mod reclaim;
 mod records;
 mod redirect;
