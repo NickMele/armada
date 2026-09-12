@@ -72,3 +72,27 @@ pub struct JudgeAnswered {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 }
+
+/// How this Job meets a Judge criterion that refuses. Beside
+/// [`crate::WhenBlocked`], the same shape for the same reason: a person
+/// already knows this picker from the Job header.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WhenRefused {
+    /// Each criterion decides for itself, off its own declaration. The
+    /// default, and what every Job written before this setting existed reads
+    /// as.
+    PerCriterion,
+    /// Every criterion asks, including one authored `refuse`.
+    AlwaysAsk,
+    /// Every criterion stops the step, including one that defaults to
+    /// asking.
+    AlwaysRefuse,
+}
+
+/// The request half of `set_when_refused`. A live setting on one Job: the
+/// next criterion that refuses reads it, and no Drone is respawned.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetWhenRefused {
+    pub when_refused: WhenRefused,
+}

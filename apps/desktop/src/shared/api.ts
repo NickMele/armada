@@ -27,6 +27,7 @@ import type {
   StagedAttachment,
   StartRun,
   WhenBlocked,
+  WhenRefused,
 } from "@armada/protocol";
 import type { BridgeState, Summons } from "./bridge";
 
@@ -186,6 +187,11 @@ export type BridgeApi = {
    * holding a question open.
    */
   answerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => Promise<Outcome>;
+  /**
+   * Change how one job meets a judge criterion that refuses. **Live**: the
+   * next criterion that refuses reads it, and no drone is respawned.
+   */
+  setWhenRefused: (jobId: string, whenRefused: WhenRefused) => Promise<Outcome>;
   /**
    * Choose the model one job's later steps start on, or `null` for the one its
    * workflow gives each. **Live**: the step running now keeps its model.

@@ -25,7 +25,9 @@ import type {
   RemoveAllowedCommand,
   SetModel,
   SetWhenBlocked,
+  SetWhenRefused,
   WhenBlocked,
+  WhenRefused,
 } from "@armada/protocol";
 import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
 import { ask, COMMAND_MS, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
@@ -515,6 +517,18 @@ export class JobCommands {
     const body: JudgeAnswered = { answer, note };
     return this.act(jobId, this.answering, "already_answering", (port) =>
       ask(port, "POST", route(jobId, "answer_judge"), body),
+    );
+  }
+
+  /**
+   * Change how this job meets a judge criterion that refuses. **Live, and
+   * nothing restarts** — Fleet reads it at the next criterion that refuses,
+   * and the job comes back exactly where it was.
+   */
+  async setWhenRefused(jobId: string, whenRefused: WhenRefused): Promise<Outcome> {
+    const body: SetWhenRefused = { when_refused: whenRefused };
+    return this.act(jobId, this.setting, "already_setting", (port) =>
+      ask(port, "POST", route(jobId, "set_when_refused"), body),
     );
   }
 

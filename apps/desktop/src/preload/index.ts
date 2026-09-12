@@ -17,7 +17,7 @@ import type {
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@armada/protocol";
-import type { CommandAnswer, JudgeAnswer, WhenBlocked } from "@armada/protocol";
+import type { CommandAnswer, JudgeAnswer, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
 // The whole surface the renderer is allowed to see.
@@ -121,6 +121,8 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.setWhenBlocked, jobId, whenBlocked),
   answerJudge: (jobId: string, answer: JudgeAnswer, note?: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.answerJudge, jobId, answer, note),
+  setWhenRefused: (jobId: string, whenRefused: WhenRefused): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.setWhenRefused, jobId, whenRefused),
   // The other two settings on one job. `null` crosses as `null`, which is the
   // clear Fleet asks for by name — not `undefined`, which it would refuse.
   setModel: (jobId: string, model: string | null): Promise<Outcome> =>

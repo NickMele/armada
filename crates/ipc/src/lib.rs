@@ -100,7 +100,7 @@ mod work;
 #[cfg(test)]
 mod tests;
 
-pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion};
+pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, WhenRefused};
 pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};

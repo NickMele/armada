@@ -28,6 +28,25 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::ruling::Ruling;
 
+/// The wire's [`ipc::WhenRefused`], from the domain's. Beside
+/// `crate::permitting::wire_setting` for the same setting's sibling.
+pub fn wire_when_refused(when: core_model::WhenRefused) -> ipc::WhenRefused {
+    match when {
+        core_model::WhenRefused::PerCriterion => ipc::WhenRefused::PerCriterion,
+        core_model::WhenRefused::AlwaysAsk => ipc::WhenRefused::AlwaysAsk,
+        core_model::WhenRefused::AlwaysRefuse => ipc::WhenRefused::AlwaysRefuse,
+    }
+}
+
+/// The domain's, from the wire's.
+pub fn domain_when_refused(when: ipc::WhenRefused) -> core_model::WhenRefused {
+    match when {
+        ipc::WhenRefused::PerCriterion => core_model::WhenRefused::PerCriterion,
+        ipc::WhenRefused::AlwaysAsk => core_model::WhenRefused::AlwaysAsk,
+        ipc::WhenRefused::AlwaysRefuse => core_model::WhenRefused::AlwaysRefuse,
+    }
+}
+
 impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
@@ -193,7 +212,59 @@ where
         }
     }
 
+    /// This Job's setting, for `get_job`. `per_criterion` where the store will
+    /// not say, which is what the next gate would read.
+    pub(crate) async fn when_refused_of(&self, job: &JobId) -> ipc::WhenRefused {
+        let when = self
+            .store()
+            .lock()
+            .await
+            .when_refused(job)
+            .unwrap_or_default();
+        wire_when_refused(when)
+    }
+
+    /// Change how this Job meets a Judge criterion that refuses. **Read by
+    /// the next gate**, so nothing respawns.
+    pub async fn set_when_refused(
+        &self,
+        job: &JobId,
+        when: core_model::WhenRefused,
+    ) -> Result<(), Adrift> {
+        self.store()
+            .lock()
+            .await
+            .set_when_refused(job, when)
+            .map_err(Adrift::Writing)?;
+        if let Some(step) = self
+            .load(job)
+            .await
+            .ok()
+            .and_then(|record| record.current_step().map(|step| step.step_id().clone()))
+        {
+            self.noted_about(
+                job,
+                &step,
+                "a person changed how this job meets a judge refusal",
+                "when_refused",
+                when.as_wire(),
+            );
+        }
+        Ok(())
+    }
+
     fn noted_asking(&self, job: &JobId, step: &StepId, message: &'static str, criterion: &str) {
+        self.noted_about(job, step, message, "criterion_id", criterion);
+    }
+
+    fn noted_about(
+        &self,
+        job: &JobId,
+        step: &StepId,
+        message: &'static str,
+        field: &'static str,
+        value: &str,
+    ) {
         let envelope = Envelope::new(
             self.now(),
             Level::Info,
@@ -203,7 +274,7 @@ where
         )
         .in_job(job.as_ulid().clone())
         .at_step(step.as_str())
-        .with_field("criterion_id", FieldValue::Str(criterion.to_string()));
+        .with_field(field, FieldValue::Str(value.to_string()));
         self.noted_in_the_log(job, &envelope);
     }
 

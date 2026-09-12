@@ -36,7 +36,13 @@ import type {
   StagedAttachment,
   WorktreeReclaimed,
 } from "@armada/protocol";
-import type { CommandAnswer, JudgeAnswer, StartRun, WhenBlocked } from "@armada/protocol";
+import type {
+  CommandAnswer,
+  JudgeAnswer,
+  StartRun,
+  WhenBlocked,
+  WhenRefused,
+} from "@armada/protocol";
 import type { Answered, ConfirmableAct } from "@armada/screens";
 import { proposeRequest } from "./dispatch";
 import type { Proposing } from "./dispatch";
@@ -320,6 +326,16 @@ export function useCommands(sending: Sending) {
     }
   }
 
+  /** Change how the job meets the next judge criterion that refuses. On `setWhenBlocked`'s terms. */
+  async function setWhenRefused(jobId: string, whenRefused: WhenRefused): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.setWhenRefused(jobId, whenRefused));
+    } finally {
+      setActing(null);
+    }
+  }
+
   /**
    * Choose the model the job's next step starts on, or `null` for the
    * workflow's. On `setWhenBlocked`'s terms: nothing to confirm, and under
@@ -526,6 +542,7 @@ export function useCommands(sending: Sending) {
     answer,
     answerCommand,
     answerJudge,
+    setWhenRefused,
     setWhenBlocked,
     setModel,
     removeAllowedCommand,

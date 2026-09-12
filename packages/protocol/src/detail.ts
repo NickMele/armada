@@ -41,7 +41,7 @@ import type {
   CommandInFlight,
   WhenBlocked,
 } from "./commanding";
-import type { JudgeQuestion } from "./asking";
+import type { JudgeQuestion, WhenRefused } from "./asking";
 
 /**
  * One Job, whole. The answer to `GET /jobs/:job_id`. `crates/ipc/src/detail.rs`.
@@ -193,6 +193,14 @@ export type JobDetail = {
    * three buttons, an optional note. `answer_judge` is one press.
    */
   judge_question?: JudgeQuestion;
+  /**
+   * How this job meets a judge criterion that refuses. Since protocol 11.3.
+   *
+   * **Absent is no setting at all rather than the default** — a Fleet older
+   * than 11.3 never sent one. Filled after `JobDetail::of`, like
+   * `when_blocked`.
+   */
+  when_refused?: WhenRefused;
   /**
    * The commands a person allowed for this job, oldest first. Since protocol
    * 11.0.

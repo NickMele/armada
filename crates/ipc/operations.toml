@@ -537,6 +537,19 @@ Refused with a 409 where the Job is not holding a question open.
 `helm_access` is `No`, for `answer_command`'s reason: whether a refusal stands is the owner's to decide.
 """
 
+[operations.set_when_refused]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Whether one job's judge asks a person about a criterion that refuses, per criterion, always asks, or always stops the step"
+notes = """
+A live setting on one job, the same shape `set_when_blocked` uses. The next criterion that refuses reads it, and no drone is respawned for it.
+
+The body is `when_refused`: `per_criterion`, `always_ask` or `always_refuse`. A new job starts at `per_criterion`, which is what a job that chose nothing already reads as -- each criterion decides for itself, off its own declaration. `JobDetail.when_refused` reads it back, and is absent from a Fleet older than 11.3.
+
+`helm_access` is `No`, for `set_when_blocked`'s reason: whether a refusal is asked about or stopped over is the owner's to decide.
+"""
+
 [operations.set_when_blocked]
 kind = "command"
 transport = "HTTP"

@@ -21,8 +21,8 @@ use crate::daemon::Refusal;
 use ipc::{
     AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten,
     JobId, JobSummary, JudgeAnswered, NamedRun, ProposeJob, Redirection, Redispatched,
-    RemarksTakenUp, Report, RestartRequested, RunRecord, RunUnderway, SetWhenBlocked, StartRun,
-    TurnRaise, WorktreeReclaimed,
+    RemarksTakenUp, Report, RestartRequested, RunRecord, RunUnderway, SetWhenBlocked,
+    SetWhenRefused, StartRun, TurnRaise, WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -599,6 +599,15 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         job_id: JobId,
         answered: JudgeAnswered,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `set_when_refused` — how this Job meets a Judge criterion that
+    /// refuses, changed while it runs. **Read by the next gate**, so nothing
+    /// respawns and nothing moves.
+    fn set_when_refused(
+        &self,
+        job_id: JobId,
+        setting: SetWhenRefused,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `set_model` — the model this Job's later steps spawn on, chosen by a

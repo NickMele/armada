@@ -9,16 +9,32 @@
 // another way to open them and not a second way to raise.
 
 import { JOB_LIFECYCLE, JobSettings, JobSettingsButton } from "@armada/components";
-import type { JobDetail as JobWhole, JobSummary, ModelChoices, WhenBlocked } from "@armada/protocol";
+import type {
+  JobDetail as JobWhole,
+  JobSummary,
+  ModelChoices,
+  WhenBlocked,
+  WhenRefused,
+} from "@armada/protocol";
 import { useState, type ReactNode } from "react";
 
-import { WHEN_BLOCKED, WHEN_BLOCKED_LABEL, WHEN_BLOCKED_MEANS } from "./copy";
+import {
+  WHEN_BLOCKED,
+  WHEN_BLOCKED_LABEL,
+  WHEN_BLOCKED_MEANS,
+  WHEN_REFUSED,
+  WHEN_REFUSED_LABEL,
+  WHEN_REFUSED_MEANS,
+} from "./copy";
 import { money } from "./facts";
 import { cap, RaiseCapControl } from "./RaiseCap";
 import { RaiseTurnCapControl } from "./RaiseTurnCap";
 
 /** How a new Job meets a command it was not given. The count reads against it. */
 const STARTS_AT: WhenBlocked = "ask_me";
+
+/** How a new Job meets a judge criterion that refuses. The count reads against it. */
+const REFUSED_STARTS_AT: WhenRefused = "per_criterion";
 
 /**
  * Whether this Job has settings to change.
@@ -44,8 +60,10 @@ export function offersSettings(job: JobSummary, whole: JobWhole | null): boolean
 export function changedOf(whole: JobWhole | null): number {
   if (whole === null) return 0;
   const blocked = whole.when_blocked !== undefined && whole.when_blocked !== STARTS_AT ? 1 : 0;
+  const refused =
+    whole.when_refused !== undefined && whole.when_refused !== REFUSED_STARTS_AT ? 1 : 0;
   const model = whole.model_override === undefined ? 0 : 1;
-  return blocked + model + (whole.allowed_commands?.length ?? 0);
+  return blocked + refused + model + (whole.allowed_commands?.length ?? 0);
 }
 
 /** The header's way in, where the Job has settings. Nothing where it has none. */
@@ -61,6 +79,7 @@ export function settingsButtonOf(
 /** What the panel sends. Each is live, and none restarts anything. */
 export type SettingsCalls = {
   onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void;
+  onSetWhenRefused: (jobId: string, whenRefused: WhenRefused) => void;
   onSetModel: (jobId: string, model: string | null) => void;
   onRemoveAllowedCommand: (jobId: string, run: string) => void;
   onRaiseCap: (jobId: string, costCapMicros: number) => void;
@@ -79,7 +98,7 @@ export type SettingsSheetProps = SettingsCalls & {
 };
 
 /** A row a change was sent from. */
-type Row = "cost" | "turns" | "model" | "blocked" | "allowed";
+type Row = "cost" | "turns" | "model" | "blocked" | "refused" | "allowed";
 
 /** What a row says once its change took, and how to tell that it did. */
 type Told = { row: Row; says: ReactNode; took: (whole: JobWhole) => boolean };
@@ -106,6 +125,7 @@ export function SettingsSheet({
   floor,
   onClose,
   onSetWhenBlocked,
+  onSetWhenRefused,
   onSetModel,
   onRemoveAllowedCommand,
   onRaiseCap,
@@ -115,6 +135,7 @@ export function SettingsSheet({
   const [told, setTold] = useState<Told[]>([]);
 
   const current = whole?.when_blocked;
+  const currentRefused = whole?.when_refused;
   if (whole === null || current === undefined || !offersSettings(job, whole)) return null;
 
   const tell = (row: Row, says: ReactNode, took: (next: JobWhole) => boolean) =>
@@ -162,6 +183,17 @@ export function SettingsSheet({
         }))}
         whenBlocked={current}
         whenBlockedSaid={saidOf("blocked")}
+        judgeChoices={
+          currentRefused === undefined
+            ? undefined
+            : WHEN_REFUSED.map((value) => ({
+                value,
+                label: WHEN_REFUSED_LABEL[value],
+                means: WHEN_REFUSED_MEANS[value],
+              }))
+        }
+        whenRefused={currentRefused}
+        whenRefusedSaid={saidOf("refused")}
         allowed={whole.allowed_commands ?? []}
         allowedSaid={saidOf("allowed")}
         disabled={off}
@@ -169,6 +201,10 @@ export function SettingsSheet({
         onWhenBlocked={(chose) => {
           tell("blocked", BLOCKED_TOOK, (next) => next.when_blocked === chose);
           onSetWhenBlocked(job.id, chose);
+        }}
+        onWhenRefused={(chose) => {
+          tell("refused", REFUSED_TOOK, (next) => next.when_refused === chose);
+          onSetWhenRefused(job.id, chose);
         }}
         onModel={(chose) => {
           tell("model", modelTook(chose), (next) => (next.model_override ?? null) === chose);
@@ -220,6 +256,9 @@ const SENDING = "Something sent to this job is still on its way to Fleet.";
 
 /** A new choice for a command the drone was not given, once it took. */
 const BLOCKED_TOOK = "Changed. Applies the next time it reaches for a command.";
+
+/** A new choice for how a judge refusal is met, once it took. */
+const REFUSED_TOOK = "Changed. Applies the next time a criterion refuses.";
 
 /** An allow taken back, once it was. The choice above is what answers it now. */
 const REMOVED = "Removed. The next time it reaches for that command, the setting above decides.";

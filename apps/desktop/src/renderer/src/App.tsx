@@ -401,8 +401,14 @@ export function App() {
                 onAnswerCommand={(jobId, call, chose) =>
                   void commands.answerCommand(jobId, call, chose)
                 }
+                onAnswerJudge={(jobId, answer, note) =>
+                  void commands.answerJudge(jobId, answer, note)
+                }
                 onSetWhenBlocked={(jobId, whenBlocked) =>
                   void commands.setWhenBlocked(jobId, whenBlocked)
+                }
+                onSetWhenRefused={(jobId, whenRefused) =>
+                  void commands.setWhenRefused(jobId, whenRefused)
                 }
                 onSetModel={(jobId, model) => void commands.setModel(jobId, model)}
                 onRemoveAllowedCommand={(jobId, run) =>

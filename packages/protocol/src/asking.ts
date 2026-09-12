@@ -48,3 +48,22 @@ export type JudgeAnswered = {
   answer: JudgeAnswer;
   note?: string;
 };
+
+/**
+ * How a job meets a judge criterion that refuses. Since protocol 11.3. Beside
+ * `WhenBlocked`, the same shape for the same reason — a person already knows
+ * this picker from the job header.
+ *
+ * `per_criterion` is where every job starts: each criterion decides for
+ * itself, off its own declaration. `always_ask` and `always_refuse` override
+ * every criterion in one direction, including one authored the other way.
+ */
+export type WhenRefused = "per_criterion" | "always_ask" | "always_refuse";
+
+/**
+ * The body of `set_when_refused`. Since protocol 11.3. A live setting on one
+ * job: the next criterion that refuses reads it, and no drone is respawned.
+ */
+export type SetWhenRefused = {
+  when_refused: WhenRefused;
+};

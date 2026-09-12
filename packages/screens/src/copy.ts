@@ -12,7 +12,13 @@
 
 import type { DialogTone } from "@armada/components";
 
-import type { CommandAnswer, Outcome, WhenBlocked, WorktreeReclaimed } from "@armada/protocol";
+import type {
+  CommandAnswer,
+  Outcome,
+  WhenBlocked,
+  WhenRefused,
+  WorktreeReclaimed,
+} from "@armada/protocol";
 import type { ConfirmableAct, JobAct } from "./JobDetail";
 
 /** What a refusal says. Every one names what happened and what to do. */
@@ -293,6 +299,26 @@ export const WHEN_BLOCKED_MEANS: Record<WhenBlocked, string> = {
   allow_all:
     "Any command runs without asking, so the job finishes however it can. Pushing stays " +
     "Armada's, and anything armada.yml marks destructive still stops for you.",
+};
+
+/**
+ * How a job meets a judge criterion that refuses, in the Job settings panel's
+ * words, and the order it offers them. **The three are the whole set** — a
+ * new job starts at *Ask me*, which is what asking a person by default means.
+ */
+export const WHEN_REFUSED: readonly WhenRefused[] = ["per_criterion", "always_ask", "always_refuse"];
+
+export const WHEN_REFUSED_LABEL: Record<WhenRefused, string> = {
+  per_criterion: "Ask me",
+  always_ask: "Always ask me",
+  always_refuse: "Always stop the step",
+};
+
+/** What each choice commits to, drawn under it. */
+export const WHEN_REFUSED_MEANS: Record<WhenRefused, string> = {
+  per_criterion: "Each criterion decides for itself. Most ask; one marked refuse still stops the step.",
+  always_ask: "Every refusal opens a question, even one marked refuse in the workflow.",
+  always_refuse: "Every refusal stops the step, even one that would otherwise ask.",
 };
 
 /**

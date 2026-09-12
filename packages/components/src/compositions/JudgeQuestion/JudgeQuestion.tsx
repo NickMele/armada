@@ -23,6 +23,11 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  *
  * **Nothing here times out.** An unanswered question holds — the same cost an
  * open human gate already has — so there is no countdown and no default.
+ *
+ * **One primary, and it is the one-step answer.** "Always disagree" changes
+ * what this repository asks about forever, so it must not read as the
+ * inviting press — it is secondary, beside "Agree with the refusal", and the
+ * emphasis sits on "Disagree, just this step" alone.
  */
 export type JudgeQuestionProps = {
   /** Which criterion refused — `Does the fix address the cause the note names?` */
@@ -92,7 +97,7 @@ export function JudgeQuestion({
         <Button variant="primary" disabled={disabled} onClick={() => send("disagree_once")}>
           Disagree, just this step
         </Button>
-        <Button variant="primary" disabled={disabled} onClick={() => send("disagree_always")}>
+        <Button variant="secondary" disabled={disabled} onClick={() => send("disagree_always")}>
           Always disagree
         </Button>
       </div>

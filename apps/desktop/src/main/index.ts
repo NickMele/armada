@@ -8,7 +8,13 @@ import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, Summons } from "../shared/bridge";
 import type { Draft, StagedAttachment } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
-import type { Artifact, CommandAnswer, JudgeAnswer, WhenBlocked } from "@armada/protocol";
+import type {
+  Artifact,
+  CommandAnswer,
+  JudgeAnswer,
+  WhenBlocked,
+  WhenRefused,
+} from "@armada/protocol";
 import type { StartRun } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
@@ -370,6 +376,10 @@ void app.whenReady().then(() => {
     CHANNELS.answerJudge,
     (_event, jobId: string, answer: JudgeAnswer, note?: string) =>
       connection?.commands.answerJudge(jobId, answer, note),
+  );
+  // How the job meets the next such refusal. Moves nothing on the job.
+  ipcMain.handle(CHANNELS.setWhenRefused, (_event, jobId: string, whenRefused: WhenRefused) =>
+    connection?.commands.setWhenRefused(jobId, whenRefused),
   );
   // The model the job's next step starts on, and an allow taken back. Neither
   // moves anything on the job.

@@ -16,7 +16,7 @@ use axum::response::Response;
 use ipc::{
     AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobRequest, JudgeAnswered,
     Overruled, ProposeJob, Redirection, RemarksTakenUp, RestartRequested, SetWhenBlocked,
-    StopProposal, TurnRaise,
+    SetWhenRefused, StopProposal, TurnRaise,
 };
 
 use crate::answers::{answer, refused, undecodable};
@@ -468,6 +468,23 @@ pub(crate) async fn answer_judge<D: Commands>(
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served.daemon().answer_judge(job.id(), answered).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Change how this Job meets a Judge criterion that refuses. **The Job
+/// comes back unchanged**: the setting is read by the next gate.
+pub(crate) async fn set_when_refused<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let setting: SetWhenRefused = match ipc::decode("a setting", &body) {
+        Ok(setting) => setting,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().set_when_refused(job.id(), setting).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
