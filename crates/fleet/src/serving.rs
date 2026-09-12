@@ -189,20 +189,13 @@ where
     }
 
     /// Whether the repository still has what `armada.yml` names —
-    /// `crate::drifting`.
+    /// `crate::drifting`, which carries the whole argument.
     ///
-    /// **Against the main checkout, and not a Job's worktree.** The surface
-    /// this answers is the project's Manifest, read before anything has been
-    /// dispatched; a Job's own sheet rehearses the Manifest that Job froze, in
-    /// that Job's tree, and is a different question with a different answer.
-    ///
-    /// **No lock and no process.** It is a `stat` per path the file names,
-    /// which is what lets a surface make this call on opening.
+    /// **Against the main checkout, not a Job's worktree**, and it takes no
+    /// lock and starts no process.
     async fn get_manifest_drift(&self) -> Result<ManifestDrift, Refusal> {
-        Ok(crate::drifting::drift(
-            self.manifest(),
-            std::path::Path::new(&self.host().repo_root),
-        ))
+        let checkout = std::path::Path::new(&self.host().repo_root);
+        Ok(crate::drifting::drift(self.manifest(), checkout))
     }
 
     /// One Job in full, folded from its log like every other read.

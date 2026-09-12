@@ -14,6 +14,14 @@
 //! adopted without complaint, and says nothing. The first thing that notices is
 //! a Job failing on it, which is the silence this module ends.
 //!
+//! # Against the main checkout, and not a Job's worktree
+//!
+//! The surface this answers is the project's Manifest, read before anything
+//! has been dispatched. A Job's own run sheet rehearses the Manifest that Job
+//! froze, in that Job's tree, and is a different question with a different
+//! answer — `docs/journeys/run-and-edit-a-manifest.md`, under *Running one
+//! inside a Job*.
+//!
 //! # It runs nothing
 //!
 //! No process is started here and none may be. Drift runs on opening a surface,
