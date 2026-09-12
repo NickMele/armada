@@ -272,6 +272,34 @@ commands:
 ports:
   storybook: {}
 
+# How this repository shows what a change looks like. A step whose
+# `evidence.captured` is true runs this, and Fleet keeps what lands in `frames`.
+#
+# **Storybook, and not Bridge.** What is photographed is the recorded-Job
+# stories — a Job a Fleet really ran, replayed through the fold main folds with
+# — so a frame is the app's own reading of real wire data rather than a drawing
+# of one. Driving the Electron app would take the owner's screen for the length
+# of every Job, and `.claude/skills/armada-local/SKILL.md` says what that costs.
+#
+# **`serve` restates `storybook_dev` above rather than naming it.** There is no
+# key here that points at a Command, and the duplication is the honest shape:
+# the two are the same server for the same reason, and both resolve the one
+# `${port.storybook}` claimed above.
+evidence:
+  serve: pnpm -C packages/components exec storybook dev -p ${port.storybook} --no-open --ci
+  ready: curl -sf http://localhost:${port.storybook}
+  # `{}` is where the spec a Drone named goes. The spec itself is not
+  # substituted, so `ARMADA_PORT_STORYBOOK` is its only channel to the port.
+  run: pnpm -C packages/components exec playwright test {}
+  # Ignored whole by `.gitignore`, with everything else one run leaves behind.
+  frames: .armada/frames
+  never:
+    # The Notes panel's own route. A GET reads a shot back; a POST writes into
+    # `.notes/`, which is a spec editing the worktree it is photographing.
+    # Armada enforces none of this and says so — it is read by whoever writes
+    # the spec, and by whoever reviews it.
+    - /__notes
+
 # How patient Fleet is with a Drone working here. Both keys are optional and
 # each falls back on its own: what is not written is what Fleet was started
 # with, and a workflow step may override either again.
