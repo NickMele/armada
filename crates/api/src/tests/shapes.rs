@@ -206,6 +206,15 @@ pub fn manifest_reading() -> ipc::ManifestReading {
     }
 }
 
+/// The file behind the reading above, refused for the same key — so a test can
+/// see the two answers are about one `armada.yml`.
+pub fn manifest_file() -> ipc::ManifestFile {
+    ipc::ManifestFile {
+        path: "armada.yml".to_string(),
+        text: "version: 1\nid: fake\ndrone:\n  poke_limit: soon\n".to_string(),
+    }
+}
+
 /// One drifted line and one whole one, because a list of either alone would
 /// let a route test pass while the verdict was constant.
 ///

@@ -103,6 +103,15 @@ const REVIEW_UNREADABLE: &str = "fleet.review_unreadable";
 /// request is wrong, and the worktree existed a moment ago — `surviving_worktree`
 /// already refused otherwise.
 const REMARKS_FILE_UNWRITABLE: &str = "fleet.remarks_file_unwritable";
+/// `armada.yml` would not open for the view that edits it. **A 500**, for the
+/// reason above: nothing about the request is wrong, and Fleet started against
+/// this file.
+const MANIFEST_UNREADABLE: &str = "fleet.manifest_unreadable";
+/// A corrected `armada.yml` would not go to disk. **Its own code and not the
+/// one above**: what a person does next is different — the edit they typed is
+/// still in front of them and is not on disk, where a failed read left them
+/// with nothing to type into.
+const MANIFEST_UNWRITABLE: &str = "fleet.manifest_unwritable";
 /// A press that named no comment at all. **A 422**, like a blank note: the
 /// request decoded and names something that cannot work.
 const NO_REMARKS_CHOSEN: &str = "fleet.no_remarks_chosen";
@@ -359,6 +368,17 @@ where
                 WireError::raised(NO_REMARKS_CHOSEN, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
+            // The Manifest file itself would not open, or would not be
+            // written. A 500 each: Fleet started against this file, so neither
+            // is anything the caller can put right by asking differently. A
+            // refused *parse* is not here at all — that is `ManifestReading`,
+            // and it is an answer rather than a refusal.
+            Adrift::ManifestUnreadable { .. } => {
+                Refusal::Fault(WireError::raised(MANIFEST_UNREADABLE, said, self.run_id()))
+            }
+            Adrift::ManifestUnwritable { .. } => {
+                Refusal::Fault(WireError::raised(MANIFEST_UNWRITABLE, said, self.run_id()))
+            }
             // The comments a person picked would not write to disk. A 500,
             // for `ReviewUnreadable`'s reason: nothing about the request is
             // wrong.

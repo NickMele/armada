@@ -296,6 +296,23 @@ The evidence sits inside the verdict rather than beside it, so `gone` with nothi
 `agent_access` is `Yes` on `get_manifest_reading`'s terms: it is one small answer about this repository's own configuration, it costs nothing to ask, and a Helm about to dispatch against a Check whose script is not there should be able to find that out first.
 """
 
+[operations.get_manifest_file]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "armada.yml as it is on disk, for the file view that edits it"
+notes = """
+The half a person acts with, where `get_manifest_reading` is the half that reports. That one says which keys Fleet was refused for and there is nothing else on this seam that puts one right, so correcting a Check meant leaving Bridge for an editor and then watching the daemon's console — Journey 9, *Editing*.
+
+**No path in, and none accepted.** A Fleet serves one repository and already holds the file it was started against, `config::Manifest::path`, which is the same file `crates/armada/src/watching.rs` watches. A caller names the act and Fleet names the file. The path comes back spelled as `ManifestReading.path` spells it, so a surface holding both can see they are about one file.
+
+**The bytes, not a document.** Nothing is parsed here. A file that does not parse reads back as well as one that does, which is the case a person opening this is most likely to be in, and the parse's own answer is the reading beside it.
+
+**Whole, and not windowed.** `get_check_output` serves a tail and says so because half a log is still a log; a partial Manifest handed to an editor would be saved back over the rest. A Manifest is a few kilobytes.
+
+`agent_access` is `No`, on the seven checkout-run operations' terms: the main checkout is the tree a Drone is confined out of, and the reader this exists for is a person who opened the file view. What an agent needs about this repository's configuration is `get_manifest`, which is resolved, `Yes`, and carries no comments to rewrite.
+"""
+
 [operations.get_manifest_reading]
 kind = "query"
 transport = "HTTP"
@@ -1482,6 +1499,25 @@ notes = """
 **Never offered where no snapshot was taken.** This tree holds a person's own uncommitted work, which no Job's worktree does, so a run with nothing kept behind it is refused rather than discarded from — `CheckoutRunRecord.undoable` is that answer, given before anything is offered.
 
 Refused while a run is in flight, on a run already undone or with no snapshot, and where a path the run changed has moved since. The confirmation naming what would be discarded is Bridge's.
+"""
+
+[operations.save_manifest_file]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Write a corrected armada.yml to disk, and stop there"
+notes = """
+**Save writes the file and stops.** No staging, no commit, no formatting and no reserialisation — the bytes the caller sends are the bytes on disk. The file is tracked, so the edit appears in the working tree and is committed along with everything else; Armada committing to git on a person's behalf would be a surprise in the one place a person is most sensitive to one. Journey 9, *Editing*.
+
+**Fleet owns the write, and there is no path in.** Bridge writing a repository file directly would be a second writer against the file Fleet resolves, watches and re-reads, and a path Bridge composed is the capability a row refuses by deriving instead of handing over where it lives.
+
+**A write that does not parse is still a write.** A person correcting a file gets it wrong on the way, and refusing to save invalid YAML would mean work in progress cannot be saved at all — which is the editor this operation exists to stop sending people to. The bytes land, Fleet's own watch settles and re-reads, and `manifest.reread` reports every fault key by key with the previous values still in force.
+
+**The answer is not a reading.** The watch settles before it re-reads, so what a save moved is not known when the write returns. `ManifestSaved` says the bytes landed and when, and the reading that follows carries its own later `at` — which is what tells this save's answer from a reading already on screen. `worthSaying` stays the judgement about whether one is news, and is not restated here.
+
+**Editing during a running Job needs no warning and no lock.** A Job is judged against the Checks and Commands it snapshotted at creation, so an edit here cannot reach it.
+
+`agent_access` is `No`, and more plainly than on the seven checkout-run operations it follows: those run in the main checkout, which is the tree a Drone is confined out of, and this writes a tracked file in it — the one that decides what every Job is gated on. A change to what Checks mean is a person's, made where the consequence is stated.
 """
 
 # Servers: a Command with `serve`, held by Fleet — `docs/concepts/fleet.md`,

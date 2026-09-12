@@ -12,7 +12,8 @@ use ipc::{
     AlertList, CallArguments, CheckOutput, CommandExplained, DroneDetail, DroneId, DroneList,
     FilesFound, FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence,
     JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestDrift,
-    ManifestId, ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
+    ManifestFile, ManifestId, ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary,
+    WorktreesHeld,
 };
 
 use super::FakeDaemon;
@@ -203,6 +204,15 @@ impl Queries for FakeDaemon {
             return Err(self.fault("the fake was told not to answer"));
         }
         Ok(Some(shapes::manifest_reading()))
+    }
+
+    /// **A file that does not parse**, matching the reading beside it: the two
+    /// answers a surface draws together are about one `armada.yml`.
+    async fn get_manifest_file(&self) -> Result<ManifestFile, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(shapes::manifest_file())
     }
 
     /// **Always two rows, one of each verdict.** A fake answering all `current`

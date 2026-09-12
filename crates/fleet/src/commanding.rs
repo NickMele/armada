@@ -351,6 +351,19 @@ where
         self.undo_checkout_rehearsal(run.id).await
     }
 
+    /// A corrected Manifest, written and nothing more —
+    /// [`editing`](mod@crate::editing).
+    ///
+    /// **Not `Arc`, because nothing outlives the call.** The bytes are on disk
+    /// when this answers; what the re-read makes of them is the watch's, and
+    /// arrives as `manifest.reread`.
+    async fn save_manifest_file(
+        &self,
+        asked: ipc::SaveManifestFile,
+    ) -> Result<ipc::ManifestSaved, Refusal> {
+        self.write_manifest_file(asked)
+    }
+
     /// A person starting a server, for a Job or the main checkout. **The `Arc`
     /// is handed on**, so the server is a task of its own — `crate::servers`.
     ///

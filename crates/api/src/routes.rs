@@ -35,6 +35,7 @@ use crate::commands::{
     stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
+use crate::editing::{get_manifest_file, save_manifest_file};
 use crate::fleetwide::{
     get_drone, get_events_since, get_health, get_manifest, get_usage, list_drones,
 };
@@ -90,6 +91,8 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/activity", get(get_activity_feed::<D>))
         .route("/manifest/reading", get(get_manifest_reading::<D>))
         .route("/manifest/drift", get(get_manifest_drift::<D>))
+        .route("/manifest/file", get(get_manifest_file::<D>))
+        .route("/manifest/save_file", post(save_manifest_file::<D>))
         .route("/manifest/files", get(search_files::<D>))
         .route("/jobs/:job_id", get(get_job::<D>))
         .route("/jobs/:job_id/events", get(get_job_events::<D>))

@@ -64,6 +64,9 @@ mod drifting;
 pub mod drone;
 mod drone_moves;
 pub mod dry_run;
+/// The Manifest file itself, read and written — the half of Journey 9's
+/// *Editing* a person acts with. Save stops at the bytes.
+mod editing;
 pub mod ending;
 pub mod evidence;
 /// Going and looking at a Job now, because somebody suspects it is wedged.

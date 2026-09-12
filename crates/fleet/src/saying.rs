@@ -502,6 +502,16 @@ impl fmt::Display for Adrift {
                 "no Manifest is named `{named}`. This Fleet holds `{held}`, the one declared by \
                  the `armada.yml` it was started against, and `list_manifests` says where"
             ),
+            Adrift::ManifestUnreadable { path, cause } => write!(
+                out,
+                "{path} could not be read: {cause}. What Fleet is running with is unchanged — \
+                 this is the file on disk, not the configuration in force"
+            ),
+            Adrift::ManifestUnwritable { path, cause } => write!(
+                out,
+                "the corrected Manifest could not be written to {path}: {cause}. Nothing was \
+                 changed, so what is on disk is what was there before"
+            ),
             Adrift::Modelless => out.write_str(
                 "a Job needs a model, and neither the proposal nor configuration named one. \
                  Set `default-model-per-job-type` in crates/config/settings.toml, or name a \
@@ -615,6 +625,8 @@ impl Adrift {
             | Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
+            | Adrift::ManifestUnreadable { .. }
+            | Adrift::ManifestUnwritable { .. }
             | Adrift::NoSuchPeer { .. }
             | Adrift::NoSuchCall { .. }
             | Adrift::NoSuchDrone { .. }
@@ -655,7 +667,9 @@ impl Error for Adrift {
             | Adrift::NotReaped { cause, .. }
             | Adrift::NoTranscript { cause, .. }
             | Adrift::AttachmentUnreadable { cause, .. }
-            | Adrift::RemarksFileUnwritable { cause, .. } => Some(cause),
+            | Adrift::RemarksFileUnwritable { cause, .. }
+            | Adrift::ManifestUnreadable { cause, .. }
+            | Adrift::ManifestUnwritable { cause, .. } => Some(cause),
             // An id naming no open command has nothing underneath it: the two
             // places a command can be were read, and neither held one.
             Adrift::NothingToExplain { .. }
