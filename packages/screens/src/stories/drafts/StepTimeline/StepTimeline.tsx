@@ -215,12 +215,12 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
 /**
  * The body's own small type, and the two steps down from it.
  *
- * **Written as style rather than as classes, because the classes did not
- * exist.** `text-2xs`, `text-fg-subtle` and `text-fg-muted` are declared in no
- * stylesheet in this repository — `.mono` and `.caps` in the token layer are the
- * only utilities there are — so every line of this body drew at the inherited
- * size in the inherited colour. A draft nobody can read the hierarchy of is a
- * draft that answers the wrong question.
+ * **Written as style rather than as utilities, because utilities are inert
+ * here.** `text-2xs` and `text-fg-muted` are Tailwind's, generated where the
+ * whole of Tailwind is imported — which the desktop renderer does and Storybook
+ * does not: its preview loads the preflight alone, and says so. So a draft
+ * written in them reads correctly in the app and draws at the inherited size in
+ * the one place it exists to be looked at.
  */
 const SMALL = { fontSize: "var(--text-2xs)", lineHeight: "var(--leading-2xs)" } as const;
 const SUBTLE = { ...SMALL, color: "var(--fg-subtle)" } as const;

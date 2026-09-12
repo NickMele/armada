@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import type { Turn } from "@armada/protocol";
 
 import { answered, called, checked, producedTurn, said } from "./fixtures/build/base";
-import { byToolOf, laneOf, producedOf, runsOf, workingOf } from "./working";
+import { byToolOf, producedOf, runsOf, workingOf } from "./working";
 
 const STEP = "implement";
 
@@ -38,6 +38,16 @@ describe("a call and its answer are one act", () => {
   it("carries how long the call was open", () => {
     const [call] = workingOf(turns, STEP).acts;
     expect(call?.ms).toBe(400);
+  });
+
+  it("names the answer's own row, so a surface drawing rows can still draw it", () => {
+    const [call] = workingOf(turns, STEP).acts;
+    expect(call?.answeredId).toBe(String(turns[1]?.seq));
+  });
+
+  it("names none where the call is still open", () => {
+    const [call] = workingOf([called(STEP, at(0), "c9", "Read", "x.ts")], STEP).acts;
+    expect(call?.answeredId).toBeUndefined();
   });
 
   it("marks a call whose answer failed", () => {
@@ -156,39 +166,6 @@ describe("a Check is read through the registry", () => {
   it("leaves a passing run unmarked", () => {
     const passed = checked(STEP, at(1), { attempt: 1, name: "fmt", outcome: "passed" });
     expect(workingOf([passed], STEP).acts[0]?.wrong).toBeUndefined();
-  });
-});
-
-describe("the waterfall places every act on one clock", () => {
-  const turns = [
-    called(STEP, at(0), "c1", "Read", "a.ts"),
-    answered(STEP, at(0.2), "c1"),
-    called(STEP, at(50), "c2", "TaskOutput", ""),
-    answered(STEP, at(100), "c2"),
-  ];
-  const working = workingOf(turns, STEP);
-
-  it("puts a bar where the act happened, as a fraction of the attempt", () => {
-    const [first, second] = laneOf(working);
-    expect(first?.at).toBe(0);
-    expect(second?.at).toBeCloseTo(0.5, 3);
-  });
-
-  it("draws a long call to scale", () => {
-    expect(laneOf(working)[1]?.width).toBeCloseTo(0.5, 3);
-  });
-
-  it("floors a fast call so it is still a tick", () => {
-    // 200ms of a 100-second attempt is a fifth of a pixel at any width a panel
-    // has. The floor is what stops the lane being empty where the work was.
-    const [first] = laneOf(working);
-    expect(first?.width).toBeGreaterThan(0);
-    expect(first?.ms).toBe(200);
-  });
-
-  it("draws only what went wrong when it is asked to", () => {
-    const wrong = [...turns, called(STEP, at(101), "c3", "Bash", "false"), answered(STEP, at(102), "c3", true)];
-    expect(laneOf(workingOf(wrong, STEP), true).map((row) => row.tool)).toEqual(["Bash"]);
   });
 });
 

@@ -53,6 +53,15 @@ export type WorkingAct = {
   tool?: string;
   /** How long the call was open, where its answer arrived. */
   ms?: number;
+  /**
+   * The answer's own row, where one arrived.
+   *
+   * **Because a surface drawing rows still has to draw it.** The answer folds
+   * into its call *here*, which is what makes one act out of two rows — but a
+   * caller that renders the transcript itself would drop 351 rows on one real
+   * step if this did not say which they were.
+   */
+  answeredId?: string;
   /** The call failed, the Check did not pass, or the harness refused. */
   wrong?: boolean;
   /** The run, on `checked`, so a body can open its output. */
@@ -98,7 +107,7 @@ export function workingOf(turns: readonly Turn[], stepId: string | undefined): W
   // Answers first, so a call knows its own outcome when it is drawn. Keyed by
   // call id, which is what the wire pairs them on.
   const opened = new Map<string, string>();
-  const answered = new Map<string, { ms?: number; failed: boolean }>();
+  const answered = new Map<string, { ms?: number; failed: boolean; id: string }>();
   for (const turn of mine) {
     if (turn.saw.event === "called") opened.set(turn.saw.call, turn.ts);
     if (turn.saw.event === "answered") {
@@ -107,6 +116,7 @@ export function workingOf(turns: readonly Turn[], stepId: string | undefined): W
       answered.set(turn.saw.call, {
         ...(took === undefined ? {} : { ms: took }),
         failed: turn.saw.failed,
+        id: String(turn.seq),
       });
     }
   }
@@ -139,7 +149,7 @@ export function workingOf(turns: readonly Turn[], stepId: string | undefined): W
  */
 function actOf(
   turn: Turn,
-  answered: Map<string, { ms?: number; failed: boolean }>,
+  answered: Map<string, { ms?: number; failed: boolean; id: string }>,
 ): WorkingAct | undefined {
   const saw = turn.saw;
   const id = String(turn.seq);
@@ -154,6 +164,7 @@ function actOf(
         mono: true,
         tool: saw.tool,
         ...(answer?.ms === undefined ? {} : { ms: answer.ms }),
+        ...(answer === undefined ? {} : { answeredId: answer.id }),
         ...(answer?.failed === true ? { wrong: true } : {}),
       };
     }
@@ -292,64 +303,16 @@ export function runsOf(acts: readonly WorkingAct[]): WorkingRun[] {
   return runs.map((run) => ({ ...run, folded: run.acts.length > 1 && run.wrong === 0 }));
 }
 
-/** One bar on the waterfall, placed on the attempt's own clock. */
-export type LaneRow = {
-  id: string;
-  said: string;
-  kind: WorkingKind;
-  tool?: string;
-  /** Where the bar starts, as a fraction of the wall clock. */
-  at: number;
-  /** How wide it is, floored so a 200ms call is still a visible tick. */
-  width: number;
-  ms: number;
-  wrong?: boolean;
-};
-
-/**
- * The narrowest a bar is drawn, as a fraction of the whole.
- *
- * **Because 343 of the recorded step's 351 calls answered inside a second.**
- * Drawn to scale against a 43-minute attempt each is a fifth of a pixel, so a
- * lane drawn honestly to scale is two bars and 349 gaps. A floor makes a fast
- * call a tick rather than nothing, and the duration is still written beside it.
- */
-const NARROWEST = 0.004;
-
-/** The acts as bars on one clock, oldest first. */
-export function laneOf(working: Working, wrongOnly = false): LaneRow[] {
-  const first = working.acts[0];
-  if (first === undefined || working.wall === 0) return [];
-  const from = instant(first.ts) ?? 0;
-  return working.acts
-    .filter((act) => !wrongOnly || act.wrong === true)
-    .map((act) => {
-      // Held a tick clear of the right edge, so the last act of an attempt is
-      // still a bar. Placed flush at 1 there is no width left to give it.
-      const at = Math.min(1 - NARROWEST, ((instant(act.ts) ?? from) - from) / working.wall);
-      const ms = act.ms ?? 0;
-      return {
-        id: act.id,
-        said: act.said,
-        kind: act.kind,
-        ...(act.tool === undefined ? {} : { tool: act.tool }),
-        at: Math.min(1, Math.max(0, at)),
-        width: Math.min(1 - at, Math.max(NARROWEST, ms / working.wall)),
-        ms,
-        ...(act.wrong === true ? { wrong: true } : {}),
-      };
-    });
-}
-
-/** One tool, everything it was called for. The waterfall's collapsed reading. */
+/** One tool, everything it was called for. */
 export type ToolTotal = { tool: string; calls: number; ms: number; wrong: number };
 
 /**
  * The calls added up by tool, slowest first.
  *
- * **The collapse a trace viewer offers, and on this data it is the answer**:
- * 351 rows become nine, and the nine say that two `TaskOutput` waits hold four
- * fifths of the step's call time.
+ * **Kept from the lane that was drawn beside this and rejected**, because it is
+ * the one reading grouping cannot give: 351 rows become nine, and the nine say
+ * two `TaskOutput` waits hold four fifths of the step's call time. It has no
+ * surface yet — the owner asked for it to be kept when the lane went.
  */
 export function byToolOf(acts: readonly WorkingAct[]): ToolTotal[] {
   const totals = new Map<string, ToolTotal>();

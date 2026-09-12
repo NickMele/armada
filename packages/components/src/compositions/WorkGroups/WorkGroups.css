@@ -1,0 +1,86 @@
+/* A step's work, with runs of one tool folded to a line. The rows themselves
+   are the caller's log and are styled by it — everything here is the heading
+   that folds them and the line that counts what is not drawn. */
+.armada-work {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.armada-work__group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The folded line. It sits in the log's own rhythm rather than announcing
+   itself: a heading that read as a card would put a lid on rows that are
+   already inside one. */
+.armada-work__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.armada-work__head:hover {
+  background: var(--bg-hover);
+}
+
+/* The chevron takes the subtle tone, never the name's. It reports state and
+   the name reports what the group is. */
+.armada-work__fold {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+.armada-work__name {
+  flex: none;
+  color: var(--fg-default);
+}
+
+/* The count and the duration. --fg-subtle is the tone every other count on the
+   panel takes, so a folded run reads as metadata and not as an event. */
+.armada-work__meta {
+  color: var(--fg-subtle);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-work__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* One unread kind and how many arrived. */
+.armada-work__kind {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-8);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* What an empty log says. The same tone the rest of the story's empties take. */
+.armada-work__empty {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}

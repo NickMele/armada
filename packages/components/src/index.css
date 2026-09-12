@@ -208,3 +208,6 @@
 
 /* Every setting a person can change on a running Job, on a trailing sheet. */
 @import "./compositions/JobSettings/JobSettings.css";
+
+/* A step's work, with runs of one tool folded to a line. */
+@import "./compositions/WorkGroups/WorkGroups.css";
