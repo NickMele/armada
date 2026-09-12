@@ -103,18 +103,9 @@ const REVIEW_UNREADABLE: &str = "fleet.review_unreadable";
 /// request is wrong, and the worktree existed a moment ago — `surviving_worktree`
 /// already refused otherwise.
 const REMARKS_FILE_UNWRITABLE: &str = "fleet.remarks_file_unwritable";
-/// `armada.yml` would not open for the view that edits it. **A 500**, for the
-/// reason above: nothing about the request is wrong, and Fleet started against
-/// this file.
+/// The three Manifest-file codes. Why each is its own is `save_manifest_file`'s row.
 const MANIFEST_UNREADABLE: &str = "fleet.manifest_unreadable";
-/// A corrected `armada.yml` would not go to disk. **Its own code and not the
-/// one above**: what a person does next is different — the edit they typed is
-/// still in front of them and is not on disk, where a failed read left them
-/// with nothing to type into.
 const MANIFEST_UNWRITABLE: &str = "fleet.manifest_unwritable";
-/// The file changed after the edit that was about to be saved read it. **A 409
-/// and never either code above**: nothing failed, and what a person does next
-/// is reconcile the two texts rather than retry the act.
 const MANIFEST_MOVED: &str = "fleet.manifest_moved_under_the_edit";
 /// A press that named no comment at all. **A 422**, like a blank note: the
 /// request decoded and names something that cannot work.
@@ -372,20 +363,14 @@ where
                 WireError::raised(NO_REMARKS_CHOSEN, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
-            // The Manifest file itself would not open, or would not be
-            // written. A 500 each: Fleet started against this file, so neither
-            // is anything the caller can put right by asking differently. A
-            // refused *parse* is not here at all — that is `ManifestReading`,
-            // and it is an answer rather than a refusal.
+            // Fleet's own ground failing; a refused parse is `ManifestReading`.
             Adrift::ManifestUnreadable { .. } => {
                 Refusal::Fault(WireError::raised(MANIFEST_UNREADABLE, said, self.run_id()))
             }
             Adrift::ManifestUnwritable { .. } => {
                 Refusal::Fault(WireError::raised(MANIFEST_UNWRITABLE, said, self.run_id()))
             }
-            // A conflict and not a fault. **What is on disk rides the
-            // refusal**, so a surface shows both texts without a second round
-            // trip — and is absent where the file is gone.
+            // A conflict, not a fault; the disk rides it, absent where it is gone.
             Adrift::ManifestMovedUnderTheEdit { on_disk, .. } => {
                 let refused = WireError::raised(MANIFEST_MOVED, said, self.run_id());
                 Refusal::IllegalMove(match on_disk {

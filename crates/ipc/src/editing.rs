@@ -7,14 +7,10 @@
 //! repository and already holds the file it was started against, so a caller
 //! names the act and Fleet names the file.
 //!
-//! **A write that does not parse is still a write.** Refusing invalid YAML
-//! would mean work in progress cannot be saved, which is the editor this exists
-//! to stop sending people to. The bytes go to disk, Fleet's watch re-reads
-//! them, and [`ManifestReading`] reports what it could not adopt.
-//!
-//! **A write over a file that moved is refused.** Nothing here destroys work
-//! without saying so, and `armada.yml` is tracked — what a blind save clobbers
-//! is somebody's committed edit. [`SaveManifestFile::read`] is the guard.
+//! **A write that does not parse is still a write**, and [`ManifestReading`]
+//! reports what Fleet could not adopt. **A write over a file that moved is
+//! refused** — `armada.yml` is tracked, so a blind save clobbers a committed
+//! edit. [`SaveManifestFile::read`] is the guard.
 //!
 //! [`ManifestReading`]: crate::ManifestReading
 
@@ -41,26 +37,13 @@ pub struct ManifestFile {
     pub text: String,
 }
 
-/// A corrected Manifest, on its way to disk.
-///
-/// **No path, and no flag that would make this a staging or a commit** — the
-/// act has one shape and a caller cannot ask for a second.
-///
-/// **Both fields are required, so there is no unguarded save to reach for.** A
-/// caller that omits [`SaveManifestFile::read`] does not get an overwrite; it
-/// gets a body that will not decode.
+/// A corrected Manifest, on its way to disk. **Both fields are required**, so
+/// omitting [`SaveManifestFile::read`] fails to decode rather than overwriting.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveManifestFile {
-    /// What the edit started from: [`ManifestFile::text`], unchanged.
-    ///
-    /// **The whole text and not a digest.** A digest needs an algorithm both
-    /// sides agree on and a dependency neither has, to compare a few kilobytes
-    /// — and it answers *probably the same* where this answers *the same*.
-    ///
-    /// Fleet compares it against the disk at the moment of the save and
-    /// refuses where the two differ. A `git checkout` landing while the view is
-    /// open is somebody's committed edit, and this is what stops the next Save
-    /// taking it silently.
+    /// What the edit started from — [`ManifestFile::text`], unchanged, and
+    /// whole rather than a digest, which answers *probably the same*. Fleet
+    /// refuses where the disk no longer holds it.
     pub read: String,
     /// The bytes to put on disk, exactly as they arrive.
     pub text: String,

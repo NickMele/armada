@@ -37,33 +37,19 @@ export type ManifestFile = {
 };
 
 /**
- * A corrected Manifest, on its way to disk.
+ * A corrected Manifest, on its way to disk. No staging, no commit.
  *
- * **No path, and no flag that would make this a staging or a commit** — Save
- * writes the file and stops there, and Armada committing to git on your behalf
- * would be a surprise in the one place a person is most sensitive to one.
+ * **A write that does not parse is still a write**; `ManifestReading` reports
+ * what Fleet could not adopt, previous values still in force.
  *
- * **A write that does not parse is still a write.** Refusing invalid YAML would
- * mean work in progress cannot be saved at all. The bytes go to disk and
- * `ManifestReading` reports what Fleet could not adopt, with the previous
- * values still in force.
- *
- * **A write over a file that moved is refused.** Both fields are required, so
- * there is no unguarded save to reach for: omitting `read` does not overwrite,
- * it fails to decode.
+ * **A write over a file that moved is refused**, as a 409 under
+ * `fleet.manifest_moved_under_the_edit` carrying `on_disk`. Both fields are
+ * required, so omitting `read` fails to decode rather than overwriting.
  */
 export type SaveManifestFile = {
   /**
-   * What the edit started from: the `ManifestFile.text` this view opened with,
-   * unchanged.
-   *
-   * **The whole text and not a digest**, which would need an algorithm both
-   * sides agree on to compare a few kilobytes, and answers *probably the same*
-   * where this answers *the same*.
-   *
-   * Fleet compares it against the disk at the moment of the save and refuses
-   * where the two differ, handing back what is there now. A `git checkout`
-   * landing while this view is open is somebody's committed edit.
+   * What the edit started from — the `ManifestFile.text` this view opened
+   * with, unchanged and whole rather than a digest.
    */
   read: string;
   text: string;
