@@ -351,11 +351,7 @@ pub fn answer(answered: Answered) -> Result<String, Unencodable> {
                 "instructions": instructions(&scope),
             }),
         ),
-        Answered::Unreachable {
-            id,
-            revision,
-            why,
-        } => result(
+        Answered::Unreachable { id, revision, why } => result(
             id,
             json!({
                 "protocolVersion": revision,

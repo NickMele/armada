@@ -11,8 +11,8 @@ use fleet::process::StartedAt;
 use fleet::runtime::{Presence, RuntimeFile, Staleness};
 use ipc::{ManifestId, ManifestSummary, ProtocolVersion, PROTOCOL_VERSION};
 
-use crate::mcp::{listening, refused, stands_in, standing_in};
-use crate::tests::TempDir;
+use crate::mcp::{listening, publish, refused, standing_in, stands_in};
+use crate::tests::{repository, TempDir};
 
 fn file(version: ProtocolVersion) -> RuntimeFile {
     RuntimeFile {
@@ -142,8 +142,14 @@ fn a_fleet_behind_this_binary_is_not_connected_to() {
 fn a_fleet_serving_another_manifest_answers_nothing_about_this_one() {
     let said = stands_in("mine", &[manifest("theirs")]).expect_err("a different Manifest");
 
-    assert!(said.contains("you are standing in Manifest `mine`"), "{said}");
-    assert!(said.contains("theirs"), "what it is serving is named: {said}");
+    assert!(
+        said.contains("you are standing in Manifest `mine`"),
+        "{said}"
+    );
+    assert!(
+        said.contains("theirs"),
+        "what it is serving is named: {said}"
+    );
     assert!(
         said.contains("/repos/theirs/armada.yml"),
         "and where that one is: {said}"
@@ -169,7 +175,10 @@ fn a_session_that_reaches_no_fleet_is_told_at_the_handshake() {
 
 #[test]
 fn a_session_that_reaches_no_fleet_offers_no_tools() {
-    let said = answered(br#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#, "nothing here");
+    let said = answered(
+        br#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+        "nothing here",
+    );
 
     assert!(said.contains(r#""tools":[]"#), "{said}");
 }
@@ -191,7 +200,10 @@ fn a_call_made_anyway_is_refused_in_the_answer() {
 #[test]
 fn a_notification_is_not_answered_at_all() {
     assert_eq!(
-        refused(br#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#, "why"),
+        refused(
+            br#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+            "why"
+        ),
         None,
         "JSON-RPC forbids answering one"
     );
@@ -199,4 +211,25 @@ fn a_notification_is_not_answered_at_all() {
 
 fn answered(message: &[u8], why: &str) -> String {
     String::from_utf8(refused(message, why).expect("an answer")).expect("text")
+}
+
+/// **This repository's own `.mcp.json` already names the door**, byte for byte
+/// what publishing would write — so a session opened here reaches Fleet without
+/// waiting for the next `armada serve` to rewrite the file.
+///
+/// Asserted against a copy, so the case reads the repository and writes
+/// nothing in it.
+#[test]
+fn this_repository_publishes_its_own_door() {
+    let dir = TempDir::new();
+    let theirs =
+        std::fs::read_to_string(repository().join(adapters::REPOSITORY_CONFIG)).expect("the file");
+    dir.write(adapters::REPOSITORY_CONFIG, &theirs);
+
+    assert_eq!(
+        publish(dir.path()).expect("the entry"),
+        adapters::Published::AlreadyThere,
+        "this repository's {} is not what publishing writes:\n{theirs}",
+        adapters::REPOSITORY_CONFIG
+    );
 }

@@ -42,6 +42,9 @@ mod commanding;
 /// One Manifest as Fleet resolved it, past the summary a picker reads.
 mod configured;
 mod detail;
+/// One entry written into a JSON document Armada does not own. Here for
+/// `codec`'s reason: bytes nobody in this process typed.
+pub mod document;
 /// The agent's door: the MCP half of the HTTP surface, and the tool set
 /// `build.rs` emits from `operations.toml`'s own `agent_access` column.
 pub mod door;
@@ -74,9 +77,6 @@ mod judged;
 /// Fleet to Bridge — so it is a module rather than a flat re-export and none of
 /// its types are in `operations.toml`.
 pub mod mcp;
-/// One entry written into a JSON document Armada does not own. Here for
-/// `codec`'s reason: bytes nobody in this process typed.
-pub mod merging;
 /// Where two Jobs claim the same paths. **A fact on the card, never a
 /// verdict** — nothing in it is readable as a refusal.
 mod overlap;

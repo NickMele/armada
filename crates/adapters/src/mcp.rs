@@ -1,11 +1,6 @@
 //! The configuration file a Drone is spawned against, holding one server — and
-//! the repository's own, holding one entry beside whatever else is in it.
-//!
-//! **Two documents, opposite guarantees.** The first is Armada's: it is written
-//! whole, it holds exactly one server, and a Drone is confined to it. The
-//! second is the repository's: Armada adds one entry and preserves every other
-//! byte, because somebody else wrote that file. [`publish_the_agents_door`] is
-//! the second and everything above it is the first.
+//! [`publish_the_agents_door`], the opposite guarantee in a file Armada does
+//! not own.
 //!
 //! # Why this is written rather than assembled at the call site
 //!
@@ -160,6 +155,10 @@ pub enum Published {
 
 /// Register the agent's door in `at`, keeping everything else in the file.
 ///
+/// **The opposite guarantee to the document above.** That one is Armada's,
+/// written whole, holding exactly one server; this one is the repository's, so
+/// one entry is added and every other key survives.
+///
 /// `command` and `args` are the caller's, because the program is `armada`'s own
 /// verb and this crate may not know it. What this crate owns is the file's
 /// name, the schema's spellings and the merge that does not destroy what a
@@ -179,7 +178,7 @@ pub fn publish_the_agents_door(
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => None,
         Err(cause) => return Err(cause),
     };
-    let written = ipc::merging::merged_into(
+    let written = ipc::document::merged_into(
         existing.as_deref(),
         SERVERS,
         ipc::door::SERVER,

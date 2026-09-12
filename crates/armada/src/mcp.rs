@@ -86,7 +86,9 @@ fn reached() -> Result<Loopback, String> {
 pub fn standing_in(cwd: &Path) -> Result<String, String> {
     match Manifest::load(&cwd.join(MANIFEST)) {
         Ok(manifest) => Ok(manifest.id().as_str().to_string()),
-        Err(LoadError::Unreadable { cause, .. }) if cause.kind() == std::io::ErrorKind::NotFound => {
+        Err(LoadError::Unreadable { cause, .. })
+            if cause.kind() == std::io::ErrorKind::NotFound =>
+        {
             Err(format!(
                 "there is no {MANIFEST} in {}, so nothing here says which repository's Jobs you \
                  would be asking about. Armada answers inside one Manifest, and the repository \
@@ -201,7 +203,10 @@ const MANIFESTS: &str = "/manifests";
 
 /// The comparison itself, which is the whole of the scoping rule.
 pub fn stands_in(standing: &str, served: &[ManifestSummary]) -> Result<(), String> {
-    match served.iter().any(|manifest| manifest.id.as_str() == standing) {
+    match served
+        .iter()
+        .any(|manifest| manifest.id.as_str() == standing)
+    {
         true => Ok(()),
         false => Err(format!(
             "you are standing in Manifest `{standing}`, and the Fleet on this machine is serving \

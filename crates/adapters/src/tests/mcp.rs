@@ -55,7 +55,10 @@ fn the_agents_door_is_added_and_everything_else_is_kept() {
     assert!(written.contains(r#""command": "armada""#), "{written}");
     assert!(written.contains(r#""type": "stdio""#), "{written}");
     assert!(written.contains(r#""their-server""#), "{written}");
-    assert!(written.contains(r#""other""#), "a key this crate never heard of survives");
+    assert!(
+        written.contains(r#""other""#),
+        "a key this crate never heard of survives"
+    );
 
     let _ = std::fs::remove_file(&at);
 }

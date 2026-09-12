@@ -6,7 +6,7 @@
 
 use serde::Serialize;
 
-use crate::merging::{merged_into, NotMerged};
+use crate::document::{merged_into, NotMerged};
 
 #[derive(Serialize)]
 struct Entry {
@@ -34,6 +34,8 @@ fn no_file_yet_is_the_same_answer_as_an_empty_one() {
     assert!(fresh.ends_with('\n'), "a file ends with a newline");
 }
 
+/// Every key survives. **Their order does not** — see the module: a sorted map
+/// is what `serde_json` has without a feature nothing else here wants.
 #[test]
 fn every_other_key_comes_back_out() {
     let written = merged(Some(
@@ -50,8 +52,8 @@ fn every_other_key_comes_back_out() {
 /// A second publish replaces the one entry rather than appending a second.
 #[test]
 fn the_entry_is_replaced_and_not_doubled() {
-    let first = merged(Some(r#"{"mcpServers":{"armada-fleet":{"command":"old"}}}"#))
-        .expect("a document");
+    let first =
+        merged(Some(r#"{"mcpServers":{"armada-fleet":{"command":"old"}}}"#)).expect("a document");
 
     assert!(!first.contains("old"), "{first}");
     assert_eq!(first.matches("armada-fleet").count(), 1, "{first}");

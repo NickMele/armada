@@ -29,8 +29,8 @@ fn the_status_and_the_body_come_back_whole() {
 /// rather than a failure.
 #[test]
 fn an_empty_body_is_an_answer() {
-    let answer = answered(&raw("HTTP/1.1 202 Accepted\r\nContent-Length: 0", ""), 4180)
-        .expect("an answer");
+    let answer =
+        answered(&raw("HTTP/1.1 202 Accepted\r\nContent-Length: 0", ""), 4180).expect("an answer");
 
     assert_eq!(answer.status, 202);
     assert!(answer.body.is_empty());
@@ -41,7 +41,10 @@ fn an_empty_body_is_an_answer() {
 #[test]
 fn a_chunked_answer_is_refused_rather_than_misread() {
     let refused = answered(
-        &raw("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked", "5\r\nhello\r\n0\r\n"),
+        &raw(
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked",
+            "5\r\nhello\r\n0\r\n",
+        ),
         4180,
     )
     .expect_err("not carried");
@@ -55,7 +58,9 @@ fn something_that_is_not_fleet_is_named_as_such() {
     let refused = answered(b"hello?\r\n\r\n", 4180).expect_err("not an answer");
 
     assert!(
-        refused.to_string().contains("was not an answer Fleet would have sent"),
+        refused
+            .to_string()
+            .contains("was not an answer Fleet would have sent"),
         "{refused}"
     );
 }

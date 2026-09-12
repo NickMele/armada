@@ -1,17 +1,15 @@
 //! One entry written into a JSON document somebody else owns.
 //!
 //! **The file is not Armada's.** A repository's own agent configuration is
-//! written by whoever works in that repository, and Armada registers one server
-//! in it. Everything else in the document — other servers, keys this crate has
-//! never heard of, the order they were written in — comes back out unchanged,
-//! because a publisher that rewrote the file from a struct of its own would
-//! delete what it could not model.
+//! written by whoever works there, and Armada registers one server in it. Every
+//! other key comes back out, because a publisher that rewrote the file from a
+//! struct of its own would delete what it could not model. **Their order does
+//! not**: `serde_json`'s object is a sorted map without a feature that would
+//! change how every message on the wire is written.
 //!
-//! It is here for `codec`'s reason and no other: reading JSON nobody
-//! typed is bytes entering the process, gate rule five scopes that to two
-//! crates, and this is one of them. What the entry means and what the file is
-//! called are the caller's — `adapters` holds both, because the schema is a
-//! vendor's.
+//! Here for `codec`'s reason: reading JSON nobody typed is bytes entering the
+//! process. What the entry means and what the file is called are the caller's —
+//! `adapters` holds both, because the schema is a vendor's.
 
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -21,8 +19,9 @@ use crate::codec::{Undecodable, Unencodable};
 /// Write `entry` under `under`.`named`, keeping every other byte of meaning.
 ///
 /// `existing` is `None` where there is no file yet, which is the same answer as
-/// an empty document. The result is pretty-printed with a trailing newline: it
-/// is a file a person reads and a diff a person reviews, not a wire message.
+/// an empty document. The result is pretty-printed with a trailing newline and
+/// its keys in sorted order: it is a file a person reads and a diff a person
+/// reviews, not a wire message.
 pub fn merged_into<T: Serialize>(
     existing: Option<&[u8]>,
     under: &str,
@@ -90,7 +89,10 @@ impl std::fmt::Display for NotMerged {
         match self {
             NotMerged::Unreadable(why) => write!(out, "it is {why}"),
             NotMerged::NotAnObject { at } => {
-                write!(out, "{at} is not a JSON object, so nothing can be added to it")
+                write!(
+                    out,
+                    "{at} is not a JSON object, so nothing can be added to it"
+                )
             }
             NotMerged::Unencodable(why) => write!(out, "the entry {why}"),
         }

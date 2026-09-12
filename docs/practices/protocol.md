@@ -701,8 +701,17 @@ route `SERVED` already names, so there is no second implementation to drift.
 What it adds over the HTTP surface is a cap — a tool answer over 64 KiB is cut,
 says so, and names the route that serves it whole — and a scope: every answer
 is inside one Manifest, and the handshake says which. It answers 405 to `GET`
-and `DELETE` for `/mcp`'s reason, so it adds nothing to the risk above. Who may
-open it is a separate question from what it serves.
+and `DELETE` for `/mcp`'s reason, so it adds nothing to the risk above.
+
+**Who opens it is the repository somebody is standing in.** `armada mcp` is the
+relay a repository's own `.mcp.json` names: it reads `fleet.json` for the port,
+refuses on `Stale { PidHeldByAnother }` rather than connecting to a port another
+process now holds, and resolves its own working directory to a Manifest —
+never a request field, for the reason a Job id is not one on a Drone's tools.
+A session that resolves to no Manifest, or to one this Fleet is not serving, is
+answered rather than dropped: the handshake succeeds and carries the reason, and
+`tools/list` is empty. **None of it is authentication** — the bind is loopback
+with nothing in front of it, so this selects a Manifest and grants nothing.
 
 **The route table is hand-written, and that's an accepted cost, not an
 oversight.** A typo in a route path is a runtime 404/500, not a compile error,
