@@ -160,7 +160,7 @@ export function Chapter({
       {meta === undefined && !live ? null : (
         <span className="armada-chapter__meta">
           {live ? <span className="armada-chapter__live" aria-hidden /> : null}
-          {meta}
+          <span className="armada-chapter__meta-text">{meta}</span>
         </span>
       )}
     </>

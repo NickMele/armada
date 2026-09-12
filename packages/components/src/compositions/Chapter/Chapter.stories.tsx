@@ -1,4 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Button } from "../../primitives/Button/Button";
+import { Kbd } from "../../primitives/Kbd/Kbd";
 import { Chapter } from "./Chapter";
 
 const meta: Meta<typeof Chapter> = {
@@ -127,6 +129,44 @@ export const TheChapterThatNeedsYou: Story = {
       </p>
     ),
   },
+};
+
+/**
+ * The header line at the width `.armada-inside`'s own arithmetic leaves the
+ * panel at `--window-floor` (`screens.css`, `380px against --window-floor's
+ * 768 leaves 363 for the panel`) — not a number invented for this story.
+ *
+ * **The regression this guards.** The name and the act used to be two
+ * unshrinkable neighbours on one flex row, with the header's meta caught
+ * between them: at this width the turn count printed over the act
+ * (`1mOpen the log`) and the name — which chapter this is — drew nothing at
+ * all. The name never shrinks now; the meta ellipsises first, and the act
+ * moves to a line of its own rather than share one it no longer fits on.
+ */
+export const AtTheFloor: Story = {
+  name: "At the floor width",
+  render: () => (
+    <div style={{ width: "calc(var(--window-floor) - var(--w-run-column) - var(--space-6))" }}>
+      <Chapter
+        ordinal={2}
+        name="Working"
+        meta="105 turns · 1m 46s"
+        open
+        onToggle={() => {}}
+        bodyId="chapter-floor"
+        act={
+          <Button variant="ghost" size="sm" onClick={() => {}}>
+            Open the log
+            <Kbd>L</Kbd>
+          </Button>
+        }
+      >
+        <p style={{ margin: 0, fontSize: "var(--text-xs)", lineHeight: "var(--leading-xs)", color: "var(--fg-muted)" }}>
+          The activity log's own rows, folded here — this story is about the header line above them.
+        </p>
+      </Chapter>
+    </div>
+  ),
 };
 
 /**
