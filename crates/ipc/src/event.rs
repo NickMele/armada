@@ -23,7 +23,7 @@ use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
 use crate::proposing::ProposalInFlight;
 use crate::reading::ManifestReading;
-use crate::rehearsal::RunRecord;
+use crate::rehearsal::{CheckoutRunRecord, RunRecord};
 use crate::servers::ServerState;
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
@@ -123,6 +123,11 @@ pub enum Event {
     ManifestReread(ManifestReading),
     #[serde(rename = "run.finished")]
     RunFinished(RunRecord),
+    // The same fact for the main checkout, and its own kind because the record
+    // is its own shape: this one names no Job, so a reader that folds
+    // `run.finished` by `job_id` cannot be handed it.
+    #[serde(rename = "checkout_run.finished")]
+    CheckoutRunFinished(CheckoutRunRecord),
     // A server's three lifecycle facts, each carrying the instance whole so a
     // row is replaced rather than patched. Its output is `observe_server`'s.
     #[serde(rename = "server.starting")]

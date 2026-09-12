@@ -13,7 +13,7 @@ import type { JudgeInFlight, Settled } from "./detail";
 import type { JobForgotten, JobList, JobSummary, Reason } from "./protocol";
 import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
-import type { RunRecord } from "./rehearsal";
+import type { CheckoutRunRecord, RunRecord } from "./rehearsal";
 import type { ServerState } from "./servers";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
@@ -57,6 +57,8 @@ export type Event =
   | ({ kind: "proposal.moved" } & ProposalMoved)
   | ({ kind: "manifest.reread" } & ManifestReading)
   | ({ kind: "run.finished" } & RunRecord)
+  /** A run in the main checkout ended. Its own kind: the record names no Job. Since 11.9. */
+  | ({ kind: "checkout_run.finished" } & CheckoutRunRecord)
   | ({ kind: "server.starting" } & ServerState)
   | ({ kind: "server.serving" } & ServerState)
   | ({ kind: "server.exited" } & ServerState);

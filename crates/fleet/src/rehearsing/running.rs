@@ -140,13 +140,13 @@ where
         // run on `run.finished` is not refused as though this one were out.
         drop(held);
         let _ = done.send(Some(record.clone()));
-        // **A Job's runs only.** `run.finished` carries a `RunRecord`, whose
-        // `job_id` says which Job Bridge re-reads on it; a checkout run moves
-        // no row on any surface that stream feeds. Its end is the answer to
-        // `stop_checkout_run`, and the close of its own socket.
-        if let Some(finished) = record.of_job() {
-            self.publish(ipc::Event::RunFinished(finished));
-        }
+        // **One kind per owner, because the record is one shape per owner.** A
+        // reader folding `run.finished` by its `job_id` is never handed one
+        // that has none.
+        self.publish(match record.of_job() {
+            Some(finished) => ipc::Event::RunFinished(finished),
+            None => ipc::Event::CheckoutRunFinished(record.of_checkout()),
+        });
     }
 
     /// A Check's prerequisites, in order, then the command — into one log.

@@ -625,6 +625,13 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // The same, for a run in the main checkout. Its own kind because it names
+    // no Job, so a reader folding the one above by `job_id` cannot be given it.
+    Route {
+        operation: "checkout_run.finished",
+        method: "GET",
+        path: "/events",
+    },
     // A server's three lifecycle facts. Its output is `observe_server`'s.
     Route {
         operation: "server.starting",

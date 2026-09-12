@@ -1415,7 +1415,7 @@ transport = "WebSocket"
 agent_access = "No"
 description = "One person's run in the main checkout - what its log holds, then what it prints next - on a socket of its own"
 notes = """
-`observe_run`'s socket, one owner over, message for message. It is also how a caller learns a checkout run ended: nothing about one rides `/events`, so the socket closing is the end.
+`observe_run`'s socket, one owner over, message for message. What ended the run is `checkout_run.finished`'s, as it is for a Job — this carries only what the run printed.
 
 `agent_access` is `No` for `observe_run`'s reason.
 """
@@ -1434,7 +1434,7 @@ notes = """
 
 A destructive Command runs without approval, as the Manifest concept page settles: a person's own invocation is not approved a second time. The confirmation that names it is Bridge's.
 
-It answers at once with the run underway, and output arrives on `observe_checkout_run`. **It publishes nothing on `/events`** — `run.finished` carries a `RunRecord`, whose `job_id` is what a reader re-reads on, and a checkout run moves no row on any surface that stream feeds.
+It answers at once with the run underway, output arrives on `observe_checkout_run`, and the end is `checkout_run.finished` on `/events` — its own kind, because the record names no Job.
 """
 
 [operations.stop_checkout_run]
@@ -1728,6 +1728,17 @@ agent_access = "Bridge only"
 description = "A person's run ended: its record, with exit code, duration and what it changed"
 notes = """
 Carries the whole `RunRecord` — the row `list_runs` answers — so the sheet draws the result and the changed files without a read. Published after the record is written, so a reader that re-reads on it finds the run in the history.
+"""
+
+[operations."checkout_run.finished"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "A run in the main checkout ended: its record, with exit code, duration and what it changed"
+notes = """
+`run.finished` for the other owner, and a kind of its own because the record is a different shape. It carries `CheckoutRunRecord`, which names no Job — so a reader folding `run.finished` by its `job_id` is never handed one that has none, which is the whole reason the two are not one kind.
+
+Published after the record is written, `run.finished`'s reason. It is what makes the Manifest surface and the Job's run sheet the same surface to write against: both learn a run ended from this stream carrying the result, rather than one of them re-fetching after a socket closed.
 """
 
 [operations."server.starting"]

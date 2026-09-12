@@ -39,12 +39,17 @@ setup:
 "#;
 
 fn a_fleet_over(home: &TempDir) -> Arc<Fixture> {
+    a_fleet_watched(home, &api::Broadcaster::new())
+}
+
+fn a_fleet_watched(home: &TempDir, events: &api::Broadcaster) -> Arc<Fixture> {
     let manifest = config::Manifest::parse(Path::new("armada.yml"), MANIFEST)
         .unwrap_or_else(|why| panic!("the fixture manifest did not parse: {why}"));
     let mut fittings = fittings(home, FakeWorkProduct::changed(&[]));
     fittings.manifest = manifest;
     // Past `sleep`'s thirty seconds, so what ends that run is Stop.
     fittings.budget = CheckBudget::of(Duration::from_secs(120));
+    fittings.events = events.clone();
     Arc::new(Fleet::assembled(fittings))
 }
 
@@ -250,4 +255,48 @@ async fn a_checkout_run_and_a_jobs_run_do_not_lock_each_other_out() {
         .stop_rehearsal(job.id(), jobs.id)
         .await
         .expect("the Job's run stopped");
+}
+
+/// **One kind per owner.** A Job's run ends with `run.finished` carrying a
+/// `RunRecord`; this one ends with `checkout_run.finished` carrying a record
+/// that names no Job — so a reader folding the first by its `job_id` is never
+/// handed one that has none.
+#[tokio::test]
+async fn a_checkout_run_ends_with_its_own_kind_on_the_stream() {
+    let home = TempDir::new();
+    a_repository_at(home.path());
+    let events = api::Broadcaster::new();
+    let fleet = a_fleet_watched(&home, &events);
+    let mut watching = events.subscribe();
+
+    let underway = Arc::clone(&fleet)
+        .start_checkout_rehearsal(ipc::StartCheckoutRun {
+            name: String::from("lint"),
+        })
+        .await
+        .expect("underway");
+
+    let seen = tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            match watching.next().await {
+                Some(api::Next::Send(delivered)) => match delivered.event {
+                    ipc::Event::CheckoutRunFinished(record) if record.id == underway.id => {
+                        return record
+                    }
+                    ipc::Event::RunFinished(record) => {
+                        panic!("a checkout run published a Job's kind: {}", record.id)
+                    }
+                    _ => continue,
+                },
+                Some(_) => continue,
+                None => panic!("the stream closed"),
+            }
+        }
+    })
+    .await
+    .expect("the event arrived");
+
+    assert_eq!(seen.name, "lint");
+    assert_eq!(seen.exit_code, Some(0));
+    assert_eq!(seen.ended, "exited 0");
 }

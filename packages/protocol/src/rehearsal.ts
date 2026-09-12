@@ -190,7 +190,7 @@ export type RunFollowed =
   | { state: "failed"; jobId: string; runId: string; detail: string };
 
 // ---------------------------------------------------------------------------
-// The checkout's half — Journey 9, *Running one*. Since protocol 11.6.
+// The checkout's half — Journey 9, *Running one*. Since protocol 11.9.
 // ---------------------------------------------------------------------------
 //
 // Its own shapes rather than the Job's with the id left out: every type above
@@ -266,8 +266,8 @@ export type CheckoutRunList = {
 
 /**
  * One message on `GET /manifest/runs/:run_id/observe`. `RunMessage`'s four,
- * one owner over. **It is also how a checkout run's end arrives**: nothing
- * about one rides `/events`, so the socket closing is the end.
+ * one owner over. What ended the run is `checkout_run.finished`'s, as it is
+ * for a Job; this carries only what the run printed.
  */
 export type CheckoutRunMessage =
   | ({ message: "opened" } & CheckoutRunOpened)
