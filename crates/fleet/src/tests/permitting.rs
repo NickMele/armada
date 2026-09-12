@@ -283,6 +283,10 @@ async fn a_command_taken_back_is_no_longer_allowed() {
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
     fleet
+        .set_when_blocked(&job, WhenBlocked::RefuseAndHold)
+        .await
+        .unwrap();
+    fleet
         .store()
         .lock()
         .await
