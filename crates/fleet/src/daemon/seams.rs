@@ -29,6 +29,7 @@ use crate::delivery::Delivered;
 use crate::drone::{environment, HostPaths};
 use crate::dry_run::DryRuns;
 use crate::evidence::EvidenceInbox;
+use crate::explaining::Explaining;
 use crate::gate::CheckBudget;
 use crate::headroom::{Headroom, Machine, Polling};
 use crate::holding::Reclaiming;
@@ -233,6 +234,31 @@ where
                 },
                 // No worktree, no Manifest ports resolved against one -- a
                 // Judge and a proposer call carry neither.
+                &[],
+            )?,
+        })
+    }
+
+    /// What a reading of one blocked command needs in order to ask.
+    ///
+    /// **The Judge's client, budget and dial, rather than a fourth set.** The
+    /// call is the same call — one turn, no toolset, no directory — and the
+    /// model is the same cheap one, which `crates/ipc/operations.toml` says
+    /// outright: the dial `judge_model` already derives, and not a fourth
+    /// spelling of a vendor's name. What it does not take is a Job, because a
+    /// reading is marked nowhere and filed nowhere.
+    pub(crate) fn explaining(&self) -> Result<Explaining, SpawnConfigRefused> {
+        Ok(Explaining {
+            client: Arc::clone(&self.judge),
+            budget: self.judge_budget,
+            model: self.judge_model.clone(),
+            environment: environment(
+                HostPaths {
+                    path: &self.host.path,
+                    user: &self.host.user,
+                    home: &self.host.home,
+                },
+                // No worktree, for `judging`'s reason one call over.
                 &[],
             )?,
         })

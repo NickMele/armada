@@ -65,12 +65,11 @@
 import { JobHoldsSummary } from "@armada/components";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { type RunTreeStep } from "@armada/components";
 import { InsideAJob } from "./InsideAJob";
 
 import type { CommandAnswer, Examination, FileReport, FollowedLog, History, Holds, JobSummary, Journalled, JudgeAnswer, ManifestSummary, ModelChoices, Observed, Outcome, Watched, WhenBlocked, WhenRefused, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
-import { useCallArguments, type ReadCall } from "./calls";
+import { useCallArguments, type ExplainCommand, type ReadCall } from "./calls";
 import {
   useCheckOutputs,
   useFollowing,
@@ -83,7 +82,8 @@ const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames, type ReadFrame } from "./frames";
 import { openArtifact } from "./opening";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
-import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
+import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
+import { named } from "./run-labels";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
@@ -148,7 +148,9 @@ export type JobDetailProps = {
    * same call answers a command a drone is waiting on and a refused row on a
    * stopped job. Straight through, for `onAnswer`'s reason.
    */
-  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer) => void;
+  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer, note?: string) => void;
+  /** Ask what one command does. It decides nothing; absent draws no control. */
+  onExplainCommand?: ExplainCommand;
   /** Answer the question a judge refusal opened. One press is the whole answer. */
   onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
   /** How this job meets the next such command. Live; nothing restarts. */
@@ -343,6 +345,7 @@ export function JobDetail({
   onRedirect,
   onAnswer,
   onAnswerCommand,
+  onExplainCommand,
   onAnswerJudge,
   onSetWhenBlocked,
   onSetWhenRefused,
@@ -671,7 +674,10 @@ export function JobDetail({
   // One way to answer a command the Drone was not given, for both places a
   // person meets one: the command it is waiting on, and a refused row.
   const answering = answeringOf(job.id, stale, acting, onAnswerCommand);
-  const waiting = waitingOf(question, commandOf(whole, now, answering));
+  // Bound to the Job being read, so nothing downstream carries an id back.
+  const explain =
+    onExplainCommand === undefined ? undefined : (call: string) => onExplainCommand(job.id, call);
+  const waiting = waitingOf(question, commandOf(whole, now, answering, explain));
 
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
@@ -866,29 +872,4 @@ export function JobDetail({
       onCopied={onCopied}
     />
   );
-}
-
-/**
- * A step of the run, with its name marked so the keyboard can find the control
- * the name is drawn in.
- *
- * **The marker draws nothing.** It is `display: contents`, so the row lays out
- * exactly as it did with a bare string — which matters on this row, where the
- * name is the only column that flexes and the ellipsis it truncates with is the
- * whole reason the duration column never moves.
- *
- * It is here rather than in `run.ts` because that file builds data and this one
- * builds elements, and it is here at all because `j`/`k` move focus: focus is
- * the only cursor the tree can draw, so the keyboard has to be able to reach
- * the control. Everything else it does to the run goes through `openSteps`.
- */
-function named(step: RunTreeStep): RunTreeStep {
-  return {
-    ...step,
-    label: (
-      <span className="contents" {...namesStep(step.id)}>
-        {step.label}
-      </span>
-    ),
-  };
 }

@@ -221,6 +221,29 @@ pub(crate) async fn get_call<D: Queries>(
     }
 }
 
+/// What one command a Drone was not granted does, read by a model for the
+/// person deciding about it. **It decides nothing**: the offers stay, the Drone
+/// stays held, nothing is recorded, and a person who never asks is answered
+/// exactly as they were before this route existed.
+///
+/// Under the call rather than beside it, because it is a second reading of the
+/// one call `get_call` answers about.
+///
+/// 404 where the Job is unknown, and 404 again where the id names nothing this
+/// Job is waiting on or refused — the reading exists only while that command is
+/// open, so an id naming none is a screen that has moved on. 500 where the
+/// model would not answer, which changes nothing about the command.
+pub(crate) async fn explain_command<D: Queries>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    Path(Called { call_id }): Path<Called>,
+) -> Response {
+    match served.daemon().explain_command(job.id(), call_id).await {
+        Ok(explained) => answer(StatusCode::OK, &explained, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// One Check's own output, read back into the app. **The other end of a path
 /// that opened nothing in Armada.**
 ///

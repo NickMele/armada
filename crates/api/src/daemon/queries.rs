@@ -17,11 +17,11 @@ use crate::daemon::Refusal;
 use crate::observing::Observed;
 use crate::reference::Resolved;
 use ipc::{
-    AlertList, CallArguments, CheckOutput, DroneDetail, DroneId, DroneList, FilesFound,
-    FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestId, ManifestReading,
-    ManifestSummary, ModelChoices, ReportList, RunList, RunOutput, RunSheet, WorkflowSummary,
-    WorktreesHeld,
+    AlertList, CallArguments, CheckOutput, CommandExplained, DroneDetail, DroneId, DroneList,
+    FilesFound, FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence,
+    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestId,
+    ManifestReading, ManifestSummary, ModelChoices, ReportList, RunList, RunOutput, RunSheet,
+    WorkflowSummary, WorktreesHeld,
 };
 
 /// Everything a client reads.
@@ -301,6 +301,27 @@ pub trait Queries: Send + Sync + 'static {
         job_id: JobId,
         call_id: String,
     ) -> impl Future<Output = Result<CallArguments, Refusal>> + Send;
+
+    /// `explain_command` — what one command a Drone was not granted does, read
+    /// by a model for the person who has to decide about it.
+    ///
+    /// **It decides nothing.** The offers the command carries are unchanged,
+    /// the Drone stays held, and nothing is recorded — a Job whose person never
+    /// asks behaves exactly as it did, and asking twice costs two calls.
+    ///
+    /// `call_id` is [`ipc::CommandInFlight::call`] or `ipc::Refusal::call`, the
+    /// same id `answer_command` takes.
+    ///
+    /// [`Refusal::NoSuchJob`] where the id names no Job **and where it names
+    /// nothing this Job is waiting on or refused** — a 404 here where
+    /// `answer_command` answers 409, because the id is only nameable off a
+    /// command that is still open. [`Refusal::Fault`] where the model would not
+    /// answer, which leaves the command exactly as it was.
+    fn explain_command(
+        &self,
+        job_id: JobId,
+        call_id: String,
+    ) -> impl Future<Output = Result<CommandExplained, Refusal>> + Send;
 
     /// `get_check_output` — one Check's own output, read back into the app.
     ///

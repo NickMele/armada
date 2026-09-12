@@ -11,6 +11,7 @@
 import type {
   CallArguments,
   CheckOutput,
+  CommandExplained,
   JobDetail,
   JobExamined,
   JobFilesChanged,
@@ -239,6 +240,24 @@ export type Turn = {
  */
 export type CallRead =
   | { ok: true; call: CallArguments }
+  | { ok: false; outcome: Outcome };
+
+/**
+ * What a reading of one command came back as. Since protocol 11.5.
+ *
+ * **`CallRead`'s shape, and for its reasons.** A reading is asked for by one
+ * person about one call and answered once; it never moves afterwards, so it is
+ * answered to the caller rather than published as state that every surface
+ * re-renders on.
+ *
+ * It lives here rather than beside either reader because both need it: the
+ * screen that draws it, and the preload surface that carries it. `shared/`
+ * cannot import the screens package — that would pull JSX into the main and
+ * preload programs, which have no DOM — so a type spelled in both is a second
+ * vocabulary waiting to drift.
+ */
+export type CommandExplainedRead =
+  | { ok: true; explained: CommandExplained }
   | { ok: false; outcome: Outcome };
 
 /**

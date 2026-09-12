@@ -28,7 +28,7 @@ use tokio::sync::oneshot;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::permitting::{first, First, Permitted, Refusing, Waiting};
+use crate::permitting::{first, Answered, First, Permitted, Refusing, Waiting};
 use crate::resume::Steer;
 use crate::session::{LiveSession, Occasion};
 
@@ -133,11 +133,14 @@ fn said(answer: CommandAnswer) -> &'static str {
 }
 
 /// The turn an answer becomes where the call it was about has returned.
-fn permitted(command: &str, answer: CommandAnswer) -> Permitted {
-    match answer {
-        CommandAnswer::AllowForJob => Permitted::allowed(command, Reach::Job),
-        CommandAnswer::AlwaysAllow => Permitted::allowed(command, Reach::Repository),
-        CommandAnswer::Reject => Permitted::rejected(command),
+///
+/// **The note rides the reject and nothing else can read it**: [`Answered`] has
+/// no field for one on an allow, so there is no arm here that could carry a
+/// person's words into a sentence about a command that was permitted.
+fn permitted(command: &str, answered: &Answered) -> Permitted {
+    match answered {
+        Answered::Allowed(reach) => Permitted::allowed(command, *reach),
+        Answered::Rejected(note) => Permitted::rejected(command, note.as_ref()),
     }
 }
 
@@ -248,7 +251,7 @@ where
         job_id: &JobId,
         asked: &PermissionAsked,
         what: &str,
-        answer: &mut oneshot::Receiver<CommandAnswer>,
+        answer: &mut oneshot::Receiver<Answered>,
     ) -> PermissionAnswer {
         let answered = match tokio::time::timeout(HOLD, &mut *answer).await {
             Ok(answered) => answered.ok(),
@@ -272,11 +275,12 @@ where
             }
         };
         match answered {
-            Some(CommandAnswer::AllowForJob | CommandAnswer::AlwaysAllow) => {
-                PermissionAnswer::Allow
-            }
-            Some(CommandAnswer::Reject) => {
-                PermissionAnswer::Deny(Refusing::Rejected.to_the_drone(what))
+            Some(Answered::Allowed(_)) => PermissionAnswer::Allow,
+            // **Where a person's words reach a Drone soonest**: inside the call
+            // it is still holding open, which is the path every promptly
+            // answered reject takes.
+            Some(Answered::Rejected(note)) => {
+                PermissionAnswer::Deny(Refusing::Rejected { note }.to_the_drone(what))
             }
             None => PermissionAnswer::Deny(Refusing::Asked.to_the_drone(what)),
         }
@@ -438,12 +442,16 @@ where
         &self,
         job_id: &JobId,
         call: &str,
-        answer: CommandAnswer,
+        answered: Answered,
     ) -> Result<(), NotPermitted> {
-        if self.answer_waiting(job_id, call, answer).await? {
+        // Cloned rather than handed back out of the first call: the two paths
+        // are tried in order and only one of them consumes it, and a signature
+        // that returned the answer to try the second with would be a bool with
+        // a value smuggled through it.
+        if self.answer_waiting(job_id, call, answered.clone()).await? {
             return Ok(());
         }
-        self.answer_refused(job_id, call, answer).await
+        self.answer_refused(job_id, call, answered).await
     }
 
     /// `true` where the call was waiting and is answered.
@@ -451,8 +459,9 @@ where
         &self,
         job_id: &JobId,
         call: &str,
-        answer: CommandAnswer,
+        answered: Answered,
     ) -> Result<bool, NotPermitted> {
+        let answer = answered.answer();
         let Some(slot) = self.slot_of(job_id).await else {
             return Ok(false);
         };
@@ -467,17 +476,23 @@ where
         let (_, _, worktree) = at_work.standing();
         self.record_answer(job_id, &worktree, &command, answer)
             .await?;
-        if answer == CommandAnswer::Reject {
-            at_work.refused_by_fleet(&tool, call, &Refusing::Rejected.to_the_drone(&command));
+        if let Answered::Rejected(note) = &answered {
+            at_work.refused_by_fleet(
+                &tool,
+                call,
+                &Refusing::Rejected { note: note.clone() }.to_the_drone(&command),
+            );
         }
         // **Down the held call where it is still held**, and as a turn where
         // the hold ended first. A send that fails is a hold that ended between
-        // the two readings, and is a turn too.
-        let in_the_call = at_work
-            .permission_reply()
-            .is_some_and(|reply| reply.send(answer).is_ok());
-        if !in_the_call {
-            let told = permitted(&command, answer);
+        // the two readings, and is a turn too — and it hands the answer back,
+        // so the person's words are not lost between the two readings either.
+        let as_a_turn = match at_work.permission_reply() {
+            Some(reply) => reply.send(answered).err(),
+            None => Some(answered),
+        };
+        if let Some(answered) = as_a_turn {
+            let told = permitted(&command, &answered);
             at_work.instructed(Occasion::Permission, told.text());
             at_work
                 .session()
@@ -508,8 +523,9 @@ where
         &self,
         job_id: &JobId,
         call: &str,
-        answer: CommandAnswer,
+        answered: Answered,
     ) -> Result<(), NotPermitted> {
+        let answer = answered.answer();
         let nothing = || NotPermitted::NothingToAnswer {
             call: call.to_string(),
         };
@@ -537,7 +553,7 @@ where
         }
         let step = crate::stuck::stopped_step(&job).cloned();
         let delivered = if self.drone_speakable(job_id).await {
-            self.steer(job_id, Steer::Permission(&permitted(&command, answer)))
+            self.steer(job_id, Steer::Permission(&permitted(&command, &answered)))
                 .await
                 .map(|_| ())
         } else {
@@ -565,7 +581,11 @@ where
     /// The tool and the whole command of one refusal on the step this Job
     /// stopped on. **The whole command**, off the transcript, where the row
     /// carried it cut: the command is what gets allowed.
-    async fn refused_row(&self, job: &Job, call: &str) -> Option<(String, Option<String>)> {
+    pub(crate) async fn refused_row(
+        &self,
+        job: &Job,
+        call: &str,
+    ) -> Option<(String, Option<String>)> {
         let records = &self.host().records_root;
         let handle = job.handle();
         let refusals =

@@ -51,6 +51,10 @@ mod drones;
 mod enums;
 mod error;
 mod event;
+/// What a cheap model said one command a Drone reached for does, for the
+/// person deciding whether to allow it. **It decides nothing** — the offers
+/// are the same whether or not anybody asks.
+mod explaining;
 /// What `search_files` found under the checkout, for the `@` mention popup.
 mod files;
 /// What Fleet can say about its own health, and what it cannot. **Not
@@ -147,6 +151,7 @@ pub use event::{
     JobRemarksChanged, JobStateChanged, JobStepAdvanced, Missed, ProposalMoved, Reason, Resync,
     StreamMessage,
 };
+pub use explaining::CommandExplained;
 pub use files::FilesFound;
 pub use health::{FleetHealth, Probe, Unprobed};
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};

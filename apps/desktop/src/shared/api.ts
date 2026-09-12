@@ -12,6 +12,7 @@ import type {
   CheckOutputRead,
   ClearOutcome,
   CommandAnswer,
+  CommandExplainedRead,
   Draft,
   FileReport,
   Followed,
@@ -30,6 +31,12 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { BridgeState, Summons } from "./bridge";
+
+/**
+ * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and
+ * re-exported here because this is the surface the renderer reads.
+ */
+export type { CommandExplainedRead } from "@armada/protocol";
 
 /** The whole preload surface, and therefore everything the renderer can reach. */
 export type BridgeApi = {
@@ -175,7 +182,22 @@ export type BridgeApi = {
    * where the call names nothing waiting or refused, and where the answer was
    * not offered.
    */
-  answerCommand: (jobId: string, call: string, answer: CommandAnswer) => Promise<Outcome>;
+  answerCommand: (
+    jobId: string,
+    call: string,
+    answer: CommandAnswer,
+    note?: string,
+  ) => Promise<Outcome>;
+  /**
+   * What one command does, in a cheap model's words, for the person deciding
+   * whether to allow it.
+   *
+   * **A read, and it decides nothing.** The offers the command carries are
+   * unchanged and the three answers stay live while this is out — a person who
+   * never asks is answered exactly as before. It names the model, because a
+   * reading is a claim rather than a fact.
+   */
+  explainCommand: (jobId: string, callId: string) => Promise<CommandExplainedRead>;
   /**
    * Change how one job meets a command its drone was not given. **Live**: the
    * next command the drone reaches for reads it, and no drone is respawned.

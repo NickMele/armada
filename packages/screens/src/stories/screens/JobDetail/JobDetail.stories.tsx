@@ -165,7 +165,79 @@ export const WaitingOnACommand: Story = {
     answerCommand.mockClear();
     await userEvent.click(await canvas.findByRole("radio", { name: "Allow for this job" }));
     await userEvent.click(canvas.getByRole("button", { name: "Send this answer" }));
-    await expect(answerCommand).toHaveBeenCalledWith(JOB_ID, WAITING_CALL, "allow_for_job");
+    // No note: an allow tells the drone everything it acts on, and the field is
+    // never drawn under it.
+    await expect(answerCommand).toHaveBeenCalledWith(
+      JOB_ID,
+      WAITING_CALL,
+      "allow_for_job",
+      undefined,
+    );
+  },
+};
+
+/**
+ * The same command, refused with a reason.
+ *
+ * **What goes is the call, the wire's word and the person's own words** — one
+ * act, because the reason exists at the moment somebody presses reject and a
+ * second surface for it is a second chance to lose it.
+ */
+export const RejectingWithAReason: Story = {
+  name: "Rejecting a command, with a reason",
+  render: () => (
+    <JobDetailFrom fixture={runningWaitingOnACommand()} on={{ onAnswerCommand: answerCommand }} />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    answerCommand.mockClear();
+    await userEvent.click(await canvas.findByRole("radio", { name: "Reject" }));
+    await userEvent.type(
+      canvas.getByLabelText("Note (optional)"),
+      "we are not taking that dependency",
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "Send this answer" }));
+    await expect(answerCommand).toHaveBeenCalledWith(
+      JOB_ID,
+      WAITING_CALL,
+      "reject",
+      "we are not taking that dependency",
+    );
+  },
+};
+
+/** What the reading asks for, and what comes back. A module's spy, cleared by its play. */
+const explainCommand = fn(async () => ({
+  ok: true as const,
+  explained: {
+    explanation:
+      "It adds reselect 5.1.1 to this repository as a development dependency and writes the lockfile. It reaches the network.",
+    model: "haiku",
+  },
+}));
+
+/**
+ * Reading the command before answering it.
+ *
+ * **It decides nothing**, which is the second half of this play: the three
+ * answers are live after the reading lands, exactly as they were before anybody
+ * pressed. The model is named, because a reading is a claim and not a fact.
+ */
+export const ReadingACommand: Story = {
+  name: "Reading a command before answering",
+  render: () => (
+    <JobDetailFrom fixture={runningWaitingOnACommand()} on={{ onExplainCommand: explainCommand }} />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    explainCommand.mockClear();
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Help me understand this command" }),
+    );
+    await expect(explainCommand).toHaveBeenCalledWith(JOB_ID, WAITING_CALL);
+
+    const reading = within(await canvas.findByRole("status", { name: "What this command does" }));
+    await expect(reading.getByText(/adds reselect 5\.1\.1/)).toBeVisible();
+    await expect(reading.getByText("haiku")).toBeVisible();
+    await expect(canvas.getByRole("radio", { name: "Reject" })).toBeEnabled();
   },
 };
 

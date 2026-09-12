@@ -332,6 +332,9 @@ export const CHANNELS = {
   redirectDrone: "bridge:redirect-drone",
   answerQuestion: "bridge:answer-question",
   answerCommand: "bridge:answer-command",
+  // What a command does, read for the person deciding about it. A read: it
+  // moves nothing, and the three answers are live while it is out.
+  explainCommand: "bridge:explain-command",
   setWhenBlocked: "bridge:set-when-blocked",
   answerJudge: "bridge:answer-judge",
   setWhenRefused: "bridge:set-when-refused",

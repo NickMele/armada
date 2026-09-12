@@ -65,6 +65,9 @@ pub mod evidence;
 /// Going and looking at a Job now, because somebody suspects it is wedged.
 /// **The rung below intervene**, and it costs no model call.
 mod examining;
+/// Asking a cheap model what one blocked command does, for the person deciding
+/// whether to allow it. It decides nothing and moves nothing.
+pub mod explaining;
 /// Walking the checkout for `search_files`, the `@` mention popup's read.
 mod files;
 /// A running Check's log, read for `observe_check_output` as it grows.

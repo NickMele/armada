@@ -39,8 +39,8 @@ use crate::fleetwide::{
     get_drone, get_events_since, get_health, get_manifest, get_usage, list_drones,
 };
 use crate::queries::{
-    get_call, get_capacity, get_check_output, get_diff, get_evidence, get_frame, get_job,
-    get_job_events, get_job_resources, get_manifest_reading, get_remarks, list_jobs,
+    explain_command, get_call, get_capacity, get_check_output, get_diff, get_evidence, get_frame,
+    get_job, get_job_events, get_job_resources, get_manifest_reading, get_remarks, list_jobs,
     list_manifests, list_models, list_reports, list_workflows, list_worktrees, search_files,
 };
 use crate::rehearsing::{
@@ -164,6 +164,16 @@ pub const SERVED: &[Route] = &[
         operation: "get_call",
         method: "GET",
         path: "/jobs/:job_id/calls/:call_id",
+    },
+    // What that call would do, read by a model for the person deciding whether
+    // to allow it. Under the call and not beside it: it is a second reading of
+    // the one call above, on the same id `answer_command` takes. A query,
+    // because it decides nothing — the offers are unchanged and the Drone stays
+    // held whatever it says.
+    Route {
+        operation: "explain_command",
+        method: "GET",
+        path: "/jobs/:job_id/calls/:call_id/explain",
     },
     // One Check's output, read into the app rather than handed to the operating
     // system. `:kept` is a row's own file name — the last component of
@@ -736,6 +746,10 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/resources", get(get_job_resources::<D>))
         .route("/jobs/:job_id/examine", post(examine_job::<D>))
         .route("/jobs/:job_id/calls/:call_id", get(get_call::<D>))
+        .route(
+            "/jobs/:job_id/calls/:call_id/explain",
+            get(explain_command::<D>),
+        )
         .route(
             "/jobs/:job_id/checks/:kept/output",
             get(get_check_output::<D>),

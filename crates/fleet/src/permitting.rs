@@ -23,6 +23,7 @@ mod holding;
 pub use holding::{domain_setting, wire_setting, NotPermitted};
 
 use core_model::{AllowedCommand, Reach, StepId, Timestamp, WhenBlocked};
+use ipc::CommandAnswer;
 use tokio::sync::oneshot;
 
 /// A permission question a person has been asked, about a call this Drone
@@ -43,7 +44,75 @@ pub struct Waiting {
     ///
     /// **`None` once the hold has ended**, the Drone having been told to wait
     /// for a turn: the answer then arrives as a [`Permitted`] turn instead.
-    pub reply: Option<oneshot::Sender<ipc::CommandAnswer>>,
+    ///
+    /// It carries [`Answered`] rather than `ipc::CommandAnswer` since 11.5,
+    /// because a reject may carry the person's own words and the words have to
+    /// reach the Drone inside the call it is still holding open.
+    pub reply: Option<oneshot::Sender<Answered>>,
+}
+
+/// What a person answered about one command, and their words where a reject
+/// carried any.
+///
+/// **An allow has no field for a note and that is the whole shape of it.** A
+/// note is only ever read on a reject — an allow needs no reason, and a Drone
+/// told why it was allowed learns nothing it can act on — so the case where one
+/// could be carried and dropped is not representable rather than checked for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Answered {
+    /// Allowed, this far.
+    Allowed(Reach),
+    /// Rejected, with the person's words where they wrote any.
+    Rejected(Option<Note>),
+}
+
+impl Answered {
+    /// A person's answer, read off the wire's three offers and the note beside
+    /// them. **A note sent with an allow is dropped here**, at the one place
+    /// that decides which of the two an answer is.
+    pub fn of(answer: CommandAnswer, note: Option<&str>) -> Answered {
+        match answer {
+            CommandAnswer::AllowForJob => Answered::Allowed(Reach::Job),
+            CommandAnswer::AlwaysAllow => Answered::Allowed(Reach::Repository),
+            CommandAnswer::Reject => Answered::Rejected(note.and_then(Note::saying)),
+        }
+    }
+
+    /// The same answer as one of the three offers, for the check that it was
+    /// offered and the log line that records what was said. **Derived rather
+    /// than carried**, so the two cannot come to disagree.
+    pub fn answer(&self) -> CommandAnswer {
+        match self {
+            Answered::Allowed(Reach::Job) => CommandAnswer::AllowForJob,
+            Answered::Allowed(Reach::Repository) => CommandAnswer::AlwaysAllow,
+            Answered::Rejected(_) => CommandAnswer::Reject,
+        }
+    }
+}
+
+/// Why a person said no, in their own words.
+///
+/// **There is no way to make an empty one.** A field somebody opened and typed
+/// nothing into is the same request as no note at all — `redirect_drone`'s rule
+/// about a blank note, which this borrows rather than restates — and a heading
+/// with nothing under it is what a Drone would otherwise be handed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Note(String);
+
+impl Note {
+    /// The note, or `None` where there is nothing in it. Trimmed, because the
+    /// whitespace is a person's keystrokes and not their reason.
+    pub fn saying(note: &str) -> Option<Note> {
+        let note = note.trim();
+        match note.is_empty() {
+            true => None,
+            false => Some(Note(note.to_string())),
+        }
+    }
+
+    pub fn text(&self) -> &str {
+        &self.0
+    }
 }
 
 /// What the permission tool answers before anybody is asked.
@@ -162,8 +231,10 @@ pub enum Refusing {
     AlreadyAsking {
         other: String,
     },
-    /// A person said no.
-    Rejected,
+    /// A person said no, and said why where they wrote anything.
+    Rejected {
+        note: Option<Note>,
+    },
     Withheld(Withheld),
 }
 
@@ -214,7 +285,7 @@ impl Refusing {
                 "A person is being asked whether you may run `{other}`. Wait for that answer, \
                  which arrives as your next turn, before reaching for `{what}`."
             ),
-            Refusing::Rejected => rejected(what),
+            Refusing::Rejected { note } => rejected(what, note.as_ref()),
             Refusing::Withheld(Withheld::Destructive { .. }) => format!(
                 "`{what}` is declared destructive in this repository, and an unattended task \
                  never runs it. Do not try to get the same result another way."
@@ -231,20 +302,41 @@ impl Refusing {
     }
 }
 
-fn rejected(what: &str) -> String {
-    format!(
+/// The refusal a person's no becomes, and their reason under it where they
+/// gave one.
+///
+/// **Fleet's sentence is unchanged and the note is attributed.** The two are
+/// separated and the person's words are introduced as theirs, on their own
+/// lines and unquoted — a Drone that read them as Armada's would treat one
+/// person's reason as a standing rule, and a note carrying a backtick or a
+/// newline would otherwise run into the sentence around it.
+fn rejected(what: &str, note: Option<&Note>) -> String {
+    let refusal = format!(
         "A person said no to `{what}`. Do not run it, or anything that does the same thing. \
          Carry on without it if the task allows, or ask a question if it cannot be done \
          without it."
-    )
+    );
+    match note {
+        None => refusal,
+        Some(note) => format!(
+            "{refusal}\n\nThis is what the person said, in their own words:\n\n{}",
+            note.text()
+        ),
+    }
 }
 
 /// A person's answer to a permission question, as a turn, arriving after the
 /// call it was about has returned.
 ///
-/// **No constructor takes free text**, the property `crate::questioning::Answer`
-/// has and for its reason: the words are Fleet's, around a command the Drone
-/// itself ran.
+/// **One constructor takes free text, and only on a reject.** It did not until
+/// 11.5, on `crate::questioning::Answer`'s property and for its reason — the
+/// words were Fleet's, around a command the Drone itself ran. What changed is
+/// where the reason lives: it is in a person's head exactly when they press
+/// reject, and telling them to reject here and redirect from another box spends
+/// it. So [`Permitted::rejected`] takes a [`Note`], which cannot be empty, and
+/// [`Permitted::allowed`] still takes none — an allow needs no reason, and the
+/// text around both is still Fleet's with the person's words attributed inside
+/// it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Permitted(String);
 
@@ -263,8 +355,8 @@ impl Permitted {
         })
     }
 
-    pub fn rejected(command: &str) -> Permitted {
-        Permitted(rejected(command))
+    pub fn rejected(command: &str, note: Option<&Note>) -> Permitted {
+        Permitted(rejected(command, note))
     }
 
     pub fn text(&self) -> &str {

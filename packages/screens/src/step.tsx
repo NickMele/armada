@@ -29,12 +29,14 @@ import {
   JudgeRefusal,
   Refusals,
 } from "@armada/components";
-import type { JobDetailField } from "@armada/components";
+import type { Explaining, JobDetailField } from "@armada/components";
 import type { StepNotice } from "./InsideAJob";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
-import type { CommandAnswer, Criterion, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
-import { answerNamed, offeredOf } from "./copy";
+import type { CommandAnswer, CommandInFlight, Criterion, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
+import type { CommandExplainedRead } from "./calls";
+import { answerNamed, offeredOf, said } from "./copy";
 import { span } from "./duration";
 import { panelsOf, sentenceOf } from "./gates";
 import { Opening, openKept, type Opens } from "./phases";
@@ -119,7 +121,11 @@ const LATE_ANSWER =
  * the call id is what says which, and both are off for the same two reasons.
  */
 export type Answering = {
-  send: (call: string, answer: CommandAnswer) => void;
+  /**
+   * The answer, and the words typed with it where there are any. **Only a
+   * reject reads them**, which is Fleet's rule rather than this screen's.
+   */
+  send: (call: string, answer: CommandAnswer, note?: string) => void;
   /** What is shown is not live, so nothing may be sent against it. */
   stale: boolean;
   /** An act on this job is already out. */
@@ -130,9 +136,13 @@ export function answeringOf(
   jobId: string,
   stale: boolean,
   acting: boolean,
-  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer) => void,
+  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer, note?: string) => void,
 ): Answering {
-  return { send: (call, answer) => onAnswerCommand(jobId, call, answer), stale, acting };
+  return {
+    send: (call, answer, note) => onAnswerCommand(jobId, call, answer, note),
+    stale,
+    acting,
+  };
 }
 
 /** Why a refused row's answers are off, where the reading is not live. */
@@ -155,11 +165,79 @@ const REFUSED_SENDING = "That answer is already on its way to Fleet.";
  * **Aged here and nowhere else**, on `questionOf`'s terms, and a command cut by
  * the wire says so on a line of its own, as a refused row does.
  */
-export function commandOf(whole: JobWhole | null, now: number, answering: Answering): ReactNode {
+export function commandOf(
+  whole: JobWhole | null,
+  now: number,
+  answering: Answering,
+  explain?: ExplainOne,
+): ReactNode {
   const waiting = whole?.command_waiting;
   if (waiting === undefined) return undefined;
+  // Keyed by the call, so a reading of one command never outlives it.
+  return (
+    <CommandWaiting
+      key={waiting.call}
+      waiting={waiting}
+      now={now}
+      answering={answering}
+      explain={explain}
+    />
+  );
+}
+
+/** Asking what this one command does. The screen is handed the way to ask. */
+type ExplainOne = (call: string) => Promise<CommandExplainedRead>;
+
+/** The field a refusal carries, and what becomes of the words typed in it. */
+const REFUSAL_NOTE = "Note (optional)";
+const REFUSAL_NOTE_SAYS = "Your words go to the drone with the refusal.";
+
+/** What is said where the reading did not arrive and the refusal named no reason. */
+const NO_READING = "Fleet did not explain this command.";
+
+/**
+ * The box, and the one thing in this file that holds state: what came back from
+ * asking what the command does.
+ *
+ * **Held here rather than on the published state**, on `useCallArguments`'s
+ * terms — one person asks about one call, the answer does not move once it has
+ * arrived, and the window does not re-render because somebody read a paragraph.
+ */
+function CommandWaiting({
+  waiting,
+  now,
+  answering,
+  explain,
+}: {
+  waiting: CommandInFlight;
+  now: number;
+  answering: Answering;
+  explain?: ExplainOne;
+}): ReactNode {
+  const [reading, setReading] = useState<Explaining>({ state: "ready" });
   const offered = offeredOf(waiting.offers);
   const cut = shownOf(waiting);
+
+  function ask(): void {
+    if (explain === undefined) return;
+    setReading({ state: "asking" });
+    void explain(waiting.call).then(
+      (answer) =>
+        setReading(
+          answer.ok
+            ? {
+                state: "read",
+                explanation: answer.explained.explanation,
+                model: answer.explained.model,
+              }
+            : { state: "failed", why: said(answer.outcome) || NO_READING },
+        ),
+      // A rejected call is main gone, which is the window closing. Recorded as
+      // an absence so the control is not left reading for the rest of its life.
+      () => setReading({ state: "failed", why: NO_READING }),
+    );
+  }
+
   return (
     <DroneQuestion
       question={
@@ -174,15 +252,23 @@ export function commandOf(whole: JobWhole | null, now: number, answering: Answer
           {cut === undefined ? null : <span className="block">{cut.size}</span>}
         </>
       }
-      options={offered.map(({ label, means }) => ({ label, consequence: means }))}
+      options={offered.map(({ offer, label, means }) => ({
+        label,
+        consequence: means,
+        // Which answer reads words is Fleet's rule, so it is read off the
+        // wire's own spelling and never off the words on the control.
+        ...(offer === "reject" ? { noteLabel: REFUSAL_NOTE, noteSays: REFUSAL_NOTE_SAYS } : {}),
+      }))}
       waiting={span(waiting.asked_at, now) ?? undefined}
       disabled={answering.stale || answering.acting}
       disabledNote={answering.stale ? STALE_NOTE : answering.acting ? SENDING_NOTE : undefined}
       redirectNote={LATE_ANSWER}
       answersLabel="Your answers"
-      onAnswer={(label) => {
+      explain={explain === undefined ? undefined : reading}
+      onExplain={ask}
+      onAnswer={(label, note) => {
         const chose = offered.find((one) => one.label === label);
-        if (chose !== undefined) answering.send(waiting.call, chose.offer);
+        if (chose !== undefined) answering.send(waiting.call, chose.offer, note);
       }}
     />
   );

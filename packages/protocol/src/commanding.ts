@@ -79,13 +79,24 @@ export type CommandInFlight = {
  *
  * **One body for both paths**, because the call id already says which: a call
  * a drone is waiting on is answered in place, and a refused row on a stopped
- * job restarts the step. There is no field for prose.
+ * job restarts the step.
+ *
+ * **It carries prose on a reject, since protocol 11.5.** It did not until
+ * then, and `redirect_drone` was named as where words go — which made saying
+ * why a command was refused two acts in two boxes, and the reason is in a
+ * person's head at the moment of the first one.
  */
 export type AnswerCommand = {
   /** `CommandInFlight.call`, or `Refusal.call`. */
   call: string;
   /** One of that command's `offers`. */
   answer: CommandAnswer;
+  /**
+   * Why, in the person's own words, carried to the drone inside the refusal.
+   * **Only a reject reads it.** Absent is the bare refusal, which is what
+   * every fleet before 11.5 sent.
+   */
+  note?: string;
 };
 
 /**

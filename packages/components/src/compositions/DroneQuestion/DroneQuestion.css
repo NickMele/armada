@@ -70,6 +70,47 @@
   text-wrap: pretty;
 }
 
+/* The field the chosen answer reads, indented to the radio's label edge for
+   `__means`'s reason and by its arithmetic: it belongs to the choice above it,
+   not to the list. Its own stacking, because the field and the sentence under
+   it are two lines of one thing. */
+.armada-question__note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-inline-start: calc(var(--space-4) + var(--space-2));
+  min-width: 0;
+}
+
+/* Reading the command: the control, and whatever came of pressing it.
+   `align-items` is what keeps the button its own width — the section is a flex
+   column, so a control placed straight into it would stretch edge to edge and
+   read as the surface's primary act, which it is deliberately not. */
+.armada-question__explaining {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* What came back, and what read it. **No fill and no edge**, on this file's own
+   rule: the band above carries the one condition, and a well around a model's
+   paragraph would frame it as evidence rather than as a reading. */
+.armada-question__reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A model's paragraph, read once. `pretty` for the reason the drone's own
+   sentence takes it. */
+.armada-question__explanation {
+  min-width: 0;
+  text-wrap: pretty;
+}
+
 /* What is true about the surface rather than about a choice on it. */
 .armada-question__said {
   min-width: 0;

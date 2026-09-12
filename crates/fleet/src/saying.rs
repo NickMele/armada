@@ -473,6 +473,18 @@ impl fmt::Display for Adrift {
                  what a Drone did while a Fleet was writing it down, so an id from a row \
                  whose transcript has since been reclaimed reaches nothing"
             ),
+            Adrift::NothingToExplain { call, .. } => write!(
+                out,
+                "this job is neither waiting on nor refused the call `{call}`, so there is no \
+                 command to read. A reading is only asked for while a person still has the \
+                 command in front of them, and the id is the one `answer_command` takes"
+            ),
+            Adrift::NotExplained { call, cause, .. } => write!(
+                out,
+                "the command on call `{call}` could not be read: {cause}. Nothing about it \
+                 changed — it is waiting exactly as it was, and every answer it offered is \
+                 still offered"
+            ),
             Adrift::NoSuchCheckOutput { named } => write!(
                 out,
                 "no Check of this Job kept an output named `{named}`. The record holds where \
@@ -588,7 +600,11 @@ impl Adrift {
             | Adrift::NotFileable { job, .. }
             | Adrift::DroneStillThere { job }
             | Adrift::WorktreeGone { job, .. }
-            | Adrift::AttachmentUnreadable { job, .. } => Some(job),
+            | Adrift::AttachmentUnreadable { job, .. }
+            // Both name the Job whose command was being decided about, so a
+            // reading that failed is readable from the Job it was asked on.
+            | Adrift::NothingToExplain { job, .. }
+            | Adrift::NotExplained { job, .. } => Some(job),
             Adrift::CommandTimedOut { job, .. } => job.as_ref(),
             Adrift::BootRead(_)
             | Adrift::Reading(_)
@@ -631,13 +647,19 @@ impl Error for Adrift {
             | Adrift::NoDrone { cause, .. }
             | Adrift::NotCommitted { cause, .. } => Some(cause.as_ref()),
             Adrift::NotPrepared { cause, .. } => Some(cause),
+            // The call that would not be made, as the typed leaf the runner
+            // raised rather than as a sentence this rewrote.
+            Adrift::NotExplained { cause, .. } => Some(cause),
             Adrift::PortsRefused { cause, .. } => Some(cause),
             Adrift::NotTold { cause, .. }
             | Adrift::NotReaped { cause, .. }
             | Adrift::NoTranscript { cause, .. }
             | Adrift::AttachmentUnreadable { cause, .. }
             | Adrift::RemarksFileUnwritable { cause, .. } => Some(cause),
-            Adrift::NotDelivered { .. }
+            // An id naming no open command has nothing underneath it: the two
+            // places a command can be were read, and neither held one.
+            Adrift::NothingToExplain { .. }
+            | Adrift::NotDelivered { .. }
             | Adrift::Unworkable { .. }
             | Adrift::NotConfigurable { .. }
             | Adrift::NoSuchStep { .. }
