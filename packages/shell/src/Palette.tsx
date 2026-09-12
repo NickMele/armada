@@ -70,6 +70,29 @@ export type PaletteSurface = {
   icon: LucideIcon;
 };
 
+/**
+ * One thing the Manifest surface can run — a Check, a Command, or a server.
+ *
+ * **A row per entry, not one row spelling "run something".** Journey 9's own
+ * table says the palette carries one entry per Check and Command, for the
+ * reason the Board's filters are five rows rather than the registry's single
+ * `state_filter`: the set is what a person is choosing from, and a row that
+ * named none of them would leave every Check reachable only by finding the
+ * surface first.
+ *
+ * **Its `run` line is the value**, drawn in mono to the right the way a
+ * setting's current value is — so a palette that will run `pnpm -C
+ * apps/desktop typecheck` says so before it is chosen.
+ */
+export type PaletteRunnable = {
+  /** The entry id the Manifest surface uses — `check:format`, `command:fmt`. */
+  id: string;
+  /** The Manifest's own name for it. */
+  label: string;
+  /** The `run` or `serve` line, exactly as declared. */
+  value: string;
+};
+
 /** A setting, which states its current value in mono right of the label. */
 export type PaletteSetting = { id: string; label: string; value: string };
 
@@ -90,6 +113,7 @@ export type PaletteChoice =
   | { of: "act"; id: string }
   | { of: "job"; id: string }
   | { of: "surface"; id: string }
+  | { of: "run"; id: string }
   | { of: "setting"; id: string }
   | { of: "filter"; id: string };
 
@@ -108,6 +132,15 @@ export type PaletteProps = {
   surfaces: readonly PaletteSurface[];
   /** The Board's state filters, where the surface has them. */
   filters?: readonly PaletteFilter[];
+  /**
+   * What the Manifest surface can run, where it is the surface showing.
+   *
+   * **Empty everywhere else, and that is the whole of the scoping.** Choosing
+   * one runs it in the checkout, which is an act on a surface rather than on a
+   * Job — so a row offered from the Board would be a run started from a
+   * surface that cannot show its output.
+   */
+  runnables?: readonly PaletteRunnable[];
   jobs: readonly PaletteJob[];
   settings: readonly PaletteSetting[];
   /** Why an act cannot be chosen here, by action id. Absent means it can. */
@@ -124,6 +157,7 @@ export type PaletteProps = {
 /** The section ids. Their order is the contract's contents order. */
 const CONTEXT = "context";
 const NAVIGATION = "navigation";
+const RUN = "run";
 const JOBS = "jobs";
 const SETTINGS = "settings";
 
@@ -173,6 +207,7 @@ export function Palette({
   on,
   surfaces,
   filters = [],
+  runnables = [],
   jobs,
   settings,
   dormant = {},
@@ -182,6 +217,12 @@ export function Palette({
   const sections: PaletteSection[] = [
     { id: CONTEXT, title: on ?? NOTHING_FOCUSED },
     { id: NAVIGATION, title: "Navigation" },
+    // **Below Navigation and above Jobs, and it is a fifth block.** The
+    // contract's contents order names four, and none of them is this: a Check
+    // is not an act on the Job under the cursor, not a place, not a Job and
+    // not a setting. It sits where it does because it is the one block scoped
+    // to the surface showing — nearer the acts than the index of everything.
+    ...(runnables.length === 0 ? [] : [{ id: RUN, title: "Run in the checkout" }]),
     { id: JOBS, title: "Jobs" },
     { id: SETTINGS, title: "Settings" },
   ];
@@ -221,6 +262,14 @@ export function Palette({
       ...(surface.aliases === undefined ? {} : { aliases: surface.aliases }),
     })),
     ...globalActs().map((action) => entryOf(action, NAVIGATION, dormant)),
+    ...runnables.map((runnable) => ({
+      id: `run:${runnable.id}`,
+      section: RUN,
+      label: runnable.label,
+      // The `run` line, mono and to the right — a setting's own treatment,
+      // because it answers the same question: what this row currently is.
+      value: runnable.value,
+    })),
     ...jobs.map((job) => ({ id: `job:${job.id}`, section: JOBS, label: job.label })),
     ...settings.map((setting) => ({
       id: `set:${setting.id}`,
@@ -235,7 +284,7 @@ export function Palette({
       open={open}
       sections={sections}
       entries={entries}
-      searched={searchedSentence(jobs.length, settings.length)}
+      searched={searchedSentence(jobs.length, settings.length, runnables.length)}
       onClose={onClose}
       onSelect={(entry) => onChoose(choiceOf(entry.id))}
       onConfirm={(entry) => onConfirmAct(bare(entry.id))}
@@ -278,6 +327,7 @@ function choiceOf(id: string): PaletteChoice {
   if (id.startsWith("nav:")) return { of: "surface", id: rest };
   if (id.startsWith("job:")) return { of: "job", id: rest };
   if (id.startsWith("tab:")) return { of: "filter", id: rest };
+  if (id.startsWith("run:")) return { of: "run", id: rest };
   return { of: "setting", id: rest };
 }
 
@@ -290,10 +340,11 @@ function choiceOf(id: string): PaletteChoice {
  * sentence claiming settings on a build that indexes none would be the labelled
  * blank this app refuses everywhere else.
  */
-function searchedSentence(jobs: number, settings: number): string {
+function searchedSentence(jobs: number, settings: number, runnables: number): string {
   const held = [
     "every act available here",
     "every place in Bridge",
+    runnables === 0 ? null : "every Check and Command this Manifest declares",
     jobs === 0 ? null : "every job on this Manifest, at every status",
     settings === 0 ? null : "every setting",
   ].filter((part): part is string => part !== null);

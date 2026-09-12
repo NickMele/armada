@@ -43,6 +43,15 @@ export type HeadProps = {
    * same shape, and this is that file.
    */
   clearing: boolean;
+  /**
+   * The Manifest surface — Journey 9's *Running one*. Leaves to the list.
+   *
+   * **`clearing`'s shape, and the same reason it has one.** It is a rail
+   * destination whose name is written nowhere on the page itself: the page is
+   * three groups of rows and an output pane, none of which says what surface
+   * they belong to.
+   */
+  manifest: boolean;
   /** A live connection. What stops a new Job being proposed into nothing. */
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
@@ -53,6 +62,7 @@ export type HeadProps = {
   onReadReports: () => void;
   onCloseWorktrees: () => void;
   onReadWorktrees: () => void;
+  onCloseManifest: () => void;
   onRefresh: () => void;
   /** Every Job Bridge holds, for the counts on the Board's two bulk acts. */
   jobs: readonly JobSummary[];
@@ -68,6 +78,7 @@ export function headOf({
   composing,
   auditing,
   clearing,
+  manifest,
   live,
   refreshing,
   onCloseComposer,
@@ -76,11 +87,28 @@ export function headOf({
   onReadReports,
   onCloseWorktrees,
   onReadWorktrees,
+  onCloseManifest,
   onRefresh,
   jobs,
   onClearTerminal,
   onForgetTerminal,
 }: HeadProps): Head | null {
+  if (manifest) {
+    return {
+      title: "Manifest",
+      // What the surface is *for*, and the one thing about it that surprises
+      // people: a run from here goes into the tree they are working in, and
+      // leaves no verdict behind for any Job. Both halves are Journey 9's own
+      // rules, said once here rather than repeated on every row.
+      summary:
+        "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict.",
+      actions: (
+        <Button variant="ghost" size="sm" onClick={onCloseManifest}>
+          Back to the list
+        </Button>
+      ),
+    };
+  }
   if (clearing) {
     return {
       title: "Held worktrees",
