@@ -26,43 +26,46 @@
 //!
 //! No process is started here and none may be. Drift runs on opening a surface,
 //! beside a dry-run that runs a real test suite behind its own button, and the
-//! only reason the two can sit together is that this half is a handful of
-//! `stat` calls. A `which`-style probe would make the free read cost a spawn
-//! per declaration and would answer a different question anyway — whether the
-//! *machine* has a tool, not whether the *repository* has a file.
+//! only reason the two can sit together is that this half is `stat` calls and
+//! file reads. A `which`-style probe would cost a spawn per declaration and
+//! answer a different question anyway — whether the *machine* has a tool, not
+//! whether the *repository* has what the tool would look for.
 //!
-//! # What a word has to look like before it is looked for
+//! # Paths, and then the tool
 //!
 //! [`checks_runner::split`] gives the words the runner would actually execute —
 //! the same splitter, so drift and the runner cannot come to disagree about
-//! what a line invokes. Of those words, one names a repository path when it
-//! holds a `/` and survives [`named_path`]'s exclusions. Everything else is a
-//! tool on `PATH`, a flag, or a word this read has no way to resolve, and each
-//! of those is left alone rather than guessed at: the verdict `gone` means *the
-//! repository no longer has this*, which can only be said having looked and not
-//! found. Absence of anything to look for is not evidence of absence, so it
-//! reads `current` with `checked` at zero — and the wire carries that number so
-//! a surface can say which rows its clean list is actually about.
+//! what a line invokes. Two readings are then taken of them.
 //!
-//! **A `/` in the word, and the whole word, is the rule.** `bash scripts/ci.sh`
-//! is judged on `scripts/ci.sh` and not on `bash`, which is the shape the issue
-//! was filed about: the program is an interpreter that is always installed and
-//! the thing that went missing is its argument.
+//! **Paths.** A word holding a `/` that survives [`named_path`]'s exclusions is
+//! looked for in the checkout. `bash scripts/ci.sh` is judged on `scripts/ci.sh`
+//! and not on `bash`, which is the shape `#719` was filed about.
 //!
-//! # What is deliberately not resolved
+//! **The tool's own files.** `pnpm typecheck` names a script in a
+//! `package.json`, and `cargo xtask` an alias in `.cargo/config.toml` — a
+//! quarter of this repository's own `run` lines, which read as clean with
+//! nothing checked until these were followed. [`following`] holds which tools
+//! are known and [`declared`] reads their files.
 //!
-//! A `pnpm test` naming a `package.json` script, and a `cargo xtask` naming a
-//! workspace member, each name something real that this read does not follow.
-//! Following them means teaching this module one build tool's vocabulary at a
-//! time, and a rule that knows `pnpm` and not `bun` reports a clean row for the
-//! repository it does not know. Both come back `current` with `checked` at
-//! zero, which is the true answer to what was asked rather than a false one to
-//! what was not.
+//! # What was not followed is said on the row
+//!
+//! A word naming something this read did not resolve — an unknown tool, a
+//! package manager's own subcommand, a file that would not scan — is recorded
+//! with its reason, **whatever the verdict**, and never counted as missing.
+//! `gone` means the repository no longer has this, which can only be said
+//! having looked and not found. The owner's decision on the question the first
+//! version of this module left open: follow the tools it can, and say plainly
+//! on every row what it did not.
 
 use std::path::Path;
 
 use config::Manifest;
-use ipc::{Declaration, Drift, ManifestDrift};
+use ipc::{Declaration, Drift, ManifestDrift, Unfollowed};
+
+pub(crate) use declared::Repository;
+
+pub(crate) mod declared;
+mod following;
 
 /// Read one Manifest against the checkout it was loaded from.
 ///
@@ -72,6 +75,7 @@ use ipc::{Declaration, Drift, ManifestDrift};
 /// `checks_runner`'s own argument for being a crate, one scale down.
 pub(crate) fn drift(manifest: &Manifest, checkout: &Path) -> ManifestDrift {
     let mut declarations = Vec::new();
+    let repo = &mut Repository::at(checkout);
 
     // Checks first and in declaration order, because that is the order the
     // file writes them and the order they run in. `check_names` is the same
@@ -80,7 +84,7 @@ pub(crate) fn drift(manifest: &Manifest, checkout: &Path) -> ManifestDrift {
         let Some(check) = manifest.check(name) else {
             continue;
         };
-        declarations.push(declared("checks", name, "run", check.run(), checkout));
+        declarations.push(declared("checks", name, "run", check.run(), repo));
     }
 
     // Commands and servers are both written under `commands:` and the file
@@ -90,7 +94,7 @@ pub(crate) fn drift(manifest: &Manifest, checkout: &Path) -> ManifestDrift {
         let Some(command) = manifest.command(&name) else {
             continue;
         };
-        declarations.push(declared("commands", &name, "run", command.run(), checkout));
+        declarations.push(declared("commands", &name, "run", command.run(), repo));
     }
     for name in manifest.server_names() {
         let Some(server) = manifest.server(&name) else {
@@ -100,17 +104,11 @@ pub(crate) fn drift(manifest: &Manifest, checkout: &Path) -> ManifestDrift {
         // what starts it, what says it is ready. Each can go missing on its
         // own, and one row for the three would carry a verdict about none.
         if let Some(run) = server.run() {
-            declarations.push(declared("commands", &name, "run", run, checkout));
+            declarations.push(declared("commands", &name, "run", run, repo));
         }
-        declarations.push(declared(
-            "commands",
-            &name,
-            "serve",
-            server.serve(),
-            checkout,
-        ));
+        declarations.push(declared("commands", &name, "serve", server.serve(), repo));
         if let Some(ready) = server.ready() {
-            declarations.push(declared("commands", &name, "ready", ready, checkout));
+            declarations.push(declared("commands", &name, "ready", ready, repo));
         }
     }
 
@@ -122,43 +120,82 @@ pub(crate) fn drift(manifest: &Manifest, checkout: &Path) -> ManifestDrift {
 }
 
 /// One line, judged.
-fn declared(section: &str, name: &str, key: &str, run: &str, checkout: &Path) -> Declaration {
+fn declared(section: &str, name: &str, key: &str, run: &str, repo: &mut Repository) -> Declaration {
+    let (drift, unfollowed) = judged(run, repo);
     Declaration {
         section: section.to_string(),
         name: name.to_string(),
         key: key.to_string(),
         run: run.to_string(),
-        drift: judged(run, checkout),
+        drift,
+        unfollowed,
     }
 }
 
-/// The verdict for one `run` line.
+/// What one line's words came to, as they are read.
+///
+/// **Three lists, and the verdict is made from two of them at the end.** A
+/// word is found, missing, or not followed, and only the first two bear on
+/// `gone` — which is what keeps a tool this read does not know out of the
+/// verdict.
+#[derive(Default)]
+pub(crate) struct Found {
+    checked: u32,
+    missing: Vec<String>,
+    unfollowed: Vec<Unfollowed>,
+}
+
+impl Found {
+    fn found(&mut self) {
+        self.checked += 1;
+    }
+
+    fn missing(&mut self, what: String) {
+        if !self.missing.contains(&what) {
+            self.missing.push(what);
+        }
+    }
+
+    fn unfollowed(&mut self, word: &str, why: &str) {
+        self.unfollowed.push(Unfollowed {
+            word: word.to_string(),
+            why: why.to_string(),
+        });
+    }
+}
+
+/// The verdict for one `run` line, and what it did not follow.
 ///
 /// **`None` from the splitter is a line with no program in it**, which the
 /// parser does not admit — an empty `run` is refused at load. It is answered
 /// here as nothing checked rather than as a fault, because a read that could
 /// refuse would be a second opinion about a file `config` already accepted.
-pub(crate) fn judged(run: &str, checkout: &Path) -> Drift {
+pub(crate) fn judged(run: &str, repo: &mut Repository) -> (Drift, Vec<Unfollowed>) {
     let Some((program, arguments)) = checks_runner::split(run) else {
-        return Drift::Current { checked: 0 };
+        return (Drift::Current { checked: 0 }, Vec::new());
     };
 
-    let mut checked = 0u32;
-    let mut missing = Vec::new();
+    let mut found = Found::default();
     for word in std::iter::once(&program).chain(arguments.iter()) {
         let Some(path) = named_path(word) else {
             continue;
         };
-        checked += 1;
-        if !checkout.join(path).exists() {
-            missing.push(path.to_string());
+        match repo.checkout().join(path).exists() {
+            true => found.found(),
+            false => found.missing(path.to_string()),
         }
     }
+    following::follow(&program, &arguments, repo, &mut found);
 
-    match missing.is_empty() {
-        true => Drift::Current { checked },
-        false => Drift::Gone { missing },
-    }
+    let drift = match found.missing.is_empty() {
+        true => Drift::Current {
+            checked: found.checked,
+        },
+        false => Drift::Gone {
+            missing: found.missing,
+        },
+    };
+    (drift, found.unfollowed)
 }
 
 /// The path one word names inside the repository, or [`None`] where it names
@@ -169,11 +206,17 @@ pub(crate) fn judged(run: &str, checkout: &Path) -> Drift {
 /// worse than a missed one here: the missed one is the state this whole module
 /// is replacing, and the false one teaches a person that the amber means
 /// nothing.
-fn named_path(word: &str) -> Option<&str> {
+pub(crate) fn named_path(word: &str) -> Option<&str> {
     // A flag. `--manifest-path=a/b` carries a path and is not one; the value
     // spelled as its own word — `-C packages/web` — is, and arrives here as
     // that word.
     if word.starts_with('-') {
+        return None;
+    }
+    // A scoped package name. `@armada/desktop` holds a `/` and names a package
+    // by its `package.json` name, not a directory — and the first version of
+    // this rule called it missing on every `--filter` line.
+    if word.starts_with('@') {
         return None;
     }
     // An address. Nothing on this machine is at `https://…/x`.

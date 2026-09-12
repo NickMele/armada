@@ -233,6 +233,12 @@ pub fn manifest_drift() -> ipc::ManifestDrift {
                 key: "run".to_string(),
                 run: "cargo nextest run --workspace".to_string(),
                 drift: ipc::Drift::Current { checked: 0 },
+                unfollowed: vec![ipc::Unfollowed {
+                    word: "nextest".to_string(),
+                    why: "not an alias this repository declares, so an external cargo \
+                          subcommand installed on the machine"
+                        .to_string(),
+                }],
             },
             ipc::Declaration {
                 section: "checks".to_string(),
@@ -242,6 +248,12 @@ pub fn manifest_drift() -> ipc::ManifestDrift {
                 drift: ipc::Drift::Gone {
                     missing: vec!["scripts/lint.sh".to_string()],
                 },
+                // On the `gone` row too: what was not followed is a fact about
+                // the line whatever the verdict.
+                unfollowed: vec![ipc::Unfollowed {
+                    word: "bash".to_string(),
+                    why: "not a tool this read follows".to_string(),
+                }],
             },
         ],
     }

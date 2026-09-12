@@ -72,6 +72,32 @@ export type Declaration = {
   run: string;
   /** Whether the repository still has what it names. */
   drift: Drift;
+  /**
+   * What this line names that the read did not follow, and why, **whatever the
+   * verdict**. Empty only where every word that could name something runnable
+   * was resolved.
+   *
+   * **This is what stops a clean list overstating itself.** Drift follows
+   * `pnpm` and `npm` into `package.json` and `cargo` into its aliases and
+   * workspace; a tool it does not know lands here rather than reading as clean.
+   * It is never a third verdict — it belongs on a `gone` row as much as on a
+   * `current` one.
+   */
+  unfollowed: Unfollowed[];
+};
+
+/**
+ * One word a line names that the drift read did not follow.
+ *
+ * **Never evidence of absence.** A script name resolved to a `package.json`
+ * that could not be read lands here, not in `missing`: a false `gone` teaches
+ * a person the amber means nothing.
+ */
+export type Unfollowed = {
+  /** The word, as the line spells it once quotes are taken off. */
+  word: string;
+  /** Why it was not followed. Rendered, never matched on. */
+  why: string;
 };
 
 /**
@@ -92,11 +118,11 @@ export type Drift = DriftCurrent | DriftGone;
 export type DriftCurrent = {
   verdict: "current";
   /**
-   * How many repository paths this line named. **Zero for most lines, and that
-   * is the honest answer** — `cargo nextest run --workspace` names no path in
-   * any repository, so there was nothing to look for and nothing was found
-   * missing. A row drawn green off a `checked` of zero is making a claim this
-   * read did not make.
+   * How many things this line named that the read looked for and found — a
+   * path, a `package.json` script, a cargo alias or workspace member. **Zero
+   * is common and is not a clean bill**: read it beside `unfollowed`, which
+   * says what was not looked for. A row drawn green off a `checked` of zero is
+   * making a claim this read did not make.
    */
   checked: number;
 };
@@ -110,9 +136,11 @@ export type DriftCurrent = {
 export type DriftGone = {
   verdict: "gone";
   /**
-   * The paths, relative to the checkout, in the order the line names them.
-   * Never empty — and every one of them, because a person correcting a file
-   * from a message naming one saves and meets the next.
+   * What is missing, in the order the line names it, each spelled to name the
+   * file a person would open: a path (`scripts/lint.sh`), or a file and the key
+   * it lacks (`packages/web/package.json: scripts.build`). Never empty — and
+   * every one of them, because a person correcting a file from a message naming
+   * one saves and meets the next.
    */
   missing: string[];
 };

@@ -32,6 +32,22 @@
 //! of this is still right*. [`Drift::Current`] carries `checked` so that a row
 //! judged on nothing is distinguishable from a row judged and found whole,
 //! which is the same sentence one row down.
+//!
+//! # What was not followed, beside the verdict and not inside it
+//!
+//! Drift follows a script name into the `package.json` that would be consulted
+//! and a `cargo` subcommand into the repository's aliases and members. It does
+//! that for the tools it knows, and a repository built with one it does not
+//! know has to read as *not followed*, plainly, rather than as clean.
+//! [`Declaration::unfollowed`] is where that is said.
+//!
+//! **Beside `checked`, not an extension of it.** `checked` counts what the line
+//! named and this read found, and lives inside `current` because a `gone` row's
+//! evidence is its `missing` list. What was not followed is a fact about the
+//! row whatever the verdict — `bash scripts/lint.sh scripts/gone.sh` is `gone`
+//! on the second path and still never followed `bash` — so it cannot live in
+//! either variant, and folding it into a count would lose the word and the
+//! reason a person needs. It is never a third verdict.
 
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +92,31 @@ pub struct Declaration {
     pub run: String,
     /// Whether the repository still has what it names.
     pub drift: Drift,
+    /// What this line names that the read did not follow, and why, **whatever
+    /// the verdict**. Empty only where every word that could name something
+    /// runnable was resolved.
+    ///
+    /// **Additive, and defaulted where it is absent**, so a peer built before
+    /// it existed still decodes this row — an older Fleet simply said nothing
+    /// about what it did not follow, which is what the field replaces.
+    #[serde(default)]
+    pub unfollowed: Vec<Unfollowed>,
+}
+
+/// One word a line names that the drift read did not follow.
+///
+/// **Never evidence of absence.** A script name resolved to a `package.json`
+/// that could not be read is recorded here and not as missing: a false `gone`
+/// teaches a person the amber means nothing, and a missed one is only the state
+/// this read replaced.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Unfollowed {
+    /// The word, verbatim as the line spells it after quotes are taken off.
+    pub word: String,
+    /// Why it was not followed, as a person would read it. **Rendered, never
+    /// matched on** — a tool this read learns later changes which words land
+    /// here, not the shape of the row.
+    pub why: String,
 }
 
 /// The verdict, carrying what it was reached on.
@@ -94,17 +135,44 @@ pub enum Drift {
     /// that draws a green `current` on a row checked against nothing is making
     /// a claim this read did not make.
     Current {
-        /// How many repository paths this line named.
+        /// How many things this line named that the read looked for and found
+        /// — a repository path, a `package.json` script, a cargo alias or
+        /// workspace member. What it did not look for is
+        /// [`Declaration::unfollowed`], and is not counted here.
         checked: u32,
     },
-    /// The line names repository paths that are not in the checkout.
+    /// The line names something the repository does not have.
     ///
     /// **Behind, not broken** — the journey renders this amber and never red,
     /// and nothing here offers to fix it. Acting on a row means editing the
     /// file, where the consequence is stated.
     Gone {
-        /// The paths, relative to the checkout, in the order the line names
-        /// them. Never empty.
+        /// What is missing, in the order the line names it, **each spelled so
+        /// it names the file a person would open**: a path relative to the
+        /// checkout (`scripts/lint.sh`), or a file and the key it lacks
+        /// (`packages/web/package.json: scripts.build`,
+        /// `.cargo/config.toml: alias.xtask`). Never empty.
         missing: Vec<String>,
     },
+}
+
+/// The part of a `package.json` the drift read uses: its script names.
+///
+/// **Not a wire message. A file shape, decoded here because this is the door.**
+/// Untyped JSON is decoded only in `store` and `ipc`, because a decode failure
+/// that is quietly skipped is how v1 lost 21 Jobs. Fleet reads `package.json`
+/// through [`decode`](crate::decode) into this, and a file that will not decode
+/// makes the row *not followed*. It never becomes `gone`, and it is never
+/// skipped as though the file had no scripts.
+///
+/// **Only `scripts`, and absent means none.** Every other key a `package.json`
+/// holds is ignored rather than refused, since drift reads nothing else. A
+/// script whose value is not a string is refused, because npm refuses it too
+/// and a file npm would not read is not one this read should claim to have
+/// followed.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+pub struct PackageScripts {
+    /// Each script's name, with the command it runs.
+    #[serde(default)]
+    pub scripts: std::collections::BTreeMap<String, String>,
 }

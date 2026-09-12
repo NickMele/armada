@@ -14,12 +14,18 @@ use std::path::Path;
 use config::Manifest;
 use ipc::Drift;
 
-use crate::drifting::{drift, judged};
+use crate::drifting::{drift, judged, Repository};
 use crate::tests::tmp::TempDir;
+
+/// Reading a `package.json` through `ipc`, and a cargo config and a workspace.
+mod declared;
+/// Following `pnpm`, `npm` and `cargo` into those files, and saying what was
+/// not followed.
+mod following;
 
 /// A checkout with the given paths in it, each an empty file with its parents
 /// made.
-fn checkout(paths: &[&str]) -> TempDir {
+pub(super) fn checkout(paths: &[&str]) -> TempDir {
     let dir = TempDir::new();
     for path in paths {
         let at = dir.path().join(path);
@@ -31,7 +37,30 @@ fn checkout(paths: &[&str]) -> TempDir {
     dir
 }
 
-fn parsed(text: &str) -> Manifest {
+/// A file at `path` under the checkout holding `text`, parents made.
+pub(super) fn write(dir: &TempDir, path: &str, text: &str) {
+    let at = dir.path().join(path);
+    if let Some(parent) = at.parent() {
+        std::fs::create_dir_all(parent).expect("a parent directory");
+    }
+    std::fs::write(at, text).expect("a file");
+}
+
+/// The verdict alone, for the cases about paths.
+pub(super) fn verdict(line: &str, dir: &Path) -> Drift {
+    judged(line, &mut Repository::at(dir)).0
+}
+
+/// The words not followed, in the order they were met.
+pub(super) fn unfollowed(line: &str, dir: &Path) -> Vec<String> {
+    judged(line, &mut Repository::at(dir))
+        .1
+        .into_iter()
+        .map(|one| one.word)
+        .collect()
+}
+
+pub(super) fn parsed(text: &str) -> Manifest {
     Manifest::parse(Path::new("armada.yml"), text).expect("the fixture parses")
 }
 
@@ -185,7 +214,7 @@ fn every_row_says_where_in_the_file_it_came_from() {
 fn the_argument_is_judged_and_not_only_the_program() {
     let repo = checkout(&[]);
     assert_eq!(
-        judged("bash scripts/ci.sh", repo.path()),
+        verdict("bash scripts/ci.sh", repo.path()),
         Drift::Gone {
             missing: vec!["scripts/ci.sh".to_string()],
         }
@@ -198,7 +227,7 @@ fn the_argument_is_judged_and_not_only_the_program() {
 fn a_quoted_path_is_one_word_here_because_it_is_one_word_to_the_runner() {
     let repo = checkout(&["my scripts/ci.sh"]);
     assert_eq!(
-        judged("bash 'my scripts/ci.sh'", repo.path()),
+        verdict("bash 'my scripts/ci.sh'", repo.path()),
         Drift::Current { checked: 1 }
     );
 }
@@ -224,7 +253,7 @@ fn a_word_that_is_not_a_repository_path_is_not_looked_for() {
         "bash ../elsewhere/ci.sh",
     ] {
         assert_eq!(
-            judged(line, repo.path()),
+            verdict(line, repo.path()),
             Drift::Current { checked: 0 },
             "{line}"
         );
@@ -237,11 +266,11 @@ fn a_word_that_is_not_a_repository_path_is_not_looked_for() {
 fn a_directory_the_line_names_is_a_path_like_any_other() {
     let repo = checkout(&["packages/web/package.json"]);
     assert_eq!(
-        judged("pnpm -C packages/web build", repo.path()),
+        verdict("pnpm -C packages/web build", repo.path()),
         Drift::Current { checked: 1 }
     );
     assert_eq!(
-        judged("pnpm -C packages/gone build", repo.path()),
+        verdict("pnpm -C packages/gone build", repo.path()),
         Drift::Gone {
             missing: vec!["packages/gone".to_string()],
         }
@@ -256,7 +285,7 @@ fn a_directory_the_line_names_is_a_path_like_any_other() {
 fn a_line_missing_two_paths_names_both() {
     let repo = checkout(&[]);
     assert_eq!(
-        judged("bash scripts/one.sh scripts/two.sh", repo.path()),
+        verdict("bash scripts/one.sh scripts/two.sh", repo.path()),
         Drift::Gone {
             missing: vec!["scripts/one.sh".to_string(), "scripts/two.sh".to_string()],
         }
@@ -270,7 +299,7 @@ fn a_line_missing_two_paths_names_both() {
 fn a_line_is_read_and_never_run() {
     let repo = checkout(&["scripts/rm-rf.sh"]);
     assert_eq!(
-        judged("bash scripts/rm-rf.sh --delete-everything", repo.path()),
+        verdict("bash scripts/rm-rf.sh --delete-everything", repo.path()),
         Drift::Current { checked: 1 }
     );
     assert!(repo.path().join("scripts/rm-rf.sh").exists());
