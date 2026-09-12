@@ -165,13 +165,13 @@ where
     /// `.armada/artifacts/` is in every shipped workflow and in no fresh
     /// worktree, so the first thing a Drone reaches for is `mkdir -p` — a
     /// command no repository declares, refused by the allowlist, and refused
-    /// silently. Job `01M21BKVPW002DC0ATD1X9T0VF` spent its last turn there.
-    /// The directory is Fleet's to make, because Fleet is what named the path.
+    /// silently. One Job spent its last turn there. The directory is Fleet's
+    /// to make, because Fleet is what named the path.
     ///
     /// **Empty, and that gates nothing.** `artifact_exists` reads the file's
-    /// size, so a file nobody wrote still stops its step — what this removes is
-    /// the directory that had to exist first, not the writing. A step's Drone
-    /// still delivers or does not.
+    /// size, so a file nobody wrote still stops its step — what this removes
+    /// is the directory that had to exist first, not the writing. A step's
+    /// Drone still delivers or does not.
     ///
     /// **Every step's, not the one about to run.** A worktree is prepared once
     /// and lives for the whole Job, so doing this per spawn would ask the same

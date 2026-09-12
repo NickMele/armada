@@ -113,8 +113,7 @@ fn the_four_states_read_back_as_themselves() {
 
 /// **The defect, closed at the source.** A forced choice among three answers
 /// with no way to abstain is what read an uncertain look as `converging` on
-/// Job `01M28RVVN200232YNHWF8CFFKH`, three times over a step that failed the
-/// same way every time.
+/// one Job, three times over a step that failed the same way every time.
 #[test]
 fn a_look_that_cannot_tell_is_not_forced_into_converging() {
     assert_ne!(

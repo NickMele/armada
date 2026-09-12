@@ -272,7 +272,7 @@ export const FinishedNothingAsked: Story = {
  * added 2026-09-11, reworked the same day once the owner found it depended on
  * which step was open. A real Job: #546, dispatched, restarted once,
  * overruled once, approved, and merged as #630 — every value below is off
- * Fleet's own record of it (`01M27918MN0011N9KZEV9ZWHY3`), read the same way
+ * Fleet's own record of it (Fleet's own record), read the same way
  * `verdictSlotAfterAnswer` reads it now: **the whole Job, never one step**,
  * so the overruled criterion on `tests` shows up here exactly as it does with
  * the panel opened the ordinary way — nothing picked, nothing navigated to.

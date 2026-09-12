@@ -727,11 +727,11 @@ export class JobCommands {
    * **The other half of what `over_budget` folds, which had no act at all.**
    * The dollar cap got a route and a control; the turn cap in the same setting
    * stayed a number changed by a rebuild, on the reading that a job over it is
-   * going in circles and wants a new brief. Job `01M22TYSAE0023MADDP5ZQEYGW`
-   * falsified that: it finished its work, passed every Check, had its verdict
-   * overruled, then stopped at 393 turns against 300 with a cheap summarise
-   * never run. A redispatch would have thrown away thirty-five files three
-   * gates had already passed.
+   * going in circles and wants a new brief. One Job falsified that: it
+   * finished its work, passed every Check, had its verdict overruled, then
+   * stopped at 393 turns against 300 with a cheap summarise never run. A
+   * redispatch would have thrown away thirty-five files three gates had
+   * already passed.
    *
    * **A plain turn count and no conversion.** `JobSpend.turns` and
    * `JobSpend.turn_cap` read in the same integers, unlike the cost cap's

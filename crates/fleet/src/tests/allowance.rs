@@ -177,11 +177,11 @@ fn a_second_terminating_line_replaces_the_cost_and_adds_the_turns() {
 /// A Drone that never reported still spent whatever it spent, and the fold
 /// declines to put a number on it.
 ///
-/// **This asserted `0` until Job `01M21BKVPW002DC0ATD1X9T0VF`**, whose two
-/// killed Drones ran 277 and 299 seconds and were billed nothing each — so the
-/// Job read as $5.28 against a $5 cap while having spent more than it could
-/// say. A run with no terminating line carries no price, and nought is a price.
-/// The wall clock still answers, because that one is Fleet's own.
+/// **This asserted `0` until one Job**, whose two killed Drones ran 277 and
+/// 299 seconds and were billed nothing each — so the Job read as $5.28 against
+/// a $5 cap while having spent more than it could say. A run with no
+/// terminating line carries no price, and nought is a price. The wall clock
+/// still answers, because that one is Fleet's own.
 #[test]
 fn a_drone_that_never_reported_names_no_price_rather_than_a_price_of_nothing() {
     let folded = spent(

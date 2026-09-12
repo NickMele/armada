@@ -230,12 +230,12 @@ fn background_work(outstanding: usize) -> DroneEvent {
 
 /// A Drone that delegated, ended its turn on the delegation, and stayed.
 ///
-/// **This is Job `01M21BKVPW002DC0ATD1X9T0VF`, in three echoes.** Its Drone
-/// called the built-in `Agent` tool, said "I'll wait for the exploration
-/// agent's findings before declaring scope", and ended its turn. The report
-/// reaches a session as a notification and a headless Drone between turns
-/// cannot be notified, so the wait could not end — and Fleet reaped it 21
-/// seconds in, having spent nothing.
+/// **This is one Job, in three echoes.** Its Drone called the built-in
+/// `Agent` tool, said "I'll wait for the exploration agent's findings
+/// before declaring scope", and ended its turn. The report reaches a
+/// session as a notification and a headless Drone between turns cannot be
+/// notified, so the wait could not end — and Fleet reaped it 21 seconds in,
+/// having spent nothing.
 fn a_drone_that_ends_waiting_on_a_subagent() -> FakeHarness {
     FakeHarness::running(
         "/bin/sh",

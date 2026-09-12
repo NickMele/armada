@@ -1,16 +1,17 @@
-// Which of the two ceilings caught a job, and what it is offered because of it.
+// Which of the two ceilings caught a job, and what it is offered because of
+// it.
 //
-// **The defect this file gates was on the screen, not on the wire.** A job held
-// on turns and a job out of money both arrive as `queued` with
-// `over_budget`. Until `budget_hold` there was one predicate for both, so a job
-// stopped at its turn cap read `Over budget` and was offered `Raise the cost
-// cap` — a control that sends a request Fleet answers, and leaves the job
-// exactly as stopped as it was. Job `01M22TYSAE0023MADDP5ZQEYGW` is the case:
-// 393 turns against 300, every Check passed, nothing on the screen able to
-// start it.
+// **The defect this file gates was on the screen, not on the wire.** A job
+// held on turns and a job out of money both arrive as `queued` with
+// `over_budget`. Until `budget_hold` there was one predicate for both, so a
+// job stopped at its turn cap read `Over budget` and was offered `Raise the
+// cost cap` — a control that sends a request Fleet answers, and leaves the
+// job exactly as stopped as it was. One Job is the case: 393 turns against
+// 300, every Check passed, nothing on the screen able to start it.
 //
 // So what is pinned here is the exclusivity in both directions, the fallback
-// where an older Fleet says nothing, and that the header reads the finer word.
+// where an older Fleet says nothing, and that the header reads the finer
+// word.
 
 import { expect, test } from "vitest";
 import type { JobSummary } from "@armada/protocol";

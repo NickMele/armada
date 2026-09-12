@@ -67,12 +67,12 @@ fn helm(turns: u64) -> TurnRaise {
     }
 }
 
-/// **The act, end to end, and the incident it was built from.** Job
-/// `01M22TYSAE0023MADDP5ZQEYGW` finished its work, passed every Check, and then
-/// stood at `queued` past its turn cap on a machine with a free slot; its
-/// branch was committed by hand because nothing could start the cheap step that
-/// was left. Until this case passed there was no way out of that state at all —
-/// not a key, not a route, not a number below a rebuild.
+/// **The act, end to end, and the incident it was built from.** One Job
+/// finished its work, passed every Check, and then stood at `queued` past its
+/// turn cap on a machine with a free slot; its branch was committed by hand
+/// because nothing could start the cheap step that was left. Until this case
+/// passed there was no way out of that state at all — not a key, not a route,
+/// not a number below a rebuild.
 #[tokio::test]
 async fn raising_the_turn_cap_starts_a_job_the_turns_were_holding() {
     let home = TempDir::new();

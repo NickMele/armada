@@ -82,9 +82,9 @@ pub enum Overspent {
     /// which ceiling, so that both acts are reachable.
     ///
     /// The reading that only the brief could fix shipped with this variant and
-    /// was falsified by Job `01M22TYSAE0023MADDP5ZQEYGW`: 393 turns against
-    /// 300, every Check passed, `summarise` never run, and a redispatch would
-    /// have thrown away the work rather than finished it.
+    /// was falsified by one Job: 393 turns against 300, every Check passed,
+    /// `summarise` never run, and a redispatch would have thrown away the work
+    /// rather than finished it.
     Turns,
 }
 
@@ -137,9 +137,9 @@ impl Allowance {
     /// They did not until Sept 2026, because spike 5's three runs of one Job
     /// spread 2.31x on price while their turns held at 7, 7 and 4 — so a Job
     /// over the turn cap was going in circles, where a bigger number buys more
-    /// circles. The conclusion did not survive the measurement: Job
-    /// `01M22TYSAE0023MADDP5ZQEYGW` finished, passed every Check, and stopped
-    /// at 393 turns against 300 with a cheap `summarise` unrun.
+    /// circles. The conclusion did not survive the measurement: One Job
+    /// finished, passed every Check, and stopped at 393 turns against 300 with
+    /// a cheap `summarise` unrun.
     ///
     /// # Live at every tier, and frozen at none
     ///
@@ -190,14 +190,14 @@ impl Allowance {
 /// What one Drone's stream came to, folded once.
 ///
 /// **Cost is the last figure seen and turns are the sum**, which is measured
-/// rather than assumed. `docs/spikes/004-transcript-idle-session.ndjson` is one
-/// session with two terminating lines: `num_turns` reads 3 and then 2, while
-/// the second line's `modelUsage` holds the sum of both invocations — input 10
-/// = 6 + 4, output 444 = 271 + 173 — and its `total_cost_usd` reconstructs from
-/// those cumulative figures exactly. So `total_cost_usd` is the session's
-/// running total and `num_turns` is per invocation. Adding the costs would bill
-/// the first invocation twice; taking the last turn count would report a
-/// two-turn Drone that took five.
+/// rather than assumed. `docs/spikes/004-transcript-idle-session.ndjson` is
+/// one session with two terminating lines: `num_turns` reads 3 and then 2,
+/// while the second line's `modelUsage` holds the sum of both invocations —
+/// input 10 = 6 + 4, output 444 = 271 + 173 — and its `total_cost_usd`
+/// reconstructs from those cumulative figures exactly. So `total_cost_usd` is
+/// the session's running total and `num_turns` is per invocation. Adding the
+/// costs would bill the first invocation twice; taking the last turn count
+/// would report a two-turn Drone that took five.
 ///
 /// `ran` is Fleet's own clock and not the stream's: the harness reports a
 /// duration per terminating line and Armada does not carry it, and the wall
@@ -205,10 +205,10 @@ impl Allowance {
 ///
 /// **A stream with no terminating line answers [`None`], never nought.** Cost
 /// is carried on that line alone, so a Drone that was signalled mid-run has no
-/// price rather than a price of nothing — and a Drone that ran for five minutes
-/// and cost `0` is a sentence nothing should be able to write. Job
-/// `01M21BKVPW002DC0ATD1X9T0VF` had two of them, and read as $5.28 against a $5
-/// cap while having spent more than it could say.
+/// price rather than a price of nothing — and a Drone that ran for five
+/// minutes and cost `0` is a sentence nothing should be able to write. One Job
+/// had two of them, and read as $5.28 against a $5 cap while having spent more
+/// than it could say.
 pub(crate) fn spent(events: &[DroneEvent], ran: std::time::Duration) -> DroneSpend {
     let mut spend = DroneSpend {
         ran_ms: ran.as_millis() as u64,

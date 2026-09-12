@@ -157,8 +157,8 @@ pub enum QueuedReason {
     /// per kind of wait. It was the figures on the Job's detail alone until
     /// Sept 2026, and failed the way this row's own argument predicts:
     /// readable only to somebody who already knew there were two ceilings.
-    /// Job `01M22TYSAE0023MADDP5ZQEYGW` stranded at 393 turns against 300
-    /// with nothing on the screen naming turns at all.
+    /// One Job stranded at 393 turns against 300 with nothing on the screen
+    /// naming turns at all.
     OverBudget,
     /// Nothing is in its way but the slot.
     WaitingOnResources,

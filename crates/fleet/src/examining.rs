@@ -136,8 +136,8 @@ where
 
     /// Whether the current step's last two attempts failed the same Check —
     /// alive and repeating, which every other look here reads as `working` or,
-    /// at worst, a shrug. Job `01M28RVVN200232YNHWF8CFFKH`'s tests step failed
-    /// this way six times over seven hours.
+    /// at worst, a shrug. One Job's tests step failed this way six times over
+    /// seven hours.
     async fn repeating(&self, job: &Job) -> Look {
         let Some(step) = job.current_step_id() else {
             return told(

@@ -201,11 +201,12 @@ pub struct Progress {
     /// How many turns Armada put into this session the Drone has actually been
     /// handed.
     ///
-    /// **The acknowledgement, and the one thing that says a directive landed.**
-    /// `--replay-user-messages` re-emits an injected turn *at the moment it is
-    /// consumed* rather than when it was written, which spike 4 relied on to
-    /// measure delivery at all — its words: an acknowledgement, not an echo of
-    /// the write. Nothing else in this stream can date the arrival.
+    /// **The acknowledgement, and the one thing that says a directive
+    /// landed.** `--replay-user-messages` re-emits an injected turn *at the
+    /// moment it is consumed* rather than when it was written, which spike 4
+    /// relied on to measure delivery at all — its words: an acknowledgement,
+    /// not an echo of the write. Nothing else in this stream can date the
+    /// arrival.
     ///
     /// **A third counter, because [`turned`](Progress::turned) must not count
     /// these and cannot.** That one asks whether the Drone acted, and the arm
@@ -217,8 +218,8 @@ pub struct Progress {
     /// **Why anything asks.** Injection lands at a turn boundary, so a Drone
     /// inside a tool call is handed nothing until that call returns; spike 4
     /// measured 1.59s between two fast calls and 33.14s inside a slow one, and
-    /// Job `01M21BKVPW002DC0ATD1X9T0VF` waited 92s. A grace measured from the
-    /// send spends itself on a Drone that has not been told anything yet.
+    /// one Job waited 92s. A grace measured from the send spends itself on a
+    /// Drone that has not been told anything yet.
     pub delivered: usize,
 }
 

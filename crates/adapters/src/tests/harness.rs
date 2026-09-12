@@ -465,7 +465,7 @@ fn the_read_only_git_grant_never_renders_a_bare_git_prefix() {
 }
 
 /// `git stash push` names `stash`, not `push` — the failure mode measured on
-/// Job `01M28RVVN200232YNHWF8CFFKH`, where the old word-match refused it.
+/// one Job, where the old word-match refused it.
 #[test]
 fn a_stash_push_is_not_a_push() {
     for run in ["git stash push -u -m \"wip\"", "git stash push"] {

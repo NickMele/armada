@@ -298,11 +298,11 @@ fn one_step_delivers() -> config::ResolvedWorkflow {
 
 /// **(f)** The path a step declares is a path its Drone finds already there.
 ///
-/// Job `01M21BKVPW002DC0ATD1X9T0VF` is why: told to write
-/// `.armada/artifacts/scope.md` into a worktree holding no such directory, its
-/// Drone reached for `mkdir -p` — a command no repository declares, refused by
-/// the allowlist, and refused silently. It never wrote anything and the step
-/// died at `no_report`. Fleet named the path, so the directory is Fleet's.
+/// One Job is why: told to write `.armada/artifacts/scope.md` into a worktree
+/// holding no such directory, its Drone reached for `mkdir -p` — a command no
+/// repository declares, refused by the allowlist, and refused silently. It
+/// never wrote anything and the step died at `no_report`. Fleet named the
+/// path, so the directory is Fleet's.
 #[tokio::test]
 async fn the_file_a_step_is_told_to_write_is_there_before_its_drone_is() {
     let home = TempDir::new();
