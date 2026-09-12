@@ -78,6 +78,16 @@ obvious. Trailers a tool appends are not that; a summary block is.
 **Never restate a decision.** Link it or name it. A commit message that argues
 a settled point re-opens it in the one place nobody will look for the argument.
 
+## One message per command
+
+**Never put a commit message and a pull request body in one shell command.**
+Two heredocs in one line each read standard input, and which text reaches which
+tool is decided by the shell rather than by the order they are written.
+Confirmed 12 Sep 2026: `git commit -F -` and `gh pr create --body-file -` in one
+call swapped the two, so the commit carried the PR description as its subject
+and the PR carried the commit message. It cost an amend, a force-push and an
+edit to the PR. Commit, then open the PR, in two calls.
+
 ## Where the rest lives
 
 `docs/contracts/agent-copy.md` governs every surface a Drone, the Judge or Helm
