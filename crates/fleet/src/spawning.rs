@@ -360,22 +360,14 @@ where
     /// beside it** — not read off a person's own settings file, and not one a
     /// Job's setting can withhold, because it cannot change a repository.
     ///
-    /// A destructive command is withheld, and that is a decision this file
-    /// makes rather than one it inherits: `commands.<name>.destructive` is a
-    /// key `config` reads at M1 and nothing consumed until now, and granting
-    /// one to an unattended process is the opposite of what the flag is for.
+    /// A destructive command is withheld: granting one to an unattended
+    /// process is the opposite of what `commands.<name>.destructive` is for.
     ///
-    /// # Why this takes the step, when it used to take nothing
-    ///
-    /// **The dispatch grant is per step and cannot be anything else.** The
-    /// capability it carries is *other Jobs existing*, and what authorises that
-    /// is a person having read the plan the step before it produced. A Job-wide
-    /// grant would put the tool in the hands of the Drone writing the plan,
-    /// which is the one Drone that must not have it.
-    ///
-    /// `Dispatching::at` is the same predicate the tool call itself is refused
-    /// by, so a Drone's allowlist and Fleet's answer cannot disagree — and both
-    /// read the frozen workflow, which is what a person approved.
+    /// **The dispatch grant is per step**, which is why this takes one. The
+    /// capability it carries is *other Jobs existing*, and a Job-wide grant
+    /// would hand it to the Drone writing the plan — the one Drone that must
+    /// not have it. `Dispatching::at` is the same predicate the tool call is
+    /// refused by, so a Drone's allowlist and Fleet's answer cannot disagree.
     ///
     /// **Off `crate::snapshotting::effective_manifest`, never Fleet's live
     /// Manifest** — a Drone that could write itself a Command could grant

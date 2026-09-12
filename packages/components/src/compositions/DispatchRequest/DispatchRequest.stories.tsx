@@ -96,7 +96,7 @@ export const Typed: Story = {
 
 /**
  * Typing `@` opens the mention popup, and picking a result inserts it into
- * the field — the way Claude Code's own `@` file reference works.
+ * the field — the way an editor's own file reference works.
  *
  * **A stateful wrapper, not static args.** Every other story here proves a
  * callback fired; this one proves what the field holds afterward, which needs
