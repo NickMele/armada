@@ -32,4 +32,8 @@ pub struct Reconciled {
     /// What was moved out from under a ULID and under the handle beside it —
     /// `crate::transcript::migrating`. Zeroes on every boot after the first.
     pub rekeyed: Rekeyed,
+    /// Jobs the old `Agree` arm left `awaiting_review` with a stopped step and
+    /// no question — `#733`. Each is now `escalated`, reason `gate_failure`.
+    /// Empty once every Job it could have stranded has passed through here.
+    pub mended: Vec<JobId>,
 }

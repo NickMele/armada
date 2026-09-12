@@ -69,16 +69,20 @@ where
         // behind is re-probed before this process trusts it. See
         // `crate::ports::Fleet::reconciled_main_checkout_ports`.
         self.reconciled_main_checkout_ports().await;
-        let (loaded, unreadable) = self.every_job().await?;
+        let (mut loaded, unreadable) = self.every_job().await?;
         // Before anything else reads a path: every Job's name, and the rename
         // of what an older Fleet wrote under a ULID. See
         // [`mod@crate::naming`] and `crate::transcript::migrating`.
         self.names().learn_all(&loaded.jobs);
         let rekeyed = crate::transcript::rekeyed(&self.host().records_root, &loaded.jobs).await;
+        // Before the Drone-adoption pass below reads these same rows: see
+        // `crate::mending`'s own header for why the order matters.
+        let mended = self.mended_wedged_reviews(&mut loaded.jobs).await?;
         let mut reconciled = Reconciled {
             repaired: loaded.repaired.len(),
             unreadable,
             rekeyed,
+            mended,
             ..Reconciled::default()
         };
         // Every **step** the store says holds a Drone, whatever status its Job
