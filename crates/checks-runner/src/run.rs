@@ -412,7 +412,14 @@ fn tail(bytes: &[u8]) -> String {
 /// interpreted — no variable expansion, no escapes, no globbing — because each
 /// of those is a shell feature and this is not a shell. `None` where the string
 /// holds no program at all.
-pub(crate) fn split(command: &str) -> Option<(String, Vec<String>)> {
+///
+/// **Public so that it stays the only one.** The reader outside this crate is
+/// `fleet::drifting`, which answers whether what a `run` line names is still in
+/// the repository and therefore has to agree, word for word, with what the
+/// runner would actually execute. A second splitter written there would agree
+/// until the first quoted argument, and then drift and the runner would
+/// disagree about what a line invokes with nothing comparing them.
+pub fn split(command: &str) -> Option<(String, Vec<String>)> {
     let mut words = Vec::new();
     let mut word = String::new();
     let mut started = false;

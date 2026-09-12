@@ -17,6 +17,12 @@
 //! up while a second runs against it — and it is here because the three process
 //! rules are [`run`]'s: no shell, a group of its own, the whole group ended.
 //!
+//! [`split`] is the one splitter in the workspace and is public for that
+//! reason. `fleet::drifting` asks whether what a `run` line names is still in
+//! the repository, which is the same resolution this crate does before it
+//! spawns — so it reads this rather than writing a second one that would agree
+//! until the first quoted word.
+//!
 //! # It decides nothing
 //!
 //! What comes back is a fact: a code, a signal, an expired budget, or a spawn
@@ -32,5 +38,5 @@ mod serving;
 mod tests;
 
 pub use narrow::{narrowed, Narrowed};
-pub use run::{run, run_until, run_writing, run_writing_with_env, Attempt, Output, Writing};
+pub use run::{run, run_until, run_writing, run_writing_with_env, split, Attempt, Output, Writing};
 pub use serving::Served;
