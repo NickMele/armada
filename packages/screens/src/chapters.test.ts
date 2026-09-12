@@ -35,10 +35,8 @@ import { chaptersOf } from "./chapters";
 import { NO_FRAMES } from "./frames";
 // The phase strip, because the last describe in this file is the two surfaces
 // against each other and there is no third place both are reachable from.
-import { phasesOf, type Opens } from "./phases";
+import type { Opens } from "./phases";
 
-/** The Job status under which a step's own `running` is the whole truth. */
-const RUNNING = "running";
 
 /** The brief as `crates/fleet/src/briefing.rs` writes it, three blocks of it. */
 const BRIEF = [
@@ -587,22 +585,11 @@ describe("a step retried twice, on both surfaces", () => {
     return documentsIn(renderToStaticMarkup(chapters({ step: one })[2]!.preview));
   }
 
-  /** What the strip's Submitted tier lists. The result is beside the label. */
-  function onTheStrip(one: StepDetail): string[] {
-    const stage = phasesOf(one, [], OPENS, RUNNING).stages.find((held) => held.id === "submitted");
-    return (stage?.rows ?? []).flatMap((row) =>
-      documentsIn(renderToStaticMarkup(row.label) + renderToStaticMarkup(row.result)),
-    );
-  }
-
-  it("lists the same documents in the same order on both", () => {
-    expect(onTheStrip(twice)).toEqual(inProduced(twice));
-  });
-
-  // Named rather than only compared, so a change that reversed *both* surfaces
-  // still fails here. Two surfaces agreeing on the wrong order is the reading
-  // the test above cannot tell from the right one.
-  it("puts the last run at the top of both", () => {
+  // **Named rather than only ordered.** It read against the strip's Submitted
+  // tier as well until the strip was deleted, and a comparison of two surfaces
+  // cannot tell both being wrong from both being right — which is why the
+  // documents are spelled out here rather than checked against anything.
+  it("puts the last run at the top", () => {
     expect(inProduced(twice)).toEqual([
       ".armada/deliverables/plan.2.plan.md · attempt 2",
       ".armada/deliverables/plan.1.plan.md · attempt 1",

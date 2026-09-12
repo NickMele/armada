@@ -152,6 +152,15 @@ export function timelineOf(
   });
 }
 
+/**
+ * The four phases every step is read against, in the order they happen.
+ *
+ * **One list, because two would drift.** The rows below are built from it and
+ * the panel's reading state names the same four before a step has come back;
+ * a second literal in either place is the copy that goes stale first.
+ */
+export const EVERY_STEP_PHASE: readonly string[] = ["Instructed", "Working", "Checks", "Judge"];
+
 /** The step states in which a Drone is working right now. */
 const WORKING = new Set(["running", "retrying"]);
 

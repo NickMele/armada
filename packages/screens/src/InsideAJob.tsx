@@ -9,12 +9,11 @@ import {
   JobBrief,
   JobBriefSkeleton,
   JobDetailHeaderActions,
-  PhaseStripSkeleton,
   StepTimeline,
+  StepTimelineSkeleton,
   RunTree,
   RunTreeSkeleton,
   Skeleton,
-  StepStorySkeleton,
   Tooltip,
   WhereRow,
   conceptSaid,
@@ -137,8 +136,8 @@ export type StepReading = {
   /** The step's name off the workflow. Absent draws a bar in its place. */
   label?: ReactNode;
   labelIsAnIdentifier?: boolean;
-  /** The chapters every step's story has, by name. */
-  chapters: readonly ReactNode[];
+  /** The phases every step is read against, by name. */
+  phases: readonly ReactNode[];
 };
 
 export type InsideAJobProps = {
@@ -475,7 +474,7 @@ export function InsideAJob({
  * it, and its fields, gates and story waiting. The head is the real one, so
  * nothing moves when the step lands.
  */
-function StepPanelReading({ label, labelIsAnIdentifier, chapters }: StepReading) {
+function StepPanelReading({ label, labelIsAnIdentifier, phases }: StepReading) {
   return (
     <>
       <div className="armada-inside__step-head">
@@ -494,8 +493,7 @@ function StepPanelReading({ label, labelIsAnIdentifier, chapters }: StepReading)
           </div>
         </div>
       </div>
-      <PhaseStripSkeleton />
-      <StepStorySkeleton chapters={chapters} />
+      <StepTimelineSkeleton phases={phases} />
     </>
   );
 }
