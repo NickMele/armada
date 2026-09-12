@@ -112,6 +112,8 @@ Where a worktree and its log live on disk is in `../contracts/system-architectur
 
 **What Armada injects is not what the process ends up holding.** Measured against the live CLI: `--allowedTools` is a permission allowlist rather than a toolset — it removed none of the thirty built-in tools, and a spawned Drone inherited the operator's own MCP servers, plugins, subagents, skills and SessionStart hook. **Isolation is opt-out, and the opt-out is not** `--allowedTools`**.**
 
+**The operator's permission rules come along too, and so do their skills.** On a real Job a Drone ran `git commit` because the operator's settings allowed it. Armada's permission tool never saw the call, and a leftover user-level skill had told the Drone to commit, which no search of this repository could find. Fleet now passes `--disallowedTools` for the `git` verbs that change a repository (measured: a deny beats an identical allow) and leaves every other inherited rule standing.
+
 **For MCP servers, `--strict-mcp-config` is the opt-out, and it is not optional.** A harness must let Fleet inject the Evidence MCP server, since Evidence is the only sanctioned completion path, and must then run with that server and nothing else.
 
 The two fail differently: a harness that cannot inject fails loudly and immediately, while one that injects but cannot exclude looks like success — the Drone works, and holds the operator's whole toolbelt. Both are enforced at compile time rather than by a runtime check, because `mcp_config` and the strict-mode field are non-optional on `DroneSpawnConfig` with no escape-hatch constructor. See `../contracts/adapters.md`.

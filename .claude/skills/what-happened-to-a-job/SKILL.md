@@ -86,6 +86,21 @@ Checks printed.
 **`and said it had not done` is the most useful paragraph a Drone writes.** It
 is where a step that passed every gate admits what it did not verify.
 
+## A Job that finished and opened no pull request
+
+**Read `THE LAST OF` at the delivering step's entry before anything else.** Fleet
+writes one line there whenever the branch did not go out, and the line says why.
+Confirmed 12 Sep 2026: a `refactor` Job ended `completed_success` with two
+commits on a branch nobody pushed. The owner's first reading was that the
+workflow could not deliver, but the log line said the worktree "held nothing
+new". The Drone had committed its own work, and Fleet then pushed only commits
+it had made itself (#783).
+
+**When a Drone does something no prompt here asks for, search the operator's
+user-level skills as well as this repository.** A Drone loads them. That commit
+came from a leftover v1 skill that told it to "commit before you finish", and no
+search of the repository could find it (#786).
+
 ## What it cannot tell you
 
 | | |
