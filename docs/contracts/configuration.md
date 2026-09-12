@@ -414,7 +414,7 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   reads it, and on 8 Sept 2026 Job `01M21BKVPW002DC0ATD1X9T0VF` merged three
   over-long comment blocks past a fully green gate: `crates/armada/src/clean.rs`
   at 27 lines, `crates/fleet/src/ending.rs` at 32, `crates/store/src/forget.rs`
-  at 28, all under the 25-line hard refusal, all in files the Job had touched.
+  at 28, all over the cap the hook refuses at, all in files the Job had touched.
   Every declared Check passed. A person running the gate afterwards is what
   caught it.
   **The obvious fix is the one this cannot simply take.** Making it a Check
