@@ -1,11 +1,12 @@
-//! The span of ports a Job's worktree holds, or the main checkout holds.
+//! The span of ports a Job's worktree holds, the main checkout holds, or
+//! Fleet's own listener holds.
 //!
-//! `docs/concepts/fleet.md`, *Ports*: "A claim carries a `job_id`, or marks
-//! the main checkout, so who holds which span is a query rather than an
-//! inspection of directories." [`PortClaimant`] is that either/or, answered by
-//! the type rather than by two nullable columns a caller could leave both set
-//! or both empty — the shape a `CHECK` would otherwise have to refuse at the
-//! boundary between this crate and whoever calls it.
+//! `docs/concepts/fleet.md`, *Ports*: "A claim names a Job, the main checkout
+//! or Fleet's own listener, so who holds which span is a query rather than an
+//! inspection of directories." [`PortClaimant`] is that one-of-three, answered
+//! by the type rather than by three nullable columns a caller could leave all
+//! set or all empty — the shape a `CHECK` would otherwise have to refuse at
+//! the boundary between this crate and whoever calls it.
 //!
 //! **Sizing, probing and picking a free span are not here.** This module
 //! persists a claim once Fleet has decided one; the decision is
@@ -58,8 +59,56 @@ CREATE UNIQUE INDEX port_claims_by_job ON port_claims (job_id) WHERE job_id IS N
 CREATE UNIQUE INDEX port_claims_main_checkout ON port_claims (main_checkout) WHERE main_checkout IS NOT NULL;
 "#;
 
-/// Who a port span belongs to. **Exactly one of the two, and there is no
-/// third constructor that leaves it unstated.**
+/// Version 50 — Fleet's own listener joins a Job and the main checkout as a
+/// third thing that can hold a span.
+///
+/// **A table rebuild, because SQLite cannot alter a `CHECK` in place.**
+/// [`V45`]'s `CHECK ((job_id IS NULL) <> (main_checkout IS NULL))` spells
+/// "exactly one of two" and there is no `ALTER TABLE` that widens it, so the
+/// table is built beside the old one, the rows are carried across, and the old
+/// one is dropped. **The drop comes before the indexes are created**: a rename
+/// carries a table's indexes with it under their original names, so
+/// `port_claims_by_job` exists on the renamed table until that table is gone.
+///
+/// **The rows are carried, not backfilled.** Every claim a Job or the main
+/// checkout held before this migration is still held after it, at the same
+/// base and width — which is what the migration test asserts, because a table
+/// rebuild that quietly drops rows is a Job whose Command loses its port.
+///
+/// `fleet_listener` is `1` or absent, and its own partial unique index makes
+/// it singular, exactly as `main_checkout` is: **one Fleet per store.** Two
+/// Fleets on one machine are two stores under two homes, and what keeps their
+/// ports apart is the bind-and-connect probe rather than a row either can see.
+pub(crate) const V50: &str = r#"
+ALTER TABLE port_claims RENAME TO port_claims_before_the_fleet_listener;
+
+CREATE TABLE port_claims (
+    job_id         TEXT REFERENCES jobs(job_id),
+    main_checkout  INTEGER,
+    fleet_listener INTEGER,
+    base           INTEGER NOT NULL,
+    width          INTEGER NOT NULL,
+    claimed_at     TEXT NOT NULL,
+    CHECK (base > 0 AND width > 0),
+    CHECK ((job_id IS NOT NULL) + (main_checkout IS NOT NULL)
+           + (fleet_listener IS NOT NULL) = 1),
+    CHECK (main_checkout IS NULL OR main_checkout = 1),
+    CHECK (fleet_listener IS NULL OR fleet_listener = 1)
+) STRICT;
+
+INSERT INTO port_claims (job_id, main_checkout, base, width, claimed_at)
+SELECT job_id, main_checkout, base, width, claimed_at
+FROM port_claims_before_the_fleet_listener;
+
+DROP TABLE port_claims_before_the_fleet_listener;
+
+CREATE UNIQUE INDEX port_claims_by_job ON port_claims (job_id) WHERE job_id IS NOT NULL;
+CREATE UNIQUE INDEX port_claims_main_checkout ON port_claims (main_checkout) WHERE main_checkout IS NOT NULL;
+CREATE UNIQUE INDEX port_claims_fleet_listener ON port_claims (fleet_listener) WHERE fleet_listener IS NOT NULL;
+"#;
+
+/// Who a port span belongs to. **Exactly one of the three, and there is no
+/// fourth constructor that leaves it unstated.**
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PortClaimant {
     /// A Job's worktree, for the whole of the worktree's lifetime.
@@ -69,6 +118,13 @@ pub enum PortClaimant {
     /// Manifest surface with no Job runs in and draws its ports from —
     /// neither has a worktree of its own to claim against.
     MainCheckout,
+    /// Fleet's own listener — the one port Bridge connects to, published in
+    /// the runtime file. Claimed at startup before the bind and released when
+    /// Fleet stops, so two Fleets on one machine never bind the same number.
+    ///
+    /// **One port, not a span**, and it is the only claimant whose width is
+    /// not sized from a Manifest's `ports:`.
+    FleetListener,
 }
 
 /// A span of contiguous ports, claimed.
@@ -96,17 +152,20 @@ impl Store {
     ///
     /// [`port_span_for_job`]: Store::port_span_for_job
     pub fn claim_port_span(&mut self, claim: &PortClaim) -> Result<(), WriteError> {
-        let (job_id, main_checkout) = match &claim.claimant {
-            PortClaimant::Job(job_id) => (Some(job_id.as_str()), None),
-            PortClaimant::MainCheckout => (None, Some(1_i64)),
+        let (job_id, main_checkout, fleet_listener) = match &claim.claimant {
+            PortClaimant::Job(job_id) => (Some(job_id.as_str()), None, None),
+            PortClaimant::MainCheckout => (None, Some(1_i64), None),
+            PortClaimant::FleetListener => (None, None, Some(1_i64)),
         };
         self.conn
             .execute(
-                "INSERT INTO port_claims (job_id, main_checkout, base, width, claimed_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO port_claims \
+                 (job_id, main_checkout, fleet_listener, base, width, claimed_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 (
                     job_id,
                     main_checkout,
+                    fleet_listener,
                     i64::from(claim.base),
                     i64::from(claim.width),
                     claim.claimed_at.as_str(),
@@ -139,6 +198,10 @@ impl Store {
                 "DELETE FROM port_claims WHERE main_checkout IS NOT NULL",
                 (),
             ),
+            PortClaimant::FleetListener => self.conn.execute(
+                "DELETE FROM port_claims WHERE fleet_listener IS NOT NULL",
+                (),
+            ),
         };
         deleted
             .map_err(fault("releasing a port span"))
@@ -151,7 +214,7 @@ impl Store {
         let found = self
             .conn
             .query_row(
-                "SELECT job_id, main_checkout, base, width, claimed_at \
+                "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
                  FROM port_claims WHERE job_id = ?1",
                 (job_id.as_str(),),
                 |row| Ok(read_claim(row)),
@@ -177,7 +240,7 @@ impl Store {
         let found = self
             .conn
             .query_row(
-                "SELECT job_id, main_checkout, base, width, claimed_at \
+                "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
                  FROM port_claims WHERE main_checkout IS NOT NULL",
                 (),
                 |row| Ok(read_claim(row)),
@@ -196,8 +259,42 @@ impl Store {
         })
     }
 
-    /// Every span currently claimed, Job spans before the main checkout's and
-    /// each in claim order.
+    /// The port Fleet's own listener claimed, if one has been claimed.
+    ///
+    /// **Read at startup, before the bind.** A row here that no live Fleet is
+    /// behind is what a crash leaves, and it is reused rather than trusted:
+    /// `fleet::listener` probes the port before this process binds it, because
+    /// the row says only that the last Fleet to hold it believed it was free.
+    ///
+    /// **Not a [`LoadJobError`]**, for
+    /// [`port_span_for_main_checkout`](Store::port_span_for_main_checkout)'s
+    /// reason — there is no Job to name if the read fails.
+    pub fn port_span_for_fleet_listener(&self) -> Result<Option<PortClaim>, LoadAllError> {
+        let found = self
+            .conn
+            .query_row(
+                "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
+                 FROM port_claims WHERE fleet_listener IS NOT NULL",
+                (),
+                |row| Ok(read_claim(row)),
+            )
+            .map(Some)
+            .or_else(|why| match why {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                other => Err(LoadAllError::Database(fault(
+                    "reading Fleet's own listener port claim",
+                )(other))),
+            })?;
+        found.transpose().map_err(|cause| {
+            LoadAllError::Database(fault("reading Fleet's own listener port claim")(
+                rusqlite::Error::InvalidColumnName(cause.to_string()),
+            ))
+        })
+    }
+
+    /// Every span currently claimed, Job spans before the two that have no
+    /// Job — the main checkout's and Fleet's own listener's — and each in
+    /// claim order.
     ///
     /// **What Fleet reads before it picks a candidate span.** One pass rather
     /// than a query per attempt, the same shape as
@@ -208,8 +305,9 @@ impl Store {
         let mut asked = self
             .conn
             .prepare(
-                "SELECT job_id, main_checkout, base, width, claimed_at \
-                 FROM port_claims ORDER BY job_id IS NULL, job_id, main_checkout, claimed_at",
+                "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
+                 FROM port_claims \
+                 ORDER BY job_id IS NULL, job_id, main_checkout, fleet_listener, claimed_at",
             )
             .map_err(fault("preparing the port claim read"))
             .map_err(LoadAllError::Database)?;
@@ -233,23 +331,28 @@ impl Store {
 }
 
 /// One row, narrowed. **The claimant is refused rather than guessed** — a row
-/// holding both or neither of `job_id` and `main_checkout` is a row the
-/// `CHECK` should have stopped, and reading it as one or the other would be
-/// this crate deciding the shape the database already refused to hold.
+/// holding more or fewer than one of `job_id`, `main_checkout` and
+/// `fleet_listener` is a row the `CHECK` should have stopped, and reading it
+/// as one of them would be this crate deciding the shape the database already
+/// refused to hold.
 fn read_claim(row: &rusqlite::Row<'_>) -> Result<PortClaim, RowError> {
     let job_id: Option<String> = row.get("job_id").map_err(column(TABLE, "job_id"))?;
     let main_checkout: Option<i64> = row
         .get("main_checkout")
         .map_err(column(TABLE, "main_checkout"))?;
-    let claimant = match (job_id, main_checkout) {
-        (Some(job_id), None) => PortClaimant::Job(JobId::carried(Ulid::carried(job_id))),
-        (None, Some(_)) => PortClaimant::MainCheckout,
+    let fleet_listener: Option<i64> = row
+        .get("fleet_listener")
+        .map_err(column(TABLE, "fleet_listener"))?;
+    let claimant = match (job_id, main_checkout, fleet_listener) {
+        (Some(job_id), None, None) => PortClaimant::Job(JobId::carried(Ulid::carried(job_id))),
+        (None, Some(_), None) => PortClaimant::MainCheckout,
+        (None, None, Some(_)) => PortClaimant::FleetListener,
         _ => {
             return Err(RowError::MalformedColumn {
                 table: TABLE,
                 column: "job_id",
-                detail: "a port claim names exactly one of a Job or the main checkout, and this \
-                         row does not"
+                detail: "a port claim names exactly one of a Job, the main checkout or Fleet's \
+                         own listener, and this row does not"
                     .to_string(),
             })
         }

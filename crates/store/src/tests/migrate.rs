@@ -246,7 +246,7 @@ fn titles(store: &Store) -> Vec<String> {
     rows.map(|title| title.expect("a title")).collect()
 }
 
-fn recorded_version(store: &Store) -> String {
+pub(super) fn recorded_version(store: &Store) -> String {
     store
         .conn
         .query_row(
