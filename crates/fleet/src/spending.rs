@@ -37,7 +37,10 @@ where
             over_budget: Vec::new(),
         };
         for job in &loaded.jobs {
-            let spent = self.spend_of(job.id()).await.map_err(|why| self.refusal(why))?;
+            let spent = self
+                .spend_of(job.id())
+                .await
+                .map_err(|why| self.refusal(why))?;
             usage.cost_micros = usage.cost_micros.saturating_add(spent.cost_micros);
             usage.turns = usage.turns.saturating_add(spent.turns);
             usage.drones = usage.drones.saturating_add(spent.drones);

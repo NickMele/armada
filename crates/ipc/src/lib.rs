@@ -181,9 +181,9 @@ pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,
     ServerPort, ServerState, StartServer, StartedBy,
 };
-pub use since::{EventTally, EventsSince};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet};
+pub use since::{EventTally, EventsSince};
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,
     Voice, Withheld,

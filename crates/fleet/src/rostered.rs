@@ -64,9 +64,13 @@ where
                 // twice declares twice, and the promise in force is the last.
                 .filter(|plan| Some(&plan.step_id) == job.current_step_id())
                 .next_back();
-            let (turns, older) =
-                crate::transcript::one_drones_rows(&self.host().records_root, &job.handle(), &wanted, TURNS)
-                    .await;
+            let (turns, older) = crate::transcript::one_drones_rows(
+                &self.host().records_root,
+                &job.handle(),
+                &wanted,
+                TURNS,
+            )
+            .await;
             return Ok(DroneDetail {
                 drone,
                 declared: plan.as_ref().map(|plan| {

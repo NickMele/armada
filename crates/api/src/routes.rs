@@ -35,7 +35,9 @@ use crate::commands::{
     stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
-use crate::fleetwide::{get_drone, get_events_since, get_health, get_manifest, get_usage, list_drones};
+use crate::fleetwide::{
+    get_drone, get_events_since, get_health, get_manifest, get_usage, list_drones,
+};
 use crate::queries::{
     get_call, get_capacity, get_check_output, get_diff, get_evidence, get_frame, get_job,
     get_job_events, get_job_resources, get_manifest_reading, get_remarks, list_jobs,
@@ -44,8 +46,8 @@ use crate::queries::{
 use crate::rehearsing::{
     get_run_output, get_run_sheet, list_runs, observe_run, start_run, stop_run, undo_run,
 };
-use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::served::Served;
+use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
 
 /// One operation, and where it is served.
@@ -694,7 +696,6 @@ pub const SERVED: &[Route] = &[
     },
 ];
 
-
 /// The one listener: the HTTP surface, the Drone's endpoint and the agent's
 /// door, on one port.
 ///
@@ -702,10 +703,7 @@ pub const SERVED: &[Route] = &[
 /// tool call against it rather than against the daemon, and a router that held
 /// itself is not a value — so it is handed its own copy of the same table.
 pub fn router<D: Daemon>(served: Served<D>) -> Router {
-    surface(served.clone()).merge(crate::door::mounted::<D>(
-        served.clone(),
-        surface(served),
-    ))
+    surface(served.clone()).merge(crate::door::mounted::<D>(served.clone(), surface(served)))
 }
 
 /// The HTTP surface and the Drone's endpoint: every route but the door.

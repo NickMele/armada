@@ -7,7 +7,9 @@
 
 use serde_json::{json, Value};
 
-use crate::door::{answer, read, Answer, Answered, Asked, Shape, MOST_A_TOOL_MAY_ANSWER, REACHABLE};
+use crate::door::{
+    answer, read, Answer, Answered, Asked, Shape, MOST_A_TOOL_MAY_ANSWER, REACHABLE,
+};
 
 /// The shapes a test drives: one read with a segment, one with a query, and
 /// one command.
@@ -88,7 +90,10 @@ fn a_missing_segment_is_a_tool_error_and_never_a_request() {
     let Asked::NotACall { why, .. } = asked else {
         panic!("expected a refusal, got {asked:?}");
     };
-    assert!(why.contains("job_id"), "the refusal must name the field: {why}");
+    assert!(
+        why.contains("job_id"),
+        "the refusal must name the field: {why}"
+    );
 }
 
 #[test]
@@ -114,7 +119,10 @@ fn an_argument_is_encoded_into_its_segment() {
 /// empty object rather than nothing at all.
 #[test]
 fn a_command_carries_a_body_even_where_none_was_sent() {
-    let asked = read(&call("redirect_drone", json!({ "job_id": "12" })), &shapes());
+    let asked = read(
+        &call("redirect_drone", json!({ "job_id": "12" })),
+        &shapes(),
+    );
     let Asked::Call { call, .. } = asked else {
         panic!("expected a call, got {asked:?}");
     };
@@ -145,7 +153,10 @@ fn an_operation_with_no_route_is_refused_at_the_door() {
     let Asked::NotACall { why, .. } = asked else {
         panic!("expected a refusal, got {asked:?}");
     };
-    assert!(why.contains("no \nroute") || why.contains("no route"), "{why}");
+    assert!(
+        why.contains("no \nroute") || why.contains("no route"),
+        "{why}"
+    );
 }
 
 #[test]
@@ -209,7 +220,10 @@ fn an_answer_under_the_cap_is_untouched() {
     })
     .expect("an answer encodes");
     let back: Value = serde_json::from_str(&written).expect("valid JSON");
-    assert_eq!(back["result"]["content"][0]["text"], json!(r#"{"jobs":[]}"#));
+    assert_eq!(
+        back["result"]["content"][0]["text"],
+        json!(r#"{"jobs":[]}"#)
+    );
 }
 
 /// A refusal from the HTTP surface reaches the model as something to read,

@@ -41,10 +41,7 @@ const MOST_A_CALL_MAY_BE: usize = 1024 * 1024;
 /// **Two rows, and they are the route table's own fact.** A path segment is
 /// visible in the path and a query is not, so this is the one thing about a
 /// route the door cannot read off [`SERVED`].
-const QUERIES: &[(&str, &[&str])] = &[
-    ("search_files", &["q"]),
-    ("get_events_since", &["since"]),
-];
+const QUERIES: &[(&str, &[&str])] = &[("search_files", &["q"]), ("get_events_since", &["since"])];
 
 /// Every tool this door offers: the inventory's `agent_access` column, joined
 /// to the route table.
@@ -57,9 +54,7 @@ pub fn offered() -> Vec<Shape> {
     door::REACHABLE
         .iter()
         .map(|row| {
-            let route = SERVED
-                .iter()
-                .find(|route| route.operation == row.operation);
+            let route = SERVED.iter().find(|route| route.operation == row.operation);
             Shape {
                 operation: row.operation,
                 method: route.map(|route| route.method).unwrap_or("GET"),
@@ -195,7 +190,9 @@ impl<D: Queries> Doorway<D> {
             .method(call.method)
             .uri(&call.path)
             .header(header::CONTENT_TYPE, "application/json")
-            .body(axum::body::Body::from(call.body.clone().unwrap_or_default()));
+            .body(axum::body::Body::from(
+                call.body.clone().unwrap_or_default(),
+            ));
         let Ok(request) = request else {
             return unanswerable(call, "that call did not make a request");
         };

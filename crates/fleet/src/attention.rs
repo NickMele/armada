@@ -106,7 +106,9 @@ where
             .lock()
             .await
             .events_for(job.id())
-            .map_err(|cause| self.refusal(Adrift::Reading(store::LoadJobError::Unreadable(cause))))?;
+            .map_err(|cause| {
+                self.refusal(Adrift::Reading(store::LoadJobError::Unreadable(cause)))
+            })?;
         let moved = events
             .iter()
             .rev()

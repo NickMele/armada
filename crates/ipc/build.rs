@@ -52,7 +52,8 @@ fn main() {
             inventory.display()
         )
     });
-    fs::write(out.join("reachable.rs"), reachable(&named, &inventory)).expect("OUT_DIR is writable");
+    fs::write(out.join("reachable.rs"), reachable(&named, &inventory))
+        .expect("OUT_DIR is writable");
 }
 
 fn number(text: &str, key: &str, source: &Path) -> u32 {

@@ -15,14 +15,13 @@
 
 use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
-    Actor, Asked, CallArguments, CheckOutput, EvidenceType, Finding, FleetCapacity, Held, Instant,
-    JobDetail, JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks,
-    Alert, AlertList, DroneDetail, DroneId, DroneSummary, FleetHealth, FleetUsage, JobResources,
+    Actor, Alert, AlertList, Asked, CallArguments, CheckOutput, DroneDetail, DroneId, DroneSummary,
+    EvidenceType, Finding, FleetCapacity, FleetHealth, FleetUsage, Held, Instant, JobDetail,
+    JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks, JobResources,
     JobStatus, JobSummary, KeptFrame, Look, ManifestConfig, ManifestId, ManifestSummary,
-    Overspending, Probe, Unprobed,
-    ModelChoices, Movement, NotedField, Origin, ReclaimedBranch, ReclaimedWorktree, Recorded,
-    RunId, StatusMoved, StepId, Submitted, Urgency, Work, WorkflowId, WorkflowSummary,
-    WorktreeReclaimed,
+    ModelChoices, Movement, NotedField, Origin, Overspending, Probe, ReclaimedBranch,
+    ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted, Unprobed, Urgency, Work,
+    WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
 
 /// A spelling the registry has. Panics in a test rather than returning an
@@ -38,6 +37,13 @@ pub fn run_id() -> RunId {
 /// The one call id this fake's record holds. Anything else is a call the
 /// transcripts do not carry, which is a different answer from a missing Job.
 pub const THE_CALL: &str = "toolu_01Haa";
+
+/// The one Drone this fake is holding a slot for. Anything else names no live
+/// process, which is a 404 and not a detail with nothing in it.
+pub const THE_DRONE: &str = "01DRONE";
+
+/// The one Manifest this fake serves, and therefore the only scope.
+pub const THE_MANIFEST: &str = "01MF";
 
 /// An argument longer than a row carries, so a test can prove the whole of it
 /// comes back rather than the line the socket sent.
@@ -555,7 +561,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
 /// The one Manifest the fake holds.
 pub fn manifests() -> Vec<ManifestSummary> {
     vec![ManifestSummary {
-        id: ManifestId::carried("01MF"),
+        id: ManifestId::carried(THE_MANIFEST),
         repository: "a-repository".to_string(),
         path: "/a-repository/armada.yml".to_string(),
         records_root: "/records/a-repository-key".to_string(),
@@ -636,7 +642,7 @@ pub fn alerts() -> AlertList {
 /// The one Drone the fake is holding.
 pub fn drone() -> DroneSummary {
     DroneSummary {
-        drone_id: DroneId::carried("01DRONE"),
+        drone_id: DroneId::carried(THE_DRONE),
         job_id: JobId::carried("01JOB1"),
         handle: "1-a-job".to_string(),
         step_id: StepId::carried("implement"),
@@ -694,7 +700,7 @@ pub fn usage() -> FleetUsage {
 /// What the one Manifest declares, past the summary a picker reads.
 pub fn manifest_config() -> ManifestConfig {
     ManifestConfig {
-        id: ManifestId::carried("01MF"),
+        id: ManifestId::carried(THE_MANIFEST),
         summary: manifests()[0].clone(),
         base: Some("main".to_string()),
         checks_as_written: vec!["build".to_string()],

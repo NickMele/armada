@@ -421,10 +421,16 @@ fn tool(shape: &Shape) -> Value {
 /// worth a sentence; the rest are their own name.
 fn describe(name: &str) -> String {
     match name {
-        "job_id" => String::from("The Job: its id, the handle a person reads, or the number that handle starts with"),
-        "manifest_id" => String::from("The Manifest. This Fleet serves one, and it is the one your session is scoped to"),
+        "job_id" => String::from(
+            "The Job: its id, the handle a person reads, or the number that handle starts with",
+        ),
+        "manifest_id" => String::from(
+            "The Manifest. This Fleet serves one, and it is the one your session is scoped to",
+        ),
         "drone_id" => String::from("The Drone, as `list_drones` names it"),
-        "since" => String::from("The cursor your last call answered with, as `upto`. Nought is the whole stream"),
+        "since" => String::from(
+            "The cursor your last call answered with, as `upto`. Nought is the whole stream",
+        ),
         "q" => String::from("What a person has typed so far. Empty matches everything"),
         other => format!("The `{other}` this route names"),
     }
@@ -505,14 +511,12 @@ fn said_as(text: &str, is_error: bool) -> Value {
 /// **Twenty lines rather than a dependency.** This crate is held to two, and
 /// an encoder has one shape with a test beneath it.
 fn base64(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
-        let packed = chunk
-            .iter()
-            .enumerate()
-            .fold(0u32, |packed, (at, byte)| packed | (*byte as u32) << (16 - 8 * at));
+        let packed = chunk.iter().enumerate().fold(0u32, |packed, (at, byte)| {
+            packed | (*byte as u32) << (16 - 8 * at)
+        });
         for at in 0..4 {
             match at <= chunk.len() {
                 true => out.push(ALPHABET[(packed >> (18 - 6 * at)) as usize & 0x3F] as char),

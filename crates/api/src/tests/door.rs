@@ -94,7 +94,10 @@ async fn the_tool_list_is_every_reachable_operation_and_names_its_route() {
         !body.contains("\"name\":\"observe_job\""),
         "a Bridge-only operation reached the agent's tool set"
     );
-    assert!(body.contains("GET /jobs/:job_id"), "a tool must name its route");
+    assert!(
+        body.contains("GET /jobs/:job_id"),
+        "a tool must name its route"
+    );
 }
 
 /// The point of the whole door: a tool call and a Bridge request reach one
@@ -160,7 +163,10 @@ async fn a_command_reaches_the_post_route_with_its_body() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("no_drone_to_redirect"), "{body}");
-    assert!(!body.contains("undecodable"), "the body did not decode: {body}");
+    assert!(
+        !body.contains("undecodable"),
+        "the body did not decode: {body}"
+    );
 }
 
 /// The handshake says which Manifest the session is inside and what stands in

@@ -75,11 +75,7 @@ kind = "command"
 "#;
     let mut report = Report::new("test");
     check(inventory, TABLE_SOURCE, &mut report);
-    assert!(
-        failures(&report).is_empty(),
-        "{:?}",
-        failures(&report)
-    );
+    assert!(failures(&report).is_empty(), "{:?}", failures(&report));
 }
 
 /// **The allowance shrinks on its own.** An exemption for something that is
@@ -119,7 +115,11 @@ fn an_empty_inventory_or_an_empty_table_is_refused_rather_than_passed() {
     assert!(!failures(&report).is_empty());
 
     let mut report = Report::new("test");
-    check("[operations.list_jobs]\nkind = \"query\"\n", "", &mut report);
+    check(
+        "[operations.list_jobs]\nkind = \"query\"\n",
+        "",
+        &mut report,
+    );
     assert!(!failures(&report).is_empty());
 }
 
