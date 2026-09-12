@@ -9,8 +9,8 @@
 //!
 //! # No parser, and the failure is an answer
 //!
-//! `serde_json::from_*` is refused outside `store` and `ipc`, and `fleet` is
-//! neither — so `package.json` is read by a scan that knows JSON strings and
+//! Decoding untyped JSON is refused by the gate outside `store` and `ipc`, and
+//! `fleet` is neither — so `package.json` is read by a scan that knows JSON strings and
 //! brace depth and nothing more, the way `xtask` reads `operations.toml`. What
 //! makes that safe rather than merely allowed is where it fails: every reader
 //! answers [`None`] where it could not read the file with confidence, and a
