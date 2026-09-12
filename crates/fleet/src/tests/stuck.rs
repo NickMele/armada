@@ -305,14 +305,15 @@ async fn a_job_whose_worktree_is_gone_is_told_only_a_redispatch_moves_it() {
 #[tokio::test]
 async fn a_restart_onto_a_gone_worktree_answers_409_over_the_wire() {
     let home = TempDir::new();
-    let fleet = a_fleet_with(&home, a_drone_that_leaves());
+    let fleet = std::sync::Arc::new(a_fleet_with(&home, a_drone_that_leaves()));
     let job = refused(&fleet, &home).await;
     until_reaped(&fleet).await;
     delete_the_worktree(&home, &fleet.load(&job).await.expect("the Job").handle());
 
-    let refusal = api::Commands::restart_step(&fleet, ipc::JobId::from(&job), None)
-        .await
-        .expect_err("the worktree was just deleted");
+    let refusal =
+        api::Commands::restart_step(std::sync::Arc::clone(&fleet), ipc::JobId::from(&job), None)
+            .await
+            .expect_err("the worktree was just deleted");
 
     assert!(matches!(refusal, api::Refusal::IllegalMove(_)));
     assert_eq!(refusal.status(), 409);

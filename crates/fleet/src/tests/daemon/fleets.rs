@@ -26,6 +26,7 @@ use super::workflows::{
 // suite reaches these four by.
 use super::{Counted, Ticking, NEVER_QUIET, UNTRIPPABLE};
 use crate::allowance::{Allowance, Micros};
+use crate::commanding::CommandBudget;
 use crate::daemon::{Fittings, Fleet, Host};
 use crate::dry_run::DryRuns;
 use crate::gate::CheckBudget;
@@ -143,6 +144,10 @@ pub fn fitted_with(
         // unwatched one — buys a test nothing but a slower failure when one
         // hangs.
         proposer_budget: JudgeBudget::of(Duration::from_secs(5)),
+        // The same five seconds, for `judge_budget`'s reason: a fixture's own
+        // commands answer in milliseconds, so this only slows a genuine hang's
+        // failure rather than a passing suite.
+        command_budget: CommandBudget::of(Duration::from_secs(5)),
         judge_model: Model::named("the-cheap-model").expect("a model name"),
         proposer_model: Model::named("the-cheap-model").expect("a model name"),
         // Resolves nothing, so every fixture but `proposing`'s own behaves

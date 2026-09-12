@@ -83,6 +83,10 @@ pub struct Fleet<H, V, W> {
     judge: Arc<dyn ModelClient + Send + Sync>,
     judge_budget: JudgeBudget,
     proposer_budget: JudgeBudget,
+    /// How long a plain command may take before Fleet answers a refusal in
+    /// its own words rather than leaving Bridge's wait as the only account of
+    /// who gave up. See [`crate::commanding::CommandBudget`].
+    command_budget: crate::commanding::CommandBudget,
     /// The Judge call that is out right now, or none. **The one piece of Fleet
     /// state that is only ever true for as long as it takes** — it is never
     /// written down, because a record of it would outlive the fact.

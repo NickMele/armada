@@ -26,6 +26,7 @@
 
 use std::error::Error;
 use std::io;
+use std::time::Duration;
 
 use adapter_traits::{NotDelivered, NotMerged, SpawnConfigRefused, WorktreeSpecRefused};
 use adapters::RepoUnreadable;
@@ -627,6 +628,17 @@ pub enum Adrift {
     /// a ULID, a handle or a number — resolved to nothing, and the refusal
     /// quotes what they said rather than a ULID they never typed.
     Unresolvable(ResolveJobError),
+    /// A plain command — one that only reads and writes the store, or does a
+    /// small amount of local work beside it — took longer than Fleet's own
+    /// bound on it. **The command is not cancelled.** `crate::commanding`
+    /// spawns it before racing the bound, so a write already in flight (or a
+    /// second write a first one committed before, `redispatch_job`'s shape)
+    /// runs to whatever end it was going to reach; only the answer to whoever
+    /// was waiting stops here. `#712`.
+    CommandTimedOut {
+        job: Option<JobId>,
+        waited: Duration,
+    },
 }
 impl Adrift {
     /// A refusal from the delivery seam, named against the Job it was for.

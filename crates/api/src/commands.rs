@@ -34,7 +34,7 @@ pub(crate) async fn propose_job<D: Commands>(
         // bytes did not become a request, so nothing downstream was asked.
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().propose_job(proposal).await {
+    match served.shared().propose_job(proposal).await {
         // 201: the Job now exists, at the approval gate. It is not running, and
         // nothing here approves it.
         Ok(job) => answer(StatusCode::CREATED, &job, served.run_id()),
@@ -82,7 +82,7 @@ pub(crate) async fn approve_dispatch<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().approve_dispatch(job.id()).await {
+    match served.shared().approve_dispatch(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -98,7 +98,7 @@ pub(crate) async fn approve_review<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().approve_review(job.id()).await {
+    match served.shared().approve_review(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -155,7 +155,7 @@ pub(crate) async fn request_changes<D: Commands>(
         Ok(note) => note,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().request_changes(job.id(), note).await {
+    match served.shared().request_changes(job.id(), note).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -192,7 +192,7 @@ pub(crate) async fn reject_job<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().reject_job(job.id()).await {
+    match served.shared().reject_job(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -215,7 +215,7 @@ pub(crate) async fn override_verdict<D: Commands>(
         Ok(overruling) => overruling,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().override_verdict(job.id(), overruling).await {
+    match served.shared().override_verdict(job.id(), overruling).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -278,7 +278,7 @@ pub(crate) async fn raise_cost_cap<D: Commands>(
         Ok(raise) => raise,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().raise_cost_cap(job.id(), raise).await {
+    match served.shared().raise_cost_cap(job.id(), raise).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -300,7 +300,7 @@ pub(crate) async fn raise_turn_cap<D: Commands>(
         Ok(raise) => raise,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().raise_turn_cap(job.id(), raise).await {
+    match served.shared().raise_turn_cap(job.id(), raise).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -312,7 +312,7 @@ pub(crate) async fn kill_drone<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().kill_drone(job.id()).await {
+    match served.shared().kill_drone(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -326,7 +326,7 @@ pub(crate) async fn kill_job<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().kill_job(job.id()).await {
+    match served.shared().kill_job(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -345,7 +345,7 @@ pub(crate) async fn examine_job<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().examine_job(job.id()).await {
+    match served.shared().examine_job(job.id()).await {
         Ok(examined) => answer(StatusCode::OK, &examined, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -362,7 +362,7 @@ pub(crate) async fn forget_job<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().forget_job(job.id()).await {
+    match served.shared().forget_job(job.id()).await {
         Ok(forgotten) => answer(StatusCode::OK, &forgotten, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -378,7 +378,7 @@ pub(crate) async fn reclaim_worktree<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().reclaim_worktree(job.id()).await {
+    match served.shared().reclaim_worktree(job.id()).await {
         Ok(reclaimed) => answer(StatusCode::OK, &reclaimed, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -391,7 +391,7 @@ pub(crate) async fn redispatch_job<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
 ) -> Response {
-    match served.daemon().redispatch_job(job.id()).await {
+    match served.shared().redispatch_job(job.id()).await {
         Ok(both) => answer(StatusCode::OK, &both, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -411,7 +411,7 @@ pub(crate) async fn redirect_drone<D: Commands>(
         Ok(instruction) => instruction,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().redirect_drone(job.id(), instruction).await {
+    match served.shared().redirect_drone(job.id(), instruction).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -430,7 +430,7 @@ pub(crate) async fn answer_question<D: Commands>(
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     let job_id = job.id();
-    match served.daemon().answer_question(job_id, chosen).await {
+    match served.shared().answer_question(job_id, chosen).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -449,7 +449,7 @@ pub(crate) async fn answer_command<D: Commands>(
         Ok(answered) => answered,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().answer_command(job.id(), answered).await {
+    match served.shared().answer_command(job.id(), answered).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -467,7 +467,7 @@ pub(crate) async fn answer_judge<D: Commands>(
         Ok(answered) => answered,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().answer_judge(job.id(), answered).await {
+    match served.shared().answer_judge(job.id(), answered).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -484,7 +484,7 @@ pub(crate) async fn set_when_refused<D: Commands>(
         Ok(setting) => setting,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().set_when_refused(job.id(), setting).await {
+    match served.shared().set_when_refused(job.id(), setting).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -501,7 +501,7 @@ pub(crate) async fn set_when_blocked<D: Commands>(
         Ok(setting) => setting,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().set_when_blocked(job.id(), setting).await {
+    match served.shared().set_when_blocked(job.id(), setting).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -518,7 +518,7 @@ pub(crate) async fn set_model<D: Commands>(
         Ok(choice) => choice,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().set_model(job.id(), choice).await {
+    match served.shared().set_model(job.id(), choice).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -536,7 +536,7 @@ pub(crate) async fn remove_allowed_command<D: Commands>(
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served
-        .daemon()
+        .shared()
         .remove_allowed_command(job.id(), removing)
         .await
     {
@@ -575,7 +575,7 @@ pub(crate) async fn restart_step<D: Commands>(
             Err(why) => return undecodable(&why.to_string(), served.run_id()),
         }
     };
-    match served.daemon().restart_step(job.id(), note).await {
+    match served.shared().restart_step(job.id(), note).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -597,7 +597,7 @@ pub(crate) async fn file_report<D: Commands>(
         Ok(filing) => filing,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().file_report(job.id(), filing).await {
+    match served.shared().file_report(job.id(), filing).await {
         Ok(report) => answer(StatusCode::CREATED, &report, served.run_id()),
         Err(refusal) => refused(refusal),
     }

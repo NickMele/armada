@@ -31,7 +31,7 @@ pub trait Commands: Send + Sync + 'static {
     /// unchanged:** what comes back is a Job at `awaiting_approval`, not a
     /// running one.
     fn propose_job(
-        &self,
+        self: std::sync::Arc<Self>,
         proposal: ProposeJob,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
@@ -95,7 +95,7 @@ pub trait Commands: Send + Sync + 'static {
     /// turn's, because one inside this request died whenever a client stopped
     /// waiting for it — `fleet::daemon::Fleet::approve` and `#428`.
     fn approve_dispatch(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
@@ -103,8 +103,10 @@ pub trait Commands: Send + Sync + 'static {
     /// Intervention Ladder rung 2. **The Job survives**: what comes back is the
     /// Job the killed Drone was on, still open, with its worktree held for a
     /// redispatch. Nothing here ends a Job.
-    fn kill_drone(&self, job_id: JobId)
-        -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+    fn kill_drone(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `kill_job` — ends the Job at `killed`, terminal, carrying no verdict.
     /// Not on the Intervention Ladder, and the only thing that ends a Job by
@@ -113,7 +115,10 @@ pub trait Commands: Send + Sync + 'static {
     ///
     /// Legal from every non-terminal status, including those with no Drone
     /// under them, which is why it cannot be spelled as [`Commands::kill_drone`].
-    fn kill_job(&self, job_id: JobId) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+    fn kill_job(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `examine_job` — go and look at this Job now, and say what was found.
     ///
@@ -140,7 +145,7 @@ pub trait Commands: Send + Sync + 'static {
     /// [`Refusal::IllegalMove`]: every status is examinable, including the
     /// terminal ones, because *check this Job* is not *check preparation*.
     fn examine_job(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
     ) -> impl Future<Output = Result<JobExamined, Refusal>> + Send;
 
@@ -160,7 +165,7 @@ pub trait Commands: Send + Sync + 'static {
     /// What comes back is the id and nothing else — there is no Job left for a
     /// summary to describe.
     fn forget_job(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
     ) -> impl Future<Output = Result<JobForgotten, Refusal>> + Send;
 
@@ -182,7 +187,7 @@ pub trait Commands: Send + Sync + 'static {
     /// The record is untouched. A reclaimed Job is still on the Board, and
     /// [`Commands::forget_job`] is what takes the row.
     fn reclaim_worktree(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
     ) -> impl Future<Output = Result<WorktreeReclaimed, Refusal>> + Send;
 
@@ -199,7 +204,7 @@ pub trait Commands: Send + Sync + 'static {
     /// a reference back, and the replacement's id is what the caller needs
     /// next.
     fn redispatch_job(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
     ) -> impl Future<Output = Result<Redispatched, Refusal>> + Send;
 
@@ -216,7 +221,7 @@ pub trait Commands: Send + Sync + 'static {
     /// and the two are separate methods so that neither can quietly become the
     /// other.
     fn redirect_drone(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         instruction: Redirection,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -245,7 +250,7 @@ pub trait Commands: Send + Sync + 'static {
     /// writes down and not a second one. Refused where a note is already
     /// waiting, and refused blank for [`Commands::redirect_drone`]'s reason.
     fn restart_step(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         note: Option<RestartRequested>,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -274,7 +279,7 @@ pub trait Commands: Send + Sync + 'static {
     /// the point of it — deferring the dispatch is `#456`, deferring the
     /// refusal would have been collateral.
     fn approve_review(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
@@ -344,7 +349,7 @@ pub trait Commands: Send + Sync + 'static {
     /// refused as well: a Drone told nothing resumes with exactly the
     /// information that was not enough.
     fn request_changes(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         note: ChangesRequested,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -401,7 +406,7 @@ pub trait Commands: Send + Sync + 'static {
     /// [`Refusal::Unacceptable`]: an override that says nothing is how this
     /// becomes the way somebody quiets a gate.
     fn override_verdict(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         overruling: ipc::Overruled,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -463,8 +468,10 @@ pub trait Commands: Send + Sync + 'static {
     /// Refused anywhere but `awaiting_review`. `awaiting_approval -> rejected`
     /// is a legal edge and it belongs to `deny_dispatch`, which is a different
     /// act on a Job that has never run.
-    fn reject_job(&self, job_id: JobId)
-        -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+    fn reject_job(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `file_report` — a person says this Job failed in error, and the Job's
     /// own record is filed with what they said.
@@ -490,7 +497,7 @@ pub trait Commands: Send + Sync + 'static {
     /// meaningful, which is why [`ipc::FileReport::claim`] is a closed set and
     /// is the field anything counting reads.
     fn file_report(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         filing: FileReport,
     ) -> impl Future<Output = Result<Report, Refusal>> + Send;
@@ -515,7 +522,7 @@ pub trait Commands: Send + Sync + 'static {
     /// surface asked past its ceiling, which a person has none of.
     /// `crates/fleet/src/raising.rs` carries that ceiling and defends it.
     fn raise_cost_cap(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         raise: CapRaise,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -532,7 +539,7 @@ pub trait Commands: Send + Sync + 'static {
     /// [`raise_cost_cap`](Commands::raise_cost_cap) and for the same reasons,
     /// and comes back as the summary a caller reads `queued_reason` off.
     fn raise_turn_cap(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         raise: TurnRaise,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -558,7 +565,7 @@ pub trait Commands: Send + Sync + 'static {
     /// [`Refusal::IllegalMove`] where nothing is outstanding, where the id names
     /// a question already answered, and where the label was not offered.
     fn answer_question(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         answer: ChosenAnswer,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -575,7 +582,7 @@ pub trait Commands: Send + Sync + 'static {
     /// [`Refusal::IllegalMove`] where the call names nothing waiting or
     /// refused, and where the answer is not among the ones the command offers.
     fn answer_command(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         answer: AnswerCommand,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -584,7 +591,7 @@ pub trait Commands: Send + Sync + 'static {
     /// granted, changed while it runs. **Read by the next permission
     /// question**, so nothing respawns and nothing moves.
     fn set_when_blocked(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         setting: SetWhenBlocked,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -596,7 +603,7 @@ pub trait Commands: Send + Sync + 'static {
     ///
     /// [`Refusal::IllegalMove`] where the Job is not holding a question open.
     fn answer_judge(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         answered: JudgeAnswered,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -605,7 +612,7 @@ pub trait Commands: Send + Sync + 'static {
     /// refuses, changed while it runs. **Read by the next gate**, so nothing
     /// respawns and nothing moves.
     fn set_when_refused(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         setting: SetWhenRefused,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -616,7 +623,7 @@ pub trait Commands: Send + Sync + 'static {
     ///
     /// [`Refusal::IllegalMove`] on a model this Fleet does not offer.
     fn set_model(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         choice: ipc::SetModel,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
@@ -627,7 +634,7 @@ pub trait Commands: Send + Sync + 'static {
     ///
     /// [`Refusal::IllegalMove`] where the Job has no such allow.
     fn remove_allowed_command(
-        &self,
+        self: std::sync::Arc<Self>,
         job_id: JobId,
         removing: ipc::RemoveAllowedCommand,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;

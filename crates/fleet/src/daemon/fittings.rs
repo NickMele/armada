@@ -172,6 +172,10 @@ pub struct Fittings<H, V, W> {
     /// that can end a call nobody is watching, and a proposal has somebody who
     /// can end it themselves.
     pub proposer_budget: JudgeBudget,
+    /// How long a plain command may take before Fleet answers a refusal in
+    /// its own words. See [`crate::commanding::CommandBudget`], which has no
+    /// default for [`JudgeBudget`]'s reason.
+    pub command_budget: crate::commanding::CommandBudget,
     /// What a step naming no model of its own is judged by. **Resolved by the
     /// composition root**, like every other input here — which model is cheap
     /// is a vendor's fact, and nothing below Fleet may spell one.
@@ -226,6 +230,7 @@ where
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
             proposer_budget: fittings.proposer_budget,
+            command_budget: fittings.command_budget,
             aloft: Aloft::default(),
             underway: Underway::default(),
             proposals: Proposals::new(),

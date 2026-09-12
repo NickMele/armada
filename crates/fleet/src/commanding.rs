@@ -1,17 +1,22 @@
 //! `api::Commands`, implemented over a real Fleet: every act a person takes.
 //!
-//! **The write half of the seam [`serving`](mod@crate::serving) holds the read
-//! half of**, and a file of its own because `api::Daemon` is three traits and
-//! Rust takes one impl block per trait. The redaction, the refusal path and the
-//! one-way dependency are all argued there and are the same here; what is
-//! different is that everything below moves something, and each says what it
-//! moves it to.
+//! **The write half of the seam `serving` holds the read half of**, split out
+//! because `api::Daemon` is three traits and Rust takes one impl block per
+//! trait. Nothing here decides: each method converts the request, calls the
+//! `Fleet` method that moves it, and maps a refusal through `Fleet::refusal`.
 //!
-//! **Nothing here decides.** The move is the `Fleet` method each of these
-//! calls, under the locks that make it one decision; this converts the request,
-//! carries the outcome out as a DTO, and maps a refusal through
-//! `Fleet::refusal`. A rule that lived here rather than beside the machine
-//! would be a second opinion on a question the machine already answers.
+//! `#712`: most commands race their work against [`CommandBudget`] through
+//! [`budgeted`], spawned so a losing race stops waiting without cancelling a
+//! write already in progress. Each excluded command says why on its own `impl`.
+//!
+//! **Past 500 lines and staying one file.** `#712` added a wrapper to two
+//! thirds of a trait already sized to one method per act; splitting by act
+//! would scatter `budgeted` and `CommandBudget` across the pieces that use
+//! them, which is the coupling the line count is asking about, not the count.
+
+use std::future::Future;
+use std::sync::Arc;
+use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
@@ -30,6 +35,59 @@ use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
 use crate::wire::reported;
 
+/// How long Fleet gives a plain command before answering
+/// [`Adrift::CommandTimedOut`]. Paired with Bridge's `COMMAND_MS` — see
+/// `PROVISIONAL_COMMAND_BUDGET` in `crates/armada/src/serve.rs`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CommandBudget(Duration);
+
+impl CommandBudget {
+    pub fn of(budget: Duration) -> CommandBudget {
+        CommandBudget(budget)
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.0
+    }
+}
+
+/// Race a plain command's work against [`CommandBudget`], spawned rather than
+/// merely timed — see this module's own header for why.
+async fn budgeted<T>(
+    budget: CommandBudget,
+    work: impl Future<Output = Result<T, Adrift>> + Send + 'static,
+) -> Result<T, Adrift>
+where
+    T: Send + 'static,
+{
+    let waited = budget.duration();
+    match tokio::time::timeout(waited, tokio::spawn(work)).await {
+        Ok(Ok(answered)) => answered,
+        // Resumed rather than folded into a refusal a caller might retry: a
+        // panic has already unwound past every lock it held.
+        Ok(Err(panicked)) => std::panic::resume_unwind(panicked.into_panic()),
+        Err(_elapsed) => Err(Adrift::CommandTimedOut { job: None, waited }),
+    }
+}
+
+/// [`budgeted`], naming the Job a losing race's refusal is about.
+async fn budgeted_for<T>(
+    budget: CommandBudget,
+    job: JobId,
+    work: impl Future<Output = Result<T, Adrift>> + Send + 'static,
+) -> Result<T, Adrift>
+where
+    T: Send + 'static,
+{
+    match budgeted(budget, work).await {
+        Err(Adrift::CommandTimedOut { waited, .. }) => Err(Adrift::CommandTimedOut {
+            job: Some(job.to_domain()),
+            waited,
+        }),
+        answered => answered,
+    }
+}
+
 impl<H, V, W> Commands for Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
@@ -42,11 +100,13 @@ where
 {
     /// Draft a Job onto the approval gate. **Creation publishes `job.created`**
     /// — not a state change, because a created Job has no status it moved from.
-    async fn propose_job(&self, proposal: ProposeJob) -> Result<JobSummary, Refusal> {
-        let job = self
-            .propose(proposal)
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn propose_job(self: Arc<Self>, proposal: ProposeJob) -> Result<JobSummary, Refusal> {
+        let job = budgeted(self.command_budget(), {
+            let fleet = Arc::clone(&self);
+            async move { fleet.propose(proposal).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
@@ -86,19 +146,27 @@ where
         })
     }
 
-    async fn approve_dispatch(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
-        let job = self
-            .approve(&job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn approve_dispatch(self: Arc<Self>, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { fleet.approve(&job_id.to_domain()).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// The person takes the work, and the Job goes on or is finished.
-    async fn approve_review(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
-        let job = Fleet::approve_review(self, &job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
+    /// **Included even though the last step's answer commits and delivers the
+    /// branch inside it.** [`CommandBudget`] is sized to cover an ordinary
+    /// local commit and push for that reason.
+    async fn approve_review(self: Arc<Self>, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::approve_review(&fleet, &job_id.to_domain()).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
@@ -107,6 +175,9 @@ where
     /// **The merge is Fleet's to perform and never Fleet's to decide.** What
     /// arrives here is a press, and what it buys over merging on the forge is
     /// the Checks that run against the tree the merge left.
+    ///
+    /// **Not [`budgeted`].** The forge call inside writes into a repository
+    /// Fleet did not make, over the network this crate has not measured.
     async fn merge_pull_request(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         let job = Fleet::merge_pull_request(self, &job_id.to_domain())
             .await
@@ -116,6 +187,9 @@ where
 
     /// A person sends the branch back for a Drone that can edit files to
     /// bring it current with main. `#663`.
+    ///
+    /// **Not [`budgeted`]**, for [`Commands::merge_pull_request`]'s reason: the
+    /// rebase and push inside are against a remote nothing here has measured.
     async fn resolve_pull_request_conflict(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         let job = Fleet::resolve_pull_request_conflict(self, &job_id.to_domain())
             .await
@@ -131,15 +205,18 @@ where
     /// exactly the information that was not enough, which is the review
     /// appearing to work and changing nothing.
     async fn request_changes(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         note: ChangesRequested,
     ) -> Result<JobSummary, Refusal> {
         let said =
             Instruction::saying(&note.note).ok_or_else(|| self.refusal(Adrift::Unnameable))?;
-        let job = Fleet::request_changes(self, &job_id.to_domain(), &said)
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::request_changes(&fleet, &job_id.to_domain(), &said).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
@@ -150,6 +227,9 @@ where
     /// body carries handles and the words come off the forge inside the act. An
     /// empty list is refused there rather than here, because it is a fact about
     /// the Job's pull request and not about the request's shape.
+    ///
+    /// **Not [`budgeted`]**, for [`Commands::merge_pull_request`]'s reason: the
+    /// forge is read for the comments' own words before a Drone ever sees them.
     async fn take_up_remarks(
         &self,
         job_id: JobId,
@@ -168,8 +248,11 @@ where
     /// delivered to a Drone, so what an empty string would lose is the only
     /// account of why a verdict was overruled — and an override that says
     /// nothing is how this becomes the act somebody uses to quiet a gate.
+    ///
+    /// **Included**, for [`Commands::approve_review`]'s reason: the step it
+    /// advances may also be the workflow's last.
     async fn override_verdict(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         overruling: Overruled,
     ) -> Result<JobSummary, Refusal> {
@@ -178,9 +261,12 @@ where
                 job: job_id.to_domain(),
             })
         })?;
-        let job = Fleet::override_verdict(self, &job_id.to_domain(), &said)
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::override_verdict(&fleet, &job_id.to_domain(), &said).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
@@ -192,6 +278,9 @@ where
     /// disagreed with a machine, and nothing here is disagreed with. What the
     /// second reading came to is written into the Job's own log by
     /// `crate::regating`, and it says more than a sentence would.
+    ///
+    /// **Not [`budgeted`].** This asks the Judge again, on its own budget
+    /// paired with Bridge's own wait for this route.
     async fn rerun_gate(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         let job = Fleet::rerun_gate(self, &job_id.to_domain())
             .await
@@ -201,6 +290,9 @@ where
 
     /// A person asking a Job to show its work. **The `Arc` is handed on**, so
     /// the press runs on a task of its own — `crate::showing_again`.
+    ///
+    /// **Not [`budgeted`].** The request waits for the whole run, however long
+    /// the repository's harness takes; Bridge sends `NO_WAIT` on this route.
     async fn show_again(
         self: std::sync::Arc<Self>,
         job_id: JobId,
@@ -213,6 +305,9 @@ where
 
     /// A person's run in a Job's worktree. **The `Arc` is handed on**, so the
     /// run is a task of its own — `crate::rehearsing`.
+    ///
+    /// **Not [`budgeted`]**: a rehearsal answers through its own refusal type,
+    /// never [`Adrift`], because it is not a move on the Job at all.
     async fn start_run(
         self: std::sync::Arc<Self>,
         job_id: JobId,
@@ -221,16 +316,21 @@ where
         Fleet::start_rehearsal(self, &job_id.to_domain(), run).await
     }
 
+    /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
     async fn stop_run(&self, job_id: JobId, run: ipc::NamedRun) -> Result<ipc::RunRecord, Refusal> {
         self.stop_rehearsal(&job_id.to_domain(), run.id).await
     }
 
+    /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
     async fn undo_run(&self, job_id: JobId, run: ipc::NamedRun) -> Result<ipc::RunRecord, Refusal> {
         self.undo_rehearsal(&job_id.to_domain(), run.id).await
     }
 
     /// A person starting a server, for a Job or the main checkout. **The `Arc`
     /// is handed on**, so the server is a task of its own — `crate::servers`.
+    ///
+    /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason: a server
+    /// answers through its own refusal.
     async fn start_server(
         self: std::sync::Arc<Self>,
         asked: ipc::StartServer,
@@ -250,6 +350,7 @@ where
             .map_err(|why| refusing.server_refusal(why, asked.job_id.as_ref()))
     }
 
+    /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
     async fn stop_server(&self, named: ipc::NamedServer) -> Result<ipc::ServerState, Refusal> {
         self.stopped_server(&named.id)
             .await
@@ -263,43 +364,66 @@ where
     /// the field it wants is `queued_reason`, which `summarised` computes from
     /// the board through the same predicate admission asks. A raise that reports
     /// its own success would be a second answer to *is this Job still held*.
-    async fn raise_cost_cap(&self, job_id: JobId, raise: CapRaise) -> Result<JobSummary, Refusal> {
-        let job = Fleet::raise_cost_cap(self, &job_id.to_domain(), &raise)
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn raise_cost_cap(
+        self: Arc<Self>,
+        job_id: JobId,
+        raise: CapRaise,
+    ) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::raise_cost_cap(&fleet, &job_id.to_domain(), &raise).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// More turns for one Job, and nothing else changes. The method above's
     /// shape and its reasons, on the other ceiling.
-    async fn raise_turn_cap(&self, job_id: JobId, raise: TurnRaise) -> Result<JobSummary, Refusal> {
-        let job = Fleet::raise_turn_cap(self, &job_id.to_domain(), &raise)
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn raise_turn_cap(
+        self: Arc<Self>,
+        job_id: JobId,
+        raise: TurnRaise,
+    ) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::raise_turn_cap(&fleet, &job_id.to_domain(), &raise).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// A verdict on the work, and the Job is over.
-    async fn reject_job(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
-        let job = Fleet::reject(self, &job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn reject_job(self: Arc<Self>, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::reject(&fleet, &job_id.to_domain()).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// The process, not the unit of work.
-    async fn kill_drone(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
-        let job = Fleet::kill_drone(self, &job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn kill_drone(self: Arc<Self>, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::kill_drone(&fleet, &job_id.to_domain()).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// The unit of work, not the process.
-    async fn kill_job(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
-        let job = Fleet::kill_job(self, &job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn kill_job(self: Arc<Self>, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::kill_job(&fleet, &job_id.to_domain()).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
@@ -310,20 +434,28 @@ where
     /// **The redaction is `crate::resources`'s.** A process crosses as its
     /// executable's name and never its argument vector, which carries absolute
     /// paths and whatever a Check was invoked with.
-    async fn examine_job(&self, job_id: JobId) -> Result<JobExamined, Refusal> {
-        let job = self
-            .load(&job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
-        self.examined(&job).await.map_err(|why| self.refusal(why))
+    async fn examine_job(self: Arc<Self>, job_id: JobId) -> Result<JobExamined, Refusal> {
+        budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let job = fleet.load(&job_id.to_domain()).await?;
+                fleet.examined(&job).await
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))
     }
 
     /// The record, gone. **Nothing is redacted here** — there is no Job left
     /// to redact, only the id it used to name.
-    async fn forget_job(&self, job_id: JobId) -> Result<JobForgotten, Refusal> {
-        Fleet::forget_job(self, &job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn forget_job(self: Arc<Self>, job_id: JobId) -> Result<JobForgotten, Refusal> {
+        budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            let id = job_id.clone();
+            async move { Fleet::forget_job(&fleet, &id.to_domain()).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         Ok(JobForgotten { job_id })
     }
 
@@ -331,22 +463,31 @@ where
     /// redacted here either** — every field of the answer is about a directory
     /// and a branch this Job derived, and there is no path in it a person
     /// clearing their own disk should not be shown.
-    async fn reclaim_worktree(&self, job_id: JobId) -> Result<WorktreeReclaimed, Refusal> {
+    async fn reclaim_worktree(
+        self: Arc<Self>,
+        job_id: JobId,
+    ) -> Result<WorktreeReclaimed, Refusal> {
         let id = job_id.to_domain();
-        let gave_back = Fleet::reclaim_worktree(self, &id)
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let gave_back = budgeted_for(self.command_budget(), job_id, {
+            let fleet = Arc::clone(&self);
+            let id = id.clone();
+            async move { Fleet::reclaim_worktree(&fleet, &id).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         Ok(crate::wire::reclaimed(&id, gave_back))
     }
 
     /// **Two Jobs, redacted separately.** The failed one is now `killed`; the
     /// replacement carries `redispatched_from` and is what the caller opens
     /// next.
-    async fn redispatch_job(&self, job_id: JobId) -> Result<Redispatched, Refusal> {
-        let both = self
-            .redispatch(&job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
+    async fn redispatch_job(self: Arc<Self>, job_id: JobId) -> Result<Redispatched, Refusal> {
+        let both = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { fleet.redispatch(&job_id.to_domain()).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         Ok(Redispatched {
             replaced: self.summarised(&both.replaced).await?,
             dispatched: self.summarised(&both.dispatched).await?,
@@ -361,16 +502,18 @@ where
     /// changing nothing. `Redirection::saying` is where the emptiness is
     /// caught; this only carries the refusal out.
     async fn redirect_drone(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         instruction: Redirection,
     ) -> Result<JobSummary, Refusal> {
         let said = Instruction::saying(&instruction.instruction)
             .ok_or_else(|| self.refusal(Adrift::Unnameable))?;
-        let job = self
-            .redirect(&job_id.to_domain(), &said)
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { fleet.redirect(&job_id.to_domain(), &said).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
@@ -387,7 +530,7 @@ where
     /// `redirect_drone` refuses one: a Drone opened with a heading and nothing
     /// under it has been given exactly the information that was not enough.
     async fn restart_step(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         note: Option<ipc::RestartRequested>,
     ) -> Result<JobSummary, Refusal> {
@@ -397,10 +540,12 @@ where
             ),
             None => None,
         };
-        let job = self
-            .restart_step(&job_id.to_domain(), said.as_ref())
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::restart_step(&fleet, &job_id.to_domain(), said.as_ref()).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
@@ -411,7 +556,7 @@ where
     /// the two refusals it has: `crate::reporting::NotFiled` names each cause
     /// and says it, and this only carries one out as the 422 it is.
     async fn file_report(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         filing: ipc::FileReport,
     ) -> Result<ipc::Report, Refusal> {
@@ -423,9 +568,12 @@ where
             filing.criterion_id,
         )
         .map_err(|cause| self.refusal(cause.about(&id)))?;
-        let filed = Fleet::file_report(self, &id, &filed)
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let filed = budgeted_for(self.command_budget(), job_id, {
+            let fleet = Arc::clone(&self);
+            async move { Fleet::file_report(&fleet, &id, &filed).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         reported(&filed).map_err(|why| self.refusal(why))
     }
 
@@ -434,102 +582,155 @@ where
     /// summary comes back because a caller folds the row rather than re-reading
     /// the board. The four refusals are `crate::questioning::NotAnswered`'s.
     async fn answer_question(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         answer: ipc::ChosenAnswer,
     ) -> Result<JobSummary, Refusal> {
-        let id = job_id.to_domain();
-        Fleet::answer_question(self, &id, answer.question_id.as_str(), &answer.chose)
-            .await
-            .map_err(|why| self.refusal(why.about(&id)))?;
-        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let id = job_id.to_domain();
+                Fleet::answer_question(&fleet, &id, answer.question_id.as_str(), &answer.chose)
+                    .await
+                    .map_err(|why| why.about(&id))?;
+                fleet.load(&id).await
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// A person's answer to a command a Drone was refused or is waiting on.
     /// The refusals are `crate::permitting::NotPermitted`'s.
     async fn answer_command(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         answer: ipc::AnswerCommand,
     ) -> Result<JobSummary, Refusal> {
-        let id = job_id.to_domain();
-        Fleet::answer_command(self, &id, &answer.call, answer.answer)
-            .await
-            .map_err(|why| self.refusal(why.about(&id)))?;
-        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let id = job_id.to_domain();
+                Fleet::answer_command(&fleet, &id, &answer.call, answer.answer)
+                    .await
+                    .map_err(|why| why.about(&id))?;
+                fleet.load(&id).await
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// How this Job meets a blocked command, changed. Loaded first, so an id
     /// naming nothing is a 404 rather than a setting written against nothing.
     async fn set_when_blocked(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         setting: ipc::SetWhenBlocked,
     ) -> Result<JobSummary, Refusal> {
-        let id = job_id.to_domain();
-        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
-        let when = crate::permitting::domain_setting(setting.when_blocked);
-        Fleet::set_when_blocked(self, &id, when)
-            .await
-            .map_err(|why| self.refusal(why.about(&id)))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let id = job_id.to_domain();
+                let job = fleet.load(&id).await?;
+                let when = crate::permitting::domain_setting(setting.when_blocked);
+                Fleet::set_when_blocked(&fleet, &id, when)
+                    .await
+                    .map_err(|why| why.about(&id))?;
+                Ok(job)
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// A person's answer to the question a Judge refusal opened.
     /// `crate::asking::answer_judge`'s refusals.
     async fn answer_judge(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         answered: ipc::JudgeAnswered,
     ) -> Result<JobSummary, Refusal> {
-        let id = job_id.to_domain();
-        let job = Fleet::answer_judge(self, &id, answered.answer, answered.note)
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let id = job_id.to_domain();
+                Fleet::answer_judge(&fleet, &id, answered.answer, answered.note).await
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// How this Job meets a Judge criterion that refuses, changed. Loaded
     /// first, for `set_when_blocked`'s reason.
     async fn set_when_refused(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         setting: ipc::SetWhenRefused,
     ) -> Result<JobSummary, Refusal> {
-        let id = job_id.to_domain();
-        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
-        let when = crate::asking::domain_when_refused(setting.when_refused);
-        Fleet::set_when_refused(self, &id, when)
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let id = job_id.to_domain();
+                let job = fleet.load(&id).await?;
+                let when = crate::asking::domain_when_refused(setting.when_refused);
+                Fleet::set_when_refused(&fleet, &id, when).await?;
+                Ok(job)
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// The model this Job's later steps spawn on, chosen or cleared. Loaded
     /// first for `set_when_blocked`'s reason; the refusals are
     /// `crate::permitting::NotPermitted`'s.
-    async fn set_model(&self, job_id: JobId, choice: ipc::SetModel) -> Result<JobSummary, Refusal> {
-        let id = job_id.to_domain();
-        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
-        Fleet::set_model(self, &id, choice.model.as_deref())
-            .await
-            .map_err(|why| self.refusal(why.about(&id)))?;
+    async fn set_model(
+        self: Arc<Self>,
+        job_id: JobId,
+        choice: ipc::SetModel,
+    ) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let id = job_id.to_domain();
+                let job = fleet.load(&id).await?;
+                Fleet::set_model(&fleet, &id, choice.model.as_deref())
+                    .await
+                    .map_err(|why| why.about(&id))?;
+                Ok(job)
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 
     /// A command a person allowed for this Job, taken back.
     async fn remove_allowed_command(
-        &self,
+        self: Arc<Self>,
         job_id: JobId,
         removing: ipc::RemoveAllowedCommand,
     ) -> Result<JobSummary, Refusal> {
-        let id = job_id.to_domain();
-        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
-        Fleet::remove_allowed_command(self, &id, &removing.run)
-            .await
-            .map_err(|why| self.refusal(why.about(&id)))?;
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let id = job_id.to_domain();
+                let job = fleet.load(&id).await?;
+                Fleet::remove_allowed_command(&fleet, &id, &removing.run)
+                    .await
+                    .map_err(|why| why.about(&id))?;
+                Ok(job)
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
 }

@@ -103,12 +103,12 @@ async fn a_stalled_job_whose_drone_is_gone_refuses_a_redirect() {
 #[tokio::test]
 async fn a_redirect_with_no_drone_answers_409_over_the_wire() {
     let home = TempDir::new();
-    let fleet = a_fleet_with(&home, a_drone_that_leaves());
+    let fleet = std::sync::Arc::new(a_fleet_with(&home, a_drone_that_leaves()));
     let job = stalled(&fleet, &home).await;
     until_reaped(&fleet).await;
 
     let refusal = api::Commands::redirect_drone(
-        &fleet,
+        std::sync::Arc::clone(&fleet),
         ipc::JobId::from(&job),
         ipc::Redirection {
             instruction: String::from("read tests/parse.rs first"),
@@ -127,12 +127,13 @@ async fn a_redirect_with_no_drone_answers_409_over_the_wire() {
 #[tokio::test]
 async fn a_restart_with_the_drone_still_there_answers_409_over_the_wire() {
     let home = TempDir::new();
-    let fleet = a_fleet_with(&home, a_drone_that_answers());
+    let fleet = std::sync::Arc::new(a_fleet_with(&home, a_drone_that_answers()));
     let job = refused(&fleet, &home).await;
 
-    let refusal = api::Commands::restart_step(&fleet, ipc::JobId::from(&job), None)
-        .await
-        .expect_err("the Drone `refused` left in the slot is still there");
+    let refusal =
+        api::Commands::restart_step(std::sync::Arc::clone(&fleet), ipc::JobId::from(&job), None)
+            .await
+            .expect_err("the Drone `refused` left in the slot is still there");
 
     assert!(matches!(refusal, api::Refusal::IllegalMove(_)));
     assert_eq!(refusal.status(), 409);
