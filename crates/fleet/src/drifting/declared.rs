@@ -7,15 +7,16 @@
 //! question better and costs a process per open, which is the one price drift
 //! may not pay.
 //!
-//! # No parser, and the failure is an answer
+//! # `package.json` goes through `ipc`'s codec
 //!
-//! Decoding untyped JSON is refused by the gate outside `store` and `ipc`, and
-//! `fleet` is neither — so `package.json` is read by a scan that knows JSON strings and
-//! brace depth and nothing more, the way `xtask` reads `operations.toml`. What
-//! makes that safe rather than merely allowed is where it fails: every reader
-//! answers [`None`] where it could not read the file with confidence, and a
-//! `None` becomes *not followed* on the row. A reader that is wrong about a file
-//! produces an honest row, never a false `gone`.
+//! The gate lets only `store` and `ipc` decode untyped JSON, because a decode
+//! failure that is quietly skipped is how v1 lost 21 Jobs. So `package.json`
+//! is decoded through [`ipc::decode`] into [`ipc::PackageScripts`], the same
+//! door `crate::rehearsing::records` uses for a run record. There is no second
+//! parser to disagree with the real one about a nested `"scripts"` key or an
+//! escaped quote. The two TOML files are still read line by line, the way
+//! `xtask` reads `operations.toml`, and like the decode, each reader's failure is
+//! [`None`]. A `None` makes the row *not followed*, never `gone`.
 //!
 //! **An absent file and an unreadable one are different answers.** No
 //! `.cargo/config.toml` is a repository declaring no aliases, which is a fact;
@@ -58,8 +59,8 @@ impl<'a> Repository<'a> {
         self.scripts
             .entry(dir.to_string())
             .or_insert_with(|| {
-                let text = std::fs::read_to_string(checkout.join(dir).join("package.json"));
-                scripts(&text.ok()?)
+                let bytes = std::fs::read(checkout.join(dir).join("package.json"));
+                scripts(&bytes.ok()?)
             })
             .as_ref()
     }
@@ -94,97 +95,14 @@ impl<'a> Repository<'a> {
     }
 }
 
-/// The keys of the top-level `"scripts"` object in a `package.json`.
+/// The script names a `package.json` declares, decoded through `ipc`.
 ///
-/// A scan, not a parse: strings with their escapes, and the depth of every
-/// `{` and `[`. **Unbalanced, or not an object at the top, is `None`.** No
-/// `"scripts"` key at all is an empty set, because that is a package declaring
-/// no scripts.
-pub(crate) fn scripts(text: &str) -> Option<BTreeSet<String>> {
-    // Each open container: whether it is an object, and whether the next
-    // string in it is a key.
-    let mut open: Vec<(bool, bool)> = Vec::new();
-    let mut last_top_key = String::new();
-    let mut inside_scripts: Option<usize> = None;
-    let mut found = BTreeSet::new();
-    let mut saw_root = false;
-    let mut chars = text.chars();
-
-    while let Some(c) = chars.next() {
-        match c {
-            c if c.is_whitespace() => {}
-            '{' | '[' => {
-                if open.is_empty() {
-                    if c != '{' || saw_root {
-                        return None;
-                    }
-                    saw_root = true;
-                }
-                if c == '{' && open.len() == 1 && last_top_key == "scripts" {
-                    inside_scripts = Some(2);
-                }
-                open.push((c == '{', c == '{'));
-            }
-            '}' | ']' => {
-                let (object, _) = open.pop()?;
-                if object != (c == '}') {
-                    return None;
-                }
-                if inside_scripts == Some(open.len() + 1) {
-                    inside_scripts = None;
-                }
-            }
-            ',' => {
-                let top = open.last_mut()?;
-                top.1 = top.0;
-            }
-            ':' => {
-                open.last_mut()?.1 = false;
-            }
-            '"' => {
-                let string = string(&mut chars)?;
-                let depth = open.len();
-                let top = open.last()?;
-                if top.0 && top.1 {
-                    if depth == 1 {
-                        last_top_key = string.clone();
-                    }
-                    if inside_scripts == Some(depth) {
-                        found.insert(string);
-                    }
-                }
-            }
-            _ => {
-                if open.is_empty() {
-                    return None;
-                }
-            }
-        }
-    }
-    match open.is_empty() && saw_root {
-        true => Some(found),
-        false => None,
-    }
-}
-
-/// The rest of one JSON string, its opening quote already taken. Escapes are
-/// decoded where they are one character; a `\u` is kept as written, because a
-/// script name spelled with one is a name this read would rather not follow
-/// than misspell.
-fn string(chars: &mut std::str::Chars<'_>) -> Option<String> {
-    let mut out = String::new();
-    loop {
-        match chars.next()? {
-            '"' => return Some(out),
-            '\\' => match chars.next()? {
-                'n' => out.push('\n'),
-                't' => out.push('\t'),
-                'u' => out.push_str("\\u"),
-                other => out.push(other),
-            },
-            c => out.push(c),
-        }
-    }
+/// **`None` where it will not decode**, and the caller turns that into *not
+/// followed*. No `"scripts"` key at all decodes to an empty set, since that is a
+/// package declaring no scripts.
+pub(crate) fn scripts(bytes: &[u8]) -> Option<BTreeSet<String>> {
+    let decoded = ipc::decode::<ipc::PackageScripts>("a package.json", bytes).ok()?;
+    Some(decoded.scripts.into_keys().collect())
 }
 
 /// The `[alias]` table of a cargo config, each name with its expansion as one

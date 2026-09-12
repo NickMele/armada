@@ -17,7 +17,7 @@ use ipc::Drift;
 use crate::drifting::{drift, judged, Repository};
 use crate::tests::tmp::TempDir;
 
-/// Reading a `package.json`, a cargo config and a workspace, with no parser.
+/// Reading a `package.json` through `ipc`, and a cargo config and a workspace.
 mod declared;
 /// Following `pnpm`, `npm` and `cargo` into those files, and saying what was
 /// not followed.

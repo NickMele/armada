@@ -6,21 +6,31 @@
 //! is recorded as not followed — **a tool this read has never heard of reads as
 //! not followed, plainly, and never as clean.**
 //!
-//! # A tool's own subcommand is not a missing script
+//! # Only a word that must be a script can be missing
 //!
-//! `pnpm install` names no script, and neither does `cargo build`. So each
-//! tool carries the subcommands it answers for itself, and a word on that list
-//! that is not also a script lands as not followed. **A word on neither list is
-//! `gone`**, which is the case this module exists for: `pnpm typecheck` after
-//! `typecheck` left `package.json`. A subcommand missing from a list below is a
-//! false `gone` on the one repository that uses it, and the fix is a word here.
+//! **No hand-kept list is the only thing between a word and `gone`.** A bare
+//! word that is not a script is ambiguous. `pnpm install` is pnpm's own
+//! subcommand, and `pnpm vitest` is a binary pnpm runs out of
+//! `node_modules/.bin`. Nothing in the repository tells either apart from a
+//! script that was deleted. So:
 //!
-//! **`cargo` is the opposite way round.** A cargo word that is neither built in
-//! nor an alias is an external subcommand — `cargo nextest` is `cargo-nextest`
-//! on the machine — so it is not followed and never `gone`. The consequence is
-//! stated rather than hidden: an alias that is deleted moves its row from
-//! checked to not followed, not to `gone`, because nothing in the repository
-//! can tell a deleted alias from a plugin that was always meant to be installed.
+//! | Word | Reads |
+//! |---|---|
+//! | A script the decoded `package.json` has | found, counted in `checked` |
+//! | After `run`, and not a script | `gone`, because `run` runs only scripts |
+//! | On the tool's own subcommand list | not followed, as its own subcommand |
+//! | Anything else | not followed, as a binary the tool may run |
+//!
+//! The lists name what a subcommand is, so its row says so. They can only move
+//! a word away from `gone`, never toward it, so a subcommand missing from them
+//! costs a vaguer reason and never a false verdict.
+//!
+//! **`cargo` reads the same way.** A cargo word that is neither built in nor an
+//! alias is an external subcommand (`cargo nextest` is `cargo-nextest` on the
+//! machine), so it is not followed and never `gone`. The cost is stated rather
+//! than hidden: deleting an alias moves its row from checked to not followed,
+//! not to `gone`, since nothing in the repository tells a deleted alias apart
+//! from a plugin that was always meant to be installed.
 //!
 //! # Where a flag stops the read
 //!
@@ -321,11 +331,18 @@ fn package_manager(
             Some(script) => (script, true),
             None => return found.unfollowed(word, "names no script"),
         },
-        "exec" | "dlx" | "x" => {
+        "exec" | "x" => {
             let binary = words.find(|one| !one.starts_with('-')).unwrap_or(word);
             return found.unfollowed(
                 binary,
                 "run from node_modules, which is installed rather than committed",
+            );
+        }
+        "dlx" => {
+            let binary = words.find(|one| !one.starts_with('-')).unwrap_or(word);
+            return found.unfollowed(
+                binary,
+                "fetched from the registry when it runs, and never in the repository",
             );
         }
         _ => (word, false),
@@ -363,13 +380,21 @@ fn package_manager(
 
     if scripts.contains(script.as_str()) {
         found.found();
-    } else if !explicit && own.contains(&script.as_str()) {
+    } else if explicit {
+        found.missing(format!("{manifest}: scripts.{script}"));
+    } else if own.contains(&script.as_str()) {
         found.unfollowed(
             script,
             &format!("{tool}'s own subcommand, not a script this repository declares"),
         );
     } else {
-        found.missing(format!("{manifest}: scripts.{script}"));
+        found.unfollowed(
+            script,
+            &format!(
+                "not a script in {manifest}; {tool} may run it as a binary from \
+                 node_modules/.bin, which this read does not look in"
+            ),
+        );
     }
 }
 

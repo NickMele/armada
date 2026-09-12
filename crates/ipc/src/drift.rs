@@ -155,3 +155,24 @@ pub enum Drift {
         missing: Vec<String>,
     },
 }
+
+/// The part of a `package.json` the drift read uses: its script names.
+///
+/// **Not a wire message. A file shape, decoded here because this is the door.**
+/// Untyped JSON is decoded only in `store` and `ipc`, because a decode failure
+/// that is quietly skipped is how v1 lost 21 Jobs. Fleet reads `package.json`
+/// through [`decode`](crate::decode) into this, and a file that will not decode
+/// makes the row *not followed*. It never becomes `gone`, and it is never
+/// skipped as though the file had no scripts.
+///
+/// **Only `scripts`, and absent means none.** Every other key a `package.json`
+/// holds is ignored rather than refused, since drift reads nothing else. A
+/// script whose value is not a string is refused, because npm refuses it too
+/// and a file npm would not read is not one this read should claim to have
+/// followed.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+pub struct PackageScripts {
+    /// Each script's name, with the command it runs.
+    #[serde(default)]
+    pub scripts: std::collections::BTreeMap<String, String>,
+}

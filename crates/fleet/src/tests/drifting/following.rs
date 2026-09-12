@@ -77,18 +77,19 @@ fn the_four_lines_that_read_clean_on_nothing_are_now_checked() {
 }
 
 /// The case the owner decided for: a script that left `package.json` while the
-/// Manifest still names it.
+/// Manifest still names it. **Through `run`, because `run` only ever runs a
+/// script.** The bare form of the same word is ambiguous and is the next case.
 #[test]
 fn a_script_the_package_no_longer_declares_is_gone_and_names_the_file() {
     let repo = armada_like();
     assert_eq!(
-        verdict("pnpm lint", repo.path()),
+        verdict("pnpm run lint", repo.path()),
         Drift::Gone {
             missing: vec!["package.json: scripts.lint".to_string()]
         }
     );
     assert_eq!(
-        verdict("pnpm -C packages/components storybook", repo.path()),
+        verdict("pnpm -C packages/components run storybook", repo.path()),
         Drift::Gone {
             missing: vec!["packages/components/package.json: scripts.storybook".to_string()],
         }
@@ -99,6 +100,45 @@ fn a_script_the_package_no_longer_declares_is_gone_and_names_the_file() {
             missing: vec!["package.json: scripts.lint".to_string()]
         }
     );
+}
+
+/// **`pnpm vitest` names no script and is not pnpm's own subcommand.** pnpm
+/// runs it as a binary out of `node_modules/.bin`, so in a healthy repository
+/// it would read `gone` under a rule that trusted the subcommand list. It is not
+/// followed, and says why. So is the bare form of a script that left
+/// `package.json`, which is the price of no list standing between a word and
+/// `gone`.
+#[test]
+fn a_bare_word_that_is_not_a_script_is_not_followed_rather_than_gone() {
+    let repo = armada_like();
+    for line in ["pnpm vitest", "npm eslint", "pnpm lint"] {
+        let (drift, not_followed) = judged(line, &mut Repository::at(repo.path()));
+        assert_eq!(drift, Drift::Current { checked: 0 }, "{line}");
+        assert_eq!(not_followed.len(), 1, "{line}");
+        assert!(
+            not_followed[0].why.contains("node_modules/.bin"),
+            "{line}: {}",
+            not_followed[0].why
+        );
+    }
+    assert_eq!(unfollowed("pnpm vitest", repo.path()), vec!["vitest"]);
+}
+
+/// `exec` runs an installed binary and `dlx` fetches one. Neither is anything
+/// the repository holds, so each is not followed and names the binary.
+#[test]
+fn exec_and_dlx_name_a_binary_and_are_not_followed() {
+    let repo = armada_like();
+    for (line, word, reason) in [
+        ("pnpm exec vitest run", "vitest", "node_modules"),
+        ("pnpm dlx create-vite app", "create-vite", "registry"),
+        ("npm exec -- tsc", "tsc", "node_modules"),
+    ] {
+        let (drift, not_followed) = judged(line, &mut Repository::at(repo.path()));
+        assert_eq!(drift, Drift::Current { checked: 0 }, "{line}");
+        assert_eq!(unfollowed(line, repo.path()), vec![word], "{line}");
+        assert!(not_followed[0].why.contains(reason), "{line}");
+    }
 }
 
 /// `pnpm install` names no script. On the list of what the tool answers for

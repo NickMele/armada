@@ -1,14 +1,18 @@
-//! The three build-file readers, with no parser underneath them.
+//! The three build-file readers.
 //!
-//! **Each reader's failure is `None`, and `None` is what makes a row say *not
-//! followed*.** So the cases here are mostly the ways a scan could be fooled
-//! into a wrong set — a `}` inside a script's command, a nested object holding a
-//! key named like a script — and the ways it must give up rather than guess.
+//! **Each reader's failure is `None`, and a `None` is what makes a row *not
+//! followed*.** `package.json` goes through `ipc::decode`, so its cases prove
+//! the decode reads the top-level `scripts` and nothing nested, and that a file
+//! it refuses comes back `None` rather than as a package with no scripts.
 
 use std::collections::BTreeSet;
 
 use super::{checkout, write};
-use crate::drifting::declared::{aliases, scripts, Repository};
+use crate::drifting::declared::{self, aliases, Repository};
+
+fn scripts(text: &str) -> Option<BTreeSet<String>> {
+    declared::scripts(text.as_bytes())
+}
 
 fn set(names: &[&str]) -> BTreeSet<String> {
     names.iter().map(|one| one.to_string()).collect()
@@ -40,15 +44,16 @@ fn a_package_with_no_scripts_declares_none() {
     );
 }
 
-/// Unbalanced, not an object, or two roots: each is a file this read could not
-/// read, and saying so is the only safe answer.
+/// Unbalanced, not an object, two roots, or a script that is not a string:
+/// each is a file the decode refuses, and the only safe answer is to say so.
 #[test]
-fn a_file_that_does_not_scan_is_none_rather_than_a_guess() {
+fn a_file_that_does_not_decode_is_none_rather_than_a_guess() {
     for text in [
         r#"{ "scripts": { "build": "x" }"#,
         r#"["scripts"]"#,
         r#"{ "scripts": { "build": "x" } } {}"#,
         r#"{ "scripts": { "build": "unterminated }"#,
+        r#"{ "scripts": { "build": ["not", "a", "string"] } }"#,
         "",
     ] {
         assert_eq!(scripts(text), None, "{text}");
