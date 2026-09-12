@@ -26,12 +26,13 @@ use crate::ids::{Instant, StepId};
 #[serde(rename_all = "snake_case")]
 pub enum WhenBlocked {
     /// Refuse the call and stop the Job at `blocked_by_policy`, for a person to
-    /// answer later. **Where every Job starts**, because it asks nobody to be
-    /// watching.
+    /// answer later. Asks nobody at the time — a person only sees the refused
+    /// row once they go looking.
     RefuseAndHold,
-    /// Hold the Drone inside the call and ask a person now. The step stays
-    /// `running` while it waits, and an allow lets it carry on in the same
-    /// session.
+    /// Hold the Drone inside the call and ask a person now. **Where every Job
+    /// starts**, so nothing runs ungranted without a person also being asked.
+    /// The step stays `running` while it waits, and an allow lets it carry on
+    /// in the same session.
     AskMe,
     /// Run every command the Drone reaches for without asking. **Except two**,
     /// which still stop for a person: one `armada.yml` declares destructive, and
@@ -69,10 +70,10 @@ pub enum CommandAnswer {
 ///
 /// # Only under [`WhenBlocked::AskMe`]
 ///
-/// Under the default the call is refused the moment it arrives and nothing
-/// waits; what a person answers then is a [`Refusal`](crate::Refusal) on a
-/// stopped Job. **`asked_at` crosses once and every surface subtracts for
-/// itself**, as a question's does.
+/// Under [`WhenBlocked::RefuseAndHold`] the call is refused the moment it
+/// arrives and nothing waits; what a person answers then is a
+/// [`Refusal`](crate::Refusal) on a stopped Job. **`asked_at` crosses once and
+/// every surface subtracts for itself**, as a question's does.
 ///
 /// # The whole argument stays in the file
 ///

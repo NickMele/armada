@@ -496,7 +496,7 @@ transport = "HTTP"
 helm_access = "No"
 description = "A person allows or rejects a command a Drone was not given"
 notes = """
-**It answers two things, and the call id says which.** A command a Drone is waiting on right now — its Job is set to `ask_me`, so the harness is holding it inside the permission call — is answered in place, and the Drone carries on in the same session. A refused row on a Job stopped at `blocked_by_policy` — the default, `refuse_and_hold` — is answered after the fact: an allow records the command for the Job and restarts the step, and a reject reaches the Drone as a turn.
+**It answers two things, and the call id says which.** A command a Drone is waiting on right now — its Job is set to `ask_me`, the default a new Job starts at, so the harness is holding it inside the permission call — is answered in place, and the Drone carries on in the same session. A refused row on a Job stopped at `blocked_by_policy` — `refuse_and_hold` — is answered after the fact: an allow records the command for the Job and restarts the step, and a reject reaches the Drone as a turn.
 
 `always_allow` does what `allow_for_job` does and also writes the command into `armada.yml` under `commands`, as its own commit on the Job's branch.
 
@@ -517,7 +517,7 @@ description = "Whether one Job asks a person about a command it was not given, r
 notes = """
 A live setting on one Job. The next permission question the Job's Drone raises reads it, and no Drone is respawned for it.
 
-The body is `when_blocked`: `refuse_and_hold`, `ask_me` or `allow_all`. A new Job starts at `refuse_and_hold`, because that asks nobody to be watching; `ask_me` holds a Drone inside the call until somebody answers. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
+The body is `when_blocked`: `refuse_and_hold`, `ask_me` or `allow_all`. A new Job starts at `ask_me`, which holds a Drone inside the call until somebody answers; `refuse_and_hold` refuses instead and asks nobody at the time. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
 
 **`allow_all` runs every command without asking, except two**: one `armada.yml` declares destructive and one the harness cannot grant — a push. Those still stop for a person, so no setting on this route lets a Job push or run a destructive command unseen. It arrived at 11.0 and was a major bump, because Bridge matches on this set to choose which control to draw.
 

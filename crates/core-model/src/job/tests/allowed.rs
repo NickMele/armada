@@ -18,9 +18,10 @@ fn every_when_blocked_reads_back_from_its_own_spelling() {
     );
 }
 
-/// A Job nobody set this on refuses, so nothing ungranted runs by omission.
+/// The type's own default is the safe answer to a store that will not read,
+/// not what a new Job starts at — `crates/store` binds that explicitly.
 #[test]
-fn a_job_that_chose_nothing_refuses_and_holds() {
+fn the_type_defaults_to_refuse_and_hold_for_a_store_that_will_not_say() {
     assert_eq!(WhenBlocked::default(), WhenBlocked::RefuseAndHold);
 }
 

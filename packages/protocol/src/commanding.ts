@@ -16,12 +16,13 @@
  * What a job does when its drone reaches for a command it was not given.
  * Since protocol 10.7.
  *
- * `refuse_and_hold` refuses the call and stops the job at `blocked_by_policy`
- * — **where every job starts**, because it asks nobody to be watching.
- * `ask_me` holds the drone inside the call and asks a person now.
- * `allow_all`, since protocol 11.0, runs every command without asking
- * **except two**, which still stop for a person: one `armada.yml` declares
- * destructive, and one the harness cannot grant — a push.
+ * `refuse_and_hold` refuses the call and stops the job at `blocked_by_policy`,
+ * asking nobody at the time — a person only sees the refused row once they go
+ * looking. `ask_me` holds the drone inside the call and asks a person now —
+ * **where every job starts**, so nothing runs ungranted without a person also
+ * being asked. `allow_all`, since protocol 11.0, runs every command without
+ * asking **except two**, which still stop for a person: one `armada.yml`
+ * declares destructive, and one the harness cannot grant — a push.
  *
  * **A third value was a major bump**, because a `switch` or a
  * `Record<WhenBlocked, …>` over this union is how a surface picks its control.
@@ -46,8 +47,8 @@ export type CommandAnswer = "allow_for_job" | "always_allow" | "reject";
  *
  * **Not a status.** The job and its step are `running` while the drone waits,
  * exactly as they are while a question is out, and the wait ends without
- * either moving. Present only under `ask_me`: under the default nothing waits,
- * and a person answers a `Refusal` on a stopped job instead.
+ * either moving. Present only under `ask_me`: under `refuse_and_hold` nothing
+ * waits, and a person answers a `Refusal` on a stopped job instead.
  *
  * **`detail` is one line of the argument**, as a `Refusal`'s is. `truncated`
  * and `length` say how much was cut, and `get_call` serves the rest by `call`

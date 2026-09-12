@@ -18,7 +18,7 @@ import { cap, RaiseCapControl } from "./RaiseCap";
 import { RaiseTurnCapControl } from "./RaiseTurnCap";
 
 /** How a new Job meets a command it was not given. The count reads against it. */
-const STARTS_AT: WhenBlocked = "refuse_and_hold";
+const STARTS_AT: WhenBlocked = "ask_me";
 
 /**
  * Whether this Job has settings to change.
@@ -33,8 +33,8 @@ export function offersSettings(job: JobSummary, whole: JobWhole | null): boolean
 }
 
 /**
- * How many settings differ from how a Job starts: a choice other than *Stop and
- * wait for me*, a chosen model, and **one for each command allowed** — each is
+ * How many settings differ from how a Job starts: a choice other than *Ask me
+ * first*, a chosen model, and **one for each command allowed** — each is
  * a separate thing a person did to this Job, and two allows read as one change
  * would undercount what somebody has to go and read.
  *

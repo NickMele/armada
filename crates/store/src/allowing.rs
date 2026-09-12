@@ -18,9 +18,11 @@ use crate::row::{column, enum_value};
 /// Beside the change it makes, like [`V43`](crate::shown_again::V43):
 /// `schema.rs` is at the 900 lines the gate refuses at.
 ///
-/// **The `DEFAULT` is the backfill**: a Job written before this reads as
-/// `refuse_and_hold`, which is what a Job that chose nothing is. The table
-/// starts empty, which is what a Job nobody allowed anything reads as.
+/// **The `DEFAULT` is the backfill only**: a Job written before this reads as
+/// `refuse_and_hold`, which is what it already was. [`Store::insert_job`]
+/// binds `ask_me` for a Job created after, the way it binds `title`, so this
+/// `DEFAULT` is never the value a new Job gets. The table starts empty, which
+/// is what a Job nobody allowed anything reads as.
 ///
 /// `by` is quoted because it is an SQL keyword, and the key is the pair so a
 /// second allow of one command is a conflict rather than a second row.
