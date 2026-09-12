@@ -318,6 +318,12 @@ export const AJsonFrame: Story = {
  * **A recording, with its own controls.** `#605`: a run of the app is a fourth
  * kind the Job screen must show. The plate is not a button here — a button
  * around a native player would steal the clicks its own controls are for.
+ *
+ * **The address is the app's own, and it is what a real one carries.** Since
+ * `#615` a video is not fetched at all: the screen hands the plate a URL on the
+ * scheme Bridge's main process handles, and main forwards a span of it at a
+ * time. Nothing resolves that scheme in Storybook, so what draws here is the
+ * player and the sentence below — which is the story after this one.
  */
 export const AVideoFrame: Story = {
   args: {
@@ -327,14 +333,49 @@ export const AVideoFrame: Story = {
         name: "walkthrough.webm",
         attempt: 1,
         weight: "2.1 MB",
-        content: { kind: "video", src: "data:video/webm;base64," },
+        content: {
+          kind: "video",
+          src: "armada-frame://frame/01JOB/implement.1/walkthrough.webm",
+        },
       },
     ],
   },
   play: async ({ canvasElement, canvas }) => {
-    await expect(canvasElement.querySelector("video")).not.toBeNull();
+    const video = canvasElement.querySelector("video");
+    await expect(video).not.toBeNull();
+    // The weight is still on the line under it: a recording says what it costs
+    // to watch even though nothing here waits for the whole of it.
+    await expect(canvas.getByText("attempt 1 · 2.1 MB")).toBeInTheDocument();
     // A recording is not a still, and never opened as one.
     await expect(canvas.queryAllByRole("button")).toHaveLength(0);
+  },
+};
+
+/**
+ * **A recording that would not play says so, and keeps its player.**
+ *
+ * A video is streamed rather than held, so the read happens inside the element
+ * and the failure never reaches the screen that handed over the address — a
+ * Fleet that went away mid-watch is the ordinary case. What a person can do
+ * about it is press play again, so the controls stay and the reason goes under
+ * them rather than in place of them.
+ */
+export const AVideoThatWillNotPlay: Story = {
+  args: {
+    frames: [
+      {
+        kept: "implement.1/gone.webm",
+        name: "gone.webm",
+        attempt: 1,
+        weight: "18.4 MB",
+        content: { kind: "video", src: "armada-frame://frame/01JOB/implement.1/gone.webm" },
+      },
+    ],
+  },
+  play: async ({ canvasElement, canvas }) => {
+    await expect(canvas.findByText("This video would not play.")).resolves.toBeInTheDocument();
+    // The player is still there, which is the whole of what a person can act on.
+    await expect(canvasElement.querySelector("video")).not.toBeNull();
   },
 };
 

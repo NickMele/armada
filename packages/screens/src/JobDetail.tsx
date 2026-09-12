@@ -80,6 +80,7 @@ export function JobDetail({
   followed,
   onFollowCheckOutput,
   onReadFrame,
+  onFrameSrc,
   onNeedMaterial,
   onNeedRemarks,
   job,
@@ -301,7 +302,7 @@ export function JobDetail({
   // the Job for `outputs`' reason, and it owns the object URLs it mints — a
   // `blob:` lives until it is revoked, so a person walking six Jobs would
   // otherwise leave six sets of screenshots behind them.
-  const frames = useFrames(onReadFrame, job.id);
+  const frames = useFrames(onReadFrame, job.id, onFrameSrc);
 
   // **Asked for when the step is opened, not when a chapter is pressed.** The
   // claim #209 makes is that a change whose point is not the code is reviewed
