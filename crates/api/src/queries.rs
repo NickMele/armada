@@ -78,6 +78,21 @@ pub(crate) async fn get_manifest_reading<D: Queries>(State(served): State<Served
     }
 }
 
+/// Whether the repository still has what `armada.yml` names.
+///
+/// **A read of the repository, where `get_manifest_reading` is a read of the
+/// file.** It never refuses and never 404s: every declared line gets a verdict,
+/// and a line naming nothing this read can look for says so on its own row.
+///
+/// **It runs nothing**, which is what lets a surface make this call on opening.
+/// The dry-run beside it is a real test suite and is behind its own button.
+pub(crate) async fn get_manifest_drift<D: Queries>(State(served): State<Served<D>>) -> Response {
+    match served.daemon().get_manifest_drift().await {
+        Ok(drift) => answer(StatusCode::OK, &drift, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// The `?q=` a person has typed after `@`. A query string rather than a path
 /// segment — `q` is empty the instant somebody types `@` and before anything
 /// follows it, which a path segment cannot carry. Absent decodes the same as

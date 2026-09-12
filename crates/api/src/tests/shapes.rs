@@ -206,6 +206,38 @@ pub fn manifest_reading() -> ipc::ManifestReading {
     }
 }
 
+/// One drifted line and one whole one, because a list of either alone would
+/// let a route test pass while the verdict was constant.
+///
+/// The `current` row carries `checked: 0` on purpose: it is the ordinary case
+/// — `cargo nextest run --workspace` names no path in any repository — and a
+/// fake whose clean row was checked against something would hide the field a
+/// surface needs to say what its clean list is about.
+pub fn manifest_drift() -> ipc::ManifestDrift {
+    ipc::ManifestDrift {
+        path: "armada.yml".to_string(),
+        checkout: "/repo".to_string(),
+        declarations: vec![
+            ipc::Declaration {
+                section: "checks".to_string(),
+                name: "test".to_string(),
+                key: "run".to_string(),
+                run: "cargo nextest run --workspace".to_string(),
+                drift: ipc::Drift::Current { checked: 0 },
+            },
+            ipc::Declaration {
+                section: "checks".to_string(),
+                name: "lint".to_string(),
+                key: "run".to_string(),
+                run: "bash scripts/lint.sh".to_string(),
+                drift: ipc::Drift::Gone {
+                    missing: vec!["scripts/lint.sh".to_string()],
+                },
+            },
+        ],
+    }
+}
+
 /// One Job, with nothing the fake does not hold — except a step rail, which it
 /// holds because the rail is the shape a client draws a Job from.
 ///

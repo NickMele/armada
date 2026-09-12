@@ -30,8 +30,8 @@ use core_model::JobReference;
 use ipc::{
     AlertList, CallArguments, DroneDetail, DroneId, DroneList, FleetCapacity, FleetHealth,
     FleetUsage, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobRemarks, JobResources, JobReview, JobSpend, ManifestConfig, ManifestId, ManifestReading,
-    ManifestSummary, ModelChoices, Work, WorkflowSummary, WorktreesHeld,
+    JobRemarks, JobResources, JobReview, JobSpend, ManifestConfig, ManifestDrift, ManifestId,
+    ManifestReading, ManifestSummary, ModelChoices, Work, WorkflowSummary, WorktreesHeld,
 };
 use store::{LoadJobError, ResolveJobError};
 
@@ -186,6 +186,16 @@ where
     /// booted on.
     async fn get_manifest_reading(&self) -> Result<Option<ManifestReading>, Refusal> {
         Ok(self.last_reading())
+    }
+
+    /// Whether the repository still has what `armada.yml` names —
+    /// `crate::drifting`, which carries the whole argument.
+    ///
+    /// **Against the main checkout, not a Job's worktree**, and it takes no
+    /// lock and starts no process.
+    async fn get_manifest_drift(&self) -> Result<ManifestDrift, Refusal> {
+        let checkout = std::path::Path::new(&self.host().repo_root);
+        Ok(crate::drifting::drift(self.manifest(), checkout))
     }
 
     /// One Job in full, folded from its log like every other read.

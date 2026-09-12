@@ -252,6 +252,25 @@ notes = """
 The resolution chain across Kit, Machine and Manifest is not yet stated.
 """
 
+[operations.get_manifest_drift]
+kind = "query"
+transport = "HTTP"
+agent_access = "Yes"
+description = "Whether the repository still has what armada.yml names, per declared line"
+notes = """
+The other half of `get_manifest_reading`, and it is a different question. That one is a read of the *file*: what Fleet could not adopt when the file changed. A `run` line naming a script that was deleted parses perfectly, is adopted without complaint, and the first thing that notices is a Job failing on it. This is the read of the repository around the file.
+
+Two verdicts and there is no third. `gone` and `current`, and nothing here means *changed*: the file carries no record of what it was written against, so calling a script changed would need a stored scan of a previous one, and a stored scan is state this read deliberately does not have. `docs/journeys/run-and-edit-a-manifest.md`, under *Verify*, settles that and settles the direction too — drift never reports a script the repository picked up that the file does not yet name.
+
+It is free, and that is what makes it a read rather than the dry-run beside it. Nothing here runs a command to find out whether one exists; it is a handful of `stat` calls against the checkout, which is why it can run on opening the surface while the dry-run stays behind its own button.
+
+One row per line, not per declaration. A Command that serves declares up to three — what builds it, what starts it, what says it is ready — and each can go missing on its own, so one row covering all three would carry a verdict about none of them.
+
+The evidence sits inside the verdict rather than beside it, so `gone` with nothing missing cannot be written down. `current` carries how many repository paths the line named, and that number is zero for most lines: `cargo nextest run --workspace` names no path here, so there was nothing to look for. A surface that draws a clean list without saying so is claiming something this read did not say — about a third of a mature Manifest names nothing runnable at all.
+
+`agent_access` is `Yes` on `get_manifest_reading`'s terms: it is one small answer about this repository's own configuration, it costs nothing to ask, and a Helm about to dispatch against a Check whose script is not there should be able to find that out first.
+"""
+
 [operations.get_manifest_reading]
 kind = "query"
 transport = "HTTP"

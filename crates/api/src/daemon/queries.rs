@@ -19,9 +19,9 @@ use crate::reference::Resolved;
 use ipc::{
     AlertList, CallArguments, CheckOutput, CommandExplained, DroneDetail, DroneId, DroneList,
     FilesFound, FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence,
-    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestId,
-    ManifestReading, ManifestSummary, ModelChoices, ReportList, RunList, RunOutput, RunSheet,
-    WorkflowSummary, WorktreesHeld,
+    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestDrift,
+    ManifestId, ManifestReading, ManifestSummary, ModelChoices, ReportList, RunList, RunOutput,
+    RunSheet, WorkflowSummary, WorktreesHeld,
 };
 
 /// What a caller asked for of a frame's bytes.
@@ -200,6 +200,27 @@ pub trait Queries: Send + Sync + 'static {
     fn get_manifest_reading(
         &self,
     ) -> impl Future<Output = Result<Option<ManifestReading>, Refusal>> + Send;
+
+    /// `get_manifest_drift` — whether the repository still has what
+    /// `armada.yml` names, line by line.
+    ///
+    /// **The other half of [`Queries::get_manifest_reading`], and a different
+    /// question.** That one reads the *file* and reports what Fleet could not
+    /// adopt. A `run` line naming a script somebody deleted parses perfectly
+    /// and is adopted without complaint, so the reread says nothing about it
+    /// and cannot; this reads the repository around the file.
+    ///
+    /// **Free, and it has to stay free.** It runs on opening a surface, beside
+    /// a dry-run that runs a real test suite behind its own button. Nothing in
+    /// the implementation may start a process to find out whether one exists.
+    ///
+    /// **No `manifest_id`, matching [`Queries::get_manifest_reading`].** A
+    /// Fleet serves one repository.
+    ///
+    /// It cannot refuse: every line gets a verdict, and a line naming nothing
+    /// this read can look for is answered as such rather than as a failure.
+    /// `Result` is here to match the surface.
+    fn get_manifest_drift(&self) -> impl Future<Output = Result<ManifestDrift, Refusal>> + Send;
 
     /// `get_job` — one Job in full: its steps and where each got to, the
     /// criteria it is held to, the branch its worktree is on, and the brief it

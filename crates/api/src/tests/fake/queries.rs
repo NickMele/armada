@@ -11,8 +11,8 @@
 use ipc::{
     AlertList, CallArguments, CheckOutput, CommandExplained, DroneDetail, DroneId, DroneList,
     FilesFound, FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence,
-    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestId,
-    ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
+    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestDrift,
+    ManifestId, ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
 };
 
 use super::FakeDaemon;
@@ -198,6 +198,15 @@ impl Queries for FakeDaemon {
             return Err(self.fault("the fake was told not to answer"));
         }
         Ok(Some(shapes::manifest_reading()))
+    }
+
+    /// **Always two rows, one of each verdict.** A fake answering all `current`
+    /// or all `gone` would let a route test pass against a constant.
+    async fn get_manifest_drift(&self) -> Result<ManifestDrift, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(shapes::manifest_drift())
     }
 
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {

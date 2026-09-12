@@ -48,6 +48,10 @@ pub mod document;
 /// The agent's door: the MCP half of the HTTP surface, and the tool set
 /// `build.rs` emits from `operations.toml`'s own `agent_access` column.
 pub mod door;
+/// Whether the repository still has what `armada.yml` names. **A read of the
+/// repository**, where `reading` is a read of the file — a `run` line naming a
+/// deleted script parses perfectly and says nothing.
+mod drift;
 /// The processes Fleet is holding, and what one of them has been doing.
 /// **Read off the roster, never off the Jobs.**
 mod drones;
@@ -141,6 +145,7 @@ pub use detail::{
     Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
     PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
 };
+pub use drift::{Declaration, Drift, ManifestDrift};
 pub use drones::{DroneDetail, DroneList, DroneSummary};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,

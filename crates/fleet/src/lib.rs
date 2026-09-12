@@ -57,6 +57,10 @@ pub mod delivery;
 pub mod detach;
 pub mod dispatch;
 pub mod drafting;
+/// Whether the repository still has what `armada.yml` names. **A read of the
+/// repository**, where `daemon::rereading` is a read of the file — a `run`
+/// line naming a deleted script parses perfectly and says nothing.
+mod drifting;
 pub mod drone;
 mod drone_moves;
 pub mod dry_run;
