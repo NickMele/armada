@@ -59,7 +59,7 @@ fn a_two_step_workflow() -> config::ResolvedWorkflow {
 /// `WhenRefused::AlwaysAsk` is what turns `c1`'s own `on_refusal: refuse` —
 /// every `judged_on` fixture criterion declares that — into a question rather
 /// than the refusal `tests::judging::ruling` already covers.
-async fn asking_a_question(home: &TempDir) -> (Fixture, JobId) {
+pub(super) async fn asking_a_question(home: &TempDir) -> (Fixture, JobId) {
     let fleet = a_fleet_judged_by(
         home,
         FakeWorkProduct::changed(&["src/log.rs"]).showing("+    let n = n - 1;\n"),

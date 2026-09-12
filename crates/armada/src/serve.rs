@@ -523,11 +523,12 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // with a Drone nothing can speak to.
     let reconciled = fleet.reconcile().await?;
     println!(
-        "reconciled: {} interrupted, {} adopted, {} repaired, {} unreadable{}",
+        "reconciled: {} interrupted, {} adopted, {} repaired, {} unreadable, {} mended{}",
         reconciled.interrupted.len(),
         reconciled.adopted.len(),
         reconciled.repaired,
         reconciled.unreadable.len(),
+        reconciled.mended.len(),
         match reconciled.admitted.as_slice() {
             [] => String::new(),
             admitted => format!(", admitted {}", admitted.len()),
@@ -539,6 +540,15 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         // the transcript and never will be. The Job's own log says how wide.
         eprintln!(
             "  a Drone outlived the last Fleet and was adopted: {}",
+            job.as_str()
+        );
+    }
+    for job in &reconciled.mended {
+        // Named for the same reason: a person reading this Job's own log gets
+        // the why, and this line is where an operator watching boot sees that
+        // one existed at all.
+        eprintln!(
+            "  a Job the old `Agree` arm left stranded was moved to escalated: {}",
             job.as_str()
         );
     }

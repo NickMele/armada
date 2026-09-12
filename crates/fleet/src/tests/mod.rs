@@ -68,6 +68,7 @@ mod left_behind;
 mod linking;
 mod listener;
 mod looping;
+mod mending;
 mod merging;
 mod migrating;
 mod modelling;
