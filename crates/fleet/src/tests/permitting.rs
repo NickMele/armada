@@ -176,16 +176,14 @@ async fn a_new_job_asks_first_by_default() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
+    let asking = asked("Bash", "npm publish", "c1");
 
-    let (answer, answered) = tokio::join!(
-        fleet.permission(&job, &asked("Bash", "npm publish", "c1")),
-        async {
-            until_waiting(&fleet, &job).await;
-            fleet
-                .answer_command(&job, "c1", CommandAnswer::Reject)
-                .await
-        }
-    );
+    let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
+        until_waiting(&fleet, &job).await;
+        fleet
+            .answer_command(&job, "c1", CommandAnswer::Reject)
+            .await
+    });
 
     answered.expect("a person was asked, unprompted by any setting");
     assert_eq!(
