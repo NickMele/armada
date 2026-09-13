@@ -28,6 +28,12 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
+import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
+import type {
+  ManifestProposalsRead,
+  ProposalAnswer,
+  RepositoryScanRead,
+} from "@armada/screens/src/setup-reads";
 import type { CommandAnswer, JudgeAnswer, SaveLimits, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
@@ -314,6 +320,14 @@ const api: BridgeApi = {
   editManifest: (body: EditManifest): Promise<ManifestEditAnswer> =>
     ipcRenderer.invoke(CHANNELS.editManifest, body),
   readManifestSpend: (): Promise<ManifestSpendRead> => ipcRenderer.invoke(CHANNELS.readManifestSpend),
+  // Setup: Scan, the proposals, one edit, Write — one operation each.
+  readRepositoryScan: (): Promise<RepositoryScanRead> => ipcRenderer.invoke(CHANNELS.readRepositoryScan),
+  readManifestProposals: (): Promise<ManifestProposalsRead> =>
+    ipcRenderer.invoke(CHANNELS.readManifestProposals),
+  editManifestProposal: (body: EditManifestProposal): Promise<ProposalAnswer> =>
+    ipcRenderer.invoke(CHANNELS.editManifestProposal, body),
+  writeManifestProposal: (body: WriteManifestProposal): Promise<ProposalAnswer> =>
+    ipcRenderer.invoke(CHANNELS.writeManifestProposal, body),
 
   // A repository-wide always-allow — Fleet's own table since protocol 13.5.
   // Neither takes a path or a job id: Fleet names the repository.

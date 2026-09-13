@@ -439,6 +439,11 @@ export const CHANNELS = {
   // The forms' two: edits as keys rather than text, and what past Jobs cost.
   editManifest: "bridge:edit-manifest",
   readManifestSpend: "bridge:read-manifest-spend",
+  // Setup: four entries, one per operation, on `readManifestFile`'s terms.
+  readRepositoryScan: "bridge:read-repository-scan",
+  readManifestProposals: "bridge:read-manifest-proposals",
+  editManifestProposal: "bridge:edit-manifest-proposal",
+  writeManifestProposal: "bridge:write-manifest-proposal",
   // A repository-wide always-allow, kept in Fleet's own table since 13.5 —
   // #836. Two entries, a read and a remove, on `readManifestFile`'s terms:
   // Fleet names the repository, so neither takes a path or an id.

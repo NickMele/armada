@@ -17,7 +17,7 @@ import type {
 import type { FleetCapacity, FleetLimits, JobSummary, ManifestReading } from "@armada/protocol";
 import type { ServerList } from "@armada/protocol";
 import type { CallArguments, CheckOutput } from "@armada/protocol";
-import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
+import type { LeftOutWorkflow, ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { refusedWith } from "@armada/protocol";
 import { Socket } from "node:net";
 import { HOST } from "./runtime-file";
@@ -196,15 +196,17 @@ export function isJobSummary(body: unknown): body is JobSummary {
  * value too many rather than a form with nothing in it.
  */
 export async function holdingsOf(port: number, held: Holdings): Promise<Holdings> {
-  const [workflows, manifests, models] = await Promise.all([
+  const [workflows, manifests, models, leftOut] = await Promise.all([
     ask(port, "GET", "/workflows"),
     ask(port, "GET", "/manifests"),
     ask(port, "GET", "/models"),
+    ask(port, "GET", "/workflows/left_out"),
   ]);
   return {
     workflows: workflows.ok === true ? (workflows.body as WorkflowSummary[]) : held.workflows,
     manifests: manifests.ok === true ? (manifests.body as ManifestSummary[]) : held.manifests,
     models: models.ok === true ? (models.body as ModelChoices) : held.models,
+    leftOut: leftOut.ok === true ? (leftOut.body as LeftOutWorkflow[]) : held.leftOut,
   };
 }
 

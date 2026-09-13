@@ -59,7 +59,7 @@ export function factsOf(
 ): JobDetailField[] {
   const address = whole?.delivery?.pull_request;
   return [
-    ...workflowFact(job, workflow),
+    ...workflowFact(job, workflow, whole?.workflow_source),
     ...branchFact(job),
     ...pullRequestFact(address),
     ...landedFact(whole, address !== undefined),
@@ -75,11 +75,25 @@ export function factsOf(
  * where it does not — which after the refusal at creation means a Job older
  * than the check.
  */
-function workflowFact(job: JobSummary, workflow: WorkflowSummary | undefined): JobDetailField[] {
+function workflowFact(job: JobSummary, workflow: WorkflowSummary | undefined, source?: string): JobDetailField[] {
+  const suffix = ` workflow${sourceOf(source)}`;
   if (workflow === undefined) {
-    return [{ value: job.workflow_id, mono: true, suffix: " workflow", copyValue: job.workflow_id }];
+    return [{ value: job.workflow_id, mono: true, suffix, copyValue: job.workflow_id }];
   }
-  return [{ value: workflow.name, suffix: " workflow", copyValue: job.workflow_id }];
+  return [{ value: workflow.name, suffix, copyValue: job.workflow_id }];
+}
+
+/** Where a workflow came from, in Fleet's own words for `WorkflowSource` — #425. */
+export const WORKFLOW_SOURCE: Readonly<Record<string, string>> = {
+  armada: "carried by Armada",
+  kit: "from Kit",
+  repository: "from the repository",
+};
+
+/** `, from Kit`, or nothing where Fleet did not say. An unknown word renders as itself. */
+export function sourceOf(source: string | undefined): string {
+  if (source === undefined || source === "") return "";
+  return `, ${WORKFLOW_SOURCE[source] ?? source}`;
 }
 
 /**

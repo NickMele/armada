@@ -227,3 +227,7 @@
 /* Drift and Verify on the Manifest surface — Journey 9's *Verify*. */
 @import "./compositions/DriftPanel/DriftPanel.css";
 @import "./compositions/VerifyPanel/VerifyPanel.css";
+@import "./compositions/PortAddForm/PortAddForm.css";
+@import "./compositions/Provenance/Provenance.css";
+@import "./compositions/SetupPicker/SetupPicker.css";
+@import "./compositions/ProposalSheet/ProposalSheet.css";
