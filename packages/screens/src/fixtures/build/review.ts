@@ -7,6 +7,7 @@
 // `whole.delivery.pull_request` is present, which this fixture leaves absent
 // on purpose: the roster's escalated fixture is the one that reaches delivery.
 
+import type { JobConfidence } from "@armada/protocol";
 import type { JobFixture } from "../fixture";
 import {
   answered,
@@ -97,10 +98,48 @@ const FILES = [
   { path: "packages/settings/src/index.ts", change: "added" },
 ];
 
+/** Armada's review of the settings split, as `get_job` serves it. #903. */
+const CONFIDENCE: JobConfidence = {
+  says: "confident",
+  reasons: [
+    "Every Check passed and the Judge met every criterion.",
+    "One test was removed without a reason, and it needs your yes.",
+  ],
+  areas: [
+    {
+      name: "Selectors",
+      what: "The selectors no longer import the store",
+      files: ["packages/settings/src/selectors.ts", "packages/settings/src/index.ts"],
+    },
+    { name: "Reducer", what: "The reducer is split out of the selectors", files: ["packages/settings/src/reducer.ts"] },
+  ],
+  tests: {
+    opened_because: { kind: "test_removed", name: "reruns_every_selector_on_write" },
+    proves: [{ area: "Selectors", what: "A settings write re-runs only the selectors that read it", tests: 3 }],
+    changed: [
+      {
+        name: "reruns_every_selector_on_write",
+        change: "removed",
+        replaced_by: "reruns_only_what_reads_the_write",
+        flagged: true,
+      },
+    ],
+    untested: [],
+  },
+  needs_you: [
+    {
+      finding: "`reruns_every_selector_on_write` was removed with no reason given",
+      why: "A test taken out or weakened is the reviewer's to explain",
+    },
+  ],
+  small_fixes: [],
+  for_context: [{ finding: "The consumers still import the old path", why: "The next step checks them" }],
+};
+
 export function review(): JobFixture {
   const theJob = job("awaiting_review", { current_step_id: "regression_verify" });
   const steps = [reproStep(), rootCauseStep(), fixStep(), regressionStep(), consumersStep(), landStep()];
-  const whole = detail(theJob, steps);
+  const whole = { ...detail(theJob, steps), confidence: CONFIDENCE };
 
   const rows = [
     instructed("repro", "2026-09-10T14:11:15Z", 1, "the reproduction fails on main", "Reproduction"),
