@@ -1,0 +1,113 @@
+/* Overview's tiles. A floor per tile and no fixed width: the band is drawn
+   beside a 380px dock at 1100px and wider and full width below it, so it wraps
+   rather than squeezing a reading to an ellipsis. */
+.armada-overview-band {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(var(--space-12) * 4), 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-overview-tile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  color: var(--fg-default);
+  font: inherit;
+  text-align: left;
+}
+
+button.armada-overview-tile {
+  cursor: pointer;
+}
+
+button.armada-overview-tile:hover {
+  background: var(--bg-hover);
+}
+
+button.armada-overview-tile:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-overview-tile__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-overview-tile__label {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-overview-tile__value {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-medium);
+  text-wrap: pretty;
+}
+
+.armada-overview-tile__value[data-face="mono"] {
+  font-family: var(--font-mono);
+}
+
+.armada-overview-tile__value[data-tone="completed-success"] {
+  color: var(--status-completed-success);
+}
+
+.armada-overview-tile__value[data-tone="awaiting-review"] {
+  color: var(--status-awaiting-review);
+}
+
+.armada-overview-tile__value[data-tone="completed-failed"] {
+  color: var(--status-completed-failed);
+}
+
+.armada-overview-tile__value[data-tone="notice-caution"] {
+  color: var(--notice-caution);
+}
+
+/* The placeholder stands where the reading lands, at the reading's line height. */
+.armada-overview-tile__placeholder {
+  margin-block: var(--space-3);
+}
+
+.armada-overview-tile__detail {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.armada-overview-tile__detail[data-face="mono"] {
+  font-family: var(--font-mono);
+}
+
+.armada-overview-tile__mark {
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.armada-overview-tile__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

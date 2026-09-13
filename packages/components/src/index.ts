@@ -281,3 +281,5 @@ export * from "./compositions/SetupPicker/SetupPicker";
 export * from "./compositions/LocateForm/LocateForm";
 export * from "./compositions/ProposalSheet/ProposalSheet";
 export * from "./compositions/ValuePopover/ValuePopover";
+// Overview's band — Fleet, Doctor, Drones, Queued and Manifest drift at a glance.
+export * from "./compositions/OverviewTile/OverviewTile";
