@@ -1,4 +1,5 @@
-// The Manifest surface — Journey 9's *Running one*, with no Job in existence.
+// The Manifest surface — Journey 9's *Running one* and the file half of
+// *Editing*, with no Job in existence.
 //
 // # Why this is a surface at all
 //
@@ -13,6 +14,18 @@
 // The rail has carried a Manifest row since it shipped, which is what gives
 // this `⌘4`. Until now it reached nothing.
 //
+// # Two views, and the toggle between them is named by the file's path
+//
+// Correcting a Check used to mean leaving Bridge for an editor, and finding
+// out whether the correction parsed meant watching Fleet's console. The file
+// view is `armada.yml` itself and the answer to a save beside it. **The toggle
+// is the file's name, never its format** — the lexicon bans calling a
+// Manifest by one.
+//
+// Journey 9 puts forms in front of the file, with the file behind that toggle.
+// The forms are #721 and not built; when they are, they are a third view here,
+// and the path toggle goes on switching to the file.
+//
 // # What this page is not
 //
 // **Not the run sheet widened.** A sheet is dismissed back to what you were
@@ -26,16 +39,15 @@
 //
 // # What is not built here, and is this surface's by the journey
 //
-// Editing and Verify. Journey 9 puts both on this surface, and neither has a
-// wire: `armada.yml` is read-only over the connection today and nothing serves
-// drift. They are absent rather than stubbed — a form that could not save and
-// a Verify button that could not run would be two labelled blanks.
+// The forms, and Verify. Neither has a surface yet: a form that could not
+// express the schema and a Verify button that could not run would be two
+// labelled blanks.
 
-import { Alert } from "@armada/components";
-import { RunPage } from "@armada/components";
+import { Alert, ManifestFile, RunPage, Tabs } from "@armada/components";
 
 import { said } from "./copy";
 import { useManifestRuns, type ManifestSlice } from "./checkout-runs";
+import type { ManifestEditing } from "./manifest-file";
 
 export type ManifestProps = ManifestSlice & {
   /**
@@ -50,11 +62,13 @@ export type ManifestProps = ManifestSlice & {
   now: number;
   /** A sentence to say — today, only a server link that did not open. */
   onSaid: (sentence: string) => void;
+  /** The file view, held by the app so an unsaved edit outlives the surface. */
+  editing: ManifestEditing;
 };
 
 /**
- * Everything this repository's Manifest declares, and one press that runs one
- * of them in the checkout as it is on disk.
+ * Everything this repository's Manifest declares, one press that runs one of
+ * them in the checkout as it is on disk, and the file itself.
  *
  * **The read is the app's, not this screen's.** `Worktrees` opens and closes
  * its own because nothing else wants it; this one is also what the command
@@ -65,11 +79,30 @@ export function Manifest(props: ManifestProps) {
   // Before the branches: a hook cannot be called conditionally, and the states
   // below are branches on what was read rather than on what this holds.
   const slot = useManifestRuns(props);
+  const { editing } = props;
 
-  if (props.sheet.state === "failed") {
+  return (
+    <div className="armada-screen__stack">
+      {/* Above both views, so the file stays reachable when the run sheet is
+          what would not read. */}
+      <Tabs
+        items={[
+          { id: "run", label: "Checks and Commands" },
+          { id: "file", label: editing.named },
+        ]}
+        value={editing.view}
+        onChange={(id) => editing.onView(id === "file" ? "file" : "run")}
+      />
+      {editing.view === "file" ? <FileView file={editing.file} /> : <RunView {...props} slot={slot} />}
+    </div>
+  );
+}
+
+function RunView({ sheet, slot }: ManifestProps & { slot: ReturnType<typeof useManifestRuns> }) {
+  if (sheet.state === "failed") {
     return (
       <Alert tone="escalated" title="This repository's Manifest could not be read">
-        {said(props.sheet.outcome)}
+        {said(sheet.outcome)}
       </Alert>
     );
   }
@@ -77,13 +110,22 @@ export function Manifest(props: ManifestProps) {
   // thing as `reading` rather than drawing three empty groups, which here
   // would claim the file declares nothing — the one answer on this page
   // nobody should be given by accident.
-  if (props.sheet.state !== "read") {
+  if (sheet.state !== "read") {
     return <p className="text-fg-muted">Reading this repository's Manifest.</p>;
   }
+  return <RunPage {...slot} />;
+}
 
-  return (
-    <div className="armada-screen__stack">
-      <RunPage {...slot} />
-    </div>
-  );
+function FileView({ file }: { file: ManifestEditing["file"] }) {
+  if (file.state === "failed") {
+    return (
+      <Alert tone="escalated" title="The Manifest file could not be read">
+        {file.saying}
+      </Alert>
+    );
+  }
+  if (file.state === "reading") {
+    return <p className="text-fg-muted">Reading the Manifest file.</p>;
+  }
+  return <ManifestFile {...file.props} />;
 }

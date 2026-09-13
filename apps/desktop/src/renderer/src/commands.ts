@@ -28,6 +28,7 @@
 import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
+import type { SaveManifestFile } from "@armada/protocol";
 import type {
   Artifact,
   Draft,
@@ -102,6 +103,10 @@ export const stopCheckoutRun = (runId: string) => window.armada.stopCheckoutRun(
 export const undoCheckoutRun = (runId: string) => window.armada.undoCheckoutRun(runId);
 export const listCheckoutRuns = () => window.armada.listCheckoutRuns();
 export const getCheckoutRunOutput = (runId: string) => window.armada.getCheckoutRunOutput(runId);
+// The Manifest file. Held by the app, like the sheet above, so an unsaved edit
+// outlives the surface it was made on.
+export const readManifestFile = () => window.armada.readManifestFile();
+export const saveManifestFile = (body: SaveManifestFile) => window.armada.saveManifestFile(body);
 export const startServer = (name: string, jobId?: string) => window.armada.startServer(name, jobId);
 export const stopServer = (serverId: string) => window.armada.stopServer(serverId);
 export const openServerLink = (serverId: string, url: string) =>

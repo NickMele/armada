@@ -32,7 +32,7 @@ import { DispatchJob } from "@armada/screens";
 import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
-import { Manifest, checkoutRunnablesOf } from "@armada/screens";
+import { Manifest, checkoutRunnablesOf, useManifestEditing } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
@@ -49,6 +49,8 @@ import {
   observeCheckoutRun,
   getRunOutput,
   getCheckoutRunOutput,
+  readManifestFile,
+  saveManifestFile,
   listRuns,
   listCheckoutRuns,
   undoRun,
@@ -200,6 +202,16 @@ export function App() {
     watchCheckoutRunSheet(manifesting || palette.open);
   }, [manifesting, palette.open]);
 
+  // The Manifest file and an edit of it. **Held here rather than by the
+  // screen**, which unmounts whenever the rail moves: an unsaved correction the
+  // screen owned would be gone after one look at the Board.
+  const editing = useManifestEditing({
+    showing: manifesting,
+    reading: state.manifestReading,
+    onReadFile: readManifestFile,
+    onSaveFile: saveManifestFile,
+  });
+
   useEffect(() => watchUncaught(setUncaught), []);
 
   // **Where a pressed notification says to go, and it always goes somewhere.**
@@ -337,7 +349,8 @@ export function App() {
     onReadReports: () => setAuditing(true),
     onCloseWorktrees: () => setClearing(false),
     onReadWorktrees: () => setClearing(true),
-    manifest: manifesting,
+    // Which Manifest view is up, so the head describes the one on screen.
+    manifest: manifesting ? editing.view : false,
     onRefresh: () => void commands.refresh(),
     jobs: state.jobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
@@ -372,7 +385,12 @@ export function App() {
         <div className="armada-screen__mounted">
           <Standing
             fleet={fleet}
-            manifestReading={state.manifestReading}
+            // **Not while the file is on screen**, which draws the same
+            // reading beside the text it is about. Twice at once is two places
+            // to read one refusal and one to dismiss while the other stands.
+            manifestReading={
+              manifesting && editing.view === "file" ? null : state.manifestReading
+            }
             readingSeen={readingSeen}
             onReadingSeen={setReadingSeen}
             uncaught={uncaught}
@@ -534,6 +552,7 @@ export function App() {
                 picked={picked}
                 now={now}
                 onSaid={setTelling}
+                editing={editing}
                 onObserveRun={observeCheckoutRun}
                 onStartRun={startCheckoutRun}
                 onStopRun={stopCheckoutRun}

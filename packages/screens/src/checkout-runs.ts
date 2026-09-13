@@ -188,8 +188,9 @@ export function checkoutPastRunOf(
   };
 }
 
-/** `HH:MM:SS`, off an ISO instant — a run row here carries no date. */
-function clockOf(at: string): string {
+/** `HH:MM:SS`, off an ISO instant — a run row here carries no date, and
+ * neither does a save's receipt beside the file it saved. */
+export function clockOf(at: string): string {
   return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 

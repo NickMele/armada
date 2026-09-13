@@ -392,6 +392,10 @@ export const CHANNELS = {
   undoCheckoutRun: "bridge:undo-checkout-run",
   listCheckoutRuns: "bridge:list-checkout-runs",
   getCheckoutRunOutput: "bridge:get-checkout-run-output",
+  // The Manifest file — Journey 9's *Editing*. Two entries, a read and a
+  // write, and neither takes a path: Fleet names the file.
+  readManifestFile: "bridge:read-manifest-file",
+  saveManifestFile: "bridge:save-manifest-file",
   startServer: "bridge:start-server",
   stopServer: "bridge:stop-server",
   openServerLink: "bridge:open-server-link",

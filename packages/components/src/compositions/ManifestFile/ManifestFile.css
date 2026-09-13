@@ -1,0 +1,116 @@
+/* The Manifest as a file — Journey 9's *Editing*. A head carrying the path, the
+   save's receipt and Save; whatever the save came to; and the text, filling
+   what is left of the panel.
+
+   **It fills the mount and scrolls inside the well**, so a long file does not
+   make the page as tall as the file. */
+.armada-manifest-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.armada-manifest-file__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* A path is a fact the system reported, so it is mono. */
+.armada-manifest-file__path {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+  /* The path takes the slack and wraps anywhere, so Save stays at the trailing
+     edge. A path from Fleet is absolute and long. */
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* The receipt keeps its own width and gives way only when the head runs out.
+   Given the slack instead, it lost to the path and broke "Not saved." across
+   two lines — measured in the app, not in a story. */
+.armada-manifest-file__receipt {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* The well the text sits in, and what makes it fill. `Textarea` sizes itself by
+   `rows` for a brief in a column of fields; a file is the whole panel, so the
+   height comes from here instead. */
+.armada-manifest-file__well {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.armada-manifest-file__well .armada-textarea-field {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Mono, where `Textarea` is sans. **A Manifest is not prose**: it is keys,
+   commands and paths, every one of which the contract puts in mono, and a
+   YAML indent that does not line up is a different document. `wrap="off"` on
+   the element keeps a long `run:` line on its own line for the same reason. */
+.armada-manifest-file__well .armada-textarea {
+  flex: 1 1 auto;
+  min-height: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  overflow: auto;
+}
+
+/* Two texts, side by side, at equal widths — neither is the one that matters
+   more. Each keeps a floor so a narrow window stacks nothing into a sliver. */
+.armada-manifest-file__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.armada-manifest-file__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  min-width: 0;
+}
+
+.armada-manifest-file__side-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-manifest-file__gone {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-manifest-file__acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

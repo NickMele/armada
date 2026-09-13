@@ -262,3 +262,4 @@ export * from "./compositions/WorkGroups/WorkGroups";
 // A step as one timeline: the phases in the order they happened, repeated for
 // each attempt, with the earlier ones folded. Replaces the strip and the story.
 export * from "./compositions/StepTimeline/StepTimeline";
+export * from "./compositions/ManifestFile/ManifestFile";
