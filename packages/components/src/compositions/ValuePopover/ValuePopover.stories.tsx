@@ -56,8 +56,8 @@ const flagged = fn();
 export const Destructive: Story = {
   args: {
     label: "reset destructive",
-    value: "not destructive",
-    empty: true,
+    offer: "Mark destructive",
+    offerName: "Mark destructive: reset",
     children: (
       <OneFlag
         checked={false}
@@ -71,7 +71,7 @@ export const Destructive: Story = {
   },
   play: async ({ canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Edit reset destructive" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Mark destructive: reset" }));
     const layer = canvas.getByRole("dialog", { name: "reset destructive" });
     await expect(within(layer).getByText(/this is your judgement/)).toBeVisible();
     await userEvent.click(within(layer).getByRole("switch", { name: /Destructive/ }));

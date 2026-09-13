@@ -91,7 +91,8 @@ export const CorrectRunsFirstAndDestructive: Story = {
     const sheet = await canvas.findByRole("dialog", { name: "Proposal for services/api" });
 
     const test = within(within(sheet).getByRole("list", { name: "Checks" })).getByRole("listitem", { name: "test" });
-    await userEvent.click(within(test).getByRole("button", { name: "Edit test runs first" }));
+    // Nothing runs first yet, so its control is the offer rather than a value.
+    await userEvent.click(within(test).getByRole("button", { name: "Add runs first: test" }));
     const first = within(test).getByRole("dialog", { name: "test runs first" });
     await userEvent.click(within(first).getByRole("checkbox", { name: "migrate" }));
     await expect(await within(test).findByText("edited during setup")).toBeVisible();
@@ -101,7 +102,7 @@ export const CorrectRunsFirstAndDestructive: Story = {
 
     const commands = within(sheet).getByRole("list", { name: "Commands" });
     const reset = within(commands).getByRole("listitem", { name: "reset" });
-    await userEvent.click(within(reset).getByRole("button", { name: "Edit reset destructive" }));
+    await userEvent.click(within(reset).getByRole("button", { name: "Mark destructive: reset" }));
     const flag = within(reset).getByRole("dialog", { name: "reset destructive" });
     await expect(within(flag).getByText(/this is your judgement/)).toBeVisible();
     await userEvent.click(within(flag).getByRole("switch", { name: /Destructive/ }));
@@ -115,10 +116,10 @@ export const CorrectRunsFirstAndDestructive: Story = {
 
     // `test` runs `migrate` first now, so `migrate` is not offered as destructive.
     const migrate = within(commands).getByRole("listitem", { name: "migrate" });
-    await userEvent.click(within(migrate).getByRole("button", { name: "Edit migrate destructive" }));
+    await userEvent.click(within(migrate).getByRole("button", { name: "Mark destructive: migrate" }));
     await expect(within(migrate).getByRole("switch", { name: /Destructive/ })).toBeDisabled();
     await expect(within(migrate).getByText("test runs it first, so it cannot be destructive.")).toBeVisible();
-    await userEvent.click(within(migrate).getByRole("button", { name: "Edit migrate destructive" }));
+    await userEvent.click(within(migrate).getByRole("button", { name: "Mark destructive: migrate" }));
     await expect(within(sheet).queryByRole("dialog")).toBeNull();
 
     await userEvent.click(within(sheet).getByRole("button", { name: "Write services/api/armada.yml" }));

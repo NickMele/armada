@@ -178,6 +178,10 @@
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
   min-width: 0;
+  /* A column that gives way takes its name with it, rather than drawing it over the next (#925). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The four names start at the workflow column: the badge needs no header to be

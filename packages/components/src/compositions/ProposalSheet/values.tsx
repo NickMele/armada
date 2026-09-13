@@ -1,6 +1,8 @@
 // The two values on the sheet a cell cannot hold, each opened from where it sits. Its own file
 // so the sheet stays one screen of layout.
 
+import { Fragment, type ReactNode } from "react";
+
 import { OneFlag, OrderedPicks, ValuePopover, type OrderedPick } from "../ValuePopover/ValuePopover";
 import type { ProposalEntry, ProposalSheetProps } from "./ProposalSheet";
 
@@ -9,11 +11,17 @@ function frozen(props: ProposalSheetProps): boolean {
   return props.written !== undefined || props.setUp === true;
 }
 
-/** Only Commands are offered: a gate that runs to set up a gate is no longer a gate. */
-export function RunsFirst({ entry, ...props }: ProposalSheetProps & { entry: ProposalEntry }) {
+/**
+ * Only Commands are offered: a gate that runs to set up a gate is no longer a gate. A set value reads
+ * before the command it runs ahead of and the offer after it, so an unset row keeps no gap. Keyed,
+ * so the first tick moves the command rather than remounting the popover it was ticked in.
+ */
+export function RunsFirst({ entry, children, ...props }: ProposalSheetProps & { entry: ProposalEntry; children: ReactNode }) {
   const requires = entry.requires ?? [];
   const written = requires.length === 0 ? "" : `${requires.join(", ")} →`;
-  if (frozen(props)) return written === "" ? null : <span className="armada-proposal-sheet__mono">{written}</span>;
+  const command = <Fragment key="command">{children}</Fragment>;
+  const around = (value: ReactNode) => (written === "" ? [command, value] : [value, command]);
+  if (frozen(props)) return written === "" ? command : around(<span key="value" className="armada-proposal-sheet__mono">{written}</span>);
   const declared = props.commands.map((command) => command.name);
   const options: OrderedPick[] = [
     ...props.commands.map((command) =>
@@ -25,9 +33,13 @@ export function RunsFirst({ entry, ...props }: ProposalSheetProps & { entry: Pro
       .filter((name) => !declared.includes(name))
       .map((name) => ({ name, unavailable: "Not a Command this file declares." })),
   ];
-  if (options.length === 0) return null;
-  return (
-    <ValuePopover label={`${entry.name} runs first`} value={written === "" ? "runs nothing first" : written} empty={written === ""}>
+  if (options.length === 0) return command;
+  return around(
+    <ValuePopover
+      key="value"
+      label={`${entry.name} runs first`}
+      {...(written === "" ? { offer: "Add runs first", offerName: `Add runs first: ${entry.name}` } : { value: written })}
+    >
       <OrderedPicks
         label={`Commands ${entry.name} runs first`}
         says="Ticked Commands run before this Check, in the order ticked. To reorder, untick and tick again."
@@ -49,7 +61,10 @@ export function Destructive({ entry, ...props }: ProposalSheetProps & { entry: P
     ...(props.setup?.requires.includes(entry.name) === true ? ["setup"] : []),
   ];
   return (
-    <ValuePopover label={`${entry.name} destructive`} value={on ? "destructive" : "not destructive"} empty={!on}>
+    <ValuePopover
+      label={`${entry.name} destructive`}
+      {...(on ? { value: "destructive" } : { offer: "Mark destructive", offerName: `Mark destructive: ${entry.name}` })}
+    >
       <OneFlag
         checked={on}
         description="A Drone asks you before it runs this."

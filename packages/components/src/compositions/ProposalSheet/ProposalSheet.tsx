@@ -328,13 +328,23 @@ function Registry({
               }
             >
               <span className="armada-proposal-sheet__run">
-                {band === "checks" ? <RunsFirst entry={entry} {...props} /> : null}
-                <InPlace
-                  label={`${entry.name} command`}
-                  value={entry.run}
-                  locked={locked}
-                  onCommit={(run) => props.onEditRun(band, entry.name, run)}
-                />
+                {band === "checks" ? (
+                  <RunsFirst entry={entry} {...props}>
+                    <InPlace
+                      label={`${entry.name} command`}
+                      value={entry.run}
+                      locked={locked}
+                      onCommit={(run) => props.onEditRun(band, entry.name, run)}
+                    />
+                  </RunsFirst>
+                ) : (
+                  <InPlace
+                    label={`${entry.name} command`}
+                    value={entry.run}
+                    locked={locked}
+                    onCommit={(run) => props.onEditRun(band, entry.name, run)}
+                  />
+                )}
                 {band === "commands" ? <Destructive entry={entry} {...props} /> : null}
               </span>
             </Row>

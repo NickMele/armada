@@ -14,30 +14,28 @@ import { Switch } from "../../primitives/Switch/Switch";
 export type ValuePopoverProps = {
   /** Names the value: the trigger is `Edit <label>` and the layer is `<label>`. */
   label: string;
-  /** The value as its row reads it. */
-  value: string;
-  /** The value is a placeholder for nothing set, and reads quieter than a fact. */
-  empty?: boolean;
+  /** The value as its row reads it. Absent where nothing is set: a default is not drawn as text. */
+  value?: string;
+  /** Where nothing is set, the control's words, and its accessible name, which starts with them. */
+  offer?: string;
+  offerName?: string;
   defaultOpen?: boolean;
   children: ReactNode;
 };
 
-export function ValuePopover({ label, value, empty = false, defaultOpen, children }: ValuePopoverProps) {
+export function ValuePopover({ label, value, offer, offerName, defaultOpen, children }: ValuePopoverProps) {
+  const trigger =
+    value === undefined ? (
+      <button type="button" className="armada-value-popover__offer" aria-label={offerName ?? offer}>
+        {offer}
+      </button>
+    ) : (
+      <button type="button" className="armada-value-popover__value" aria-label={`Edit ${label}`}>
+        {value}
+      </button>
+    );
   return (
-    <Popover
-      label={label}
-      defaultOpen={defaultOpen}
-      trigger={
-        <button
-          type="button"
-          className="armada-value-popover__value"
-          data-empty={empty || undefined}
-          aria-label={`Edit ${label}`}
-        >
-          {value}
-        </button>
-      }
-    >
+    <Popover label={label} defaultOpen={defaultOpen} trigger={trigger}>
       <div className="armada-value-popover">{children}</div>
     </Popover>
   );

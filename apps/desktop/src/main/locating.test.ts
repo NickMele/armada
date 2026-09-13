@@ -10,7 +10,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { NOTHING_YET, type BridgeState } from "../shared/bridge";
 import { CLONE_MS, Locating, locateAnswerOf, resolvedFolder } from "./locating";
+import { OverviewReads } from "./overview";
+import { Picked } from "./picked";
+import type { RehearsalConnection } from "./rehearsal";
+import { RepositoryReads } from "./repositories";
 import { ask, COMMAND_MS } from "./request";
 
 const ADDED = { root: "/Users/user/scratch", records_root: "/records/scratch" };
@@ -125,5 +130,61 @@ describe("the clone preview's parent", () => {
     expect(await resolvedFolder("code")).toBeNull();
     expect(await resolvedFolder(join(real, "missing"))).toBeNull();
     expect(await resolvedFolder(file)).toBeNull();
+  });
+});
+
+describe("a clone that lands late", () => {
+  it("is told as landed once listed, where an add is not", async () => {
+    const landed: unknown[] = [];
+    const done: string[] = [];
+    const port = await fleet(201, ADDED, []);
+    const locating = new Locating({ port: () => port, list: async () => void done.push("list"), landed: (one) => void landed.push(one) });
+    await locating.add("/Users/user/scratch");
+    expect(landed).toEqual([]);
+    await locating.clone("https://forge.invalid/owner/scratch.git", "/Users/user");
+    expect(done).toEqual(["list", "list"]);
+    expect(landed).toEqual([ADDED]);
+  });
+
+  it("reaches every window on the one state main publishes, and moves no pick", async () => {
+    const armada = { root: "/Users/user/armada", records_root: "/records/armada" };
+    const routes: Record<string, unknown> = {
+      "/repositories/clone": ADDED,
+      "/repositories": { repositories: [armada, ADDED] },
+      "/workflows": [],
+      "/manifests": [],
+      "/models": { choices: [] },
+    };
+    const server = createServer((request, response) => {
+      const body = routes[request.url ?? ""];
+      response.writeHead(body === undefined ? 404 : 200, { "content-type": "application/json" });
+      response.end(JSON.stringify(body ?? {}));
+    });
+    listening = server;
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const port = (server.address() as AddressInfo).port;
+
+    // Bridge opens on All repositories, so the person's pick is made, as the rail makes it.
+    const picked = new Picked();
+    picked.hold([armada]);
+    picked.pick(armada.root);
+    const published: Partial<BridgeState>[] = [];
+    const publish = (change: Partial<BridgeState>) => void published.push(change);
+    const reads = new RepositoryReads({
+      picked,
+      publish,
+      holds: () => NOTHING_YET.holds,
+      rehearsal: { onRepositoryMoved: async () => {} } as unknown as RehearsalConnection,
+      overview: new OverviewReads({ publish, picked, port: () => port }),
+      port: () => port,
+    });
+    await reads.locating.clone("https://forge.invalid/owner/scratch.git", "/Users/user");
+
+    const told = published.filter((change) => change.located !== undefined);
+    expect(told).toEqual([{ located: { repository: ADDED, at: expect.any(Number) } }]);
+    // Listed before it is told, so a window that opens its Setup finds it in the picker.
+    expect(published.findIndex((change) => change.holds !== undefined)).toBeLessThan(published.indexOf(told[0]!));
+    expect(published.filter((change) => "repository" in change).map((change) => change.repository)).toEqual([armada.root]);
   });
 });

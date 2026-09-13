@@ -228,20 +228,28 @@
   white-space: nowrap;
 }
 
-/* A table's headline cell holds the title and the handle on one line. A person
-   reads a Job by its handle (#884), so it never shrinks: the headline track's
-   floor is the handle, so a fourth fact gives way first and the title after. */
+/* A table's headline holds the title and the handle (#884). The handle sits beside the title only while
+   the whole title fits, else under it, and breaks at hyphens only where wider than the cell (#925). */
 .armada-job-row[data-view="table"] .armada-job-row__headline,
 .armada-job-row-list[data-view="table"] .armada-job-row__headline {
+  flex-wrap: wrap;
+  row-gap: calc(var(--space-1) / 2);
   overflow: hidden;
 }
 
 .armada-job-row[data-view="table"] .armada-job-row__title,
 .armada-job-row-list[data-view="table"] .armada-job-row__title {
-  /* No intrinsic width, so the floor is the handle's rather than the whole title's. */
-  contain: inline-size;
-  flex: 1 1 0;
+  /* The whole title is the basis, so a title that would truncate sends the handle to the next line. */
+  flex: 0 1 auto;
   min-width: 0;
+}
+
+.armada-job-row[data-view="table"] .armada-job-row__id,
+.armada-job-row-list[data-view="table"] .armada-job-row__id {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Line two: the labelled field run, on tracks shared down the list so it reads
@@ -269,7 +277,9 @@
   white-space: nowrap;
 }
 
-.armada-job-row__field > svg {
+/* The glyph outlasts the value, so a fact that gives way leaves its mark rather than a letter. */
+.armada-job-row__field > svg,
+.armada-job-row__field-body > svg {
   flex: none;
 }
 
@@ -466,10 +476,12 @@
      Composed from the two tracks it holds rather than restated, so a change to
      either reaches this. */
   --armada-track-progress: calc(var(--armada-track-bar) + var(--space-2) + var(--armada-track-step));
-  /* The table's tracks. The headline is the 1fr here, where in the card view
-     the slack sits before the action: on one line the title is what should
-     take the room, and the facts keep their measure beside it.
-     
+  /* The table's tracks. The headline is the 1fr, floored at 30% of the list
+     rather than a length, so the title stays readable and the floor narrows with
+     the window instead of pushing the action out (#925). The facts give way
+     first: origin to its glyph, progress to its bar, run time to its figure.
+
+
      **Two lists, because a reserved column that is always empty is the bug
      the row's own comments keep naming.** Every drawn track has a floor, and a
      floor a column never fills reads as a value that failed to load. So the
@@ -478,18 +490,17 @@
      has words but no carriage to Bridge, and four wherever it does. */
   --armada-job-table-tracks-3:
     minmax(var(--armada-track-badge), max-content)
-    minmax(min-content, 1fr)
-    minmax(var(--armada-track-origin), auto)
-    minmax(var(--armada-track-progress), auto)
-    minmax(var(--armada-track-time), auto)
+    minmax(30%, 1fr)
+    minmax(var(--space-3), auto)
+    minmax(var(--armada-track-bar), auto)
+    minmax(min-content, auto)
     max-content;
   --armada-job-table-tracks-4:
     minmax(var(--armada-track-badge), max-content)
-    minmax(min-content, 1fr)
-    minmax(var(--armada-track-origin), auto)
-    minmax(var(--armada-track-progress), auto)
-    minmax(var(--armada-track-time), auto)
-    /* No floor: the fourth fact is what gives way first, so the handle never does. */
+    minmax(30%, 1fr)
+    minmax(var(--space-3), auto)
+    minmax(var(--armada-track-bar), auto)
+    minmax(min-content, auto)
     minmax(0, auto)
     max-content;
   --armada-job-table-tracks: var(--armada-job-table-tracks-4);

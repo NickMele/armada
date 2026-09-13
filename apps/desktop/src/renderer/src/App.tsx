@@ -253,6 +253,7 @@ export function App() {
     onAdd: addRepository,
     onClone: cloneRepository,
     nothingServed: listed && repositories.length === 0,
+    landed: state.located,
     onLocated: (one) => {
       pickRepository(one.root);
       goTo(SURFACE.manifest);
