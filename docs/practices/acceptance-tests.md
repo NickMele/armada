@@ -111,10 +111,19 @@ M1's claim would stop being run for the length of Focus.
 > Why: a shipped claim that quietly stops being checked is the failure the gate
 > exists to prevent, arriving from the inside.
 
-So a test written before its code is written in vocabulary that exists, against
-behaviour that does not. Rule one goes red reporting a **failed assertion**
-rather than a broken build, which is the more precise of the two signals it
-already distinguishes — "it builds, and the claim it makes is not carried".
+So a test written before its code is written in vocabulary that exists, and it
+merges green.
+
+> **Rule.** No failing test is merged — a milestone's own test, written first,
+> included.
+> Why: rule one reads the same line whichever acceptance test fails, so a claim
+> left red on `main` by design hides a real break in every other milestone's.
+
+**It asserts what is carried, and states the rest.** A step of the claim that
+cannot be asserted yet is a row in the test's header naming the issue that
+carries it. The change that builds a step adds its assertion beside the code and
+takes the row out. Focus and Landing merged their tests red before this rule;
+neither is red now.
 
 **What that costs is stated rather than hidden.** A claim needing vocabulary
 that does not exist yet cannot be an assertion, so it is named in the test's own
@@ -122,10 +131,9 @@ header as a claim the file does not carry and why. `drone_per_step.rs` names
 three. That is weaker than a compiler error list, and the compiler error list is
 not available at this price.
 
-**And one gap reports at a time.** A panic ends a run, so a test whose
-assertions are in the order a Job meets them names the earliest unmet one. On
-Focus that is the order the milestone is built in, so each step landing moves
-the failure down the file rather than clearing it.
+**The header is the build order.** Its rows follow the order a person meets
+the claim, so the next row to take out is the next thing to build — and a green
+run always means every step asserted so far holds.
 
 ## What Board's test proves, and the layer it stops at
 

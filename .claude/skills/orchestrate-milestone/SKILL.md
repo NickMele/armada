@@ -109,7 +109,7 @@ All of it, every time:
 |---|---|
 | **Every Check `armada.yml` declares** | run the Checks, not the gate. `format` is one of them — `cargo fmt --all --check` — and a merge that skipped it left `main` failing a declared Check on 2 Sep, found by the next agent rather than by the merge |
 | The gating check passes | `cargo nextest run --workspace --exclude acceptance` |
-| The acceptance tests pass | separately; a milestone's own claim is red until the milestone lands, which is why it is written first |
+| The acceptance tests pass | separately, and read by test name — rule one's line is the same whichever one fails. **No failing test is merged**, a milestone's own included: a test written first asserts what is carried and names the rest in its header |
 | Both halves build | Bridge too, if it was touched |
 | `verify-foundations` is no worse | against a baseline off `main`, not against zero — a `missing:` the branch added blocks |
 | `verify-docs` is green | a stale `docs/OPEN.md` fails it |
