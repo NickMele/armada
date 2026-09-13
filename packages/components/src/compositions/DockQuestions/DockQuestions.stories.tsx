@@ -1,0 +1,117 @@
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
+
+import { DockQuestions, type DockQuestion } from "./DockQuestions";
+
+/**
+ * The questions zone of Helm's dock, drawn at the dock's own width on its sunken ground. One story
+ * per kind of question, and one with questions from two repositories.
+ */
+const meta: Meta<typeof DockQuestions> = {
+  title: "Compositions/Dock questions",
+  component: DockQuestions,
+  render: (args) => (
+    <div style={{ width: "var(--w-dock)", background: "var(--bg-sunken)", padding: "var(--space-4)" }}>
+      <DockQuestions {...args} />
+    </div>
+  ),
+};
+export default meta;
+
+type Story = StoryObj<typeof DockQuestions>;
+
+const droneQuestion: DockQuestion = {
+  id: "01M21BKVPW002DC0ATD1X9T0VF:drone",
+  repository: "armada",
+  job: "12",
+  title: "The drone count is wrong after a restart",
+  label: "The drone asked a question",
+  asked: "Should the count include drones that exited during the restart, or only those still running?",
+  waiting: "4m",
+  answers: [
+    { id: "Only running", label: "Only running", consequence: "Counts drones with a live process and nothing else." },
+    { id: "Include exited", label: "Include exited", consequence: "Keeps exited drones in the count until the next status move." },
+  ],
+  onAnswer: fn(),
+  onDiscuss: fn(),
+};
+
+const commandWaiting: DockQuestion = {
+  id: "01M21BKW3M0045T2Q8C1ZC7Q1R:command",
+  repository: "armada",
+  job: "14",
+  title: "Preserve job metadata during resource cleanup",
+  label: "The drone wants to run a command it was not given",
+  asked: <span className="mono">cargo nextest run -p store</span>,
+  waiting: "1m",
+  answers: [
+    { id: "allow_for_job", label: "Allow for this job", consequence: "The drone runs it now, and this job can run it again without asking." },
+    { id: "always_allow", label: "Always allow in this repository", consequence: "The drone runs it now, and every job against this repository can run it without asking." },
+    { id: "reject", label: "Reject", consequence: "The drone is told no, and the command does not run." },
+  ],
+  onAnswer: fn(),
+  onDiscuss: fn(),
+};
+
+const judgeRefusal: DockQuestion = {
+  id: "01M21BKX8H006A9RWZ3T0NQ4KD:judge",
+  repository: "shop-01",
+  job: "3",
+  title: "Checkout total ignores the discount code",
+  label: "Judge refused a criterion and is asking you",
+  asked: "Does the fix address the cause the note names?",
+  detail: "A customer with a valid code is still charged the full price.",
+  waiting: "22m",
+  answers: [
+    { id: "agree", label: "Agree with the refusal", consequence: "The step fails, as it would where the criterion is marked refuse." },
+    { id: "disagree_once", label: "Disagree, just this step", consequence: "The step advances. The next job is asked about this criterion again." },
+    { id: "disagree_always", label: "Always disagree", consequence: "The step advances, and no later job in this repository is asked about this criterion." },
+  ],
+  onAnswer: fn(),
+  onDiscuss: fn(),
+};
+
+/** A Drone's question offers its own two to four answers. */
+export const ADroneQuestion: Story = { args: { questions: [droneQuestion] } };
+
+/** A held command offers the three Armada answers Fleet sent. */
+export const ACommandWaiting: Story = { args: { questions: [commandWaiting] } };
+
+/** A Judge refusal offers agree, disagree once and disagree always. */
+export const AJudgeRefusal: Story = { args: { questions: [judgeRefusal] } };
+
+/**
+ * Two repositories, each Job number meaning something only beside its repository. Pressing an
+ * answer sends its wire name, and Discuss with Helm names the card it was pressed on.
+ */
+export const FromTwoRepositories: Story = {
+  args: { questions: [judgeRefusal, droneQuestion, commandWaiting] },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getAllByRole("article")).toHaveLength(3);
+    const refusal = canvas.getByRole("article", { name: /shop-01, job 3/ });
+    await expect(refusal).toBeVisible();
+    await expect(canvas.getByRole("article", { name: /armada, job 12/ })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Disagree, just this step" }));
+    await expect(args.questions[0]?.onAnswer).toHaveBeenCalledWith("disagree_once");
+    await expect(args.questions[2]?.onAnswer).not.toHaveBeenCalled();
+
+    await userEvent.click(canvas.getAllByRole("button", { name: "Discuss with Helm" })[1]!);
+    await expect(args.questions[1]?.onDiscuss).toHaveBeenCalledTimes(1);
+    await expect(args.questions[0]?.onDiscuss).not.toHaveBeenCalled();
+  },
+};
+
+/** Before answering from the dock is wired: the answers are drawn, off, and the card says where to answer. */
+export const AnswersNotWiredYet: Story = {
+  args: {
+    questions: [
+      { ...droneQuestion, onAnswer: undefined, onDiscuss: undefined, note: "Open job 12 to answer." },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Only running" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Discuss with Helm" })).toBeDisabled();
+    await expect(canvas.getByRole("note")).toHaveTextContent("Open job 12 to answer.");
+  },
+};

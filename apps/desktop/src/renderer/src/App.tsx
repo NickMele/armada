@@ -17,7 +17,7 @@
 // failure is on screen, and `palette.ts` for what the palette can reach.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ofPicked } from "@armada/screens";
+import { dockQuestionsOf, ofPicked } from "@armada/screens";
 import { Dialog, Textarea } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
@@ -417,6 +417,11 @@ export function App() {
   const all = pickedRepository === null && repositories.length > 0;
   // The Board's Jobs follow the pick. The status bar, the palette and held worktrees read every Job.
   const boardJobs = useMemo(() => ofPicked(state.jobs, pickedRepository), [state.jobs, pickedRepository]);
+  // Helm's dock lists every repository's questions, whatever the pick. Answering is #936, Helm #944.
+  const questions = useMemo(
+    () => dockQuestionsOf(state.questions, state.jobs, repositories, now),
+    [state.questions, state.jobs, repositories, now],
+  );
   const head = headOf({
     reading: reading !== null,
     composing,
@@ -451,6 +456,7 @@ export function App() {
         onAddRepository={locate.onOpen}
         jobs={state.jobs}
         boardJobs={boardJobs}
+        questions={questions}
         capacity={state.capacity}
         title={head?.title}
         summary={

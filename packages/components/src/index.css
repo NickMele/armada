@@ -244,3 +244,6 @@
 
 /* Overview's band of readings. */
 @import "./compositions/OverviewTile/OverviewTile.css";
+
+/* Questions waiting on a person, in Helm's dock. */
+@import "./compositions/DockQuestions/DockQuestions.css";

@@ -40,6 +40,7 @@ import type { ManifestReading } from "@armada/protocol";
 import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
 import type { CheckoutRunFollowed, CheckoutRunSheetRead, ManifestDriftRead } from "@armada/protocol";
 import type { DriftsRead, HealthRead } from "@armada/screens/src/overview-reads";
+import type { Outstanding } from "@armada/screens/src/outstanding";
 import { spoken } from "@armada/protocol";
 
 
@@ -348,6 +349,11 @@ export type BridgeState = {
    * `manifestDrift`, which is the Manifest surface's one. Overview's drift tile, held open by it.
    */
   drifts: DriftsRead;
+  /**
+   * Every question waiting on a person — a Drone's, a held command, a Judge refusal — from every
+   * repository Fleet serves, **whatever the rail picked**. Helm's dock draws them. `questions.ts`.
+   */
+  questions: Outstanding[];
 };
 
 /**
@@ -396,6 +402,7 @@ export const NOTHING_YET: BridgeState = {
   manifestDrift: { state: "none" },
   health: { state: "none" },
   drifts: { state: "none" },
+  questions: [],
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
