@@ -86,6 +86,10 @@ export class CheckoutSheetReader {
     this.asked += 1;
     const asked = this.asked;
     const path = this.picked.checkout("/manifest/run_sheet");
+    if (path === null) {
+      this.publish({ state: "failed", outcome: NOT_SET_UP });
+      return;
+    }
     const answer = await ask(port, "GET", path);
     // Nobody wants it any more, or a newer read was begun while this one was
     // in flight. Either way this answer is not the one to publish — including
@@ -211,6 +215,7 @@ export class CheckoutRunCommands {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
     const path = this.board.picked.checkout("/manifest/start_verify");
+    if (path === null) return NOT_SET_UP;
     const body: StartCheckoutVerify | undefined = workspace === undefined ? undefined : { workspace };
     const answer = await ask(port, "POST", path, body);
     if (answer.ok !== true) return answer.outcome;
@@ -225,6 +230,7 @@ export class CheckoutRunCommands {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
     const path = this.board.picked.checkout("/manifest/stop_run");
+    if (path === null) return NOT_SET_UP;
     const body: NamedRun = { id };
     const answer = await ask(port, "POST", path, body);
     if (answer.ok !== true) return answer.outcome;
@@ -327,6 +333,10 @@ export class CheckoutRunSocket {
       return;
     }
     const path = this.picked.checkout(`/manifest/runs/${encodeURIComponent(runId)}/observe`);
+    if (path === null) {
+      this.set({ state: "failed", runId, detail: "No repository is picked." });
+      return;
+    }
     this.set({ state: "opening", runId });
 
     const socket = new WebSocket(`ws://${HOST}:${port}${path}`);

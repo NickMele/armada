@@ -15,7 +15,7 @@ import type {
 } from "@armada/screens/src/setup-reads";
 
 import type { Picked } from "./picked";
-import { ask, type Answer } from "./request";
+import { ask, NOT_SET_UP, type Answer } from "./request";
 
 /** Declared in `crates/fleet/src/manifest_proposal/held.rs`. Matched, never minted. */
 const APPEARED = "fleet.manifest_appeared";
@@ -62,7 +62,9 @@ export class SetupCommands {
   async readScan(): Promise<RepositoryScanRead> {
     const port = this.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", this.picked.scan("/repository/scan"));
+    const path = this.picked.scan("/repository/scan");
+    if (path === null) return { ok: false, outcome: NOT_SET_UP };
+    const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, scan: answer.body as RepositoryScan };
   }
@@ -71,7 +73,9 @@ export class SetupCommands {
   async readProposals(): Promise<ManifestProposalsRead> {
     const port = this.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", this.picked.scan("/repository/proposals"));
+    const path = this.picked.scan("/repository/proposals");
+    if (path === null) return { ok: false, outcome: NOT_SET_UP };
+    const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, proposals: answer.body as ManifestProposals };
   }
@@ -80,14 +84,18 @@ export class SetupCommands {
   async edit(body: EditManifestProposal): Promise<ProposalAnswer> {
     const port = this.port();
     if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
-    return proposalAnswerOf(await ask(port, "POST", this.picked.scan("/repository/edit_proposal"), body));
+    const path = this.picked.scan("/repository/edit_proposal");
+    if (path === null) return { state: "failed", outcome: NOT_SET_UP };
+    return proposalAnswerOf(await ask(port, "POST", path, body));
   }
 
   /** Create `armada.yml` for one workspace. **Creates, never replaces**, and stages nothing. */
   async write(body: WriteManifestProposal): Promise<ProposalAnswer> {
     const port = this.port();
     if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
-    const answer = proposalAnswerOf(await ask(port, "POST", this.picked.scan("/repository/write_proposal"), body));
+    const path = this.picked.scan("/repository/write_proposal");
+    if (path === null) return { state: "failed", outcome: NOT_SET_UP };
+    const answer = proposalAnswerOf(await ask(port, "POST", path, body));
     // Awaited, so the sheet that wrote the root has this repository's Manifest to Verify when it redraws.
     if (answer.state === "took" && body.dir === ".") await this.written(port);
     return answer;

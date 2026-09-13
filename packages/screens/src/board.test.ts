@@ -67,8 +67,19 @@ describe("which Jobs the Board lists", () => {
     expect(ofPicked([ours, theirs], {})).toEqual([]);
   });
 
-  it("lists every Job when Fleet has listed no repository to pick", () => {
+  it("lists every repository's Jobs on All repositories, which is no one picked", () => {
     expect(ofPicked([ours, theirs], null)).toEqual([ours, theirs]);
+  });
+
+  it("keeps every Job on All, including one whose repository is no longer served", () => {
+    const orphan = job({ id: "01M130Y1380016YK5S0JXBXDQ7", owner_manifest_id: "gone" });
+    expect(ofPicked([ours, theirs, orphan], null)).toEqual([ours, theirs, orphan]);
+    expect(ofPicked([ours, theirs, orphan], { manifest: { id: "armada" } })).toEqual([ours]);
+  });
+
+  it("lists every Job when Fleet has listed no repository to pick", () => {
+    expect(ofPicked([], null)).toEqual([]);
+    expect(ofPicked([ours], null)).toEqual([ours]);
   });
 });
 
@@ -325,8 +336,8 @@ describe("the All tab's sections", () => {
 
 describe("a Board row's tasks", () => {
   it("names the Tasks column only where some row has a plan", () => {
-    expect(columnsFor([job()])).toEqual(BOARD_COLUMNS);
-    expect(columnsFor([job({ tasks: { done: 1, working: 1, open: 1, dropped: 0 } })])).toEqual([
+    expect(columnsFor([job()], null, false)).toEqual(BOARD_COLUMNS);
+    expect(columnsFor([job({ tasks: { done: 1, working: 1, open: 1, dropped: 0 } })], null, false)).toEqual([
       ...BOARD_COLUMNS,
       TASKS_COLUMN,
     ]);

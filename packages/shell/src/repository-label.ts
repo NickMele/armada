@@ -1,5 +1,5 @@
-// What a repository is called in the rail's picker.
-// No React, so a node test reaches it.
+// What a repository is called wherever Bridge names one: the rail's picker and, on All
+// repositories, a Board row. No React, so a node test reaches it.
 
 import type { RepositorySummary } from "@armada/protocol";
 
@@ -18,6 +18,12 @@ export function repositoryLabel(
   if (!alike.some((other) => folderOf(other.root) === folder)) return folder;
   const placed = placedOf(repository.root);
   return alike.some((other) => placedOf(other.root) === placed) ? repository.root : placed;
+}
+
+/** A Job's repository, by the Manifest id it carries. One no longer served reads as that id. */
+export function manifestLabel(manifestId: string, repositories: readonly RepositorySummary[]): string {
+  const served = repositories.find((one) => one.manifest?.id === manifestId);
+  return served === undefined ? manifestId : repositoryLabel(served, repositories);
 }
 
 function placedOf(root: string): string {

@@ -312,6 +312,8 @@ export function SetupFrom({
         listed
         scope={scope}
         onScope={(root) => {
+          // All repositories asks which Manifest in `App`; this story draws one repository's.
+          if (root === null) return;
           // `App`'s own rule: a repository nobody set up opens on Setup.
           const to = listed.find((one) => one.root === root)!;
           if (to.manifest === undefined) held.current = NO_ROOT_FILE;

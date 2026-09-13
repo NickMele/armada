@@ -353,7 +353,7 @@ const api: BridgeApi = {
   // Start a declared server, for this Job's worktree or, with no Job, the
   // main checkout — the capability the Manifest surface shares, which is why
   // `jobId` was optional here before that surface existed.
-  pickRepository: (root: string): Promise<void> => ipcRenderer.invoke(CHANNELS.pickRepository, root),
+  pickRepository: (root: string | null): Promise<void> => ipcRenderer.invoke(CHANNELS.pickRepository, root),
 
   // Locate: the OS folder dialog, a clone parent as Fleet will spell it, and a repository added or cloned.
   chooseFolder: (): Promise<string | null> => ipcRenderer.invoke(CHANNELS.chooseFolder),

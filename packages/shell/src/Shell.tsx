@@ -47,7 +47,7 @@ import type { Connection } from "@armada/protocol";
 import type { FleetCapacity, JobSummary } from "@armada/protocol";
 import type { RepositorySummary } from "@armada/protocol";
 import type { Statement } from "./fleet";
-import { repositoryLabel } from "./repository-label";
+import { ALL_REPOSITORIES, RepositoryOptions } from "./RepositoryOptions";
 import { ADMISSION_HOLD } from "@armada/components";
 import { SURFACE, SURFACES } from "./surfaces";
 
@@ -59,9 +59,10 @@ export type ShellProps = {
   repositories: readonly RepositorySummary[];
   /** Whether Fleet has answered the listing, so an empty one says nothing is set up rather than not read. */
   listed?: boolean;
-  /** The picked repository's root: what every per-repository read and act names. */
-  scope: string;
-  onScope: (root: string) => void;
+  /** The picked repository's root, or `null` for All repositories, which is where Bridge opens. */
+  scope: string | null;
+  /** A root, or `null` for All repositories. */
+  onScope: (root: string | null) => void;
   /** Opens Locate. Absent draws no control. */
   onAddRepository?: () => void;
   /** Every Job, for the bar's counts. They span every repository. */
@@ -110,11 +111,6 @@ export function Shell({
   children,
 }: ShellProps) {
   const collapsed = useNarrow();
-  const optionOf = (repository: RepositorySummary) => (
-    <option key={repository.root} value={repository.root} title={repository.root}>
-      {repositoryLabel(repository, repositories)}
-    </option>
-  );
 
   return (
     <TheShell
@@ -141,18 +137,19 @@ export function Shell({
         <>
         <Select
           aria-label="Project"
-          value={scope}
-          onChange={(event) => onScope(event.target.value)}
+          value={scope ?? ALL_REPOSITORIES}
+          onChange={(event) => onScope(event.target.value === ALL_REPOSITORIES ? null : event.target.value)}
           // A picker over what Fleet serves. Empty until the connection answers,
           // and the option says so rather than showing a blank control.
           disabled={repositories.length === 0}
         >
-          {repositories.length === 0 ? <option value="">{listed ? "Nothing set up yet" : "No repository read yet"}</option> : null}
-          {repositories.filter((one) => one.manifest !== undefined).map(optionOf)}
-          {/* A group rather than a suffix: the rail clips a long label, and picking one opens Setup. */}
-          {repositories.some((one) => one.manifest === undefined) ? (
-            <optgroup label="Not set up">{repositories.filter((one) => one.manifest === undefined).map(optionOf)}</optgroup>
-          ) : null}
+          {repositories.length === 0 ? (
+            <option value={ALL_REPOSITORIES}>{listed ? "Nothing set up yet" : "No repository read yet"}</option>
+          ) : (
+            // First, and where Bridge opens: the Board and Overview list every repository's Jobs.
+            <option value={ALL_REPOSITORIES}>All repositories</option>
+          )}
+          <RepositoryOptions repositories={repositories} />
         </Select>
         {/* Under the picker rather than in it: an option that opened a dialog would be a pick that picked nothing. */}
         {onAddRepository === undefined ? null : (

@@ -77,9 +77,11 @@
 // strip is still a breakdown of what is on screen — and a tab that empties
 // under a search renders no count rather than a `0`.
 
-import type { JobSummary, TaskCounts } from "@armada/protocol";
+import type { JobSummary, RepositorySummary, TaskCounts } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import type { TaskBarSegment } from "@armada/components";
+// The module, not the package: this file is arithmetic, tested in node, and the package draws.
+import { manifestLabel } from "@armada/shell/src/repository-label";
 import { needsYou, oldest, tabOf } from "./needs-you";
 import type { BoardTab } from "./needs-you";
 
@@ -131,8 +133,8 @@ export { needsYou, needsYouClause, oldest, tabOf } from "./needs-you";
 
 /**
  * The Jobs the Board lists: the picked repository's, by `owner_manifest_id`.
- * `null` is no pick at all, from a Fleet that lists no repositories, and scopes
- * nothing. A picked repository with no Manifest owns no Job yet.
+ * `null` is no one repository — All repositories, or a Fleet that lists none —
+ * and scopes nothing. A picked repository with no Manifest owns no Job yet.
  */
 export function ofPicked(
   jobs: readonly JobSummary[],
@@ -220,6 +222,29 @@ export const BOARD_SORTS: readonly { id: BoardSort; label: string }[] = [
 export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time"];
 
 /**
+ * Drawn only on All repositories where Fleet serves more than one. **Before Tasks**: every row
+ * carries it where it is drawn, so only the trailing Tasks cell is ever left blank.
+ */
+export const REPOSITORY_COLUMN = "Repository";
+
+/**
+ * Whether rows name their repository: on All, `all`, with more than one served. One picked
+ * says it for every row, and `null` is a listing not read yet.
+ */
+function naming(served: readonly RepositorySummary[] | null, all: boolean): served is readonly RepositorySummary[] {
+  return all && served !== null && served.length > 1;
+}
+
+/** A row's repository by the picker's label, or `undefined` where no row names one. */
+export function repositoryOf(
+  job: JobSummary,
+  served: readonly RepositorySummary[] | null,
+  all: boolean,
+): string | undefined {
+  return naming(served, all) ? manifestLabel(job.owner_manifest_id, served) : undefined;
+}
+
+/**
  * The fourth, drawn only where at least one row on the board has a plan.
  * `#898`. **Trailing, always** — appended after the three fixed columns, so
  * a row without a plan leaves the cell after it blank instead of shifting
@@ -227,9 +252,17 @@ export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time"];
  */
 export const TASKS_COLUMN = "Tasks";
 
-/** The Board's columns for what it holds. */
-export function columnsFor(jobs: readonly JobSummary[]): string[] {
-  return jobs.some((job) => job.tasks !== undefined) ? [...BOARD_COLUMNS, TASKS_COLUMN] : BOARD_COLUMNS;
+/** The Board's columns for what it holds, and for whether it is on All repositories. */
+export function columnsFor(
+  jobs: readonly JobSummary[],
+  served: readonly RepositorySummary[] | null,
+  all: boolean,
+): string[] {
+  return [
+    ...BOARD_COLUMNS,
+    ...(naming(served, all) ? [REPOSITORY_COLUMN] : []),
+    ...(jobs.some((job) => job.tasks !== undefined) ? [TASKS_COLUMN] : []),
+  ];
 }
 
 /**

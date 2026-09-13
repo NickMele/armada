@@ -46,12 +46,56 @@ const STOREFRONT: RepositorySummary = {
   manifest: { ...repository().manifest!, id: "storefront", repository: "storefront", path: "storefront/armada.yml" },
 };
 
-/** Two repositories served: the Board lists the picked one's Jobs, so no row or column names a repository. */
+/** Every drawn row, with the repository it names, if any, in either arrangement. */
+async function rowsNaming(canvasElement: HTMLElement, named: RegExp | null) {
+  const rows = [...canvasElement.querySelectorAll<HTMLElement>("[data-job-id]")];
+  await expect(rows.length).toBeGreaterThan(0);
+  for (const row of rows) {
+    // The handle and the status keep their places beside it.
+    await expect(row.querySelector(".armada-job-row__id")?.textContent).not.toBe("");
+    await expect(row.querySelector(".armada-job-row__badge")).not.toBeNull();
+    const values = [...row.querySelectorAll(".armada-job-row__field-value")].map((one) => one.textContent ?? "");
+    await expect(values.some((value) => named?.test(value) ?? /^(armada|storefront)$/.test(value))).toBe(named !== null);
+  }
+}
+
+/** Every Job, split between the two repositories. */
+const acrossTwo = () =>
+  boardJobs().map((job, at) => ({ ...job, owner_manifest_id: at % 2 === 0 ? "armada" : "storefront" }));
+
+/** Two repositories served, on All: every row names its own by the picker's label, as a card and in the table. */
 export const TwoRepositories: Story = {
   name: "Two repositories",
-  args: { repositories: [ARMADA, STOREFRONT] },
+  args: { jobs: acrossTwo(), repositories: [ARMADA, STOREFRONT] },
   play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelectorAll("[data-job-id]").length).toBeGreaterThan(0);
+    await expect(within(canvasElement).getByRole("combobox", { name: "Project" })).toHaveValue("");
+    await rowsNaming(canvasElement, /^(armada|storefront)$/);
+    await expect(within(canvasElement).getAllByText("Repository").length).toBeGreaterThan(0);
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Table" }));
+    await expect(canvasElement.querySelector(".armada-active-jobs__columns")?.textContent).toContain("Repository");
+    await rowsNaming(canvasElement, /^(armada|storefront)$/);
+  },
+};
+
+/** Two served, one picked: the Board lists its Jobs alone, so no row or column names a repository. */
+export const OnePicked: Story = {
+  name: "One picked",
+  args: { jobs: acrossTwo(), repositories: [ARMADA, STOREFRONT], picked: STOREFRONT.root },
+  play: async ({ canvasElement }) => {
+    await rowsNaming(canvasElement, null);
+    await expect(canvasElement.querySelectorAll("[data-job-id]").length).toBeLessThan(acrossTwo().length);
+    await expect(within(canvasElement).queryByText("Repository")).toBeNull();
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Table" }));
+    await expect(canvasElement.querySelector(".armada-active-jobs__columns")?.textContent).not.toContain("Repository");
+    await rowsNaming(canvasElement, null);
+  },
+};
+
+/** One repository served, on All: the Board looks as it always did, with no column saying one name down every row. */
+export const OneRepository: Story = {
+  name: "One repository",
+  play: async ({ canvasElement }) => {
+    await rowsNaming(canvasElement, null);
     await expect(within(canvasElement).queryByText("Repository")).toBeNull();
     await userEvent.click(within(canvasElement).getByRole("button", { name: "Table" }));
     await expect(canvasElement.querySelector(".armada-active-jobs__columns")?.textContent).not.toContain("Repository");
