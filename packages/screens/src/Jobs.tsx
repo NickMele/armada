@@ -75,9 +75,9 @@ import type { JobSummary, RepositorySummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { BoardEmpty } from "./BoardEmpty";
 import {
-  BOARD_COLUMNS,
   BOARD_SORTS,
   BOARD_TABS,
+  columnsFor,
   DEFAULT_SORT,
   emptiedBy,
   FIRST_TAB,
@@ -405,7 +405,7 @@ export function Jobs({
         selectable
         label="Job Board"
         view={view}
-        columns={BOARD_COLUMNS}
+        columns={columnsFor(jobs)}
         controls={
           <BoardControls
             query={query}
