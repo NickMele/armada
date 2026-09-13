@@ -58,8 +58,11 @@ where
     W::Error: std::error::Error + Send + Sync + 'static,
 {
     /// Write down the question this ruling opens. **Called once, from
-    /// `crate::dispatch::act_on`'s `Questioned` arm, after the step and the
-    /// Job have already moved.**
+    /// `crate::dispatch::act_on`'s `Questioned` arm, after the step has moved
+    /// but before the Job's move to `awaiting_review` is applied and
+    /// announced** — so a client that reacts to that announcement by
+    /// re-reading the Job always finds the question `get_job` would answer
+    /// with already on record.
     pub(crate) async fn asked_the_judge_question(
         &self,
         job: &Job,
