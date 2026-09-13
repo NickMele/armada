@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::event::Missed;
-use crate::ids::{Instant, JobId};
+use crate::ids::{Instant, JobId, ManifestId};
 use crate::underway::{OutputClosed, OutputLines};
 use crate::version::ProtocolVersion;
 
@@ -61,6 +61,11 @@ pub struct ServerState {
     /// Absent: started with no Job, in the main checkout, on its span.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub job_id: Option<JobId>,
+    /// The repository it runs in, by its Manifest — a Job's own, or the main
+    /// checkout's. What tells two repositories' main-checkout servers apart.
+    /// Absent only from a Fleet that predates it. **Since 13.17.**
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest_id: Option<ManifestId>,
     pub phase: ServerPhase,
     /// The `serve` line as it ran, `${port.NAME}` resolved.
     pub serve: String,
@@ -98,7 +103,9 @@ pub struct ServerList {
 }
 
 /// `start_server`'s body. **A name, never a command line and never a port**:
-/// what runs is what the Manifest declares, on the span it runs under.
+/// what runs is what the Manifest declares, on the span it runs under. Which
+/// repository's main checkout is `?manifest_id=`, as on every checkout route;
+/// a Job's repository is the Job's own.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartServer {
     pub name: String,

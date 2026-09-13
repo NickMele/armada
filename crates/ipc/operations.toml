@@ -1787,6 +1787,8 @@ description = "Every server Fleet holds — each Job's and the main checkout's �
 notes = """
 **In Fleet's memory and nowhere else.** A server is true only while the process holding it lives, so there is no table: a Fleet that restarts holds none, having stopped every one it held on the way out — or, after a crash, ended what it left behind when it next starts. The last instance of each that ended is kept beside the live ones, so a server that fell over is still there to read — with its exit code and its log — until it is started again or its Job ends.
 
+**Every repository's, each naming its own.** A row's `manifest_id` is the repository it runs in — a Job's own, or the main checkout's — so two repositories' main-checkout servers are told apart on the row.
+
 `agent_access` is `Yes` since `#697`. `start_server` and `stop_server` have read `Yes` since `#695`; a caller that may start one and may not ask which are up starts a second on the same port, which is the mistake the server tool exists to replace. It is a handful of rows and carries no output — that is `observe_server`'s, and stays Bridge's.
 """
 
@@ -1796,7 +1798,7 @@ transport = "HTTP"
 agent_access = "Yes"
 description = "Start a server the Manifest declares, for a Job or for the main checkout — or be handed the one already running"
 notes = """
-**A name, never a command line and never a port.** What runs is the Manifest's `run` then `serve`, with `${port.NAME}` resolved from the span it runs under: the Job's, or the main checkout's where the body names no Job. `serve` starts only if `run` exits zero, and the instance is `serving` once `ready` exits zero — polled, never a duration — or at once where there is no `ready`.
+**A name, never a command line and never a port.** What runs is the Manifest's `run` then `serve`, with `${port.NAME}` resolved from the span it runs under: the Job's, or the main checkout's where the body names no Job. Which repository's main checkout is `?manifest_id=`, the one Fleet was started in where absent; a Job's is the Job's own. `serve` starts only if `run` exits zero, and the instance is `serving` once `ready` exits zero — polled, never a duration — or at once where there is no `ready`.
 
 **One instance per Job per server.** A second request, from a person or through a Drone's `start_server` tool, is answered with the instance already starting or serving rather than a second one on the same port.
 

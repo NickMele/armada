@@ -4,8 +4,8 @@ use core_model::Timestamp;
 
 use crate::mcp::{answer, read, Answered, Incoming, ServerReport, SERVER_TOOL};
 use crate::{
-    decode, encode, Cursor, Delivered, Event, Instant, JobId, ServerLink, ServerPhase, ServerPort,
-    ServerState, StartServer, StartedBy, StreamMessage,
+    decode, encode, Cursor, Delivered, Event, Instant, JobId, ManifestId, ServerLink, ServerPhase,
+    ServerPort, ServerState, StartServer, StartedBy, StreamMessage,
 };
 
 fn at(text: &str) -> Instant {
@@ -17,6 +17,7 @@ fn serving() -> ServerState {
         id: "01SERVER".to_string(),
         name: "storybook".to_string(),
         job_id: Some(JobId::carried("01JOB")),
+        manifest_id: Some(ManifestId::carried("01MF")),
         phase: ServerPhase::Serving,
         serve: "storybook dev -p 41207".to_string(),
         ports: vec![ServerPort {
@@ -50,6 +51,7 @@ fn the_three_lifecycle_kinds_carry_the_instance_whole() {
     assert!(spelled.contains(r#""kind":"server.serving""#), "{spelled}");
     assert!(spelled.contains(r#""phase":"serving""#), "{spelled}");
     assert!(spelled.contains(r#""started_by":"person""#), "{spelled}");
+    assert!(spelled.contains(r#""manifest_id":"01MF""#), "{spelled}");
     let back: StreamMessage = decode("a stream message", spelled.as_bytes()).expect("reads");
     assert!(matches!(
         back,
@@ -63,6 +65,16 @@ fn the_three_lifecycle_kinds_carry_the_instance_whole() {
     let spelled = encode(&Event::ServerStarting(main_checkout)).expect("plain data");
     assert!(spelled.contains(r#""kind":"server.starting""#), "{spelled}");
     assert!(!spelled.contains("job_id"), "{spelled}");
+
+    // A Fleet that predates the repository says none, and still reads.
+    let unnamed = ServerState {
+        manifest_id: None,
+        ..serving()
+    };
+    let spelled = encode(&unnamed).expect("plain data");
+    assert!(!spelled.contains("manifest_id"), "{spelled}");
+    let back: ServerState = decode("a server", spelled.as_bytes()).expect("reads");
+    assert_eq!(back, unnamed);
 }
 
 /// The body names a server and, optionally, a Job. **No port field exists to

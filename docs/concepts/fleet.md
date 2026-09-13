@@ -79,7 +79,9 @@ Process-group semantics differ across platforms, and where that difference belon
 
 **Restart and adding reconcile the same way.** Fleet remembers every repository it serves, serves them again on restart before reconciling, and reconciles each over its own Jobs. A remembered folder that is gone is said and stays remembered; a Job whose repository is not served is left as it stands, and is reconciled when that repository is added.
 
-**What stays Fleet-wide:** the concurrency cap and headroom, the store, the listener, and one Verify at a time.
+**Each repository's main checkout is held apart.** A Verify is kept per repository, so each run sheet shows its own, and one underway refuses runs in that checkout only; two repositories Verify at once. A server names the repository it runs in, by its Manifest id.
+
+**What stays Fleet-wide:** the concurrency cap and headroom, the store, and the listener.
 
 ## Scheduling and gating
 
@@ -321,7 +323,7 @@ Fleet holds a Manifest's server Commands — the ones with `serve`, which [Manif
 > **Rule.** A Job's servers are stopped when the Job ends, before its span is released.
 > Why: release is gated on teardown, and a server is an in-tree process the group kill reaches.
 
-A server started with no Job runs in the main checkout and uses its span. It stops on Stop, when it exits, or when Fleet stops; the span itself is released only when Fleet stops, after teardown.
+A server started with no Job runs in the main checkout of the repository `?manifest_id=` names, and uses that checkout's span. It stops on Stop, when it exits, or when Fleet stops; the span itself is released only when Fleet stops, after teardown.
 
 **Fleet holds its servers in memory, so a Job's servers stop when Fleet stops too.** A restarted Fleet holds none, and a server that outlived the process holding it would keep its port with nothing left to hand it to the next Drone or stop it with the Job. Beside each running server's log Fleet keeps a record of its process group, removed when the server stops.
 

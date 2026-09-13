@@ -33,6 +33,7 @@ mod briefing;
 mod capacity;
 mod checking;
 mod checkout_runs;
+mod checkouts_apart;
 mod checks;
 mod cloning;
 mod concurrency;

@@ -23,7 +23,7 @@ type Stopping = (Arc<watch::Sender<bool>>, watch::Receiver<Option<Record>>);
 #[derive(Clone, Default)]
 pub(crate) struct Rehearsals {
     out: Arc<Mutex<BTreeMap<Owner, InFlight>>>,
-    /// The checkout's latest Verify. Here rather than on `Fleet`: it is this
+    /// Each repository's latest Verify. Here rather than on `Fleet`: it is this
     /// one-run-at-a-time state, one sequence up — `super::verifying`.
     verifies: Verifies,
 }
