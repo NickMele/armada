@@ -250,6 +250,11 @@ pub enum PlanRefused {
     NoSuchPlace {
         named: TaskId,
     },
+    /// A move out of `dropped`. A dropped task stays dropped; the work comes
+    /// back only as a new task, which is a person's add.
+    StaysDropped {
+        named: TaskId,
+    },
 }
 
 impl fmt::Display for PlanRefused {
@@ -259,6 +264,12 @@ impl fmt::Display for PlanRefused {
             PlanRefused::NoSuchTask { named } => write!(out, "the plan holds no task {named}"),
             PlanRefused::NoSuchPlace { named } => {
                 write!(out, "the plan holds no task {named} to add after")
+            }
+            PlanRefused::StaysDropped { named } => {
+                write!(
+                    out,
+                    "task {named} was dropped, and a dropped task stays dropped"
+                )
             }
         }
     }
@@ -375,6 +386,11 @@ impl WorkPlan {
                 let at = plan
                     .position(*task)
                     .ok_or(PlanRefused::NoSuchTask { named: *task })?;
+                // A new reason on a dropped task is not a move out of it.
+                if plan.tasks[at].state() == TaskState::Dropped && to.state() != TaskState::Dropped
+                {
+                    return Err(PlanRefused::StaysDropped { named: *task });
+                }
                 plan.tasks[at].state = to.clone();
             }
         }

@@ -76,6 +76,12 @@ impl fmt::Display for NotPlanned {
                 "the plan holds no task {named} to add after. Name one of its ids, or send \
                  \"\" to add it at the end"
             ),
+            NotPlanned::Refused(PlanRefused::StaysDropped { named }) => write!(
+                out,
+                "task {named} was dropped, and a dropped task stays dropped. If the work \
+                 is needed after all, say so in `not_claimed` when you submit; a person \
+                 can add it back as a new task. {CARRY_ON}"
+            ),
             NotPlanned::NotKept(why) => write!(
                 out,
                 "the change could not be written down ({why}). It is not yours to fix. \

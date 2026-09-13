@@ -15,8 +15,9 @@ use std::time::Duration;
 use adapter_traits::{Environment, Footprint, Model, Vcs, Worktree, WorktreeSpec};
 use core_model::{
     AdvanceGate, Attempt, EvidenceType, Facts, FrozenWorkflow, Job, JobId, JobNumber, ManifestId,
-    ModelName, NewJob, PlanAuthor, PlanEntry, ResolvedCheck, ResolvedStep, StepId, StepSeed,
-    TaskCounts, Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WhenRefused, WorkPlan, WorkflowId,
+    ModelName, NewJob, PlanAuthor, PlanEntry, PlanRefused, ResolvedCheck, ResolvedStep, StepId,
+    StepSeed, TaskCounts, Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WhenRefused, WorkPlan,
+    WorkflowId,
 };
 use fleet::{
     rule_on, Asked, AtStep, CheckBudget, JudgeBudget, Judging, Keeping, Marking, Policies, Ruling,
@@ -146,6 +147,25 @@ impl Planned {
             at: at(self.history.len() + 1),
         });
         self.plan().expect("a plan")
+    }
+
+    /// What the plan as it stands says to one more call, **without keeping it** —
+    /// `store` judges a change inside the write, and a refused one writes nothing.
+    pub fn judged(
+        &self,
+        call: PlanCall,
+        step: &str,
+        attempt: u32,
+    ) -> Result<WorkPlan, PlanRefused> {
+        let entry = PlanEntry {
+            change: call.change,
+            by: PlanAuthor::Step {
+                step_id: StepId::new(step),
+                attempt: Attempt::stored(attempt).expect("one-based"),
+            },
+            at: at(self.history.len() + 1),
+        };
+        WorkPlan::after(self.plan().as_ref(), &entry)
     }
 
     pub fn plan(&self) -> Option<WorkPlan> {

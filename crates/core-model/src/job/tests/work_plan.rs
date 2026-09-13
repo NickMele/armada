@@ -204,3 +204,34 @@ fn a_task_id_reads_only_its_own_spelling() {
     assert!(NewTask::new("   ", "detail").is_none());
     assert!(Approach::new("").is_none());
 }
+
+/// A done task may go back to work; a dropped one stays dropped. The work comes
+/// back only as a new task, and the history keeps every move made before.
+#[test]
+fn a_done_task_may_be_reopened_and_a_dropped_one_stays_dropped() {
+    let reason = || crate::DropReason::new("covered by T1").expect("a reason");
+    let plan = WorkPlan::fold(&[
+        recorded(&["one", "two"]),
+        updated("T1", TaskUpdate::Done),
+        updated("T1", TaskUpdate::Working),
+        updated("T2", TaskUpdate::Dropped(reason())),
+        updated("T2", TaskUpdate::Dropped(reason())),
+    ])
+    .expect("reopening a done task and re-dropping a dropped one both replay")
+    .expect("a plan");
+    assert_eq!(
+        states(&plan),
+        [
+            ("T1".to_string(), TaskState::Working),
+            ("T2".to_string(), TaskState::Dropped)
+        ]
+    );
+    for to in [TaskUpdate::Open, TaskUpdate::Working, TaskUpdate::Done] {
+        assert_eq!(
+            WorkPlan::after(Some(&plan), &updated("T2", to)),
+            Err(PlanRefused::StaysDropped {
+                named: TaskId::read("T2").expect("an id")
+            })
+        );
+    }
+}

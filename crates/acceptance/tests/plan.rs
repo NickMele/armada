@@ -135,6 +135,19 @@ fn implement_completes_two_tasks_and_drops_one_with_a_reason() {
     );
     assert_eq!(plan.tasks[3].state.as_wire(), "open");
 
+    // A done task may be reopened; a dropped one stays dropped, and says so.
+    let reopened = r#"{"task":"T1","state":"working","reason":""}"#;
+    assert!(planned
+        .judged(called("update_task", reopened), IMPLEMENT, 1)
+        .is_ok());
+    let undropped = r#"{"task":"T3","state":"open","reason":""}"#;
+    assert_eq!(
+        planned.judged(called("update_task", undropped), IMPLEMENT, 1),
+        Err(core_model::PlanRefused::StaysDropped {
+            named: core_model::TaskId::read("T3").expect("an id")
+        })
+    );
+
     let event = Event::JobPlanChanged(JobPlanChanged {
         job_id: planned.job.id().into(),
         tasks,
