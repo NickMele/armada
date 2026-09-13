@@ -152,7 +152,17 @@ pub trait Queries: Send + Sync + 'static {
     /// **The roster, not the Jobs.** An escalated Job keeps its Drone alive and
     /// idle so a redirect costs no respawn, so a list derived from statuses
     /// would omit exactly the Drone somebody is asking about.
-    fn list_drones(&self) -> impl Future<Output = Result<DroneList, Refusal>> + Send;
+    fn list_drones(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<DroneList, Refusal>> + Send;
+
+    /// Every Job `manifest_id` owns, by id. **Not an operation**, [`Queries::scope`]'s
+    /// shape: what `get_events_since` counts a scoped caller against.
+    fn owned_jobs(
+        &self,
+        manifest_id: ManifestId,
+    ) -> impl Future<Output = Result<Vec<ipc::JobId>, Refusal>> + Send;
 
     /// `get_drone` — one Drone, what it declared, and a window of its own rows.
     ///
@@ -604,7 +614,10 @@ pub trait Queries: Send + Sync + 'static {
     /// **A piloted Job's worktree is not in the answer** — `#367`. It is
     /// dropped where the rule lives rather than hidden by a client, because an
     /// act that is drawn is an act somebody eventually clicks.
-    fn list_worktrees(&self) -> impl Future<Output = Result<WorktreesHeld, Refusal>> + Send;
+    fn list_worktrees(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<WorktreesHeld, Refusal>> + Send;
 
     /// `observe_job` — one Job's turns, the history and then the live ones.
     ///
@@ -734,7 +747,10 @@ pub trait Queries: Send + Sync + 'static {
 
     /// `list_servers` — every server Fleet holds, a Job's and the main
     /// checkout's, and the last instance of each that ended.
-    fn list_servers(&self) -> impl Future<Output = Result<ipc::ServerList, Refusal>> + Send;
+    fn list_servers(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<ipc::ServerList, Refusal>> + Send;
 
     /// `observe_server` — one server's output on a socket of its own, for
     /// [`Queries::observe_run`]'s reasons. [`Refusal::Unacceptable`] where

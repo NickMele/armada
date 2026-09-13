@@ -84,12 +84,9 @@ where
             let owner = self.names().owner_of(&found.job_id);
             if owner.as_deref() != Some(manifest_id.as_str()) {
                 return Err(
-                    self.refusal(Adrift::Unresolvable(ResolveJobError::NoSuchJob {
-                        named: format!(
-                        "{named}` in Manifest `{}` — it belongs to another repository, and this \
-                         session answers only about the one it stands in",
-                        manifest_id.as_str()
-                    ),
+                    self.refusal(Adrift::Unresolvable(ResolveJobError::ElsewhereOwned {
+                        named,
+                        within: manifest_id.as_str().to_string(),
                     })),
                 );
             }
@@ -156,8 +153,12 @@ where
     }
 
     /// The roster, read without taking a working slot — `crate::rostered`.
-    async fn list_drones(&self) -> Result<DroneList, Refusal> {
-        self.drone_list().await
+    async fn list_drones(&self, manifest_id: Option<ManifestId>) -> Result<DroneList, Refusal> {
+        self.drones_within(manifest_id).await
+    }
+
+    async fn owned_jobs(&self, manifest_id: ManifestId) -> Result<Vec<JobId>, Refusal> {
+        self.jobs_owned_by(manifest_id)
     }
 
     async fn get_drone(&self, drone_id: DroneId) -> Result<DroneDetail, Refusal> {
@@ -719,8 +720,11 @@ where
     }
 
     /// Every server Fleet holds — `crate::servers`.
-    async fn list_servers(&self) -> Result<ipc::ServerList, Refusal> {
-        Ok(self.server_list())
+    async fn list_servers(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> Result<ipc::ServerList, Refusal> {
+        self.servers_within(manifest_id)
     }
 
     async fn observe_server(&self, server_id: String) -> Result<api::ObservedServer, Refusal> {
@@ -780,17 +784,21 @@ where
     /// **The one thing dropped is a piloted Job's checkout**, and it is dropped
     /// through `Holding::offerable` rather than by matching a status here —
     /// `#367`, and the predicate belongs beside the tests it reads.
-    async fn list_worktrees(&self) -> Result<WorktreesHeld, Refusal> {
+    async fn list_worktrees(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> Result<WorktreesHeld, Refusal> {
         let holding = Fleet::worktrees_held(self)
             .await
             .map_err(|why| self.refusal(why))?;
-        Ok(WorktreesHeld {
+        let held = WorktreesHeld {
             worktrees: holding
                 .iter()
                 .filter(|one| one.offerable())
                 .map(worktree_held)
                 .collect(),
-        })
+        };
+        self.worktrees_within(held, manifest_id)
     }
 
     /// Every report filed, newest first, with the counts they are read beside.

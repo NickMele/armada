@@ -107,6 +107,11 @@ pub fn door_within(manifest_id: &str) -> String {
 /// The routes that read `?manifest_id=` and, absent it, answer about every
 /// repository or the first. The door always names its scope on these.
 const NAMES_ITS_SCOPE: &[&str] = &[
+    "get_events_since",
+    "list_drones",
+    "list_worktrees",
+    "list_servers",
+    "propose_from_request",
     "list_jobs",
     "list_job_board",
     "list_reviews",
@@ -219,9 +224,12 @@ async fn called<D: Queries + Admitting>(
                 id,
                 why: reach.refusing(call.operation),
             },
-            (Ok(scope), _) => Answered::Served {
-                id,
-                answer: doorway.through(&call, helm.is_some(), &scope).await,
+            (Ok(scope), _) => match within_scope(&call, &scope) {
+                Ok(call) => Answered::Served {
+                    id,
+                    answer: doorway.through(&call, helm.is_some(), &scope).await,
+                },
+                Err(why) => Answered::Refused { id, why },
             },
         },
     };
@@ -314,17 +322,45 @@ impl<D: Queries> Doorway<D> {
     }
 }
 
-/// The call's path, with the session's Manifest named where the route reads one.
+/// The call as the session's scope allows it: refused where it names another
+/// Manifest, and a proposal's owner taken from the scope.
+fn within_scope(call: &door::Call, scope: &Scope) -> Result<door::Call, String> {
+    if let Some(named) = call
+        .manifest_id
+        .as_deref()
+        .filter(|named| *named != scope.named())
+    {
+        return Err(format!(
+            "this session is answered only about Manifest `{}`, the one it stands in, and \
+             `{}` named `{named}`",
+            scope.named(),
+            call.operation
+        ));
+    }
+    let mut call = call.clone();
+    if call.operation == "propose_job" {
+        call.body = Some(door::owned_by(
+            call.body.as_deref().unwrap_or("{}"),
+            scope.named(),
+        )?);
+    }
+    Ok(call)
+}
+
+/// The call's path, with the session's Manifest named where the route reads
+/// one. **Replaced, never appended beside another.**
 fn scoped_path(call: &door::Call, scope: &Scope) -> String {
     if !NAMES_ITS_SCOPE.contains(&call.operation) {
         return call.path.clone();
     }
-    let joined = if call.path.contains('?') { '&' } else { '?' };
-    format!(
-        "{}{joined}manifest_id={}",
-        call.path,
-        door::encoded(scope.named())
-    )
+    let (path, query) = call.path.split_once('?').unwrap_or((&call.path, ""));
+    let mut pairs: Vec<String> = query
+        .split('&')
+        .filter(|pair| !pair.is_empty() && !pair.starts_with("manifest_id="))
+        .map(str::to_string)
+        .collect();
+    pairs.push(format!("manifest_id={}", door::encoded(scope.named())));
+    format!("{path}?{}", pairs.join("&"))
 }
 
 /// The most a surface answer may weigh before the door stops reading it.

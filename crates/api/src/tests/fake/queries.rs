@@ -87,6 +87,20 @@ impl FakeDaemon {
     }
 }
 
+impl FakeDaemon {
+    /// Whether a Job the fake holds belongs to `within`; everything does where
+    /// none is named.
+    fn owns(&self, within: Option<&ManifestId>, job_id: &JobId) -> bool {
+        within.is_none_or(|named| {
+            self.jobs
+                .lock()
+                .expect("not poisoned")
+                .iter()
+                .any(|job| &job.id == job_id && &job.owner_manifest_id == named)
+        })
+    }
+}
+
 impl Queries for FakeDaemon {
     /// **The three forms, against the summaries the fake is holding.** A real
     /// daemon asks the store; this asks the list, which is the same three
@@ -185,13 +199,26 @@ impl Queries for FakeDaemon {
         Ok(shapes::alerts())
     }
 
-    async fn list_drones(&self) -> Result<DroneList, Refusal> {
+    async fn list_drones(&self, manifest_id: Option<ManifestId>) -> Result<DroneList, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
         Ok(DroneList {
-            drones: vec![shapes::drone()],
+            drones: vec![shapes::drone()]
+                .into_iter()
+                .filter(|drone| self.owns(manifest_id.as_ref(), &drone.job_id))
+                .collect(),
         })
+    }
+
+    async fn owned_jobs(&self, manifest_id: ManifestId) -> Result<Vec<JobId>, Refusal> {
+        let manifest_id = self.scope(Some(manifest_id)).await?;
+        let jobs = self.jobs.lock().expect("not poisoned");
+        Ok(jobs
+            .iter()
+            .filter(|job| job.owner_manifest_id == manifest_id)
+            .map(|job| job.id.clone())
+            .collect())
     }
 
     /// **The refusal is what matters**: an id naming no live Drone is a 404,
@@ -557,7 +584,10 @@ impl Queries for FakeDaemon {
 
     /// **The fake holds no server**, so the list is empty and every id names
     /// nothing. What holding one means is `fleet::servers`', tested there.
-    async fn list_servers(&self) -> Result<ipc::ServerList, Refusal> {
+    async fn list_servers(
+        &self,
+        _manifest_id: Option<ManifestId>,
+    ) -> Result<ipc::ServerList, Refusal> {
         Ok(ipc::ServerList {
             servers: Vec::new(),
         })
@@ -642,9 +672,16 @@ impl Queries for FakeDaemon {
         Ok(shapes::models())
     }
 
-    async fn list_worktrees(&self) -> Result<WorktreesHeld, Refusal> {
+    async fn list_worktrees(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> Result<WorktreesHeld, Refusal> {
+        let held = self.held.lock().expect("not poisoned").clone();
         Ok(WorktreesHeld {
-            worktrees: self.held.lock().expect("not poisoned").clone(),
+            worktrees: held
+                .into_iter()
+                .filter(|one| self.owns(manifest_id.as_ref(), &one.job_id))
+                .collect(),
         })
     }
 

@@ -84,6 +84,9 @@ pub struct Call {
     pub path: String,
     /// The JSON body, on a command. `None` on a read.
     pub body: Option<String>,
+    /// The Manifest the call's arguments named, as a segment or not. A door
+    /// scoped to one compares it rather than letting a route choose.
+    pub manifest_id: Option<String>,
 }
 
 /// One message read off the door.
@@ -304,7 +307,32 @@ fn requested(shape: &Shape, arguments: &Map<String, Value>) -> Result<Call, Stri
         method: shape.method,
         path,
         body,
+        manifest_id: arguments.get("manifest_id").and_then(said),
     })
+}
+
+/// A proposal's body with its owner set to `manifest_id`, or the sentence
+/// refusing one that names another. **The one body this door rewrites.**
+pub fn owned_by(body: &str, manifest_id: &str) -> Result<String, String> {
+    let mut value: Value =
+        serde_json::from_str(body).map_err(|why| format!("that body is not JSON: {why}"))?;
+    let Some(fields) = value.as_object_mut() else {
+        return Err(String::from("that body is not a JSON object"));
+    };
+    match fields.get("owner_manifest_id").and_then(Value::as_str) {
+        Some(named) if named != manifest_id => {
+            return Err(format!(
+                "this session is answered only about Manifest `{manifest_id}`, the one it \
+                 stands in, and that proposal names `{named}`. Leave `owner_manifest_id` out"
+            ))
+        }
+        _ => {}
+    }
+    fields.insert(
+        "owner_manifest_id".to_string(),
+        Value::String(manifest_id.to_string()),
+    );
+    encode(&value).map_err(|why| why.to_string())
 }
 
 /// One argument as text. A number or a boolean is taken as written, because a

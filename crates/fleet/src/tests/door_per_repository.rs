@@ -2,7 +2,10 @@
 //! answered about the one it stands in, and refused one Fleet does not serve.
 //! `#987`.
 
+use std::future::Future;
+use std::net::SocketAddr;
 use std::path::Path;
+use std::pin::Pin;
 use std::process::Command;
 use std::sync::Arc;
 
@@ -15,13 +18,33 @@ use testkit::FakeWorkProduct;
 use tower::ServiceExt;
 
 use crate::daemon::Fleet;
+use crate::helm::{Carry, Carrying, Heard, Hosting};
 use crate::repositories::{Located, SetUp};
 use crate::tests::daemon::fittings;
 use crate::tests::http::call;
+use crate::tests::peer::Placing;
 use crate::tests::tmp::TempDir;
 
 const FIRST: &str = "01FIXTUREMANIFEST";
 const SECOND: &str = "01SECONDMANIFEST";
+
+/// A Helm session's pid and the port its relay calls from: `propose_job` is
+/// offered to that session alone.
+const SESSION: u32 = 4242;
+const RELAY: u16 = 52000;
+
+/// A host whose one session is running, and never answers.
+struct Running;
+
+impl Hosting for Running {
+    fn carry<'a>(&'a self, _carry: Carry, _heard: &'a dyn Heard) -> Carrying<'a> {
+        Box::pin(std::future::pending()) as Pin<Box<dyn Future<Output = _> + Send>>
+    }
+
+    fn running(&self) -> Vec<u32> {
+        vec![SESSION]
+    }
+}
 
 fn committed(at: &Path, text: &str) {
     let git = |args: &[&str]| {
@@ -54,7 +77,11 @@ fn two_repositories(home: &TempDir) -> Router {
     fittings.starting().manifest =
         config::Manifest::parse(Path::new("armada.yml"), &first_text).expect("the first loads");
     let workflows = fittings.starting().workflows.clone();
-    let fleet = Arc::new(Fleet::assembled(fittings));
+    let peers = Placing::nothing();
+    peers.holding(SESSION + 1, RELAY, fittings.host.port);
+    peers.started(SESSION, SESSION + 1);
+    fittings.peers = peers;
+    let fleet = Arc::new(Fleet::assembled(fittings).hosting_helm_on(Arc::new(Running)));
     let root = home.path().join("second");
     let second_text = format!("version: 1\nid: {SECOND}\n");
     committed(&root, &second_text);
@@ -93,10 +120,24 @@ async fn proposed(app: &Router, manifest_id: &str, title: &str) -> ipc::JobSumma
 }
 
 async fn standing_in(app: &Router, manifest_id: &str, body: &str) -> String {
-    let request = Request::builder()
+    through(app, manifest_id, body, None).await
+}
+
+/// The same call from the Helm session's relay.
+async fn helm_standing_in(app: &Router, manifest_id: &str, body: &str) -> String {
+    through(app, manifest_id, body, Some(RELAY)).await
+}
+
+async fn through(app: &Router, manifest_id: &str, body: &str, port: Option<u16>) -> String {
+    let mut request = Request::builder()
         .method("POST")
         .uri(api::door_within(manifest_id))
-        .header("content-type", "application/json")
+        .header("content-type", "application/json");
+    if let Some(port) = port {
+        let peer: SocketAddr = format!("127.0.0.1:{port}").parse().expect("an address");
+        request = request.extension(axum::extract::ConnectInfo(peer));
+    }
+    let request = request
         .body(Body::from(body.to_string()))
         .expect("a well-formed request");
     let response = app.clone().oneshot(request).await.expect("an answer");
@@ -146,6 +187,10 @@ async fn a_session_standing_in_the_second_repository_is_answered_about_the_secon
     .await;
     assert!(theirs.contains("\"isError\":true"), "{theirs}");
     assert!(theirs.contains("belongs to another repository"), "{theirs}");
+    assert!(
+        theirs.contains("fleet.job_in_another_repository"),
+        "the ElsewhereOwned refusal, by its own code: {theirs}"
+    );
 
     // Bridge's own read of that Job is unscoped.
     let (status, _) = call(&app, "GET", &format!("/jobs/{}", first.id.as_str()), "").await;
@@ -176,4 +221,77 @@ async fn a_session_naming_a_manifest_this_fleet_does_not_serve_is_refused_plainl
     let listed = standing_in(&app, "01NOTSERVEDMANIFEST", &calling("list_jobs", "{}")).await;
     assert!(listed.contains("\"isError\":true"), "{listed}");
     assert!(!listed.contains("the first repository's Job"), "{listed}");
+}
+
+/// A proposal through the door is owned by the session's repository, and one
+/// naming another is refused.
+#[tokio::test]
+async fn a_proposal_through_the_door_is_owned_by_the_repository_the_session_stands_in() {
+    let home = TempDir::new();
+    let app = two_repositories(&home);
+    let unowned = r#"{"title": "drafted in the second", "workflow_id": "fixture-workflow",
+        "origin": "manual", "urgency": "normal", "atomic": false}"#;
+    let drafted = helm_standing_in(
+        &app,
+        SECOND,
+        &calling("propose_job", &format!(r#"{{"body":{unowned}}}"#)),
+    )
+    .await;
+    assert!(drafted.contains("\"isError\":false"), "{drafted}");
+    let (_, owned) = call(&app, "GET", &format!("/jobs?manifest_id={SECOND}"), "").await;
+    assert!(
+        String::from_utf8_lossy(&owned).contains("drafted in the second"),
+        "the second owns it"
+    );
+
+    let elsewhere = unowned.replace(
+        "\"origin\"",
+        &format!("\"owner_manifest_id\": \"{FIRST}\", \"origin\""),
+    );
+    let refused = helm_standing_in(
+        &app,
+        SECOND,
+        &calling("propose_job", &format!(r#"{{"body":{elsewhere}}}"#)),
+    )
+    .await;
+    assert!(refused.contains("\"isError\":true"), "{refused}");
+    assert!(refused.contains(&format!("names `{FIRST}`")), "{refused}");
+}
+
+#[tokio::test]
+async fn a_call_naming_the_other_repository_is_refused_and_events_are_counted_for_the_scope() {
+    let home = TempDir::new();
+    let app = two_repositories(&home);
+    proposed(&app, FIRST, "the first repository's Job").await;
+    proposed(&app, SECOND, "the second repository's Job").await;
+
+    let reading = standing_in(
+        &app,
+        SECOND,
+        &calling(
+            "get_manifest_reading",
+            &format!(r#"{{"manifest_id":"{FIRST}"}}"#),
+        ),
+    )
+    .await;
+    assert!(reading.contains("\"isError\":true"), "{reading}");
+    assert!(reading.contains(&format!("named `{FIRST}`")), "{reading}");
+    let manifest = standing_in(
+        &app,
+        SECOND,
+        &calling("get_manifest", &format!(r#"{{"manifest_id":"{FIRST}"}}"#)),
+    )
+    .await;
+    assert!(manifest.contains("\"isError\":true"), "{manifest}");
+
+    let scoped = standing_in(
+        &app,
+        SECOND,
+        &calling("get_events_since", r#"{"since":"0"}"#),
+    )
+    .await;
+    assert!(scoped.contains(r#"job.created\",\"count\":1"#), "{scoped}");
+    let (_, every) = call(&app, "GET", "/events/since?since=0", "").await;
+    let every = String::from_utf8_lossy(&every);
+    assert!(every.contains(r#""job.created","count":2"#), "{every}");
 }

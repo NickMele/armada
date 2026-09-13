@@ -11,6 +11,7 @@
 /// serves the operation.
 mod conversing;
 mod door;
+mod door_scope;
 mod fake;
 mod following;
 mod journal;

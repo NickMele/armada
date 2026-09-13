@@ -486,8 +486,11 @@ pub(crate) async fn list_reports<D: Queries>(State(served): State<Served<D>>) ->
 ///
 /// A piloted Job's worktree is not in the answer. Fleet drops it — `#367` — so
 /// there is nothing here to filter and nothing a client could show by mistake.
-pub(crate) async fn list_worktrees<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().list_worktrees().await {
+pub(crate) async fn list_worktrees<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().list_worktrees(scope.manifest()).await {
         Ok(held) => answer(StatusCode::OK, &held, served.run_id()),
         Err(refusal) => refused(refusal),
     }

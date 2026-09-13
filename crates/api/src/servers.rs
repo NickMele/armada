@@ -26,8 +26,11 @@ pub(crate) struct Instance {
     server_id: String,
 }
 
-pub(crate) async fn list_servers<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().list_servers().await {
+pub(crate) async fn list_servers<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().list_servers(scope.manifest()).await {
         Ok(servers) => answer(StatusCode::OK, &servers, served.run_id()),
         Err(refusal) => refused(refusal),
     }

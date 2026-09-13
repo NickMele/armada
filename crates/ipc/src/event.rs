@@ -163,6 +163,24 @@ impl Event {
             // because this runs on the publish path of every event.
             .unwrap_or_default()
     }
+
+    /// The Job and the Manifest this event's body names at its top level, where
+    /// it names either. Read out of the serialisation for [`Event::kind`]'s reason.
+    pub fn about(&self) -> (Option<String>, Option<String>) {
+        let value = serde_json::to_value(self).ok();
+        // Top level, or inside the `job` a body carries whole — `job.created`'s.
+        let field = |path: &[&str]| {
+            let mut at = value.as_ref()?;
+            for name in path {
+                at = at.get(name)?;
+            }
+            at.as_str().map(str::to_string)
+        };
+        (
+            field(&["job_id"]).or_else(|| field(&["job", "id"])),
+            field(&["manifest_id"]).or_else(|| field(&["job", "owner_manifest_id"])),
+        )
+    }
 }
 
 // `manifest.reread` carries [`ManifestReading`] itself rather than a payload

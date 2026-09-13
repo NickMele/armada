@@ -195,6 +195,7 @@ pub mod saying;
 /// because a [`scanning::Tree`] has no write on it.**
 pub mod scanning;
 pub mod scope;
+mod scoping;
 mod servers;
 pub mod serving;
 pub mod session;
