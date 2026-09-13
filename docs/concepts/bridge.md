@@ -76,6 +76,8 @@ Whether the bar reads the same during onboarding, before Fleet is reachable, is 
 
 Almost nothing is scoped to Bridge as a config target: settings a person adjusts *in* Bridge are tagged to the concept each one affects — Job Board default view to Job Board, landing Manifest to Manifest — rather than to Bridge as a catch-all. **Notification routing is the exception**: no dependency path carries config to Bridge, so the Electron side reads its own copy or a hardcoded default. See `../contracts/configuration.md` for the tiering rule.
 
+**A person's Bridge preferences are a different path from that one, kept by Fleet rather than resolved from `armada.yml`.** `#927`. Fleet keeps a preferences table the way it keeps a person's admission limits — one row per name, an absent row reading as the shipped default — and serves it over `get_preferences`/`save_preferences`. Bridge's main process loads it when Fleet connects, saves on change, and publishes it in `BridgeState`; while Fleet is unreachable Bridge draws the shipped default and queues no save. `where_things_are_open` is the first preference this carries — whether Job detail's *Where things are* chapter opens collapsed or expanded — and moving the Board's own view and sort onto it is left for later.
+
 ## Open questions
 
 - **[bridge-reconnect-trust]** What does Bridge show while it cannot reach Fleet, and what does it trust on reconnect? Closing Bridge does not stop Fleet, and reopening it reconnects rather than respawning, but the reconnect behavior itself is not yet designed.
