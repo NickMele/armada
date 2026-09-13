@@ -26,7 +26,7 @@ export type ServerState = {
   job_id?: string;
   /**
    * The repository it runs in, by its Manifest — a Job's own, or the main
-   * checkout's. Absent only from a Fleet that predates it.
+   * checkout's. Absent only from a Fleet that predates it. Since protocol 13.17.
    */
   manifest_id?: string;
   /** `starting`, `serving` or `exited`. Only `serving` carries a live address. */

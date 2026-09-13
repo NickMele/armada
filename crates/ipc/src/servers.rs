@@ -63,7 +63,7 @@ pub struct ServerState {
     pub job_id: Option<JobId>,
     /// The repository it runs in, by its Manifest — a Job's own, or the main
     /// checkout's. What tells two repositories' main-checkout servers apart.
-    /// Absent only from a Fleet that predates it.
+    /// Absent only from a Fleet that predates it. **Since 13.17.**
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manifest_id: Option<ManifestId>,
     pub phase: ServerPhase,
