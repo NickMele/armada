@@ -68,8 +68,13 @@ const JOBS: PaletteEntry[] = [
   { id: "job_41c07e", section: "jobs", label: "job_41c07e — drop the stale socket on reconnect" },
 ];
 
-/** A setting states its current value, in mono, right of the label. */
+/**
+ * A setting states its current value, in mono, right of the label — where it
+ * has one. **Fleet settings does not**: choosing it opens the sheet rather
+ * than stating a field, so the row carries a label and nothing to its right.
+ */
 const SETTINGS: PaletteEntry[] = [
+  { id: "set-fleet", section: "settings", label: "Fleet settings", icon: Settings },
   { id: "set-model", section: "settings", label: "Default model", value: "sonnet", icon: Settings },
   { id: "set-headroom", section: "settings", label: "Concurrent drones", value: "4", icon: Settings },
   { id: "set-history", section: "settings", label: "Job history kept", value: "30 days", icon: Settings },

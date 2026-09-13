@@ -124,6 +124,15 @@ export type PaletteHands = {
   search: () => void;
   copyDebugInfo: () => void;
   confirm: (act: "kill_job" | "redispatch" | "restart_step", jobId: string) => void;
+  /**
+   * Open the settings row's own screen, by the id `settings` was given.
+   *
+   * **One row today, so one id.** `fleet_settings` opens the Fleet settings
+   * sheet; the switch lives with the app that owns the sheet rather than
+   * here, the way `surface` and `run` already read their id against the
+   * screen that answers for it.
+   */
+  openSetting: (id: string) => void;
 };
 
 /**
@@ -153,9 +162,7 @@ export function carryOut(choice: PaletteChoice, job: string | null, hands: Palet
       hands.filter(choice.id);
       return;
     case "setting":
-      // Bridge serves no settings surface, so nothing indexes one and this
-      // arm is unreachable rather than unhandled. Written out so the day a
-      // setting is indexed, the row is not silently inert.
+      hands.openSetting(choice.id);
       return;
     case "act":
       act(choice.id, job, hands);

@@ -179,8 +179,9 @@ function statusOf(
   };
 }
 
-/** The admission holds Fleet settings answers for. `cpu` has no control: the
- *  owner cut it, on the ruling that macOS schedules CPU rather than Fleet. */
+/** The admission holds Fleet settings answers for. `cpu` has no control:
+ *  Fleet no longer holds a Job back for CPU, so only an older Fleet sends
+ *  `cpu`, and it gets no control. */
 const SETTABLE_HOLD = new Set(["concurrency_bound", "memory", "disk"]);
 
 /** `parts` with `separator` between each, as one array `detail` can render. */
