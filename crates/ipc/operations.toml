@@ -1588,13 +1588,6 @@ agent_access = "No"
 description = "Restarts a Job after a Fleet crash"
 
 
-[operations."alert.raised"]
-kind = "event"
-transport = "WebSocket"
-agent_access = "Bridge only"
-description = "An Alert is raised, carrying its Alert Level"
-unbuilt = "#812"
-
 [operations."drone.exited"]
 kind = "event"
 transport = "WebSocket"
@@ -1844,16 +1837,3 @@ notes = """
 `stopped: false` is a server that fell over, with its exit code and a sentence; its log stays readable on `observe_server`. A Job's servers publish this before the Job's own terminal `job.state_changed`, because they are torn down before its span is released.
 """
 
-[operations."review.ready"]
-kind = "event"
-transport = "WebSocket"
-agent_access = "Bridge only"
-description = "A Job reaches a human gate"
-unbuilt = "#814"
-
-[operations."usage.threshold"]
-kind = "event"
-transport = "WebSocket"
-agent_access = "Bridge only"
-description = "Spend or quota crosses the Machine gate"
-unbuilt = "#815"
