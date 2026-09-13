@@ -177,53 +177,74 @@ async fn each_step_runs_once_in_order_one_after_another() {
 
 /// **A step's finish is published only once the next step is out**, so a
 /// reader re-reading the sheet on `checkout_run.finished` never meets a gap.
-#[tokio::test]
+///
+/// The reader is a thread of its own, reading the instant each finish is
+/// published — as Bridge does — so nothing waits on the runtime to schedule it
+/// after the next step has already started.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_steps_finish_is_published_after_the_next_step_is_out() {
     let home = TempDir::new();
     let events = api::Broadcaster::new();
     let fleet = a_fleet(&home, MANIFEST, &events);
     let mut watching = events.subscribe();
+    let handle = tokio::runtime::Handle::current();
+    let reader = Arc::clone(&fleet);
+    let reading = std::thread::spawn(move || {
+        let mut read = Vec::new();
+        while read.len() < 4 {
+            match handle.block_on(watching.next()) {
+                Some(api::Next::Send(delivered)) => {
+                    if let ipc::Event::CheckoutRunFinished(record) = delivered.event {
+                        let sheet = handle
+                            .block_on(reader.checkout_run_sheet())
+                            .expect("a sheet");
+                        read.push((
+                            record.name,
+                            sheet.verify.expect("the Verify is on the sheet"),
+                        ));
+                    }
+                }
+                Some(_) => continue,
+                None => break,
+            }
+        }
+        read
+    });
 
     Arc::clone(&fleet)
         .begin_checkout_verify()
         .await
         .expect("underway");
-
-    let mut seen = 0;
-    tokio::time::timeout(Duration::from_secs(60), async {
-        while seen < 4 {
-            let Some(api::Next::Send(delivered)) = watching.next().await else {
-                continue;
-            };
-            let ipc::Event::CheckoutRunFinished(record) = delivered.event else {
-                continue;
-            };
-            let sheet = fleet.checkout_run_sheet().await.expect("a sheet");
-            let verify = sheet.verify.expect("the Verify is on the sheet");
-            let at = verify
-                .steps
-                .iter()
-                .position(|step| step.name == record.name)
-                .expect("a step of the Verify");
-            assert!(matches!(
-                verify.steps[at].state,
-                ipc::VerifyStepState::Ran { .. }
-            ));
-            match verify.steps.get(at + 1) {
-                Some(next) => assert!(
-                    matches!(next.state, ipc::VerifyStepState::Running { .. }),
-                    "`{}` finished and `{}` was not out yet: {:?}",
-                    record.name,
-                    next.name,
-                    next.state
-                ),
-                None => assert!(verify.ended_at.is_some(), "the last step ended it"),
-            }
-            seen += 1;
-        }
-    })
+    let read = tokio::time::timeout(
+        Duration::from_secs(60),
+        tokio::task::spawn_blocking(move || reading.join().expect("the reader")),
+    )
     .await
-    .expect("every step finished");
+    .expect("every step finished")
+    .expect("joined");
+
+    assert_eq!(read.len(), 4);
+    for (name, verify) in read {
+        let at = verify
+            .steps
+            .iter()
+            .position(|step| step.name == name)
+            .expect("a step of the Verify");
+        assert!(
+            matches!(verify.steps[at].state, ipc::VerifyStepState::Ran { .. }),
+            "`{name}` was published before its Verify held the record: {:?}",
+            verify.steps[at].state
+        );
+        match verify.steps.get(at + 1) {
+            Some(next) => assert!(
+                matches!(next.state, ipc::VerifyStepState::Running { .. }),
+                "`{name}` finished and `{}` was not out yet: {:?}",
+                next.name,
+                next.state
+            ),
+            None => assert!(verify.ended_at.is_some(), "the last step ended it"),
+        }
+    }
 }
 
 /// **While a Verify is underway nothing else runs in the checkout, and a
