@@ -274,9 +274,10 @@ longer sit fourth on screen. Explicit numbering is what lets both hold:
 the rows a person needs are at the top, and the citation still resolves.
 See How are criterion verdicts encoded without status hue?
 
-**Everything else below Job level stays neutral, with one exception.** A
-Kit file's drift state, an origin tag and the retry marker carry
-position, surface, weight and glyph. Adding a value to
+**Everything else below Job level stays neutral, with one exception.** An
+origin tag and the retry marker carry position, surface, weight and glyph.
+Drift is the exception: `gone` and `current` render in `--notice-caution`,
+because a drifted file is behind rather than broken. Adding a value to
 `tokens/status.css` is a contract change, not a design decision.
 
 > **Rule.** A caution notice is the one Alert tone below Job level that
@@ -978,8 +979,9 @@ the only channel. Full specification on [Iconography](iconography.md).
 12px is an exact half-scale and a stroke of 2 lands on exactly 1px. 11px
 scales to 0.917px and antialiases into fuzz on a dark ground.
 
-**A bordered pill is a Job state and nothing else.** An origin tag,
-drift states and provenance are plain sans in `--fg-muted`. Two chips in
+**A bordered pill is a Job state and nothing else.** An origin tag and
+provenance are plain sans in `--fg-muted`; drift states are plain sans in
+`--notice-caution`. Two chips in
 one row separated only by colour makes a reader learn a rule the screen
 never states.
 
