@@ -7,11 +7,13 @@
 // frame built from primitives, and the reason these tests are here rather than
 // there is that it is not this package's screens.
 //
-// The stylesheet is deliberately not loaded. What these tests read is the
-// accessibility tree — a control that is disabled, a callback that did not
-// fire — and none of that is a property of the CSS. A screen's appearance is
-// the components package's to prove, story by story.
+// **The app's stylesheet is loaded, in Storybook's order.** `#840`: unstyled, a
+// tooltip bubble flowed inline and moved the next button out from under a click.
 
+import "@armada/tokens/tokens.css";
+import "tailwindcss/preflight.css";
+import "@armada/tokens/base.css";
+import "@armada/components/src/index.css";
 import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
