@@ -482,6 +482,15 @@ export class JobCommands {
   }
 
   /**
+   * Delete one terminal Job's branch. **A force** — see `Clearing.deleteBranch`
+   * for the refusals, and `reclaimWorktree` above for the checkout's own act,
+   * which never forces.
+   */
+  deleteBranch(jobId: string, tip: string): Promise<Outcome> {
+    return this.clearing.deleteBranch(jobId, tip);
+  }
+
+  /**
    * Delete one terminal Job's whole record. **Real deletion, and there is no
    * undo** — the per-Job half of `forgetTerminalJobs`.
    */

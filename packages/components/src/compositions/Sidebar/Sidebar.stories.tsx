@@ -43,7 +43,7 @@ const surfaces: SidebarItem[] = [
   { id: "alerts", label: "Alerts", icon: Bell },
   { id: "doctor", label: "Doctor", icon: Stethoscope },
   { id: "manifest", label: "Manifest", icon: FileCog },
-  { id: "worktrees", label: "Held worktrees", icon: HardDrive },
+  { id: "worktrees", label: "Cleanup", icon: HardDrive },
 ];
 
 const helm: SidebarItem = { id: "helm", label: "Helm", icon: MessageSquare };
@@ -93,7 +93,7 @@ export const WhatIsBuilt: Story = {
   args: {
     surfaces: [
       { id: "board", label: "Job Board", icon: ClipboardList, count: 6 },
-      { id: "worktrees", label: "Held worktrees", icon: HardDrive },
+      { id: "worktrees", label: "Cleanup", icon: HardDrive },
     ],
     activeId: "board",
     appName: "Armada",

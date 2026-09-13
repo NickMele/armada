@@ -188,6 +188,17 @@
   text-wrap: pretty;
 }
 
+/* The three acts, each its own checkbox and its own row — never a single
+   control standing in for a choice made of three independent parts. */
+.armada-held__acts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* What the reclaim did, half by half. A definition list because that is what it
    is: two named outcomes, each with its own answer, and neither derivable from
    the other. */

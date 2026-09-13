@@ -65,6 +65,8 @@ export const readDiff = (jobId: string | null): void => void window.armada.readD
 export const readReports = (want: boolean): void => void window.armada.readReports(want);
 export const readHeld = (want: boolean): void => void window.armada.readHeld(want);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
+export const deleteBranchOne = (jobId: string, tip: string) => window.armada.deleteBranch(jobId, tip);
+export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);
 export const readEvidence = (jobId: string | null): void => void window.armada.readEvidence(jobId);
 export const readRemarks = (jobId: string | null): void => void window.armada.readRemarks(jobId);
 export const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);

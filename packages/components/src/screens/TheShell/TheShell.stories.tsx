@@ -39,7 +39,7 @@ const shell: ComponentProps<typeof TheShell> = {
   // each. Only the Board carries a count.
   surfaces: [
     { id: "board", label: "Job Board", icon: ClipboardList, count: 6 },
-    { id: "worktrees", label: "Held worktrees", icon: HardDrive },
+    { id: "worktrees", label: "Cleanup", icon: HardDrive },
   ],
   activeId: "board",
   title: "Job Board",
@@ -85,7 +85,7 @@ export const FleetIsNotRunning: Story = {
     summary: "No jobs.",
     surfaces: [
       { id: "board", label: "Job Board", icon: ClipboardList, count: 0 },
-      { id: "worktrees", label: "Held worktrees", icon: HardDrive },
+      { id: "worktrees", label: "Cleanup", icon: HardDrive },
     ],
     status: {
       fleet: "not-running",

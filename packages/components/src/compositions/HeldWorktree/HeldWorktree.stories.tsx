@@ -4,6 +4,7 @@ import { expect } from "storybook/test";
 import type { WorktreeHeld } from "@armada/protocol";
 
 import { HeldWorktree } from "./HeldWorktree";
+import type { RowChoice } from "./HeldWorktree";
 
 const meta: Meta<typeof HeldWorktree> = {
   title: "Compositions/Held worktree",
@@ -12,6 +13,8 @@ const meta: Meta<typeof HeldWorktree> = {
 export default meta;
 
 type Story = StoryObj<typeof HeldWorktree>;
+
+const NO_CHOICE: RowChoice = { removeCheckout: false, deleteBranch: false, forget: false };
 
 /** The shape fleet answers with. One place, so a story cannot drift from it. */
 function held(over: Partial<WorktreeHeld> = {}): WorktreeHeld {
@@ -23,6 +26,7 @@ function held(over: Partial<WorktreeHeld> = {}): WorktreeHeld {
     path: "/Users/user/armada/.armada/worktrees/01JOBHELD0001",
     branch: "armada/01JOBHELD0001",
     held: [],
+    on_disk: true,
     ...over,
   };
 }
@@ -41,10 +45,9 @@ export const NothingIsHoldingIt: Story = {
 };
 
 /**
- * **The reason a person acts on most freely.** There is no force on this seam,
- * so the branch is kept and every commit stays on it — the checkout goes and
- * nothing is lost. The count says how much, the base says what cannot reach it,
- * and the tip is what the work is reachable from afterwards.
+ * **The reason a person acts on most freely.** Removing the checkout is still
+ * never a force — the branch is offered on its own line, its own checkbox,
+ * unchecked until somebody chooses it.
  */
 export const ABranchTheBaseCannotReach: Story = {
   args: {
@@ -58,8 +61,9 @@ export const ABranchTheBaseCannotReach: Story = {
         },
       ],
     }),
-    selected: false,
-    onSelect: () => {},
+    choice: NO_CHOICE,
+    offered: { removeCheckout: true, deleteBranch: true, forget: false },
+    onChoose: () => {},
   },
 };
 
@@ -88,8 +92,9 @@ export const FilesCommittedNowhere: Story = {
         },
       ],
     }),
-    selected: false,
-    onSelect: () => {},
+    choice: NO_CHOICE,
+    offered: { removeCheckout: true, deleteBranch: false, forget: false },
+    onChoose: () => {},
     sitting: "4 days",
   },
 };
@@ -139,8 +144,9 @@ export const TwoReasonsOnOneWorktree: Story = {
         { why: "uncommitted", files: ["crates/fleet/src/overlap.rs"] },
       ],
     }),
-    selected: false,
-    onSelect: () => {},
+    choice: NO_CHOICE,
+    offered: { removeCheckout: true, deleteBranch: true, forget: false },
+    onChoose: () => {},
   },
 };
 
@@ -172,33 +178,62 @@ export const AskedAndNotAnswered: Story = {
 };
 
 /**
- * **Selected, which is the state the confirmation is built from.** The fill is
- * the shell's own selected-row token and the edge is added on top: what follows
- * a selection here is destructive, and a tint alone is a state a person can miss
- * in the moment they most need to see it.
+ * **The checkout is already gone, so removing it is not offered.** `on_disk`
+ * is the fact this reads — a terminal Job whose worktree fleet already took
+ * back, but whose branch still holds commits the base cannot reach, offers only
+ * the branch and the record. This is the row #931's bug left stuck forever.
  */
-export const ChosenToBeReclaimed: Story = {
+export const TheCheckoutIsAlreadyGone: Story = {
   args: {
     held: held({
+      job_title: "Rework the retry ceiling",
+      on_disk: false,
       held: [
         {
           why: "unmerged",
           base: "main",
-          commits: 4,
-          tip: "9f1c2ab84d5e6710b3c4d5e6f708192a3b4c5d6e",
+          commits: 2,
+          tip: "5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e",
         },
       ],
     }),
-    selected: true,
-    onSelect: () => {},
+    choice: NO_CHOICE,
+    offered: { removeCheckout: false, deleteBranch: true, forget: false },
+    onChoose: () => {},
   },
 };
 
 /**
- * **The answer when one half happened and the other did not**, which is the
- * ordinary outcome rather than a partial failure: the checkout is gone and the
- * branch was kept on purpose, because deleting it would have destroyed commits
- * nobody has taken.
+ * **Forget is offered only once the other two read as settled.** The checkout
+ * is already gone and the branch is chosen for deletion in this same act — the
+ * moment both are true, the third checkbox appears rather than being drawn
+ * disabled: a control that cannot yet be pressed is not on the row until it can.
+ */
+export const ForgetJoinsOnceTheOtherTwoAreSettled: Story = {
+  args: {
+    held: held({
+      job_title: "Rework the retry ceiling",
+      on_disk: false,
+      held: [
+        {
+          why: "unmerged",
+          base: "main",
+          commits: 2,
+          tip: "5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e",
+        },
+      ],
+    }),
+    choice: { removeCheckout: false, deleteBranch: true, forget: false },
+    offered: { removeCheckout: false, deleteBranch: true, forget: true },
+    onChoose: () => {},
+  },
+};
+
+/**
+ * **The answer when a checkout is given back and its branch survives**, which
+ * is the ordinary outcome rather than a partial failure: the checkout is gone
+ * and the branch was kept on purpose, because deleting it would have destroyed
+ * commits nobody has taken.
  *
  * The `play` is here and not on the variants above because this is the claim a
  * rendering cannot make for itself — a single flag would have to say the reclaim
@@ -266,14 +301,45 @@ export const NeitherHalfHappened: Story = {
 };
 
 /**
- * **A checkbox is what the whole surface is for**, so the selection is asserted
- * rather than looked at: the row hands back the job id it was drawn from, which
- * is what the caller reclaims by. A row that carried the selection itself would
- * make a bulk act unrepresentable.
+ * **The explicit delete has its own receipt.** `reclaimed.branch` says what the
+ * safe reclaim did to the branch, ordinarily nothing; `branchDeleted` is the
+ * forcing act's own answer, and the two never both apply to one commit.
+ */
+export const TheBranchWasDeletedOnPurpose: Story = {
+  args: {
+    held: held({
+      on_disk: false,
+      held: [
+        {
+          why: "unmerged",
+          base: "main",
+          commits: 2,
+          tip: "5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e",
+        },
+      ],
+    }),
+    branchDeleted: {
+      job_id: "01JOBHELD0001",
+      branch: "armada/01JOBHELD0001",
+      tip: "5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e",
+    },
+  },
+  play: async ({ canvas }) => {
+    const branch = canvas.getByText("The branch").nextElementSibling;
+    await expect(branch).toHaveTextContent("Deleted, at 5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e.");
+  },
+};
+
+/**
+ * **Three checkboxes is what the whole surface is for**, so choosing one is
+ * asserted rather than looked at: the row hands back the job id it was drawn
+ * from and the whole `RowChoice`, which is what the caller acts on. A row that
+ * carried its own choice would make the confirmation this act builds
+ * unrepresentable.
  */
 export const ChoosingOne: Story = {
   render: () => {
-    const [chosen, setChosen] = useState<string | null>(null);
+    const [choice, setChoice] = useState<RowChoice>(NO_CHOICE);
     const row = held({
       held: [{ why: "unmerged", base: "main", commits: 2, tip: "3ac10de99b7f4e21c0d5" }],
     });
@@ -281,19 +347,21 @@ export const ChoosingOne: Story = {
       <ul style={{ margin: 0, padding: 0 }}>
         <HeldWorktree
           held={row}
-          selected={chosen === row.job_id}
-          onSelect={(jobId, selected) => setChosen(selected ? jobId : null)}
+          choice={choice}
+          offered={{ removeCheckout: true, deleteBranch: true, forget: false }}
+          onChoose={(_jobId, next) => setChoice(next)}
         />
       </ul>
     );
   },
   play: async ({ canvas, userEvent }) => {
-    const box = canvas.getByRole("checkbox", { name: "Port the settings selectors" });
+    const box = canvas.getByRole("checkbox", { name: /^Remove the checkout/ });
     await expect(box).not.toBeChecked();
-    // The row does not hold its own selection — it hands back the job id it was
-    // drawn from, and the caller decides. A row that kept the state would make
-    // the bulk act the surface exists for unrepresentable, and this is the only
-    // way to see that the id, and not merely a boolean, went out.
+    // The row does not hold its own choice — it hands back the job id it was
+    // drawn from and the whole `RowChoice`, and the caller decides. A row that
+    // kept the state would make the confirmation the surface exists to build
+    // unrepresentable, and this is the only way to see that the whole choice,
+    // and not merely a boolean, went out.
     await userEvent.click(box);
     await expect(box).toBeChecked();
   },

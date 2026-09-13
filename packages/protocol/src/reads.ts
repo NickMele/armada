@@ -9,6 +9,7 @@
 // can draw one unread Job can draw them all.
 
 import type {
+  BranchDeleted,
   CallArguments,
   CheckOutput,
   CommandExplained,
@@ -374,6 +375,12 @@ export type Outcome =
       jobId?: string;
       report?: Report;
       reclaimed?: WorktreeReclaimed;
+      /**
+       * `delete_branch`'s own receipt, on `reclaimed`'s terms: a branch delete
+       * changes no row the board reads, so what came back is shown once by the
+       * surface that asked rather than published as app state.
+       */
+      branchDeleted?: BranchDeleted;
       /**
        * What a press came to, on the same terms as `report`: a receipt the
        * surface that pressed shows once. The set itself arrives on the Job's

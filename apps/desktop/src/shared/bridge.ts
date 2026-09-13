@@ -414,6 +414,7 @@ export const CHANNELS = {
   clearTerminalJobs: "bridge:clear-terminal-jobs",
   forgetTerminalJobs: "bridge:forget-terminal-jobs",
   reclaimWorktree: "bridge:reclaim-worktree",
+  deleteBranch: "bridge:delete-branch",
   forgetJob: "bridge:forget-job",
   redirectDrone: "bridge:redirect-drone",
   answerQuestion: "bridge:answer-question",

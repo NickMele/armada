@@ -121,7 +121,7 @@ export function headOf({
   }
   if (clearing) {
     return {
-      title: "Held worktrees",
+      title: "Cleanup",
       // No `Esc` hint. The key is bound while a Job is open and nowhere else,
       // and a hint for a key that does nothing is worse than no hint.
       actions: (
@@ -147,7 +147,7 @@ export function headOf({
     };
   }
   // **A Job read whole gets no head, and that is the one view where none is
-  // right.** The others are named by it: `Held worktrees`, `Reported in error`,
+  // right.** The others are named by it: `Cleanup`, `Reported in error`,
   // `New job` are pages whose name is not written anywhere else on them. A Job
   // is not — its own header carries the badge, the title, the id and the run's
   // figures, and it is the thing the reader is looking at. A bar above that

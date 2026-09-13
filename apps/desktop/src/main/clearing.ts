@@ -23,7 +23,7 @@
 // It holds no connection. The `Board` it is handed is what any act needs, so
 // nothing here can drift from what the socket believes.
 
-import type { ClearOutcome, Outcome, ReclaimOutcome, WorktreeReclaimed } from "@armada/protocol";
+import type { BranchDeleted, ClearOutcome, Outcome, ReclaimOutcome, WorktreeReclaimed } from "@armada/protocol";
 import { ask, route } from "./request";
 // Type-only, and therefore not a cycle at runtime: `Board` is what an act needs
 // of the connection, and it is declared where the acts are.
@@ -125,6 +125,27 @@ export class Clearing {
     } finally {
       this.reclaiming.delete(jobId);
     }
+  }
+
+  /**
+   * Delete one terminal Job's branch, sending the tip the person confirmed.
+   *
+   * **A force, unlike `reclaim` above.** Fleet refuses with 409 —
+   * `fleet.branch_not_deletable` — where the Job is not terminal, the checkout
+   * is still on disk, the branch is gone, or the tip has moved since the tip
+   * this call sends: the safety net a stale confirmation needs.
+   *
+   * **No in-flight guard here.** `Worktrees` sends every row's acts in turn
+   * from one `sending` flag rather than a press per row, so a second call for
+   * the same id cannot land while the first is still out.
+   */
+  async deleteBranch(jobId: string, tip: string): Promise<Outcome> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+
+    const answer = await ask(port, "POST", route(jobId, "delete_branch"), { tip });
+    if (answer.ok !== true) return answer.outcome;
+    return { ok: true, branchDeleted: answer.body as BranchDeleted };
   }
 
   /**

@@ -395,11 +395,23 @@ void app.whenReady().then(() => {
     await connection?.rereadHeld();
     return outcome;
   });
+  // A force, unlike the reclaim above. The re-read afterwards is the same
+  // reason: whether the branch still stands is Fleet's reading, and a delete
+  // that refused has to stay on the list exactly as it was.
+  ipcMain.handle(CHANNELS.deleteBranch, async (_event, jobId: string, tip: string) => {
+    const outcome = await connection?.commands.deleteBranch(jobId, tip);
+    await connection?.rereadHeld();
+    return outcome;
+  });
   // The per-Job half of `forgetTerminalJobs` above. Real deletion, and there
-  // is no undo.
-  ipcMain.handle(CHANNELS.forgetJob, (_event, jobId: string) =>
-    connection?.commands.forgetJob(jobId),
-  );
+  // is no undo. The re-read afterwards keeps Cleanup's own list honest: a
+  // forgotten Job's row is gone from `worktrees_held`, which walks Job
+  // records rather than directories.
+  ipcMain.handle(CHANNELS.forgetJob, async (_event, jobId: string) => {
+    const outcome = await connection?.commands.forgetJob(jobId);
+    await connection?.rereadHeld();
+    return outcome;
+  });
   // The two acts that resume a step without redispatching. Which applies is
   // decided by whether the Job still holds a Drone; Fleet is the authority
   // and refuses the wrong one rather than Bridge picking silently.

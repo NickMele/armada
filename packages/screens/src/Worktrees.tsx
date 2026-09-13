@@ -19,18 +19,20 @@
 // # Per item, never all-or-nothing
 //
 // There is one bulk act in armada, `armada clean --everything`, and it is the
-// one nobody should reach for from a screen. So the control here is a checkbox
-// per row and a confirmation that reads out what each chosen row costs; there
-// is no select-all, and adding one would be adding the act this surface exists
-// to replace.
+// one nobody should reach for from a screen. So the control here is up to
+// three independent checkboxes per row — a checkout, a branch, a record — and
+// a confirmation that reads out what each chosen row costs; there is no
+// select-all, and adding one would be adding the act this surface exists to
+// replace.
 //
 // # The confirmation says what is lost, not how much disk comes back
 //
 // Bytes are not the decision. Which commits go, whether anything else has them,
-// and which uncommitted files exist nowhere but the checkout is — and only the
-// last of those is destroyed at all, because there is no force on this seam.
-// `held.ts` computes it and is unit-tested, because every sentence in it is read
-// immediately before something is destroyed.
+// which uncommitted files exist nowhere but the checkout, and which records are
+// forgotten — reclaiming a checkout is still never a force, but deleting the
+// branch that survives it is a separate, explicit choice a person confirms row
+// by row. `held.ts` computes it and is unit-tested, because every sentence in
+// it is read immediately before something is destroyed.
 
 import { useEffect, useState } from "react";
 import {
@@ -43,19 +45,25 @@ import {
   Dialog,
   HeldWorktree,
 } from "@armada/components";
+import type { RowChoice } from "@armada/components";
 
-import type { HeldWorktrees, JobSummary, Outcome, WorktreeHeld, WorktreeReclaimed } from "@armada/protocol";
+import type { BranchDeleted, HeldWorktrees, JobSummary, Outcome, WorktreeReclaimed } from "@armada/protocol";
 import { said } from "./copy";
 import {
+  choiceOf,
+  chosenRows,
   confirmOpening,
   confirmTitle,
   divided,
   filesDestroyed,
-  losing,
   namedByHandle,
   NOTHING_IS_LOST,
+  offeredOn,
+  planned,
   sitting,
+  unmergedOf,
 } from "./held";
+import type { Planned } from "./held";
 
 export type WorktreesProps = {
   /**
@@ -89,6 +97,20 @@ export type WorktreesProps = {
    */
   onReclaim: (jobId: string) => Promise<Outcome>;
   /**
+   * Delete one row's branch, sending the tip the person confirmed.
+   *
+   * **The tip is what was confirmed, not what fleet answers with next.** Fleet
+   * refuses with 409 where the tip has moved since — the safety net a stale
+   * confirmation needs, not a fact this screen has to keep current itself.
+   */
+  onDeleteBranch: (jobId: string, tip: string) => Promise<Outcome>;
+  /**
+   * Delete one row's whole record. **There is no undo.** Only ever sent once
+   * the checkout and the branch are gone or chosen in the same act — `held.ts`'s
+   * `offeredOn` is what keeps that true before this is ever called.
+   */
+  onForget: (jobId: string) => Promise<Outcome>;
+  /**
    * The clock every elapsed figure on this surface is drawn from.
    *
    * **The app's one `now`, not a `Date.now()` per row.** Two clocks on one
@@ -109,20 +131,31 @@ export type WorktreesProps = {
  * hundreds of held worktrees, that is a fleet not sweeping rather than a list
  * needing windowing.
  */
-export function Worktrees({ onWant, held, jobs = [], onReclaim, now, onCopied }: WorktreesProps) {
+export function Worktrees({
+  onWant,
+  held,
+  jobs = [],
+  onReclaim,
+  onDeleteBranch,
+  onForget,
+  now,
+  onCopied,
+}: WorktreesProps) {
   useEffect(() => {
     onWant(true);
     return () => onWant(false);
   }, []);
 
-  /** Chosen, by job id. **Not on the rows** — a bulk act needs one set. */
-  const [chosen, setChosen] = useState<string[]>([]);
+  /** What is chosen for each of a row's three acts, by job id. */
+  const [choices, setChoices] = useState<Record<string, RowChoice>>({});
   /** Whether the confirmation is up. */
   const [confirming, setConfirming] = useState(false);
   /** What each reclaim answered, by job id. Kept until the list is re-read. */
   const [receipts, setReceipts] = useState<Record<string, WorktreeReclaimed>>({});
-  /** Refusals, which are the half a receipt cannot carry. */
-  const [refused, setRefused] = useState<{ jobId: string; outcome: Outcome }[]>([]);
+  /** What each branch delete answered, by job id. Kept until re-read. */
+  const [branchDeletions, setBranchDeletions] = useState<Record<string, BranchDeleted>>({});
+  /** Refusals, named by row and by which of the three acts they were about. */
+  const [refused, setRefused] = useState<RowFailure[]>([]);
   /** One act at a time, so a second press does not send the set twice. */
   const [sending, setSending] = useState(false);
 
@@ -142,34 +175,69 @@ export function Worktrees({ onWant, held, jobs = [], onReclaim, now, onCopied }:
   }
 
   const groups = divided(held.held.worktrees);
-  const picked = groups.deciding.filter((one) => chosen.includes(one.job_id));
-  const cost = losing(picked);
+  const picked = chosenRows(groups.deciding, choices);
+  const plan = planned(picked, choices);
 
-  function choose(jobId: string, selected: boolean): void {
-    setChosen((was) => (selected ? [...was, jobId] : was.filter((id) => id !== jobId)));
+  function choose(jobId: string, choice: RowChoice): void {
+    setChoices((was) => ({ ...was, [jobId]: choice }));
   }
 
   /**
-   * Send one `reclaim_worktree` per chosen id, in turn.
+   * Run every chosen row's acts, one row at a time, checkout then branch then
+   * record.
    *
-   * **Each is independent.** There is no bulk route, and one refusing — a
-   * status that moved between the press and the call, a repository that would
-   * not open — must not stop the rest. What comes back is kept per job, because
-   * a person reading the answer is reading it row by row.
+   * **A failed checkout or branch cancels that row's forget.** `offeredOn`
+   * only offers forget once both read as already gone — but a status can
+   * still move between the press and this call, and sending it anyway would
+   * be `worktrees_held`'s exact bug: a record forgotten while its disk stands.
+   * Rows are independent of each other throughout, the way `reclaim` already
+   * sent them.
    */
-  async function reclaim(): Promise<void> {
+  async function cleanUp(): Promise<void> {
     setConfirming(false);
     setSending(true);
     const gaveBack: Record<string, WorktreeReclaimed> = {};
-    const failed: { jobId: string; outcome: Outcome }[] = [];
-    for (const one of picked) {
-      const outcome = await onReclaim(one.job_id);
-      if (outcome.ok && outcome.reclaimed !== undefined) gaveBack[one.job_id] = outcome.reclaimed;
-      else if (!outcome.ok) failed.push({ jobId: one.job_id, outcome });
+    const deletedBranches: Record<string, BranchDeleted> = {};
+    const failed: RowFailure[] = [];
+
+    for (const row of picked) {
+      const choice = choiceOf(choices, row.job_id);
+      let checkoutOk = true;
+      let branchOk = true;
+
+      if (choice.removeCheckout) {
+        const outcome = await onReclaim(row.job_id);
+        if (outcome.ok) {
+          if (outcome.reclaimed !== undefined) gaveBack[row.job_id] = outcome.reclaimed;
+        } else {
+          checkoutOk = false;
+          failed.push({ jobId: row.job_id, title: row.job_title, act: "checkout", outcome });
+        }
+      }
+
+      if (choice.deleteBranch) {
+        const unmerged = unmergedOf(row);
+        if (unmerged !== null) {
+          const outcome = await onDeleteBranch(row.job_id, unmerged.tip);
+          if (outcome.ok) {
+            if (outcome.branchDeleted !== undefined) deletedBranches[row.job_id] = outcome.branchDeleted;
+          } else {
+            branchOk = false;
+            failed.push({ jobId: row.job_id, title: row.job_title, act: "branch", outcome });
+          }
+        }
+      }
+
+      if (choice.forget && checkoutOk && branchOk) {
+        const outcome = await onForget(row.job_id);
+        if (!outcome.ok) failed.push({ jobId: row.job_id, title: row.job_title, act: "record", outcome });
+      }
     }
+
     setReceipts(gaveBack);
+    setBranchDeletions(deletedBranches);
     setRefused(failed);
-    setChosen([]);
+    setChoices({});
     setSending(false);
   }
 
@@ -178,8 +246,8 @@ export function Worktrees({ onWant, held, jobs = [], onReclaim, now, onCopied }:
   return (
     <div className="armada-screen__pane">
       {refused.map((one) => (
-        <Alert key={one.jobId} tone="escalated" title="One worktree was not given back">
-          {said(one.outcome)}
+        <Alert key={`${one.jobId}-${one.act}`} tone="escalated" title={refusalTitle(one)}>
+          {refusedSaid(one.outcome)}
         </Alert>
       ))}
 
@@ -197,17 +265,22 @@ export function Worktrees({ onWant, held, jobs = [], onReclaim, now, onCopied }:
               unsafe, and the reason under each row is what the decision is made on.
             </p>
             <ul>
-              {groups.deciding.map((one) => (
-                <HeldWorktree
-                  key={one.job_id}
-                  held={namedByHandle(one, jobs)}
-                  selected={chosen.includes(one.job_id)}
-                  onSelect={choose}
-                  reclaimed={receipts[one.job_id]}
-                  sitting={sitting(one.last_moved_at, now) ?? undefined}
-                  onCopied={onCopied}
-                />
-              ))}
+              {groups.deciding.map((one) => {
+                const choice = choiceOf(choices, one.job_id);
+                return (
+                  <HeldWorktree
+                    key={one.job_id}
+                    held={namedByHandle(one, jobs)}
+                    choice={choice}
+                    offered={offeredOn(one, choice)}
+                    onChoose={choose}
+                    reclaimed={receipts[one.job_id]}
+                    branchDeleted={branchDeletions[one.job_id]}
+                    sitting={sitting(one.last_moved_at, now) ?? undefined}
+                    onCopied={onCopied}
+                  />
+                );
+              })}
             </ul>
             <Button
               variant="secondary"
@@ -215,8 +288,8 @@ export function Worktrees({ onWant, held, jobs = [], onReclaim, now, onCopied }:
               onClick={() => setConfirming(true)}
             >
               {picked.length === 0
-                ? "Reclaim what you choose"
-                : `Reclaim ${picked.length === 1 ? "1 worktree" : `${picked.length} worktrees`}`}
+                ? "Clean up what you choose"
+                : `Clean up ${picked.length === 1 ? "1 row" : `${picked.length} rows`}`}
             </Button>
           </CardContent>
         </Card>
@@ -276,14 +349,38 @@ export function Worktrees({ onWant, held, jobs = [], onReclaim, now, onCopied }:
         open={confirming}
         width="wide"
         title={confirmTitle(picked.length)}
-        confirmLabel="Reclaim"
+        confirmLabel="Clean up"
         onCancel={() => setConfirming(false)}
-        onConfirm={() => void reclaim()}
+        onConfirm={() => void cleanUp()}
       >
-        <WhatItCosts picked={picked} cost={cost} now={now} />
+        <WhatItCosts plan={plan} now={now} />
       </Dialog>
     </div>
   );
+}
+
+/** A refusal named by the row it is about and which of its three acts it was. */
+type RowFailure = { jobId: string; title: string; act: "checkout" | "branch" | "record"; outcome: Outcome };
+
+/** What a failed act reads on its alert. */
+function refusalTitle(failure: RowFailure): string {
+  const acted =
+    failure.act === "checkout"
+      ? "the checkout was not removed"
+      : failure.act === "branch"
+        ? "the branch was not deleted"
+        : "the record was not forgotten";
+  return `${failure.title}: ${acted}`;
+}
+
+/**
+ * What a refused act says. **Fleet's own sentence where it sent one** — a
+ * `delete_branch` 409 arrives as `refused` with a `WireError`, and `said`'s
+ * generic case for that is blank by design (`copy.ts`); every other refusal
+ * here still reads through `said`.
+ */
+function refusedSaid(outcome: Outcome): string {
+  return !outcome.ok && outcome.why === "refused" ? outcome.error.message : said(outcome);
 }
 
 /**
@@ -291,26 +388,20 @@ export function Worktrees({ onWant, held, jobs = [], onReclaim, now, onCopied }:
  * comes back.
  *
  * **The destroyed files are named, one by one.** They are the only thing on
- * this screen the act ends, no branch carries them, and a count would be a
- * number a person cannot check against what they remember writing.
+ * this screen a checkout removal ends, no branch carries them, and a count
+ * would be a number a person cannot check against what they remember writing.
  */
-function WhatItCosts({
-  picked,
-  cost,
-  now,
-}: {
-  picked: readonly WorktreeHeld[];
-  cost: ReturnType<typeof losing>;
-  now: number;
-}) {
-  const files = filesDestroyed(cost);
+function WhatItCosts({ plan, now }: { plan: Planned; now: number }) {
+  const files = filesDestroyed(plan);
+  const nothingLost =
+    plan.destroying.length === 0 && plan.deletingBranches.length === 0 && plan.forgetting.length === 0;
   return (
     <>
-      <p>{confirmOpening(cost)}</p>
+      <p>{confirmOpening(plan)}</p>
 
-      {cost.destroying.length === 0 ? (
-        <p>{NOTHING_IS_LOST}</p>
-      ) : (
+      {nothingLost ? <p>{NOTHING_IS_LOST}</p> : null}
+
+      {plan.destroying.length === 0 ? null : (
         <>
           <p>
             <strong>
@@ -319,7 +410,7 @@ function WhatItCosts({
             — written and committed nowhere, so the checkout is the only copy and nothing
             gets them back.
           </p>
-          {cost.destroying.map((one) => (
+          {plan.destroying.map((one) => (
             <div key={one.jobId}>
               {/* How long they have sat, on the confirmation as well as the
                   row: this is the last screen before they are gone, and it is
@@ -337,14 +428,19 @@ function WhatItCosts({
         </>
       )}
 
-      {cost.keeping.length === 0 ? null : (
+      {plan.deletingBranches.length === 0 ? null : (
         <>
           <p>
-            These branches are kept, with the commits that kept them. Nothing here deletes
-            work nobody has taken — merge or delete them by hand when you are ready.
+            <strong>
+              {plan.deletingBranches.length === 1
+                ? "One branch is deleted"
+                : `${plan.deletingBranches.length} branches are deleted`}
+            </strong>
+            , at the tip below — recoverable from that commit alone once the branch itself is
+            gone.
           </p>
           <ul>
-            {cost.keeping.map((one) => (
+            {plan.deletingBranches.map((one) => (
               <li key={one.jobId} className="mono">
                 {one.branch} · {one.commits === 1 ? "1 commit" : `${one.commits} commits`} ·{" "}
                 {one.tip}
@@ -354,7 +450,38 @@ function WhatItCosts({
         </>
       )}
 
-      {picked.length === 0 ? <p>Nothing is chosen, so nothing happens.</p> : null}
+      {plan.keeping.length === 0 ? null : (
+        <>
+          <p>
+            These branches are kept, with the commits that kept them. Nothing here deletes
+            work nobody has taken — merge or delete them by hand when you are ready.
+          </p>
+          <ul>
+            {plan.keeping.map((one) => (
+              <li key={one.jobId} className="mono">
+                {one.branch} · {one.commits === 1 ? "1 commit" : `${one.commits} commits`} ·{" "}
+                {one.tip}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {plan.forgetting.length === 0 ? null : (
+        <>
+          <p>
+            <strong>
+              {plan.forgetting.length === 1 ? "One record is forgotten" : `${plan.forgetting.length} records are forgotten`}
+            </strong>{" "}
+            — there is no undo, and a forgotten job cannot be opened again.
+          </p>
+          <ul>
+            {plan.forgetting.map((one) => (
+              <li key={one.jobId}>{one.title}</li>
+            ))}
+          </ul>
+        </>
+      )}
     </>
   );
 }
