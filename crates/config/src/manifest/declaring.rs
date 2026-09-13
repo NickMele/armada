@@ -80,10 +80,7 @@ impl Manifest {
     /// **Declared, never destructive.** The key is not written, so it reads as
     /// false; a person allowing a command is allowing it to run unattended.
     pub fn declaring_command(path: &Path, text: &str, run: &str) -> Result<Declared, NotDeclared> {
-        let run = run.trim();
-        if run.contains('\n') || run.contains('\r') {
-            return Err(NotDeclared::MoreThanOneLine);
-        }
+        let run = trimmed(run)?;
         let before = Manifest::parse(path, text).map_err(NotDeclared::Unreadable)?;
         let declared = before.command_names().into_iter().find(|name| {
             before
@@ -98,17 +95,46 @@ impl Manifest {
             });
         }
         let name = unused_name(run, &before);
-        let text = inserted(text, &name, run)?;
+        Manifest::declaring_named(path, text, &name, run)
+    }
+
+    /// `text` with `name: { run: <run> }` inserted under `commands`, where
+    /// `name` is already decided — by a prior call to
+    /// [`declaring_command`](Manifest::declaring_command) against a different
+    /// text that is meant to end up with the same entry.
+    ///
+    /// **No "already declared" check.** That question only makes sense against
+    /// a name nobody has chosen yet, which [`declaring_command`] is the one
+    /// caller that does.
+    pub fn declaring_named(
+        path: &Path,
+        text: &str,
+        name: &str,
+        run: &str,
+    ) -> Result<Declared, NotDeclared> {
+        let run = trimmed(run)?;
+        let text = inserted(text, name, run)?;
         let after = Manifest::parse(path, &text).map_err(NotDeclared::WouldNotRead)?;
-        match after.command(&name) {
+        match after.command(name) {
             Some(command) if command.run() == run && !command.is_destructive() => Ok(Declared {
                 text,
-                name,
+                name: name.to_string(),
                 already: false,
             }),
-            _ => Err(NotDeclared::Misread { name }),
+            _ => Err(NotDeclared::Misread {
+                name: name.to_string(),
+            }),
         }
     }
+}
+
+/// `run`, trimmed, or refused as more than a `run:` can hold.
+fn trimmed(run: &str) -> Result<&str, NotDeclared> {
+    let run = run.trim();
+    if run.contains('\n') || run.contains('\r') {
+        return Err(NotDeclared::MoreThanOneLine);
+    }
+    Ok(run)
 }
 
 /// A name from the command's first words, numbered until neither registry has

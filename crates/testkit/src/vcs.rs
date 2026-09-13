@@ -39,8 +39,8 @@ use crate::work_product::Holding;
 
 mod commit;
 
-pub use commit::FakeCommit;
 use commit::Willing;
+pub use commit::{CommitScope, FakeCommit};
 
 /// Why the fake refused.
 ///
@@ -141,6 +141,12 @@ pub struct FakeVcs {
     bases: Mutex<BTreeMap<String, bool>>,
     /// Every base checkout this fake has been asked to drop, in order.
     dropped_bases: Mutex<Vec<String>>,
+    /// What the branch tip holds at a path, scripted per path. Absent for
+    /// every path a test does not care about — the same "nothing here answers
+    /// a real repository" stance every other read in this fake takes, so
+    /// `content_at_tip` answers `None` for a path nobody scripted rather than
+    /// inventing content there is no repository here to have.
+    tip_contents: Mutex<BTreeMap<String, String>>,
 }
 
 /// What this fake's forge does when asked to merge.
@@ -315,6 +321,16 @@ impl FakeVcs {
     /// entry**, for the same reason nothing removes a worktree.
     pub fn created(&self) -> Vec<Worktree> {
         self.created.lock().expect("not poisoned").clone()
+    }
+
+    /// Script what the branch tip holds at `path`, for `content_at_tip` to
+    /// answer.
+    pub fn with_tip_content(self, path: impl Into<String>, text: impl Into<String>) -> FakeVcs {
+        self.tip_contents
+            .lock()
+            .expect("not poisoned")
+            .insert(path.into(), text.into());
+        self
     }
 
     /// Put a ref at a commit, so a base can be resolved without a repository.
@@ -820,7 +836,7 @@ impl Vcs for FakeVcs {
         message: &str,
         at: CommitTime,
     ) -> Result<Committed, Self::CommitError> {
-        self.commit(worktree, None, message, at)
+        self.commit(worktree, CommitScope::All, message, at)
     }
 
     fn commit_paths(
@@ -831,7 +847,39 @@ impl Vcs for FakeVcs {
         at: CommitTime,
     ) -> Result<Committed, Self::CommitError> {
         let paths = paths.iter().map(|path| path.to_string()).collect();
-        self.commit(worktree, Some(paths), message, at)
+        self.commit(worktree, CommitScope::Paths(paths), message, at)
+    }
+
+    fn content_at_tip(
+        &self,
+        _worktree: &Worktree,
+        path: &str,
+    ) -> Result<Option<String>, Self::CommitError> {
+        Ok(self
+            .tip_contents
+            .lock()
+            .expect("not poisoned")
+            .get(path)
+            .cloned())
+    }
+
+    fn commit_content(
+        &self,
+        worktree: &Worktree,
+        path: &str,
+        content: &str,
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError> {
+        self.commit(
+            worktree,
+            CommitScope::Content {
+                path: path.to_string(),
+                content: content.to_string(),
+            },
+            message,
+            at,
+        )
     }
 }
 

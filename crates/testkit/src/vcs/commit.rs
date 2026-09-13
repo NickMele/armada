@@ -13,8 +13,23 @@ pub struct FakeCommit {
     pub branch: String,
     pub message: String,
     pub at: CommitTime,
-    /// The paths it was limited to, or `None` for everything in the worktree.
-    pub paths: Option<Vec<String>>,
+    /// What it committed: everything, some paths as the working directory
+    /// holds them, or one path's content given directly.
+    pub scope: CommitScope,
+}
+
+/// What one commit covered. **Three variants because the real trait has three
+/// methods that write one**, and a test asserting on `scope` is asserting on
+/// which of them was called.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitScope {
+    /// `commit_all`: everything the worktree holds.
+    All,
+    /// `commit_paths`: these paths, as the working directory holds them.
+    Paths(Vec<String>),
+    /// `commit_content`: this one path, given this exact content — the
+    /// working directory is never consulted.
+    Content { path: String, content: String },
 }
 
 /// What the fake does when asked to commit.
@@ -57,12 +72,12 @@ impl FakeVcs {
         self.committed.lock().expect("not poisoned").clone()
     }
 
-    /// Both kinds of commit, told apart only by `paths`. Scripted for the
+    /// Every kind of commit, told apart only by `scope`. Scripted for the
     /// reason the `commits` field is: there is no worktree here to look in.
     pub(super) fn commit(
         &self,
         worktree: &Worktree,
-        paths: Option<Vec<String>>,
+        scope: CommitScope,
         message: &str,
         at: CommitTime,
     ) -> Result<Committed, FakeVcsError> {
@@ -75,7 +90,7 @@ impl FakeVcs {
                     branch: worktree.branch().to_string(),
                     message: message.to_string(),
                     at,
-                    paths,
+                    scope,
                 });
                 Ok(Committed::Made {
                     commit: format!("{:040x}", made.len()),
