@@ -546,9 +546,11 @@ export type BridgeApi = {
 
   /** The OS's folder dialog, over this window. `null` where the person cancelled it. */
   chooseFolder: () => Promise<string | null>;
-  /** Serve a folder, by its absolute path. Once served it is listed and picked before this answers. */
+  /** A clone parent as Fleet will canonicalise it, or `null` where it is not a folder here. */
+  resolveFolder: (path: string) => Promise<string | null>;
+  /** Serve a folder, by its absolute path. Listed before this answers; the window picks it. */
   addRepository: (path: string) => Promise<LocateAnswer>;
-  /** Clone `url` into a new folder under `parent`, then serve and pick it. **Waits past Fleet's ten minutes.** */
+  /** Clone `url` into a new folder under `parent`, then serve and list it. **Waits past Fleet's ten minutes.** */
   cloneRepository: (url: string, parent: string) => Promise<LocateAnswer>;
 
   /** Start a declared server — this Job's worktree, or the main checkout with

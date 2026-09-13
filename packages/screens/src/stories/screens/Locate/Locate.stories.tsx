@@ -56,6 +56,59 @@ export const AFolderAdded: Story = {
   },
 };
 
+/** A fresh install: Fleet serves nothing, so the dialog opens by itself over a rail saying so, and nothing reads as a fault. */
+export const NothingServed: Story = {
+  name: "Nothing served",
+  args: { repositories: [] },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dialog = await canvas.findByRole("dialog", { name: "Add a repository" });
+    const picker = canvas.getByRole("combobox", { name: "Project" });
+    await expect(within(picker).getByRole("option", { name: "Nothing set up yet" })).toBeInTheDocument();
+    await expect(canvas.getByText("Nothing is set up yet")).toBeInTheDocument();
+    await expect(canvas.queryByText(/could not be read/)).toBeNull();
+    await userEvent.type(within(dialog).getByLabelText("Project location"), CHOSEN);
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Add repository/ }));
+    await expect(args.onAdded).toHaveBeenCalledWith(CHOSEN);
+    // The first repository added lands on Setup.
+    await expect(await canvas.findByRole("region", { name: "Workspaces" })).toBeVisible();
+    await expect(canvas.getByRole("combobox", { name: "Project" })).toHaveValue(CHOSEN);
+  },
+};
+
+/** A clone that finished after its dialog closed says so, and moves nothing until its Setup is asked for. */
+export const ACloneFinishedLate: Story = {
+  name: "A clone that finished after its dialog closed",
+  args: { clone: "late" },
+  play: async ({ canvasElement }) => {
+    const { canvas, dialog } = await cloneFrom(canvasElement);
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Cancel/ }));
+    await waitFor(() => expect(canvas.queryByRole("dialog", { name: "Add a repository" })).toBeNull());
+    await expect(await canvas.findByText("storefront is ready to set up", {}, { timeout: 3000 })).toBeVisible();
+    const picker = canvas.getByRole("combobox", { name: "Project" });
+    await expect(picker).toHaveValue("/Users/user/armada");
+    await expect(canvas.queryByRole("region", { name: "Workspaces" })).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Open Setup" }));
+    await expect(await canvas.findByRole("region", { name: "Workspaces" })).toBeVisible();
+    await expect(picker).toHaveValue("/Users/user/code/storefront");
+    await expect(canvas.queryByText("storefront is ready to set up")).toBeNull();
+  },
+};
+
+/** A parent under a symlink previews the folder Fleet clones into, as main resolves it. */
+export const AParentUnderASymlink: Story = {
+  name: "A parent under a symlink",
+  play: async ({ canvasElement }) => {
+    const { dialog } = await opened(canvasElement);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Clone from a URL" }));
+    await userEvent.type(within(dialog).getByLabelText("Repository URL"), URL);
+    await userEvent.type(within(dialog).getByLabelText("Clone into"), "/tmp");
+    const lands = within(dialog).getByRole("group", { name: "Project location" });
+    await expect(await within(lands).findByText("/private/tmp/storefront")).toBeVisible();
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Cancel/ }));
+  },
+};
+
 /** A clone underway says so, and a second press — the button or Enter — sends nothing. */
 export const ACloneUnderway: Story = {
   name: "A clone underway",
@@ -119,15 +172,21 @@ const SET_UP = { ...repository(), root: "/Users/user/code/web-app", manifest: { 
 const LOOSE = { root: "/Users/user/scratch", records_root: "/records/scratch" };
 const API = { root: "/Users/user/code/api", records_root: "/records/api" };
 const OLD_API = { root: "/Users/user/old/api", records_root: "/records/old-api" };
+const SET_UP_API = { ...repository(), root: "/Users/user/services/api", manifest: { ...repository().manifest!, id: "api" } };
 
-/** The picker names a Manifest by its id and a folder nobody set up by its name; two alike take their parent. */
+/**
+ * A set-up repository reads as its Manifest id and nothing else. A folder nobody set up reads as its
+ * name, and takes its parent only where another not set up shares that name.
+ */
 export const ThePickersNames: Story = {
   name: "The picker's names",
-  args: { repositories: [SET_UP, LOOSE, API, OLD_API] },
+  args: { repositories: [SET_UP, SET_UP_API, LOOSE, API, OLD_API] },
   play: async ({ canvasElement }) => {
     const picker = within(canvasElement).getByRole("combobox", { name: "Project" });
     const setUp = within(picker).getByRole("option", { name: "storefront" });
     await expect(setUp).toHaveAttribute("title", SET_UP.root);
+    await expect(within(picker).getByRole("option", { name: "api" })).toHaveAttribute("title", SET_UP_API.root);
+    await expect(within(picker).queryByRole("option", { name: "services/api" })).toBeNull();
     const notSetUp = within(within(picker).getByRole("group", { name: "Not set up" }));
     await expect(notSetUp.getByRole("option", { name: "scratch" })).toHaveAttribute("title", LOOSE.root);
     await expect(notSetUp.getByRole("option", { name: "code/api" })).toHaveAttribute("title", API.root);

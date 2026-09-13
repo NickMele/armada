@@ -17,6 +17,7 @@
 // gone to look at a worktree, is not looking at this window; a notice that
 // expired while they were is one they cannot get back.
 
+import type { ReactNode } from "react";
 import { Alert, Button, ManifestNotice } from "@armada/components";
 import type { ManifestReading, Outcome, WorktreeReclaimed } from "@armada/protocol";
 import type { BridgeIdentity } from "@armada/protocol";
@@ -53,6 +54,8 @@ export type StandingProps = {
   commandFailure: Failure | null;
   outcome: Outcome | null;
   onOutcome: (outcome: Outcome | null) => void;
+  /** A clone that finished after its dialog closed — `LocatedNotice`, held by Locate. */
+  located?: ReactNode;
 };
 
 /** Everything true above the surface, in the order it is met. */
@@ -73,6 +76,7 @@ export function Standing({
   commandFailure,
   outcome,
   onOutcome,
+  located,
 }: StandingProps) {
   return (
     <>
@@ -118,6 +122,8 @@ export function Standing({
           {`${missed} events will never arrive. Fleet resynced current state after each drop, so the list below is repaired.`}
         </Alert>
       )}
+
+      {located}
 
       {/* What a reclaim gave back. **Neutral, because nothing is wrong** — a
           branch kept for holding work nothing has taken is the safe setting

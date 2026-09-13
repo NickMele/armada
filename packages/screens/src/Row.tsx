@@ -77,7 +77,7 @@
 
 import { Button, JobRowStacked, SplitButton, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
-import { Layers } from "lucide-react";
+import { FolderGit2, Layers } from "lucide-react";
 
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
@@ -121,6 +121,7 @@ export function Row({
   stale,
   now,
   workflows,
+  repository,
   selected,
   focused,
   onOpen,
@@ -128,6 +129,8 @@ export function Row({
   onCopied,
 }: {
   job: JobSummary;
+  /** Which repository, by the picker's label. Absent where Fleet serves one, so no row repeats it. */
+  repository?: string;
   /** The title, plus which dispatch of the work this is where there is more than one. */
   headline: string;
   stale: boolean;
@@ -182,8 +185,9 @@ export function Row({
   const createdAt = absoluteOf(job.created_at) ?? undefined;
 
   // **The row's facts, in the order `BOARD_COLUMNS` names them, and both views
-  // read them.** Three, and exactly three: a column with no header is a cell
-  // nobody can read, and a header with no cell is a track reserved for nothing.
+  // read them.** Three, and a fourth only where `columnsFor` names Repository: a
+  // column with no header is a cell nobody can read, and a header with no cell is
+  // a track reserved for nothing.
   //
   // **One track per fact, not per value.** Progress holds the bar and the step
   // together because a column called Progress answering in two places would
@@ -219,6 +223,8 @@ export function Row({
       mono: true,
       quiet: elapsedNow === undefined,
     },
+    // Last, so the handle, the status and the three facts a person scans keep their places.
+    ...(repository === undefined ? [] : [{ label: "Repository", icon: FolderGit2, value: repository }]),
   ];
 
   // **`landed` leaves the row with the old field run.** It said whether a Job's

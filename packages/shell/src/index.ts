@@ -18,5 +18,6 @@ export * from "./floor";
 export * from "./Head";
 export * from "./Palette";
 export * from "./Shell";
+export * from "./repository-label";
 export * from "./surfaces";
 export * from "./uncaught";

@@ -1,12 +1,16 @@
-// Add and clone, as main sends them: the body, the wait, and what a person lands on after.
+// Add and clone, as main sends them: the body, the wait, and the parent a clone preview names.
 
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
+import { mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CLONE_MS, Locating, locateAnswerOf } from "./locating";
+import { CLONE_MS, Locating, locateAnswerOf, resolvedFolder } from "./locating";
 import { ask, COMMAND_MS } from "./request";
 
 const ADDED = { root: "/Users/user/scratch", records_root: "/records/scratch" };
@@ -39,19 +43,18 @@ function wired(port: number, done: string[]): Locating {
   return new Locating({
     port: () => port,
     list: async () => void done.push("list"),
-    pick: async (root) => void done.push(`pick ${root}`),
   });
 }
 
 describe("adding a folder", () => {
-  it("posts the path, then lists and picks what Fleet now serves", async () => {
+  it("posts the path and lists what Fleet now serves, leaving the pick to the window that asked", async () => {
     const asked: { url: string; body: string }[] = [];
     const done: string[] = [];
     const port = await fleet(201, ADDED, asked);
     const answer = await wired(port, done).add("/Users/user/scratch");
     expect(asked).toEqual([{ url: "/repositories/add", body: JSON.stringify({ path: "/Users/user/scratch" }) }]);
     expect(answer).toEqual({ state: "located", repository: ADDED });
-    expect(done).toEqual(["list", `pick ${ADDED.root}`]);
+    expect(done).toEqual(["list"]);
   });
 
   it("reads a refusal in Fleet's words, and picks nothing", async () => {
@@ -64,7 +67,7 @@ describe("adding a folder", () => {
   });
 
   it("sends nothing without a Fleet", async () => {
-    const locating = new Locating({ port: () => null, list: async () => {}, pick: async () => {} });
+    const locating = new Locating({ port: () => null, list: async () => {} });
     expect(await locating.add("/Users/user/scratch")).toEqual({ state: "failed", outcome: { ok: false, why: "not_connected" } });
   });
 });
@@ -76,7 +79,7 @@ describe("cloning from a URL", () => {
       waits.push({ path, waitMs, body });
       return { ok: true, body: ADDED };
     };
-    const locating = new Locating({ port: () => 1, list: async () => {}, pick: async () => {} }, recording);
+    const locating = new Locating({ port: () => 1, list: async () => {} }, recording);
     await locating.clone("file:///tmp/remotes/scratch.git", "/Users/user/code");
     await locating.add("/Users/user/scratch");
     expect(CLONE_MS).toBeGreaterThan(10 * 60_000);
@@ -93,7 +96,7 @@ describe("cloning from a URL", () => {
       sent += 1;
       return new Promise((resolve) => (finish = () => resolve({ ok: true, body: ADDED })));
     };
-    const locating = new Locating({ port: () => 1, list: async () => {}, pick: async () => {} }, slow);
+    const locating = new Locating({ port: () => 1, list: async () => {} }, slow);
     const first = locating.clone("git@host:scratch.git", "/Users/user/code");
     expect(await locating.clone("git@host:scratch.git", "/Users/user/code")).toEqual({ state: "busy" });
     finish();
@@ -104,5 +107,23 @@ describe("cloning from a URL", () => {
   it("carries a transport failure whole", () => {
     const outcome = { ok: false as const, why: "transport" as const, detail: "aborted", fault: { method: "POST" as const, path: "/repositories/clone", why: "timed_out" as const, waitedMs: CLONE_MS } };
     expect(locateAnswerOf({ ok: false, outcome })).toEqual({ state: "failed", outcome });
+  });
+});
+
+describe("the clone preview's parent", () => {
+  it("resolves a symlink the way Fleet canonicalises it", async () => {
+    const real = await mkdtemp(join(tmpdir(), "parent-"));
+    const link = `${real}-link`;
+    await symlink(real, link);
+    expect(await resolvedFolder(link)).toBe(await realpath(real));
+  });
+
+  it("names nothing for a relative path, a folder that is not there, or a file", async () => {
+    const real = await mkdtemp(join(tmpdir(), "parent-"));
+    const file = join(real, "armada.yml");
+    await writeFile(file, "version: 1\n");
+    expect(await resolvedFolder("code")).toBeNull();
+    expect(await resolvedFolder(join(real, "missing"))).toBeNull();
+    expect(await resolvedFolder(file)).toBeNull();
   });
 });

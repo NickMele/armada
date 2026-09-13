@@ -20,6 +20,7 @@ import type { StartCheckoutRun, StartRun } from "@armada/protocol";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import { FleetConnection } from "./connection";
+import { resolvedFolder } from "./locating";
 import { openArtifact } from "./open";
 import { openPullRequest, openRemarkLink } from "./forge";
 import { RemarksPoll } from "./remarks-poll";
@@ -605,6 +606,8 @@ void app.whenReady().then(() => {
     const chosen = window === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(window, options);
     return chosen.canceled ? null : (chosen.filePaths[0] ?? null);
   });
+  // A path in, its canonical folder out: the clone preview names what Fleet will. Reads nothing inside it.
+  ipcMain.handle(CHANNELS.resolveFolder, (_event, path: unknown) => (typeof path === "string" ? resolvedFolder(path) : null));
   ipcMain.handle(CHANNELS.addRepository, (_event, path: unknown) =>
     typeof path === "string" ? connection?.repositories.locating.add(path) : undefined,
   );

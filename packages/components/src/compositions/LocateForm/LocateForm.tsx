@@ -80,7 +80,7 @@ export function LocateForm(props: LocateFormProps) {
       ) : sending && cloning ? (
         <p>
           Git is cloning into <span className="armada-locate__path">{props.landsIn}</span>. A large repository
-          takes minutes. Closing this leaves the clone running, and it joins the project picker when it finishes.
+          takes minutes. Closing this leaves the clone running, and Bridge says so when it finishes.
         </p>
       ) : sending ? (
         <p>Fleet is reading the folder.</p>

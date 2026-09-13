@@ -62,6 +62,7 @@ import {
 } from "@armada/components";
 
 import { said } from "./copy";
+import { NOTHING_SERVED, servesNothing } from "./locate-reads";
 import { useManifestRuns, type ManifestSlice } from "./checkout-runs";
 import { useRepositoryAllows, type RepositoryAllowsSlice } from "./manifest-allows";
 import type { ManifestEditing } from "./manifest-file";
@@ -126,6 +127,11 @@ export function Manifest(props: ManifestProps) {
     onStopRun: (runId) => void props.onStopRun(runId),
     onDismiss: setDismissedVerify,
   });
+
+  // A Fleet serving nothing is where a fresh install starts, not a Manifest that would not read.
+  if (props.sheet.state === "failed" && servesNothing(props.sheet.outcome)) {
+    return <Alert tone="neutral" title={NOTHING_SERVED.title}>{NOTHING_SERVED.next}</Alert>;
+  }
 
   return (
     <div className="armada-screen__stack">

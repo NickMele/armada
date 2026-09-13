@@ -1,9 +1,10 @@
 // Locate, held by the app — `docs/journeys/set-up-a-project-manifest.md`, *Getting in*. Above
 // the dialog, so a clone still running when it closes is still running when it opens again.
 
-import { useRef, useState } from "react";
-import { LocateForm, type LocateFormProps, type LocateMode } from "@armada/components";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Button, LocateForm, type LocateFormProps, type LocateMode } from "@armada/components";
 import type { RepositorySummary } from "@armada/protocol";
+import { repositoryLabel } from "@armada/shell";
 
 import { said } from "./copy";
 import { DESTINATION_OCCUPIED, isAbsolute, landsIn, type LocateAnswer } from "./locate-reads";
@@ -11,13 +12,27 @@ import { DESTINATION_OCCUPIED, isAbsolute, landsIn, type LocateAnswer } from "./
 /** What Locate asks of the host. */
 export type LocateSlice = {
   onChooseFolder: () => Promise<string | null>;
+  /** A clone parent as Fleet will canonicalise it, resolved in main. `null` where it is no folder. */
+  onResolveFolder: (path: string) => Promise<string | null>;
   onAdd: (path: string) => Promise<LocateAnswer>;
   onClone: (url: string, parent: string) => Promise<LocateAnswer>;
-  /** Served and picked: go to Setup. **Not called where the dialog was closed while it ran.** */
+  /**
+   * Served: pick it and go to Setup. **Called only on a person's press** — the send while the
+   * dialog is up, or the notice's Open Setup where it finished after the dialog closed.
+   */
   onLocated: (repository: RepositorySummary) => void;
+  /** Fleet has listed nothing: the dialog opens by itself, since there is nothing else to do. */
+  nothingServed?: boolean;
 };
 
-export type Locating = { open: boolean; onOpen: () => void; form: LocateFormProps };
+export type Locating = {
+  open: boolean;
+  onOpen: () => void;
+  form: LocateFormProps;
+  /** A repository located after its dialog closed, until the person opens its Setup or dismisses it. */
+  late: RepositorySummary | null;
+  onLate: (open: boolean) => void;
+};
 
 const FULL_PATH = "A full path, starting with /.";
 
@@ -29,12 +44,31 @@ export function useLocate(slice: LocateSlice): Locating {
   const [parent, setParent] = useState("");
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<LocateFormProps["refusal"]>(undefined);
+  const [late, setLate] = useState<RepositorySummary | null>(null);
+  const [resolved, setResolved] = useState<{ parent: string; folder: string | null } | null>(null);
   const latest = useRef(slice);
   latest.current = slice;
   const shown = useRef(open);
   shown.current = open;
 
-  const destination = landsIn(url, parent);
+  useEffect(() => {
+    if (slice.nothingServed === true) setOpen(true);
+  }, [slice.nothingServed]);
+
+  // Fleet canonicalises the parent, so the preview asks main for the same spelling.
+  useEffect(() => {
+    const asked = parent.trim();
+    if (!isAbsolute(asked)) return undefined;
+    let current = true;
+    void latest.current.onResolveFolder(asked).then((folder) => {
+      if (current) setResolved({ parent: asked, folder });
+    });
+    return () => {
+      current = false;
+    };
+  }, [parent]);
+  const canonical = resolved?.parent === parent.trim() ? resolved.folder : null;
+  const destination = landsIn(url, canonical ?? parent);
   const ready = mode === "folder" ? isAbsolute(path) : url.trim() !== "" && destination !== null;
   const edited = <T,>(set: (value: T) => void) => (value: T) => {
     set(value);
@@ -61,6 +95,7 @@ export function useLocate(slice: LocateSlice): Locating {
         reset();
         setOpen(false);
         if (wasOpen) latest.current.onLocated(answer.repository);
+        else setLate(answer.repository);
         return;
       }
       setRefusal(refusalOf(answer, cloning));
@@ -72,6 +107,11 @@ export function useLocate(slice: LocateSlice): Locating {
   return {
     open,
     onOpen: () => setOpen(true),
+    late,
+    onLate: (going) => {
+      if (going && late !== null) latest.current.onLocated(late);
+      setLate(null);
+    },
     form: {
       open,
       mode,
@@ -140,4 +180,32 @@ function sentence(saying: string): string {
 /** The dialog, drawn from what `useLocate` holds. */
 export function Locate({ locating }: { locating: Locating }) {
   return <LocateForm {...locating.form} />;
+}
+
+/**
+ * A clone that finished after its dialog closed, said wherever the person is. **It never moves the
+ * window**: Open Setup is theirs to press, and until then the pick stays where they left it.
+ */
+export function LocatedNotice({ locating, repositories }: { locating: Locating; repositories: readonly RepositorySummary[] }) {
+  const { late } = locating;
+  if (late === null) return null;
+  const listed = repositories.some((one) => one.root === late.root) ? repositories : [...repositories, late];
+  return (
+    <Alert
+      tone="neutral"
+      title={`${repositoryLabel(late, listed)} is ready to set up`}
+      action={
+        <>
+          <Button variant="secondary" size="sm" onClick={() => locating.onLate(true)}>
+            Open Setup
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => locating.onLate(false)}>
+            Dismiss
+          </Button>
+        </>
+      }
+    >
+      {`The clone into ${late.root} finished, and Armada serves it. It is in the project picker.`}
+    </Alert>
+  );
 }

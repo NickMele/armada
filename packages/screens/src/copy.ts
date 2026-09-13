@@ -20,6 +20,7 @@ import type {
   WorktreeReclaimed,
 } from "@armada/protocol";
 import type { ConfirmableAct, JobAct } from "./JobDetail";
+import { NOTHING_SERVED, servesNothing } from "./locate-reads";
 
 /** What a refusal says. Every one names what happened and what to do. */
 export function said(outcome: Outcome): string {
@@ -84,8 +85,8 @@ export function said(outcome: Outcome): string {
     case "empty_note":
       return "Requesting changes needs a note. Nothing was sent, and the job is still waiting.";
     case "refused":
-      // Drawn as a failure notice above, with everything it carries.
-      return "";
+      // Drawn as a failure notice above, with everything it carries — except Fleet serving nothing, which is no fault.
+      return servesNothing(outcome) ? `${NOTHING_SERVED.title}. ${NOTHING_SERVED.next}` : "";
     case "transport":
       // **The fallback and not the rendering.** `App.tsx` draws this through
       // `transportFailure`, with a code, the route, the wait and something to

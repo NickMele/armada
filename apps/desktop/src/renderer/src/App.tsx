@@ -35,7 +35,7 @@ import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
 import { Manifest, checkoutRunnablesOf, useManifestEditing, useManifestForm } from "@armada/screens";
 import { Setup, useSetup } from "@armada/screens";
-import { Locate, useLocate } from "@armada/screens";
+import { Locate, LocatedNotice, useLocate } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
@@ -52,6 +52,7 @@ import {
   observeCheckoutRun,
   pickRepository,
   chooseFolder,
+  resolveFolder,
   addRepository,
   cloneRepository,
   getRunOutput,
@@ -239,12 +240,17 @@ export function App() {
   // The repository the rail picked. Main holds it, so every read below is taken after main moved.
   const repositories = state.holds.repositories ?? [];
   const repository = state.repository ?? undefined;
-  // Locate, held here so a clone outlives its dialog. Main has picked what it located; it lands on Setup.
+  // Whether Fleet has answered the listing. `models` is what says the holdings were read.
+  const listed = state.connection.state === "connected" && state.holds.models !== null;
+  // Locate, held here so a clone outlives its dialog, and opened by itself on a rail Fleet listed empty.
   const locate = useLocate({
     onChooseFolder: chooseFolder,
+    onResolveFolder: resolveFolder,
     onAdd: addRepository,
     onClone: cloneRepository,
-    onLocated: () => {
+    nothingServed: listed && repositories.length === 0,
+    onLocated: (one) => {
+      pickRepository(one.root);
       goTo(SURFACE.manifest);
       setSettingUp(true);
     },
@@ -353,12 +359,6 @@ export function App() {
     now,
   });
   const guarded = { bridge: state.bridge, onCopied: setCopied };
-  // A rail Fleet listed empty opens Locate by itself. `models` is what says the holdings were read.
-  const emptyRail = live && state.holds.models !== null && repositories.length === 0;
-  useEffect(() => {
-    if (emptyRail) locate.onOpen();
-  }, [emptyRail]);
-
   function close(): void {
     setReturning(openJob);
     setOpenJob(null);
@@ -436,6 +436,7 @@ export function App() {
         connection={state.connection}
         statement={statement}
         repositories={repositories}
+        listed={listed}
         scope={state.repository ?? ""}
         onScope={pick}
         onAddRepository={locate.onOpen}
@@ -484,6 +485,7 @@ export function App() {
             commandFailure={commandFailure}
             outcome={commands.outcome}
             onOutcome={commands.setOutcome}
+            located={<LocatedNotice locating={locate} repositories={repositories} />}
           />
 
           {/* One Job, read whole, in place of the board. Reviewing and deciding
@@ -745,6 +747,7 @@ export function App() {
                   stale={!live}
                   now={now}
                   workflows={state.holds.workflows}
+                  served={listed ? repositories : null}
                   disconnected={live ? null : statement.headline}
                   selected={openJob}
                   onOpen={setOpenJob}

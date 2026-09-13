@@ -1,5 +1,7 @@
-// Locate: a repository added by its folder or cloned from a URL, then listed and picked so the
-// window lands on Setup for it. `docs/journeys/set-up-a-project-manifest.md`, *Getting in*.
+// Locate: a repository added by its folder or cloned from a URL, then listed. The window that asked
+// picks it, so a clone finishing behind a closed dialog moves nobody. `docs/journeys/set-up-a-project-manifest.md`.
+
+import { realpath, stat } from "node:fs/promises";
 
 import type { AddRepository, CloneRepository, RepositorySummary } from "@armada/protocol";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
@@ -15,9 +17,8 @@ export const CLONE_MS = 11 * 60_000;
 
 export type LocatingWiring = {
   port: () => number | null;
-  /** Read what Fleet serves again, so the pick below finds the new root listed. */
+  /** Read what Fleet serves again, so the window's pick finds the new root listed. */
   list: (port: number) => Promise<void>;
-  pick: (root: string) => Promise<void>;
 };
 
 export class Locating {
@@ -52,11 +53,24 @@ export class Locating {
       // The port a clone started on may be gone ten minutes later.
       const now = this.wiring.port();
       if (now !== null) await this.wiring.list(now);
-      await this.wiring.pick(answer.repository.root);
       return answer;
     } finally {
       this.out = false;
     }
+  }
+}
+
+/**
+ * The folder a clone's parent names, as Fleet canonicalises it — `/tmp` is `/private/tmp` — or `null`
+ * where it is not an absolute folder on this machine, which Fleet refuses and the preview leaves bare.
+ */
+export async function resolvedFolder(path: string): Promise<string | null> {
+  if (!path.startsWith("/")) return null;
+  try {
+    const resolved = await realpath(path);
+    return (await stat(resolved)).isDirectory() ? resolved : null;
+  } catch {
+    return null;
   }
 }
 
