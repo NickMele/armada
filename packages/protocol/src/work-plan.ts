@@ -52,3 +52,24 @@ export type JobPlanChanged = {
   actor: string;
   at: string;
 };
+
+/**
+ * A person adds a task to a Job's plan — `add_task`. Since 13.30.
+ *
+ * `detail` and `after` may both be `""`; `after` is the id it comes after, or
+ * `""` for the end.
+ */
+export type AddTask = {
+  title: string;
+  detail: string;
+  after: string;
+};
+
+/**
+ * A person drops a task from a Job's plan, with a reason — `drop_task`.
+ * Since 13.30. `reason` is never blank.
+ */
+export type DropTask = {
+  task: string;
+  reason: string;
+};

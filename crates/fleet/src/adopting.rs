@@ -40,6 +40,7 @@ use crate::resume::Redirection;
 use crate::session::{DroneSession, LiveSession};
 use crate::silence::Poke;
 use crate::terms::{Declaring, Redeclaring};
+use crate::work_plan::PlanChanged;
 
 /// What Fleet says when something asks an adopted Drone to listen.
 ///
@@ -298,6 +299,13 @@ impl LiveSession for Session {
     async fn redirect(&self, instruction: &Redirection) -> Result<(), io::Error> {
         match self {
             Session::Spawned(session) => session.redirect(instruction).await,
+            Session::Adopted(_) => Err(io::Error::other(NOTHING_TO_SPEAK_INTO)),
+        }
+    }
+
+    async fn plan_changed(&self, note: &PlanChanged) -> Result<(), io::Error> {
+        match self {
+            Session::Spawned(session) => session.plan_changed(note).await,
             Session::Adopted(_) => Err(io::Error::other(NOTHING_TO_SPEAK_INTO)),
         }
     }

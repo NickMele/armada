@@ -6,17 +6,22 @@
 //! disagree. **Nothing here gates a submission**: a task's state is a claim.
 
 use std::fmt;
+use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, Grant, Vcs, WorkProduct};
+use api::Refusal;
 use core_model::{
-    Actor, EvidenceType, FrozenWorkflow, JobId, PlanChange, PlanRefused, ResolvedStep,
-    StepEvidence, StepId, WorkPlan,
+    Actor, DropReason, EvidenceType, FrozenWorkflow, JobId, NewTask, PlanChange, PlanRefused,
+    PlanTask, ResolvedStep, StepEvidence, StepId, TaskId, TaskState, TaskUpdate, Timestamp,
+    WorkPlan,
 };
 use ipc::mcp::NotRecorded;
 use store::{PlanHand, PlanNotKept};
 
 use crate::adrift::Adrift;
+use crate::budget::budgeted_for;
 use crate::daemon::Fleet;
+use crate::session::{LiveSession, Occasion};
 
 /// Why a Drone's change to the plan was not kept. **None of these moves a
 /// step**, and each says what to do instead in words the Drone can act on.
@@ -158,6 +163,55 @@ pub(crate) fn with_the_plan(
     recorded
 }
 
+/// What a person's add or drop is told to a working Drone. **Fleet's own
+/// sentence, never a person's words** — `redirect_drone` is where those
+/// travel. `docs/contracts/agent-prompt.md` section 4a has the drafted
+/// wording. `#897`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlanChanged(String);
+
+impl PlanChanged {
+    /// A task added, at the id the plan gave it.
+    pub fn added(id: TaskId, task: &NewTask) -> PlanChanged {
+        PlanChanged(format!(
+            "THE PLAN CHANGED\n\nA person added a task to this Job's plan: {id} {}. It \
+             is open, for you or a later part to pick up. This is not a question. Carry \
+             on with the part you were given.",
+            task.title()
+        ))
+    }
+
+    /// A task dropped, with the reason.
+    pub fn dropped(id: TaskId, title: &str, reason: &str) -> PlanChanged {
+        PlanChanged(format!(
+            "THE PLAN CHANGED\n\nA person dropped a task from this Job's plan: {id} \
+             {title}. Reason: {reason}. This is settled, not a question to raise — the \
+             task stays dropped unless a person adds it back. Carry on with the part \
+             you were given."
+        ))
+    }
+
+    /// The turn, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Why the store would not keep a person's change, once the plan itself would
+/// have taken it. Not the person's to fix.
+fn plan_not_kept(job: &JobId, why: PlanNotKept) -> Adrift {
+    match why {
+        PlanNotKept::Refused(refused) => Adrift::PlanRefused {
+            job: job.clone(),
+            why: refused,
+        },
+        other => Adrift::PlanNotKept {
+            job: job.clone(),
+            because: other.to_string(),
+        },
+    }
+}
+
 /// The word a kept change is answered with. An added task answers with its id,
 /// which is the one thing the Drone needs to name it later.
 pub(crate) fn receipt_word(change: &PlanChange, plan: &WorkPlan) -> String {
@@ -244,5 +298,156 @@ where
             at: (&at).into(),
         }));
         Ok(plan)
+    }
+
+    /// A person adds a task to the Job's plan, from Bridge. `#897`.
+    ///
+    /// **Refused by name**: an empty title, or an `after` naming nothing the
+    /// plan holds — both `Adrift::Unnameable`, `redirect_drone`'s reuse of it
+    /// for a value that cannot work — or `Adrift::PlanRefused` where the Job
+    /// has no plan at all.
+    pub(crate) async fn add_task_by_person(
+        self: Arc<Self>,
+        job_id: ipc::JobId,
+        add: ipc::AddTask,
+    ) -> Result<ipc::WorkPlan, Refusal> {
+        let task = NewTask::new(&add.title, &add.detail)
+            .ok_or_else(|| self.refusal(Adrift::Unnameable))?;
+        let after = match add.after.trim() {
+            "" => None,
+            named => Some(TaskId::read(named).ok_or_else(|| self.refusal(Adrift::Unnameable))?),
+        };
+        let plan = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            let job = job_id.to_domain();
+            async move { fleet.added_by_person(&job, task, after).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
+        Ok((&plan).into())
+    }
+
+    /// A person drops a task from the Job's plan, with a reason, from Bridge.
+    /// `#897`.
+    ///
+    /// **Refused by name**: an empty reason, or a task the plan does not
+    /// hold — both `Adrift::Unnameable` — a Job with no plan at all
+    /// (`Adrift::PlanRefused`), or a task already `done` or already
+    /// `dropped` (`Adrift::TaskAlreadySettled`) — a person's drop is not
+    /// repeating a decision already made.
+    pub(crate) async fn drop_task_by_person(
+        self: Arc<Self>,
+        job_id: ipc::JobId,
+        body: ipc::DropTask,
+    ) -> Result<ipc::WorkPlan, Refusal> {
+        let task =
+            TaskId::read(body.task.trim()).ok_or_else(|| self.refusal(Adrift::Unnameable))?;
+        let reason =
+            DropReason::new(&body.reason).ok_or_else(|| self.refusal(Adrift::Unnameable))?;
+        let plan = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            let job = job_id.to_domain();
+            async move { fleet.dropped_by_person(&job, task, reason).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
+        Ok((&plan).into())
+    }
+
+    async fn added_by_person(
+        &self,
+        job: &JobId,
+        task: NewTask,
+        after: Option<TaskId>,
+    ) -> Result<WorkPlan, Adrift> {
+        let at = self.now();
+        let change = PlanChange::Added {
+            task: task.clone(),
+            after,
+        };
+        let plan = {
+            let mut store = self.store().lock().await;
+            store
+                .change_plan(job, &change, PlanHand::Person, &at)
+                .map_err(|why| plan_not_kept(job, why))?
+        };
+        let id = plan
+            .tasks()
+            .iter()
+            .map(PlanTask::id)
+            .max()
+            .expect("the task just added is in the plan it leaves");
+        self.told_plan_changed(job, &plan, &at);
+        self.deliver_plan_change(job, &PlanChanged::added(id, &task))
+            .await;
+        Ok(plan)
+    }
+
+    async fn dropped_by_person(
+        &self,
+        job: &JobId,
+        task: TaskId,
+        reason: DropReason,
+    ) -> Result<WorkPlan, Adrift> {
+        let at = self.now();
+        let change = PlanChange::Updated {
+            task,
+            to: TaskUpdate::Dropped(reason.clone()),
+        };
+        let plan = {
+            let mut store = self.store().lock().await;
+            let settled = store
+                .work_plan(job)
+                .map_err(Adrift::Reading)?
+                .and_then(|plan| plan.task(task).cloned());
+            if let Some(existing) = settled {
+                if matches!(existing.state(), TaskState::Dropped | TaskState::Done) {
+                    return Err(Adrift::TaskAlreadySettled {
+                        job: job.clone(),
+                        named: task,
+                        state: existing.state(),
+                    });
+                }
+            }
+            store
+                .change_plan(job, &change, PlanHand::Person, &at)
+                .map_err(|why| plan_not_kept(job, why))?
+        };
+        let title = plan
+            .task(task)
+            .map(PlanTask::title)
+            .unwrap_or_default()
+            .to_string();
+        self.told_plan_changed(job, &plan, &at);
+        self.deliver_plan_change(job, &PlanChanged::dropped(task, &title, reason.as_str()))
+            .await;
+        Ok(plan)
+    }
+
+    /// Publish `job.plan_changed`, actor `Human` — a person's act, never
+    /// Fleet's own.
+    fn told_plan_changed(&self, job: &JobId, plan: &WorkPlan, at: &Timestamp) {
+        self.publish(ipc::Event::JobPlanChanged(ipc::JobPlanChanged {
+            job_id: job.into(),
+            tasks: plan.counts().into(),
+            actor: Actor::Human.into(),
+            at: at.into(),
+        }));
+    }
+
+    /// Tell a working Drone what a person's add or drop changed. **Only where
+    /// there is a live session on this Job** — at a step boundary, or with no
+    /// session, this sends nothing, and the next brief's THE PLAN carries it.
+    /// It never respawns to deliver itself, `redirect_drone`'s own rule.
+    async fn deliver_plan_change(&self, job: &JobId, note: &PlanChanged) {
+        let Some(slot) = self.slot_of(job).await else {
+            return;
+        };
+        let working = slot.lock().await;
+        let Some(at_work) = working.as_ref().filter(|at_work| at_work.is(job)) else {
+            return;
+        };
+        at_work.instructed(Occasion::Plan, note.text());
+        let _ = at_work.session().plan_changed(note).await;
     }
 }

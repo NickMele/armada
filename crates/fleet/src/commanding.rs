@@ -6,27 +6,23 @@
 //! `Fleet` method that moves it, and maps a refusal through `Fleet::refusal`.
 //!
 //! `#712`: most commands race their work against [`CommandBudget`] through
-//! [`budgeted`], spawned so a losing race stops waiting without cancelling a
-//! write already in progress. Each excluded command says why on its own `impl`.
-//!
-//! **Past 500 lines and staying one file.** `#712` added a wrapper to two
-//! thirds of a trait already sized to one method per act; splitting by act
-//! would scatter `budgeted` and `CommandBudget` across the pieces that use
-//! them, which is the coupling the line count is asking about, not the count.
+//! [`budgeted`](crate::budget::budgeted). **The race itself moved to
+//! `crate::budget` at the 900-line refusal, `#897`** — a method added here is
+//! a delegating line into whichever module already holds its Job's logic.
 
-use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
 use ipc::{
-    CapRaise, ChangesRequested, FindingDismissed, JobExamined, JobForgotten, JobId, JobSummary,
-    Overruled, Preferences, ProposeJob, Redirection, Redispatched, RemarksTakenUp, SavePreference,
-    TurnRaise, WorktreeReclaimed,
+    AddTask, CapRaise, ChangesRequested, DropTask, FindingDismissed, JobExamined, JobForgotten,
+    JobId, JobSummary, Overruled, Preferences, ProposeJob, Redirection, Redispatched,
+    RemarksTakenUp, SavePreference, TurnRaise, WorkPlan, WorktreeReclaimed,
 };
 
 use crate::adrift::Adrift;
+use crate::budget::{budgeted, budgeted_for};
 use crate::daemon::Fleet;
 // The wire's `Redirection` is a struct with a public field; Fleet's is a
 // newtype that cannot hold an empty instruction. Both names are in scope here,
@@ -49,43 +45,6 @@ impl CommandBudget {
 
     pub fn duration(&self) -> Duration {
         self.0
-    }
-}
-
-/// Race a plain command's work against [`CommandBudget`], spawned rather than
-/// merely timed — see this module's own header for why.
-async fn budgeted<T>(
-    budget: CommandBudget,
-    work: impl Future<Output = Result<T, Adrift>> + Send + 'static,
-) -> Result<T, Adrift>
-where
-    T: Send + 'static,
-{
-    let waited = budget.duration();
-    match tokio::time::timeout(waited, tokio::spawn(work)).await {
-        Ok(Ok(answered)) => answered,
-        // Resumed rather than folded into a refusal a caller might retry: a
-        // panic has already unwound past every lock it held.
-        Ok(Err(panicked)) => std::panic::resume_unwind(panicked.into_panic()),
-        Err(_elapsed) => Err(Adrift::CommandTimedOut { job: None, waited }),
-    }
-}
-
-/// [`budgeted`], naming the Job a losing race's refusal is about.
-async fn budgeted_for<T>(
-    budget: CommandBudget,
-    job: JobId,
-    work: impl Future<Output = Result<T, Adrift>> + Send + 'static,
-) -> Result<T, Adrift>
-where
-    T: Send + 'static,
-{
-    match budgeted(budget, work).await {
-        Err(Adrift::CommandTimedOut { waited, .. }) => Err(Adrift::CommandTimedOut {
-            job: Some(job.to_domain()),
-            waited,
-        }),
-        answered => answered,
     }
 }
 
@@ -896,5 +855,15 @@ where
         .await
         .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
+    }
+
+    /// A person adds a task to the Job's plan. `#897`; `work_plan` has it.
+    async fn add_task(self: Arc<Self>, job: JobId, add: AddTask) -> Result<WorkPlan, Refusal> {
+        Fleet::add_task_by_person(self, job, add).await
+    }
+
+    /// A person drops a task, with a reason. `#897`; `work_plan` has it.
+    async fn drop_task(self: Arc<Self>, job: JobId, body: DropTask) -> Result<WorkPlan, Refusal> {
+        Fleet::drop_task_by_person(self, job, body).await
     }
 }

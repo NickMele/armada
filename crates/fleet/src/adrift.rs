@@ -32,7 +32,7 @@ use adapter_traits::{NotDelivered, NotMerged, SpawnConfigRefused, WorktreeSpecRe
 use adapters::RepoUnreadable;
 use core_model::{
     EscalationTrigger, IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId,
-    JobStatus, RedirectAlreadyWaiting, StepId,
+    JobStatus, PlanRefused, RedirectAlreadyWaiting, StepId, TaskId, TaskState,
 };
 use store::{LoadAllError, LoadJobError, ResolveJobError, WriteError};
 
@@ -692,6 +692,28 @@ pub enum Adrift {
         job: Option<JobId>,
         waited: Duration,
     },
+    /// A person's add or drop refused by the plan itself: no plan is recorded
+    /// for the Job, or a task or a place to add after that the plan does not
+    /// hold. `core_model::PlanRefused` is also what a Drone's own change is
+    /// refused by, in `fleet::work_plan::NotPlanned` — this is the same set,
+    /// read from a person's act instead. `#897`.
+    PlanRefused { job: JobId, why: PlanRefused },
+    /// A person's drop named a task already `done` or already `dropped`.
+    ///
+    /// **Not the plan's own refusal** — `core_model::WorkPlan::after` would
+    /// take the change, since a Drone's own `update_task` may repeat one. A
+    /// person's drop is answering a question already answered, and saying so
+    /// by name is worth more than a silent no-op. `#897`.
+    TaskAlreadySettled {
+        job: JobId,
+        named: TaskId,
+        state: TaskState,
+    },
+    /// The store would not keep a person's plan change that the plan itself
+    /// would have taken. Not the person's to fix —
+    /// `fleet::work_plan::NotPlanned::NotKept` is the Drone path's version of
+    /// the same failure. `#897`.
+    PlanNotKept { job: JobId, because: String },
 }
 impl Adrift {
     /// A refusal from the delivery seam, named against the Job it was for.

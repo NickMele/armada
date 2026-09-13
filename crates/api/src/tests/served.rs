@@ -843,6 +843,63 @@ const A_BLANK_NOTE: &str = r#"{"note":"   "}"#;
 /// two above** — nothing downstream was asked, so it is the transport's 400.
 const NOT_A_NOTE: &str = "{";
 
+/// `add_task` and `drop_task`, over the router. **What the fake daemon can
+/// prove is that the route reached it and that the body arrived** — its own
+/// header's rule. The refusals a real Fleet answers by name are `fleet`'s own
+/// tests, against real plan state a fake has none of.
+#[tokio::test]
+async fn a_persons_add_and_drop_reach_the_daemon_and_answer_with_the_plan() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01JOBPLAN0");
+    let app = wired(daemon, events);
+
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/jobs/01JOBPLAN0/add_task",
+        r#"{"title":"Add a regression test","detail":"","after":""}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let plan: ipc::WorkPlan = ipc::decode("the plan the add leaves", &body).expect("a plan");
+    assert_eq!(plan.approach, "a fake plan");
+
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/jobs/01JOBPLAN0/drop_task",
+        r#"{"task":"T1","reason":"not needed"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/jobs/01NOSUCHJOB/add_task",
+        r#"{"title":"x","detail":"","after":""}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "no such Job");
+}
+
+/// Bytes that are not a request reach neither route as a refusal about the
+/// Job — the transport's 400, `NOT_A_NOTE`'s reason.
+#[tokio::test]
+async fn a_persons_add_or_drop_with_no_body_is_the_transports_refusal() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01JOBPLAN0");
+    let app = wired(daemon, events);
+
+    let (status, _) = call(&app, "POST", "/jobs/01JOBPLAN0/add_task", NOT_A_NOTE).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = call(&app, "POST", "/jobs/01JOBPLAN0/drop_task", NOT_A_NOTE).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
 /// The `@` mention popup's own route. **Narrowed by `?q=`, and absent reads
 /// as empty** — the instant somebody types a bare `@` there is no text after
 /// it yet, and a client that sent no parameter at all must see the same

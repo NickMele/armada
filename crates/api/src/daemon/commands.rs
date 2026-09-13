@@ -19,11 +19,11 @@ use std::future::Future;
 
 use crate::daemon::Refusal;
 use ipc::{
-    AnswerCommand, CapRaise, ChangesRequested, CheckoutRunRecord, CheckoutRunUnderway,
-    ChosenAnswer, FileReport, FindingDismissed, JobExamined, JobForgotten, JobId, JobSummary,
-    JudgeAnswered, ManifestSaved, NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp,
-    Report, RestartRequested, RunRecord, RunUnderway, SaveManifestFile, SetWhenBlocked,
-    SetWhenRefused, StartCheckoutRun, StartRun, TurnRaise, WorktreeReclaimed,
+    AddTask, AnswerCommand, CapRaise, ChangesRequested, CheckoutRunRecord, CheckoutRunUnderway,
+    ChosenAnswer, DropTask, FileReport, FindingDismissed, JobExamined, JobForgotten, JobId,
+    JobSummary, JudgeAnswered, ManifestSaved, NamedRun, ProposeJob, Redirection, Redispatched,
+    RemarksTakenUp, Report, RestartRequested, RunRecord, RunUnderway, SaveManifestFile,
+    SetWhenBlocked, SetWhenRefused, StartCheckoutRun, StartRun, TurnRaise, WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -884,4 +884,25 @@ pub trait Commands: Send + Sync + 'static {
         removing: ipc::RemoveRepositoryAllowedCommand,
         manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ipc::RepositoryAllowedCommands, Refusal>> + Send;
+
+    /// `add_task` — a person adds a task to the Job's plan, and the plan it
+    /// leaves comes back. `#897`. Refused where the Job has no plan, or
+    /// `after` names no task the plan holds — `crates/ipc/operations.toml`.
+    /// **A working Drone is told**, mid-step; at a step boundary the next
+    /// brief's THE PLAN carries it, and nothing respawns to deliver it.
+    fn add_task(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        add: AddTask,
+    ) -> impl Future<Output = Result<ipc::WorkPlan, Refusal>> + Send;
+
+    /// `drop_task` — a person drops a task with a reason, and the plan it
+    /// leaves comes back. Refused where the task is already `done` or
+    /// already `dropped`, on `crates/ipc/operations.toml`'s terms. Delivery
+    /// is [`Commands::add_task`]'s.
+    fn drop_task(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        drop: DropTask,
+    ) -> impl Future<Output = Result<ipc::WorkPlan, Refusal>> + Send;
 }

@@ -567,6 +567,23 @@ impl fmt::Display for Adrift {
                 "Fleet gave up waiting on this after {waited:?}, which is its own limit and \
                  not Bridge's — the command was not cancelled and may still be finishing"
             ),
+            Adrift::PlanRefused { job, why } => {
+                write!(out, "{}'s plan refuses this change: {why}", job.as_str())
+            }
+            Adrift::TaskAlreadySettled { job, named, state } => write!(
+                out,
+                "{}'s task {named} is already {}, and a person's drop does not repeat a \
+                 decision already made. Add it back as a new task if the work is needed \
+                 after all",
+                job.as_str(),
+                state.as_wire()
+            ),
+            Adrift::PlanNotKept { job, because } => write!(
+                out,
+                "{}'s plan change could not be written down: {because}. The change was \
+                 well-formed — this is Fleet's own store, not the request",
+                job.as_str()
+            ),
         }
     }
 }
@@ -642,6 +659,9 @@ impl Adrift {
             | Adrift::DroneStillThere { job }
             | Adrift::WorktreeGone { job, .. }
             | Adrift::AttachmentUnreadable { job, .. }
+            | Adrift::PlanRefused { job, .. }
+            | Adrift::TaskAlreadySettled { job, .. }
+            | Adrift::PlanNotKept { job, .. }
             // Both name the Job whose command was being decided about, so a
             // reading that failed is readable from the Job it was asked on.
             | Adrift::NothingToExplain { job, .. }
@@ -802,6 +822,11 @@ impl Error for Adrift {
             // running.
             | Adrift::CommandTimedOut { .. }
             | Adrift::ManifestMovedUnderTheEdit { .. }
+            // The plan itself, or the record of it, says what a person's add
+            // or drop could not do — none of the three wraps a failure.
+            | Adrift::PlanRefused { .. }
+            | Adrift::TaskAlreadySettled { .. }
+            | Adrift::PlanNotKept { .. }
             | Adrift::Modelless => None,
             Adrift::NotProposed { cause, .. } => Some(cause),
             Adrift::NoReading { cause, .. }

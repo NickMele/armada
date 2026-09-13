@@ -193,6 +193,18 @@ const NOTHING_TO_EXPLAIN: &str = "fleet.nothing_to_explain";
 /// asking again is reasonable — and the command is exactly as it was, so the
 /// decision is still open on what the person already had.
 const NOT_EXPLAINED: &str = "fleet.not_explained";
+/// A person's add or drop named a Job with no plan recorded, or a task — or
+/// an `after` — the plan does not hold. A 422: the request is well-formed and
+/// retrying it unchanged fails identically. `#897`.
+const NO_PLAN: &str = "fleet.no_plan";
+const NO_SUCH_TASK: &str = "fleet.no_such_task";
+/// A person's drop named a task already `done` or already `dropped`. A 409
+/// like the other status conflicts — the task was read, and what it read
+/// refuses this rather than the request's shape.
+const TASK_ALREADY_SETTLED: &str = "fleet.task_already_settled";
+/// A person's add or drop reached a plan that would have taken it and a
+/// store that would not keep it. A 500: nothing about the request is wrong.
+const PLAN_NOT_KEPT: &str = "fleet.plan_not_kept";
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -334,6 +346,39 @@ where
             // off one would go and look at a status with nothing wrong with it.
             Adrift::NotServed { job, .. } => Refusal::Unacceptable(
                 WireError::raised(NOT_SERVED, said, self.run_id()).about_job(ipc::JobId::from(job)),
+            ),
+            // A person's add or drop, refused by the plan itself. `NoPlan` is
+            // its own code; the other two both name a task the plan does not
+            // hold, one field naming which.
+            Adrift::PlanRefused {
+                job,
+                why: core_model::PlanRefused::NoPlan,
+            } => Refusal::Unacceptable(
+                WireError::raised(NO_PLAN, said, self.run_id()).about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::PlanRefused {
+                job,
+                why:
+                    core_model::PlanRefused::NoSuchTask { named }
+                    | core_model::PlanRefused::NoSuchPlace { named }
+                    | core_model::PlanRefused::StaysDropped { named },
+            } => Refusal::Unacceptable(
+                WireError::raised(NO_SUCH_TASK, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("task", WireValue::Str(named.to_string())),
+            ),
+            // A drop naming a task the plan already settled. `StaysDropped`
+            // is folded into `NO_SUCH_TASK` above because it is unreachable
+            // from `add_task`/`drop_task`, which never ask to reopen one.
+            Adrift::TaskAlreadySettled { job, named, state } => Refusal::IllegalMove(
+                WireError::raised(TASK_ALREADY_SETTLED, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("task", WireValue::Str(named.to_string()))
+                    .with_field("state", WireValue::Str(state.as_wire().to_string())),
+            ),
+            Adrift::PlanNotKept { job, .. } => Refusal::Fault(
+                WireError::raised(PLAN_NOT_KEPT, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
             ),
             Adrift::Unnameable
             | Adrift::CapNotRaised { .. }

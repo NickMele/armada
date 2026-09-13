@@ -1262,6 +1262,40 @@ notes = """
 **`agent_access` is `Yes`**, for that route's reason and with more force: the Job that bought this route stopped on its cheapest final step, and a person is not always at the screen when that happens. Helm is bounded where a person is not — `raised_by` again, the same `Ceiling` and the same `HELM_MULTIPLE`, because a bound on how far an agent may move a ceiling says nothing about what the ceiling counts.
 """
 
+[operations.add_task]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "A person adds a task to the Job's plan, and answers with the plan it leaves"
+notes = """
+`#897`. `title`, an optional `detail` and `after` — the id it comes after, or `""` for the end — the same three fields the Drone-facing `add_task` MCP tool takes, so a person's add and a Drone's are one shape read two ways. The change is kept under `store::PlanHand::Person`, which is the whole of what tells the two apart on the record.
+
+**Refused with a 422 where the plan itself refuses it** — no plan recorded for the Job (`fleet.no_plan`), or `after` naming a task the plan does not hold (`fleet.no_such_task`) — and with the same 422 as `redirect_drone`'s blank instruction where the title is blank or `after` does not read as a task id at all.
+
+**Delivery follows `redirect_drone`'s rule.** With a working Drone mid-step, a turn is injected saying what changed — the task's id and title, stated as settled rather than as something to argue with, and it carries `crate::session::Occasion::Plan` rather than `Redirect` so the log shows it was not one. At a step boundary, or with no session, nothing is sent: the next brief's THE PLAN carries it, because a plan is read from the record at every spawn. It never respawns to deliver itself.
+
+Publishes `job.plan_changed` either way, `actor` `human`.
+
+`agent_access` is `No`: this changes the Job, which is `redirect_drone`'s own reason and every other command on this table that moves a Job.
+"""
+
+[operations.drop_task]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "A person drops a task from the Job's plan, with a reason, and answers with the plan it leaves"
+notes = """
+`#897`. `task` and a required `reason` — the same two fields the Drone-facing `update_task` MCP tool takes for a drop. The change is kept under `store::PlanHand::Person`.
+
+**Refused by name.** A 422 where the plan holds no such task (`fleet.no_such_task`) or none was ever recorded (`fleet.no_plan`); a 422 where the reason is blank, `redirect_drone`'s reuse of a value that cannot work; a 409 where the task is already `done` or already `dropped` (`fleet.task_already_settled`) — a person's drop is not repeating a decision already made, where a Drone's own retry of `update_task` may.
+
+**Reopening is not this.** `docs/concepts/job.md`'s decision stands: a dropped task stays dropped for a Drone, and only a person's add brings the work back, as a new task. This route never un-drops one.
+
+Delivery and the event are `add_task`'s.
+
+`agent_access` is `No`, `add_task`'s reason.
+"""
+
 [operations.redirect_drone]
 kind = "command"
 transport = "HTTP"
@@ -1988,7 +2022,7 @@ transport = "WebSocket"
 agent_access = "Bridge only"
 description = "A Job's plan was recorded, or one of its tasks was added or changed state"
 notes = """
-`#893`. Published when a Drone's `record_plan`, `add_task` or `update_task` is kept, and by a person's add or drop once that act exists (#897).
+`#893`. Published when a Drone's `record_plan`, `add_task` or `update_task` is kept, and by a person's `add_task` or `drop_task` (#897) — `actor` is `drone` for the first three and `human` for the last two, which is the whole of what tells them apart here.
 
 **The counts ride along and the plan does not.** A Board redraws a row's task figure from them without a read per row, and an open Job reads `get_job`, whose `work_plan` is the plan whole. A plan's approach and titles are free text, and this stream is one bounded drop-oldest channel every Job shares.
 
