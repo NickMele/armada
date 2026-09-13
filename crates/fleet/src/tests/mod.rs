@@ -20,6 +20,7 @@ mod admitted;
 mod adopting;
 mod allowance;
 mod always_allow;
+mod amending;
 mod asked;
 mod asking;
 mod attachments;

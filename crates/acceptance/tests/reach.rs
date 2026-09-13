@@ -31,7 +31,8 @@
 //! | **Dispatch.** With no workflows of its own, all eight Armada carries resolve there, and a Job on the carried `bug` is created and dispatched | That a Fleet started there serves them. `Setup::at` reads directories, and `armada`'s own tests read them |
 //! | **Override.** One file from Kit replaces a carried definition by id, and the repository's replaces Kit's, whatever order they arrive in | That `~/.armada/workflows/` is where Kit's are read from. That is a directory, `armada`'s tests again |
 //! | **Source.** Each workflow says which of the three places it came from, in words a person reads, and a Job created on the carried `bug` freezes `armada` onto its own record | That the record reads it back out of `store`, which has no in-memory constructor — `store`'s own round-trip test does. That a person sees it on a Job: nothing on the wire carries it, which is Bridge's half |
-//! | Running one Manifest entry in the checkout, and reading and saving the file, are operations Fleet serves | Verify and Fix. One entry is not setup and every Check once, and a saved file is not a row corrected in place |
+//! | Running one Manifest entry in the checkout, and reading, saving and editing the file, are operations Fleet serves | Verify. One entry is not setup and every Check once |
+//! | **Fix.** A failed Check's command corrected as a form sends it — that Check's `run`, by name — changes that one line: every comment and every other line stays, the result loads, and a correction that would not load is refused with its faults | That a person sees the failing row and corrects it there: the form is Bridge's, a later child of #721. That only that Check runs again: #719's scoped Verify. That Fleet writes it and refuses a file that moved: that touches a file, and is `fleet`'s own tests |
 //! | A request naming a milestone is offered `epic` with what it is for, in a requester's words, beside its steps — and a definition saying nothing is offered as before | That a model reading it proposes `epic`. Choosing is a model's, and this file calls none |
 
 //! # Not carried: setting it up
@@ -45,7 +46,6 @@
 //! | Proposal | Every line cites the file it came from, or says `convention` | #823 |
 //! | Write | One `armada.yml` per workspace, whatever the proposal was iterated to | #823 |
 //! | Verify | Setup and every Check run once on approval, on the sheet that wrote the file, writing nothing | #719 |
-//! | Fix | The failing Check's command corrected in its row, and only that Check run again | #721 |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the six.
@@ -55,7 +55,10 @@ mod bench;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use config::{Fault, ResolveError, ResolvedCheck, ResolvedWorkflow, WorkflowSource};
+use config::{
+    CheckEdit, Edit, Fault, NotAmended, ResolveError, ResolvedCheck, ResolvedWorkflow,
+    WorkflowSource,
+};
 use core_model::{JobStatus, StepState, WorkflowId};
 use fleet::scanning::scan;
 use fleet::{Brief, Proposal};
@@ -66,7 +69,8 @@ use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
     carried_there, catalogued, one_step, resolved_there, written, Held, A_MILESTONE, CARRYABLE,
-    CHECKOUT, EPIC, EPIC_AT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP, WRITTEN,
+    CHECKOUT, EPIC, EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP,
+    WRITTEN,
 };
 use bench::{states, Bench};
 
@@ -616,6 +620,7 @@ fn running_one_entry_and_saving_the_file_are_operations_fleet_serves() {
         "observe_checkout_run",
         "get_manifest_file",
         "save_manifest_file",
+        "edit_manifest",
         "get_manifest_reading",
     ] {
         assert!(
@@ -623,4 +628,63 @@ fn running_one_entry_and_saving_the_file_are_operations_fleet_serves() {
             "`{act}` is a piece Verify or Fix is built from and nothing serves it"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Fix
+// ---------------------------------------------------------------------------
+
+/// **Fix: the failed Check's command corrected in its row, and nothing else in
+/// the file moves.** #721.
+///
+/// The storefront's Manifest as a person keeps it once Setup has written it —
+/// comments, spacing — with `lint` failed on a command that repository does not
+/// run. The correction is what a form sends: that Check's `run`, by name, and
+/// never the file. What comes back loads with the new command and every other
+/// line where it was, and a correction that would not load is refused with the
+/// parser's own faults rather than handed back to be written.
+#[test]
+fn a_failed_check_corrected_in_its_row_changes_that_line_and_still_loads() {
+    let correct = |edit| config::amend(Path::new(MANIFEST_AT), KEPT, &[edit]);
+    let fixed = correct(Edit::Check {
+        name: "lint".to_string(),
+        edit: CheckEdit::Run("pnpm -r lint".to_string()),
+    })
+    .unwrap_or_else(|why| panic!("the correction applies: {why}"));
+
+    let changed: Vec<(&str, &str)> = KEPT
+        .lines()
+        .zip(fixed.text().lines())
+        .filter(|(was, now)| was != now)
+        .collect();
+    assert_eq!(
+        changed,
+        [("    run: pnpm eslint .", "    run: pnpm -r lint")],
+        "one line, and it is the failed Check's"
+    );
+    assert_eq!(KEPT.lines().count(), fixed.text().lines().count());
+    assert_eq!(
+        fixed.manifest().check("lint").map(|check| check.run()),
+        Some("pnpm -r lint")
+    );
+    assert_eq!(
+        fixed.manifest().checks_as_written(),
+        written().checks_as_written(),
+        "the gate starts them in the order it did"
+    );
+
+    let refused = correct(Edit::Check {
+        name: "e2e".to_string(),
+        edit: CheckEdit::Requires(vec!["migrate".to_string(), "db".to_string()]),
+    });
+    let Err(NotAmended::Refused(why)) = refused else {
+        panic!("a correction that would not load is refused: {refused:?}");
+    };
+    assert!(
+        why.refusals()
+            .iter()
+            .any(|refusal| refusal.key.starts_with("checks.e2e.requires")),
+        "refused for the name nothing declares: {:?}",
+        why.refusals()
+    );
 }

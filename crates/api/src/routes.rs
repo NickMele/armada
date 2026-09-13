@@ -25,6 +25,7 @@
 use axum::routing::{get, post};
 use axum::Router;
 
+use crate::amending::edit_manifest;
 use crate::attention::{get_activity_feed, list_alerts, list_job_board, list_reviews};
 use crate::commands::{
     answer_command, answer_judge, answer_question, approve_dispatch, approve_review, examine_job,
@@ -100,6 +101,7 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         )
         .route("/manifest/file", get(get_manifest_file::<D>))
         .route("/manifest/save_file", post(save_manifest_file::<D>))
+        .route("/manifest/edit", post(edit_manifest::<D>))
         .route("/manifest/files", get(search_files::<D>))
         .route("/jobs/:job_id", get(get_job::<D>))
         .route("/jobs/:job_id/events", get(get_job_events::<D>))

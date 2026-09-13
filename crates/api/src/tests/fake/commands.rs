@@ -166,6 +166,16 @@ impl Commands for FakeDaemon {
             at: ipc::Instant::carried("2026-09-12T09:00:00.000Z"),
         })
     }
+    /// The edits counted into the answer so a route test can tell the body
+    /// arrived. Nothing is placed: what edits do to a file is
+    /// `config::amend`'s, and `fleet::amending`'s against a real one.
+    async fn edit_manifest(&self, edit: ipc::EditManifest) -> Result<ipc::ManifestEdited, Refusal> {
+        Ok(ipc::ManifestEdited {
+            path: "armada.yml".to_string(),
+            at: ipc::Instant::carried("2026-09-12T09:00:00.000Z"),
+            text: format!("{}# {} edits\n", edit.read, edit.edits.len()),
+        })
+    }
 
     /// Each field the save names replaces the fake's value. What a save does to
     /// admission is `fleet::limits`' and tested there.

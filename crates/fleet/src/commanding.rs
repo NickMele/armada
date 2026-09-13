@@ -365,6 +365,17 @@ where
         self.write_manifest_file(asked)
     }
 
+    /// A form's edits, placed and written — [`amending`](mod@crate::amending).
+    ///
+    /// **Not `Arc`**, for [`Commands::save_manifest_file`]'s reason: the bytes
+    /// are on disk when this answers.
+    async fn edit_manifest(
+        &self,
+        asked: ipc::EditManifest,
+    ) -> Result<ipc::ManifestEdited, Refusal> {
+        self.edit_manifest_file(asked)
+    }
+
     /// A person starting a server, for a Job or the main checkout. **The `Arc`
     /// is handed on**, so the server is a task of its own — `crate::servers`.
     ///

@@ -216,6 +216,52 @@ setup:
     - install
 "#;
 
+/// [`WRITTEN`] as a person keeps it after Setup wrote it: the same keys, with
+/// comments and spacing of their own — and `lint` on a command Verify failed.
+pub const KEPT: &str = r#"# The storefront's Manifest, kept by hand since Setup wrote it.
+version: 1
+id: storefront
+
+# Armada places the number; the app reads it as PORT.
+ports:
+  web:
+    container: 3000
+    env: PORT
+
+# In the order the gate starts them.
+checks:
+  test:
+    run: pnpm vitest run
+  # Failed Verify: this repository lints per package, not from the root.
+  lint:
+    run: pnpm eslint .
+  e2e:
+    run: pnpm playwright test
+    # `migrate` before `seed`: seed writes into the tables migrate made.
+    requires:
+      - migrate
+      - seed
+
+commands:
+  install:
+    run: pnpm install --frozen-lockfile
+  migrate:
+    run: pnpm prisma migrate deploy
+  seed:
+    run: pnpm tsx scripts/seed.ts
+  # Drops the database. A Drone asks first.
+  reset:
+    run: pnpm prisma migrate reset --force
+    destructive: true
+  dev:
+    serve: pnpm next dev -p ${port.web}
+    ready: curl -sf http://localhost:${port.web}
+
+setup:
+  requires:
+    - install
+"#;
+
 /// A proposal that says more than the file can hold, four ways at once.
 ///
 /// **Each is a guess the journey's evidence rule exists to stop**: a section
