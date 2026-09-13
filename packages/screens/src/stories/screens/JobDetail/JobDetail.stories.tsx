@@ -196,18 +196,20 @@ export const PlanDropReasonEmpty: Story = {
 };
 
 /** Nothing is connected, so a send refuses and the dialog stays open with what was typed. `#897`. */
-export const PlanAddTaskRefused: Story = {
-  name: "Plan, Add task refused",
+export const PlanDropRefused: Story = {
+  name: "Plan, Drop refused",
   render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(await canvas.findByRole("button", { name: "Add task" }));
-    const dialog = within(document.body).getByRole("dialog");
-    await userEvent.type(within(dialog).getByLabelText("Title"), "Add a regression test");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Add task" }));
+    const found = await canvas.findByText("Add a unit test that does not construct the store");
+    const row = found.closest("li");
+    if (row === null) throw new Error("the task row was not found");
+    await userEvent.click(within(row).getByRole("button", { name: "Drop…" }));
+    await userEvent.type(within(row).getByLabelText("Reason"), "Already covered elsewhere.");
+    await userEvent.click(within(row).getByRole("button", { name: "Drop" }));
     await expect(
-      await within(dialog).findByText("Fleet is not connected. Nothing was sent."),
+      await within(row).findByText("Fleet is not connected. Nothing was sent."),
     ).toBeVisible();
-    await expect(within(dialog).getByLabelText("Title")).toHaveValue("Add a regression test");
+    await expect(within(row).getByLabelText("Reason")).toHaveValue("Already covered elsewhere.");
   },
 };
 
