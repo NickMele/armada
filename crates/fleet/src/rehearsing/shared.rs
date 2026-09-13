@@ -43,7 +43,9 @@ where
         let whose = place.whose();
         // A server never exits, so a run of one would hold the owner's one run
         // slot for good — and Fleet would not know to hand it on or stop it.
-        let (manifest, has_snapshot) = self.manifest_at(place).await;
+        let Some((manifest, has_snapshot)) = self.manifest_at(place).await else {
+            return Err(Unrehearsable::NoManifest);
+        };
         if manifest.server(name).is_some() {
             return Err(Unrehearsable::IsAServer {
                 name: name.to_string(),
@@ -106,7 +108,7 @@ where
                 whose,
             });
         };
-        let (root, handle) = (place.served.records_root(), place.handle.clone());
+        let (root, handle) = (place.checkout.records_root(), place.handle.clone());
         records::swept(
             root,
             &handle,
@@ -140,7 +142,7 @@ where
         place: &Place,
         id: String,
     ) -> Result<Record, Unrehearsable> {
-        let (root, handle) = (place.served.records_root(), place.handle.as_str());
+        let (root, handle) = (place.checkout.records_root(), place.handle.as_str());
         let Some((stop, mut done)) = self.rehearsals().stopping(&place.owner, &id) else {
             return Err(match records::read(root, handle, &id) {
                 Some(Ok(_)) => Unrehearsable::NotRunning { id },
@@ -172,7 +174,7 @@ where
         let Some(tree) = self.tree_at(place) else {
             return Err(Unrehearsable::NoWorktree);
         };
-        let (root, handle) = (place.served.records_root(), place.handle.as_str());
+        let (root, handle) = (place.checkout.records_root(), place.handle.as_str());
         let mut record = match records::read(root, handle, &id) {
             Some(Ok(record)) => record,
             Some(Err(why)) => return Err(Unrehearsable::NothingToUndo { id, why }),
@@ -234,7 +236,7 @@ where
     pub(super) fn history_at(&self, place: &Place) -> (Vec<Record>, Vec<ipc::UnreadableRun>) {
         let running = self.rehearsals().in_flight(&place.owner).map(|out| out.id);
         records::every(
-            place.served.records_root(),
+            place.checkout.records_root(),
             &place.handle,
             running.as_deref(),
         )
@@ -243,7 +245,7 @@ where
     /// One run's log. **The owner's own runs are the allowlist**: an id that
     /// names none of them reaches no file.
     pub(super) fn output_at(&self, place: &Place, id: &str) -> Option<ipc::RunOutput> {
-        let (root, handle) = (place.served.records_root(), place.handle.as_str());
+        let (root, handle) = (place.checkout.records_root(), place.handle.as_str());
         let name = match self
             .rehearsals()
             .in_flight(&place.owner)
@@ -259,7 +261,7 @@ where
     }
 
     pub(super) fn observed_at(&self, place: &Place, id: &str) -> Option<Seen> {
-        let (root, handle) = (place.served.records_root(), place.handle.as_str());
+        let (root, handle) = (place.checkout.records_root(), place.handle.as_str());
         let (name, live) = match self.rehearsals().watching(&place.owner, id) {
             Some((name, watch)) => (name, Some(watch)),
             None => match records::read(root, handle, id) {
@@ -385,7 +387,12 @@ where
 
     /// The worktree's own Manifest, or why it would not read.
     pub(super) fn theirs(&self, place: &Place, tree: &Tree) -> Result<config::Manifest, String> {
-        let file = self.manifest_file(&place.served);
+        let Some(served) = place.checkout.served() else {
+            return Err(String::from(
+                "this repository has no armada.yml at its root",
+            ));
+        };
+        let file = self.manifest_file(served);
         config::Manifest::load(&tree.path.join(file)).map_err(|why| why.to_string())
     }
 
@@ -398,8 +405,8 @@ where
         tree: Option<&Tree>,
     ) -> Option<ipc::Instant> {
         let before = before.epoch_millis()?.div_euclid(1_000);
-        let root = tree.map_or_else(|| PathBuf::from(place.served.root()), |t| t.path.clone());
-        let file = self.manifest_file(&place.served);
+        let root = tree.map_or_else(|| PathBuf::from(place.checkout.root()), |t| t.path.clone());
+        let file = self.manifest_file(place.checkout.served()?);
         let seconds =
             adapters::snapshot::last_touched(&root, &file.to_string_lossy(), before).ok()??;
         let at = Timestamp::from_rfc3339(crate::clock::rfc3339_utc(seconds.saturating_mul(1_000)));

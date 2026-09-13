@@ -31,3 +31,22 @@ impl InRepository {
         self.repository
     }
 }
+
+/// `?manifest_id=` or `?repository=` on the main checkout's Verify routes, which
+/// reach a repository with no root Manifest by its root. Fleet refuses both.
+#[derive(Deserialize)]
+pub(crate) struct InCheckout {
+    #[serde(default)]
+    manifest_id: Option<String>,
+    #[serde(default)]
+    repository: Option<String>,
+}
+
+impl InCheckout {
+    pub(crate) fn scope(self) -> (Option<ipc::ManifestId>, Option<String>) {
+        (
+            self.manifest_id.map(ipc::ManifestId::carried),
+            self.repository,
+        )
+    }
+}

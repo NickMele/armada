@@ -645,9 +645,10 @@ where
     async fn get_checkout_run_sheet(
         &self,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ipc::CheckoutRunSheet, Refusal> {
-        self.checkout_run_sheet(self.served_named(manifest_id.as_ref())?)
-            .await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        self.checkout_run_sheet(checkout).await
     }
 
     async fn list_checkout_runs(
@@ -680,9 +681,10 @@ where
         &self,
         run_id: String,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ObservedCheckoutRun, Refusal> {
-        self.observe_checkout_rehearsal(run_id, self.served_named(manifest_id.as_ref())?)
-            .await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        self.observe_checkout_rehearsal(run_id, checkout).await
     }
 
     /// Every server Fleet holds — `crate::servers`.

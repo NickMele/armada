@@ -155,13 +155,4 @@ describe("verify of a workspace's own file", () => {
     expect(panel.steps).toBeUndefined();
     expect(panel.onStop).toBeUndefined();
   });
-
-  it("waits on the root's own file where the repository has none", () => {
-    const panel = verifyPanelOf({
-      ...inputs(SHEET, { workspace: "apps/web" }),
-      sheet: { state: "failed", outcome: { ok: false, why: "not_set_up" } },
-    });
-    expect(panel.onVerify).toBeUndefined();
-    expect(panel.unavailable).toMatch(/at its root, is written/);
-  });
 });

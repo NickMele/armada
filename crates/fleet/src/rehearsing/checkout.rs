@@ -15,7 +15,7 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::Refusal;
 
 use super::entries;
-use super::owner::Place;
+use super::owner::{Checkout, Place};
 use super::record::Record;
 use super::records;
 use super::unrehearsable::Unrehearsable;
@@ -37,13 +37,21 @@ where
     /// already holding, which is why it answers before any Job exists.
     pub(crate) async fn checkout_run_sheet(
         &self,
-        served: crate::repositories::Served,
+        checkout: impl Into<Checkout>,
     ) -> Result<ipc::CheckoutRunSheet, Refusal> {
-        let place = Place::of_checkout(served);
+        let place = Place::of_checkout(checkout);
         let tree = self.tree_at(&place);
-        let manifest = place.served.manifest().clone();
-        let listed = entries::declared(&manifest);
-        let (setup, checks, commands) = listed.sheet(&[]);
+        // No root Manifest lists nothing, and still reads a workspace's Verify.
+        let (setup, checks, commands, servers) = match place.checkout.served() {
+            Some(served) => {
+                let manifest = served.manifest();
+                let (setup, checks, commands) = entries::declared(manifest).sheet(&[]);
+                let holder = crate::servers::Holder::MainCheckout(served.root().to_string());
+                let servers = self.declared_servers(&holder, manifest);
+                (setup, checks, commands, servers)
+            }
+            None => Default::default(),
+        };
         Ok(ipc::CheckoutRunSheet {
             setup,
             checks,
@@ -53,11 +61,8 @@ where
                 .rehearsals()
                 .in_flight(&place.owner)
                 .map(|out| out.of_checkout()),
-            servers: self.declared_servers(
-                &crate::servers::Holder::MainCheckout(place.served.root().to_string()),
-                &manifest,
-            ),
-            verify: self.rehearsals().verifies().seen(&place.served),
+            servers,
+            verify: self.rehearsals().verifies().seen(place.checkout.root()),
         })
     }
 
@@ -72,7 +77,7 @@ where
         let owner = place.owner.clone();
         // A Verify holds its own checkout between steps too: a run slipped in
         // there would take the slot its next step is about to be handed.
-        if self.rehearsals().verifies().underway(&place.served) {
+        if self.rehearsals().verifies().underway(place.checkout.root()) {
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
         }
         // The whole tree, always: there is no diff of the checkout's own for a
@@ -94,9 +99,9 @@ where
     pub(crate) async fn stop_checkout_rehearsal(
         &self,
         id: String,
-        served: crate::repositories::Served,
+        checkout: impl Into<Checkout>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
-        let place = Place::of_checkout(served);
+        let place = Place::of_checkout(checkout);
         self.stopped_at(&place, id)
             .await
             .map(|record| record.of_checkout())
@@ -114,7 +119,7 @@ where
         served: crate::repositories::Served,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
         let place = Place::of_checkout(served);
-        if self.rehearsals().verifies().underway(&place.served) {
+        if self.rehearsals().verifies().underway(place.checkout.root()) {
             return Err(self.refused_run(&place.owner, Unrehearsable::VerifyUnderway));
         }
         self.undone_at(&place, id)
@@ -142,7 +147,7 @@ where
         {
             return Err(refused(Unrehearsable::StillRunning { id }));
         }
-        let (root, handle) = (place.served.records_root(), place.handle.as_str());
+        let (root, handle) = (place.checkout.records_root(), place.handle.as_str());
         let record = match records::read(root, handle, &id) {
             Some(Ok(record)) => record,
             Some(Err(why)) => return Err(refused(Unrehearsable::DiffUnreadable { why })),
@@ -166,7 +171,7 @@ where
                     .unwrap_or("no snapshot was taken before this run"),
             ));
         };
-        let path = std::path::PathBuf::from(place.served.root());
+        let path = std::path::PathBuf::from(place.checkout.root());
         let read =
             tokio::task::spawn_blocking(move || adapters::snapshot::patch(&path, &reference)).await;
         match read {
@@ -214,9 +219,9 @@ where
     pub(crate) async fn observe_checkout_rehearsal(
         &self,
         id: String,
-        served: crate::repositories::Served,
+        checkout: impl Into<Checkout>,
     ) -> Result<api::ObservedCheckoutRun, Refusal> {
-        let place = Place::of_checkout(served);
+        let place = Place::of_checkout(checkout);
         let seen = self
             .observed_at(&place, &id)
             .ok_or_else(|| self.no_such_run(&place, id))?;

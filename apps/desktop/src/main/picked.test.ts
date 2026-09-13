@@ -60,6 +60,11 @@ describe("the pick", () => {
     expect(picked.manifest("/manifest/run_sheet")).toBeNull();
   });
 
+  it("names the main checkout by root where it has no Manifest, and by id where it has one", () => {
+    expect(pickedAt(NOT_SET_UP.root).checkout("/manifest/start_verify")).toBe("/manifest/start_verify?repository=%2FUsers%2Fuser%2Fscratch");
+    expect(pickedAt(SET_UP.root).checkout("/manifest/run_sheet")).toBe("/manifest/run_sheet?manifest_id=store-01");
+  });
+
   it("moves when Write gives the picked repository its Manifest", () => {
     const picked = pickedAt(NOT_SET_UP.root);
     const written = { ...NOT_SET_UP, manifest: { ...SET_UP.manifest!, id: "scratch" } };
@@ -204,14 +209,17 @@ describe("every per-repository call", () => {
     }
   });
 
-  it("sends no Manifest route for a repository nobody set up, and still names it to Scan", async () => {
+  it("sends no Manifest route for a repository nobody set up, and names it by root to Scan and Verify", async () => {
     const asked: string[] = [];
     const port = await recording(asked);
     const picked = pickedAt(NOT_SET_UP.root);
     await everyCall(port, picked);
     const scoped = asked.filter((url) => !FLEETWIDE.has(url));
-    expect(scoped.every((url) => url.startsWith("/repository/") && url.includes("repository=%2FUsers%2Fuser%2Fscratch"))).toBe(true);
-    expect(scoped).toHaveLength(4);
+    expect(scoped.every((url) => url.endsWith("repository=%2FUsers%2Fuser%2Fscratch"))).toBe(true);
+    // A workspace verifies before the root has a Manifest, so its panel's reads go too.
+    expect(scoped.map((url) => url.split("?")[0]).sort()).toEqual(
+      ["/manifest/run_sheet", "/manifest/start_verify", "/manifest/stop_run", "/repository/edit_proposal", "/repository/proposals", "/repository/scan", "/repository/write_proposal"],
+    );
     const editing = new ManifestFileCommands(() => port, picked, async () => {});
     expect(await editing.readFile()).toEqual({ ok: false, outcome: { ok: false, why: "not_set_up" } });
   });
@@ -226,7 +234,7 @@ describe("every per-repository call", () => {
           .split("\n")
           .map((line, index) => ({ at: `${file}:${index + 1}`, line }))
           .filter(({ line }) => routes.test(line) && !line.trim().startsWith("*") && !line.trim().startsWith("//"))
-          .filter(({ line }) => !line.includes("picked.manifest(") && !line.includes("picked.scan(")),
+          .filter(({ line }) => !["picked.manifest(", "picked.scan(", "picked.checkout("].some((built) => line.includes(built))),
       )
       .map(({ at }) => at);
     expect(unnamed).toEqual([]);

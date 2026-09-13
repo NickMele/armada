@@ -175,12 +175,14 @@ where
         let dir = plan.tree.commands_in();
         let path = dir.as_path();
         // The Job's own claimed span, or the main checkout's — `crate::ports`.
-        let (ports, env) = match plan.place.job.as_ref() {
-            Some(job) => (self.port_map(job).await, self.port_env(job).await),
-            None => (
-                self.main_checkout_ports(&plan.place.served).await,
-                self.main_checkout_port_env(&plan.place.served).await,
+        let (ports, env) = match (plan.place.job.as_ref(), plan.place.checkout.served()) {
+            (Some(job), _) => (self.port_map(job).await, self.port_env(job).await),
+            (None, Some(served)) => (
+                self.main_checkout_ports(served).await,
+                self.main_checkout_port_env(served).await,
             ),
+            // No root Manifest, so no ports are declared to lease.
+            (None, None) => Default::default(),
         };
         let mut required = Vec::new();
         for needed in &plan.entry.requires {

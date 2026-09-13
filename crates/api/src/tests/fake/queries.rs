@@ -464,6 +464,7 @@ impl Queries for FakeDaemon {
     async fn get_checkout_run_sheet(
         &self,
         _manifest_id: Option<ipc::ManifestId>,
+        _repository: Option<String>,
     ) -> Result<ipc::CheckoutRunSheet, Refusal> {
         Ok(ipc::CheckoutRunSheet {
             setup: Vec::new(),
@@ -506,6 +507,7 @@ impl Queries for FakeDaemon {
         &self,
         _run_id: String,
         _manifest_id: Option<ipc::ManifestId>,
+        _repository: Option<String>,
     ) -> Result<crate::ObservedCheckoutRun, Refusal> {
         self.runs_nothing_here()
     }

@@ -1613,6 +1613,8 @@ transport = "HTTP"
 agent_access = "No"
 description = "What a person can run in the main checkout - its Setup, Checks and Commands - off the Manifest Fleet holds"
 notes = """
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning. With no root Manifest the three lists and `servers` are empty, and `verify` is still the checkout's.
+
 **It needs no Job and reads no store.** This is the `armada.yml` Fleet is already running on and watching, which is why it answers on a repository that has never had a Job in it. Nothing here is frozen: there is one file and it is the one that runs.
 
 Under `/manifest` beside `get_manifest_reading`, for that operation's reason — a Fleet serves one repository, and this reads it before any Job exists to read one from instead.
@@ -1663,6 +1665,8 @@ transport = "WebSocket"
 agent_access = "No"
 description = "One person's run in the main checkout - what its log holds, then what it prints next - on a socket of its own"
 notes = """
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
+
 `observe_run`'s socket, one owner over, message for message. What ended the run is `checkout_run.finished`'s, as it is for a Job — this carries only what the run printed.
 
 `agent_access` is `No` for `observe_run`'s reason.
@@ -1691,6 +1695,8 @@ transport = "HTTP"
 agent_access = "No"
 description = "End a checkout run's process group; its log keeps what printed"
 notes = """
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
+
 Answers with the run's record once it is written, `stop_run`'s reason: the caller does not wait on an event for an end it asked for. Refused on a run that is not in flight.
 """
 
@@ -1715,7 +1721,7 @@ notes = """
 
 **Setup in `setup.requires` order, then every Check in written order, and nothing else** — no other Command and no server. A Check's own `requires` runs inside that Check's run, as it always does.
 
-**The body is optional and names a workspace.** Empty runs the root's Manifest. `StartCheckoutVerify.workspace` is a directory relative to the repository root: Fleet reads that directory's own `armada.yml` from disk and runs its setup and Checks with that directory as each command's working directory. A path that leaves the repository is refused, and so is a file that is missing or will not load, carrying `faults` as `[key, fault]` pairs. The Verify names the file it ran in `CheckoutVerify.workspace`, absent for the root. **It is still the checkout's one Verify**: a workspace's file sits in the root's tree and build directory, so a root Verify and a workspace Verify never run at once.
+**The body is optional and names a workspace.** Empty runs the root's Manifest. `StartCheckoutVerify.workspace` is a directory relative to the repository root: Fleet reads that directory's own `armada.yml` from disk and runs its setup and Checks with that directory as each command's working directory. A path that leaves the repository is refused, and so is a file that is missing or will not load, carrying `faults` as `[key, fault]` pairs. The Verify names the file it ran in `CheckoutVerify.workspace`, absent for the root. **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning. With no `workspace` there, it is refused as having nothing to run. **It is still the checkout's one Verify**: a workspace's file sits in the root's tree and build directory, so a root Verify and a workspace Verify never run at once.
 
 **One at a time, because the checkout has one run slot.** The next step takes it as the last gives it back, before that step's `checkout_run.finished` is published, so a reader re-reading the sheet on the event finds the next step already out. While a Verify is underway `start_checkout_run` and `undo_checkout_run` are refused, rather than slipped in between two steps. Stop is `stop_checkout_run` on the step that is out, and the steps after it are not run.
 

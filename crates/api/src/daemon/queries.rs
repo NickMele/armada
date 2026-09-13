@@ -653,10 +653,12 @@ pub trait Queries: Send + Sync + 'static {
     ///
     /// **It needs no Job and never refuses.** This is the file Fleet is
     /// already running on, so the sheet answers against an empty store — which
-    /// is the whole of what Journey 9's *Running one* asks for.
+    /// is the whole of what Journey 9's *Running one* asks for. `repository`
+    /// names one by root instead, which may have no root Manifest.
     fn get_checkout_run_sheet(
         &self,
         manifest_id: Option<ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<CheckoutRunSheet, Refusal>> + Send;
 
     /// `list_checkout_runs` — the main checkout's earlier runs, newest first,
@@ -693,6 +695,7 @@ pub trait Queries: Send + Sync + 'static {
         &self,
         run_id: String,
         manifest_id: Option<ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<crate::ObservedCheckoutRun, Refusal>> + Send;
 
     /// `list_servers` — every server Fleet holds, a Job's and the main
