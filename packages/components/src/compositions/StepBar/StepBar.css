@@ -39,18 +39,11 @@
 }
 
 /* Past: a finished step, in its own hue, the same as in a rail. A `done`
-   task takes the same weight by default — Job detail draws one Job, so it
-   keeps `--step-advanced` too. */
+   task takes the same weight everywhere — on the Board this row's own
+   Progress bar colours an advanced step green, and a neutral task segment
+   beside it would disagree with the field it sits next to. */
 .armada-step-bar__segment[data-state="past"] {
   background: var(--step-advanced);
-}
-
-/* A `done` task on a list row, `doneHue="neutral"`. The list rule
-   `docs/journeys/monitor-active-work.md` already settled for the step bar:
-   done segments are neutral and only the working one takes hue, because five
-   rows of hued segments stop meaning anything read down a column. */
-.armada-step-bar__segment[data-state="past"][data-tone="neutral"] {
-  background: var(--border-strong);
 }
 
 /* Remaining, and every segment on a Job that has not started. Same ground as

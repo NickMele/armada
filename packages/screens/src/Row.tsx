@@ -232,7 +232,7 @@ export function Row({
             label: "Tasks",
             value: (
               <>
-                <StepBar tasks={taskBarSegmentsOf(job.tasks)} doneHue="neutral" label={`${taskFigureOf(job.tasks)} tasks`} />
+                <StepBar tasks={taskBarSegmentsOf(job.tasks)} label={`${taskFigureOf(job.tasks)} tasks`} />
                 <span className="armada-row-step">{taskFigureOf(job.tasks)} tasks</span>
               </>
             ),

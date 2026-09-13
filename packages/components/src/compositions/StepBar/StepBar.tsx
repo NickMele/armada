@@ -52,7 +52,6 @@ export type StepBarProps =
        */
       activity?: StepActivity;
       tasks?: undefined;
-      doneHue?: undefined;
       /**
        * The exact count, as the tooltip carries it. Written by the caller,
        * because "Step 4 of 7" is a sentence and this component composes none.
@@ -69,17 +68,14 @@ export type StepBarProps =
        * step bar draws one position moving through a line, and a task bar
        * draws several independent claims, so segment state rides in on its
        * own list rather than being derived from `total`/`current`.
+       *
+       * **`done` keeps `--step-advanced` everywhere**, on the Board and on
+       * job detail alike — the Board's own step bar beside it colours an
+       * advanced step green, so a neutral task segment would disagree with
+       * the field next to it on one row. The neutral list rule is the
+       * Active Jobs step bar's own, not this one's.
        */
       tasks: readonly TaskBarSegment[];
-      /**
-       * Whether a `done` segment takes the step's own hue or a list's neutral
-       * one. **Job detail draws one Job**, so `done` keeps `--step-advanced`
-       * — the same argument that keeps a step's own past segments hued.
-       * **A list neutralizes it** to `--border-strong`, the rule the Active
-       * Jobs step bar already settled on: five rows of hued segments stop
-       * meaning anything. Defaults to `"advanced"`, the rail's own reading.
-       */
-      doneHue?: "advanced" | "neutral";
       label?: string;
     };
 
@@ -90,7 +86,6 @@ export function StepBar(props: StepBarProps) {
       ? props.tasks.map((task) => ({
           state: task === "done" ? ("past" as const) : task === "working" ? ("current" as const) : ("remaining" as const),
           activity: task === "working" ? ("running" as const) : undefined,
-          tone: task === "done" ? (props.doneHue ?? "advanced") : undefined,
         }))
       : Array.from({ length: props.total }, (_, i) => {
           const position = i + 1;
@@ -98,7 +93,6 @@ export function StepBar(props: StepBarProps) {
           return {
             state: state as "past" | "current" | "remaining",
             activity: state === "current" ? (props.activity ?? "not_started") : undefined,
-            tone: undefined,
           };
         });
 
@@ -115,7 +109,6 @@ export function StepBar(props: StepBarProps) {
           className="armada-step-bar__segment"
           data-state={segment.state}
           data-activity={segment.activity}
-          data-tone={segment.tone === "advanced" ? undefined : segment.tone}
         />
       ))}
     </span>
