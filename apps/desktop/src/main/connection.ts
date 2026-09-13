@@ -26,6 +26,7 @@ import { JobFocus } from "./job-focus";
 import { JobReads } from "./job-reads";
 import { ObserveSocket } from "./observe";
 import { HeldReader } from "./holding";
+import { OverviewReads } from "./overview";
 import { RehearsalConnection } from "./rehearsal";
 import { ManifestFileCommands } from "./editing";
 import { RepositoryAllowsCommands } from "./repository-allows";
@@ -75,6 +76,8 @@ export class FleetConnection {
   readonly repositoryAllows: RepositoryAllowsCommands;
   /** What Fleet serves and which repository was picked — see `repositories.ts`. */
   readonly repositories: RepositoryReads;
+  /** Overview's health and per-repository drift, held while it is open — see `overview.ts`. */
+  readonly overview: OverviewReads;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
   /**
@@ -157,8 +160,9 @@ export class FleetConnection {
     });
     const [publish, picked] = [(change: Partial<BridgeState>) => this.publish(change), new Picked()];
     this.rehearsal = new RehearsalConnection({ publish, port, picked });
-    const holds = () => this.current.holds;
-    this.repositories = new RepositoryReads({ picked, publish, holds, rehearsal: this.rehearsal, port });
+    this.overview = new OverviewReads({ publish, picked, port });
+    const [holds, overview] = [() => this.current.holds, this.overview];
+    this.repositories = new RepositoryReads({ picked, publish, holds, rehearsal: this.rehearsal, overview, port });
     this.editing = new ManifestFileCommands(port, picked, (at) => this.repositories.readHoldings(at));
     this.repositoryAllows = new RepositoryAllowsCommands(port, picked);
     this.commands = new JobCommands({
@@ -199,6 +203,7 @@ export class FleetConnection {
       watchedJobId: () => this.jobFocus.watchedJobId(),
       repositories: this.repositories,
       rehearsal: this.rehearsal,
+      overview: this.overview,
       material: this.material,
       socket: this.socket,
       publish: (change) => this.publish(change),
@@ -256,6 +261,7 @@ export class FleetConnection {
     this.material.close();
     this.reports.close();
     this.held.close();
+    this.overview.close();
   }
 
   // --------------------------------------------------------------- arrivals

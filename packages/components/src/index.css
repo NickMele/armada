@@ -241,3 +241,6 @@
 
 /* Helm's dock, beside the shell's panel. */
 @import "./screens/TheShell/TheShell.css";
+
+/* Overview's band of readings. */
+@import "./compositions/OverviewTile/OverviewTile.css";

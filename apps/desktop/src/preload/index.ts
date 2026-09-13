@@ -319,6 +319,9 @@ const api: BridgeApi = {
   watchManifestDrift: (want: boolean): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.watchManifestDrift, want),
 
+  // Overview's two reads, held open by that surface. A boolean: main names every route.
+  watchOverview: (want: boolean): Promise<void> => ipcRenderer.invoke(CHANNELS.watchOverview, want),
+
   startCheckoutVerify: (workspace?: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.startCheckoutVerify, workspace),
 
