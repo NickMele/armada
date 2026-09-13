@@ -17,6 +17,8 @@ use api::Refusal;
 use super::entries;
 use super::owner::Place;
 use super::record::Record;
+use super::records;
+use super::unrehearsable::Unrehearsable;
 use crate::daemon::Fleet;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -101,6 +103,68 @@ where
             .await
             .map(|record| record.of_checkout())
             .map_err(|why| self.refused_run(&place.owner, why))
+    }
+
+    /// What one run changed, against the snapshot taken just before it.
+    ///
+    /// **Never against `HEAD`, and never a fallback to it.** This tree holds a
+    /// person's own uncommitted work, which a patch against `HEAD` would show
+    /// as the run's; a snapshot that is gone is answered as gone. A read.
+    pub(crate) async fn checkout_rehearsal_diff(
+        &self,
+        id: String,
+    ) -> Result<ipc::CheckoutRunDiff, Refusal> {
+        let place = Place::of_checkout();
+        let refused = |why| self.refused_run(&place.owner, why);
+        if self
+            .rehearsals()
+            .in_flight(&place.owner)
+            .is_some_and(|out| out.id == id)
+        {
+            return Err(refused(Unrehearsable::StillRunning { id }));
+        }
+        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let record = match records::read(root, handle, &id) {
+            Some(Ok(record)) => record,
+            Some(Err(why)) => return Err(refused(Unrehearsable::DiffUnreadable { why })),
+            None => return Err(self.no_such_run(&place, id)),
+        };
+        let answered = |reading| ipc::CheckoutRunDiff {
+            id: record.id.clone(),
+            against: ipc::DiffAgainst::RunSnapshot,
+            reading,
+        };
+        let gone = |why: &str| {
+            answered(ipc::RunDiffReading::Gone {
+                why: why.to_string(),
+            })
+        };
+        let Some(reference) = record.snapshot.clone() else {
+            return Ok(gone(
+                record
+                    .changed_unreadable
+                    .as_deref()
+                    .unwrap_or("no snapshot was taken before this run"),
+            ));
+        };
+        let path = std::path::PathBuf::from(&self.host().repo_root);
+        let read =
+            tokio::task::spawn_blocking(move || adapters::snapshot::patch(&path, &reference)).await;
+        match read {
+            Ok(Ok(patch)) => Ok(answered(ipc::RunDiffReading::Read {
+                files: patch.changed.iter().map(super::running::wired).collect(),
+                patch: Some(patch.text).filter(|text| !text.is_empty()),
+            })),
+            Ok(Err(adapters::snapshot::SnapshotError::NoSuchSnapshot { .. })) => Ok(gone(
+                "the snapshot this run kept is no longer in the repository",
+            )),
+            Ok(Err(why)) => Err(refused(Unrehearsable::DiffUnreadable {
+                why: why.to_string(),
+            })),
+            Err(_) => Err(refused(Unrehearsable::DiffUnreadable {
+                why: String::from("reading the patch did not finish"),
+            })),
+        }
     }
 
     /// The checkout's earlier runs, newest first.

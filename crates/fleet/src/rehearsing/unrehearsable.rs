@@ -98,6 +98,14 @@ pub enum Unrehearsable {
     NotKept {
         why: String,
     },
+    /// A diff asked of a run that has not ended, so has no tree after it.
+    StillRunning {
+        id: String,
+    },
+    /// The repository would not render a patch from a snapshot it holds.
+    DiffUnreadable {
+        why: String,
+    },
 }
 
 impl Unrehearsable {
@@ -107,7 +115,7 @@ impl Unrehearsable {
     pub(super) fn spelled(&self) -> (&'static str, fn(WireError) -> Refusal) {
         use Unrehearsable::*;
         match self {
-            NoWorktree | AlreadyRunning { .. } | NotRunning { .. } => {
+            NoWorktree | AlreadyRunning { .. } | NotRunning { .. } | StillRunning { .. } => {
                 (CANNOT_RUN_HERE, Refusal::IllegalMove)
             }
             DroneWorking
@@ -121,7 +129,9 @@ impl Unrehearsable {
                 (NOTHING_TO_NARROW_TO, Refusal::Unacceptable)
             }
             NoSuchRun { .. } => (NO_SUCH_RUN, Refusal::Unacceptable),
-            Unreadable { .. } | NotKept { .. } => (RUN_FAULT, Refusal::Fault),
+            Unreadable { .. } | NotKept { .. } | DiffUnreadable { .. } => {
+                (RUN_FAULT, Refusal::Fault)
+            }
         }
     }
 }
@@ -198,6 +208,12 @@ impl fmt::Display for Unrehearsable {
                 paths.join(", ")
             ),
             NotKept { why } => write!(out, "the run's record could not be kept: {why}"),
+            StillRunning { id } => write!(
+                out,
+                "run `{id}` is still going, so what it changed is not settled yet. Read the diff \
+                 once it ends"
+            ),
+            DiffUnreadable { why } => write!(out, "the run's patch could not be read: {why}"),
         }
     }
 }

@@ -3,9 +3,9 @@
 use core_model::Timestamp;
 
 use crate::{
-    decode, encode, ChangeKind, ChangedFile, Cursor, Delivered, Event, Instant, JobId, Missed,
-    OutputClosed, OutputEnded, OutputLines, RunMessage, RunOpened, RunRecord, StreamMessage,
-    PROTOCOL_VERSION,
+    decode, encode, ChangeKind, ChangedFile, CheckoutRunDiff, Cursor, Delivered, DiffAgainst,
+    Event, Instant, JobId, Missed, OutputClosed, OutputEnded, OutputLines, RunDiffReading,
+    RunMessage, RunOpened, RunRecord, StreamMessage, PROTOCOL_VERSION,
 };
 
 fn at(text: &str) -> Instant {
@@ -104,4 +104,35 @@ fn a_record_with_no_snapshot_carries_no_key_for_one() {
     assert!(!json.contains("\"exit_code\""), "{json}");
     let back: RunRecord = decode("a run record", json.as_bytes()).expect("it reads");
     assert_eq!(back, record);
+}
+
+/// A checkout run's diff says what it was measured against, and a snapshot
+/// that is gone is its own state rather than an empty patch.
+#[test]
+fn a_checkout_runs_diff_names_its_base_and_a_gone_snapshot_is_a_state() {
+    let read = CheckoutRunDiff {
+        id: "01RUN".to_string(),
+        against: DiffAgainst::RunSnapshot,
+        reading: RunDiffReading::Read {
+            files: a_record().changed,
+            patch: Some("+formatted\n".to_string()),
+        },
+    };
+    let json = encode(&read).expect("plain data");
+    assert!(json.contains("\"against\":\"run_snapshot\""), "{json}");
+    assert!(json.contains("\"state\":\"read\""), "{json}");
+    let back: CheckoutRunDiff = decode("a run's diff", json.as_bytes()).expect("it reads");
+    assert_eq!(back, read);
+
+    let gone = CheckoutRunDiff {
+        reading: RunDiffReading::Gone {
+            why: "no snapshot".to_string(),
+        },
+        ..read
+    };
+    let json = encode(&gone).expect("plain data");
+    assert!(json.contains("\"state\":\"gone\""), "{json}");
+    assert!(!json.contains("\"patch\""), "{json}");
+    let back: CheckoutRunDiff = decode("a run's diff", json.as_bytes()).expect("it reads");
+    assert_eq!(back, gone);
 }

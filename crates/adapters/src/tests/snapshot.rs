@@ -5,7 +5,9 @@ use std::path::Path;
 use adapter_traits::Change;
 use git2::{Repository, Signature, Time};
 
-use crate::snapshot::{forget, last_touched, snapshot, undo, NotUndone, SnapshotError, PREFIX};
+use crate::snapshot::{
+    forget, last_touched, patch, snapshot, undo, NotUndone, SnapshotError, PREFIX,
+};
 use crate::tests::repo::TempRepo;
 
 const AT: i64 = 1_790_000_000;
@@ -139,6 +141,45 @@ fn a_forgotten_snapshot_cannot_be_undone() {
         Err(NotUndone::Unreadable(SnapshotError::NoSuchSnapshot { .. }))
     ));
     forget(repo.root(), &settled.reference).expect("forgetting twice is not a failure");
+}
+
+/// **#782's claim, one crate down.** The patch is the run's own two trees: the
+/// Drone's uncommitted work from before the run and an edit made after it are
+/// both absent, which a patch against HEAD or against the worktree would show.
+#[test]
+fn the_patch_is_what_the_run_changed_and_nothing_either_side_of_it() {
+    let repo = with_work_on_it();
+    let root = repo.root();
+    let taken = snapshot(root, "01RUN", AT).expect("a snapshot");
+    write(root, "generated.rs", "made by the run\n");
+    let settled = taken.settle(AT + 5).expect("settled");
+    write(root, "src/lib.rs", "edited after the run\n");
+
+    let read = patch(root, &settled.reference).expect("a patch");
+
+    assert_eq!(read.changed, settled.changed);
+    assert!(read.text.contains("+made by the run"), "{}", read.text);
+    for absent in ["the drone's", "committed", "edited after the run"] {
+        assert!(!read.text.contains(absent), "{absent}: {}", read.text);
+    }
+}
+
+/// A snapshot mid-run names the tree before, whose parent is HEAD: a patch
+/// from it would be the worktree against HEAD, so none is given.
+#[test]
+fn a_snapshot_that_has_not_settled_gives_no_patch() {
+    let repo = with_work_on_it();
+    let taken = snapshot(repo.root(), "01RUN", AT).expect("a snapshot");
+    assert!(matches!(
+        patch(repo.root(), taken.reference()),
+        Err(SnapshotError::Unsettled { .. })
+    ));
+    let settled = taken.settle(AT).expect("settled");
+    forget(repo.root(), &settled.reference).expect("forgotten");
+    assert!(matches!(
+        patch(repo.root(), &settled.reference),
+        Err(SnapshotError::NoSuchSnapshot { .. })
+    ));
 }
 
 fn commit_at(git: &Repository, path: &str, text: &str, seconds: i64) {

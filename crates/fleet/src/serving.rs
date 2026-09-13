@@ -544,7 +544,7 @@ where
         self.observe_rehearsal(&job_id.to_domain(), run_id).await
     }
 
-    /// The Manifest surface's four reads — `crate::rehearsing::checkout`.
+    /// The Manifest surface's five reads — `crate::rehearsing::checkout`.
     async fn get_checkout_run_sheet(&self) -> Result<ipc::CheckoutRunSheet, Refusal> {
         self.checkout_run_sheet().await
     }
@@ -555,6 +555,10 @@ where
 
     async fn get_checkout_run_output(&self, run_id: String) -> Result<ipc::RunOutput, Refusal> {
         self.checkout_rehearsal_output(run_id).await
+    }
+
+    async fn get_checkout_run_diff(&self, run_id: String) -> Result<ipc::CheckoutRunDiff, Refusal> {
+        self.checkout_rehearsal_diff(run_id).await
     }
 
     async fn observe_checkout_run(&self, run_id: String) -> Result<ObservedCheckoutRun, Refusal> {

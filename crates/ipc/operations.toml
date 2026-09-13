@@ -1460,6 +1460,23 @@ notes = """
 `get_run_output`'s shape and its allowlist: `:run_id` names a run the checkout recorded or the one in flight, resolved against its own run directories before anything is opened.
 """
 
+[operations.get_checkout_run_diff]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "What one checkout run changed, as a patch against the snapshot it took just before it"
+notes = """
+**Against the run's own snapshot, never `HEAD`.** The main checkout holds a person's own uncommitted work, and a patch against `HEAD` would show all of it as the run's. Both trees are the ones the run kept — just before and just after — so an edit made since the run is not in it either. `against` says so on the wire.
+
+**A snapshot that is gone is a state, not a fallback.** `reading.state` is `gone` where no snapshot was taken or its ref is no longer in the repository; nothing stands in for it. The ref is let go when retention sweeps the run's record, and an Undo does not let it go.
+
+A read: it writes, stages and commits nothing. Refused while the run is still going, because there is no tree after it yet.
+
+`get_diff`'s split, for the same reason — the patch is the expensive half, so it is fetched by the one person who opened it rather than carried on `list_checkout_runs`.
+
+`agent_access` is `No`, on the seven checkout-run operations' terms, and it differs from `get_diff`'s `Yes` on purpose: that route lets an agent check its own change, and no agent can have made this one — `start_checkout_run` is `No`, and the main checkout is the tree a Drone is confined out of.
+"""
+
 [operations.observe_checkout_run]
 kind = "query"
 transport = "WebSocket"

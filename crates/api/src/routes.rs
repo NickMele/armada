@@ -46,9 +46,9 @@ use crate::queries::{
     list_workflows, list_worktrees, search_files,
 };
 use crate::rehearsing::{
-    get_checkout_run_output, get_checkout_run_sheet, get_run_output, get_run_sheet,
-    list_checkout_runs, list_runs, observe_checkout_run, observe_run, start_checkout_run,
-    start_run, stop_checkout_run, stop_run, undo_checkout_run, undo_run,
+    get_checkout_run_diff, get_checkout_run_output, get_checkout_run_sheet, get_run_output,
+    get_run_sheet, list_checkout_runs, list_runs, observe_checkout_run, observe_run,
+    start_checkout_run, start_run, stop_checkout_run, stop_run, undo_checkout_run, undo_run,
 };
 use crate::served::Served;
 use crate::servers::{list_servers, observe_server, start_server, stop_server};
@@ -141,6 +141,10 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route(
             "/manifest/runs/:run_id/output",
             get(get_checkout_run_output::<D>),
+        )
+        .route(
+            "/manifest/runs/:run_id/diff",
+            get(get_checkout_run_diff::<D>),
         )
         .route(
             "/manifest/runs/:run_id/observe",
