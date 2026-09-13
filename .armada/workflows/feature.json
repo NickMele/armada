@@ -42,12 +42,12 @@
       "id": "scope",
       "label": "Scope the change",
       "evidence": {
-        "submitted": { "type": "facts_note" }
+        "submitted": { "type": "plan" }
       },
       "mechanical_checks": [
         {
-          "type": "artifact_exists",
-          "target": ".armada/artifacts/scope.md"
+          "type": "plan_recorded",
+          "min_tasks": 1
         }
       ],
       "evidence_scope": {
@@ -80,6 +80,7 @@
         "captured": true
       },
       "retry_limit": 2,
+      "follows_plan": true,
       "mechanical_checks": [
         {
           "type": "every_manifest_check"
@@ -108,6 +109,10 @@
             {
               "criterion_id": "no_behaviour_beyond_scope",
               "question": "Does this diff change behaviour beyond what the scope note described?"
+            },
+            {
+              "criterion_id": "tasks_match_the_diff",
+              "question": "Does the diff do every task set to done, and does each dropped task's reason hold?"
             }
           ]
         }
@@ -122,6 +127,7 @@
         "submitted": { "type": "diff" }
       },
       "retry_limit": 2,
+      "follows_plan": true,
       "mechanical_checks": [
         {
           "type": "every_manifest_check"

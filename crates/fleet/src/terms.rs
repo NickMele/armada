@@ -243,7 +243,7 @@ impl Checking {
 /// gets when a step advances underneath it — see [`Declaring::at`] for why the
 /// second one is not optional.
 ///
-/// The consequence is stated plainly and without a threat: a plan that turns
+/// The consequence is stated plainly and without a threat: a scope that turns
 /// out wrong is fixed by declaring again, and work belonging to a later part
 /// does not become this part's by being named.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -282,7 +282,7 @@ impl Declaring {
             block.push_str(
                 " Files you change outside them are compared against what you \
                  declared. If the work turns out to be somewhere else, call the \
-                 tool again — a plan that changed is fine, and a file changed \
+                 tool again — a scope that changed is fine, and a file changed \
                  for the next part is not.",
             );
         }
@@ -360,7 +360,7 @@ impl Redeclaring {
             return None;
         }
         let mut block = String::from(
-            "FILES OUTSIDE WHAT YOU DECLARED\n\nThe plan you declared for this \
+            "FILES OUTSIDE WHAT YOU DECLARED\n\nThe scope you declared for this \
              part does not cover everything that has changed:",
         );
         for path in drifted {
@@ -370,9 +370,9 @@ impl Redeclaring {
         block.push_str(
             "\n\nNothing has failed and you are not being asked to stop. If this \
              part's work is there, call the scope tool again with every path the \
-             work is in. The new call replaces the plan, and that is how a plan \
-             that turned out wrong is corrected. If that work belongs to a later \
-             part, leave it to that part.",
+             work is in. The new call replaces the scope, and that is how a \
+             scope that turned out wrong is corrected. If that work belongs to \
+             a later part, leave it to that part.",
         );
         Some(Redeclaring(block))
     }

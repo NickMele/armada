@@ -41,8 +41,8 @@
 # **`retry_limit` is on the steps that can fail mechanically, and nowhere
 # else.** Two hand-backs, so `implement` is worked three times before the
 # failure stands. `plan` can fail mechanically and still declares none: its one
-# mechanical failure is not writing the file it was told to write, which a
-# second attempt does not fix.
+# mechanical failure is not recording a plan, which a second attempt does not
+# fix.
 #
 # **`no_behaviour_beyond_the_plan` asks about behaviour, not about every line.**
 # It was ported wider than the designed file -- *anything the plan did not
@@ -58,12 +58,12 @@
       "id": "plan",
       "label": "Plan the change",
       "evidence": {
-        "submitted": { "type": "facts_note" }
+        "submitted": { "type": "plan" }
       },
       "mechanical_checks": [
         {
-          "type": "artifact_exists",
-          "target": ".armada/artifacts/plan.md"
+          "type": "plan_recorded",
+          "min_tasks": 1
         }
       ],
       "evidence_scope": {
@@ -95,6 +95,7 @@
         "submitted": { "type": "diff" }
       },
       "retry_limit": 2,
+      "follows_plan": true,
       "mechanical_checks": [
         {
           "type": "every_manifest_check"
@@ -123,6 +124,10 @@
             {
               "criterion_id": "no_behaviour_beyond_the_plan",
               "question": "Does this diff change behaviour beyond what the plan described?"
+            },
+            {
+              "criterion_id": "tasks_match_the_diff",
+              "question": "Does the diff do every task set to done, and does each dropped task's reason hold?"
             }
           ],
           "gaming_check": {

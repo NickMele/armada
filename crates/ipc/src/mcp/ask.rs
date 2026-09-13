@@ -143,10 +143,10 @@ pub(super) fn ask_tool() -> Value {
     json!({
         "name": ASK_TOOL,
         "description":
-            "Ask the person who approved this task a question you cannot answer \
+            "Ask the person who approved this Job a question you cannot answer \
              from the repository, and offer them the answers you would accept. \
              Use it when guessing would change what gets built, not when you \
-             merely have a preference — you were given the task because the \
+             merely have a preference — you were given this Job because the \
              ordinary decisions are yours. You get back a receipt, not an \
              answer: the answer arrives later as a turn in this session, and it \
              may be a while. Stop and wait for it. One question at a time, and \

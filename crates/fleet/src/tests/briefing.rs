@@ -291,7 +291,7 @@ fn the_stop_falls_where_the_step_is() {
 #[test]
 fn the_rail_says_parts_rather_than_steps() {
     let said = turn_at("implement");
-    assert!(said.contains("This task runs in 2 parts."));
+    assert!(said.contains("This work runs in 2 parts."));
 }
 
 /// The requester's words reach the Drone: what the Job is, and what done means.

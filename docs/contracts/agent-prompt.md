@@ -955,8 +955,8 @@ what a call would check can only spend one to find out.
 │ When you have finished the work described below, you
 │ must report it using the evidence submission tool you
 │ have been given. It is the only way to report. Work
-│ you do not submit is work no one sees, and the task
-│ will not move on.
+│ you do not submit is work no one sees, and nothing
+│ moves on.
 │
 │ Submitting returns "recorded". That is a receipt, not
 │ a verdict — your work is checked after you submit. A
@@ -976,7 +976,7 @@ what a call would check can only spend one to find out.
 │ registered, and it fails with a message naming neither.
 └──────────────────────────────────────────────
 ┌─ WHERE YOU ARE ────────────────────────────────
-│ This task runs in four parts. You are on part 2.
+│ This work runs in four parts. You are on part 2.
 │
 │   1. Plan the change      ✓ done
 │   2. Implement            ← you are here
@@ -1007,7 +1007,7 @@ what a call would check can only spend one to find out.
 │ of work this part owes.
 │
 │ Parts 3 and 4 happen after you submit, and doing them
-│ yourself does not move this task forward. Leave the
+│ yourself does not move the work forward. Leave the
 │ branch in a state they can start from.
 └──────────────────────────────────────────────
 ┌─ THE PART BEFORE THIS ONE ─────────────────────
@@ -1051,7 +1051,7 @@ than its output.
 │ to what happens when two Jobs start at once.
 └──────────────────────────────────────────────
 ┌─ WHERE YOU ARE ────────────────────────────────
-│ This task runs in three parts. You are on part 2.
+│ This work runs in three parts. You are on part 2.
 │
 │   1. Read the changes     ✓ done
 │   2. Assess               ← you are here

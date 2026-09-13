@@ -23,7 +23,7 @@
 //! **Drafted wording**, which `docs/contracts/agent-prompt.md` section 4a says.
 //! The product block is not — the contract draws it, and [`Produced::text`]
 //! follows it.
-use core_model::{FrozenWorkflow, RedirectWaiting, ResolvedStep, StepEvidence, StepId};
+use core_model::{FrozenWorkflow, RedirectWaiting, ResolvedStep, StepEvidence, StepId, WorkPlan};
 use verification::TheBaseMoved;
 
 /// What a Drone that was not there has to be handed, because the process that
@@ -42,6 +42,7 @@ pub struct Crossed {
     dispatched: Option<Dispatched>,
     overtaken: Option<Overtaken>,
     sent_back: Option<SentBack>,
+    the_plan: Option<ThePlan>,
 }
 
 impl Crossed {
@@ -96,6 +97,16 @@ impl Crossed {
 
     pub fn and_redirect(self, redirect: Option<Redirected>) -> Crossed {
         Crossed { redirect, ..self }
+    }
+
+    /// The Job's plan, where the step being opened is not the one that
+    /// records it. `#894`.
+    pub fn and_the_plan(self, the_plan: Option<ThePlan>) -> Crossed {
+        Crossed { the_plan, ..self }
+    }
+
+    pub(crate) fn the_plan(&self) -> Option<&ThePlan> {
+        self.the_plan.as_ref()
     }
 
     /// The Jobs this Job dispatched, and where each of them got to.
@@ -191,6 +202,41 @@ impl Overtaken {
 
 This Job and another were read off one              request, so neither waits on the other. That one — \"{title}\" — has since              landed, and its own evidence says:\n\n  \"{claimed}\"\n\nSome of what this              step was going to do may already be in your base. Read before you write, and say              in your evidence what you found rather than doing it twice. Where nothing is              left, that is a finding and not a failure."
         )
+    }
+}
+
+/// The Job's plan, on every step after the one that records it.
+///
+/// **Never on the step that records it** — that one is asked through
+/// `record_plan`'s own description — **and never "step", "workflow" or
+/// `follows_plan`.** A Job with no recorded plan gets no block at all, per
+/// [`Crossed`]'s own rule. **Drafted**, like [`Overtaken`] beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThePlan(String);
+
+impl ThePlan {
+    /// The plan as `WorkPlan::rendered` leaves it — the same text a later
+    /// step's Judge reads through `crate::work_plan::with_the_plan` — plus
+    /// what this step may do about it.
+    pub fn of(plan: &WorkPlan, follows: bool) -> ThePlan {
+        let mut block = format!("THE PLAN\n\n{}", plan.rendered());
+        block.push_str(match follows {
+            true => {
+                "\n\nKeep it current as you work: call update_task when you \
+                 start a task and when it is done, and add_task for work the \
+                 plan missed. Drop a task with a reason rather than leaving \
+                 it open. A done task may move back; a dropped one stays \
+                 dropped. A task's state decides nothing on its own — it is \
+                 your account of the work, and the diff is what is checked."
+            }
+            false => "\n\nRead it before you start. It is not yours to change.",
+        });
+        ThePlan(block)
+    }
+
+    /// The block, exactly as it reaches a Drone.
+    pub(crate) fn text(&self) -> &str {
+        &self.0
     }
 }
 

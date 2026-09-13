@@ -1,11 +1,11 @@
 //! Plan's claim: **a running Job says how far through its plan it is.** Every
 //! assertion is made against what crossed [`ipc::encode`], as `board.rs`'s are,
-//! and the apparatus is [`bench::plan`]. #893 and #895 are what this file
-//! carries; the rest of the claim is a row, in the order a person meets it:
+//! and the apparatus is [`bench::plan`]. #893, #894 and #895 are what this
+//! file carries; the rest of the claim is a row, in the order a person meets
+//! it:
 //!
 //! | Step of the claim | Carried by |
 //! |---|---|
-//! | The plan step is asked for a plan; later briefs carry THE PLAN | #894 |
 //! | Job detail's Plan region draws the plan | #896 |
 //! | A person adds a fifth task, and the working Drone is told | #897 |
 //! | The Board's row draws "2 of 4" | #898 |
@@ -20,7 +20,8 @@ mod bench;
 
 use std::sync::Arc;
 
-use core_model::NotAnUpdate;
+use core_model::{NotAnUpdate, StepId};
+use fleet::{briefing, Crossed, ThePlan};
 use ipc::mcp::{NotAnArgument, PlanArgument};
 use ipc::{ChangedBy, Event, JobPlanChanged};
 use testkit::FakeJudge;
@@ -36,6 +37,88 @@ const FOUR_TASKS: &str = r#"{"approach":"Stop the reader at the end, then cover 
              {"title":"Cover the last row","detail":""},
              {"title":"Check the writer's bound","detail":""},
              {"title":"Note the bound in the module","detail":""}]}"#;
+
+const THREE_TASKS: &str = r#"{"approach":"Stop the reader at the end, then cover the bound",
+    "tasks":[{"title":"Stop read_to before end","detail":"crates/store/src/read.rs:41"},
+             {"title":"Cover the last row","detail":""},
+             {"title":"Check the writer's bound","detail":""}]}"#;
+
+/// #894's row: **the plan step is asked for a plan, and every brief after it
+/// carries THE PLAN as Fleet holds it — with every task's id and state —
+/// rather than an empty block or none at all.** Rendered through
+/// `fleet::briefing::first_turn`, the same assembly a real spawn calls, so
+/// what this reads is the opening turn a Drone actually gets.
+#[test]
+fn the_implement_brief_carries_the_plan_fleet_holds_with_every_tasks_state() {
+    let mut planned = Planned::created("fix the reader's bound");
+    planned.kept(called("record_plan", THREE_TASKS), PLAN, 1);
+    planned.kept(
+        called("update_task", r#"{"task":"T1","state":"done","reason":""}"#),
+        IMPLEMENT,
+        1,
+    );
+    let plan = planned.kept(
+        called(
+            "update_task",
+            r#"{"task":"T2","state":"working","reason":""}"#,
+        ),
+        IMPLEMENT,
+        1,
+    );
+
+    let step = StepId::new(IMPLEMENT);
+    let follows = planned
+        .job
+        .workflow()
+        .step(&step)
+        .expect("implement is a real step")
+        .follows_plan();
+    let crossed = Crossed::nothing().and_the_plan(Some(ThePlan::of(&plan, follows)));
+    let brief = briefing::first_turn(&planned.job, planned.job.workflow(), &step, &crossed)
+        .expect("a brief assembles");
+    let said = brief.as_str();
+
+    assert!(said.contains("THE PLAN"), "{said}");
+    for expected in [
+        "T1 [done]",
+        "T2 [working]",
+        "T3 [open]",
+        "update_task",
+        "add_task",
+    ] {
+        assert!(said.contains(expected), "{expected} missing from {said}");
+    }
+    assert!(
+        !said.contains("follows_plan"),
+        "THE PLAN never says follows_plan to a Drone: {said}"
+    );
+}
+
+/// #894's other half of the same row: **a step that does not follow the plan
+/// is shown it and told it is not the step's to change.**
+#[test]
+fn the_handoff_brief_carries_the_plan_and_no_instruction_to_change_it() {
+    let mut planned = Planned::created("fix the reader's bound");
+    let plan = planned.kept(called("record_plan", THREE_TASKS), PLAN, 1);
+
+    let step = StepId::new("handoff");
+    let follows = planned
+        .job
+        .workflow()
+        .step(&step)
+        .expect("handoff is a real step")
+        .follows_plan();
+    assert!(!follows, "handoff does not follow the plan");
+    let crossed = Crossed::nothing().and_the_plan(Some(ThePlan::of(&plan, follows)));
+    let brief = briefing::first_turn(&planned.job, planned.job.workflow(), &step, &crossed)
+        .expect("a brief assembles");
+    let said = brief.as_str();
+
+    assert!(said.contains("THE PLAN"), "{said}");
+    assert!(said.contains("not yours to change"), "{said}");
+    assert!(!said.contains("update_task"), "{said}");
+    assert!(!said.contains("add_task"), "{said}");
+}
 
 /// The plan step's Drone records four tasks, and the plan reaches the wire
 /// whole, with the row beside it counting them.

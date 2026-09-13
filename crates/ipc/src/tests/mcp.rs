@@ -352,7 +352,7 @@ fn a_checks_call_naming_a_check_is_refused_and_told_who_decides() {
     let said = why.to_string();
     assert!(said.contains("`check` is not a field"), "{said}");
     assert!(
-        said.contains("when this task was approved"),
+        said.contains("when this Job was approved"),
         "and is told who settled it: {said}"
     );
 }

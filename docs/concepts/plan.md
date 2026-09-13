@@ -8,10 +8,10 @@ by the steps that follow it.
 
 **Kind:** Entity. Owned by [Job](job.md), one per Job.
 
-Designed with the owner as the Plan milestone, not yet built. #893 builds
-the record and the Drone tools that write it, #894 shows it in a Drone's brief, #895
-wires the workflow fields, #896 draws it in job detail, #897 lets a person
-change it, and #898 draws it on the Board.
+Designed with the owner as the Plan milestone. #893 built the record and the
+Drone tools that write it, #894 put it in a Drone's brief, and #895 wired the
+workflow fields. #896 draws it in job detail, #897 lets a person change it,
+and #898 draws it on the Board — none of the three built yet.
 
 ## What it is
 
