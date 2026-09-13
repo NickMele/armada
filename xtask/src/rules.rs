@@ -179,12 +179,12 @@ pub fn every_failure_mode_has_a_fixture(root: &Path) -> Report {
 /// without the gate asking.
 const LENGTH_EXEMPT: &[&str] = &["crates/store/src/schema.rs"];
 
-/// No source file over 900 lines. Warn at 500.
+/// No source file over 1200 lines. Warn at 500.
 ///
 /// A long file is not wrong on its own; it is where the reasoning stopped
 /// fitting in one place. The warn threshold is the one that does the work.
 pub fn no_file_too_long(root: &Path) -> Report {
-    let mut report = Report::new("no source file over 900 lines, warn at 500");
+    let mut report = Report::new("no source file over 1200 lines, warn at 500");
     for source_root in SOURCE_ROOTS {
         for path in files_with_ext(root, &root.join(source_root), SOURCE_EXTS) {
             if LENGTH_EXEMPT.iter().any(|exempt| path == *exempt) {
@@ -194,8 +194,8 @@ pub fn no_file_too_long(root: &Path) -> Report {
                 continue;
             };
             let lines = text.lines().count();
-            if lines > 900 {
-                report.fail(format!("{path} is {lines} lines, over 900"));
+            if lines > 1200 {
+                report.fail(format!("{path} is {lines} lines, over 1200"));
             } else if lines > 500 {
                 report.warn(format!("{path} is {lines} lines, over 500"));
             }

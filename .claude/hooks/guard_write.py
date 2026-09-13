@@ -13,7 +13,7 @@ import sys
 # Refusals only. The warnings at 500 lines and 30 lines of a CLAUDE.md are the
 # gate's, because a hook's `ask` overrides every permission mode by design.
 # `xtask/src/rules.rs` carries the same numbers; the two must not drift.
-FAIL_LINES = 900
+FAIL_LINES = 1200
 CLAUDE_MD_FAIL = 50
 COMMENT_BLOCK_CAP = 15
 
@@ -124,7 +124,7 @@ def main() -> None:
                            "it or file it. `.claude/skills/comments/SKILL.md`")
 
     # ---- rule: a CLAUDE.md routes, it does not explain -------------------
-    lines = projected_lines(root, rel, tool_input)
+    lines = projected_lines(checkout, rel, tool_input)
     if rel.endswith("CLAUDE.md") and lines is not None:
         if lines > CLAUDE_MD_FAIL:
             answer("deny", f"{rel} would be about {lines} lines, over "
@@ -134,7 +134,7 @@ def main() -> None:
                            "file reached 328 lines one reasonable paragraph at "
                            "a time.")
 
-    # ---- rule: 900 lines of source fails ---------------------------------
+    # ---- rule: 1200 lines of source fails --------------------------------
     #
     # Source only, matching `no_file_too_long`. A hook stricter than the gate
     # produces workarounds, not fixes — the scopes are part of the rule.

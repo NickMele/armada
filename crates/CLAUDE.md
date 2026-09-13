@@ -5,7 +5,7 @@ the crate boundaries, the type-system-first pattern, and the reasons.
 
 - No `serde_json::from_*` outside `store` and `ipc`.
 - No vendor literal outside `adapters`.
-- 500 lines asks, 900 lines refuses.
+- 500 lines asks, 1200 lines refuses.
 - `cargo nextest run --workspace`, not `cargo test`.
 
 All of these are enforced by a hook before the write and by the gate after it.

@@ -273,9 +273,9 @@ format-drift contract test, per `testkit`'s doc comment — a fixture's shape
 has to track what the real output format actually looks like, not drift from
 it over time as the format changes upstream.
 
-## 6. The 500/900 line rule
+## 6. The 500/1200 line rule
 
-Warn at 500 lines, fail at 900 — `xtask` rule three, and the same thresholds
+Warn at 500 lines, fail at 1200 — `xtask` rule three, and the same thresholds
 in `hooks/guard_write.py`, which turns the warning into an `ask` decision
 before the write and the failure into a `deny`. (The hook's number for an
 `Edit` is estimated from the size of the change, since the real file doesn't
