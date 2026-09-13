@@ -128,6 +128,12 @@
      It sits here because it is layout, and the --w-* group above is floating
      layers. Reported. */
   --w-run-column: 380px;
+  /* 380px: Helm's dock, beside the content on every surface at
+     --layout-breakpoint and wider. Decided with the owner on 13 Sep (#948).
+     The same number as --w-run-column and not borrowed from it: that one is a
+     region inside job detail, and a dock that moved whenever the run tree was
+     re-measured would be a second meaning on one name. */
+  --w-dock: 380px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 
