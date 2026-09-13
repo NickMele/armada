@@ -28,11 +28,10 @@ import { CopiedToast, SaidToast, useCopied, useSaid } from "@armada/shell";
 import { FailureBlock } from "@armada/shell";
 import { jobFailure } from "@armada/shell";
 import { headOf } from "@armada/shell";
-import { Composer } from "@armada/screens";
-import { DispatchJob } from "@armada/screens";
+import { AskRepository } from "@armada/screens";
 import { FleetSettingsSheet } from "@armada/screens";
-import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
+import { Composing } from "./Composing";
 import { Worktrees } from "@armada/screens";
 import { Manifest, checkoutRunnablesOf, useManifestEditing, useManifestForm } from "@armada/screens";
 import { Setup, useSetup } from "@armada/screens";
@@ -85,9 +84,7 @@ import {
   readHeld,
   readReports,
   reclaimOne,
-  searchFiles,
   showAgain,
-  stageAttachment,
   startRun,
   startCheckoutRun,
   startCheckoutVerify,
@@ -403,10 +400,10 @@ export function App() {
     if (surfaceId !== SURFACE.manifest) setSettingUp(false);
   }
 
-  /** A repository nobody set up opens on Setup when picked: there is nothing else to do with it yet. */
-  function pick(root: string): void {
+  /** A repository nobody set up opens on Setup when picked: there is nothing else to do with it yet. `null` is All. */
+  function pick(root: string | null): void {
     pickRepository(root);
-    if (repositories.find((one) => one.root === root)?.manifest !== undefined) return;
+    if (root === null || repositories.find((one) => one.root === root)?.manifest !== undefined) return;
     goTo(SURFACE.manifest);
     setSettingUp(true);
   }
@@ -414,6 +411,8 @@ export function App() {
   // What a new Job is proposed against: the picked repository's Manifest, absent until it has one.
   const pickedRepository = repositories.find((one) => one.root === state.repository) ?? null;
   const scoped = pickedRepository?.manifest;
+  // All repositories: no one picked from a listing that has any. New job and the Manifest ask which.
+  const all = pickedRepository === null && repositories.length > 0;
   // The Board's Jobs follow the pick. The status bar, the palette and held worktrees read every Job.
   const boardJobs = useMemo(() => ofPicked(state.jobs, pickedRepository), [state.jobs, pickedRepository]);
   const head = headOf({
@@ -445,7 +444,7 @@ export function App() {
         statement={statement}
         repositories={repositories}
         listed={listed}
-        scope={state.repository ?? ""}
+        scope={state.repository}
         onScope={pick}
         onAddRepository={locate.onOpen}
         jobs={state.jobs}
@@ -638,6 +637,13 @@ export function App() {
                 onCopied={setCopied}
               />
             </Boundary>
+          ) : manifesting && all ? (
+            <AskRepository
+              repositories={repositories}
+              title="Pick a repository to open its Manifest"
+              next="The Board lists every repository's Jobs. A Manifest belongs to one, and picking it focuses the Board there."
+              onPick={pick}
+            />
           ) : manifesting ? (
             /* Everything this repository's Manifest declares, and one press
                that runs one of them in the checkout as it is on disk. No Job
@@ -691,61 +697,19 @@ export function App() {
               />
             </Boundary>
           ) : composing ? (
-            /* Describing the work is the path and the form is the override, so
-               the composer is what `Enter by hand` swaps to rather than what
-               opens. What Fleet holds is read over the one connection and not
-               scraped off the Jobs already on the board, which is what this
-               offered before `list_workflows` and `list_manifests` existed. */
-            <Boundary region="the job composer" {...guarded}>
-              <DispatchJob
-                // What the reading is read against is published state, so it is
-                // handed over at the press rather than held by the command.
-                onPropose={(request, attachments) =>
-                  commands.proposeFrom(request, attachments, {
-                    workflows: state.holds.workflows,
-                    bridge: state.bridge,
-                  })
-                }
-                onStage={stageAttachment}
-                onSearchFiles={searchFiles}
-                // What Fleet says the call is doing, against the same `now`
-                // every other elapsed figure on screen is drawn from.
-                watching={watchOf(state.proposing, now)}
-                onStop={() => void commands.stopProposal()}
-                // A proposed Job is opened where somebody wants to read it
-                // first, which is the same signpost the Board's own
-                // `awaiting_approval` row carries.
-                onOpen={(jobId) => {
-                  setComposing(false);
-                  setOpenJob(jobId);
-                }}
-                // And released without leaving, on the head of the proposal.
-                // The same command the detail's own gate calls, so a second
-                // approval is refused by the one guard rather than by two.
-                onApprove={(jobId) => void commands.approve(jobId)}
-                approving={state.approving}
-                // What the board says each proposed Job is at now. The fold
-                // `approveDispatch` does is what moves the row off its gate.
-                statusOf={(jobId) => state.jobs.find((job) => job.id === jobId)?.status}
-                disabled={!live}
-                onCopied={setCopied}
-                byHand={
-                  <Composer
-                    workflows={state.holds.workflows}
-                    leftOut={state.holds.leftOut}
-                    onStage={stageAttachment}
-                    onSearchFiles={searchFiles}
-                    manifest={scoped}
-                    models={state.holds.models}
-                    disabled={!live}
-                    onPropose={(draft) => {
-                      void commands.propose(draft);
-                      setComposing(false);
-                    }}
-                  />
-                }
-              />
-            </Boundary>
+            <Composing
+              state={state}
+              commands={commands}
+              now={now}
+              live={live}
+              all={all}
+              repositories={repositories}
+              scoped={scoped}
+              onPick={pick}
+              onOpen={setOpenJob}
+              onClose={() => setComposing(false)}
+              onCopied={setCopied}
+            />
           ) : (
             <>
               {/* The boundary `docs/practices/react.md` names: a Job that cannot
@@ -760,6 +724,7 @@ export function App() {
                   now={now}
                   workflows={state.holds.workflows}
                   served={listed ? repositories : null}
+                  all={all}
                   disconnected={live ? null : statement.headline}
                   selected={openJob}
                   onOpen={setOpenJob}

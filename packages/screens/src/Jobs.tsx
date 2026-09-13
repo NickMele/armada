@@ -83,6 +83,7 @@ import {
   FIRST_TAB,
   inTab,
   matches,
+  repositoryOf,
   sectionsOf,
   sorted,
   tabOf,
@@ -114,8 +115,10 @@ export type JobsProps = {
   now: number;
   /** What Fleet holds, so a row can say `bug` where it carried a ULID. */
   workflows: readonly WorkflowSummary[];
-  /** Every repository Fleet serves, or `null` before it has listed: more than one names each row's. */
+  /** Every repository Fleet serves, or `null` before it has listed: more than one, on All, names each row's. */
   served?: readonly RepositorySummary[] | null;
+  /** Whether the rail is on All repositories rather than one picked. */
+  all?: boolean;
   /** The whole reading of the connection, for the empty state that is a fault. */
   disconnected: string | null;
   /** The Job whose detail is open, where one is. */
@@ -155,6 +158,7 @@ export function Jobs({
   now,
   workflows,
   served = null,
+  all = false,
   disconnected,
   selected,
   onOpen,
@@ -360,6 +364,7 @@ export function Jobs({
       stale={stale}
       now={now}
       workflows={workflows}
+      repository={repositoryOf(job, served, all)}
       selected={job.id === selected}
       focused={job.id === cursor}
       onOpen={onOpen}
@@ -405,7 +410,7 @@ export function Jobs({
         selectable
         label="Job Board"
         view={view}
-        columns={columnsFor(jobs)}
+        columns={columnsFor(jobs, served, all)}
         controls={
           <BoardControls
             query={query}

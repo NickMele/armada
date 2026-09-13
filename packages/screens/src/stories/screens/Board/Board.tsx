@@ -2,6 +2,7 @@ import { connectedTo, PROTOCOL_VERSION, type Connection, type JobSummary } from 
 import type { RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Jobs } from "../../../Jobs";
+import { ofPicked } from "../../../board";
 import { CREATED_AT, repository } from "../../../fixtures/build/base";
 
 /** The moment every figure on the Board is read at, so a story never moves. */
@@ -30,17 +31,23 @@ export function BoardFrom({
   connection = CONNECTED,
   now = NOW,
   repositories = [repository()],
+  picked,
 }: {
   jobs: readonly JobSummary[];
   workflows: readonly WorkflowSummary[];
-  /** What Fleet serves. More than one names each row's repository. */
+  /** What Fleet serves. More than one, on All, names each row's repository. */
   repositories?: readonly RepositorySummary[];
+  /** The rail's pick, by root. Absent is All repositories, where Bridge opens. */
+  picked?: string;
   connection?: Connection;
   /** When the Board is read. A recording passes its own, or run times go negative. */
   now?: number;
 }) {
   const statement = statementOf(connection, now, now);
   const live = connection.state === "connected";
+  // `App`'s own reading: the Board's Jobs follow the pick, and the bar reads every Job.
+  const pickedRepository = repositories.find((one) => one.root === picked) ?? null;
+  const boardJobs = ofPicked(jobs, pickedRepository);
   const head = headOf({
     reading: false,
     composing: false,
@@ -57,7 +64,7 @@ export function BoardFrom({
     onReadWorktrees: noop,
     onOpenLimits: noop,
     onRefresh: noop,
-    jobs,
+    jobs: boardJobs,
     onClearTerminal: noop,
     onForgetTerminal: noop,
   });
@@ -68,10 +75,10 @@ export function BoardFrom({
         statement={statement}
         repositories={repositories}
         listed={live}
-        scope={repositories[0]?.root ?? ""}
+        scope={pickedRepository?.root ?? null}
         onScope={noop}
         jobs={jobs}
-        boardJobs={jobs}
+        boardJobs={boardJobs}
         capacity={{ bound: 4, occupied: 2 }}
         title={head?.title}
         summary={head?.summary}
@@ -81,11 +88,12 @@ export function BoardFrom({
       >
         <div className="armada-screen__mounted">
           <Jobs
-            jobs={jobs}
+            jobs={boardJobs}
             stale={!live}
             now={now}
             workflows={workflows}
             served={live ? repositories : null}
+            all={pickedRepository === null}
             disconnected={live ? null : statement.headline}
             selected={null}
             onOpen={noop}

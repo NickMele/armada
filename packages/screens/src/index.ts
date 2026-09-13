@@ -29,6 +29,8 @@ export * from "./Sheets";
 export * from "./Worktrees";
 export * from "./FleetSettings";
 export * from "./board";
+// On All repositories, the question a surface that needs one repository asks first.
+export * from "./AskRepository";
 export * from "./calls";
 export * from "./outputs";
 export * from "./chapters";
