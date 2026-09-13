@@ -205,3 +205,4 @@ can find them.
 | Closing a session — what the work just made untrue, and what to update | `reflect` |
 | Putting a decision to a person, and writing the options | `asking-a-person` |
 | Running a whole milestone from one approval, wave by wave | `epic-as-one-job` |
+| Moving the owner's Fleet onto a merged fix | `restart-fleet` |

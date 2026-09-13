@@ -111,6 +111,12 @@ pnpm --filter @armada/desktop build && pnpm --filter @armada/desktop start
 always loads the built renderer rather than a dev server. Bridge finds Fleet
 through the runtime file, so nothing here needs a port.
 
+**Moving the owner's own Fleet onto a merged fix is `scripts/restart`, not
+either of the above.** It refuses while a Drone is working, naming the Job,
+and runs under launchd so it outlives the session that called it.
+`.claude/skills/restart-fleet/SKILL.md` says when, and why it is never on an
+allow list.
+
 ## Asking what one Job did
 
 **`./scripts/job <job-id>` prints the whole record of one Job** — its
@@ -135,7 +141,7 @@ measured by.
 |---|---|
 | Leave Bridge, Storybook or a browser running after you looked | The owner has to find the window and close it. Quit it, and say you did |
 | Leave a dialog up in anything you launched | Dismiss it or quit the app. An agent that cannot dismiss its own modal has taken the screen and not given it back |
-| Run `pnpm dev` or `scripts/dev` | It is the owner's loop: it reinstalls `armada` and kills the Fleet he is using. Start Bridge on its own instead |
+| Run `pnpm dev` or `scripts/dev` | It is the owner's loop: it reinstalls `armada` and kills the Fleet he is using. Start Bridge on its own, or run `scripts/restart` |
 | Discard what `armada clean` printed | The commit each deleted branch pointed at is the only thing that makes it recoverable |
 | `git branch -D` over the `armada/` namespace | `armada clean` derives what it deletes. A glob does not, and one destroyed nine unmerged branches belonging to no Job |
 | `rm -rf` an Armada worktree | Git keeps a record that outlives the directory and refuses the branch delete afterwards. `armada clean` does it in the order git needs |
