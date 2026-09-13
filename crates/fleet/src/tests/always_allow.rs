@@ -16,7 +16,7 @@
 use core_model::{Reach, WhenBlocked};
 use ipc::CommandAnswer;
 
-use crate::permitting::{Answered, NotPermitted};
+use crate::permitting::{Answered, NotPermitted, Refusing};
 use crate::tests::permitting::{asked, dirty_manifest_job, until_waiting, THE_TIP};
 use crate::tests::tmp::TempDir;
 
@@ -82,9 +82,11 @@ async fn always_allow_declares_the_chosen_rule_and_not_the_whole_command() {
 
 /// A rule that is not one of the command's own candidates is refused before
 /// anything is written — a person can only pick what Fleet offered, never type
-/// past it.
+/// past it. **The call is still waiting afterwards**, proved by answering it a
+/// second time rather than by a timer: `record_answer` fails before the reply
+/// is ever sent, so nothing about the held call moved.
 #[tokio::test]
-async fn a_rule_the_command_does_not_offer_is_refused_and_nothing_is_recorded() {
+async fn a_rule_the_command_does_not_offer_is_refused_and_the_call_still_waits() {
     let home = TempDir::new();
     let (fleet, job, armada_yml) = dirty_manifest_job(&home).await;
     fleet
@@ -94,9 +96,9 @@ async fn a_rule_the_command_does_not_offer_is_refused_and_nothing_is_recorded() 
     let asking = asked("Bash", THE_COMMAND, "c1");
     let before = std::fs::read_to_string(&armada_yml).expect("the file, before");
 
-    let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
+    let (answer, (bad, good)) = tokio::join!(fleet.permission(&job, &asking), async {
         until_waiting(&fleet, &job).await;
-        fleet
+        let bad = fleet
             .answer_command(
                 &job,
                 "c1",
@@ -106,19 +108,20 @@ async fn a_rule_the_command_does_not_offer_is_refused_and_nothing_is_recorded() 
                     Some("gh issue view --frobnicate"),
                 ),
             )
-            .await
+            .await;
+        let good = fleet
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::Reject, None))
+            .await;
+        (bad, good)
     });
 
     assert!(
         matches!(
-            answered,
+            bad,
             Err(NotPermitted::RuleNotOffered { ref rule }) if rule == "gh issue view --frobnicate"
         ),
-        "a rule this command never offered is a 409: {answered:?}"
+        "a rule this command never offered is a 409: {bad:?}"
     );
-    let api::PermissionAnswer::Deny(_) = answer else {
-        panic!("the call is still waiting, unanswered: {answer:?}");
-    };
     assert!(
         fleet
             .store()
@@ -133,6 +136,13 @@ async fn a_rule_the_command_does_not_offer_is_refused_and_nothing_is_recorded() 
         std::fs::read_to_string(&armada_yml).expect("the file, after"),
         before,
         "and armada.yml was never touched"
+    );
+
+    good.expect("the call was still waiting, and reject is one of its offers");
+    assert_eq!(
+        answer,
+        api::PermissionAnswer::Deny(Refusing::Rejected { note: None }.to_the_drone(THE_COMMAND)),
+        "the 409 above never touched the held call, which a second, valid answer still reaches"
     );
 }
 
