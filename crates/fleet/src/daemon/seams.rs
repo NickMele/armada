@@ -82,6 +82,19 @@ where
     pub(crate) fn run_log_retention(&self) -> std::time::Duration {
         self.run_log_retention
     }
+    /// How far this machine lets Helm act rather than only read. **The one
+    /// place `settings.helm-action-authority-tier-1-redirect-enabled-vs-read-
+    /// only` is resolved to a value** — `crate::helm::admitting` is the one
+    /// place it is asked, and the brief and the door both follow that answer.
+    /// `#943`.
+    pub(crate) fn helm_authority(&self) -> crate::helm::Authority {
+        self.helm_authority
+    }
+    /// How long a closed Helm session's stored session id is kept. See
+    /// `crate::helm::serving`, which sweeps by it on every reply. `#943`.
+    pub(crate) fn helm_session_retention(&self) -> std::time::Duration {
+        self.helm_session_retention
+    }
     /// What this repository has said about `auto_merge` and `review_gate`,
     /// folded across the Manifests gating one Job.
     ///
@@ -285,7 +298,11 @@ where
     /// make the call — the client, the model, the confinement — and is the same
     /// whether anybody is looking. This is who to tell and what may stop it,
     /// and a Fleet driven by a test with no stream still makes the call.
-    pub(crate) fn making(&self) -> Watching {
+    ///
+    /// `by` is who `ProposalMoved` is published against — the caller, never
+    /// Fleet: the call is Fleet's to make, not Fleet's to have asked for.
+    /// `#943`.
+    pub(crate) fn making(&self, by: core_model::Actor) -> Watching {
         Watching {
             proposals: self.proposals.clone(),
             events: self.events.clone(),
@@ -296,6 +313,7 @@ where
             // naming the model names the one that is out rather than a default
             // read from somewhere else.
             model: self.proposer_model.as_str().to_string(),
+            actor: by,
         }
     }
 

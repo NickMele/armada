@@ -89,6 +89,9 @@ pub struct FakeDaemon {
     pub helm_on: Mutex<Option<(u16, fn(&ipc::door::Reachable) -> bool)>>,
     /// Who each redirect that reached this daemon was recorded against.
     pub redirected_by: Mutex<Vec<crate::Redirector>>,
+    /// Who each proposal that reached this daemon was recorded against.
+    /// `#943`.
+    pub proposed_by: Mutex<Vec<crate::Redirector>>,
 }
 
 impl FakeDaemon {
@@ -118,6 +121,7 @@ impl FakeDaemon {
             helm_thread: Mutex::new(Vec::new()),
             helm_on: Mutex::new(None),
             redirected_by: Mutex::new(Vec::new()),
+            proposed_by: Mutex::new(Vec::new()),
         }
     }
 

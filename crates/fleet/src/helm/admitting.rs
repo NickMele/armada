@@ -34,23 +34,6 @@ where
     }
 }
 
-impl<H, V, W> Fleet<H, V, W>
-where
-    H: AgentHarness + Send + Sync + 'static,
-    H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Delivery + Send + Sync + 'static,
-    V::Error: std::error::Error + Send + Sync + 'static,
-    V::CommitError: std::error::Error + Send + Sync + 'static,
-    W: WorkProduct + Send + Sync + 'static,
-    W::Error: std::error::Error + Send + Sync + 'static,
-{
-    /// How far this machine lets Helm go. **The one place it is decided**, so
-    /// `#943` reads the setting here and the brief and the door both follow.
-    pub(crate) fn helm_authority(&self) -> Authority {
-        Authority::Acting
-    }
-}
-
 /// Why a call outside Helm's reach is refused, said after its name.
 fn otherwise(authority: Authority) -> &'static str {
     match authority {

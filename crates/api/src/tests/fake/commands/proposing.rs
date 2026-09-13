@@ -23,6 +23,7 @@ impl FakeDaemon {
     pub(super) async fn fake_propose_from_request(
         &self,
         request: ipc::JobRequest,
+        by: crate::Redirector,
     ) -> Result<ipc::ProposedPlan, Refusal> {
         if request.request.trim().is_empty() {
             return Err(Refusal::Unacceptable(ipc::WireError::raised(
@@ -31,27 +32,31 @@ impl FakeDaemon {
                 run_id(),
             )));
         }
-        self.fake_propose_job(ProposeJob {
-            title: request.request.clone(),
-            workflow_id: WorkflowId::carried("bug"),
-            owner_manifest_id: ManifestId::carried("01MANIFEST"),
-            origin: ipc::TopLevelOrigin::from_wire("auto_detected").expect("an origin"),
-            urgency: Urgency::from_wire("normal").expect("an urgency"),
-            atomic: false,
-            model: None,
-            acceptance_criteria: Vec::new(),
-            subject: None,
-            facts: request.request,
-            write_targets: None,
-            dependencies: Vec::new(),
-            attachments: Vec::new(),
-        })
+        self.fake_propose_job(
+            ProposeJob {
+                title: request.request.clone(),
+                workflow_id: WorkflowId::carried("bug"),
+                owner_manifest_id: ManifestId::carried("01MANIFEST"),
+                origin: ipc::TopLevelOrigin::from_wire("auto_detected").expect("an origin"),
+                urgency: Urgency::from_wire("normal").expect("an urgency"),
+                atomic: false,
+                model: None,
+                acceptance_criteria: Vec::new(),
+                subject: None,
+                facts: request.request,
+                write_targets: None,
+                dependencies: Vec::new(),
+                attachments: Vec::new(),
+            },
+            by,
+        )
         .await
         .map(|job| ipc::ProposedPlan { jobs: vec![job] })
     }
     pub(super) async fn fake_propose_job(
         &self,
         proposal: ProposeJob,
+        by: crate::Redirector,
     ) -> Result<JobSummary, Refusal> {
         let minted = self.minted.fetch_add(1, Ordering::SeqCst);
         let job = JobSummary {
@@ -90,9 +95,17 @@ impl FakeDaemon {
             tasks: None,
         };
         self.jobs.lock().expect("not poisoned").push(job.clone());
+        self.proposed_by.lock().expect("not poisoned").push(by);
+        // **Who acted is the transport's word**, `redirect_drone`'s own
+        // reason: the same bytes from a session the daemon did not place are
+        // a person's proposal. `#943`.
+        let actor = match by {
+            crate::Redirector::Person => "human",
+            crate::Redirector::Helm => "helm",
+        };
         self.events.publish(Event::JobCreated(JobCreated {
             job: job.clone(),
-            actor: Actor::from_wire("human").expect("an actor the envelope has"),
+            actor: Actor::from_wire(actor).expect("an actor the envelope has"),
             at: Instant::carried("2026-08-26T09:00:00.000Z"),
         }));
         Ok(job)

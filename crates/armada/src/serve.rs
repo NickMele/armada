@@ -201,6 +201,16 @@ pub const PORT_BLOCK_GRANULE: u16 = 8;
 /// retention window this deliberately does not share.
 pub const RUN_LOG_RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
+/// `settings.helm-action-authority-tier-1-redirect-enabled-vs-read-only`, at
+/// its own default: enabled. How far Helm may act rather than only read,
+/// resolved once here like every other Machine setting — `#943`.
+pub const HELM_ACTION_AUTHORITY: fleet::helm::Authority = fleet::helm::Authority::Acting;
+
+/// `settings.helm-session-retention-expiry`, at its own default: 30 days. How
+/// long a closed Helm session's stored session id is kept before the next
+/// reply's write sweeps it away. `#943`.
+pub const HELM_SESSION_RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
 /// How many times one step may ask Fleet to run its Checks.
 ///
 /// **Provisional, and nothing has measured it** — there is no history of a
@@ -667,9 +677,9 @@ fn assemble(
         &format!("http://127.0.0.1:{port}{}", api::MCP_PATH),
     )?;
 
-    // The Judge runs the program the Drone runs, so a machine that named one
-    // through the override names both — a second variable would let the two
-    // disagree about which binary is installed.
+    // The Judge and Helm's host both run the program the Drone runs, so a
+    // machine that named one through the override names all three — a second
+    // variable would let any pair disagree about which binary is installed.
     let judge_binary = agent.program().to_string();
     let judge_model =
         judge_model(std::env::var(JUDGE_MODEL).ok()).map_err(|refused| refused.said())?;
@@ -689,6 +699,9 @@ fn assemble(
             user,
             mcp_config: mcp_config.to_string_lossy().to_string(),
             attachments_dir: attachments_dir.to_string_lossy().to_string(),
+            // `judge_binary`'s reason: the same override reaches Helm's host.
+            // `#943`.
+            agent_binary: judge_binary.clone(),
             // The port the listener actually bound, which is the same one
             // written into `mcp.json` above — one value, so a Drone's
             // connection to the address it was given is the connection Fleet
@@ -698,6 +711,8 @@ fn assemble(
         locating: locator,
         port_range,
         run_log_retention: RUN_LOG_RETENTION,
+        helm_authority: HELM_ACTION_AUTHORITY,
+        helm_session_retention: HELM_SESSION_RETENTION,
         // The kernel, because the question is which process holds a socket.
         // `fleet::peer` holds the measurement that chose it over `lsof`.
         peers: Arc::new(fleet::peer::Kernel),

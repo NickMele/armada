@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use adapter_traits::CallProgress;
-use core_model::Timestamp;
+use core_model::{Actor, Timestamp};
 
 use crate::clock::Clock;
 use crate::judging::JudgeBudget;
@@ -89,6 +89,9 @@ pub struct Watching {
     /// Which model is reading the request. Read for the message, never for the
     /// call — what to ask is the caller's, and this only says what was asked.
     pub model: String,
+    /// Who asked: a person or a Helm session. **The caller's, never Fleet's**
+    /// — the call is Fleet's own act, asking it is the caller's. `#943`.
+    pub actor: Actor,
 }
 
 /// One proposal, being made.
@@ -285,8 +288,9 @@ impl Making {
                 proposing,
                 // The caller's, for `JobCreated`'s reason: a proposal is a
                 // human or Helm act and nothing here is Fleet deciding on its
-                // own. Fleet makes the call; it did not choose to.
-                actor: core_model::Actor::Human.into(),
+                // own. Fleet makes the call; it did not choose to. `#943`
+                // reads it off `Watching::actor` rather than assuming human.
+                actor: self.watching.actor.into(),
                 at: (&at).into(),
             }));
     }

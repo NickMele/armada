@@ -31,9 +31,14 @@ pub trait Commands: Send + Sync + 'static {
     /// `propose_job` — drafts a Job onto the approval gate. **The gate is
     /// unchanged:** what comes back is a Job at `awaiting_approval`, not a
     /// running one.
+    ///
+    /// `by` is the transport's word, never the body's — `redirect_drone`'s
+    /// reason: [`Redirector::Helm`] only where the door placed the call in a
+    /// Helm session, which is one of the acts `#941` lets it draft. `#943`.
     fn propose_job(
         self: std::sync::Arc<Self>,
         proposal: ProposeJob,
+        by: Redirector,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `propose_from_request` — reads a request and drafts the Job it proposes
@@ -61,10 +66,14 @@ pub trait Commands: Send + Sync + 'static {
     /// depending on how many: one is dispatched by its approval, several are a
     /// plan whose members each take their own. A signature answering one Job
     /// would make the second case unrepresentable rather than merely unbuilt.
+    ///
+    /// `by` is [`Commands::propose_job`]'s own word, for the same reason: the
+    /// door lets a Helm session read a request too.
     fn propose_from_request(
         &self,
         request: ipc::JobRequest,
         manifest_id: Option<ipc::ManifestId>,
+        by: Redirector,
     ) -> impl Future<Output = Result<ipc::ProposedPlan, Refusal>> + Send;
 
     /// `stop_proposal` — stops a Job proposer call that is still out.

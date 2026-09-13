@@ -787,7 +787,13 @@ async fn a_single_job_request_carries_its_attachment() {
     let attachment = a_staged_attachment(&home);
 
     let made = fleet
-        .propose_from_with_attachments(A_REQUEST, None, vec![attachment], &fleet.first())
+        .propose_from_with_attachments(
+            A_REQUEST,
+            None,
+            vec![attachment],
+            &fleet.first(),
+            api::Redirector::Person,
+        )
         .await
         .expect("a request that fits one workflow");
 
@@ -824,6 +830,7 @@ async fn a_split_request_carries_its_attachment_onto_the_head_job_alone() {
             None,
             vec![attachment],
             &fleet.first(),
+            api::Redirector::Person,
         )
         .await
         .expect("a plan");

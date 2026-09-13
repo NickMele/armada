@@ -30,6 +30,7 @@ use crate::served::Served;
 
 pub(crate) async fn propose_job<D: Commands>(
     State(served): State<Served<D>>,
+    helm: Option<Extension<HelmCalled>>,
     body: Bytes,
 ) -> Response {
     let proposal: ProposeJob = match ipc::decode("proposed Job", &body) {
@@ -38,7 +39,11 @@ pub(crate) async fn propose_job<D: Commands>(
         // bytes did not become a request, so nothing downstream was asked.
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.shared().propose_job(proposal).await {
+    let by = match helm {
+        Some(_) => Redirector::Helm,
+        None => Redirector::Person,
+    };
+    match served.shared().propose_job(proposal, by).await {
         // 201: the Job now exists, at the approval gate. It is not running, and
         // nothing here approves it.
         Ok(job) => answer(StatusCode::CREATED, &job, served.run_id()),
@@ -52,15 +57,20 @@ pub(crate) async fn propose_job<D: Commands>(
 pub(crate) async fn propose_from_request<D: Commands>(
     State(served): State<Served<D>>,
     Query(scope): Query<InManifest>,
+    helm: Option<Extension<HelmCalled>>,
     body: Bytes,
 ) -> Response {
     let request: JobRequest = match ipc::decode("request", &body) {
         Ok(request) => request,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
+    let by = match helm {
+        Some(_) => Redirector::Helm,
+        None => Redirector::Person,
+    };
     match served
         .daemon()
-        .propose_from_request(request, scope.manifest())
+        .propose_from_request(request, scope.manifest(), by)
         .await
     {
         Ok(job) => answer(StatusCode::CREATED, &job, served.run_id()),
