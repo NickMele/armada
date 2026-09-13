@@ -825,7 +825,7 @@ row, so nothing about the field's shape or presence changed under it.
 
 **The hunk is named, never copied.** Bridge finds it in the patch `get_job_diff` serves, so a View cannot show code the branch no longer holds. **Left out where empty**, which is every area and finding the reviewer gave no View.
 
-## Protocol 13.27: findings a person dismissed
+## Protocol 13.28: findings a person dismissed
 
 `ipc::DismissedRow`, additive on `JobConfidence` as `dismissed`, and `dismiss_finding`'s body `ipc::FindingDismissed` (#907). A dismissed finding leaves `needs_you`, `small_fixes` and `for_context` and is listed in `dismissed` with the reason a person gave. **Left out where empty**, which is every Job nobody dismissed anything on.
 

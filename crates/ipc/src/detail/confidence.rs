@@ -33,7 +33,7 @@ pub struct JobConfidence {
     pub needs_you: Vec<FindingRow>,
     pub small_fixes: Vec<FindingRow>,
     pub for_context: Vec<FindingRow>,
-    /// Findings a person dismissed, taken out of the three lists above. Since 13.27, #907.
+    /// Findings a person dismissed, taken out of the three lists above. Since 13.28, #907.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dismissed: Vec<DismissedRow>,
 }
@@ -110,7 +110,7 @@ pub struct FindingRow {
     pub view: Vec<ViewStepRow>,
 }
 
-/// A finding a person dismissed from the review, and why. Since 13.27, #907.
+/// A finding a person dismissed from the review, and why. Since 13.28, #907.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DismissedRow {
     pub finding: String,
@@ -118,7 +118,7 @@ pub struct DismissedRow {
 }
 
 /// `dismiss_finding`'s body: the finding, in the words the review served it in, and why
-/// it is wrong. Since 13.27, #907. **A blank reason is refused by Fleet**, a 422, because
+/// it is wrong. Since 13.28, #907. **A blank reason is refused by Fleet**, a 422, because
 /// the reason is what the next review pass is handed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FindingDismissed {
