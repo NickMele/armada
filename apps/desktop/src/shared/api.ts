@@ -7,6 +7,7 @@
 // sharing one answer.
 
 import type {
+  AddTask,
   Artifact,
   CallRead,
   CheckOutputRead,
@@ -14,6 +15,7 @@ import type {
   CommandAnswer,
   CommandExplainedRead,
   Draft,
+  DropTask,
   FileReport,
   Followed,
   FrameRead,
@@ -35,6 +37,7 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { BridgeState, Summons } from "./bridge";
+import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
 import type {
   ManifestEditAnswer,
@@ -409,6 +412,18 @@ export type BridgeApi = {
    * with — Armada does not file it anywhere, and says so.
    */
   fileReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
+  /**
+   * Add a task to this Job's plan, from the Plan region's own eyebrow act.
+   * `#897`. **Answers with the plan the add leaves**, not a plain `Outcome`
+   * — `packages/screens/src/plan-edits.ts` says why — so the Plan region
+   * redraws from the answer at once.
+   */
+  addTask: (jobId: string, add: AddTask) => Promise<PlanEditAnswer>;
+  /**
+   * Drop a task from this Job's plan, with a reason, from the row it is on.
+   * `#897`. `addTask`'s own answer shape.
+   */
+  dropTask: (jobId: string, drop: DropTask) => Promise<PlanEditAnswer>;
   /**
    * Read one Job whole and keep it current, or `null` to stop.
    *

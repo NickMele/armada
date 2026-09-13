@@ -7,7 +7,7 @@ import tokens from "@armada/tokens/tokens.json";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, Summons } from "../shared/bridge";
 import type { Draft, StagedAttachment } from "@armada/protocol";
-import type { FileReport } from "@armada/protocol";
+import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
   Artifact,
   CommandAnswer,
@@ -513,6 +513,16 @@ void app.whenReady().then(() => {
   // nothing, and the two would otherwise be one press meaning either.
   ipcMain.handle(CHANNELS.fileReport, (_event, jobId: string, filing: FileReport) =>
     connection?.commands.fileReport(jobId, filing),
+  );
+  // A person's own add or drop of a task on the plan — `connection.planEdits`,
+  // `plan-edits.ts`. Neither is `commands`' — the answer is the plan the
+  // change leaves rather than an `Outcome`, and that plan is folded straight
+  // into the open Job's detail rather than through `command.ts`'s board.
+  ipcMain.handle(CHANNELS.addTask, (_event, jobId: string, add: AddTask) =>
+    connection?.planEdits.add(jobId, add),
+  );
+  ipcMain.handle(CHANNELS.dropTask, (_event, jobId: string, drop: DropTask) =>
+    connection?.planEdits.drop(jobId, drop),
   );
   // Which Job is open. Main does the reading and republishes it as events
   // arrive, so the detail moves without the renderer asking again.

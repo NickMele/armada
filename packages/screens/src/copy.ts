@@ -78,6 +78,14 @@ export function said(outcome: Outcome): string {
       return "A decision on that job's work is already in flight. It was not sent twice.";
     case "already_answering":
       return "That answer is already in flight. It was not sent twice.";
+    case "empty_task_title":
+      return "A task needs a title. Nothing was added.";
+    case "empty_task_reason":
+      return "A drop needs a reason. Nothing was sent, and the task stands.";
+    case "already_adding_task":
+      return "That task is already being added. It was not sent twice.";
+    case "already_dropping_task":
+      return "That drop is already in flight. It was not sent twice.";
     case "already_setting":
       return "A change to this job's settings is already in flight. It was not sent twice.";
     case "already_showing":
@@ -246,6 +254,19 @@ export const RESTART_NOTE = {
  * it to `b`.
  */
 export const REPORT_LABEL = "Report this job";
+
+/**
+ * Add a task to a Job's plan. **Not a `JobAct`**, `REPORT_LABEL`'s reason: a
+ * task moves no status. `design-system.md`'s own small table, beside the
+ * enum→verb map, is what says this produces "Added".
+ */
+export const ADD_TASK_LABEL = "Add task";
+
+/**
+ * Drop a task from a Job's plan, with a reason. `ADD_TASK_LABEL`'s own
+ * reason. Produces "Dropped".
+ */
+export const DROP_TASK_LABEL = "Drop";
 
 /**
  * Give this job a higher cost ceiling. **Not a `JobAct`** for `REPORT_LABEL`'s

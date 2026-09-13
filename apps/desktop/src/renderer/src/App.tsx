@@ -582,6 +582,8 @@ export function App() {
                 onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}
                 onRerun={(jobId) => void commands.rerun(jobId)}
                 onReport={commands.report}
+                onAddTask={commands.addTask}
+                onDropTask={commands.dropTask}
                 onShowAgain={showAgain}
                 onApprove={(jobId) => void commands.approve(jobId)}
                 onMergePullRequest={(jobId) => void commands.decide(jobId, "merge")}

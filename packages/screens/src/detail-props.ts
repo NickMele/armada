@@ -45,6 +45,7 @@ import type { FrameSrc, ReadFrame } from "./frames";
 import type { FoldedReads } from "./mine";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
 import type { FollowCheckOutput, ReadCheckOutput } from "./outputs";
+import type { AddTask, DropTask, PlanEditAnswer } from "./plan-edits";
 import type { RunSheetSlice } from "./rehearsal";
 
 export type JobDetailProps = {
@@ -260,11 +261,27 @@ export type JobDetailProps = {
   recorded: FoldedReads;
   onCopied: (value: string) => void;
   /**
-   * Say a sentence to the person. **Only ever a failure**, today — an open that
-   * did nothing is the defect `#246` is about, and success is the file being in
-   * front of them.
+   * Say a sentence to the person. **Mostly a failure** — an open that did
+   * nothing is the defect `#246` is about, and success is usually the file
+   * being in front of them — **and, since `#897`, the one pair of successes
+   * that need a word anyway**: adding or dropping a task changes a row among
+   * several, so the act that changed it says so once, briefly.
    */
   onSaid: (sentence: string) => void;
+  /**
+   * Add a task to this Job's plan, from the Plan region's own eyebrow act.
+   * `after` is always `""` — the end — because reordering is not in this
+   * milestone; the owner chose add and drop alone. Refused by name:
+   * `fleet.no_plan`, a blank title.
+   */
+  onAddTask: (jobId: string, add: AddTask) => Promise<PlanEditAnswer>;
+  /**
+   * Drop a task from this Job's plan, with a reason, from the row a cursor or
+   * the keyboard is on. Refused by name: `fleet.no_plan`,
+   * `fleet.no_such_task`, `fleet.task_already_settled` on a `done` or already
+   * `dropped` task, a blank reason.
+   */
+  onDropTask: (jobId: string, drop: DropTask) => Promise<PlanEditAnswer>;
   rehearsal: RunSheetSlice; // The run sheet, Journey 9 — bundled, `recorded`'s precedent
   /**
    * Whether Where things are is open — Fleet's own preference,

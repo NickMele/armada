@@ -100,6 +100,11 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     recorded: fixture.recorded,
     onCopied: noop,
     onSaid: noop,
+    // A story is a reading of one moment and no Fleet is behind it, `onReport`'s
+    // own reason — so both answer the one refusal that makes sense with no
+    // connection at all, wrapped in `PlanEditAnswer`'s own shape.
+    onAddTask: async () => ({ ok: false, outcome: NOT_CONNECTED }),
+    onDropTask: async () => ({ ok: false, outcome: NOT_CONNECTED }),
     // Journey 9's run sheet. A story is a reading of one moment and nothing
     // here has opened the sheet, so the reads are `none` and every act is a
     // no-op, on this function's own rule.

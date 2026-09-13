@@ -16,6 +16,8 @@ import type {
   StagedAttachment,
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
+import type { AddTask, DropTask } from "@armada/protocol";
+import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@armada/protocol";
 import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
@@ -241,6 +243,13 @@ const api: BridgeApi = {
   // press. Nothing here reaches the issue tracker; what comes back is a record.
   fileReport: (jobId: string, filing: FileReport): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.fileReport, jobId, filing),
+
+  // A person's own add or drop of a task on the Job's plan — `#897`. Each
+  // answers with the plan the change leaves, not a plain `Outcome`.
+  addTask: (jobId: string, add: AddTask): Promise<PlanEditAnswer> =>
+    ipcRenderer.invoke(CHANNELS.addTask, jobId, add),
+  dropTask: (jobId: string, drop: DropTask): Promise<PlanEditAnswer> =>
+    ipcRenderer.invoke(CHANNELS.dropTask, jobId, drop),
 
   watchJob: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.watchJob, jobId),
