@@ -145,6 +145,13 @@ export const ADVANCE_GATE: Readonly<Record<string, Rendering | undefined>> = {
   "manifest_rule:review_gate": { verb: "the repository's review-gate policy decides", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
+/** `auto_merge`, keyed by the wire value. */
+export const AUTO_MERGE: Readonly<Record<string, Rendering | undefined>> = {
+  "never": { verb: "a person merges", icon: null, badgeStatus: null, statusToken: null, hint: "A person merges every pull request here." },
+  "checks-pass": { verb: "Fleet merges once the forge's checks pass", icon: null, badgeStatus: null, statusToken: null, hint: "Fleet merges once every check the forge runs has passed. Where the forge runs none, nothing merges." },
+  "always": { verb: "Fleet merges whatever ran", icon: null, badgeStatus: null, statusToken: null, hint: "Fleet merges without waiting on the forge's checks." },
+};
+
 /** `gaming_pattern`, keyed by the wire value. */
 export const GAMING_PATTERN: Readonly<Record<string, Rendering | undefined>> = {
   "assertion_weakened": { verb: "an assertion now asserts less", icon: null, badgeStatus: null, statusToken: null, hint: null },
@@ -307,6 +314,9 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "advance_gate", variant: "human_always", missing: ["icon", "token"] },
   { vocabulary: "advance_gate", variant: "manifest_rule:auto_merge", missing: ["icon", "token"] },
   { vocabulary: "advance_gate", variant: "manifest_rule:review_gate", missing: ["icon", "token"] },
+  { vocabulary: "auto_merge", variant: "never", missing: ["icon", "token"] },
+  { vocabulary: "auto_merge", variant: "checks-pass", missing: ["icon", "token"] },
+  { vocabulary: "auto_merge", variant: "always", missing: ["icon", "token"] },
   { vocabulary: "evidence_type", variant: "diff", missing: ["icon", "token"] },
   { vocabulary: "evidence_type", variant: "failing_test", missing: ["icon", "token"] },
   { vocabulary: "evidence_type", variant: "facts_note", missing: ["icon", "token"] },

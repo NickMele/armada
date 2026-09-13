@@ -258,6 +258,7 @@ const PAIRINGS: &[Pairing] = &[
 /// says which are which. `change_kind`, `movement_kind` and `silence` cannot be
 /// paired as things stand: their enums are `crates/ipc`'s and carry a serde
 /// derive instead of the `ALL` and `as_wire` pair [`read_enum`] reads.
+/// `auto_merge` cannot either: `core_model::AutoMerge` spells through `as_written`.
 const VOCABULARIES: &[&str] = &[
     "job_status",
     "queued_reason",
@@ -268,6 +269,7 @@ const VOCABULARIES: &[&str] = &[
     "step_verdict",
     "step_state",
     "advance_gate",
+    "auto_merge",
     "check_outcome",
     "criterion_verdict_check",
     "criterion_verdict_judge",
