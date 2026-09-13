@@ -160,7 +160,7 @@ export const EvidenceRemovedAndDeclared: Story = {
     await userEvent.click(within(section).getByRole("button", { name: "Declare evidence" }));
     const again = within(section).getByRole("group", { name: "evidence" });
     await userEvent.type(within(again).getByLabelText("Runs one spec"), "node capture.js");
-    await expect(within(again).getByText("It needs {} where the spec's path goes.")).toBeVisible();
+    await expect(within(again).getByText("Nowhere for the spec's path to go yet.")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled();
     // `{{` is how user-event types a literal brace.
     await userEvent.type(within(again).getByLabelText("Runs one spec"), " {{}");
@@ -183,7 +183,7 @@ export const ProvedAfterMergeSaved: Story = {
     const section = await canvas.findByRole("region", { name: "Proved after merge" });
     const group = within(section).getByRole("group", { name: "Runs after a merge" });
     await expect(within(group).queryByRole("checkbox", { name: "typecheck" })).toBeNull();
-    await expect(within(section).getByText(/^Not offered: typecheck\./)).toBeVisible();
+    await expect(within(section).getByText(/^typecheck runs a Command first/)).toBeVisible();
     await userEvent.click(within(group).getByRole("checkbox", { name: "build" }));
     await saved(canvas);
     await expect(within(section).getByRole("checkbox", { name: "build" })).toBeChecked();

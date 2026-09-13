@@ -1,7 +1,7 @@
 import { ADVANCE_GATE } from "../../generated/vocabulary";
 import { Select } from "../../primitives/Select/Select";
 
-import { Hinted, Section } from "./Entries";
+import { Section } from "./Entries";
 import type { ManifestFormProps } from "./ManifestForm";
 
 /** The registry's words for a gate, with the file's word beside them. */
@@ -14,7 +14,7 @@ export function PolicySection({ draft, onDraft, autoMergeWords, reviewGateWords 
   return (
     <Section title="Policy" says="Who decides a landing and a review here. Across several Manifests, the most cautious wins.">
       {/* No registry row says `auto_merge`'s values in words yet, so the file's word is shown. */}
-      <Hinted hint="checks-pass is the forge's checks, not Armada's, and always means always.">
+      <div className="armada-manifest-form__hinted">
         <Select
           label="Auto merge"
           value={draft.autoMerge}
@@ -26,7 +26,11 @@ export function PolicySection({ draft, onDraft, autoMergeWords, reviewGateWords 
             </option>
           ))}
         </Select>
-      </Hinted>
+        <p className="armada-manifest-form__hint">
+          <span className="armada-manifest-form__key">checks-pass</span> is the forge's checks, not Armada's, and{" "}
+          <span className="armada-manifest-form__key">always</span> means always.
+        </p>
+      </div>
       <Select
         label="Review gate"
         value={draft.reviewGate}

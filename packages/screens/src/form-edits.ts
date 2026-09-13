@@ -263,7 +263,7 @@ export function problemsOf(draft: ManifestFormDraft): Record<string, string> {
   }
   const evidence = draft.evidence;
   if (evidence !== null) {
-    if (!evidence.run.includes("{}")) problems["evidence.run"] = "It needs {} where the spec's path goes.";
+    if (!evidence.run.includes("{}")) problems["evidence.run"] = "Nowhere for the spec's path to go yet.";
     if (evidence.frames.trim() === "") problems["evidence.frames"] = "Frames need a directory to land in.";
     if ((evidence.serve.trim() === "") !== (evidence.ready.trim() === "")) {
       problems["evidence.ready"] = "Serves and Ready when go together, or neither is set.";

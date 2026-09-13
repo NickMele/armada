@@ -24,7 +24,9 @@ export function AfterMergeSection({ draft, onDraft }: ManifestFormProps) {
       />
       {prepares.length === 0 ? null : (
         <p className="armada-manifest-form__hint">
-          {`Not offered: ${prepares.join(", ")}. Each runs a Command first, which would write in the checkout a person works in.`}
+          {prepares.length === 1
+            ? `${prepares[0]} runs a Command first, which would write in the checkout a person works in, so it is not offered.`
+            : `${prepares.join(", ")} run a Command first, which would write in the checkout a person works in, so they are not offered.`}
         </p>
       )}
     </Section>
