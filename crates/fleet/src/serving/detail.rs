@@ -254,11 +254,13 @@ where
         if let Some(stuck) = detail.stuck.as_mut() {
             for refused in &mut stuck.refused {
                 let command = (refused.tool == "Bash").then(|| refused.detail.clone());
-                let (offers, withheld) = self
+                let offered = self
                     .offers_after(&job, &refused.tool, command.as_deref())
                     .await;
-                refused.offers = offers;
-                refused.withheld = withheld;
+                refused.offers = offered.answers;
+                refused.withheld = offered.withheld;
+                refused.rules = offered.rules;
+                refused.suggested_rule = offered.suggested_rule;
             }
         }
         // After the constructor, because it is read off the worktree and the

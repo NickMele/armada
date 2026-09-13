@@ -151,10 +151,10 @@ fn a_blank_note_is_no_note_at_all() {
 fn a_note_sent_with_an_allow_stops_where_the_answer_is_read() {
     assert_eq!(
         Answered::of(CommandAnswer::AllowForJob, Some("because I said so")),
-        Answered::Allowed(Reach::Job)
+        Answered::Allowed(Reach::Job, None)
     );
     assert_eq!(
         Answered::of(CommandAnswer::AlwaysAllow, Some("because I said so")),
-        Answered::Allowed(Reach::Repository)
+        Answered::Allowed(Reach::Repository, None)
     );
 }

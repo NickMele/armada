@@ -747,17 +747,17 @@ async fn an_answer_at_the_end_of_the_hold_is_delivered_once() {
 
 /// The branch tip's `armada.yml`, scripted as the fake's [`FakeVcs::commits`]
 /// script is: the on-disk copy in the Job's worktree is never read for it.
-const THE_TIP: &str = "version: 1\nid: 01FIXTUREMANIFEST\n";
+pub(super) const THE_TIP: &str = "version: 1\nid: 01FIXTUREMANIFEST\n";
 
 /// What a Drone's own uncommitted edit to `armada.yml` looks like, left dirty
 /// in the worktree by the time a person answers a held command.
-const THE_DRONES_EDIT: &str = "version: 1\nid: 01FIXTUREMANIFEST\n# the drone's own edit\n";
+pub(super) const DRONES_EDIT: &str = "version: 1\nid: 01FIXTUREMANIFEST\n# the drone's own edit\n";
 
 /// A Fleet whose version control is scripted, on a Job whose worktree already
 /// holds a dirty `armada.yml` — the shape `#6` is about: a Drone edited the
 /// file and never committed it, and then a person picks "Always allow in this
 /// repository" for a command it reached for.
-async fn a_job_with_a_dirty_manifest(home: &TempDir) -> (Fixture, JobId, std::path::PathBuf) {
+pub(super) async fn dirty_manifest_job(home: &TempDir) -> (Fixture, JobId, std::path::PathBuf) {
     let mut fittings = the_fittings(home, a_drone_that_reached_for("c1"));
     fittings.vcs = FakeVcs::new().with_tip_content("armada.yml", THE_TIP);
     let fleet = Fleet::assembled(fittings);
@@ -769,7 +769,7 @@ async fn a_job_with_a_dirty_manifest(home: &TempDir) -> (Fixture, JobId, std::pa
     let spec =
         WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle()).expect("a legal spec");
     let armada_yml = std::path::Path::new(&spec.worktree_path()).join("armada.yml");
-    std::fs::write(&armada_yml, THE_DRONES_EDIT).expect("the drone's own edit");
+    std::fs::write(&armada_yml, DRONES_EDIT).expect("the drone's own edit");
     dispatched(&fleet, job.id()).await.unwrap();
     settled(&fleet).await;
     (fleet, job.id().clone(), armada_yml)
@@ -782,7 +782,7 @@ async fn a_job_with_a_dirty_manifest(home: &TempDir) -> (Fixture, JobId, std::pa
 #[tokio::test]
 async fn always_allow_commits_the_tip_plus_the_entry_and_keeps_the_drones_edit_on_disk() {
     let home = TempDir::new();
-    let (fleet, job, armada_yml) = a_job_with_a_dirty_manifest(&home).await;
+    let (fleet, job, armada_yml) = dirty_manifest_job(&home).await;
     fleet
         .set_when_blocked(&job, WhenBlocked::AskMe)
         .await
@@ -803,7 +803,7 @@ async fn always_allow_commits_the_tip_plus_the_entry_and_keeps_the_drones_edit_o
     let at_tip = Manifest::declaring_command(&armada_yml, THE_TIP, "npm publish")
         .expect("the tip text takes the command");
     let in_worktree =
-        Manifest::declaring_named(&armada_yml, THE_DRONES_EDIT, &at_tip.name, "npm publish")
+        Manifest::declaring_named(&armada_yml, DRONES_EDIT, &at_tip.name, "npm publish")
             .expect("the worktree's own dirty text takes the same entry");
 
     let committed = fleet.vcs().committed();
@@ -854,7 +854,7 @@ async fn an_unparseable_tip_refuses_always_allow_and_leaves_allow_for_job_workin
     let spec =
         WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle()).expect("a legal spec");
     let armada_yml = std::path::Path::new(&spec.worktree_path()).join("armada.yml");
-    std::fs::write(&armada_yml, THE_DRONES_EDIT).expect("the drone's own edit");
+    std::fs::write(&armada_yml, DRONES_EDIT).expect("the drone's own edit");
     dispatched(&fleet, job.id()).await.unwrap();
     settled(&fleet).await;
     let job = job.id().clone();
@@ -881,7 +881,7 @@ async fn an_unparseable_tip_refuses_always_allow_and_leaves_allow_for_job_workin
     };
     assert_eq!(
         std::fs::read_to_string(&armada_yml).expect("the file"),
-        THE_DRONES_EDIT,
+        DRONES_EDIT,
         "refused before anything on disk was touched"
     );
     assert_eq!(

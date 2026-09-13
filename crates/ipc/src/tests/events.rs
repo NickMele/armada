@@ -192,6 +192,8 @@ fn a_held_command_goes_out_whole_and_comes_back_empty() {
                 crate::CommandAnswer::AllowForJob,
                 crate::CommandAnswer::Reject,
             ],
+            rules: vec!["touch".to_string(), "touch x".to_string()],
+            suggested_rule: Some("touch x".to_string()),
         }),
         actor: Actor::Drone.into(),
         at: (&at("2026-09-11T09:00:00.000Z")).into(),

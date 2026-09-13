@@ -21,6 +21,14 @@ fn waiting() -> CommandInFlight {
             CommandAnswer::AlwaysAllow,
             CommandAnswer::Reject,
         ],
+        rules: vec![
+            "cargo".to_string(),
+            "cargo nextest".to_string(),
+            "cargo nextest run".to_string(),
+            "cargo nextest run -p".to_string(),
+            "cargo nextest run -p ipc".to_string(),
+        ],
+        suggested_rule: Some("cargo nextest run".to_string()),
     }
 }
 
@@ -119,6 +127,7 @@ fn the_two_bodies_read_as_sent_and_ignore_what_they_do_not_know() {
             // than refusing the body — the same minor-skew rule `later` above
             // is testing from the other direction.
             note: None,
+            rule: None,
         }
     );
 

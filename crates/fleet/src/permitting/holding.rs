@@ -25,7 +25,7 @@ use tokio::sync::oneshot;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::permitting::{first, Answered, First, Permitted, Refusing, Waiting};
+use crate::permitting::{always_allow_rules, first, Answered, First, Permitted, Refusing, Waiting};
 use crate::resume::Steer;
 use crate::session::{LiveSession, Occasion};
 
@@ -37,6 +37,37 @@ const WAITING_OFFERS: [CommandAnswer; 3] = [
     CommandAnswer::AlwaysAllow,
     CommandAnswer::Reject,
 ];
+
+/// What a person may answer about a refused command, and — where Always
+/// allow is among the answers — the rules it may be answered with.
+///
+/// **A struct rather than a growing tuple**: `offers_after` started as two
+/// values and the rules make four, past where a caller can read a tuple's
+/// position back into a name.
+pub(crate) struct Offered {
+    pub answers: Vec<CommandAnswer>,
+    pub withheld: Option<String>,
+    pub rules: Vec<String>,
+    pub suggested_rule: Option<String>,
+}
+
+impl Offered {
+    fn nothing() -> Offered {
+        Offered {
+            answers: Vec::new(),
+            withheld: None,
+            rules: Vec::new(),
+            suggested_rule: None,
+        }
+    }
+
+    fn withheld(why: String) -> Offered {
+        Offered {
+            withheld: Some(why),
+            ..Offered::nothing()
+        }
+    }
+}
 
 /// Why a person's answer, or their change to a Job's settings, was not taken.
 #[derive(Debug)]
@@ -58,6 +89,11 @@ pub enum NotPermitted {
     NothingAllowed { run: String },
     /// A setting on the Job would not write down.
     NotChanged { cause: String },
+    /// Always allow named a rule that is not one of this command's own
+    /// candidates — [`always_allow_rules`](crate::permitting::always_allow_rules).
+    /// A 409: the rule offered is drawn from the command itself, so one absent
+    /// from that list was never shown to a person to pick.
+    RuleNotOffered { rule: String },
 }
 
 impl core::fmt::Display for NotPermitted {
@@ -93,6 +129,10 @@ impl core::fmt::Display for NotPermitted {
                 out,
                 "`{run}` is not a command a person allowed this job, so there is nothing to \
                  take back"
+            ),
+            NotPermitted::RuleNotOffered { rule } => write!(
+                out,
+                "`{rule}` is not one of the rules this command offers to always-allow"
             ),
             NotPermitted::NotChanged { cause } => {
                 write!(
@@ -132,7 +172,7 @@ fn said(answer: CommandAnswer) -> &'static str {
 /// person's words into a sentence about a command that was permitted.
 fn permitted(command: &str, answered: &Answered) -> Permitted {
     match answered {
-        Answered::Allowed(reach) => Permitted::allowed(command, *reach),
+        Answered::Allowed(reach, rule) => Permitted::allowed(command, *reach, rule.as_deref()),
         Answered::Rejected(note) => Permitted::rejected(command, note.as_ref()),
     }
 }
@@ -158,6 +198,10 @@ pub fn domain_setting(when: ipc::WhenBlocked) -> WhenBlocked {
 /// A held question, as Job detail and the event draw it.
 fn in_flight(waiting: &Waiting) -> ipc::CommandInFlight {
     let detail = CallDetail::of(&waiting.command);
+    // Against the whole command, never `detail`'s cut line: a candidate is
+    // only ever safe where the text it was read from carries every character
+    // `chains` would need to refuse it.
+    let (rules, suggested_rule) = crate::permitting::always_allow_rules(&waiting.command);
     ipc::CommandInFlight {
         call: waiting.call.clone(),
         step_id: ipc::StepId::from(&waiting.step),
@@ -167,6 +211,8 @@ fn in_flight(waiting: &Waiting) -> ipc::CommandInFlight {
         truncated: detail.truncated(),
         length: Some(detail.length()),
         offers: WAITING_OFFERS.to_vec(),
+        rules,
+        suggested_rule,
     }
 }
 
@@ -269,7 +315,7 @@ where
             }
         };
         match answered {
-            Some(Answered::Allowed(_)) => PermissionAnswer::Allow,
+            Some(Answered::Allowed(..)) => PermissionAnswer::Allow,
             // **Where a person's words reach a Drone soonest**: inside the call
             // it is still holding open, which is the path every promptly
             // answered reject takes.
@@ -387,9 +433,9 @@ where
         job: &Job,
         tool: &str,
         command: Option<&str>,
-    ) -> (Vec<CommandAnswer>, Option<String>) {
+    ) -> Offered {
         if !self.stopped_by_policy(job).await {
-            return (Vec::new(), None);
+            return Offered::nothing();
         }
         let ungrantable = command.and_then(|run| self.ungrantable(run));
         let decided = first(
@@ -401,13 +447,19 @@ where
             WhenBlocked::AskMe,
         );
         if let First::Withheld(withheld) = decided {
-            return (Vec::new(), Some(withheld.reason()));
+            return Offered::withheld(withheld.reason());
         }
-        let mut offers = vec![CommandAnswer::AllowForJob, CommandAnswer::AlwaysAllow];
+        let mut answers = vec![CommandAnswer::AllowForJob, CommandAnswer::AlwaysAllow];
         if self.drone_speakable(job.id()).await {
-            offers.push(CommandAnswer::Reject);
+            answers.push(CommandAnswer::Reject);
         }
-        (offers, None)
+        let (rules, suggested_rule) = command.map(always_allow_rules).unwrap_or_default();
+        Offered {
+            answers,
+            withheld: None,
+            rules,
+            suggested_rule,
+        }
     }
 
     async fn stopped_by_policy(&self, job: &Job) -> bool {
@@ -468,7 +520,7 @@ where
         };
         let (command, step, tool) = (held.command.clone(), held.step.clone(), held.tool.clone());
         let (_, _, worktree) = at_work.standing();
-        self.record_answer(job_id, &worktree, &command, answer)
+        self.record_answer(job_id, &worktree, &command, &answered)
             .await?;
         if let Answered::Rejected(note) = &answered {
             at_work.refused_by_fleet(
@@ -525,11 +577,11 @@ where
         };
         let job = self.load(job_id).await.map_err(|_| nothing())?;
         let (tool, command) = self.refused_row(&job, call).await.ok_or_else(nothing)?;
-        let (offers, withheld) = self.offers_after(&job, &tool, command.as_deref()).await;
-        if !offers.contains(&answer) {
+        let offered = self.offers_after(&job, &tool, command.as_deref()).await;
+        if !offered.answers.contains(&answer) {
             return Err(NotPermitted::NotOffered {
                 answer,
-                why: withheld.unwrap_or_else(|| {
+                why: offered.withheld.unwrap_or_else(|| {
                     "the job did not stop on a refused command, or no drone is there to tell"
                         .to_string()
                 }),
@@ -542,7 +594,7 @@ where
                     .map_err(|why| NotPermitted::NotDeclared {
                         cause: why.to_string(),
                     })?;
-            self.record_answer(job_id, &worktree, &command, answer)
+            self.record_answer(job_id, &worktree, &command, &answered)
                 .await?;
         }
         let step = crate::stuck::stopped_step(&job).cloned();
@@ -602,24 +654,41 @@ where
     }
 
     /// Write down what a person answered: the allow, and for Always allow the
-    /// command in `armada.yml` first.
+    /// rule in `armada.yml` first.
+    ///
+    /// **The rule is checked against `command`'s own candidates before
+    /// anything is written.** A rule absent from
+    /// [`always_allow_rules`](crate::permitting::always_allow_rules)'s list for
+    /// this exact command was never offered, and is a 409 rather than a
+    /// declaration nobody chose. Absent is the whole command, unchanged since
+    /// before `#834` — an older Bridge that never sends a rule still works.
     async fn record_answer(
         &self,
         job: &JobId,
         worktree: &Worktree,
-        run: &str,
-        answer: CommandAnswer,
+        command: &str,
+        answered: &Answered,
     ) -> Result<(), NotPermitted> {
-        let reach = match answer {
-            CommandAnswer::Reject => return Ok(()),
-            CommandAnswer::AllowForJob => Reach::Job,
-            CommandAnswer::AlwaysAllow => {
-                self.declare_in_repository(worktree, run)?;
-                Reach::Repository
+        let (reach, declared_as) = match answered {
+            Answered::Rejected(_) => return Ok(()),
+            Answered::Allowed(Reach::Job, _) => (Reach::Job, command.to_string()),
+            Answered::Allowed(Reach::Repository, rule) => {
+                let declared_as = match rule {
+                    Some(rule) => {
+                        let (candidates, _) = always_allow_rules(command);
+                        candidates
+                            .into_iter()
+                            .find(|candidate| candidate == rule)
+                            .ok_or_else(|| NotPermitted::RuleNotOffered { rule: rule.clone() })?
+                    }
+                    None => command.to_string(),
+                };
+                self.declare_in_repository(worktree, &declared_as)?;
+                (Reach::Repository, declared_as)
             }
         };
         let allowed = AllowedCommand {
-            run: run.to_string(),
+            run: declared_as,
             reach,
             allowed_at: self.now(),
             by: Actor::Human,
