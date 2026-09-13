@@ -165,7 +165,8 @@ pub use commanding::{
 pub use configured::ManifestConfig;
 pub use detail::{
     Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
-    PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
+    PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts, StepPass, Stuck,
+    Verdict,
 };
 pub use drift::{Declaration, Drift, ManifestDrift, PackageScripts, Unfollowed};
 pub use drones::{DroneDetail, DroneList, DroneSummary};

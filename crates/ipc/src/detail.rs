@@ -37,7 +37,7 @@ use crate::overlap::ScopeOverlap;
 use crate::waiting::{QuestionInFlight, RedirectInFlight, RedirectWaiting};
 use crate::work::JobFootprint;
 
-pub use step::{JudgeInFlight, StepDetail, StepFacts, Verdict};
+pub use step::{JudgeInFlight, StepDetail, StepFacts, StepPass, Verdict};
 
 /// One Job, whole.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

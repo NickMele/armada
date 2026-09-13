@@ -199,6 +199,13 @@ function factsOfStep(
   const before = working ? beforeFact(step) : undefined;
   if (before !== undefined) facts.push(before);
 
+  // **On the step that sends the work back**, which is whose pass it is. Not on
+  // a step that has not started: its first pass has not begun, and a fact there
+  // would hide the row's "nothing recorded yet".
+  if (step.pass !== undefined && step.state !== "not_started") {
+    facts.push({ label: "Pass", value: `${step.pass.number} of ${step.pass.of}` });
+  }
+
   const stands = standsFact(step, activity);
   if (stands !== undefined) facts.push(stands);
 

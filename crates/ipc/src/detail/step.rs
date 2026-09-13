@@ -101,6 +101,23 @@ pub struct StepFacts {
     /// reason and from the same kind of slot. `None` on every step whose gate
     /// is not between starting its Checks and writing its ruling down.
     pub checking: Option<ChecksUnderway>,
+    /// How many times this step has sent the work back, counted off the log's
+    /// `returned_by` column — `store::step_iteration`'s reading, less its one.
+    /// Zero on every step of every linear workflow.
+    pub returns: u32,
+}
+
+/// Which pass a looping step is on, and how many its workflow allows it.
+///
+/// **On the step that sends the work back, not the step it is sent to** —
+/// `docs/journeys/triage-queue.md` settles whose count it is, and draws it
+/// against the gate row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StepPass {
+    /// Counted from one.
+    pub number: u32,
+    /// The step's `iteration_cap`.
+    pub of: u32,
 }
 
 /// One `job_steps` row: which step, where in the order, and where it got to.
@@ -166,6 +183,12 @@ pub struct StepDetail {
     /// workflow declaring no delivering step is never.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivers: Option<bool>,
+    /// Which pass this step is on, where it closes a loop. Since protocol 13.20.
+    ///
+    /// **Absent on every step that sends nothing back**, which is every step of
+    /// a linear workflow — and absent where Fleet cannot say, as `checks` is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass: Option<StepPass>,
     /// Absent until a gate has ruled on the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verdict: Option<Verdict>,
@@ -377,6 +400,13 @@ impl StepDetail {
             judge_checks: declared.map(|declared| DeclaredJudge::firing(declared.judge_checks())),
             advance_gate: declared.map(|declared| declared.advance_gate().into()),
             delivers: declared.map(core_model::ResolvedStep::delivers),
+            pass: declared
+                .map(core_model::ResolvedStep::iteration_cap)
+                .filter(|cap| *cap > 0)
+                .map(|of| StepPass {
+                    number: facts.map_or(0, |facts| facts.returns) + 1,
+                    of,
+                }),
             last_verdict: step
                 .last_verdict()
                 .map(|verdict| Verdict::of(latest_closed_attempt(facts), verdict)),

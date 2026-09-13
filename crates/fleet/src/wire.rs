@@ -345,6 +345,8 @@ pub(crate) struct StepMove {
     to: &'static str,
     why: Option<&'static str>,
     at: ipc::Instant,
+    /// The step that sent the work back, on the one move that is a loop return.
+    returned_by: Option<core_model::StepId>,
 }
 
 /// Every step move in one Job's log, in `seq` order, with the status
@@ -368,12 +370,17 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
         .iter()
         .filter_map(|event| match event.moved() {
             Moved::Step {
-                step_id, to, why, ..
+                step_id,
+                to,
+                why,
+                returned_by,
+                ..
             } => Some(StepMove {
                 step_id: step_id.clone(),
                 to: to.as_wire(),
                 why: why.map(|trigger| trigger.as_wire()),
                 at: event.at().into(),
+                returned_by: returned_by.clone(),
             }),
             Moved::Job { .. } | Moved::Drone { .. } => None,
         })
@@ -427,7 +434,14 @@ pub(crate) fn step_facts(
                         at: &moved.at,
                     }),
             );
+            // Counted where the attempts are, off the same moves: a return
+            // names the step that caused it, which is whose pass it is.
+            let returns = moves
+                .iter()
+                .filter(|moved| moved.returned_by.as_ref() == Some(step.step_id()))
+                .count();
             StepFacts {
+                returns: u32::try_from(returns).unwrap_or(u32::MAX),
                 step_id: StepId::from(step.step_id()),
                 label: job
                     .workflow()
