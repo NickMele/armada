@@ -3,6 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { MANIFEST_ID, repository } from "../../../fixtures/build/base";
 import { VERIFY_ENDED } from "../Manifest/Manifest";
+import { endShownIn, pressable, scrollerOf } from "../Manifest/scrolled";
 import { SCRATCH, SetupFrom } from "./Setup";
 
 /**
@@ -314,5 +315,40 @@ export const PickNotSetUp: Story = {
     await expect(within(picker).getByRole("option", { name: "scratch" })).toBeInTheDocument();
     await expect(picker).toHaveValue(SCRATCH.root);
     await expect(canvas.getByRole("tab", { name: "Edit" })).toBeVisible();
+  },
+};
+
+/**
+ * **A batch taller than the window.** The list and the grid scroll as one view under tabs that stay
+ * put, and a proposal opened from the grid's last row comes up over them with a scroll of its own.
+ */
+export const ALongBatchScrolled: Story = {
+  name: "A long batch, scrolled",
+  args: { more: 16 },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = await canvas.findByRole("region", { name: "Workspaces" });
+    const batch = canvas.getByRole("region", { name: "Check names across the batch" });
+    const picker = scrollerOf(batch);
+    await expect(picker).not.toBeNull();
+    await expect(scrollerOf(list)).toBe(picker);
+    await expect(picker!.scrollHeight).toBeGreaterThan(picker!.clientHeight);
+    await expect(endShownIn(batch, picker!)).toBe(false);
+    const tabsAt = canvas.getByRole("tablist").getBoundingClientRect().top;
+
+    picker!.scrollTop = picker!.scrollHeight;
+    await waitFor(() => expect(endShownIn(batch, picker!)).toBe(true));
+    await expect(canvas.getByRole("tablist").getBoundingClientRect().top).toBe(tabsAt);
+    const last = within(batch).getAllByRole("button", { name: "packages/pkg-16" });
+    await expect(pressable(last[0]!)).toBe(true);
+
+    await userEvent.click(last[0]!);
+    const sheet = await canvas.findByRole("dialog", { name: "Proposal for packages/pkg-16" });
+    const own = scrollerOf(within(sheet).getByRole("list", { name: "Checks" }));
+    await expect(own).not.toBeNull();
+    await expect(own).not.toBe(picker);
+    await expect(sheet.contains(own) || own!.contains(sheet)).toBe(true);
+    await userEvent.click(within(sheet).getByRole("button", { name: "Back to the workspaces" }));
+    await expect(canvas.queryByRole("dialog")).toBeNull();
   },
 };

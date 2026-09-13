@@ -181,11 +181,21 @@ const NOTHING_SERVED: CheckoutRunSheetRead = {
 /** What the OS folder dialog answers in a story. Nothing native opens. */
 export const CHOSEN = "/Users/user/scratch";
 
+/** `more` packages beside the storefront's own four, each proposing the apps' three Checks. */
+function widened(base: ManifestProposals, more: number): { scan: RepositoryScan; proposals: ManifestProposals } {
+  const dirs = Array.from({ length: more }, (_, at) => `packages/pkg-${String(at + 1).padStart(2, "0")}`);
+  return {
+    scan: { ...SCAN, workspaces: [...SCAN.workspaces, ...dirs.map((dir) => workspace(dir, "strong", [`${dir}/package.json`]))] },
+    proposals: { ...base, proposals: [...base.proposals, ...dirs.map((dir) => proposal(dir, ["test", "lint", "typecheck"]))] },
+  };
+}
+
 export function SetupFrom({
   write = "took",
   sheet = { state: "none" },
   rootSetUp = true,
   repositories,
+  more = 0,
   clone = "took",
   onAdded,
   onCloned,
@@ -210,6 +220,8 @@ export function SetupFrom({
    * a root Write there gives it a Manifest, as Fleet's re-read list would. Absent is this Fleet's own.
    */
   repositories?: RepositorySummary[];
+  /** Workspaces beyond the storefront's four, for a batch taller than the window. */
+  more?: number;
 }) {
   const [listed, setListed] = useState<RepositorySummary[]>(repositories ?? [repository()]);
   const [scope, setScope] = useState(listed[0]?.root ?? "");
@@ -243,12 +255,12 @@ export function SetupFrom({
       return served(into);
     },
     onLocated: (one) => {
-      held.current = NO_ROOT_FILE;
+      held.current = widened(NO_ROOT_FILE, more).proposals;
       setScope(one.root);
       setSettingUp(true);
     },
   });
-  const held = useRef<ManifestProposals>(rootSetUp && picked?.manifest !== undefined ? PROPOSALS : NO_ROOT_FILE);
+  const held = useRef<ManifestProposals>(widened(rootSetUp && picked?.manifest !== undefined ? PROPOSALS : NO_ROOT_FILE, more).proposals);
   const [settingUp, setSettingUp] = useState(repositories === undefined || picked?.manifest === undefined);
   const answer = (dir: string, change: (one: ManifestProposal) => ManifestProposal): Promise<ProposalAnswer> => {
     const next = held.current.proposals.map((one) => (one.dir === dir ? change(one) : one));
@@ -257,7 +269,7 @@ export function SetupFrom({
   };
   const setting = useSetup({
     showing: settingUp,
-    onReadScan: () => Promise.resolve({ ok: true, scan: SCAN }),
+    onReadScan: () => Promise.resolve({ ok: true, scan: widened(held.current, more).scan }),
     onReadProposals: () => Promise.resolve({ ok: true, proposals: held.current }),
     onEditProposal: (body) => answer(body.dir, (one) => applied(one, body)),
     repository: scope,
@@ -316,7 +328,7 @@ export function SetupFrom({
           if (root === null) return;
           // `App`'s own rule: a repository nobody set up opens on Setup.
           const to = listed.find((one) => one.root === root)!;
-          if (to.manifest === undefined) held.current = NO_ROOT_FILE;
+          if (to.manifest === undefined) held.current = widened(NO_ROOT_FILE, more).proposals;
           setScope(root);
           setSettingUp(to.manifest === undefined || settingUp);
         }}

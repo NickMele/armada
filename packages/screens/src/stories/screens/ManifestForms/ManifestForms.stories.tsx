@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { sheet } from "../Manifest/Manifest";
+import { endShownIn, pressable, scrollerOf } from "../Manifest/scrolled";
 import { ManifestFormsFrom } from "./ManifestForms";
 
 /**
@@ -248,5 +249,31 @@ export const TheIdentityIsReadOnly: Story = {
     await expect(within(identity).getByText("1")).toBeVisible();
     await expect(within(identity).queryByRole("textbox")).toBeNull();
     await expect(within(identity).getByText(/not changed from a form/)).toBeVisible();
+  },
+};
+
+/**
+ * **Scrolled to the last section.** The mount never scrolls, so the form does: the tabs stay put,
+ * Drone's end comes into view, and Save stays pinned above it, still pressable.
+ */
+export const ScrolledToTheEnd: Story = {
+  name: "Scrolled to the last section",
+  args: { ...TheForms.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const drone = await canvas.findByRole("region", { name: "Drone" });
+    const form = scrollerOf(drone);
+    await expect(form).not.toBeNull();
+    await expect(form!.scrollHeight).toBeGreaterThan(form!.clientHeight);
+    await expect(endShownIn(drone, form!)).toBe(false);
+    const tabsAt = canvas.getByRole("tablist").getBoundingClientRect().top;
+
+    form!.scrollTop = form!.scrollHeight;
+    await waitFor(() => expect(endShownIn(drone, form!)).toBe(true));
+    await expect(canvas.getByRole("tablist").getBoundingClientRect().top).toBe(tabsAt);
+    await userEvent.type(within(drone).getByLabelText("Poke limit"), "0");
+    const save = canvas.getByRole("button", { name: "Save" });
+    await expect(save).toBeEnabled();
+    await expect(pressable(save)).toBe(true);
   },
 };
