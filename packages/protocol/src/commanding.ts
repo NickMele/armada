@@ -33,8 +33,9 @@ export type WhenBlocked = "refuse_and_hold" | "ask_me" | "allow_all";
  * What a person may answer about one refused command. Since protocol 10.7.
  *
  * `allow_for_job` runs it and lets this job run it again without asking.
- * `always_allow` does that and writes it into `armada.yml` under `commands`,
- * as its own commit on the job's branch. `reject` tells the drone no.
+ * `always_allow` does that for every job in this repository: fleet keeps the
+ * picked rule in its own table and commits nothing (#836). `reject` tells the
+ * drone no.
  *
  * **Offered, never assumed.** Each place a person answers carries the subset
  * fleet will take, and an answer outside it is a 409.
