@@ -70,15 +70,15 @@ export const ACloneUnderway: Story = {
   },
 };
 
-/** Git's refusal reads in the dialog under Fleet's code, and nothing moves behind it. */
+/** Git's refusal reads in the dialog in full, under what did not happen, and nothing moves behind it. */
 export const ACloneRefused: Story = {
   name: "A clone refused",
   args: { clone: "refused" },
   play: async ({ canvasElement }) => {
     const { canvas, dialog } = await cloneFrom(canvasElement);
-    const refusal = await within(dialog).findByRole("alert");
-    await expect(within(refusal).getByText("fleet.clone_refused")).toBeVisible();
-    await expect(within(refusal).getByText(/git refused the clone: fatal: repository/)).toBeVisible();
+    await expect(await within(dialog).findByText("Not cloned")).toBeVisible();
+    await expect(within(dialog).getByText(`git refused the clone: fatal: repository '${URL}' not found.`)).toBeVisible();
+    await expect(within(dialog).queryByText("fleet.clone_refused")).toBeNull();
     await expect(within(dialog).getByRole("button", { name: /^Clone repository/ })).toBeEnabled();
     await expect(canvas.getByRole("combobox", { name: "Project" })).toHaveValue("/Users/user/armada");
   },
@@ -90,10 +90,12 @@ export const ANonEmptyDestination: Story = {
   args: { clone: "occupied" },
   play: async ({ canvasElement }) => {
     const { dialog } = await cloneFrom(canvasElement);
-    const refusal = await within(dialog).findByRole("alert");
-    await expect(within(refusal).getByText("fleet.destination_occupied")).toBeVisible();
-    await expect(within(refusal).getByText("/Users/user/code/storefront already exists and is not empty")).toBeVisible();
-    await expect(within(refusal).getByText("Choose another folder to clone into.")).toBeVisible();
+    await expect(await within(dialog).findByText("Not cloned")).toBeVisible();
+    await expect(within(dialog).getByText("/Users/user/code/storefront already exists and is not empty.")).toBeVisible();
+    await expect(within(dialog).getByText("Choose another folder to clone into.")).toBeVisible();
+    // Fleet's sentence names the destination, so the preview does not say it a second time.
+    await expect(within(dialog).queryByRole("group", { name: "Project location" })).toBeNull();
+    await expect(within(dialog).queryByText("fleet.destination_occupied")).toBeNull();
   },
 };
 

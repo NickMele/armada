@@ -63,7 +63,7 @@ export function useLocate(slice: LocateSlice): Locating {
         if (wasOpen) latest.current.onLocated(answer.repository);
         return;
       }
-      setRefusal(refusalOf(answer));
+      setRefusal(refusalOf(answer, cloning));
     } finally {
       setSending(false);
     }
@@ -105,19 +105,36 @@ export function useLocate(slice: LocateSlice): Locating {
 }
 
 /** What an answer that did not locate says, in the dialog. */
-function refusalOf(answer: Exclude<LocateAnswer, { state: "located" }>): NonNullable<LocateFormProps["refusal"]> {
+function refusalOf(
+  answer: Exclude<LocateAnswer, { state: "located" }>,
+  cloning: boolean,
+): NonNullable<LocateFormProps["refusal"]> {
   switch (answer.state) {
     case "refused":
       return {
-        code: answer.code,
-        saying: answer.saying,
+        title: titleOf(answer.code, cloning),
+        saying: sentence(answer.saying),
         ...(answer.code === DESTINATION_OCCUPIED ? { next: "Choose another folder to clone into." } : {}),
       };
     case "busy":
-      return { saying: "A repository is already being added or cloned. This one was not sent." };
+      return { title: "Not sent", saying: "A repository is already being added or cloned." };
     case "failed":
-      return { saying: said(answer.outcome) };
+      return { title: answer.outcome.ok === false && answer.outcome.why === "transport" ? "No answer from Fleet" : "Not sent", saying: said(answer.outcome) };
   }
+}
+
+/** Fleet's own clone codes mean nothing landed; any other refusal of a clone came after git, and the clone stays. */
+const CLONE_CODES = new Set(["fleet.clone_refused", DESTINATION_OCCUPIED, "fleet.no_such_folder", "fleet.clone_not_finished"]);
+
+function titleOf(code: string, cloning: boolean): string {
+  if (!cloning) return "Not added";
+  return CLONE_CODES.has(code) ? "Not cloned" : "Cloned, and not added";
+}
+
+/** Fleet's messages end bare; the dialog reads them as sentences. */
+function sentence(saying: string): string {
+  const trimmed = saying.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
 /** The dialog, drawn from what `useLocate` holds. */

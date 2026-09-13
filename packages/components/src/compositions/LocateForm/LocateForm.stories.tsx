@@ -89,9 +89,9 @@ export const CloneRefused: Story = {
   args: {
     ...CloneFromAURL.args,
     refusal: {
-      code: "fleet.clone_refused",
+      title: "Not cloned",
       saying:
-        "git refused the clone: fatal: repository 'https://forge.invalid/owner/storefront.git/' not found",
+        "git refused the clone: fatal: repository 'https://forge.invalid/owner/storefront.git/' not found.",
     },
   },
 };
@@ -102,8 +102,8 @@ export const DestinationNotEmpty: Story = {
   args: {
     ...CloneFromAURL.args,
     refusal: {
-      code: "fleet.destination_occupied",
-      saying: "/Users/user/code/storefront already exists and is not empty",
+      title: "Not cloned",
+      saying: "/Users/user/code/storefront already exists and is not empty.",
       next: "Choose another folder to clone into.",
     },
   },

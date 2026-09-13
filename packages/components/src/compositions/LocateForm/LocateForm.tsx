@@ -1,8 +1,7 @@
+import { Alert } from "../../primitives/Alert/Alert";
 import { Button } from "../../primitives/Button/Button";
 import { Dialog } from "../../primitives/Dialog/Dialog";
 import { Input } from "../../primitives/Input/Input";
-import { ScrollArea } from "../../primitives/ScrollArea/ScrollArea";
-import { ErrorCode } from "../../errors/ErrorCode/ErrorCode";
 
 /**
  * Locate — Journey 3's *Getting in*: add a repository by its folder, or clone one from a URL.
@@ -32,10 +31,10 @@ export type LocateFormProps = {
   pathMessage?: string;
   parentMessage?: string;
   /**
-   * Fleet's refusal, in its own words — git's too — with its code, and what to do where the words
-   * do not say. A failure that never reached Fleet has a sentence and no code.
+   * What did not happen, then Fleet's sentence whole — git's too — and what to do where the words
+   * do not say. The Manifest form's refused save, read the same way.
    */
-  refusal?: { code?: string; saying: string; next?: string };
+  refusal?: { title: string; saying: string; next?: string };
   onMode: (mode: LocateMode) => void;
   onPath: (path: string) => void;
   onUrl: (url: string) => void;
@@ -61,16 +60,6 @@ export function LocateForm(props: LocateFormProps) {
       field={
         <div className="armada-locate">
           {cloning ? <CloneFields {...props} /> : <FolderFields {...props} />}
-          {refusal === undefined ? null : (
-            <div className="armada-locate__refusal" role="alert">
-              {refusal.code === undefined ? null : <ErrorCode kind="fault" code={refusal.code} />}
-              {/* Git's own words can run to pages; they scroll so the controls stay on screen. */}
-              <ScrollArea className="armada-locate__said">
-                <p className="armada-locate__saying">{refusal.saying}</p>
-              </ScrollArea>
-              {refusal.next === undefined ? null : <p className="armada-locate__next">{refusal.next}</p>}
-            </div>
-          )}
           {/* Gone while sending rather than disabled: the other act means nothing until this one answers. */}
           {sending ? null : (
             <div className="armada-locate__other">
@@ -82,7 +71,13 @@ export function LocateForm(props: LocateFormProps) {
         </div>
       }
     >
-      {sending && cloning ? (
+      {/* In the body, the region that scrolls, so Fleet's sentence is never cut and the controls stay put. */}
+      {refusal !== undefined ? (
+        <Alert tone="escalated" title={refusal.title}>
+          <p className="armada-locate__saying">{refusal.saying}</p>
+          {refusal.next === undefined ? null : <p className="armada-locate__saying">{refusal.next}</p>}
+        </Alert>
+      ) : sending && cloning ? (
         <p>
           Git is cloning into <span className="armada-locate__path">{props.landsIn}</span>. A large repository
           takes minutes. Closing this leaves the clone running, and it joins the project picker when it finishes.
@@ -120,7 +115,9 @@ function FolderFields({ path, pathMessage, sending, onPath, onChoose }: LocateFo
   );
 }
 
-function CloneFields({ url, parent, landsIn, parentMessage, sending, onUrl, onParent, onChoose }: LocateFormProps) {
+function CloneFields({ url, parent, landsIn, parentMessage, refusal, sending, onUrl, onParent, onChoose }: LocateFormProps) {
+  // A refusal naming where the clone lands has said it; the preview would say it twice.
+  const said = landsIn !== null && refusal?.saying.includes(landsIn) === true;
   return (
     <>
       <Input label="Repository URL" mono value={url} disabled={sending} onChange={(event) => onUrl(event.target.value)} />
@@ -139,6 +136,7 @@ function CloneFields({ url, parent, landsIn, parentMessage, sending, onUrl, onPa
         </Button>
       </div>
       {/* Read-only, and the label the journey names: where the project will be. */}
+      {said ? null : (
       <div className="armada-locate__lands" role="group" aria-label="Project location">
         <span className="armada-locate__label">Project location</span>
         {landsIn === null ? (
@@ -147,6 +145,7 @@ function CloneFields({ url, parent, landsIn, parentMessage, sending, onUrl, onPa
           <span className="armada-locate__path">{landsIn}</span>
         )}
       </div>
+      )}
     </>
   );
 }
