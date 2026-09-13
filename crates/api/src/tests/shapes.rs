@@ -228,6 +228,37 @@ pub fn manifest_file() -> ipc::ManifestFile {
     }
 }
 
+/// A root and a member of different strengths, the member marked missing a
+/// name, so a route test cannot pass against a constant.
+pub fn repository_scan() -> ipc::RepositoryScan {
+    let at = |dir: &str, evidence| ipc::ScannedWorkspace {
+        dir: dir.to_string(),
+        declared_by: Vec::new(),
+        evidence,
+        manifests: Vec::new(),
+        lockfiles: Vec::new(),
+        runnables: Vec::new(),
+        tools: Vec::new(),
+        services: Vec::new(),
+        ports: Vec::new(),
+        missing: Vec::new(),
+        not_read: Vec::new(),
+    };
+    let mut member = at("apps/web", ipc::EvidenceStrength::Thin);
+    member.missing.push(ipc::MissingName {
+        name: "lint".to_string(),
+        declared_in: vec!["apps/admin".to_string()],
+    });
+    ipc::RepositoryScan {
+        checkout: "/repo".to_string(),
+        workspaces: vec![at(".", ipc::EvidenceStrength::Strong), member],
+        not_read: vec![ipc::NotRead {
+            file: ".ci/pipeline.yml".to_string(),
+            why: "YAML under a hidden directory, which no part of Scan reads".to_string(),
+        }],
+    }
+}
+
 /// One drifted line and one whole one, because a list of either alone would
 /// let a route test pass while the verdict was constant.
 ///

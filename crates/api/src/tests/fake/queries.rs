@@ -230,6 +230,13 @@ impl Queries for FakeDaemon {
         Ok(shapes::manifest_drift())
     }
 
+    async fn get_repository_scan(&self) -> Result<ipc::RepositoryScan, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(shapes::repository_scan())
+    }
+
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {

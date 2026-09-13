@@ -95,6 +95,16 @@ pub(crate) async fn get_manifest_drift<D: Queries>(State(served): State<Served<D
     }
 }
 
+/// What Scan found in the checkout. **Never a 404 for a repository with
+/// nothing in it**: that is one workspace, not followed, and a checkout that
+/// would not list says why in the answer.
+pub(crate) async fn get_repository_scan<D: Queries>(State(served): State<Served<D>>) -> Response {
+    match served.daemon().get_repository_scan().await {
+        Ok(scan) => answer(StatusCode::OK, &scan, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// The `?q=` a person has typed after `@`. A query string rather than a path
 /// segment — `q` is empty the instant somebody types `@` and before anything
 /// follows it, which a path segment cannot carry. Absent decodes the same as

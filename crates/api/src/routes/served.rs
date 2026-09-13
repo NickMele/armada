@@ -78,6 +78,13 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/manifest/drift",
     },
+    // Scan, and not under `/manifest`: it reads a repository nobody has written
+    // an `armada.yml` for, so there is no Manifest for the path to be under.
+    Route {
+        operation: "get_repository_scan",
+        method: "GET",
+        path: "/repository/scan",
+    },
     // The file itself, where the two rows above are readings of it. Singular
     // and beside them for their reason, and never `/manifests/:id/file`: a
     // Fleet resolves its own `armada.yml`, so there is no id to carry and no

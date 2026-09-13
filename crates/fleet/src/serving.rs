@@ -215,6 +215,16 @@ where
         Ok(crate::drifting::drift(self.manifest(), checkout))
     }
 
+    /// What Scan finds in the checkout Fleet was started in —
+    /// [`scanning`](mod@crate::scanning). **It never reads `self.manifest()`**:
+    /// Scan is for a repository with none, and the one Fleet holds is beside
+    /// the point until Locate (#821) names another checkout.
+    async fn get_repository_scan(&self) -> Result<ipc::RepositoryScan, Refusal> {
+        let root = &self.host().repo_root;
+        let tree = crate::scanning::Checkout::at(root);
+        Ok(crate::scanning::scan(root, &tree))
+    }
+
     /// One Job in full — [`detail`](mod@detail), which is a quarter of this
     /// file's length and the read made on every open of a Job.
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {

@@ -101,8 +101,15 @@ impl<'a> Repository<'a> {
 /// followed*. No `"scripts"` key at all decodes to an empty set, since that is a
 /// package declaring no scripts.
 pub(crate) fn scripts(bytes: &[u8]) -> Option<BTreeSet<String>> {
+    Some(script_lines(bytes)?.into_keys().collect())
+}
+
+/// Each script with the command it runs — the one decode both drift and
+/// `crate::scanning` read a `package.json` through, so the two cannot come to
+/// disagree about what a script is.
+pub(crate) fn script_lines(bytes: &[u8]) -> Option<BTreeMap<String, String>> {
     let decoded = ipc::decode::<ipc::PackageScripts>("a package.json", bytes).ok()?;
-    Some(decoded.scripts.into_keys().collect())
+    Some(decoded.scripts)
 }
 
 /// The `[alias]` table of a cargo config, each name with its expansion as one
@@ -139,7 +146,7 @@ pub(crate) fn aliases(text: &str) -> Option<BTreeMap<String, String>> {
 
 /// Every quoted string in a one-line TOML array. `None` where the array does
 /// not close on the line, which is a shape this read does not follow.
-fn quoted(value: &str) -> Option<Vec<String>> {
+pub(crate) fn quoted(value: &str) -> Option<Vec<String>> {
     let inner = value.strip_prefix('[')?.split(']').next()?;
     if !value.contains(']') {
         return None;
@@ -205,7 +212,7 @@ fn package_name(text: &str) -> Option<String> {
 /// The `members` array under `[workspace]`, which may span lines. An empty
 /// list where the file declares no workspace — a single package is a real
 /// answer, carried by [`package_name`].
-fn member_entries(text: &str) -> Option<Vec<String>> {
+pub(crate) fn member_entries(text: &str) -> Option<Vec<String>> {
     let mut in_workspace = false;
     let mut collecting: Option<String> = None;
     for line in text.lines() {

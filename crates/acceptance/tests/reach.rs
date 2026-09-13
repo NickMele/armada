@@ -5,20 +5,26 @@
 //! Write, Verify, Fix — and then the half no journey draws: a repository nobody
 //! set up has no `.armada/workflows/`, so today it cannot dispatch at all.
 //! **Almost none of it is built**, so this file asserts what the claim stands
-//! on and names the rest. The apparatus is [`bench::reach`]: a Manifest and a
-//! workflow definition for a repository that is not this one, held as text and
-//! read through the parsers Fleet loads with.
+//! on and names the rest. The apparatus is [`bench::reach`]: a repository that
+//! is not this one — its files before anybody set it up, a Manifest and a
+//! workflow definition — held as text and read through what Fleet reads with.
 //!
 //! **Green is not the milestone; the two tables below it are.** A Reach pull
 //! request that builds a step adds that step's assertion to this file, beside
 //! the code, and deletes the step's row — in the same pull request. A row is
 //! never moved by weakening what it would assert to fit what exists.
 
+//! **Over 500 lines, and still one file.** A milestone is one test, so every
+//! step's assertion lands here; splitting it would move the count, not the
+//! claim — `docs/practices/acceptance-tests.md`.
+
 //! # Carried, and asserted below
 //!
 //! | What holds | What it does not reach |
 //! |---|---|
-//! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That anything wrote it. Scan is #822's; Proposal and Write are #823's |
+//! | Scan reads every workspace of a repository nobody set up, in one pass — workspace globs, lockfiles, package scripts, compose services, the ports a file declares — each finding naming a file the repository has, what it did not read said beside it, and nothing written, because the tree it is handed has no write | That a checkout on disk reads the same, and that Fleet serves it: both touch a repository, and are `fleet`'s and `api`'s own tests. CI configuration is reported unread and never read, since naming whose it is belongs to `adapters` |
+//! | Each workspace carries how strong its evidence is, and a name every strong sibling declares is marked where one lacks it — the root never a sibling | That a picker ticks by it or draws the grid — #824. The mark is over the batch ticked by default; a batch a person re-ticks is the screen's to recompute |
+//! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That anything wrote it. Scan writes nothing; Proposal and Write are #823's |
 //! | A proposal saying more than the file can hold is refused, every fault in one pass | That a proposal is ever read back before it is written |
 //! | A definition gating on `every_manifest_check` resolves against that repository's own Checks, and one naming Armada's by name is refused there | That any definition reaches that repository. Carrying one is #425's |
 //! | A Job created against it is held to that repository's Checks, prerequisites and all | That the Job's record says where its definition came from — #425 |
@@ -33,8 +39,6 @@
 //! | Step | What is not carried | Carried by |
 //! |---|---|---|
 //! | Locate | Pointing Armada at a repository it has not seen, by path or by clone. A Fleet reads the one repository it was started in | #821 |
-//! | Scan | Reading lockfiles, package scripts, CI config and workspace globs across every workspace in one pass, and writing nothing | #822 |
-//! | Pick | Each workspace ticked by how strong its evidence is, and a Check name its siblings declare marked where it is missing | #822 |
 //! | Proposal | Every line cites the file it came from, or says `convention` | #823 |
 //! | Write | One `armada.yml` per workspace, whatever the proposal was iterated to | #823 |
 //! | Verify | Setup and every Check run once on approval, on the sheet that wrote the file, writing nothing | #719 |
@@ -58,14 +62,168 @@ use std::path::Path;
 
 use config::{Fault, ResolveError, ResolvedCheck, ResolvedWorkflow};
 use core_model::{JobStatus, StepState, WorkflowId};
+use fleet::scanning::scan;
 use fleet::{Brief, Proposal};
+use ipc::{
+    EvidenceStrength, MissingName, RepositoryScan, ScannedWorkspace, ToolFile, WorkspaceGlob,
+};
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    carried_there, resolved_there, written, A_MILESTONE, CARRYABLE, EPIC, EPIC_AT, MANIFEST_AT,
-    NAMING_ARMADAS_CHECKS, OVERREACHING, WRITTEN,
+    carried_there, resolved_there, written, Held, A_MILESTONE, CARRYABLE, CHECKOUT, EPIC, EPIC_AT,
+    MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP, WRITTEN,
 };
 use bench::{states, Bench};
+
+// ---------------------------------------------------------------------------
+// Scan and Pick
+// ---------------------------------------------------------------------------
+
+/// A scan as a picker receives it: through `ipc::encode` and back.
+fn received(repository: &Held) -> RepositoryScan {
+    let sent = ipc::encode(&scan(CHECKOUT, repository)).expect("a scan that serialises");
+    ipc::decode("a repository scan", sent.as_bytes()).expect("and reads back")
+}
+
+fn workspace<'a>(scan: &'a RepositoryScan, dir: &str) -> &'a ScannedWorkspace {
+    scan.workspaces
+        .iter()
+        .find(|one| one.dir == dir)
+        .unwrap_or_else(|| panic!("{dir} is a workspace"))
+}
+
+/// **Scan reads every workspace of a repository nobody set up, in one pass,
+/// and every finding names a file that repository has.** The Scan step, #822.
+///
+/// Handed to Scan as a `Tree`, which has no write on it — so *writes nothing*
+/// is the type, not an assertion. What it did not read is said beside what it
+/// did, and a tool it does not follow is never clean.
+#[test]
+fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
+    let repository = Held::of(UNSET_UP);
+    let scan = received(&repository);
+    let dirs: Vec<&str> = scan.workspaces.iter().map(|one| one.dir.as_str()).collect();
+    assert_eq!(
+        dirs,
+        [
+            ".",
+            "apps/admin",
+            "apps/shop",
+            "packages/tokens",
+            "packages/ui",
+            "services/mailer"
+        ],
+        "every workspace, the one no pattern names included"
+    );
+
+    for one in &scan.workspaces {
+        let cited = one
+            .manifests
+            .iter()
+            .chain(&one.lockfiles)
+            .map(|found| &found.file)
+            .chain(one.runnables.iter().map(|found| &found.file))
+            .chain(one.tools.iter().map(|found| &found.file))
+            .chain(one.services.iter().map(|found| &found.file))
+            .chain(one.ports.iter().map(|found| &found.file))
+            .chain(one.not_read.iter().map(|found| &found.file));
+        for file in cited {
+            assert!(
+                repository.has(file),
+                "{} cites {file}, which is not there",
+                one.dir
+            );
+        }
+    }
+
+    let shop = workspace(&scan, "apps/shop");
+    assert_eq!(
+        shop.declared_by,
+        [WorkspaceGlob {
+            file: "pnpm-workspace.yaml".to_string(),
+            entry: "apps/*".to_string()
+        }]
+    );
+    let e2e = shop
+        .runnables
+        .iter()
+        .find(|one| one.name == "e2e")
+        .expect("e2e");
+    assert_eq!(
+        (e2e.file.as_str(), e2e.key.as_str(), e2e.run.as_str()),
+        ("apps/shop/package.json", "scripts.e2e", "playwright test")
+    );
+    assert_eq!(
+        workspace(&scan, ".").lockfiles,
+        [ToolFile {
+            file: "pnpm-lock.yaml".to_string(),
+            tool: "pnpm".to_string()
+        }]
+    );
+    assert!(
+        shop.lockfiles.is_empty(),
+        "a shared lockfile is the root's, not copied"
+    );
+
+    let ports: Vec<(&str, &str, u16)> = scan
+        .workspaces
+        .iter()
+        .flat_map(|one| &one.ports)
+        .map(|port| (port.file.as_str(), port.key.as_str(), port.container))
+        .collect();
+    assert_eq!(
+        ports,
+        [
+            ("compose.yaml", "services.db.ports[0]", 5432),
+            ("apps/shop/package.json", "scripts.dev", 3000)
+        ],
+        "only where a file declares one"
+    );
+
+    let mailer = workspace(&scan, "services/mailer");
+    assert_eq!(mailer.evidence, EvidenceStrength::NotFollowed);
+    assert_eq!(mailer.not_read[0].file, "services/mailer/go.mod");
+    let unread: Vec<&str> = scan.not_read.iter().map(|one| one.file.as_str()).collect();
+    assert_eq!(unread, [".ci/pipeline.yml"], "said, rather than skipped");
+}
+
+/// **Each workspace carries how strong its evidence is, and a name every strong
+/// sibling declares is marked where one lacks it.** The Pick step, #822.
+///
+/// Narrowly: `e2e` is the shop's alone and marks nothing, the root's `lint`
+/// makes it no sibling, and a thin or unread workspace is neither marked nor
+/// allowed to erase a mark.
+#[test]
+fn pick_ticks_by_evidence_and_marks_a_name_every_strong_sibling_declares() {
+    let scan = received(&Held::of(UNSET_UP));
+    let strengths: Vec<(&str, EvidenceStrength)> = scan
+        .workspaces
+        .iter()
+        .map(|one| (one.dir.as_str(), one.evidence))
+        .collect();
+    assert_eq!(
+        strengths,
+        [
+            (".", EvidenceStrength::Strong),
+            ("apps/admin", EvidenceStrength::Strong),
+            ("apps/shop", EvidenceStrength::Strong),
+            ("packages/tokens", EvidenceStrength::Thin),
+            ("packages/ui", EvidenceStrength::Strong),
+            ("services/mailer", EvidenceStrength::NotFollowed)
+        ]
+    );
+
+    for one in &scan.workspaces {
+        let expected = match one.dir.as_str() {
+            "packages/ui" => vec![MissingName {
+                name: "lint".to_string(),
+                declared_in: vec!["apps/admin".to_string(), "apps/shop".to_string()],
+            }],
+            _ => Vec::new(),
+        };
+        assert_eq!(one.missing, expected, "on {}", one.dir);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // The file Setup ends in

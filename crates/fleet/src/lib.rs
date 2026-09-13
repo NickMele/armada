@@ -173,6 +173,9 @@ mod rostered;
 mod ruling;
 pub mod runtime;
 pub mod saying;
+/// Scan: reading a repository nobody set up for Armada. **It writes nothing,
+/// because a [`scanning::Tree`] has no write on it.**
+pub mod scanning;
 pub mod scope;
 mod servers;
 pub mod serving;

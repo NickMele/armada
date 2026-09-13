@@ -5,15 +5,111 @@
 //! bench answers "did this Job pass its gates" against Armada's own workflow,
 //! and Reach asks what holds for a repository that is not Armada's at all.
 //!
-//! **Two documents and a path, held as text.** Nothing here is read off disk,
-//! so the repository below exists only as the files it would have: the
-//! `armada.yml` Setup would end in, and a workflow definition written without
-//! that repository in view. Both go through the parsers Fleet loads with, so a
-//! fixture no Fleet would load is refused here rather than asserted against.
+//! **Held as text.** Nothing here is read off disk, so the repository below
+//! exists only as the files it would have: the ones Scan reads before anybody
+//! set it up, the `armada.yml` Setup would end in, and a workflow definition
+//! written without that repository in view. Each goes through what Fleet reads
+//! it with, so a fixture no Fleet would read is refused rather than asserted.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use config::{Fault, Manifest, ResolveError, ResolvedWorkflow, Roster, WorkflowDef};
+use fleet::scanning::{Entry, Read, Tree};
+
+/// The repository's checkout, as a Scan of it would say it read.
+pub const CHECKOUT: &str = "/repos/storefront";
+
+/// The storefront **before its Manifest was written**, as the files Scan finds:
+/// a `pnpm` workspace, a compose file, and a hidden directory of YAML.
+///
+/// `packages/tokens` names nothing runnable and `services/mailer` is on a tool
+/// Scan does not follow, so all three strengths are here to tick by.
+pub const UNSET_UP: &[(&str, &str)] = &[
+    (
+        "package.json",
+        r#"{"name":"storefront","private":true,"scripts":{"lint":"pnpm -r lint"}}"#,
+    ),
+    ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+    (
+        "pnpm-workspace.yaml",
+        "packages:\n  - 'apps/*'\n  - 'packages/*'\n",
+    ),
+    (
+        "compose.yaml",
+        "services:\n  db:\n    image: postgres:16\n    ports:\n      - \"5432:5432\"\n",
+    ),
+    (".ci/pipeline.yml", "steps:\n  - run: pnpm test\n"),
+    (
+        "apps/shop/package.json",
+        r#"{"scripts":{"test":"vitest run","lint":"eslint .","e2e":"playwright test","dev":"next dev --port 3000"}}"#,
+    ),
+    (
+        "apps/admin/package.json",
+        r#"{"scripts":{"test":"vitest run","lint":"eslint ."}}"#,
+    ),
+    (
+        "packages/ui/package.json",
+        r#"{"scripts":{"test":"vitest run"}}"#,
+    ),
+    (
+        "packages/tokens/package.json",
+        r#"{"name":"@storefront/tokens"}"#,
+    ),
+    ("services/mailer/go.mod", "module storefront/mailer\n"),
+];
+
+/// A repository held in memory, as a Scan's [`Tree`]. Reading is all it
+/// offers, because reading is all a `Tree` is.
+pub struct Held(BTreeMap<String, String>);
+
+impl Held {
+    pub fn of(files: &[(&str, &str)]) -> Held {
+        Held(
+            files
+                .iter()
+                .map(|(path, text)| (path.to_string(), text.to_string()))
+                .collect(),
+        )
+    }
+
+    pub fn has(&self, path: &str) -> bool {
+        self.0.contains_key(path)
+    }
+}
+
+impl Tree for Held {
+    fn read(&self, path: &str) -> Read {
+        match self.0.get(path) {
+            Some(text) => Read::Bytes(text.as_bytes().to_vec()),
+            None => Read::Absent,
+        }
+    }
+
+    fn entries(&self, dir: &str) -> Result<Vec<Entry>, String> {
+        let prefix = match dir.is_empty() {
+            true => String::new(),
+            false => format!("{dir}/"),
+        };
+        let mut found: BTreeMap<String, bool> = BTreeMap::new();
+        for path in self.0.keys() {
+            let Some(rest) = path.strip_prefix(&prefix) else {
+                continue;
+            };
+            match rest.split_once('/') {
+                Some((child, _)) => found.insert(child.to_string(), true),
+                None => found.insert(rest.to_string(), false),
+            };
+        }
+        if found.is_empty() && !dir.is_empty() {
+            return Err(format!("{dir} is not a directory here"));
+        }
+        Ok(found
+            .into_iter()
+            .map(|(name, is_dir)| Entry { name, is_dir })
+            .collect())
+    }
+}
 
 /// Where the repository's Manifest would be. Absolute, and not this
 /// repository: a web shop on `pnpm`, which shares no Check name with Armada.
