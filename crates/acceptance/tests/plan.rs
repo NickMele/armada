@@ -1,13 +1,12 @@
 //! Plan's claim: **a running Job says how far through its plan it is.** Every
 //! assertion is made against what crossed [`ipc::encode`], as `board.rs`'s are,
-//! and the apparatus is [`bench::plan`]. #893, #894 and #895 are what this
-//! file carries; the rest of the claim is a row, in the order a person meets
-//! it:
+//! and the apparatus is [`bench::plan`]. #893, #894, #895 and #897 are what
+//! this file carries; the rest of the claim is a row, in the order a person
+//! meets it:
 //!
 //! | Step of the claim | Carried by |
 //! |---|---|
 //! | Job detail's Plan region draws the plan | #896 |
-//! | A person adds a fifth task, and the working Drone is told | #897 |
 //! | The Board's row draws "2 of 4" | #898 |
 //!
 //! Which step is given which tool is `fleet::work_plan`, `pub(crate)`, and is
@@ -364,5 +363,104 @@ async fn implements_judge_reads_the_plan_fleet_holds_not_the_drones_words_about_
         "the writer's bound was never inclusive",
     ] {
         assert!(brief.contains(expected), "{expected} missing from {brief}");
+    }
+}
+
+/// #897's row: **a person adds a fifth task, and the working Drone is
+/// told.** The add is kept under `PlanAuthor::Person`, which is the whole of
+/// what tells a person's change from a Drone's on the record — a plan takes
+/// either the same way. What would reach a working Drone is asserted on the
+/// exact bytes crossing [`ipc::encode`]: `fleet::session::Turn::plan_changed`
+/// is the one constructor that can build the turn, from `fleet::PlanChanged`,
+/// which is `docs/contracts/agent-prompt.md`'s drafted wording.
+#[test]
+fn a_person_adds_a_fifth_task_and_the_working_drone_is_told() {
+    let mut planned = Planned::created("fix the reader's bound");
+    let plan = planned.kept(called("record_plan", FOUR_TASKS), PLAN, 1);
+    assert_eq!(plan.tasks().len(), 4, "four tasks recorded");
+
+    let task = core_model::NewTask::new("Add a regression test for the bound", "")
+        .expect("a title makes a task");
+    let entry = core_model::PlanEntry {
+        change: core_model::PlanChange::Added {
+            task: task.clone(),
+            after: None,
+        },
+        by: core_model::PlanAuthor::Person,
+        at: core_model::Timestamp::from_rfc3339("2026-09-13T10:00:05.000Z"),
+    };
+    let after = core_model::WorkPlan::after(Some(&plan), &entry).expect("a person may add");
+    assert_eq!(after.tasks().len(), 5, "the fifth task");
+    let fifth = after.tasks().last().expect("the task just added");
+    assert_eq!(fifth.id().to_string(), "T5");
+    assert_eq!(fifth.title(), "Add a regression test for the bound");
+    assert!(
+        matches!(after.recorded_by(), core_model::PlanAuthor::Step { .. }),
+        "an add is not a recording, so the plan's last whole recording is still the plan step's"
+    );
+
+    let note = fleet::PlanChanged::added(fifth.id(), &task);
+    let turn = fleet::session::Turn::plan_changed(&note);
+    let wire = ipc::encode(&turn).expect("a turn that serialises");
+    for expected in [
+        "T5",
+        "Add a regression test for the bound",
+        "not a question",
+    ] {
+        assert!(wire.contains(expected), "{expected} missing from {wire}");
+    }
+
+    let event = Event::JobPlanChanged(JobPlanChanged {
+        job_id: planned.job.id().into(),
+        tasks: after.counts().into(),
+        actor: core_model::Actor::Human.into(),
+        at: (&entry.at).into(),
+    });
+    assert_eq!(event.kind(), "job.plan_changed");
+    assert_eq!(received_event(&event), event);
+}
+
+/// The other half of #897: **a person drops a task with a reason, and it
+/// shows struck through with the reason.** A drop is `WorkPlan::after`'s
+/// `Updated` change under `PlanAuthor::Person`, exactly as a Drone's own
+/// `update_task` is under `PlanAuthor::Step` — one plan, two authors.
+#[test]
+fn a_person_drops_a_task_with_a_reason_and_it_shows_struck_through() {
+    let mut planned = Planned::created("fix the reader's bound");
+    let plan = planned.kept(called("record_plan", FOUR_TASKS), PLAN, 1);
+
+    let third = plan.tasks()[2].id();
+    let entry = core_model::PlanEntry {
+        change: core_model::PlanChange::Updated {
+            task: third,
+            to: core_model::TaskUpdate::Dropped(
+                core_model::DropReason::new("the writer's bound was never inclusive")
+                    .expect("a reason"),
+            ),
+        },
+        by: core_model::PlanAuthor::Person,
+        at: core_model::Timestamp::from_rfc3339("2026-09-13T10:00:06.000Z"),
+    };
+    let after = core_model::WorkPlan::after(Some(&plan), &entry).expect("a person may drop");
+    let dropped = after.task(third).expect("the task is still on the list");
+    assert_eq!(dropped.state().as_wire(), "dropped");
+    assert_eq!(
+        dropped.reason(),
+        Some("the writer's bound was never inclusive")
+    );
+
+    let note = fleet::PlanChanged::dropped(
+        third,
+        dropped.title(),
+        "the writer's bound was never inclusive",
+    );
+    let turn = fleet::session::Turn::plan_changed(&note);
+    let wire = ipc::encode(&turn).expect("a turn that serialises");
+    for expected in [
+        third.to_string().as_str(),
+        "the writer's bound was never inclusive",
+        "settled",
+    ] {
+        assert!(wire.contains(expected), "{expected} missing from {wire}");
     }
 }
