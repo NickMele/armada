@@ -67,6 +67,7 @@ mod gate;
 mod group;
 mod headings;
 mod headroom;
+mod helm_conversation;
 mod history;
 mod holding;
 mod host;

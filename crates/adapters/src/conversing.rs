@@ -91,7 +91,10 @@ impl Conversing {
 
 impl HeadlessAgent {
     /// One message's process. The message is not on it — see this module.
-    pub fn render_conversation(&self, conversing: &Conversing) -> Result<Launch, ConversationRefused> {
+    pub fn render_conversation(
+        &self,
+        conversing: &Conversing,
+    ) -> Result<Launch, ConversationRefused> {
         let mut args: Vec<String> = vec![
             "-p".into(),
             "--input-format".into(),

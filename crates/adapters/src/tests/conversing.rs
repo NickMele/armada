@@ -58,7 +58,10 @@ fn nothing_that_writes_the_checkout_is_callable() {
     let args = rendered(&fresh()).args().to_vec();
     let denied = value_after(&args, "--disallowedTools").expect("a deny list");
     for tool in ["Bash", "Edit", "Write", "NotebookEdit"] {
-        assert!(denied.split(',').any(|named| named == tool), "{tool} denied");
+        assert!(
+            denied.split(',').any(|named| named == tool),
+            "{tool} denied"
+        );
     }
 }
 

@@ -9,6 +9,7 @@
 
 /// The agent's door, over the router: a tool call reaches the route that
 /// serves the operation.
+mod conversing;
 mod door;
 mod fake;
 mod following;
