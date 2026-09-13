@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { JobSummary } from "@armada/protocol";
 
 import { job } from "./fixtures/build/base";
-import { freezeLineOf, named, takenNotice, takenStands, type Taken } from "./freeze";
+import { freezeLineOf, named, rowFreezeOf, takenNotice, takenStands, type Taken } from "./freeze";
 
 const at = (status: string, over: Partial<JobSummary> = {}): JobSummary => job(status, over);
 
@@ -30,6 +30,16 @@ describe("a Job a freeze holds", () => {
     expect(freezeLineOf(at("queued", { queued_reason: "waiting_on_resources" }))).toBeNull();
     expect(freezeLineOf(at("awaiting_review"))).toBeNull();
     expect(freezeLineOf(at("queued", { queued_reason: "frozen" }))).toBeNull();
+  });
+
+  it("says it shorter on a row, which shares its width with every other", () => {
+    expect(rowFreezeOf(at("queued", { queued_reason: "frozen", frozen_by: ["armada"] }))).toEqual({
+      lead: "waits for",
+      names: "armada",
+      tail: "",
+    });
+    expect(rowFreezeOf(at("awaiting_review", { frozen_by: ["armada"] }))?.lead).toBe("lands after");
+    expect(rowFreezeOf(at("running"))).toBeNull();
   });
 
   it("lists several repositories the way a sentence does", () => {
@@ -60,6 +70,8 @@ describe("a press taken at a frozen repository", () => {
     const restart: Taken = { jobId: merge.jobId, act: "restart", from: "escalated" };
     expect(takenStands(restart, at("escalated"))).toBe(true);
     expect(takenStands(restart, at("queued", { queued_reason: "frozen", frozen_by: ["armada"] }))).toBe(true);
+    // The row can reach the queue before its frozen_by does; that is not the Job moving on.
+    expect(takenStands(restart, at("queued"))).toBe(true);
     expect(takenStands(restart, at("running"))).toBe(false);
     expect(takenStands(merge, at("completed_success"))).toBe(false);
     expect(takenStands(merge, undefined)).toBe(false);

@@ -85,7 +85,7 @@ import type { WorkflowSummary } from "@armada/protocol";
 import { taskBarSegmentsOf, taskFigureOf } from "./board";
 import { absoluteOf, span } from "./duration";
 import { activityFor } from "./frozen";
-import { freezeLineOf } from "./freeze";
+import { rowFreezeOf } from "./freeze";
 import { ROW_VERBS, verbOf } from "./keys";
 import { readingOf } from "./reading";
 
@@ -183,7 +183,7 @@ export function Row({
   );
   const workflowValue =
     workflow === undefined ? job.workflow_id : `${workflow.name}, ${steps.length} steps`;
-  const freeze = freezeLineOf(job);
+  const freeze = rowFreezeOf(job);
   const elapsedNow = elapsedOf(job, now);
   const createdAt = absoluteOf(job.created_at) ?? undefined;
 
@@ -222,7 +222,7 @@ export function Row({
             <span>
               {` · ${freeze.lead} `}
               <span className="mono">{freeze.names}</span>
-              {` ${freeze.tail}`}
+              {freeze.tail === "" ? null : ` ${freeze.tail}`}
             </span>
           )}
         </>

@@ -170,8 +170,8 @@ export const AFrozenRepository: Story = {
   play: async ({ canvasElement }) => {
     for (const view of ["Cards", "Table"]) {
       if (view === "Table") await userEvent.click(within(canvasElement).getByRole("button", { name: "Table" }));
-      await expect(frozenRow(canvasElement, "retire-the-legacy-poke-path")).toMatch(/frozen.*Waits for armada to unfreeze/i);
-      await expect(frozenRow(canvasElement, "split-the-settings-reducer")).toContain("Nothing lands until armada unfreezes");
+      await expect(frozenRow(canvasElement, "retire-the-legacy-poke-path")).toMatch(/frozen.*waits for armada/i);
+      await expect(frozenRow(canvasElement, "split-the-settings-reducer")).toContain("lands after armada unfreezes");
     }
   },
 };

@@ -35,6 +35,18 @@ export function freezeLineOf(job: JobSummary): FreezeLine | null {
   return null;
 }
 
+/**
+ * The same fact, short enough for a row, whose width a list shares: the badge already says `frozen`
+ * on a queued row, so the row only has to name what it waits for.
+ */
+export function rowFreezeOf(job: JobSummary): FreezeLine | null {
+  const line = freezeLineOf(job);
+  if (line === null) return null;
+  return job.status === "awaiting_review"
+    ? { lead: "lands after", names: line.names, tail: line.tail }
+    : { lead: "waits for", names: line.names, tail: "" };
+}
+
 /** The three presses a freeze takes and holds rather than refuses. */
 export type TakenAct = "approve" | "restart" | "merge";
 
@@ -67,8 +79,11 @@ export function takenNotice(
   return { title: TAKEN_TITLE[taken.act], body };
 }
 
-/** Whether a press is still worth holding: the Job has not moved on from it unfrozen, and is not over. */
+/**
+ * Whether a press is still worth holding: the Job has not moved on from it unfrozen, and is not over.
+ * `queued` holds it too, because a row can reach the queue a beat before its `frozen_by` does.
+ */
 export function takenStands(taken: Taken, job: JobSummary | undefined): boolean {
   if (job === undefined || JOB_LIFECYCLE[job.status]?.terminal === true) return false;
-  return frozenBy(job).length > 0 || job.status === taken.from;
+  return frozenBy(job).length > 0 || job.status === taken.from || job.status === "queued";
 }
