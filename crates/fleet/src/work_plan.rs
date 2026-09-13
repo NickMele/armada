@@ -8,7 +8,10 @@
 use std::fmt;
 
 use adapter_traits::{AgentHarness, Delivery, Grant, Vcs, WorkProduct};
-use core_model::{Actor, JobId, PlanChange, PlanRefused, ResolvedStep, StepId, WorkPlan};
+use core_model::{
+    Actor, EvidenceType, FrozenWorkflow, JobId, PlanChange, PlanRefused, ResolvedStep, StepEvidence,
+    StepId, WorkPlan,
+};
 use ipc::mcp::NotRecorded;
 use store::{PlanHand, PlanNotKept};
 
@@ -125,6 +128,34 @@ pub(crate) fn permitted(step: &ResolvedStep, change: &PlanChange) -> Result<(), 
         }
         _ => Ok(()),
     }
+}
+
+/// What `<plan_step_id>.evidence` reads: the plan as it stands when the gate
+/// runs, replacing whatever a Drone submitted about it. `reference_docs` and
+/// `baseline_ref` both reach this through `AtStep::baseline`, so one write
+/// here reaches both. `#895`.
+pub(crate) fn with_the_plan(
+    mut recorded: Vec<(StepId, StepEvidence)>,
+    workflow: &FrozenWorkflow,
+    plan: Option<&WorkPlan>,
+) -> Vec<(StepId, StepEvidence)> {
+    let (Some(step), Some(plan)) = (
+        workflow.steps().iter().find(|step| step.records_plan()),
+        plan,
+    ) else {
+        return recorded;
+    };
+    recorded.retain(|(id, _)| id != step.id());
+    recorded.push((
+        step.id().clone(),
+        StepEvidence {
+            evidence_type: EvidenceType::Plan,
+            claimed: plan.rendered(),
+            shown_by: String::from("Fleet's own record of the plan"),
+            not_claimed: String::new(),
+        },
+    ));
+    recorded
 }
 
 /// The word a kept change is answered with. An added task answers with its id,
