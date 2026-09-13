@@ -484,6 +484,22 @@ export const ServerExitedOnItsOwn: Story = {
   },
 };
 
+/**
+ * A server somebody stopped. **Not "on its own", and no code**: it ended on the signal Stop sent,
+ * and drawing `exit 0` there claimed an exit that never happened.
+ */
+export const ServerStoppedByAPerson: Story = {
+  args: {
+    ...ServerExitedOnItsOwn.args,
+    server: { phase: "exited", stopped: true },
+    output: undefined,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Stopped.")).toBeVisible();
+    await expect(canvas.queryByText(/on its own/)).toBeNull();
+  },
+};
+
 /** Pressing a link reports its URL, and never navigates. */
 export const PressingALinkReportsItsUrl: Story = {
   args: ServerServing.args,
