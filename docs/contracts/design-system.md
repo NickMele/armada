@@ -1472,7 +1472,10 @@ read plausibly under a different job has failed.
   assistant, the chat.
 - **Drone** one agent instance. Never the agent, the bot, the AI,
   Claude.
-- **Job** one unit of work. Never task, run, ticket.
+- **Job** one unit of work. Never run, ticket.
+- **Task** one line of a Job's [plan](../concepts/plan.md). Never step —
+  a step is the workflow's own unit, and a Job's plan is its own account
+  of the work rather than the workflow that gates it.
 - **Convoy** a multi-workspace job landing as one PR. Never batch,
   group.
 - **Job Board** the open queue. Never the queue, the backlog.

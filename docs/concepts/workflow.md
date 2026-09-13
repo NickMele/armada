@@ -57,7 +57,7 @@ Picking one by hand stays available and is the override, not the path. That docu
 
 **Three places, merged by `workflow_id`, the most specific winning**: the set Armada carries, then [Kit](kit.md)'s Workflows at `~/.armada/workflows/`, then the repository's own `.armada/workflows/`. A repository with no workflows of its own dispatches on the carried set, and one file in either later place replaces a carried definition by id. `config::Catalogue` holds the rule. #425.
 
-**The carried set is this repository's eight definitions, compiled in**, and is judged against a repository with tests — Armada's built-in support is for code-with-tests repositories, the owner's decision. None of the eight names a Check: they gate on `every_manifest_check`, `artifact_exists`, `diff_nonempty` and Judge checks, so each resolves against any Manifest, and a repository declaring no Checks runs that gate as nothing.
+**The carried set is this repository's eight definitions, compiled in**, and is judged against a repository with tests — Armada's built-in support is for code-with-tests repositories, the owner's decision. None of the eight names a Check: they gate on `every_manifest_check`, `artifact_exists`, `diff_nonempty` and Judge checks, so each resolves against any Manifest, and a repository declaring no Checks runs that gate as nothing. See The plan step, below, for `plan_recorded` — the carried set does not use it yet.
 
 **That is Armada holding an opinion it used to refuse.** An empty `.armada/workflows/` was refused because a repository declares how its own work is done, and a carried set is Armada saying how work is done by default. The trade is accepted, and overriding is one file so that the default does not become the only way.
 
@@ -72,6 +72,30 @@ Picking one by hand stays available and is the override, not the path. That docu
 **The full workflow catalogue is `crates/core-model/domain/workflows.toml`**, one row per workflow shape — the shape, gate profile and status, including policy variants and workflows still needing a step list, so there is one list rather than three. The instantiated `WorkflowDef` sits beside it as JSON in `crates/core-model/domain/workflow-samples/`, where a sample exists.
 
 A Job instance references `workflow_id` and carries its own `status`, `current_step`, `retry_count` and `iteration_count` per step, `acceptance_criteria[]` (frozen at Job creation), `facts[]` (append-only), and `escalations[]` (using the trigger taxonomy below). A `WorkflowDef` is the template; the Job is the running instance against it. Those counters live in `job_steps`, one row per step, on [Job](job.md).
+
+### The plan step
+
+**A workflow may name at most one step as its plan step**, by giving it
+`evidence.submitted.type: "plan"` and a `plan_recorded` mechanical check
+declaring `min_tasks`. `plan_recorded` passes when a
+[Plan](plan.md) exists with at least that many tasks, and resolves against
+any Manifest the same way `every_manifest_check`, `artifact_exists` and
+`diff_nonempty` do, since a Plan is not manifest-specific.
+
+**A later step follows the plan by declaring `follows_plan: true`.** It is
+shown the plan in its brief and may add or update a task; a step without it
+may read the plan but not change it. `follows_plan` is refused on or before
+the plan step, and in a workflow with no plan step at all.
+
+**Its Judge reads the plan rendered as text** — the approach, then every
+task with its id, title, state and a dropped task's reason — where
+`submitted.type` is `plan`. `context_paths` is not the point on a plan
+step: task states are, so the whole payload is handed over rather than a
+scoped slice.
+
+Designed as the Plan milestone, not yet built. #895 wires these fields into
+the loader and the carried workflows; #893 gives a Drone the `record_plan`,
+`add_task` and `update_task` tools that fill them.
 
 ## Evidence scope object
 

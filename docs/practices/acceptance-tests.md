@@ -25,6 +25,7 @@ the gate asserts about it.
 | Recovery | A Job that needs me says so, and can be unstuck without leaving Bridge | `crates/acceptance/tests/recovery.rs` |
 | Landing | A Job's work reaches the thing it was for | `crates/acceptance/tests/landing.rs` |
 | Reach | Armada works on a repository I did not write the Manifest for by hand | `crates/acceptance/tests/reach.rs` |
+| Plan | A running Job shows how far through its plan it is | `crates/acceptance/tests/plan.rs` |
 
 The apparatus is `crates/acceptance/tests/bench/`, shared, with a file per
 milestone. Claim and apparatus are separated so that what a milestone claims and

@@ -34,11 +34,43 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 **The chevron opens a step's facts; the row selects it.** Why: the tree holds short facts and the panel holds long content, so the two never compete.
 
-**Elapsed is a figure, never a chart.** Why: a filled bar reads as progress, and a step has no percentage.
+**Elapsed is a figure, never a chart, with one exception.** Why: a filled bar reads as progress, and a step has no percentage — a task, unlike a step, does have one. Plan progress is a bar, on the Plan region below, never on a step's own fields.
 
 **An attempt is a row, not a counter.** Why: attempts beside each other show whether a Drone is trying different things or rephrasing one, and a count shows neither.
 
 **A path keeps its basename.** The directory truncates and recedes; the filename does not truncate at any width.
+
+### Plan
+
+**A Plan region sits in the rail, between The run and Pulse.** Designed
+against a screenshot of a running Job on 13 Sep, not yet built — #896 draws
+it. It is shown whichever step is selected, because the plan belongs to the
+Job rather than the step, and the panel stays the selected step's own.
+
+- The eyebrow `Plan`, with an `Add task` eyebrow act — live once #897 lands,
+  absent until then.
+- A task bar using `StepBar`'s segment grammar, one segment per task not
+  dropped: done `--step-advanced`, working `--step-running`, open
+  `--border-default`.
+- The figure `N of M`, done over tasks not dropped.
+- The approach, clamped to two lines, with the rest one click away.
+- One row per task: the mark, the mono id, a one-line title. A dropped task
+  stays struck through with its reason on a second line.
+
+**A mark alone carries a task's state.** Done is `check`, working is
+`circle-dot` and static, open is `circle-dashed`, dropped is `minus`. A row
+carries no state word and no step name. The pulse stays scoped to one mark
+per screen — the running step's own, in The run above — so a working task's
+mark does not pulse.
+
+**A Job whose workflow has no plan step draws no Plan region.** Nothing on
+this screen is drawn empty.
+
+**Where things are collapses to its header line by default, showing the
+branch.** Why: the Plan region makes an already-dense rail denser on a
+running Job, and Where things are is read rarely once a Job is open. It
+opens with one click and remembers the choice; `r` still opens the run
+sheet.
 
 ### The panel
 
