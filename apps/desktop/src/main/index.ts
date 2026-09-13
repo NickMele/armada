@@ -399,7 +399,7 @@ void app.whenReady().then(() => {
   // reason: whether the branch still stands is Fleet's reading, and a delete
   // that refused has to stay on the list exactly as it was.
   ipcMain.handle(CHANNELS.deleteBranch, async (_event, jobId: string, tip: string) => {
-    const outcome = await connection?.commands.deleteBranch(jobId, tip);
+    const outcome = await connection?.commands.clearing.deleteBranch(jobId, tip);
     await connection?.rereadHeld();
     return outcome;
   });

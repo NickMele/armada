@@ -129,7 +129,7 @@ export class JobCommands {
    * The record and the disk, once a Job has ended. **Not acts on a Job**, which
    * is what everything else here is — see `clearing.ts` for the seam.
    */
-  private readonly clearing: Clearing;
+  readonly clearing: Clearing;
   /** Fleet's three admission limits. Not acts on a Job either — `limits.ts`. */
   private readonly limits: Limits;
   /** A person's Bridge preferences. Not acts on a Job either —
@@ -479,11 +479,6 @@ export class JobCommands {
    */
   reclaimWorktree(jobId: string): Promise<Outcome> {
     return this.clearing.reclaim(jobId);
-  }
-
-  /** Delete one terminal Job's branch, unmerged or not. `Clearing.deleteBranch` has the refusals. */
-  deleteBranch(jobId: string, tip: string): Promise<Outcome> {
-    return this.clearing.deleteBranch(jobId, tip);
   }
 
   /**
