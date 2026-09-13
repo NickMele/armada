@@ -481,11 +481,7 @@ export class JobCommands {
     return this.clearing.reclaim(jobId);
   }
 
-  /**
-   * Delete one terminal Job's branch. **A force** — see `Clearing.deleteBranch`
-   * for the refusals, and `reclaimWorktree` above for the checkout's own act,
-   * which never forces.
-   */
+  /** Delete one terminal Job's branch, unmerged or not. `Clearing.deleteBranch` has the refusals. */
   deleteBranch(jobId: string, tip: string): Promise<Outcome> {
     return this.clearing.deleteBranch(jobId, tip);
   }
