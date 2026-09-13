@@ -16,8 +16,16 @@
 
 import type { CommandExplainedRead } from "../shared/api";
 import type { BridgeState } from "../shared/bridge";
-import type { ClearOutcome, Draft, FilesFound, Outcome, ReclaimOutcome, StagedAttachment } from "@armada/protocol";
-import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested, TurnRaise } from "@armada/protocol";
+import type {
+  ClearOutcome,
+  Draft,
+  FilesFound,
+  Outcome,
+  ReclaimOutcome,
+  SaveLimits,
+  StagedAttachment,
+} from "@armada/protocol";
+import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, RestartRequested, TurnRaise } from "@armada/protocol";
 import type {
   AnswerCommand,
   CommandAnswer,
@@ -34,6 +42,8 @@ import type {
 import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
 import { ask, COMMAND_MS, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
+import { Limits } from "./limits";
+import { Reporting } from "./reporting";
 import { proposeFromRequest as propose } from "./proposing";
 import { decide, takeUp, type Decision } from "./review";
 
@@ -70,6 +80,12 @@ export type Board = {
   watchProposal: (clientRef: string | null) => void;
   /** The proposal this window is waiting on, as Fleet last described it. */
   proposalOut: () => ProposalInFlight | null;
+  /**
+   * Read `/capacity` again. **What a saved limit needs**, not a Job: the
+   * status bar's count and its hold both read off that answer, and a save
+   * changes what admission works against without moving a Job at all.
+   */
+  rereadCapacity: (port: number) => Promise<void>;
 };
 
 /**
@@ -109,6 +125,11 @@ export class JobCommands {
    * is what everything else here is — see `clearing.ts` for the seam.
    */
   private readonly clearing: Clearing;
+  /** Fleet's three admission limits. Not acts on a Job either — `limits.ts`. */
+  private readonly limits: Limits;
+  /** A report being filed. Its own class beside `clearing` and `limits` —
+   *  `reporting.ts`. */
+  private readonly reporting: Reporting;
   private readonly approving = new Set<string>();
   private readonly redispatching = new Set<string>();
   private readonly killing = new Set<string>();
@@ -137,8 +158,6 @@ export class JobCommands {
   private readonly raisingTurns = new Set<string>();
   /** Jobs with a decision on the work in flight. One press sends one decision. */
   private readonly deciding = new Set<string>();
-  /** Jobs with a report being filed. Its own set: filing is not an act on the job. */
-  private readonly reporting = new Set<string>();
   /**
    * Jobs with an answer in flight. Its own set beside the redirect's: both put
    * a turn into the same session, and one set would refuse a redirect sent
@@ -167,6 +186,8 @@ export class JobCommands {
   constructor(board: Board) {
     this.board = board;
     this.clearing = new Clearing(board);
+    this.limits = new Limits(board);
+    this.reporting = new Reporting(board);
   }
 
   /**
@@ -301,6 +322,13 @@ export class JobCommands {
       proposal_id: out.proposal_id,
     });
     return answer.ok === true ? { ok: true } : answer.outcome;
+  }
+
+  // -------------------------------------------------------------- fleet limits
+  /** Change one or more of Fleet's three admission limits. `limits.ts` holds
+   *  why this is not the shape `act` or `setting` above are. */
+  saveLimits(values: SaveLimits): Promise<Outcome> {
+    return this.limits.save(values);
   }
 
   /**
@@ -760,38 +788,10 @@ export class JobCommands {
   }
 
   // ---------------------------------------------------------- reporting
-  /**
-   * Say this job failed in error, and file its record with the reason.
-   *
-   * **Not the shape `act` holds, and deliberately.** Every act in that shape
-   * folds a job onto the board and re-reads the open one, because every act in
-   * that shape changes a job. This one changes nothing — no status, no step, no
-   * drone — so folding or re-reading would be Bridge redrawing a board on the
-   * strength of somebody having written a sentence.
-   *
-   * Blank is refused before the request is sent, matching the 422 Fleet would
-   * give it. What comes back is the report, which the caller shows: Armada
-   * files nothing in the issue tracker, so the rendered record is what a person
-   * there themselves.
-   */
-  async fileReport(jobId: string, filing: FileReport): Promise<Outcome> {
-    if (filing.said.trim() === "") return { ok: false, why: "empty_report" };
-    if (this.reporting.has(jobId)) return { ok: false, why: "already_reporting" };
-    const port = this.board.port();
-    if (port === null) return { ok: false, why: "not_connected" };
-
-    this.reporting.add(jobId);
-    try {
-      const answer = await ask(port, "POST", route(jobId, "report"), filing);
-      if (answer.ok !== true) return answer.outcome;
-      const report = answer.body as Report;
-      // A body that is not a report is still a filing that happened — Fleet
-      // answered 201 — so the outcome is a success carrying nothing rather
-      // than a refusal that would send somebody to file it a second time.
-      return typeof report?.record === "string" ? { ok: true, report } : { ok: true };
-    } finally {
-      this.reporting.delete(jobId);
-    }
+  /** Say this job failed in error, and file its record with the reason.
+   *  `reporting.ts` holds why this is not the shape `act` holds. */
+  fileReport(jobId: string, filing: FileReport): Promise<Outcome> {
+    return this.reporting.file(jobId, filing);
   }
 
   // ------------------------------------------------------ deciding on work

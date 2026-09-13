@@ -12,6 +12,7 @@ import type {
   Artifact,
   CommandAnswer,
   JudgeAnswer,
+  SaveLimits,
   WhenBlocked,
   WhenRefused,
 } from "@armada/protocol";
@@ -471,6 +472,11 @@ void app.whenReady().then(() => {
   // success that left the job exactly where it was.
   ipcMain.handle(CHANNELS.raiseTurnCap, (_event, jobId: string, turnCap: number) =>
     connection?.commands.raiseTurnCap(jobId, turnCap),
+  );
+  // Fleet's three admission limits. Fleet-wide, so no Job id rides this
+  // channel — the only one among the acts above that names none.
+  ipcMain.handle(CHANNELS.saveLimits, (_event, values: SaveLimits) =>
+    connection?.commands.saveLimits(values),
   );
   // Saying a job failed in error. Its own channel beside the override rather
   // than a flag on it: the override moves the job past a verdict and this moves

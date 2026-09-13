@@ -48,6 +48,7 @@ import {
   checkOutputOf,
   frameOf,
   holdingsOf,
+  limitsOf,
   manifestReadingOf,
 } from "./request";
 import { ReviewMaterial } from "./review";
@@ -232,6 +233,7 @@ export class FleetConnection {
         if (clientRef === null) this.publish({ proposing: null });
       },
       proposalOut: () => this.current.proposing,
+      rereadCapacity: (port) => this.readCapacity(port),
     });
   }
 
@@ -329,6 +331,9 @@ export class FleetConnection {
       // the window that opened after the save — which is most windows, since a
       // refusal stands until the file is corrected.
       void this.readManifest(fleet.port);
+      // And Fleet's three admission limits, once per connection: nothing but a
+      // save changes them, and that act publishes its own new reading.
+      void this.readLimits(fleet.port);
       // And every server Fleet holds, once per connection — `server.*` on
       // `/events` carries each row whole from here on.
       void this.rehearsal.readServers(fleet.port);
@@ -582,6 +587,15 @@ export class FleetConnection {
    */
   private async readCapacity(port: number): Promise<void> {
     this.publish({ capacity: await capacityOf(port) });
+  }
+
+  /**
+   * Fleet's three admission limits. **Once per connection**, `readManifest`'s
+   * terms: nothing but a save changes them, and `saveLimits` publishes the new
+   * reading itself rather than asking this to run again.
+   */
+  private async readLimits(port: number): Promise<void> {
+    this.publish({ limits: await limitsOf(port) });
   }
 
   /**

@@ -27,7 +27,13 @@ import type {
   Reports,
   Watched,
 } from "@armada/protocol";
-import type { FleetCapacity, JobSummary, ProposalInFlight, UnreadableJob } from "@armada/protocol";
+import type {
+  FleetCapacity,
+  FleetLimits,
+  JobSummary,
+  ProposalInFlight,
+  UnreadableJob,
+} from "@armada/protocol";
 import type { ManifestReading } from "@armada/protocol";
 import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
 import type { CheckoutRunFollowed, CheckoutRunSheetRead } from "@armada/protocol";
@@ -91,6 +97,15 @@ export type BridgeState = {
    * machine reading rides along on the same call.
    */
   capacity: FleetCapacity | null;
+  /**
+   * Fleet's three admission limits, and what Armada ships them at, or `null`
+   * before the first read.
+   *
+   * **Read once per connection and republished on every save** — `capacity`'s
+   * reason for `null` rather than a stale figure, and `manifestReading`'s for
+   * not re-reading on a timer: nothing but a save changes it.
+   */
+  limits: FleetLimits | null;
   /**
    * What Fleet's last read of `armada.yml` came to, or `null` because there
    * has not been one.
@@ -306,6 +321,7 @@ export const NOTHING_YET: BridgeState = {
   jobs: [],
   unreadable: [],
   capacity: null,
+  limits: null,
   manifestReading: null,
   missed: 0,
   readAt: null,
@@ -366,6 +382,7 @@ export const CHANNELS = {
   showAgain: "bridge:show-again",
   raiseCostCap: "bridge:raise-cost-cap",
   raiseTurnCap: "bridge:raise-turn-cap",
+  saveLimits: "bridge:save-limits",
   fileReport: "bridge:file-report",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
