@@ -397,6 +397,9 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
             workflow.source()
         );
     }
+    for left in setup.left_out() {
+        println!("  {left}");
+    }
 
     let vacancy = presence
         .vacancy(&path)

@@ -61,7 +61,9 @@ Picking one by hand stays available and is the override, not the path. That docu
 
 **That is Armada holding an opinion it used to refuse.** An empty `.armada/workflows/` was refused because a repository declares how its own work is done, and a carried set is Armada saying how work is done by default. The trade is accepted, and overriding is one file so that the default does not become the only way.
 
-**Fleet says where each workflow came from when it starts.** A Job's frozen record does not say it yet: the frozen document has no key for it, and adding one is a change to `store`.
+**A definition from Kit or Armada that does not fit is left out, not refused.** One that will not parse, or will not resolve against the repository, is set aside and named when Fleet starts, and the next place down answers for its id. A repository's own stays strict.
+
+**A Job says which place its workflow came from.** The frozen workflow carries `source` — `armada`, `kit` or `repository` — beside its steps, so the answer outlives the files. Fleet also says it for every workflow when it starts. No surface in Bridge shows it yet.
 
 **Feature is the pattern other coding workflows follow; Bug is the sample to copy from.** Design Plan is the only loop; Prototype is the only workflow with gateless steps.
 

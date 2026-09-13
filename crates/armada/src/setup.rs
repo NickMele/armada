@@ -29,8 +29,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use config::{
-    Catalogue, CatalogueRefused, LoadError, Manifest, Reloads, ResolveError, ResolvedWorkflow,
-    Roster, Written,
+    Catalogue, CatalogueRefused, LeftOut, LoadError, Manifest, Reloads, ResolveError,
+    ResolvedWorkflow, Roster, Written,
 };
 
 /// The Manifest's name at a repository root. Not configurable: a repository
@@ -74,6 +74,8 @@ pub struct Setup {
     root: PathBuf,
     manifest: Manifest,
     workflows: BTreeMap<core_model::WorkflowId, ResolvedWorkflow>,
+    /// Definitions from Kit or Armada this repository runs without, and why.
+    left_out: Vec<LeftOut>,
     /// The handle that reads `armada.yml` again. **Read here, so the thing
     /// that can re-read the file is the thing that opened it** — see
     /// `config::live` for what a re-read may and may not move.
@@ -120,14 +122,16 @@ impl Setup {
                 SetupRefused::DuplicateWorkflowId { id, first, second }
             }
         })?;
-        let workflows = catalogue
+        let (workflows, left_out) = catalogue
             .resolve(&manifest)
-            .map_err(SetupRefused::ChecksNotDeclared)?;
+            .map_err(SetupRefused::ChecksNotDeclared)?
+            .into_parts();
 
         Ok(Setup {
             root: root.to_path_buf(),
             manifest,
             workflows,
+            left_out,
             reloads,
         })
     }
@@ -149,6 +153,12 @@ impl Setup {
     /// the second file. The same id in two places is an override.
     pub fn workflows(&self) -> &BTreeMap<core_model::WorkflowId, ResolvedWorkflow> {
         &self.workflows
+    }
+
+    /// What was left out of [`workflows`](Self::workflows), each saying why in
+    /// words Fleet prints at start.
+    pub fn left_out(&self) -> &[LeftOut] {
+        &self.left_out
     }
 
     /// The two halves a `Fittings` wants by value, and the handle that reads

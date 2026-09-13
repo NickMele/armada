@@ -27,10 +27,10 @@
 //! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That anything wrote it. Scan writes nothing; Proposal and Write are #823's |
 //! | A proposal saying more than the file can hold is refused, every fault in one pass | That a proposal is ever read back before it is written |
 //! | A definition gating on `every_manifest_check` resolves against that repository's own Checks, and one naming Armada's by name is refused there | That a definition written for another repository names only what this one declares. The carried set does; `config`'s `tests/carried.rs` holds it to three other shapes |
-//! | A Job created against it is held to that repository's Checks, prerequisites and all | That the Job's record says where its definition came from — the Source row |
+//! | A Job created against it is held to that repository's Checks, prerequisites and all | That any of them runs. A Manifest Check is a process, and the gate is `bug_job.rs`'s claim |
 //! | **Dispatch.** With no workflows of its own, all eight Armada carries resolve there, and a Job on the carried `bug` is created and dispatched | That a Fleet started there serves them. `Setup::at` reads directories, and `armada`'s own tests read them |
 //! | **Override.** One file from Kit replaces a carried definition by id, and the repository's replaces Kit's, whatever order they arrive in | That `~/.armada/workflows/` is where Kit's are read from. That is a directory, `armada`'s tests again |
-//! | **Source.** Each workflow says which of the three places it came from, in words a person reads | That a Job does. See below |
+//! | **Source.** Each workflow says which of the three places it came from, in words a person reads, and a Job created on the carried `bug` freezes `armada` onto its own record | That the record reads it back out of `store`, which has no in-memory constructor — `store`'s own round-trip test does. That a person sees it on a Job: nothing on the wire carries it, which is Bridge's half |
 //! | Running one Manifest entry in the checkout, and reading and saving the file, are operations Fleet serves | Verify and Fix. One entry is not setup and every Check once, and a saved file is not a row corrected in place |
 //! | A request naming a milestone is offered `epic` with what it is for, in a requester's words, beside its steps — and a definition saying nothing is offered as before | That a model reading it proposes `epic`. Choosing is a model's, and this file calls none |
 
@@ -46,12 +46,6 @@
 //! | Write | One `armada.yml` per workspace, whatever the proposal was iterated to | #823 |
 //! | Verify | Setup and every Check run once on approval, on the sheet that wrote the file, writing nothing | #719 |
 //! | Fix | The failing Check's command corrected in its row, and only that Check run again | #721 |
-
-//! # Not carried: dispatching into it
-//!
-//! | Step | What is not carried | Carried by |
-//! |---|---|---|
-//! | Source | A Job's own record says which place its frozen workflow came from. Fleet says it at start and nothing freezes it: the frozen document has no key for it, and one is a change to `store` | #425 |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the six.
@@ -454,13 +448,13 @@ fn a_job_against_that_repository_is_held_to_its_checks() {
 }
 
 /// The workflow a catalogue resolved to for `id`, against the storefront.
-fn held_there(catalogue: &config::Catalogue, id: &str) -> ResolvedWorkflow {
+fn held_there(catalogue: &config::ResolvedCatalogue, id: &str) -> ResolvedWorkflow {
     catalogue
-        .resolve(&written())
-        .unwrap_or_else(|why| panic!("every winner resolves there: {why}"))
-        .into_values()
+        .workflows()
+        .values()
         .find(|workflow| workflow.id().as_str() == id)
         .unwrap_or_else(|| panic!("`{id}` is held"))
+        .clone()
 }
 
 /// **A repository with no workflows of its own dispatches on what Armada
@@ -473,13 +467,8 @@ fn held_there(catalogue: &config::Catalogue, id: &str) -> ResolvedWorkflow {
 #[test]
 fn a_repository_with_no_workflows_of_its_own_dispatches_on_what_armada_carries() {
     let carried = catalogued(&[], &[]);
-    assert_eq!(
-        carried
-            .resolve(&written())
-            .expect("all eight resolve there")
-            .len(),
-        8
-    );
+    assert_eq!(carried.workflows().len(), 8, "all eight resolve there");
+    assert!(carried.left_out().is_empty(), "and none is left out");
     let bug = held_there(&carried, "bug");
     assert_eq!(bug.source(), WorkflowSource::Armada);
     assert_eq!(
@@ -501,6 +490,11 @@ fn a_repository_with_no_workflows_of_its_own_dispatches_on_what_armada_carries()
     bench.approved_and_dispatched(&mut run);
     assert_eq!(run.job.status(), JobStatus::Running);
     assert_eq!(states(&run.job)[0], ("plan", StepState::Running));
+    assert_eq!(
+        run.job.workflow().source(),
+        WorkflowSource::Armada,
+        "and the Job's own record says where its workflow came from"
+    );
 }
 
 /// **One file replaces a carried definition by id, and the repository's own

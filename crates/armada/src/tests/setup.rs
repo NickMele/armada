@@ -470,6 +470,39 @@ fn kit_replaces_what_armada_carries_and_the_repository_replaces_kit() {
     );
 }
 
+/// **A Kit definition that does not fit is left out and named, and Fleet
+/// starts anyway** — one that will not parse, and one gating on a Check this
+/// repository lacks. The owner's decision. Armada's `bug` answers for the id.
+#[test]
+fn a_kit_definition_that_does_not_fit_is_left_out_and_named() {
+    let dir = a_repository();
+    let kit = TempDir::new();
+    kit.write(
+        &format!("{KIT_WORKFLOWS}/broken.yml"),
+        "version: 1\nworkflow_id: broken\n",
+    );
+    kit.write(
+        &format!("{KIT_WORKFLOWS}/bug.yml"),
+        "version: 1\nworkflow_id: bug\nname: bug\nstructure: linear\nsteps:\n  - id: only\n    \
+         label: Only\n    evidence: {submitted: {type: diff}}\n    delivers: true\n    \
+         advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: build }\n",
+    );
+
+    let setup = Setup::at(dir.path(), kit.path(), &roster()).expect("starts anyway");
+    assert_eq!(bug(&setup).source(), WorkflowSource::Armada);
+    let said: Vec<String> = setup.left_out().iter().map(ToString::to_string).collect();
+    assert_eq!(said.len(), 2, "{said:?}");
+    assert!(
+        said.iter().any(|line| line.contains("broken.yml")),
+        "{said:?}"
+    );
+    assert!(
+        said.iter()
+            .any(|line| line.starts_with("workflow `bug` from Kit") && line.contains("build")),
+        "{said:?}"
+    );
+}
+
 /// Kit's home is made where it was not, with somewhere for Workflows to go, and
 /// making it again is no act at all.
 #[test]

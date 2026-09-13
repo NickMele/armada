@@ -15,7 +15,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use config::{
-    Catalogue, Fault, Manifest, ResolveError, ResolvedWorkflow, Roster, WorkflowDef, Written,
+    Catalogue, Fault, Manifest, ResolveError, ResolvedCatalogue, ResolvedWorkflow, Roster,
+    WorkflowDef, Written,
 };
 use fleet::scanning::{Entry, Read, Tree};
 
@@ -137,9 +138,10 @@ pub fn one_step(id: &str) -> String {
 }
 
 /// What Armada carries, merged with what a Kit and the repository wrote, as
-/// `(file, text)`. Read against a roster offering exactly the models the
-/// carried set names — [`carried_there`] says why the roster is not this claim.
-pub fn catalogued(kit: &[(&str, String)], own: &[(&str, String)]) -> Catalogue {
+/// `(file, text)`, and resolved against the storefront. Read against a roster
+/// offering exactly the models the carried set names — [`carried_there`] says
+/// why the roster is not this claim.
+pub fn catalogued(kit: &[(&str, String)], own: &[(&str, String)]) -> ResolvedCatalogue {
     let named: Vec<String> = config::carried()
         .iter()
         .filter_map(|one| {
@@ -169,6 +171,8 @@ pub fn catalogued(kit: &[(&str, String)], own: &[(&str, String)]) -> Catalogue {
         );
     Catalogue::of(written, &Roster::of(named))
         .unwrap_or_else(|why| panic!("the three places merge: {why:?}"))
+        .resolve(&self::written())
+        .unwrap_or_else(|why| panic!("nothing the storefront wrote is refused: {why}"))
 }
 
 /// The `armada.yml` a finished Setup would write for that repository.
