@@ -170,11 +170,10 @@
     },
     {
       "id": "handoff",
-      "label": "Summarise",
+      "label": "Review the change",
       "evidence": {
-        "submitted": { "type": "facts_note" }
+        "submitted": { "type": "review" }
       },
-      "model": "haiku",
       "delivers": true,
       "advance_gate": "human_always"
     }

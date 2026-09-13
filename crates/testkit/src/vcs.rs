@@ -187,6 +187,8 @@ pub enum Delivered {
     /// The forge was asked for inline diff comments. Counted apart from
     /// [`AskedWhatIsUnderReview`]: the sweep must never pay for this call.
     AskedForInlineRemarks { pull_request: String },
+    /// The forge was asked for a pull request's diff, for a Code Review Job's review.
+    AskedForTheDiff { pull_request: String },
     /// The branch was asked to be kept current against a base that moved —
     /// `Delivery::kept_current`, in place of the close-and-reopen this
     /// replaced. **Counted for
@@ -240,6 +242,8 @@ pub struct Delivering {
     /// The forge's answer for inline diff comments. Empty by default, and
     /// never inferred from `under_review` — a real forge does not either.
     pub inline_remarks: Vec<Remark>,
+    /// The forge's answer for a pull request's diff. `None` by default, the forge's silence.
+    pub pull_request_diff: Option<adapter_traits::PullRequestDiff>,
     /// What keeping the branch current comes to. A clean rebase by default,
     /// because the case a test has to write out is the one where it conflicted
     /// or found no branch.
@@ -272,6 +276,7 @@ impl Default for Delivering {
             mergeable: Mergeable::Yes,
             under_review: UnderReview::unreadable(),
             inline_remarks: Vec::new(),
+            pull_request_diff: None,
             kept_current: KeptCurrent::Rebased {
                 onto: String::from("5b4ec82700000000000000000000000000000000"),
                 commits: 1,
@@ -688,6 +693,24 @@ impl Delivery for FakeVcs {
             .lock()
             .expect("not poisoned")
             .inline_remarks
+            .clone()
+    }
+
+    fn pull_request_diff(
+        &self,
+        _in_repo: &str,
+        pull_request: &str,
+    ) -> Option<adapter_traits::PullRequestDiff> {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::AskedForTheDiff {
+                pull_request: pull_request.to_string(),
+            });
+        self.delivery
+            .lock()
+            .expect("not poisoned")
+            .pull_request_diff
             .clone()
     }
 

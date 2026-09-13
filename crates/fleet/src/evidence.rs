@@ -458,8 +458,13 @@ where
         }
         // Checked against the change before anything is recorded, and kept first: a
         // resubmission in the same run replaces what an earlier one kept.
-        let accepted =
-            self.accounted_for(evidence_type, submission.review.as_ref(), &worktree, &step)?;
+        let accepted = self.accounted_for(
+            evidence_type,
+            submission.review.as_ref(),
+            &record,
+            &worktree,
+            &step,
+        )?;
         if let Some(accepted) = &accepted {
             self.store()
                 .lock()
@@ -483,11 +488,15 @@ where
         Ok(recorded)
     }
 
-    /// Check a review against the change the worktree holds, on the step that asks for one.
+    /// Check a review against the change, on the step that asks for one.
+    ///
+    /// **The change is the worktree's, or the pull request a Job's `pull_request` subject
+    /// names**, read from the forge: on Code Review the diff is the Drone's input. #903.
     fn accounted_for(
         &self,
         evidence_type: EvidenceType,
         written: Option<&ipc::mcp::SubmittedReview>,
+        record: &core_model::Job,
         worktree: &adapter_traits::Worktree,
         step: &StepId,
     ) -> Result<Option<verification::AcceptedReview>, NotSubmitted> {
@@ -503,15 +512,38 @@ where
             step: step.clone(),
             why,
         };
-        let changed = self
-            .work()
-            .changed_files(worktree)
-            .map_err(|why| unreadable(why.to_string()))?;
-        let patch = self
-            .work()
-            .patch(worktree)
-            .map_err(|why| unreadable(why.to_string()))?;
-        let paths = changed.paths();
+        let reviewed = record
+            .subject()
+            .filter(|subject| subject.kind == "pull_request")
+            .map(|subject| subject.reference.as_str());
+        let (paths, patch): (Vec<String>, String) = match reviewed {
+            Some(pull_request) => {
+                let served = self
+                    .served_by_id(record.id())
+                    .map_err(|why| unreadable(why.to_string()))?;
+                let read = self
+                    .vcs()
+                    .pull_request_diff(served.root(), pull_request)
+                    .ok_or_else(|| {
+                        unreadable(format!("the forge would not show {pull_request}"))
+                    })?;
+                (read.files, read.patch)
+            }
+            None => {
+                let changed = self
+                    .work()
+                    .changed_files(worktree)
+                    .map_err(|why| unreadable(why.to_string()))?;
+                let patch = self
+                    .work()
+                    .patch(worktree)
+                    .map_err(|why| unreadable(why.to_string()))?;
+                (
+                    changed.paths().into_iter().collect(),
+                    patch.as_str().to_string(),
+                )
+            }
+        };
         let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
         let reasons: Vec<&str> = written.reasons.iter().map(String::as_str).collect();
         verification::Review::written(
