@@ -133,6 +133,13 @@ where
     pub(crate) fn allowance_for(&self, job: &Job) -> Allowance {
         self.allowance.at(self.manifest(), job)
     }
+    /// What a Job may spend on this machine before any Manifest says otherwise.
+    pub(crate) fn machine_allowance(&self) -> Allowance {
+        self.allowance
+    }
+    pub(crate) fn held_proposals(&self) -> &crate::manifest_proposal::Held {
+        &self.manifest_proposals
+    }
     pub(crate) fn norms(&self) -> StepNorms {
         self.norms
     }

@@ -103,6 +103,8 @@ mod landing;
 /// The Drones-at-once bound, memory share and disk floor a person saves, and
 /// how a save reaches admission without a restart.
 pub mod limits;
+/// A possible `armada.yml` per workspace, from Scan, and the Write that ends it.
+pub mod manifest_proposal;
 pub mod listener;
 /// The one act that writes into a repository Fleet did not make: a person
 /// presses, and Fleet merges the pull request their Job opened.

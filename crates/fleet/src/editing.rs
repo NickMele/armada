@@ -76,6 +76,38 @@ pub(crate) fn save(file: &Path, read: &str, text: &str) -> Result<(), NotSaved> 
     write(file, text).map_err(NotSaved::Unwritable)
 }
 
+/// Why a create did not happen.
+#[derive(Debug)]
+pub(crate) enum NotCreated {
+    /// Something is at the path already — **what it holds where it reads**.
+    Appeared(Option<String>),
+    /// The bytes would not go down.
+    Unwritable(io::Error),
+}
+
+/// Put `text` at `file` — **only where nothing is there**.
+///
+/// **Beside `save` and not a mode of it.** `save` refuses a missing file
+/// because a missing file under an edit is a deletion somebody made; here a
+/// present file is the thing somebody made, so the guard is the other way up.
+///
+/// **A hard link and not a rename.** A rename replaces whatever arrived in the
+/// meantime, so a check in front of it would be the race `save` accepts. A link
+/// refuses an existing name in the same call that makes it, so there is no
+/// window here at all, and the staged bytes are whole before the name exists.
+pub(crate) fn create(file: &Path, text: &str) -> Result<(), NotCreated> {
+    let staged = beside(file);
+    let linked = fs::write(&staged, text).and_then(|()| fs::hard_link(&staged, file));
+    let _ = fs::remove_file(&staged);
+    match linked {
+        Ok(()) => Ok(()),
+        Err(why) if why.kind() == io::ErrorKind::AlreadyExists => {
+            Err(NotCreated::Appeared(fs::read_to_string(file).ok()))
+        }
+        Err(why) => Err(NotCreated::Unwritable(why)),
+    }
+}
+
 /// The replace itself. The mode is carried across, so a save does not quietly
 /// reset what somebody set on the file.
 fn write(file: &Path, text: &str) -> Result<(), io::Error> {
