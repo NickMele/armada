@@ -49,6 +49,7 @@ import {
   openServerLink,
   observeRun,
   observeCheckoutRun,
+  pickRepository,
   getRunOutput,
   getCheckoutRunOutput,
   getCheckoutRunDiff,
@@ -160,10 +161,6 @@ export function App() {
   const [picked, setPicked] = useState<string | null>(null);
   // Whether Setup is the Manifest surface's view. Its own flag: the head's views are three.
   const [settingUp, setSettingUp] = useState(false);
-  // The Manifest the rail names, and what a new Job is proposed against.
-  // Bridge dispatches into the workspace it is pointed at, so this is one
-  // value rather than a field on the form.
-  const [scope, setScope] = useState("");
   // The row the cursor goes back to when the detail closes. A keyboard that
   // opened a row and came back to the top of the document has lost its place.
   const [returning, setReturning] = useState<string | null>(null);
@@ -235,7 +232,11 @@ export function App() {
   // The Manifest file and an edit of it. **Held here rather than by the
   // screen**, which unmounts whenever the rail moves: an unsaved correction the
   // screen owned would be gone after one look at the Board.
+  // The repository the rail picked. Main holds it, so every read below is taken after main moved.
+  const repositories = state.holds.repositories ?? [];
+  const repository = state.repository ?? undefined;
   const editing = useManifestEditing({
+    repository,
     showing: manifesting,
     reading: state.manifestReading,
     onReadFile: readManifestFile,
@@ -243,6 +244,7 @@ export function App() {
   });
   // The forms beside it, held here for the same reason.
   const form = useManifestForm({
+    repository,
     showing: manifesting,
     reading: state.manifestReading,
     onReadFile: readManifestFile,
@@ -252,6 +254,7 @@ export function App() {
 
   // Setup, held here for the forms' reason: ticks and the open proposal outlive a look away.
   const setting = useSetup({
+    repository,
     showing: manifesting && settingUp,
     onReadScan: readRepositoryScan,
     onReadProposals: readManifestProposals,
@@ -290,13 +293,6 @@ export function App() {
     reach.current?.tab(landing);
     setLanding(null);
   }, [landing]);
-
-  // The scope starts on the first Manifest Fleet names, and stays where a
-  // person put it when the roster is re-read.
-  useEffect(() => {
-    const held = state.holds.manifests;
-    if (scope === "" && held.length > 0) setScope(held[0]!.id);
-  }, [state.holds.manifests, scope]);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -383,7 +379,16 @@ export function App() {
     if (surfaceId !== SURFACE.manifest) setSettingUp(false);
   }
 
-  const scoped = state.holds.manifests.find((held) => held.id === scope);
+  /** A repository nobody set up opens on Setup when picked: there is nothing else to do with it yet. */
+  function pick(root: string): void {
+    pickRepository(root);
+    if (repositories.find((one) => one.root === root)?.manifest !== undefined) return;
+    goTo(SURFACE.manifest);
+    setSettingUp(true);
+  }
+
+  // What a new Job is proposed against: the picked repository's Manifest, absent until it has one.
+  const scoped = repositories.find((one) => one.root === state.repository)?.manifest;
   const head = headOf({
     reading: reading !== null,
     composing,
@@ -411,9 +416,9 @@ export function App() {
       <Shell
         connection={state.connection}
         statement={statement}
-        manifests={state.holds.manifests}
-        scope={scope}
-        onScope={setScope}
+        repositories={repositories}
+        scope={state.repository ?? ""}
+        onScope={pick}
         jobs={state.jobs}
         capacity={state.capacity}
         title={head?.title}
@@ -602,6 +607,8 @@ export function App() {
                that a person can run this project's lint without one. */
             <Boundary region="the manifest" {...guarded}>
               <Manifest
+                // Another repository is another page: its runs, its allows and a dismissed Verify are not this one's.
+                key={state.repository ?? ""}
                 sheet={state.checkoutRunSheet}
                 followed={state.checkoutRunFollowed}
                 picked={picked}

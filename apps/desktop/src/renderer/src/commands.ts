@@ -111,6 +111,7 @@ export const getCheckoutRunDiff = (runId: string) => window.armada.getCheckoutRu
 export const watchManifestDrift = (want: boolean): void =>
   void window.armada.watchManifestDrift(want);
 export const startCheckoutVerify = () => window.armada.startCheckoutVerify();
+export const pickRepository = (root: string): void => void window.armada.pickRepository(root);
 // The Manifest file. Held by the app, like the sheet above, so an unsaved edit
 // outlives the surface it was made on.
 export const readManifestFile = () => window.armada.readManifestFile();

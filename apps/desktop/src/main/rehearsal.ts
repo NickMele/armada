@@ -33,6 +33,7 @@ import { CheckoutRunCommands, CheckoutRunSocket, CheckoutSheetReader, DriftReade
 import { JobReader } from "./reader";
 import { HOST } from "./runtime-file";
 import { ServerCommands } from "./servers";
+import type { Picked } from "./picked";
 
 /** What starting and stopping a run needs of the connection, and no more. */
 export type RunBoard = {
@@ -251,9 +252,14 @@ export class RehearsalConnection {
   /** Drift, the Manifest surface's free read on opening. */
   private readonly drift: DriftReader;
 
-  constructor(wiring: { publish: (change: Partial<BridgeState>) => void; port: () => number | null }) {
+  constructor(wiring: {
+    publish: (change: Partial<BridgeState>) => void;
+    port: () => number | null;
+    picked: Picked;
+  }) {
     this.publish = wiring.publish;
     this.port = wiring.port;
+    const picked = wiring.picked;
     this.sheet = new JobReader<{ sheet: RunSheet }>({
       route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/run_sheet`,
       keeps: (body) => ({ sheet: body as RunSheet }),
@@ -265,19 +271,22 @@ export class RehearsalConnection {
       follow: (port, jobId, runId) => this.follow.open(port, jobId, runId),
       refreshSheet: (port) => this.sheet.again(port),
     });
-    this.servers = new ServerCommands({ port: this.port });
-    this.checkoutSheet = new CheckoutSheetReader((checkoutRunSheet) =>
-      this.publish({ checkoutRunSheet }),
+    this.servers = new ServerCommands({ port: this.port, picked });
+    this.checkoutSheet = new CheckoutSheetReader(
+      (checkoutRunSheet) => this.publish({ checkoutRunSheet }),
+      picked,
     );
-    this.checkoutFollow = new CheckoutRunSocket((checkoutRunFollowed) =>
-      this.publish({ checkoutRunFollowed }),
+    this.checkoutFollow = new CheckoutRunSocket(
+      (checkoutRunFollowed) => this.publish({ checkoutRunFollowed }),
+      picked,
     );
     this.checkoutRuns = new CheckoutRunCommands({
       port: this.port,
+      picked,
       follow: (port, runId) => this.checkoutFollow.open(port, runId),
       refreshSheet: (port) => this.checkoutSheet.again(port),
     });
-    this.drift = new DriftReader((manifestDrift) => this.publish({ manifestDrift }));
+    this.drift = new DriftReader((manifestDrift) => this.publish({ manifestDrift }), picked);
   }
 
   close(): void {
@@ -400,6 +409,18 @@ export class RehearsalConnection {
   /** Drift, or `false` to stop. Held open by the Manifest surface alone. */
   async watchManifestDrift(want: boolean): Promise<void> {
     await this.drift.want(this.port(), want);
+  }
+
+  /**
+   * The picked repository moved, or gained its Manifest. What the Manifest surface holds open
+   * is read again for it, and a run in the last one's checkout stops being followed.
+   */
+  async onRepositoryMoved(port: number): Promise<void> {
+    this.checkoutFollow.open(port, null);
+    await Promise.all([
+      this.checkoutSheet.open ? this.checkoutSheet.again(port) : null,
+      this.drift.open ? this.drift.again(port) : null,
+    ]);
   }
 
   /** Fleet re-read `armada.yml`, so what it names may have moved. */

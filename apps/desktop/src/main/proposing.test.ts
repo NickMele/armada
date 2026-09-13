@@ -23,6 +23,7 @@ import { afterEach, expect, it } from "vitest";
 
 import type { JobSummary, StagedAttachment } from "@armada/protocol";
 import type { Board } from "./command";
+import { Picked } from "./picked";
 import { proposeFromRequest } from "./proposing";
 
 /** How long a case may hold a request before it is the test that hung. */
@@ -65,6 +66,7 @@ type Respond = ServerResponse<IncomingMessage>;
 function boardOn(port: number): Board {
   return {
     port: () => port,
+    picked: new Picked(),
     fold: () => {},
     forget: () => {},
     reread: async () => {},

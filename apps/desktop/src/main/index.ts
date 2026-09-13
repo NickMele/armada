@@ -594,6 +594,10 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.writeManifestProposal, (_event, body: WriteManifestProposal) =>
     connection?.editing.setup.write(body),
   );
+  // Anything but a string is dropped here; a root Fleet does not list, in `Picked.pick`.
+  ipcMain.handle(CHANNELS.pickRepository, (_event, root: unknown) =>
+    typeof root === "string" ? connection?.repositories.pick(root) : undefined,
+  );
   // A repository-wide always-allow — Fleet's own table since protocol 13.5.
   // Neither takes a path or a job id: Fleet names the repository.
   ipcMain.handle(CHANNELS.listRepositoryAllowedCommands, () => connection?.repositoryAllows.list());

@@ -17,9 +17,10 @@ import type {
 import type { FleetCapacity, FleetLimits, JobSummary, ManifestReading } from "@armada/protocol";
 import type { ServerList } from "@armada/protocol";
 import type { CallArguments, CheckOutput } from "@armada/protocol";
-import type { LeftOutWorkflow, ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
+import type { LeftOutWorkflow, ManifestSummary, ModelChoices, RepositoryList, WorkflowSummary } from "@armada/protocol";
 import { refusedWith } from "@armada/protocol";
 import { Socket } from "node:net";
+import type { Picked } from "./picked";
 import { HOST } from "./runtime-file";
 
 /**
@@ -125,6 +126,9 @@ export function route(jobId: string, operation: string): string {
   return `/jobs/${encodeURIComponent(jobId)}/${operation}`;
 }
 
+/** A Manifest-scoped call on a repository with no `armada.yml` yet — `Picked.manifest` answered `null`. */
+export const NOT_SET_UP = { ok: false, why: "not_set_up" } as const;
+
 /** What came back: a body to read, or the refusal to render. */
 export type Answer = { ok: true; body: unknown } | { ok: false; outcome: Outcome };
 
@@ -195,19 +199,28 @@ export function isJobSummary(body: unknown): body is JobSummary {
  * Fleet refuses an id that has gone, so the worst case is a picker offering one
  * value too many rather than a form with nothing in it.
  */
-export async function holdingsOf(port: number, held: Holdings): Promise<Holdings> {
+export async function holdingsOf(port: number, held: Holdings, picked: Picked): Promise<Holdings> {
+  // A repository not set up has no catalogue to have left anything out of.
+  const leftOutAt = picked.manifest("/workflows/left_out");
   const [workflows, manifests, models, leftOut] = await Promise.all([
     ask(port, "GET", "/workflows"),
     ask(port, "GET", "/manifests"),
     ask(port, "GET", "/models"),
-    ask(port, "GET", "/workflows/left_out"),
+    leftOutAt === null ? null : ask(port, "GET", leftOutAt),
   ]);
   return {
     workflows: workflows.ok === true ? (workflows.body as WorkflowSummary[]) : held.workflows,
     manifests: manifests.ok === true ? (manifests.body as ManifestSummary[]) : held.manifests,
     models: models.ok === true ? (models.body as ModelChoices) : held.models,
-    leftOut: leftOut.ok === true ? (leftOut.body as LeftOutWorkflow[]) : held.leftOut,
+    leftOut: leftOut === null ? [] : leftOut.ok === true ? (leftOut.body as LeftOutWorkflow[]) : held.leftOut,
+    ...(held.repositories === undefined ? {} : { repositories: held.repositories }),
   };
+}
+
+/** Every repository Fleet serves, set up or not. `null` where Fleet did not answer, which an older Fleet does not. */
+export async function repositoriesOf(port: number): Promise<RepositoryList | null> {
+  const answer = await ask(port, "GET", "/repositories");
+  return answer.ok === true ? (answer.body as RepositoryList) : null;
 }
 
 /**
@@ -247,8 +260,10 @@ export async function limitsOf(port: number): Promise<FleetLimits | null> {
  * somebody saves a file, and `manifest.reread` is what says so. This is for the
  * window that opened *after* the save, which an event cannot reach.
  */
-export async function manifestReadingOf(port: number): Promise<ManifestReading | null> {
-  const answer = await ask(port, "GET", "/manifest/reading");
+export async function manifestReadingOf(port: number, picked: Picked): Promise<ManifestReading | null> {
+  const path = picked.manifest("/manifest/reading");
+  if (path === null) return null;
+  const answer = await ask(port, "GET", path);
   return answer.ok === true ? ((answer.body as ManifestReading | null) ?? null) : null;
 }
 

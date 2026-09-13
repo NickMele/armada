@@ -32,11 +32,9 @@ import type {
   StartCheckoutRun,
 } from "@armada/protocol";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
-import { ask } from "./request";
+import type { Picked } from "./picked";
+import { ask, NOT_SET_UP } from "./request";
 import { HOST } from "./runtime-file";
-
-/** Where the checkout's own routes live. One repository, one Manifest. */
-const MANIFEST = "/manifest";
 
 /**
  * `GET /manifest/run_sheet`, read and re-read while a surface wants it.
@@ -50,13 +48,15 @@ const MANIFEST = "/manifest";
  */
 export class CheckoutSheetReader {
   private readonly publish: (read: CheckoutRunSheetRead) => void;
+  private readonly picked: Picked;
   /** Whether a surface still wants it. `false` is no read. */
   private wanted = false;
   /** How many reads this reader has begun; the newest is the only one that publishes. */
   private asked = 0;
 
-  constructor(publish: (read: CheckoutRunSheetRead) => void) {
+  constructor(publish: (read: CheckoutRunSheetRead) => void, picked: Picked) {
     this.publish = publish;
+    this.picked = picked;
   }
 
   /** Whether anything is holding this read open. */
@@ -84,7 +84,12 @@ export class CheckoutSheetReader {
     if (!this.wanted) return;
     this.asked += 1;
     const asked = this.asked;
-    const answer = await ask(port, "GET", `${MANIFEST}/run_sheet`);
+    const path = this.picked.manifest("/manifest/run_sheet");
+    if (path === null) {
+      this.publish({ state: "failed", outcome: NOT_SET_UP });
+      return;
+    }
+    const answer = await ask(port, "GET", path);
     // Nobody wants it any more, or a newer read was begun while this one was
     // in flight. Either way this answer is not the one to publish — including
     // its failure: a stale timeout must not blank a panel the newer read is
@@ -110,11 +115,13 @@ export class CheckoutSheetReader {
  */
 export class DriftReader {
   private readonly publish: (read: ManifestDriftRead) => void;
+  private readonly picked: Picked;
   private wanted = false;
   private asked = 0;
 
-  constructor(publish: (read: ManifestDriftRead) => void) {
+  constructor(publish: (read: ManifestDriftRead) => void, picked: Picked) {
     this.publish = publish;
+    this.picked = picked;
   }
 
   get open(): boolean {
@@ -139,7 +146,12 @@ export class DriftReader {
     if (!this.wanted) return;
     this.asked += 1;
     const asked = this.asked;
-    const answer = await ask(port, "GET", `${MANIFEST}/drift`);
+    const path = this.picked.manifest("/manifest/drift");
+    if (path === null) {
+      this.publish({ state: "failed", outcome: NOT_SET_UP });
+      return;
+    }
+    const answer = await ask(port, "GET", path);
     if (!this.wanted || this.asked !== asked) return;
     if (answer.ok !== true) {
       this.publish({ state: "failed", outcome: answer.outcome });
@@ -156,6 +168,8 @@ export class DriftReader {
 /** What starting and stopping a checkout run needs of the connection. */
 export type CheckoutBoard = {
   port: () => number | null;
+  /** Whose main checkout every run here is in. */
+  picked: Picked;
   /** Follow this run's output from the instant it answers as underway. */
   follow: (port: number, runId: string) => void;
   /** Read the sheet again — its own `running` field is what moved. */
@@ -180,7 +194,9 @@ export class CheckoutRunCommands {
   async startRun(body: StartCheckoutRun): Promise<Outcome> {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
-    const answer = await ask(port, "POST", `${MANIFEST}/start_run`, body);
+    const path = this.board.picked.manifest("/manifest/start_run");
+    if (path === null) return NOT_SET_UP;
+    const answer = await ask(port, "POST", path, body);
     if (answer.ok !== true) return answer.outcome;
     const running = answer.body as CheckoutRunUnderway;
     this.board.follow(port, running.id);
@@ -196,7 +212,9 @@ export class CheckoutRunCommands {
   async startVerify(): Promise<Outcome> {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
-    const answer = await ask(port, "POST", `${MANIFEST}/start_verify`);
+    const path = this.board.picked.manifest("/manifest/start_verify");
+    if (path === null) return NOT_SET_UP;
+    const answer = await ask(port, "POST", path);
     if (answer.ok !== true) return answer.outcome;
     const out = (answer.body as CheckoutVerify).steps.find((step) => step.state === "running");
     if (out?.state === "running") this.board.follow(port, out.run_id);
@@ -208,8 +226,10 @@ export class CheckoutRunCommands {
   async stopRun(id: string): Promise<Outcome> {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
+    const path = this.board.picked.manifest("/manifest/stop_run");
+    if (path === null) return NOT_SET_UP;
     const body: NamedRun = { id };
-    const answer = await ask(port, "POST", `${MANIFEST}/stop_run`, body);
+    const answer = await ask(port, "POST", path, body);
     if (answer.ok !== true) return answer.outcome;
     await this.board.refreshSheet(port);
     return { ok: true };
@@ -225,8 +245,10 @@ export class CheckoutRunCommands {
   async undoRun(id: string): Promise<Outcome> {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
+    const path = this.board.picked.manifest("/manifest/undo_run");
+    if (path === null) return NOT_SET_UP;
     const body: NamedRun = { id };
-    const answer = await ask(port, "POST", `${MANIFEST}/undo_run`, body);
+    const answer = await ask(port, "POST", path, body);
     return answer.ok === true ? { ok: true } : answer.outcome;
   }
 
@@ -234,7 +256,9 @@ export class CheckoutRunCommands {
   async listRuns(): Promise<CheckoutRunListRead> {
     const port = this.board.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", `${MANIFEST}/runs`);
+    const path = this.board.picked.manifest("/manifest/runs");
+    if (path === null) return { ok: false, outcome: NOT_SET_UP };
+    const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, runs: answer.body as CheckoutRunList };
   }
@@ -243,7 +267,9 @@ export class CheckoutRunCommands {
   async getRunOutput(runId: string): Promise<RunOutputRead> {
     const port = this.board.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", `${MANIFEST}/runs/${encodeURIComponent(runId)}/output`);
+    const path = this.board.picked.manifest(`/manifest/runs/${encodeURIComponent(runId)}/output`);
+    if (path === null) return { ok: false, outcome: NOT_SET_UP };
+    const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, output: answer.body as RunOutput };
   }
@@ -258,7 +284,9 @@ export class CheckoutRunCommands {
   async getRunDiff(runId: string): Promise<CheckoutRunDiffRead> {
     const port = this.board.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", `${MANIFEST}/runs/${encodeURIComponent(runId)}/diff`);
+    const path = this.board.picked.manifest(`/manifest/runs/${encodeURIComponent(runId)}/diff`);
+    if (path === null) return { ok: false, outcome: NOT_SET_UP };
+    const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, diff: answer.body as CheckoutRunDiff };
   }
@@ -272,11 +300,13 @@ export class CheckoutRunCommands {
  */
 export class CheckoutRunSocket {
   private readonly publish: (followed: CheckoutRunFollowed) => void;
+  private readonly picked: Picked;
   private socket: WebSocket | null = null;
   private held: CheckoutRunFollowed = { state: "none" };
 
-  constructor(publish: (followed: CheckoutRunFollowed) => void) {
+  constructor(publish: (followed: CheckoutRunFollowed) => void, picked: Picked) {
     this.publish = publish;
+    this.picked = picked;
   }
 
   /** Which run is being read, or `null` to stop. */
@@ -299,9 +329,13 @@ export class CheckoutRunSocket {
       this.set({ state: "failed", runId, detail: "Fleet is not connected." });
       return;
     }
+    const path = this.picked.manifest(`/manifest/runs/${encodeURIComponent(runId)}/observe`);
+    if (path === null) {
+      this.set({ state: "failed", runId, detail: "This repository has no Manifest yet." });
+      return;
+    }
     this.set({ state: "opening", runId });
 
-    const path = `${MANIFEST}/runs/${encodeURIComponent(runId)}/observe`;
     const socket = new WebSocket(`ws://${HOST}:${port}${path}`);
     this.socket = socket;
     socket.on("message", (data: WebSocket.RawData) => this.arrived(runId, String(data)));

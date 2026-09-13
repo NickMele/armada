@@ -32,6 +32,7 @@ import type {
   JobSummary,
   Journalled,
   ManifestSummary,
+  RepositorySummary,
   Noted,
   Observed,
   Remarks,
@@ -145,6 +146,11 @@ export function workflow(): WorkflowSummary {
       },
     ],
   };
+}
+
+/** The repository `manifest()` was read from, as `GET /repositories` lists it. */
+export function repository(): RepositorySummary {
+  return { root: "/Users/user/armada", records_root: manifest().records_root, manifest: manifest() };
 }
 
 export function manifest(): ManifestSummary {

@@ -22,6 +22,7 @@ import { afterEach, expect, it } from "vitest";
 
 import type { JobSummary } from "@armada/protocol";
 import { JobCommands, type Board } from "./command";
+import { Picked } from "./picked";
 
 const A_JOB: JobSummary = {
   id: "01M1HQZAKN001AJ5MT3PT09KKY",
@@ -69,6 +70,7 @@ async function fleetRecording(into: Asked[]): Promise<number> {
 function boardOn(port: number): Board {
   return {
     port: () => port,
+    picked: new Picked(),
     fold: () => {},
     forget: () => {},
     reread: async () => {},

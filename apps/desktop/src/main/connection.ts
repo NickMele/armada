@@ -41,6 +41,8 @@ import { HeldReader } from "./holding";
 import { RehearsalConnection } from "./rehearsal";
 import { ManifestFileCommands } from "./editing";
 import { RepositoryAllowsCommands } from "./repository-allows";
+import { RepositoryReads } from "./repositories";
+import { Picked } from "./picked";
 import { ReportsReader } from "./reports";
 import {
   ask,
@@ -48,9 +50,7 @@ import {
   capacityOf,
   checkOutputOf,
   frameOf,
-  holdingsOf,
   limitsOf,
-  manifestReadingOf,
 } from "./request";
 import { ReviewMaterial } from "./review";
 import { startingIdentity } from "./runtime-file";
@@ -121,6 +121,8 @@ export class FleetConnection {
   readonly editing: ManifestFileCommands;
   /** Repository-wide always-allows, read and removed — see `repository-allows.ts`. */
   readonly repositoryAllows: RepositoryAllowsCommands;
+  /** What Fleet serves and which repository was picked — see `repositories.ts`. */
+  readonly repositories: RepositoryReads;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
   /**
@@ -214,14 +216,16 @@ export class FleetConnection {
       keeps: (body) => ({ moves: (body as JobHistory).moves }),
       publish: (history) => this.publish({ history }),
     });
-    this.rehearsal = new RehearsalConnection({
-      publish: (change) => this.publish(change),
-      port: () => this.connected()?.port ?? null,
-    });
-    this.editing = new ManifestFileCommands(() => this.connected()?.port ?? null);
-    this.repositoryAllows = new RepositoryAllowsCommands(() => this.connected()?.port ?? null);
+    const port = (): number | null => this.connected()?.port ?? null;
+    const [publish, picked] = [(change: Partial<BridgeState>) => this.publish(change), new Picked()];
+    this.rehearsal = new RehearsalConnection({ publish, port, picked });
+    const holds = () => this.current.holds;
+    this.repositories = new RepositoryReads({ picked, publish, holds, rehearsal: this.rehearsal, port });
+    this.editing = new ManifestFileCommands(port, picked, (at) => this.repositories.readHoldings(at));
+    this.repositoryAllows = new RepositoryAllowsCommands(port, picked);
     this.commands = new JobCommands({
-      port: () => this.connected()?.port ?? null,
+      port,
+      picked,
       fold: (job) => this.fold(job),
       forget: (jobId) => this.forget(jobId),
       reread: (port) => this.reread(port),
@@ -252,7 +256,7 @@ export class FleetConnection {
     const fleet = this.connected();
     if (fleet !== null) {
       await this.reread(fleet.port);
-      await this.readHoldings(fleet.port);
+      await this.repositories.readHoldings(fleet.port);
       // Every region of the open Job — the same list a reconnection takes, so
       // the two cannot drift apart. #472.
       await this.takeAgain(fleet.port, { because: "a_person_asked" });
@@ -325,7 +329,7 @@ export class FleetConnection {
       });
       // What a proposal may name: read once per connection, because it changes
       // when Fleet restarts rather than when a Job moves.
-      void this.readHoldings(fleet.port);
+      void this.repositories.readHoldings(fleet.port);
       // And how full the fleet is, which changes when a Job moves and is
       // therefore read again below on every status move.
       void this.readCapacity(fleet.port);
@@ -334,7 +338,7 @@ export class FleetConnection {
       // saves a file, and `manifest.reread` is what says so. This read is for
       // the window that opened after the save — which is most windows, since a
       // refusal stands until the file is corrected.
-      void this.readManifest(fleet.port);
+      void this.repositories.readManifest(fleet.port);
       // And Fleet's three admission limits, once per connection: nothing but a
       // save changes them, and that act publishes its own new reading.
       void this.readLimits(fleet.port);
@@ -532,6 +536,8 @@ export class FleetConnection {
       // A read that took after one that was refused leaves nothing of the
       // refusal standing, and a merge would keep the old fault on screen
       // beside the news that the file is now fine.
+      // Another repository's reading is not the picked one's to draw.
+      if (!this.repositories.picked.reads(event.path)) return this.publish({ connection });
       this.publish({ connection, manifestReading: event });
       this.rehearsal.onManifestReread(fleet.port);
       return;
@@ -602,11 +608,6 @@ export class FleetConnection {
     });
   }
 
-  /** What a proposal may name. The reads are `request.ts`'s; the state is here. */
-  private async readHoldings(port: number): Promise<void> {
-    this.publish({ holds: await holdingsOf(port, this.current.holds) });
-  }
-
   /**
    * How full the fleet is. **A failed read publishes `null`**, which draws as
    * nothing rather than as the last count — the bar must not keep saying
@@ -623,16 +624,6 @@ export class FleetConnection {
    */
   private async readLimits(port: number): Promise<void> {
     this.publish({ limits: await limitsOf(port) });
-  }
-
-  /**
-   * What Fleet's last read of its Manifest came to. **A failed read publishes
-   * `null`**, on `readCapacity`'s terms: there is no reading to report, and
-   * keeping the previous one would be a refusal drawn against a Fleet that was
-   * never asked.
-   */
-  private async readManifest(port: number): Promise<void> {
-    this.publish({ manifestReading: await manifestReadingOf(port) });
   }
 
   // -------------------------------------------- one Job, whole and recounted

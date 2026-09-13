@@ -19,6 +19,8 @@ import { unlandedSaying } from "./manifest-file";
 export type ManifestFormSlice = {
   /** Whether the Manifest surface is on screen. Nothing is read while it is not. */
   showing: boolean;
+  /** The picked repository's root, `ManifestEditingSlice.repository`'s terms. */
+  repository?: string;
   /** Fleet's last reading of the file, whose instant is what re-reads it. */
   reading: ManifestReading | null;
   onReadFile: () => Promise<ManifestFileRead>;
@@ -115,9 +117,16 @@ export function useManifestForm({
   onReadFile,
   onEditManifest,
   onReadSpend,
+  repository,
 }: ManifestFormSlice): ManifestForming {
   const [held, setHeld] = useState<Held>({ state: "none" });
   const [spend, setSpend] = useState<ManifestSpend | null>(null);
+  const [heldFor, setHeldFor] = useState(repository);
+  if (heldFor !== repository) {
+    setHeldFor(repository);
+    setHeld({ state: "none" });
+    setSpend(null);
+  }
   // What a press reads, and one save at a time — `manifest-file.ts`'s two refs.
   const current = useRef(held);
   current.current = held;
@@ -135,14 +144,14 @@ export function useManifestForm({
 
   useEffect(() => {
     if (showing) read();
-  }, [showing, reading?.at]);
+  }, [showing, reading?.at, repository]);
 
   useEffect(() => {
     if (!showing) return;
     void onReadSpend().then((answer) => {
       if (answer.ok) setSpend(answer.spend);
     });
-  }, [showing]);
+  }, [showing, repository]);
 
   function save(over: boolean): void {
     const at = current.current;

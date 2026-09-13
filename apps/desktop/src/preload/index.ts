@@ -340,6 +340,8 @@ const api: BridgeApi = {
   // Start a declared server, for this Job's worktree or, with no Job, the
   // main checkout — the capability the Manifest surface shares, which is why
   // `jobId` was optional here before that surface existed.
+  pickRepository: (root: string): Promise<void> => ipcRenderer.invoke(CHANNELS.pickRepository, root),
+
   startServer: (name: string, jobId?: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.startServer, name, jobId),
 

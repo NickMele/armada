@@ -12,6 +12,7 @@ import type {
   Outcome,
   Provenance,
   RepositoryScan,
+  RepositorySummary,
   ScannedWorkspace,
 } from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
@@ -22,7 +23,7 @@ import { useManifestForm } from "../../../manifest-form";
 import { Setup } from "../../../Setup";
 import { useSetup } from "../../../setup-held";
 import type { ProposalAnswer } from "../../../setup-reads";
-import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";
+import { CREATED_AT, repository } from "../../../fixtures/build/base";
 import { NOW } from "../Manifest/Manifest";
 
 const CONNECTED: Connection = connectedTo(
@@ -121,23 +122,36 @@ function applied(one: ManifestProposal, { edit }: EditManifestProposal): Manifes
 /** What Write comes to: the file lands, the parser refuses it, or a file is already there. */
 export type WriteGoesTo = "took" | "refused" | "appeared";
 
+/** A folder added by path, with no `armada.yml`: what the rail's picker lists beside a Fleet's own. */
+export const SCRATCH: RepositorySummary = { root: "/Users/user/scratch", records_root: "/Users/user/Library/Application Support/Armada/records/scratch" };
+
+const NO_ROOT_FILE: ManifestProposals = {
+  ...PROPOSALS,
+  proposals: PROPOSALS.proposals.map((one) => (one.dir === "." ? { ...one, present: false } : one)),
+};
+
 export function SetupFrom({
   write = "took",
   sheet = { state: "none" },
   rootSetUp = true,
+  repositories,
 }: {
   write?: WriteGoesTo;
   /** Whether the root already has an `armada.yml`, as any Fleet's own repository does. */
   rootSetUp?: boolean;
   /** The Manifest Fleet holds, which a Verify after a root Write reads. */
   sheet?: CheckoutRunSheetRead;
+  /**
+   * What the rail's picker lists, the first picked. Picking one nobody set up opens its Setup, and
+   * a root Write there gives it a Manifest, as Fleet's re-read list would. Absent is this Fleet's own.
+   */
+  repositories?: RepositorySummary[];
 }) {
-  const held = useRef<ManifestProposals>(
-    rootSetUp
-      ? PROPOSALS
-      : { ...PROPOSALS, proposals: PROPOSALS.proposals.map((one) => (one.dir === "." ? { ...one, present: false } : one)) },
-  );
-  const [settingUp, setSettingUp] = useState(true);
+  const [listed, setListed] = useState<RepositorySummary[]>(repositories ?? [repository()]);
+  const [scope, setScope] = useState(listed[0]!.root);
+  const picked = listed.find((one) => one.root === scope)!;
+  const held = useRef<ManifestProposals>(rootSetUp && picked.manifest !== undefined ? PROPOSALS : NO_ROOT_FILE);
+  const [settingUp, setSettingUp] = useState(repositories === undefined || picked.manifest === undefined);
   const answer = (dir: string, change: (one: ManifestProposal) => ManifestProposal): Promise<ProposalAnswer> => {
     const next = held.current.proposals.map((one) => (one.dir === dir ? change(one) : one));
     held.current = { ...held.current, proposals: next };
@@ -148,6 +162,7 @@ export function SetupFrom({
     onReadScan: () => Promise.resolve({ ok: true, scan: SCAN }),
     onReadProposals: () => Promise.resolve({ ok: true, proposals: held.current }),
     onEditProposal: (body) => answer(body.dir, (one) => applied(one, body)),
+    repository: scope,
     onWriteProposal: ({ dir }) => {
       if (write === "refused") {
         return Promise.resolve({
@@ -158,9 +173,17 @@ export function SetupFrom({
       }
       if (write === "appeared") return Promise.resolve({ state: "appeared", onDisk: "version: 1\nid: web\n" });
       const file = dir === "." ? "armada.yml" : `${dir}/armada.yml`;
+      if (dir === ".") {
+        const setUp = { ...manifestOf(picked), id: "scratch" };
+        setListed((was) => was.map((one) => (one.root === scope ? { ...one, manifest: setUp } : one)));
+      }
       return answer(dir, (one) => ({ ...one, written: { path: file, at: WROTE_AT } }));
     },
   });
+
+  // Main's read for a repository with no Manifest refuses before it is sent; after Write it is the sheet.
+  const verifiable: CheckoutRunSheetRead =
+    picked.manifest === undefined ? { state: "failed", outcome: { ok: false, why: "not_set_up" } } : sheet;
 
   // The Manifest surface's other views, faked only far enough to mount.
   const readFile = () => Promise.resolve({ ok: false as const, outcome: { ok: false as const, why: "not_connected" as const } });
@@ -184,9 +207,15 @@ export function SetupFrom({
       <Shell
         connection={CONNECTED}
         statement={statementOf(CONNECTED, NOW, NOW)}
-        manifests={[manifest()]}
-        scope={MANIFEST_ID}
-        onScope={noop}
+        repositories={listed}
+        scope={scope}
+        onScope={(root) => {
+          // `App`'s own rule: a repository nobody set up opens on Setup.
+          const to = listed.find((one) => one.root === root)!;
+          if (to.manifest === undefined) held.current = NO_ROOT_FILE;
+          setScope(root);
+          setSettingUp(to.manifest === undefined || settingUp);
+        }}
         jobs={[]}
         capacity={{ bound: 4, occupied: 0 }}
         title={head?.title}
@@ -197,7 +226,8 @@ export function SetupFrom({
       >
         <div className="armada-screen__mounted">
           <Manifest
-            sheet={sheet}
+            key={scope}
+            sheet={verifiable}
             followed={{ state: "none" }}
             picked={null}
             now={NOW}
@@ -224,7 +254,7 @@ export function SetupFrom({
               <Setup
                 setting={setting}
                 now={NOW}
-                sheet={sheet}
+                sheet={verifiable}
                 onStartVerify={nothingHappens}
                 onStopRun={nothingHappens}
                 onOpenEdit={() => {
@@ -238,4 +268,9 @@ export function SetupFrom({
       </Shell>
     </div>
   );
+}
+
+function manifestOf(one: RepositorySummary) {
+  const base = repository().manifest!;
+  return { ...base, repository: one.root.split("/").pop()!, path: `${one.root}/armada.yml`, records_root: one.records_root };
 }

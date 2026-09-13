@@ -42,6 +42,8 @@ export type ManifestEditingSlice = {
   onSaveFile: (body: SaveManifestFile) => Promise<ManifestSaveAnswer>;
   /** Which view opens first. The app takes the default; a story opens the file. */
   initialView?: ManifestView;
+  /** The picked repository's root. Another one's file is read afresh, and an edit of this one's is not carried to it. */
+  repository?: string;
 };
 
 /** The file view, as the screen draws it. */
@@ -76,9 +78,15 @@ export function useManifestEditing({
   onReadFile,
   onSaveFile,
   initialView = "run",
+  repository,
 }: ManifestEditingSlice): ManifestEditing {
   const [view, setView] = useState<ManifestView>(initialView);
   const [held, setHeld] = useState<HeldFile>({ state: "none" });
+  const [heldFor, setHeldFor] = useState(repository);
+  if (heldFor !== repository) {
+    setHeldFor(repository);
+    setHeld({ state: "none" });
+  }
   // What a press reads. **A save takes the text as it is at the press**, and
   // a closure over the render before it would send the edit minus its last
   // keystroke.
@@ -100,7 +108,7 @@ export function useManifestEditing({
   // **unless it is being edited**, which `fileAnswered` keeps.
   useEffect(() => {
     if (showing) readFile();
-  }, [showing, reading?.at]);
+  }, [showing, reading?.at, repository]);
 
   function save(over: boolean): void {
     const at = current.current;

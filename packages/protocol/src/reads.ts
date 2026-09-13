@@ -32,6 +32,7 @@ import type {
   Work,
   WorkflowSummary,
   LeftOutWorkflow,
+  RepositorySummary,
   WireError,
   WorktreeReclaimed,
   WorktreesHeld,
@@ -345,6 +346,8 @@ export type Holdings = {
   models: ModelChoices | null;
   /** The Kit and carried workflows Fleet runs without, each with why. #425. */
   leftOut?: LeftOutWorkflow[];
+  /** Every repository Fleet serves, set up or not — the rail's picker. Absent from a Fleet older than the route. */
+  repositories?: RepositorySummary[];
 };
 
 /** What a command answered. A refusal names itself; it never renders as silence. */
@@ -384,6 +387,8 @@ export type Outcome =
   | { ok: false; why: "empty_title" }
   | { ok: false; why: "no_workflow" }
   | { ok: false; why: "no_manifest" }
+  /** A Manifest-scoped act on the picked repository, which has no `armada.yml` yet. Refused before it is sent. */
+  | { ok: false; why: "not_set_up" }
   | { ok: false; why: "already_approving" }
   | { ok: false; why: "already_redispatching" }
   | { ok: false; why: "already_killing" }

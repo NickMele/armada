@@ -2,7 +2,7 @@ import { connectedTo, PROTOCOL_VERSION, type Connection, type JobSummary } from 
 import type { WorkflowSummary } from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Jobs } from "../../../Jobs";
-import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";
+import { CREATED_AT, repository } from "../../../fixtures/build/base";
 
 /** The moment every figure on the Board is read at, so a story never moves. */
 const NOW = Date.parse("2026-09-10T21:00:00Z");
@@ -63,8 +63,8 @@ export function BoardFrom({
       <Shell
         connection={connection}
         statement={statement}
-        manifests={[manifest()]}
-        scope={MANIFEST_ID}
+        repositories={[repository()]}
+        scope={repository().root}
         onScope={noop}
         jobs={jobs}
         capacity={{ bound: 4, occupied: 2 }}
