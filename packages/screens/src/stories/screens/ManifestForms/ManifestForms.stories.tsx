@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { sheet } from "../Manifest/Manifest";
 import { ManifestFormsFrom } from "./ManifestForms";
@@ -98,5 +98,136 @@ export const TheBudgetWarning: Story = {
     await userEvent.type(within(budget).getByLabelText("Cost cap per Job, in dollars"), "5");
     await expect(within(budget).getByText(/~\$7\.12/)).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Save" })).toBeEnabled();
+  },
+};
+
+/** What Save leaves: nothing more to send, once the form redraws from what Fleet wrote. */
+async function saved(canvas: ReturnType<typeof within>): Promise<void> {
+  await userEvent.click(canvas.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(canvas.getByText(/^Saved /)).toBeVisible());
+  await waitFor(() => expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled());
+}
+
+/** A Check that passes on a non-zero exit, set on the Check and saved. */
+export const AnExitCodeSaved: Story = {
+  name: "An exit code, saved",
+  args: { ...TheForms.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const checks = await canvas.findByRole("region", { name: "Checks" });
+    const build = within(checks).getByRole("group", { name: "build" });
+    await userEvent.type(within(build).getByLabelText("Passes on exit code"), "one");
+    await expect(within(build).getByText("An exit code is a whole number.")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled();
+    await userEvent.clear(within(build).getByLabelText("Passes on exit code"));
+    await userEvent.type(within(build).getByLabelText("Passes on exit code"), "1");
+    await saved(canvas);
+    const redrawn = within(checks).getByRole("group", { name: "build" });
+    await expect(within(redrawn).getByLabelText("Passes on exit code")).toHaveValue("1");
+  },
+};
+
+/** **Base** — the branch named, and saved. */
+export const TheBaseSaved: Story = {
+  name: "The base, saved",
+  args: { ...TheForms.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const base = await canvas.findByRole("region", { name: "Base" });
+    await expect(within(base).getByLabelText("Base branch")).toHaveValue("main");
+    await userEvent.clear(within(base).getByLabelText("Base branch"));
+    await userEvent.type(within(base).getByLabelText("Base branch"), "trunk");
+    await saved(canvas);
+    await expect(within(base).getByLabelText("Base branch")).toHaveValue("trunk");
+  },
+};
+
+/**
+ * **Evidence** — removed and saved, then declared again. Save waits until the
+ * spec command has `{}` and the frames have somewhere to land.
+ */
+export const EvidenceRemovedAndDeclared: Story = {
+  name: "Evidence, removed and declared again",
+  args: { ...TheForms.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const section = await canvas.findByRole("region", { name: "Evidence" });
+    const declared = within(section).getByRole("group", { name: "evidence" });
+    await expect(within(declared).getByLabelText("Frames land in")).toHaveValue(".armada/frames");
+    await userEvent.click(within(declared).getByRole("button", { name: "Remove" }));
+    await saved(canvas);
+
+    await userEvent.click(within(section).getByRole("button", { name: "Declare evidence" }));
+    const again = within(section).getByRole("group", { name: "evidence" });
+    await userEvent.type(within(again).getByLabelText("Runs one spec"), "node capture.js");
+    await expect(within(again).getByText("It needs {} where the spec's path goes.")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled();
+    // `{{` is how user-event types a literal brace.
+    await userEvent.type(within(again).getByLabelText("Runs one spec"), " {{}");
+    await userEvent.type(within(again).getByLabelText("Frames land in"), ".armada/frames");
+    await saved(canvas);
+    const redrawn = within(section).getByRole("group", { name: "evidence" });
+    await expect(within(redrawn).getByLabelText("Runs one spec")).toHaveValue("node capture.js {}");
+  },
+};
+
+/**
+ * **Proved after merge** — a Check picked and saved. One that runs a Command
+ * first is not offered, and the section says why.
+ */
+export const ProvedAfterMergeSaved: Story = {
+  name: "Proved after merge, saved",
+  args: { ...TheForms.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const section = await canvas.findByRole("region", { name: "Proved after merge" });
+    const group = within(section).getByRole("group", { name: "Runs after a merge" });
+    await expect(within(group).queryByRole("checkbox", { name: "typecheck" })).toBeNull();
+    await expect(within(section).getByText(/^Not offered: typecheck\./)).toBeVisible();
+    await userEvent.click(within(group).getByRole("checkbox", { name: "build" }));
+    await saved(canvas);
+    await expect(within(section).getByRole("checkbox", { name: "build" })).toBeChecked();
+  },
+};
+
+/** **Setup** and **Drone** — a Command added to setup, the silence threshold set, both saved. */
+export const SetupAndDroneSaved: Story = {
+  name: "Setup and the Drone, saved",
+  args: { ...TheForms.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const setup = await canvas.findByRole("region", { name: "Setup" });
+    await expect(within(setup).getByRole("checkbox", { name: "bootstrap" })).toBeChecked();
+    await userEvent.click(within(setup).getByRole("checkbox", { name: "gate" }));
+    await expect(within(setup).getByText("bootstrap, gate")).toBeVisible();
+
+    const drone = canvas.getByRole("region", { name: "Drone" });
+    const silence = within(drone).getByLabelText("Silence threshold, in seconds");
+    await userEvent.type(silence, "0");
+    await expect(within(drone).getByText(/^A silence threshold is a whole number/)).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled();
+    await userEvent.clear(silence);
+    await userEvent.type(silence, "600");
+    await expect(within(drone).getByLabelText("Poke limit")).toHaveValue("3");
+    await saved(canvas);
+    await expect(within(drone).getByLabelText("Silence threshold, in seconds")).toHaveValue("600");
+    await expect(within(setup).getByRole("checkbox", { name: "gate" })).toBeChecked();
+  },
+};
+
+/** **Policy** — the review gate in the registry's words, with the file's word beside them. */
+export const PolicyInWords: Story = {
+  name: "Policy in words",
+  args: { ...TheForms.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const policy = await canvas.findByRole("region", { name: "Policy" });
+    const gate = within(policy).getByLabelText("Review gate");
+    await expect(gate).toHaveDisplayValue("A person answers · human_always");
+    await userEvent.selectOptions(gate, "auto_if_judge_passes");
+    await saved(canvas);
+    await expect(within(policy).getByLabelText("Review gate")).toHaveDisplayValue(
+      "The checks decide, unless the Judge objects · auto_if_judge_passes",
+    );
   },
 };

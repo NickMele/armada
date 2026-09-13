@@ -2,6 +2,7 @@
 import { useId, useState, type ReactNode } from "react";
 
 import { Button } from "../../primitives/Button/Button";
+import { Checkbox } from "../../primitives/Checkbox/Checkbox";
 import { Input } from "../../primitives/Input/Input";
 
 export function Section({ title, says, children }: { title: string; says: string; children: ReactNode }) {
@@ -67,6 +68,52 @@ export function AddEntry({ noun, taken, onAdd }: { noun: string; taken: string[]
 
 export function replaced<T>(list: readonly T[], at: number, next: T): T[] {
   return list.map((one, index) => (index === at ? next : one));
+}
+
+/**
+ * Names picked from those offered, **in the order they were picked** — the
+ * order the file runs them in, said beneath once there are two.
+ */
+export function Choices({
+  label,
+  offered,
+  chosen,
+  none,
+  onChosen,
+}: {
+  label: string;
+  offered: string[];
+  chosen: string[];
+  none: string;
+  onChosen: (chosen: string[]) => void;
+}) {
+  return (
+    <>
+      {offered.length === 0 ? (
+        <p className="armada-manifest-form__hint">{none}</p>
+      ) : (
+        <div className="armada-manifest-form__choices" role="group" aria-label={label}>
+          <span className="armada-manifest-form__label">{label}</span>
+          {offered.map((name) => (
+            <Checkbox
+              key={name}
+              checked={chosen.includes(name)}
+              onChange={(event) =>
+                onChosen(event.target.checked ? [...chosen, name] : chosen.filter((one) => one !== name))
+              }
+            >
+              {name}
+            </Checkbox>
+          ))}
+        </div>
+      )}
+      {chosen.length < 2 ? null : (
+        <p className="armada-manifest-form__hint">
+          In this order: <span className="armada-manifest-form__key">{chosen.join(", ")}</span>
+        </p>
+      )}
+    </>
+  );
 }
 
 /** A field and the line that says how to fill it, shown whether or not it is valid. */

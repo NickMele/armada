@@ -29,6 +29,17 @@ export function ChecksSection({ draft, onDraft, problems }: ManifestFormProps) {
               message={problems[`checks.${check.name}.run`]}
               onChange={(event) => set(at, { ...check, run: event.target.value })}
             />
+            <Hinted hint="Empty is 0.">
+              <Input
+                label="Passes on exit code"
+                mono
+                inputMode="numeric"
+                value={check.expectExitCode}
+                invalid={problems[`checks.${check.name}.expect_exit_code`] !== undefined}
+                message={problems[`checks.${check.name}.expect_exit_code`]}
+                onChange={(event) => set(at, { ...check, expectExitCode: event.target.value })}
+              />
+            </Hinted>
             <Hinted hint="One path pattern a line. Empty runs it on every change.">
               <Textarea
                 label="Runs when a change touches"
@@ -125,7 +136,7 @@ export function ChecksSection({ draft, onDraft, problems }: ManifestFormProps) {
         noun="Check"
         taken={draft.checks.map((check) => check.name)}
         onAdd={(name) =>
-          onDraft({ ...draft, checks: [...draft.checks, { name, run: "", requires: [], when: "", narrow: null }] })
+          onDraft({ ...draft, checks: [...draft.checks, { name, run: "", expectExitCode: "", requires: [], when: "", narrow: null }] })
         }
       />
     </Section>
