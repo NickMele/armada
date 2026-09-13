@@ -108,3 +108,52 @@ fn a_command_of_more_than_one_line_is_refused() {
         Err(NotDeclared::MoreThanOneLine)
     ));
 }
+
+/// `declaring_named` inserts the exact name it is given, and reads back the
+/// same entry `declaring_command` would have chosen for itself.
+#[test]
+fn declaring_named_inserts_the_given_name_and_reads_back_the_same_as_choosing_it() {
+    let chosen = declare(WITH_COMMANDS, "npm publish --access public").expect("declared");
+    let declared = Manifest::declaring_named(
+        &named("armada.yml"),
+        WITH_COMMANDS,
+        "npm-publish-access",
+        "npm publish --access public",
+    )
+    .expect("declared");
+    assert_eq!(declared.text, chosen.text);
+    assert_eq!(declared.name, "npm-publish-access");
+    assert!(!declared.already);
+}
+
+/// The two texts a Job's Drone and a person's allow each hold can differ —
+/// the whole reason `declaring_named` exists is to put the *same* name into
+/// both regardless.
+#[test]
+fn declaring_named_puts_the_same_entry_into_a_different_text() {
+    let other_text = "version: 1\nid: armada\ncommands:\n  something-else:\n    run: make\n";
+    let declared = Manifest::declaring_named(
+        &named("armada.yml"),
+        other_text,
+        "npm-publish-access",
+        "npm publish --access public",
+    )
+    .expect("declared");
+    assert_eq!(declared.name, "npm-publish-access");
+    let read = Manifest::parse(&named("armada.yml"), &declared.text).expect("reads");
+    let command = read.command("npm-publish-access").expect("declared");
+    assert_eq!(command.run(), "npm publish --access public");
+    assert!(read.command("something-else").is_some(), "left untouched");
+}
+
+/// A worktree copy the Drone left unparseable is refused, with the file
+/// itself never inspected further — the same shape `declare_in_repository`
+/// relies on to refuse `AlwaysAllow` with a reason a person can read.
+#[test]
+fn declaring_named_against_unparseable_text_is_refused() {
+    let unparseable = "version: 1\nid: armada\nbudget: 40\n";
+    assert!(matches!(
+        Manifest::declaring_named(&named("armada.yml"), unparseable, "allowed", "npm publish"),
+        Err(NotDeclared::WouldNotRead(_))
+    ));
+}

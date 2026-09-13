@@ -108,6 +108,25 @@ impl Vcs for GitVcs {
     ) -> Result<Committed, Self::CommitError> {
         crate::commit::commit_paths(worktree, paths, message, at)
     }
+
+    fn content_at_tip(
+        &self,
+        worktree: &Worktree,
+        path: &str,
+    ) -> Result<Option<String>, Self::CommitError> {
+        crate::commit::content_at_tip(worktree, path)
+    }
+
+    fn commit_content(
+        &self,
+        worktree: &Worktree,
+        path: &str,
+        content: &str,
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError> {
+        crate::commit::commit_content(worktree, path, content, message, at)
+    }
 }
 
 /// **The pre-flight v1 learned to write.**

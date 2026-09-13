@@ -321,6 +321,152 @@ fn a_path_outside_the_worktree_is_refused_before_anything_is_staged() {
     assert_eq!(status(&worktree), before, "nothing was staged");
 }
 
+/// **The worktree's own dirty copy of `armada.yml` never enters the commit.**
+/// `wrote()` puts a dirty version on disk exactly as a Drone's uncommitted
+/// edit would, and `commit_content` is asked to commit a different string —
+/// the one `declare_in_repository` builds from the tip. The commit holds only
+/// what it was given, and the dirty file on disk is left exactly as it was.
+#[test]
+fn commit_content_writes_the_given_content_and_leaves_a_dirty_disk_copy_alone() {
+    let repo = TempRepo::with_a_commit();
+    repo.write("armada.yml", "version: 1\n");
+    repo.commit_everything("armada.yml");
+    let worktree = worktree_for(&repo);
+    let started_at = tip(&worktree);
+    wrote(
+        &worktree,
+        "armada.yml",
+        "version: 1\nthe drone's own edit\n",
+    );
+
+    let made = GitVcs::new()
+        .commit_content(
+            &worktree,
+            "armada.yml",
+            "version: 1\ncommands:\n  allowed:\n    run: \"npm publish\"\n",
+            "allow npm publish",
+            NINE,
+        )
+        .expect("a commit");
+
+    assert!(
+        matches!(made, Committed::Made { .. }),
+        "different content than the tip is something to commit: {made:?}"
+    );
+    assert_ne!(tip(&worktree), started_at);
+    assert_eq!(
+        at_tip(&worktree, "armada.yml"),
+        "version: 1\ncommands:\n  allowed:\n    run: \"npm publish\"\n",
+        "the commit holds the content it was given"
+    );
+    assert_eq!(
+        std::fs::read_to_string(format!("{}/armada.yml", worktree.path())).expect("the file"),
+        "version: 1\nthe drone's own edit\n",
+        "the dirty disk copy is untouched by the commit"
+    );
+    assert_eq!(
+        status(&worktree),
+        vec![" M armada.yml"],
+        "git status still reports the drone's edit as modified, and nothing else"
+    );
+}
+
+/// Content that already matches the tip's blob is nothing to commit, and the
+/// branch does not move — the same rule [`commit_paths`] follows.
+#[test]
+fn commit_content_matching_the_tip_is_answered_rather_than_committed() {
+    let repo = TempRepo::with_a_commit();
+    repo.write("armada.yml", "version: 1\n");
+    repo.commit_everything("armada.yml");
+    let worktree = worktree_for(&repo);
+    let started_at = tip(&worktree);
+
+    let made = GitVcs::new()
+        .commit_content(
+            &worktree,
+            "armada.yml",
+            "version: 1\n",
+            "nothing to say",
+            NINE,
+        )
+        .expect("a reading");
+
+    assert_eq!(made, Committed::NothingToCommit);
+    assert_eq!(tip(&worktree), started_at, "the branch did not move");
+}
+
+/// `content_at_tip` reads the tip's committed bytes, regardless of a dirty
+/// working-directory copy, and answers `None` for a path the tip does not
+/// have at all.
+#[test]
+fn content_at_tip_reads_the_committed_bytes_and_ignores_the_working_directory() {
+    let repo = TempRepo::with_a_commit();
+    repo.write("armada.yml", "version: 1\n");
+    repo.commit_everything("armada.yml");
+    let worktree = worktree_for(&repo);
+    wrote(&worktree, "armada.yml", "a dirty copy nobody has committed");
+
+    let read = GitVcs::new()
+        .content_at_tip(&worktree, "armada.yml")
+        .expect("a reading");
+
+    assert_eq!(read, Some("version: 1\n".to_string()));
+    assert_eq!(
+        GitVcs::new()
+            .content_at_tip(&worktree, "never-committed.yml")
+            .expect("a reading"),
+        None
+    );
+}
+
+/// **The shape `declare_in_repository` runs.** A dirty `armada.yml` in the
+/// worktree, simulating the Drone's own uncommitted edit; `content_at_tip` and
+/// `commit_content` are called the way that function calls them; and what
+/// lands is the tip plus the allowed command, with the Drone's edit surviving
+/// on disk as the only difference `git status` reports.
+#[test]
+fn the_commit_carries_only_the_allowed_command_and_the_drones_edit_stays_uncommitted() {
+    let repo = TempRepo::with_a_commit();
+    repo.write("armada.yml", "version: 1\nid: armada\n");
+    repo.commit_everything("armada.yml");
+    let worktree = worktree_for(&repo);
+    wrote(
+        &worktree,
+        "armada.yml",
+        "version: 1\nid: armada\n# the drone's own edit\n",
+    );
+
+    let vcs = GitVcs::new();
+    let tip_text = vcs
+        .content_at_tip(&worktree, "armada.yml")
+        .expect("a reading")
+        .expect("the tip has the file");
+    assert_eq!(tip_text, "version: 1\nid: armada\n");
+    let with_the_entry = format!("{tip_text}commands:\n  allowed:\n    run: \"npm publish\"\n");
+
+    vcs.commit_content(
+        &worktree,
+        "armada.yml",
+        &with_the_entry,
+        "Allow `npm publish` in this repository",
+        NINE,
+    )
+    .expect("a commit");
+
+    assert_eq!(at_tip(&worktree, "armada.yml"), with_the_entry);
+    assert_eq!(
+        std::fs::read_to_string(format!("{}/armada.yml", worktree.path())).expect("the file"),
+        "version: 1\nid: armada\n# the drone's own edit\n",
+        "the worktree file is untouched by this call — declare_in_repository writes \
+         the worktree's own text separately"
+    );
+    assert_eq!(
+        status(&worktree),
+        vec![" M armada.yml"],
+        "the only difference from the new tip is the drone's edit"
+    );
+}
+
 /// Every path in the worktree's branch tip, so a test can say what is in a
 /// commit without reading a diff.
 fn committed_paths(worktree: &Worktree) -> Vec<String> {

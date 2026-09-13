@@ -637,8 +637,12 @@ where
     /// its branch so the pull request shows the policy change apart from the
     /// work.
     ///
-    /// **The file is put back where the commit fails**, so the worktree holds
-    /// nothing the branch does not.
+    /// **The commit and the worktree are built from two different texts on
+    /// purpose.** The commit is the branch tip's `armada.yml` plus the one
+    /// entry, so a Drone's uncommitted edit never rides into a commit that is
+    /// supposed to say only "a person allowed this command." The worktree
+    /// keeps the Drone's own edit, with the same entry added, so the Job's own
+    /// later commit still carries the allow.
     fn declare_in_repository(&self, worktree: &Worktree, run: &str) -> Result<(), NotPermitted> {
         let failed = |cause: String| NotPermitted::NotDeclared { cause };
         let name = self
@@ -649,13 +653,20 @@ where
             .unwrap_or("armada.yml")
             .to_string();
         let file = Path::new(worktree.path()).join(&name);
-        let before = std::fs::read_to_string(&file).map_err(|why| failed(why.to_string()))?;
-        let declared = Manifest::declaring_command(&file, &before, run)
+        let tip_text = self
+            .vcs()
+            .content_at_tip(worktree, &name)
+            .map_err(|why| failed(why.to_string()))?
+            .unwrap_or_default();
+        let at_tip = Manifest::declaring_command(&file, &tip_text, run)
             .map_err(|why| failed(why.to_string()))?;
-        if declared.already {
+        if at_tip.already {
             return Ok(());
         }
-        std::fs::write(&file, &declared.text).map_err(|why| failed(why.to_string()))?;
+        let dirty_text = std::fs::read_to_string(&file).map_err(|why| failed(why.to_string()))?;
+        let in_worktree = Manifest::declaring_named(&file, &dirty_text, &at_tip.name, run)
+            .map_err(|why| failed(why.to_string()))?;
+        std::fs::write(&file, &in_worktree.text).map_err(|why| failed(why.to_string()))?;
         let at = CommitTime::seconds_since_epoch(
             self.now()
                 .epoch_millis()
@@ -665,13 +676,13 @@ where
         let message = format!(
             "Allow `{run}` in this repository\n\nA person allowed it from Job detail for every \
              task here. It is declared as commands.{} so each later Job's Drone is granted it.",
-            declared.name
+            at_tip.name
         );
         if let Err(cause) = self
             .vcs()
-            .commit_paths(worktree, &[name.as_str()], &message, at)
+            .commit_content(worktree, &name, &at_tip.text, &message, at)
         {
-            let _ = std::fs::write(&file, &before);
+            let _ = std::fs::write(&file, &dirty_text);
             return Err(failed(cause.to_string()));
         }
         Ok(())
