@@ -1,8 +1,9 @@
 //! A repository's own setup, found from its root.
 //!
 //! **A repository carries its setup, and Fleet is pointed at the repository.**
-//! `armada.yml` at the root, workflow definitions in `.armada/workflows/`
-//! beside it. There is no `--manifest` flag and no `--workflow` flag, and that
+//! `armada.yml` at the root; workflows from what Armada carries, Kit's, and
+//! `.armada/workflows/` beside it — see `config::Catalogue` for which wins.
+//! There is no `--manifest` flag and no `--workflow` flag, and that
 //! is the decision this module exists to hold: a pair of paths on a command
 //! line puts the answer in a second place, so two Fleets started differently
 //! can disagree about one repository, and a scratch copy of a Manifest becomes
@@ -27,7 +28,10 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use config::{LoadError, Manifest, Reloads, ResolveError, ResolvedWorkflow, Roster, WorkflowDef};
+use config::{
+    Catalogue, CatalogueRefused, LoadError, Manifest, Reloads, ResolveError, ResolvedWorkflow,
+    Roster, Written,
+};
 
 /// The Manifest's name at a repository root. Not configurable: a repository
 /// that could name its own Manifest is one where finding the Manifest requires
@@ -36,6 +40,25 @@ pub const MANIFEST: &str = "armada.yml";
 
 /// Where a repository's workflow definitions live, relative to its root.
 pub const WORKFLOWS: &str = ".armada/workflows";
+
+/// Kit's home, relative to the operator's. Workflows are the first thing read
+/// from it; the rest of Kit arrives in the same place under #41.
+pub const KIT_HOME: &str = ".armada";
+
+/// Where Kit's Workflows live inside Kit's home — the name a repository uses,
+/// so a definition moves between the two without an edit.
+pub const KIT_WORKFLOWS: &str = "workflows";
+
+/// Kit's home under `home`, with its Workflows directory made if it was not.
+///
+/// **`home` is handed in**, because the composition root is the one place that
+/// reads the environment. Made rather than required: a person looking for
+/// where Kit's Workflows go should find the folder, not a sentence about it.
+pub fn kit(home: &Path) -> std::io::Result<PathBuf> {
+    let kit = home.join(KIT_HOME);
+    std::fs::create_dir_all(kit.join(KIT_WORKFLOWS))?;
+    Ok(kit)
+}
 
 /// The extensions a definition may carry.
 ///
@@ -58,8 +81,8 @@ pub struct Setup {
 }
 
 impl Setup {
-    /// Read `root`'s Manifest, read every workflow beside it, and resolve each
-    /// against the Manifest.
+    /// Read `root`'s Manifest, merge what Armada carries with Kit's Workflows
+    /// under `kit` and the repository's own, and resolve each against it.
     ///
     /// **`root` is the repository, not a search hint.** Nothing walks upward
     /// looking for an `armada.yml` in a parent: a daemon that quietly adopted
@@ -71,7 +94,7 @@ impl Setup {
     /// something outside it is refused here — before the port and before the
     /// runtime file — for the reason every other refusal in this function is:
     /// the alternative is finding out with a Drone already on a worktree.
-    pub fn at(root: &Path, roster: &Roster) -> Result<Setup, SetupRefused> {
+    pub fn at(root: &Path, kit: &Path, roster: &Roster) -> Result<Setup, SetupRefused> {
         let manifest_path = root.join(MANIFEST);
         let (manifest, reloads) =
             Manifest::reloadable(&manifest_path).map_err(|why| match &why {
@@ -88,24 +111,18 @@ impl Setup {
                 _ => SetupRefused::ManifestRefused(why),
             })?;
 
-        let mut workflows: BTreeMap<core_model::WorkflowId, ResolvedWorkflow> = BTreeMap::new();
-        let mut paths: BTreeMap<core_model::WorkflowId, PathBuf> = BTreeMap::new();
-        for workflow_path in definitions(root)? {
-            let def =
-                WorkflowDef::load(&workflow_path, roster).map_err(SetupRefused::WorkflowRefused)?;
-            let resolved = ResolvedWorkflow::resolve(&def, &manifest)
-                .map_err(SetupRefused::ChecksNotDeclared)?;
-            let id = resolved.id().clone();
-            if let Some(first) = paths.get(&id) {
-                return Err(SetupRefused::DuplicateWorkflowId {
-                    id: id.as_str().to_string(),
-                    first: first.clone(),
-                    second: workflow_path,
-                });
+        let mut written = config::carried();
+        written.extend(definitions(&kit.join(KIT_WORKFLOWS), Written::in_kit)?);
+        written.extend(definitions(&root.join(WORKFLOWS), Written::in_repository)?);
+        let catalogue = Catalogue::of(written, roster).map_err(|why| match why {
+            CatalogueRefused::Refused(why) => SetupRefused::WorkflowRefused(why),
+            CatalogueRefused::DuplicateWorkflowId { id, first, second } => {
+                SetupRefused::DuplicateWorkflowId { id, first, second }
             }
-            paths.insert(id.clone(), workflow_path);
-            workflows.insert(id, resolved);
-        }
+        })?;
+        let workflows = catalogue
+            .resolve(&manifest)
+            .map_err(SetupRefused::ChecksNotDeclared)?;
 
         Ok(Setup {
             root: root.to_path_buf(),
@@ -124,12 +141,12 @@ impl Setup {
         &self.manifest
     }
 
-    /// Every workflow this repository declares, keyed by its `workflow_id`.
+    /// Every workflow this repository runs, keyed by its `workflow_id`, each
+    /// saying which of the three places it came from.
     ///
-    /// A map rather than a single value, because a repository may declare more
-    /// than one — Bug and Feature are not the same shape of work. Two files
-    /// naming the same id is refused at start: a Fleet that picked one silently
-    /// would be choosing on behalf of whoever wrote the second file.
+    /// Two files in one place naming the same id is refused at start: a Fleet
+    /// that picked one silently would be choosing on behalf of whoever wrote
+    /// the second file. The same id in two places is an override.
     pub fn workflows(&self) -> &BTreeMap<core_model::WorkflowId, ResolvedWorkflow> {
         &self.workflows
     }
@@ -151,23 +168,26 @@ impl Setup {
     }
 }
 
-/// Every definition in `.armada/workflows/`, or why there is not one.
+/// Every definition in one directory, as text and marked with its place.
 ///
-/// **At least one, refused otherwise.** A directory is a rule until it holds
-/// nothing, and an empty one is a repository not yet set up rather than a
-/// repository with no workflows.
-fn definitions(root: &Path) -> Result<Vec<PathBuf>, SetupRefused> {
-    let dir = root.join(WORKFLOWS);
-    let entries = std::fs::read_dir(&dir).map_err(|cause| {
-        if cause.kind() == std::io::ErrorKind::NotFound {
-            SetupRefused::NoWorkflowDirectory { path: dir.clone() }
-        } else {
-            SetupRefused::WorkflowsUnreadable {
-                path: dir.clone(),
+/// **Absent or empty adds nothing, and is not refused.** Until #425 an empty
+/// `.armada/workflows/` was a repository not yet set up; now a repository with
+/// none of its own runs on what Armada carries, and a machine with no Kit
+/// Workflows adds none.
+fn definitions(
+    dir: &Path,
+    place: fn(PathBuf, String) -> Written,
+) -> Result<Vec<Written>, SetupRefused> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(cause) if cause.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(cause) => {
+            return Err(SetupRefused::WorkflowsUnreadable {
+                path: dir.to_path_buf(),
                 cause,
-            }
+            })
         }
-    })?;
+    };
 
     let mut found: Vec<PathBuf> = Vec::new();
     for entry in entries.flatten() {
@@ -186,10 +206,16 @@ fn definitions(root: &Path) -> Result<Vec<PathBuf>, SetupRefused> {
     // occurrence by that same order.
     found.sort();
 
-    if found.is_empty() {
-        return Err(SetupRefused::NoWorkflow { path: dir });
-    }
-    Ok(found)
+    found
+        .into_iter()
+        .map(|path| match std::fs::read_to_string(&path) {
+            Ok(text) => Ok(place(path, text)),
+            Err(cause) => Err(SetupRefused::WorkflowRefused(LoadError::Unreadable {
+                path,
+                cause,
+            })),
+        })
+        .collect()
 }
 
 /// Why a repository's setup could not be read.
@@ -199,7 +225,7 @@ fn definitions(root: &Path) -> Result<Vec<PathBuf>, SetupRefused> {
 /// the terminal: the person reading the output is the person who wrote the
 /// file, and a parser reporting one fault per run turns one edit into three.
 ///
-/// Eight variants because a person has eight different things to do about them,
+/// Six variants because a person has six different things to do about them,
 /// and each names the file it is about. `source` is deliberately absent: every
 /// variant renders its own detail below, and returning the inner error as a
 /// cause would print the same faults a second time in a different shape.
@@ -209,16 +235,12 @@ pub enum SetupRefused {
     NoManifest { path: PathBuf },
     /// There is one and Armada will not have it.
     ManifestRefused(LoadError),
-    /// No `.armada/workflows/` beside the Manifest.
-    NoWorkflowDirectory { path: PathBuf },
-    /// It is there and could not be listed.
+    /// A directory of workflows is there and could not be listed.
     WorkflowsUnreadable {
         path: PathBuf,
         cause: std::io::Error,
     },
-    /// It is there and holds no definition.
-    NoWorkflow { path: PathBuf },
-    /// Two definitions name the same `workflow_id`. Naming both paths rather
+    /// Two definitions in one place name the same `workflow_id`. Naming both paths rather
     /// than picking one — a Fleet that chose silently would be deciding on
     /// behalf of whoever wrote the second file.
     DuplicateWorkflowId {
@@ -243,10 +265,9 @@ impl SetupRefused {
     /// The file or directory the refusal is about.
     pub fn path(&self) -> &Path {
         match self {
-            SetupRefused::NoManifest { path }
-            | SetupRefused::NoWorkflowDirectory { path }
-            | SetupRefused::WorkflowsUnreadable { path, .. }
-            | SetupRefused::NoWorkflow { path } => path,
+            SetupRefused::NoManifest { path } | SetupRefused::WorkflowsUnreadable { path, .. } => {
+                path
+            }
             // The first occurrence, by the sorted order `definitions` reads
             // them in — the file a person would fix, since it was already
             // there when the second one was added.
@@ -273,21 +294,9 @@ impl fmt::Display for SetupRefused {
                 MANIFEST,
                 path.parent().unwrap_or(path).display()
             ),
-            SetupRefused::NoWorkflowDirectory { path } => write!(
-                f,
-                "there is no {} — a repository's workflows live beside its {}",
-                path.display(),
-                MANIFEST
-            ),
             SetupRefused::WorkflowsUnreadable { path, cause } => {
                 write!(f, "{} could not be listed: {cause}", path.display())
             }
-            SetupRefused::NoWorkflow { path } => write!(
-                f,
-                "{} holds no workflow definition — one is expected, ending {}",
-                path.display(),
-                Listed(DEFINITION_EXTS)
-            ),
             SetupRefused::DuplicateWorkflowId { id, first, second } => write!(
                 f,
                 "workflow_id `{id}` is declared twice, and Fleet does not pick between them:\n  \
