@@ -1,7 +1,12 @@
 import { ArmadaLockupHorizontal, ArmadaMark } from "@armada/brand";
+import { MessageSquare } from "lucide-react";
 import type { ReactNode } from "react";
+import { BoardEmptyState } from "../../compositions/BoardEmptyState/BoardEmptyState";
 import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
 import { StatusBar, type StatusBarProps } from "../../compositions/StatusBar/StatusBar";
+import { Button } from "../../primitives/Button/Button";
+import { Kbd, KbdChord } from "../../primitives/Kbd/Kbd";
+import { Sheet } from "../../primitives/Sheet/Sheet";
 
 /**
  * The shell — rail, panel, status bar. The frame every journey mounts inside.
@@ -49,7 +54,24 @@ export type TheShellProps = {
   actions?: ReactNode;
   /** The panel body. The one region that scrolls. */
   children: ReactNode;
+  /** Helm's dock, on every surface. Absent draws none. */
+  dock?: TheShellDock;
   status: StatusBarProps;
+};
+
+/** Helm's dock (#948). Closed draws the edge strip at any width, so both arrangements share one way back. */
+export type TheShellDock = {
+  /** Beside the content, or the sheet when folded. */
+  open: boolean;
+  /** Below `--layout-breakpoint`. A prop, because a media query cannot read the token. */
+  folded?: boolean;
+  /** Questions waiting on the person. Zero draws no count. */
+  questions?: number;
+  /** The binding, beside the close and in the strip's tooltip. */
+  binding?: string;
+  onOpen: (open: boolean) => void;
+  /** Absent draws one quiet line until the questions (#935) and the conversation (#944) arrive. */
+  children?: ReactNode;
 };
 
 export function TheShell({
@@ -63,6 +85,7 @@ export function TheShell({
   summary,
   actions,
   children,
+  dock,
   status,
 }: TheShellProps) {
   return (
@@ -76,25 +99,89 @@ export function TheShell({
           collapsed={collapsed}
           onSelect={onSelect}
         />
-        <div className="armada-shell__panel">
-          {title === undefined ? null : (
-          <div className="armada-screen__panel-head">
-            <div className="armada-screen__titles">
-              <span className="armada-screen__title">{title}</span>
-              {summary === undefined ? null : (
-                <span className="armada-screen__summary">{summary}</span>
+        <div className="armada-shell__work">
+          <div className="armada-shell__panel">
+            {title === undefined ? null : (
+            <div className="armada-screen__panel-head">
+              <div className="armada-screen__titles">
+                <span className="armada-screen__title">{title}</span>
+                {summary === undefined ? null : (
+                  <span className="armada-screen__summary">{summary}</span>
+                )}
+              </div>
+              {actions === undefined ? null : (
+                <div className="armada-shell__actions">{actions}</div>
               )}
             </div>
-            {actions === undefined ? null : (
-              <div className="armada-shell__actions">{actions}</div>
             )}
+            <div className="armada-shell__mount">{children}</div>
           </div>
-          )}
-          <div className="armada-shell__mount">{children}</div>
+          {dock === undefined ? null : <Dock {...dock} />}
         </div>
       </div>
       <StatusBar {...status} />
     </div>
+  );
+}
+
+const DOCK_TITLE = "Helm";
+
+function Dock({ open, folded = false, questions = 0, binding, onOpen, children }: TheShellDock) {
+  const body = children ?? (
+    <BoardEmptyState quiet>Questions waiting on you, and Helm, will be here.</BoardEmptyState>
+  );
+
+  if (open && !folded) {
+    return (
+      <aside className="armada-shell__dock" aria-label={DOCK_TITLE}>
+        <div className="armada-shell__dock-head">
+          <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
+          <Button variant="secondary" size="sm" ground="sunken" onClick={() => onOpen(false)}>
+            Close
+            {binding === undefined ? null : <Chord binding={binding} />}
+          </Button>
+        </div>
+        <div className="armada-shell__dock-body">{body}</div>
+      </aside>
+    );
+  }
+
+  const waiting = questions > 0 ? `, ${questions} ${questions === 1 ? "question" : "questions"} waiting` : "";
+  return (
+    <>
+      <button
+        type="button"
+        className="armada-shell__strip"
+        aria-label={`Open ${DOCK_TITLE}${waiting}`}
+        aria-expanded={open}
+        title={binding === undefined ? `Open ${DOCK_TITLE}` : `Open ${DOCK_TITLE} — ${binding}`}
+        onClick={() => onOpen(true)}
+      >
+        <MessageSquare size={16} strokeWidth={2} aria-hidden />
+        {questions > 0 ? <span className="armada-shell__strip-count">{questions}</span> : null}
+      </button>
+      <Sheet
+        open={open && folded}
+        title={DOCK_TITLE}
+        contained
+        closeLabel="Close"
+        closeBinding={binding}
+        onClose={() => onOpen(false)}
+      >
+        {body}
+      </Sheet>
+    </>
+  );
+}
+
+/** One cap per key, as `KbdChord` draws a chord. */
+function Chord({ binding }: { binding: string }) {
+  return (
+    <KbdChord>
+      {Array.from(binding).map((key, at) => (
+        <Kbd key={at}>{key}</Kbd>
+      ))}
+    </KbdChord>
   );
 }
 

@@ -31,8 +31,9 @@
 // so the control moved up beside `New job` and the bar is what it is specified
 // to be.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  ACTION,
   JOB_LIFECYCLE,
   plural,
   Button,
@@ -111,9 +112,11 @@ export function Shell({
   children,
 }: ShellProps) {
   const collapsed = useNarrow();
+  const dock = useDock(collapsed);
 
   return (
     <TheShell
+      dock={{ ...dock, folded: collapsed, binding: HELM_KEY }}
       surfaces={SURFACES.map((surface) => ({
         id: surface.id,
         label: surface.label,
@@ -333,6 +336,42 @@ function useNarrow(): boolean {
   }, []);
 
   return narrow;
+}
+
+/** Helm's binding, read from the registry rather than retyped. */
+const HELM_KEY = ACTION.helm?.shortcut;
+
+/**
+ * Helm's dock: beside the content until put away, a closed sheet when folded.
+ * `⌘J` toggles whichever the width draws, from every surface and from inside a field.
+ */
+function useDock(folded: boolean): { open: boolean; onOpen: (open: boolean) => void } {
+  const [beside, setBeside] = useState(true);
+  const [sheet, setSheet] = useState(false);
+
+  // A sheet left open would cover the work again the next time the window narrows.
+  useEffect(() => {
+    if (!folded) setSheet(false);
+  }, [folded]);
+
+  const open = folded ? sheet : beside;
+  const onOpen = folded ? setSheet : setBeside;
+  const toggle = useRef(() => onOpen(!open));
+  toggle.current = () => onOpen(!open);
+
+  useEffect(() => {
+    if (HELM_KEY === undefined) return undefined;
+    function pressed(event: KeyboardEvent): void {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.repeat) return;
+      if (`⌘${event.key.toUpperCase()}` !== HELM_KEY) return;
+      event.preventDefault();
+      toggle.current();
+    }
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
+  }, []);
+
+  return { open, onOpen };
 }
 
 /**

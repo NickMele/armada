@@ -238,3 +238,6 @@
 
 /* A Plan region's mark — the whole of what carries a task's state. */
 @import "./compositions/TaskMark/TaskMark.css";
+
+/* Helm's dock, beside the shell's panel. */
+@import "./screens/TheShell/TheShell.css";
