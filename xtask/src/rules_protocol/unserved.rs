@@ -51,13 +51,6 @@ const NOT_BUILT: &[(&str, &str)] = &[
          person which. A third act meaning `the right one of those` would be Fleet choosing \
          for them at the moment the record is least trustworthy",
     ),
-    (
-        "evidence.submitted",
-        "Build it as a pointer, never as a payload. A submission's payload has no business on \
-         the one drop-oldest channel every Job shares, which is what that channel's bound \
-         exists to keep off it — `job.step_advanced` is the precedent: a kind that names the \
-         moment, and leaves the bundle for a client to fetch from `get_evidence`",
-    ),
 ];
 
 /// Rule: every operation the inventory names is served, or says why not.

@@ -372,3 +372,107 @@ async fn the_call_returns_without_waiting_for_the_gate() {
     );
     assert_eq!(fleet.evidence_waiting(), 1, "and decided nothing");
 }
+
+// ------------------------------------------------ the moment, on the stream
+
+/// Everything a subscription has waiting, drained after the fact.
+async fn drained(watching: &mut api::Subscription) -> Vec<ipc::Event> {
+    let mut seen = Vec::new();
+    while let Ok(Some(api::Next::Send(delivered))) =
+        tokio::time::timeout(Duration::from_millis(200), watching.next()).await
+    {
+        seen.push(delivered.event);
+    }
+    seen
+}
+
+/// Every `evidence.submitted` a subscription saw.
+fn submitted(seen: &[ipc::Event]) -> Vec<&ipc::EvidenceSubmitted> {
+    seen.iter()
+        .filter_map(|event| match event {
+            ipc::Event::EvidenceSubmitted(one) => Some(one),
+            _ => None,
+        })
+        .collect()
+}
+
+/// **`#813`, the whole of it.** The moment a Drone hands in reaches the stream
+/// as its own kind, naming the Job, the step and what the frozen step asked the
+/// work product to be — and the gate has not run.
+#[tokio::test]
+async fn a_submission_publishes_the_moment_before_the_gate_starts() {
+    let home = TempDir::new();
+    let (fleet, app) = running(&home).await;
+    let mut watching = fleet.events().subscribe();
+
+    assert!(!tool_call(&app, A_DIFF).await.is_error());
+    let seen = drained(&mut watching).await;
+
+    let said = submitted(&seen);
+    assert_eq!(said.len(), 1, "one submission, one message: {seen:?}");
+    let job = only_job(&app).await;
+    assert_eq!(said[0].job_id, job.id);
+    assert_eq!(
+        said[0].step_id.as_str(),
+        "implement",
+        "the step the submission is against, off the working slot"
+    );
+    assert_eq!(said[0].evidence_type.as_wire(), "diff");
+    assert_eq!(said[0].actor.as_wire(), "drone");
+    assert!(!said[0].at.as_str().is_empty(), "stamped by Fleet's clock");
+    assert!(
+        !seen
+            .iter()
+            .any(|event| matches!(event, ipc::Event::JobChecking(_))),
+        "the gate has not started: {seen:?}"
+    );
+    assert_eq!(fleet.evidence_waiting(), 1);
+}
+
+/// **A pointer, never a payload.** The three sentences a Drone submits are on
+/// `get_evidence` and nowhere on the one channel every Job shares — asserted
+/// against the encoded message, because a field added later would ride out on
+/// it without anything else here noticing.
+#[tokio::test]
+async fn the_message_carries_no_part_of_the_submission() {
+    let home = TempDir::new();
+    let (fleet, app) = running(&home).await;
+    let mut watching = fleet.events().subscribe();
+
+    assert!(!tool_call(&app, A_DIFF).await.is_error());
+    let seen = drained(&mut watching).await;
+
+    let said = submitted(&seen);
+    let encoded = ipc::encode(said[0]).expect("the message encodes");
+    for sentence in [
+        "The reader stops one line later.",
+        "src/log.rs, six lines",
+        "The writer has the same bug and is untouched.",
+    ] {
+        assert!(
+            !encoded.contains(sentence),
+            "the submission's own words are not on this channel: {encoded}"
+        );
+    }
+}
+
+/// **Nothing that was refused is announced.** A malformed call never reached
+/// the inbox, so a message saying a Drone submitted would be Fleet reporting a
+/// submission that does not exist.
+#[tokio::test]
+async fn a_refused_call_publishes_nothing() {
+    let home = TempDir::new();
+    let (fleet, app) = running(&home).await;
+    let mut watching = fleet.events().subscribe();
+
+    let answered = tool_call(
+        &app,
+        r#"{"claimed":"","shown_by":"src/log.rs","not_claimed":""}"#,
+    )
+    .await;
+    assert!(answered.is_error(), "{}", answered.text());
+
+    let seen = drained(&mut watching).await;
+    assert!(submitted(&seen).is_empty(), "{seen:?}");
+    assert_eq!(fleet.evidence_waiting(), 0);
+}
