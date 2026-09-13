@@ -50,7 +50,8 @@ use crate::queries::{
 use crate::rehearsing::{
     get_checkout_run_diff, get_checkout_run_output, get_checkout_run_sheet, get_run_output,
     get_run_sheet, list_checkout_runs, list_runs, observe_checkout_run, observe_run,
-    start_checkout_run, start_run, stop_checkout_run, stop_run, undo_checkout_run, undo_run,
+    start_checkout_run, start_checkout_verify, start_run, stop_checkout_run, stop_run,
+    undo_checkout_run, undo_run,
 };
 use crate::repository_allow::{get_repository_allowed_commands, remove_repository_allowed_command};
 use crate::served::Served;
@@ -171,6 +172,7 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/manifest/start_run", post(start_checkout_run::<D>))
         .route("/manifest/stop_run", post(stop_checkout_run::<D>))
         .route("/manifest/undo_run", post(undo_checkout_run::<D>))
+        .route("/manifest/start_verify", post(start_checkout_verify::<D>))
         .route("/servers", get(list_servers::<D>))
         .route("/servers/start", post(start_server::<D>))
         .route("/servers/stop", post(stop_server::<D>))

@@ -106,6 +106,10 @@ pub enum Unrehearsable {
     DiffUnreadable {
         why: String,
     },
+    /// A Verify holds the checkout, between its steps as well as during them.
+    VerifyUnderway,
+    /// The Manifest declares no setup and no Checks.
+    NothingToVerify,
 }
 
 impl Unrehearsable {
@@ -115,15 +119,19 @@ impl Unrehearsable {
     pub(super) fn spelled(&self) -> (&'static str, fn(WireError) -> Refusal) {
         use Unrehearsable::*;
         match self {
-            NoWorktree | AlreadyRunning { .. } | NotRunning { .. } | StillRunning { .. } => {
-                (CANNOT_RUN_HERE, Refusal::IllegalMove)
-            }
+            NoWorktree
+            | AlreadyRunning { .. }
+            | NotRunning { .. }
+            | StillRunning { .. }
+            | VerifyUnderway => (CANNOT_RUN_HERE, Refusal::IllegalMove),
             DroneWorking
             | RunInFlight
             | AlreadyUndone { .. }
             | NothingToUndo { .. }
             | Moved { .. } => (CANNOT_UNDO, Refusal::IllegalMove),
-            NotDeclared { .. } | IsAServer { .. } => (NOT_DECLARED_HERE, Refusal::Unacceptable),
+            NotDeclared { .. } | IsAServer { .. } | NothingToVerify => {
+                (NOT_DECLARED_HERE, Refusal::Unacceptable)
+            }
             WorktreeManifest { .. } => (WORKTREE_MANIFEST_UNREADABLE, Refusal::Unacceptable),
             DoesNotNarrow { .. } | NothingToNarrowTo { .. } => {
                 (NOTHING_TO_NARROW_TO, Refusal::Unacceptable)
@@ -214,6 +222,13 @@ impl fmt::Display for Unrehearsable {
                  once it ends"
             ),
             DiffUnreadable { why } => write!(out, "the run's patch could not be read: {why}"),
+            VerifyUnderway => out.write_str(
+                "Verify is running setup and every Check in this checkout, one at a time. Stop \
+                 it or wait for it to end",
+            ),
+            NothingToVerify => out.write_str(
+                "this Manifest declares no setup and no Checks, so Verify has nothing to run",
+            ),
         }
     }
 }

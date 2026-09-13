@@ -426,6 +426,7 @@ impl Queries for FakeDaemon {
             manifest_edited_at: None,
             running: None,
             servers: Vec::new(),
+            verify: None,
         })
     }
 

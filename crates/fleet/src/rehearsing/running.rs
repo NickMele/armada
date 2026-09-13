@@ -17,6 +17,7 @@ use verification::{Exit, NeverRan};
 use super::entries::Entry;
 use super::owner::{Place, Tree};
 use super::record::{Record, Underway};
+use super::verifying::{Handed, HANDING_OVER};
 use super::{records, Held};
 use crate::daemon::Fleet;
 
@@ -36,6 +37,9 @@ pub(crate) struct Plan {
     /// Where the run's output goes. Dropped when the run returns, which with
     /// [`Held`] going is what tells every viewer the run finished.
     pub(crate) feed: api::RunFeed,
+    /// The Verify this run is a step of, handed the record before it is
+    /// published — `super::verifying`. `None` for a run a person started.
+    pub(crate) verify: Option<tokio::sync::oneshot::Sender<Handed>>,
 }
 
 struct Outcome {
@@ -62,11 +66,12 @@ where
     /// failure is a fact on the record.
     pub(crate) async fn rehearsed(
         &self,
-        plan: Plan,
+        mut plan: Plan,
         held: Held,
         stopped: watch::Receiver<bool>,
         done: watch::Sender<Option<Record>>,
     ) {
+        let verify = plan.verify.take();
         let log = plan.dir.join(records::LOG);
         let started = self.now();
         let snapshot = {
@@ -139,6 +144,15 @@ where
         // Given back before anybody is told, so a caller that starts the next
         // run on `run.finished` is not refused as though this one were out.
         drop(held);
+        // A Verify's next step takes the slot just given back before anybody
+        // is told, so a reader of the sheet on this event finds it out.
+        if let Some(verify) = verify {
+            let (ack, acked) = tokio::sync::oneshot::channel();
+            let record = record.clone();
+            if verify.send(Handed { record, ack }).is_ok() {
+                let _ = tokio::time::timeout(HANDING_OVER, acked).await;
+            }
+        }
         let _ = done.send(Some(record.clone()));
         // **One kind per owner, because the record is one shape per owner.** A
         // reader folding `run.finished` by its `job_id` is never handed one

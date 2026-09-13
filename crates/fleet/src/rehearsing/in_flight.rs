@@ -15,12 +15,18 @@ use tokio::sync::watch;
 
 use super::owner::Owner;
 use super::record::{Record, Underway};
+use super::verifying::Verifies;
 
 type Stopping = (Arc<watch::Sender<bool>>, watch::Receiver<Option<Record>>);
 
 /// `std`'s lock: it is never held across an `.await`.
 #[derive(Clone, Default)]
-pub(crate) struct Rehearsals(Arc<Mutex<BTreeMap<Owner, InFlight>>>);
+pub(crate) struct Rehearsals {
+    out: Arc<Mutex<BTreeMap<Owner, InFlight>>>,
+    /// The checkout's latest Verify. Here rather than on `Fleet`: it is this
+    /// one-run-at-a-time state, one sequence up — `super::verifying`.
+    verifies: Verifies,
+}
 
 struct InFlight {
     underway: Underway,
@@ -32,6 +38,10 @@ struct InFlight {
 }
 
 impl Rehearsals {
+    pub(super) fn verifies(&self) -> &Verifies {
+        &self.verifies
+    }
+
     pub(super) fn in_flight(&self, owner: &Owner) -> Option<Underway> {
         self.held().get(owner).map(|out| out.underway.clone())
     }
@@ -83,7 +93,7 @@ impl Rehearsals {
     }
 
     fn held(&self) -> MutexGuard<'_, BTreeMap<Owner, InFlight>> {
-        self.0
+        self.out
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }

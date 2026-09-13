@@ -154,6 +154,11 @@ impl Commands for FakeDaemon {
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
         self.runs_nothing_here()
     }
+    async fn start_checkout_verify(
+        self: std::sync::Arc<Self>,
+    ) -> Result<ipc::CheckoutVerify, Refusal> {
+        self.runs_nothing_here()
+    }
     /// The bytes echoed back as a path so a route test can tell the body
     /// arrived. Nothing is written: what a save does to a file is
     /// `fleet::editing`'s and is tested there against a real one.

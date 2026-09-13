@@ -74,6 +74,8 @@ where
     }
 
     /// Take the owner's one run slot, make the run's directory, and spawn it.
+    /// `verify` is the Verify this run is a step of, where it is one.
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn started_at(
         self: Arc<Self>,
         place: Place,
@@ -82,6 +84,7 @@ where
         command: String,
         narrowed: bool,
         worktree_version: bool,
+        verify: Option<tokio::sync::oneshot::Sender<super::verifying::Handed>>,
     ) -> Result<Underway, Unrehearsable> {
         let whose = place.whose();
         let underway = Underway {
@@ -125,6 +128,7 @@ where
             dir,
             worktree_version,
             feed,
+            verify,
         };
         let this = Arc::clone(&self);
         tokio::spawn(async move { this.rehearsed(plan, held, stopped, done).await });

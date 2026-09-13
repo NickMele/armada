@@ -194,6 +194,17 @@ pub(crate) async fn start_checkout_run<D: Commands>(
     }
 }
 
+/// 202: the Verify is underway, its first step out. **No body**: Verify runs
+/// setup and every Check, and there is nothing to choose.
+pub(crate) async fn start_checkout_verify<D: Commands>(
+    State(served): State<Served<D>>,
+) -> Response {
+    match served.shared().start_checkout_verify().await {
+        Ok(verify) => answer(StatusCode::ACCEPTED, &verify, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 pub(crate) async fn stop_checkout_run<D: Commands>(
     State(served): State<Served<D>>,
     body: Bytes,
