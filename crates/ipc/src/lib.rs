@@ -187,9 +187,10 @@ pub use raising::{CapRaise, RaisedBy, TurnRaise};
 pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
 pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
 pub use rehearsal::{
-    CheckoutRunList, CheckoutRunMessage, CheckoutRunOpened, CheckoutRunRecord, CheckoutRunSheet,
-    CheckoutRunUnderway, NamedRun, RunEntry, RunList, RunMessage, RunOpened, RunOutput, RunRecord,
-    RunSheet, RunUnderway, StartCheckoutRun, StartRun, UnreadableRun,
+    CheckoutRunDiff, CheckoutRunList, CheckoutRunMessage, CheckoutRunOpened, CheckoutRunRecord,
+    CheckoutRunSheet, CheckoutRunUnderway, DiffAgainst, NamedRun, RunDiffReading, RunEntry,
+    RunList, RunMessage, RunOpened, RunOutput, RunRecord, RunSheet, RunUnderway, StartCheckoutRun,
+    StartRun, UnreadableRun,
 };
 pub use remarks::{InlineContext, JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};

@@ -258,6 +258,31 @@ export type CheckoutRunRecord = {
   log: string;
 };
 
+/**
+ * `GET /manifest/runs/:run_id/diff` — what one checkout run changed.
+ *
+ * **Never against `HEAD`**: this tree holds a person's own uncommitted work,
+ * and a patch against `HEAD` would show all of it as the run's. `against` says
+ * so on the wire rather than leaving a reader to assume it.
+ */
+export type CheckoutRunDiff = {
+  id: string;
+  /** The tree just before the run against the tree just after it. */
+  against: "run_snapshot";
+  reading: RunDiffReading;
+};
+
+/** The patch, or why there is none. No patch stands in for a gone snapshot. */
+export type RunDiffReading =
+  | {
+      state: "read";
+      /** `CheckoutRunRecord.changed`, read beside the patch. Empty: nothing changed. */
+      files: ChangedFile[];
+      /** Git's unified diff. Absent where there is nothing in it. */
+      patch?: string;
+    }
+  | { state: "gone"; why: string };
+
 /** `GET /manifest/runs` — newest first, and what would not read. */
 export type CheckoutRunList = {
   runs: CheckoutRunRecord[];

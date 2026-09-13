@@ -308,6 +308,46 @@ pub struct CheckoutRunRecord {
     pub log: String,
 }
 
+/// `get_checkout_run_diff`: what one checkout run changed, as a patch.
+///
+/// **Never against `HEAD`.** This tree holds a person's own uncommitted work,
+/// and a patch against `HEAD` would show all of it as the run's.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckoutRunDiff {
+    /// The run this is the change of.
+    pub id: String,
+    /// What the patch is measured against, said rather than assumed.
+    pub against: DiffAgainst,
+    pub reading: RunDiffReading,
+}
+
+/// What a run's patch is measured against. **One value**, stated on the wire
+/// so a reader never has to know that this route does not fall back.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffAgainst {
+    /// The tree just before the run against the tree just after it, both kept
+    /// by the run — so nothing edited either side of the run is in the patch.
+    RunSnapshot,
+}
+
+/// The patch, or why there is none to read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum RunDiffReading {
+    Read {
+        /// The same list `CheckoutRunRecord::changed` holds, read again beside
+        /// the patch so the two cannot disagree. Empty: the run changed nothing.
+        files: Vec<ChangedFile>,
+        /// Git's unified diff. **Absent where there is nothing in it.**
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        patch: Option<String>,
+    },
+    /// **The snapshot is gone, and no patch stands in for it.** Never taken,
+    /// or no longer in the repository.
+    Gone { why: String },
+}
+
 /// `list_checkout_runs`: the checkout's earlier runs, newest first — and the
 /// directories that would not read, said rather than dropped.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
