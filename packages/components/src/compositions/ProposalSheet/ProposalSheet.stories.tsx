@@ -30,6 +30,7 @@ const BASE: ProposalSheetProps = {
   ],
   commands: [
     { name: "dev", run: "pnpm vite", cited: { source: "convention", file: "apps/web/package.json", at: "scripts.dev" } },
+    { name: "reset", run: "pnpm db:reset", destructive: true, cited: { source: "convention", file: "apps/web/package.json", at: "scripts.db:reset" } },
   ],
   policy: [
     {
@@ -37,8 +38,8 @@ const BASE: ProposalSheetProps = {
       label: "Auto merge",
       value: "never",
       options: [
-        { value: "never", says: "A person merges every pull request." },
-        { value: "checks-pass", says: "Fleet merges once every check the forge runs has passed." },
+        { value: "never", reads: "A person merges", says: "A person merges every pull request here." },
+        { value: "checks-pass", reads: "Fleet merges once the forge's checks pass", says: "Fleet merges once every check the forge runs has passed." },
       ],
       cited: { source: "default" },
     },
@@ -46,6 +47,8 @@ const BASE: ProposalSheetProps = {
   caps: CAPS,
   onEditId: fn(),
   onEditRun: fn(),
+  onRequires: fn(),
+  onDestructive: fn(),
   onMove: fn(),
   onRemove: fn(),
   onAdd: fn(),
@@ -74,6 +77,32 @@ export const Proposed: Story = {
     await expect(args.onMove).toHaveBeenCalledWith("checks", "lint");
     await expect(sheet.getByText(/No file here declares one/)).toBeVisible();
     await expect(sheet.queryByRole("button", { name: /Helm/ })).toBeNull();
+  },
+};
+
+/** A Check's prerequisites and a Command's flag, each opened from its value; the edit goes out whole. */
+export const RunsFirstAndDestructive: Story = {
+  name: "Runs first, and destructive",
+  args: BASE,
+  play: async ({ args, canvasElement, userEvent }) => {
+    const sheet = within(canvasElement);
+    const test = within(sheet.getByRole("list", { name: "Checks" })).getByRole("listitem", { name: "test" });
+    await userEvent.click(within(test).getByRole("button", { name: "Edit test runs first" }));
+    const first = within(test).getByRole("dialog", { name: "test runs first" });
+    // A destructive Command is shown and not offered: the file would not load.
+    await expect(within(first).getByRole("checkbox", { name: "reset" })).toBeDisabled();
+    await userEvent.click(within(first).getByRole("checkbox", { name: "dev" }));
+    await expect(args.onRequires).toHaveBeenCalledWith("test", ["dev"]);
+    await userEvent.click(within(test).getByRole("button", { name: "Edit test runs first" }));
+
+    const reset = within(sheet.getByRole("list", { name: "Commands" })).getByRole("listitem", { name: "reset" });
+    await userEvent.click(within(reset).getByRole("button", { name: "Edit reset destructive" }));
+    await userEvent.click(within(reset).getByRole("switch", { name: /Destructive/ }));
+    await expect(args.onDestructive).toHaveBeenCalledWith("reset", false);
+    await userEvent.click(within(reset).getByRole("button", { name: "Edit reset destructive" }));
+    await expect(sheet.queryByRole("dialog", { name: /runs first|destructive/ })).toBeNull();
+
+    await expect(within(sheet.getByRole("region", { name: "Policy" })).getByRole("radio", { name: "A person merges never" })).toBeChecked();
   },
 };
 

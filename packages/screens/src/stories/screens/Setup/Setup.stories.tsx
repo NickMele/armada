@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { MANIFEST_ID, repository } from "../../../fixtures/build/base";
 import { SCRATCH, SetupFrom } from "./Setup";
@@ -72,6 +72,78 @@ export const CorrectAndClose: Story = {
     await userEvent.click(within(list).getByRole("button", { name: "Open services/api" }));
     const api = await canvas.findByRole("dialog", { name: "Proposal for services/api" });
     await expect(within(within(api).getByRole("list", { name: "Ports" })).getByText("compose.yaml services.db.ports")).toBeVisible();
+  },
+};
+
+/**
+ * A Check's prerequisite and a Command's destructive flag corrected from their values, and the
+ * file Write puts down carrying both.
+ */
+export const CorrectRunsFirstAndDestructive: Story = {
+  name: "Correct what runs first and what is destructive",
+  args: { write: "took", onWritten: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = await canvas.findByRole("region", { name: "Workspaces" });
+    await userEvent.click(within(list).getByRole("button", { name: "Open services/api" }));
+    const sheet = await canvas.findByRole("dialog", { name: "Proposal for services/api" });
+
+    const test = within(within(sheet).getByRole("list", { name: "Checks" })).getByRole("listitem", { name: "test" });
+    await userEvent.click(within(test).getByRole("button", { name: "Edit test runs first" }));
+    const first = within(test).getByRole("dialog", { name: "test runs first" });
+    await userEvent.click(within(first).getByRole("checkbox", { name: "migrate" }));
+    await expect(await within(test).findByText("edited during setup")).toBeVisible();
+    await expect(within(test).getByRole("button", { name: "Edit test runs first" })).toHaveTextContent("migrate →");
+    await userEvent.click(within(test).getByRole("button", { name: "Edit test runs first" }));
+    await expect(within(test).queryByRole("dialog")).toBeNull();
+
+    const commands = within(sheet).getByRole("list", { name: "Commands" });
+    const reset = within(commands).getByRole("listitem", { name: "reset" });
+    await userEvent.click(within(reset).getByRole("button", { name: "Edit reset destructive" }));
+    const flag = within(reset).getByRole("dialog", { name: "reset destructive" });
+    await expect(within(flag).getByText(/this is your judgement/)).toBeVisible();
+    await userEvent.click(within(flag).getByRole("switch", { name: /Destructive/ }));
+    await expect(await within(reset).findByText("edited during setup")).toBeVisible();
+    await expect(within(reset).getByRole("button", { name: "Edit reset destructive" })).toHaveTextContent(/^destructive$/);
+    // Esc closes the popover and leaves the sheet it opened on.
+    await expect(within(reset).getByRole("switch", { name: /Destructive/ })).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(within(reset).queryByRole("dialog")).toBeNull());
+    await expect(canvas.getByRole("dialog", { name: "Proposal for services/api" })).toBeVisible();
+
+    // `test` runs `migrate` first now, so `migrate` is not offered as destructive.
+    const migrate = within(commands).getByRole("listitem", { name: "migrate" });
+    await userEvent.click(within(migrate).getByRole("button", { name: "Edit migrate destructive" }));
+    await expect(within(migrate).getByRole("switch", { name: /Destructive/ })).toBeDisabled();
+    await expect(within(migrate).getByText("test runs it first, so it cannot be destructive.")).toBeVisible();
+    await userEvent.click(within(migrate).getByRole("button", { name: "Edit migrate destructive" }));
+    await expect(within(sheet).queryByRole("dialog")).toBeNull();
+
+    await userEvent.click(within(sheet).getByRole("button", { name: "Write services/api/armada.yml" }));
+    await expect(await within(sheet).findByText(/^Wrote services\/api\/armada.yml at /)).toBeVisible();
+    await expect(args.onWritten).toHaveBeenCalledTimes(1);
+    const [file, text] = (args.onWritten as ReturnType<typeof fn>).mock.calls[0] as [string, string];
+    await expect(file).toBe("services/api/armada.yml");
+    await expect(text).toContain("  test:\n    run: pnpm test\n    requires:\n      - migrate\n");
+    await expect(text).toContain("  reset:\n    run: pnpm reset\n    destructive: true\n");
+  },
+};
+
+/** Both policies read in words on the sheet, each with what the selected value does. */
+export const PolicyInWords: Story = {
+  name: "Policy in words",
+  args: {},
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = await canvas.findByRole("region", { name: "Workspaces" });
+    await userEvent.click(within(list).getByRole("button", { name: "Open apps/web" }));
+    const sheet = await canvas.findByRole("dialog", { name: "Proposal for apps/web" });
+    const policy = within(sheet).getByRole("region", { name: "Policy" });
+    await expect(within(policy).getByRole("radio", { name: "A person merges never" })).toBeChecked();
+    await expect(within(policy).getByRole("radio", { name: "Fleet merges once the forge's checks pass checks-pass" })).not.toBeChecked();
+    await expect(within(policy).getByText("A person merges every pull request here.")).toBeVisible();
+    await userEvent.click(within(policy).getByRole("radio", { name: "Fleet merges whatever ran always" }));
+    await expect(await within(policy).findByText("Fleet merges without waiting on the forge's checks.")).toBeVisible();
   },
 };
 

@@ -215,13 +215,18 @@ export const SetupAndDroneSaved: Story = {
   },
 };
 
-/** **Policy** — the review gate in the registry's words, with the file's word beside them. */
+/** **Policy** — auto-merge and the review gate in the registry's words, with the file's word beside them. */
 export const PolicyInWords: Story = {
   name: "Policy in words",
   args: { ...TheForms.args },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const policy = await canvas.findByRole("region", { name: "Policy" });
+    await expect(within(policy).getByLabelText("Auto merge")).toHaveDisplayValue("A person merges · never");
+    await expect(within(policy).getByText("A person merges every pull request here.")).toBeVisible();
+    await userEvent.selectOptions(within(policy).getByLabelText("Auto merge"), "checks-pass");
+    await expect(within(policy).getByLabelText("Auto merge")).toHaveDisplayValue("Fleet merges once the forge's checks pass · checks-pass");
+    await expect(within(policy).getByText(/Where the forge runs none, nothing merges\./)).toBeVisible();
     const gate = within(policy).getByLabelText("Review gate");
     await expect(gate).toHaveDisplayValue("A person answers · human_always");
     await userEvent.selectOptions(gate, "auto_if_judge_passes");

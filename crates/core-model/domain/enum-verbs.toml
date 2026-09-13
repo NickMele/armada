@@ -38,6 +38,9 @@
 #                                registry file of its own: the set is the
 #                                WorkflowDef schema's four forms, of which
 #                                `manifest_rule:<key>` is one key per row
+#   auto_merge                 - whether a machine may land a repository's
+#                                work. Keys are `armada.yml`'s own words,
+#                                hyphen and all
 #   check_outcome              - how one declared Check ended. Keys match
 #                                check-outcomes.toml
 #   criterion_verdict_check    - one criterion, as a mechanical Check saw it
@@ -65,13 +68,14 @@
 #                                row of job-fields.toml, which has no registry
 #                                file of its own
 #
-# **Five of these have no `PAIRINGS` entry in `xtask/src/rules_enums.rs`, so
+# **Several of these have no `PAIRINGS` entry in `xtask/src/rules_enums.rs`, so
 # the set is declared here and compared against nothing.** `step_verdict` and
 # the two unpaired criterion verdicts were already in that position;
 # `change_kind`, `movement_kind` and `silence` join them because the enums are
 # `crates/ipc`'s and carry a serde derive rather than the `ALL` and `as_wire`
-# pair the rule reads. `advance_gate`, `evidence_type`, `step_state` and
-# `drone_presence` are paired.
+# pair the rule reads. `auto_merge` joins them because `core_model::AutoMerge`
+# spells its words through `as_written`, not `as_wire`. `advance_gate`,
+# `evidence_type`, `step_state` and `drone_presence` are paired.
 #
 # Fields:
 #   verb         - what a person reads. Never the enum name
@@ -88,8 +92,9 @@
 #   notes        - the reasoning the row carried
 #   hint         - the sentence a status bar tooltip reads for the variant,
 #                  where the verb alone gives no reasoning. Carried only by
-#                  `admission_hold`'s three rows and `budget_hold`'s two today;
-#                  every other table
+#                  `admission_hold`'s three rows, `budget_hold`'s two and
+#                  `auto_merge`'s three today, where it is the consequence line
+#                  drawn under the selected value; every other table
 #                  leaves it unset and the generator emits `null`. Never a
 #                  measured figure — `FleetCapacity` carries no headroom
 #                  number over the wire at all (`crates/ipc/src/capacity.rs`),
@@ -779,6 +784,33 @@ status_token = ""
 vocabulary = "Advance gate"
 in_code = ""
 notes = "Its sibling's shape, asked of the other question: `auto_merge` says whether work lands without a person, this says whether a person signs off before it is offered. Both read `decides` rather than `says` because the resolution happens at the gate, against the Job's gating Manifests, and is a ruling rather than a lookup. Neither glyph nor token, for `auto`'s reason."
+
+[verbs.auto_merge.never]
+verb = "a person merges"
+icon = ""
+status_token = ""
+vocabulary = "Auto merge"
+in_code = ""
+hint = "A person merges every pull request here."
+notes = "Names the actor, for `advance_gate.human_always`'s reason: the other two values name what Fleet waits on, and this one is no machine at all. The value where a file says nothing. Neither glyph nor token, for `advance_gate.auto`'s reason: a policy value is a property of a file, not a status. `hint` is the line the Setup sheet and the Manifest form draw under the selected value, because `checks-pass` means nothing on its own. `in_code` is empty because the row was authored here."
+
+[verbs.auto_merge.checks-pass]
+verb = "Fleet merges once the forge's checks pass"
+icon = ""
+status_token = ""
+vocabulary = "Auto merge"
+in_code = ""
+hint = "Fleet merges once every check the forge runs has passed. Where the forge runs none, nothing merges."
+notes = "`the forge's`, because the value's name is deliberately the ambiguous one: `core_model::AutoMerge::ChecksPass` reads the checks a forge runs on the pull request, never the Checks this file declares, which have already run at the gate this is read at. The hint's second sentence is that variant's own rule: nothing ran is not everything passed. Neither glyph nor token, for `never`'s reason."
+
+[verbs.auto_merge.always]
+verb = "Fleet merges whatever ran"
+icon = ""
+status_token = ""
+vocabulary = "Auto merge"
+in_code = ""
+hint = "Fleet merges without waiting on the forge's checks."
+notes = "`whatever ran` is `AutoMerge::Always`'s own doc. It separates this from `checks-pass` without claiming anything about a review step, which `review_gate` decides and this does not. Neither glyph nor token, for `never`'s reason."
 
 [verbs.evidence_type.diff]
 verb = "a diff"

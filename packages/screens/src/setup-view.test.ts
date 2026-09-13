@@ -4,7 +4,18 @@
 import { describe, expect, it } from "vitest";
 
 import type { ManifestProposal, ManifestProposals, RepositoryScan, ScannedWorkspace } from "@armada/protocol";
-import { answered, gridOf, pickerOf, readInto, sheetOf, stateOf, type SetupOpen } from "./setup-view";
+import {
+  answered,
+  destructiveEdit,
+  gridOf,
+  pickerOf,
+  readInto,
+  requiresEdit,
+  runEdit,
+  sheetOf,
+  stateOf,
+  type SetupOpen,
+} from "./setup-view";
 
 function workspace(dir: string, evidence: string): ScannedWorkspace {
   return {
@@ -106,11 +117,52 @@ describe("the sheet", () => {
     const sheet = sheetOf(opened(), PROPOSALS.proposals[1]!);
     expect(sheet.checks[1]?.cited).toEqual({ source: "convention", file: "web/package.json", at: "scripts.lint" });
     expect(sheet.policy[0]?.options.map((one) => one.value)).toEqual(["never", "checks-pass", "always"]);
+    // The registry's words and consequence, not a copy written here.
+    expect(sheet.policy[0]?.options[1]).toEqual({
+      value: "checks-pass",
+      reads: "Fleet merges once the forge's checks pass",
+      says: "Fleet merges once every check the forge runs has passed. Where the forge runs none, nothing merges.",
+    });
     expect(sheet.caps).toMatch(/^Jobs here stop at .*5.* or 200 turns/);
     expect(sheet.setUp).toBe(false);
   });
 
   it("offers no Write where an armada.yml is already there", () => {
     expect(sheetOf(opened(), { ...PROPOSALS.proposals[0]!, present: true }).setUp).toBe(true);
+  });
+});
+
+describe("an edit from the sheet", () => {
+  const cited = { source: "convention", file: "api/package.json" };
+  const api: ManifestProposal = {
+    ...proposal("api", []),
+    checks: [{ name: "test", run: "pnpm test", requires: ["migrate"], provenance: cited }],
+    commands: [
+      { name: "migrate", run: "pnpm migrate", provenance: cited },
+      { name: "reset", run: "pnpm reset", destructive: true, provenance: cited },
+    ],
+  };
+
+  it("sends a Check's prerequisites with its command, since a put replaces the line", () => {
+    expect(requiresEdit(api, "test", ["migrate", "seed"])).toEqual({ edit: "check", name: "test", run: "pnpm test", requires: ["migrate", "seed"] });
+  });
+
+  it("clears prerequisites by sending none", () => {
+    expect(requiresEdit(api, "test", [])).toEqual({ edit: "check", name: "test", run: "pnpm test" });
+  });
+
+  it("sends a Command's flag with its command, on and off", () => {
+    expect(destructiveEdit(api, "migrate", true)).toEqual({ edit: "command", name: "migrate", run: "pnpm migrate", destructive: true });
+    expect(destructiveEdit(api, "reset", false)).toEqual({ edit: "command", name: "reset", run: "pnpm reset" });
+  });
+
+  it("keeps the other key when a command is retyped", () => {
+    expect(runEdit(api, "checks", "test", "pnpm test --ci")).toEqual({ edit: "check", name: "test", run: "pnpm test --ci", requires: ["migrate"] });
+    expect(runEdit(api, "commands", "reset", "pnpm db:reset")).toEqual({ edit: "command", name: "reset", run: "pnpm db:reset", destructive: true });
+  });
+
+  it("sends nothing for a line the proposal no longer has", () => {
+    expect(requiresEdit(api, "lint", ["migrate"])).toBeNull();
+    expect(destructiveEdit(api, "seed", true)).toBeNull();
   });
 });

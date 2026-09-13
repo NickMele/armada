@@ -92,6 +92,8 @@ const WANTED = [
   "criterion_verdict_judge",
   "step_state",
   "advance_gate",
+  // The Setup sheet and the Manifest form both offer its three words, and both showed the file's.
+  "auto_merge",
   "gaming_pattern",
   "evidence_type",
   "change_kind",
