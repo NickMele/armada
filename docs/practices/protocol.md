@@ -882,7 +882,7 @@ not repeat a decision already made), and a blank title or reason, on
 `redirect_drone`'s reuse of `fleet.unacceptable_proposal` for a value that
 cannot work.
 
-## Protocol 13.32: a Job's review model
+## Protocol 13.33: a Job's review model
 
 `JobDetail.review_model_override` and `JobDetail.review_step`, additive, and the command `set_review_model`, which takes `set_model`'s body (#903). A person chooses the model the step that writes Armada's review runs on, and on that step it beats `model_override`. `review_step` is that step's label, **absent on a workflow with no review step**, which is where Bridge draws no review model at all.
 

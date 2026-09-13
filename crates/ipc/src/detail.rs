@@ -241,11 +241,11 @@ pub struct JobDetail {
     /// after [`JobDetail::of`], like `when_blocked`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_override: Option<String>,
-    /// The model a person chose for this Job's review step. **Since 13.32**, #903. Absent is
+    /// The model a person chose for this Job's review step. **Since 13.33**, #903. Absent is
     /// no choice. `set_review_model` moves it, like `set_model` moves `model_override`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_model_override: Option<String>,
-    /// The label of the step that writes Armada's review. **Since 13.32**, #903. Absent on a
+    /// The label of the step that writes Armada's review. **Since 13.33**, #903. Absent on a
     /// workflow with no review step, where there is no review model to choose.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_step: Option<String>,
