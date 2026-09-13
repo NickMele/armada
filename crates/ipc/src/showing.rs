@@ -132,11 +132,21 @@ pub struct ShowAgain {
     /// Whether the Job's worktree is on disk. `armada clean` and reclaim take
     /// it, and a press has nowhere to run without it.
     pub worktree_on_disk: bool,
-    /// The spec a press reruns — the last one a Drone named on a captured step.
-    /// **Absent where no Drone ever named one**, which is every Job whose
-    /// workflow never asked a step to show its work.
+    /// The spec a press reruns where nobody picks — the last one a Drone named
+    /// on a captured step. **Absent where no Drone ever named one**, which is
+    /// every Job whose workflow never asked a step to show its work.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spec: Option<NamedSpec>,
+    /// Every spec this Job's Drones named, latest first, and the only specs a
+    /// press may be asked for. **Since 13.1**, and the first is [`spec`].
+    ///
+    /// **The record's own words and never a directory listing**, which is what
+    /// makes a choice always valid: every entry was on disk when a Drone
+    /// submitted it, so nothing here can carry a path out of the worktree.
+    ///
+    /// [`spec`]: ShowAgain::spec
+    #[serde(default)]
+    pub specs: Vec<NamedSpec>,
     /// Whether a Drone is working in the worktree right now. A press is refused
     /// while one is: it would photograph a tree mid-edit, and run beside the
     /// step's own harness when that step submits.
@@ -178,9 +188,26 @@ pub struct ShownSet {
     /// The step whose spec was rerun, and the run of it that named the spec.
     pub step_id: StepId,
     pub attempt: u32,
+    /// The spec this press ran. **Since 13.1**, and empty on a set kept before
+    /// it: two presses on one step are otherwise told apart by the minute alone.
+    #[serde(default)]
+    pub spec: String,
     /// Never empty. A press that captured nothing kept no set, and said why in
     /// its answer and in the Job's own log.
     pub frames: Vec<KeptFrame>,
+}
+
+/// Which spec a person asked a press to run.
+///
+/// **One of [`ShowAgain::specs`] and nothing else.** The body is optional: a
+/// press sent without one runs the last spec a Drone named, exactly as every
+/// press did before this existed. A spec no Drone named is refused at the Fleet
+/// boundary rather than here, for [`CapRaise`](crate::CapRaise)'s reason — a
+/// decoded request is well-formed, and whether the record holds this file is a
+/// fact about the Job.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpecPicked {
+    pub spec: String,
 }
 
 /// The answer to `show_again`: the set the press kept, or why there is none.

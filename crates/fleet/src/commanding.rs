@@ -296,9 +296,10 @@ where
     async fn show_again(
         self: std::sync::Arc<Self>,
         job_id: JobId,
+        picked: Option<String>,
     ) -> Result<ipc::ShownAgain, Refusal> {
         let refusing = std::sync::Arc::clone(&self);
-        Fleet::show_again(self, &job_id.to_domain())
+        Fleet::show_again(self, &job_id.to_domain(), picked.as_deref())
             .await
             .map_err(|why| refusing.refusal(why))
     }

@@ -450,13 +450,18 @@ pub trait Commands: Send + Sync + 'static {
     /// a spawned task has to own what it runs on. The request waits for the
     /// task, and a client that stops waiting does not stop the run.
     ///
+    /// **`picked` is one of the specs this Job's Drones named**, or `None` for
+    /// the last one they named — which is what every press ran before a person
+    /// could choose. Nothing outside that list reaches `evidence.run`.
+    ///
     /// [`Refusal::IllegalMove`] before anything runs, naming what is missing: no
-    /// harness declared, no worktree, no spec named, the spec gone from the
-    /// worktree, a Drone working in it, or a press already out on this Job.
-    /// A harness that ran and captured nothing is a 200 carrying why.
+    /// harness declared, no worktree, no spec named, a spec no Drone named, the
+    /// spec gone from the worktree, a Drone working in it, or a press already
+    /// out. A harness that ran and captured nothing is a 200 carrying why.
     fn show_again(
         self: std::sync::Arc<Self>,
         job_id: JobId,
+        picked: Option<String>,
     ) -> impl Future<Output = Result<ipc::ShownAgain, Refusal>> + Send;
 
     /// `reject_job` — the work is not wanted, and the Job is over.

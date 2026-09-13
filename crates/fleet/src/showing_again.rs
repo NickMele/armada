@@ -51,6 +51,8 @@ pub enum Unshowable {
     NoWorktree,
     /// No Drone named a spec on a step Fleet captures.
     NoSpec,
+    /// The spec asked for is not one this Job's Drones named.
+    SpecNotNamed { spec: String },
     /// The spec the Drone named is not in the worktree any more.
     SpecGone { spec: String },
     /// A Drone is working in the worktree right now.
@@ -77,6 +79,10 @@ impl Unshowable {
             Unshowable::NoSpec => String::from(
                 "no step of this Job named a spec to run. Only a step the workflow asks to be \
                  captured names one",
+            ),
+            Unshowable::SpecNotNamed { spec } => format!(
+                "no Drone on this Job named `{spec}`. A press runs a spec this Job's own record \
+                 holds, and nothing else"
             ),
             Unshowable::SpecGone { spec } => format!(
                 "the spec `{spec}` is no longer in this Job's worktree. A later run renamed or \
@@ -197,15 +203,23 @@ where
     /// Run the harness against this Job's worktree now, and keep what it
     /// captured as a set of its own.
     ///
-    /// **Refused before anything runs** on any of [`Unshowable`]'s six. The
+    /// **Refused before anything runs** on any of [`Unshowable`]'s seven. The
     /// order is the order a person fixes them in: a repository with no harness
     /// has nothing to run anywhere, and a worktree that is gone makes every
     /// question about what is in it moot.
     ///
+    /// **`picked` is one of the specs this Job's Drones named, or nothing**, in
+    /// which case the last one they named runs. Anything else is `SpecNotNamed`,
+    /// which is the whole of how the argument `evidence.run` is handed stays
+    /// inside the worktree.
+    ///
     /// **Takes Fleet by `Arc`** — see this module's header. The run is spawned
-    /// and awaited, so this answers when the press has landed, and a caller that
-    /// stops waiting leaves it running to the end.
-    pub async fn show_again(self: Arc<Self>, job_id: &JobId) -> Result<ipc::ShownAgain, Adrift> {
+    /// and awaited, so a caller that stops waiting leaves it running to the end.
+    pub async fn show_again(
+        self: Arc<Self>,
+        job_id: &JobId,
+        picked: Option<&str>,
+    ) -> Result<ipc::ShownAgain, Adrift> {
         let job = self.load(job_id).await?;
         let refused = |why: Unshowable| Adrift::CannotShowAgain {
             job: job_id.clone(),
@@ -220,14 +234,27 @@ where
         if job.status() == JobStatus::Running {
             return Err(refused(Unshowable::DroneWorking));
         }
-        let named = self
+        let choices = self
             .store()
             .lock()
             .await
-            .spec_last_named(job_id, &captured_steps(&job))
+            .specs_named(job_id, &captured_steps(&job))
             .map_err(Adrift::Reading)?;
-        let Some(named) = named else {
-            return Err(refused(Unshowable::NoSpec));
+        let named = match picked.filter(|spec| !spec.is_empty()) {
+            // The list is the allowlist. A spec nothing in it spells never
+            // reaches `evidence.run`, whatever it is a path to.
+            Some(spec) => choices
+                .into_iter()
+                .find(|named| named.spec == spec)
+                .ok_or_else(|| {
+                    refused(Unshowable::SpecNotNamed {
+                        spec: spec.to_string(),
+                    })
+                })?,
+            None => choices
+                .into_iter()
+                .next()
+                .ok_or_else(|| refused(Unshowable::NoSpec))?,
         };
         if !worktree.join(&named.spec).exists() {
             return Err(refused(Unshowable::SpecGone { spec: named.spec }));
@@ -323,6 +350,7 @@ where
                 pressed_at: at,
                 step: named.step.clone(),
                 attempt: named.attempt.number(),
+                spec: named.spec.clone(),
                 frames,
             })
         });
@@ -340,27 +368,30 @@ where
     /// does; a worktree that cannot be named reads as one that is not there.
     pub(crate) async fn showing_again_of(&self, job: &Job) -> Result<ipc::ShowAgain, Adrift> {
         let worktree = self.worktree_on_disk(job);
-        let (named, sets) = {
+        let (choices, sets) = {
             let store = self.store().lock().await;
-            let named = store
-                .spec_last_named(job.id(), &captured_steps(job))
+            let choices = store
+                .specs_named(job.id(), &captured_steps(job))
                 .map_err(Adrift::Reading)?;
             let sets = store
                 .shown_again_every_press(job.id())
                 .map_err(Adrift::Reading)?;
-            (named, sets)
+            (choices, sets)
         };
+        let named = |named: store::SpecNamed| ipc::NamedSpec {
+            on_disk: worktree
+                .as_ref()
+                .is_some_and(|at| at.join(&named.spec).exists()),
+            step_id: ipc::StepId::from(&named.step),
+            attempt: named.attempt.number(),
+            spec: named.spec,
+        };
+        let specs: Vec<ipc::NamedSpec> = choices.into_iter().map(named).collect();
         Ok(ipc::ShowAgain {
             harness: self.manifest().harness().is_some(),
             worktree_on_disk: worktree.is_some(),
-            spec: named.map(|named| ipc::NamedSpec {
-                on_disk: worktree
-                    .as_ref()
-                    .is_some_and(|at| at.join(&named.spec).exists()),
-                step_id: ipc::StepId::from(&named.step),
-                attempt: named.attempt.number(),
-                spec: named.spec,
-            }),
+            spec: specs.first().cloned(),
+            specs,
             drone_working: job.status() == JobStatus::Running,
             showing_since: self
                 .pressing()
@@ -428,6 +459,7 @@ pub(crate) fn shown_set(set: &store::ShownAgain) -> ipc::ShownSet {
         pressed_at: ipc::Instant::from(&set.pressed_at),
         step_id: ipc::StepId::from(&set.step),
         attempt: set.attempt,
+        spec: set.spec.clone(),
         frames: set
             .frames
             .iter()

@@ -245,17 +245,32 @@ pub(crate) async fn rerun_gate<D: Commands>(
 /// of its own. **The Job does not move**, so what comes back is the set and not
 /// the Job.
 ///
+/// **The body is optional and names which spec**, one of `show_again.specs` on
+/// `get_job`. No body — which is every press sent before 13.1 — runs the last
+/// spec a Drone named.
+///
 /// 409 before anything runs where it cannot — no harness, no worktree, no spec,
-/// the spec gone, a Drone working, a press already out. 200 with `nothing` set
-/// where the harness ran and captured nothing, which is an answer rather than a
-/// refusal. **It may take as long as the app takes to start**: the daemon runs
-/// it off the turn loop, and the run finishes whether or not this request is
-/// still waiting.
+/// a spec no Drone named, the spec gone, a Drone working, a press already out.
+/// 200 with `nothing` set where the harness ran and captured nothing, which is
+/// an answer rather than a refusal. **It may take as long as the app takes to
+/// start**: the daemon runs it off the turn loop, and the run finishes whether
+/// or not this request is still waiting.
 pub(crate) async fn show_again<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
+    body: Bytes,
 ) -> Response {
-    match served.shared().show_again(job.id()).await {
+    // An empty body is *no pick*, not a malformed one: this route took none
+    // until 13.1 and a peer built before it still sends none.
+    let picked: Option<String> = if body.is_empty() {
+        None
+    } else {
+        match ipc::decode::<ipc::SpecPicked>("a spec to show again", &body) {
+            Ok(picked) => Some(picked.spec),
+            Err(why) => return undecodable(&why.to_string(), served.run_id()),
+        }
+    };
+    match served.shared().show_again(job.id(), picked).await {
         Ok(shown) => answer(StatusCode::OK, &shown, served.run_id()),
         Err(refusal) => refused(refusal),
     }

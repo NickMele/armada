@@ -1293,7 +1293,7 @@ Intervention Ladder.
 kind = "command"
 transport = "HTTP"
 agent_access = "Yes"
-description = "A person asks a Job to show its work: the repository's harness runs the last spec a Drone named, in the Job's worktree, and the frames are kept as a set of their own"
+description = "A person asks a Job to show its work: the repository's harness runs a spec a Drone named, in the Job's worktree, and the frames are kept as a set of their own"
 notes = """
 **The other half of #603's "both".** A step declaring `evidence.captured` runs
 the harness while it settles; this runs it when a person asks, on any Job whose
@@ -1319,18 +1319,27 @@ when it ran. So the frames go into `job_shown_again` under a press number, and
 the copies into a run directory of their own, `<step>.again<press>.<attempt>.branch`,
 beside the step's `<step>.<attempt>.branch`. `get_frame` resolves both.
 
-**Which spec.** The last `shown_by` a Drone submitted on a step the workflow asks
-to capture. Every submission carries a `shown_by`, but only on a captured step
-does it name a spec; anywhere else it is a sentence pointing at a test or a file, and
+**Which spec.** A `shown_by` a Drone submitted on a step the workflow asks to
+capture. Every submission carries a `shown_by`, but only on a captured step does
+it name a spec; anywhere else it is a sentence pointing at a test or a file, and
 substituting that into `evidence.run` would put a Drone's words into a command
 line the repository wrote for a spec.
 
-**Refused five ways, each before anything runs, each a 409 naming what is
+**A person may pick which, since 13.1 and #619.** The body is optional and names
+one spec; a press without one runs the last a Drone named, exactly as every
+press did before. The choices are `show_again.specs` on `get_job` — every spec
+this Job's Drones named, latest first — and Fleet refuses anything else. **That
+is what keeps a path inside the worktree**: the spec reaches `evidence.run` as
+an argument, and every value the list holds was a `shown_by` submitted from
+inside the worktree, so there is no `..` and no absolute path to rule out. A
+directory listing or a typed path would each have needed that rule.
+
+**Refused seven ways, each before anything runs, each a 409 naming what is
 missing:** the repository declares no harness; the worktree is gone; no Drone
-named a spec; the spec is no longer in the worktree; a Drone is working in the
-worktree now; a press on this Job is already out. `get_job` carries the same
-facts on `show_again`, so the control says why it cannot run rather than
-offering a press that fails.
+named a spec; the spec asked for is not one a Drone named; the spec is no longer
+in the worktree; a Drone is working in the worktree now; a press on this Job is
+already out. `get_job` carries the same facts on `show_again`, so the control
+says why it cannot run rather than offering a press that fails.
 
 **A harness that ran and captured nothing is not a refusal.** The answer is a 200
 with `nothing` set to the sentence the Job's own log carries — `JobExamined`'s

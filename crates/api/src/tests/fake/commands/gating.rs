@@ -145,15 +145,26 @@ impl FakeDaemon {
     /// be there. This daemon holds no worktree and no harness, so the answer is
     /// the press having run and captured nothing — a 200 carrying why, which is
     /// the shape the real one answers with when a spec photographs nothing.
-    pub(super) async fn fake_show_again(&self, job_id: JobId) -> Result<ipc::ShownAgain, Refusal> {
+    ///
+    /// **The sentence names what was picked**, so a route test can see the body
+    /// reached the daemon rather than being dropped between the two.
+    pub(super) async fn fake_show_again(
+        &self,
+        job_id: JobId,
+        picked: Option<String>,
+    ) -> Result<ipc::ShownAgain, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         if !jobs.iter().any(|job| job.id == job_id) {
             return Err(self.no_such_job(&job_id));
         }
+        let nothing = match picked {
+            Some(spec) => format!("this daemon runs no harness, and was asked for {spec}"),
+            None => String::from("this daemon runs no harness"),
+        };
         Ok(ipc::ShownAgain {
             job_id,
             set: None,
-            nothing: Some(String::from("this daemon runs no harness")),
+            nothing: Some(nothing),
         })
     }
     /// Filing, faked on the two things the transport can see: the Job has to

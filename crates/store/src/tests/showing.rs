@@ -278,7 +278,11 @@ fn a_set_says_which_spec_the_press_ran() {
                 &id,
                 press,
                 named,
-                &[frame(&format!("fix.again{press}.1.branch"), "home.png", "a")],
+                &[frame(
+                    &format!("fix.again{press}.1.branch"),
+                    "home.png",
+                    "a",
+                )],
                 &at("2026-08-26T11:00:00.000Z"),
             )
             .expect("the press is recorded");
