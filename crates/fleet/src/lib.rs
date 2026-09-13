@@ -132,6 +132,8 @@ pub mod permitting;
 pub mod policy;
 pub mod ports;
 mod precedent;
+/// A person's Bridge preferences, `limits`'s shape one table over.
+mod preferences;
 pub mod preparing;
 /// The probes Fleet can run on itself, and the Doctor modules it cannot.
 /// **Not Doctor**, whose grid is ten modules and is not built.

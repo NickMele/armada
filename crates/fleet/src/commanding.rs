@@ -22,7 +22,8 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
 use ipc::{
     CapRaise, ChangesRequested, JobExamined, JobForgotten, JobId, JobSummary, Overruled,
-    ProposeJob, Redirection, Redispatched, RemarksTakenUp, TurnRaise, WorktreeReclaimed,
+    Preferences, ProposeJob, Redirection, Redispatched, RemarksTakenUp, SavePreference, TurnRaise,
+    WorktreeReclaimed,
 };
 
 use crate::adrift::Adrift;
@@ -453,6 +454,13 @@ where
     /// for one admission, and then writes one row.
     async fn save_limits(&self, save: ipc::SaveLimits) -> Result<ipc::FleetLimits, Refusal> {
         self.save_limits_now(save)
+            .await
+            .map_err(|why| self.refusal(why))
+    }
+
+    /// A preference, saved and put in force. Not `budgeted`, `save_limits`'s reason.
+    async fn save_preferences(&self, save: SavePreference) -> Result<Preferences, Refusal> {
+        self.save_preference_now(save)
             .await
             .map_err(|why| self.refusal(why))
     }

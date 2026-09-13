@@ -39,6 +39,9 @@ const ILLEGAL_MOVE: &str = "fleet.illegal_move";
 const FAULT: &str = "fleet.fault";
 /// A Job whose repository this Fleet does not serve. A 422.
 const NOT_SERVED: &str = "fleet.repository_not_served";
+/// A `save_preferences` naming something outside `store::Preferences`' closed
+/// set. A 422, refused by name — `name` rides on the field the message quotes.
+const UNKNOWN_PREFERENCE: &str = "fleet.unknown_preference";
 /// A proposal that decoded and names something that cannot produce a Drone.
 const UNACCEPTABLE: &str = "fleet.unacceptable_proposal";
 /// The request was read and no workflow fits. **A refusal about the request**,
@@ -208,6 +211,13 @@ where
             | Adrift::Writing(WriteError::NoSuchJob { job_id }) => Refusal::NoSuchJob(
                 WireError::raised(NO_SUCH_JOB, said, self.run_id())
                     .about_job(ipc::JobId::from(job_id)),
+            ),
+            // A preference save named something outside the closed set. Named
+            // no Job, `save_limits`' reason — the field is what says which name
+            // was refused, since `said` alone does not travel structured.
+            Adrift::Writing(WriteError::UnknownPreference { name }) => Refusal::Unacceptable(
+                WireError::raised(UNKNOWN_PREFERENCE, said, self.run_id())
+                    .with_field("name", WireValue::Str(name.clone())),
             ),
             // The same 404 one segment earlier, and with no Job on it: what the
             // caller said resolved to nothing, so there is no id to name. A
