@@ -100,10 +100,10 @@ const WANTED = [
   "silence",
 ];
 
-// `admission_hold` is here because the status bar says which of the four things
+// `admission_hold` is here because the status bar says which of the three things
 // is holding the next drone back, and every one of them folds to
-// `queued_reason.waiting_on_resources` on a Board row. Its four rows carry a
-// verb and a token and no glyph, so all four land in `GAPS` as missing one —
+// `queued_reason.waiting_on_resources` on a Board row. Its rows carry a
+// verb and a token and no glyph, so all of them land in `GAPS` as missing one —
 // which is accurate: the status bar carries no icons, and `cpu` is reserved to
 // `queued_reason` in `packages/icons/icons.toml`. Nothing renders a glyph for
 // these today and nothing should invent one. It is the one table whose rows

@@ -8,7 +8,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use api::{Commands, Queries};
-use config::ResolvedWorkflow;
 use core_model::JobId;
 use ipc::{DiskFloorGib, DronesAtOnce, LimitValues, MemorySparePercent, SaveLimits};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
@@ -145,7 +144,11 @@ async fn lowering_the_bound_stops_nothing_already_running() {
         .expect("saved");
     fleet.turn().await.expect("the loop turns");
 
-    assert_eq!(fleet.working_on().await.len(), 2, "both Drones kept working");
+    assert_eq!(
+        fleet.working_on().await.len(),
+        2,
+        "both Drones kept working"
+    );
     assert_eq!(
         capacity(&fleet).await,
         (1, 2, Some("concurrency_bound".to_string()))

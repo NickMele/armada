@@ -74,7 +74,10 @@ pub(crate) fn merged(before: SavedLimits, save: &SaveLimits) -> SavedLimits {
             .memory_spare_percent
             .map(|v| v.get())
             .or(before.memory_spare_percent),
-        disk_floor_gib: save.disk_floor_gib.map(|v| v.get()).or(before.disk_floor_gib),
+        disk_floor_gib: save
+            .disk_floor_gib
+            .map(|v| v.get())
+            .or(before.disk_floor_gib),
     }
 }
 

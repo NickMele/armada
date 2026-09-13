@@ -94,11 +94,11 @@ mod job_settings;
 /// designed around.
 pub mod journal;
 pub mod judging;
+pub mod keeping;
+mod landing;
 /// The Drones-at-once bound, memory share and disk floor a person saves, and
 /// how a save reaches admission without a restart.
 pub mod limits;
-pub mod keeping;
-mod landing;
 pub mod listener;
 /// The one act that writes into a repository Fleet did not make: a person
 /// presses, and Fleet merges the pull request their Job opened.

@@ -15,7 +15,11 @@ use crate::{router, Broadcaster, Served};
 
 fn wired() -> Router {
     let events = Broadcaster::new();
-    router(Served::by(FakeDaemon::new(events.clone()), run_id(), events))
+    router(Served::by(
+        FakeDaemon::new(events.clone()),
+        run_id(),
+        events,
+    ))
 }
 
 async fn call(app: &Router, method: &str, uri: &str, body: &str) -> (StatusCode, Vec<u8>) {

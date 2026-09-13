@@ -73,10 +73,18 @@ them yourself is running what Fleet would run:
 | | |
 |---|---|
 | Build | `cargo build --workspace --locked` |
+| Warnings | `cargo build --workspace --all-targets 2>&1 \| grep -c '^warning'` — **the same count as `main`**, whatever the exit code |
+| Format | `cargo fmt --all --check` |
 | Tests | `cargo nextest run --workspace --exclude acceptance` |
 | The milestone's own claim | `cargo test -p acceptance` |
 | Bridge | `pnpm -C apps/desktop typecheck`, `build`, and `pnpm -C packages/components build-storybook` |
 | The gate | `cargo xtask verify-foundations` — **no worse than the baseline you took off `main`.** Read what each line names; never chase a colour |
+
+**Warnings and Format were missing from this table, and a merge paid for it.**
+Confirmed 12 Sep 2026: #843 ran every row above, merged green, and left `main`
+with ten unformatted hunks and an unused import. `format` is a Check in
+`armada.yml`, so the next Job cut from `main` would have failed on work that
+was not its own.
 
 **Verify it yourself rather than on a report.** An agent's claim of green has
 been wrong here.

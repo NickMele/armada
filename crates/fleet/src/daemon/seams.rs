@@ -343,11 +343,17 @@ where
     /// The headroom in force, **by value**: a save replaces it, so a borrow
     /// would be a lock held across whatever the caller did next.
     pub(crate) fn headroom(&self) -> Headroom {
-        *self.headroom.lock().expect("the headroom lock is not poisoned")
+        *self
+            .headroom
+            .lock()
+            .expect("the headroom lock is not poisoned")
     }
     /// Put a saved headroom in force. `crate::limits`' alone.
     pub(crate) fn rehoused(&self, headroom: Headroom) {
-        *self.headroom.lock().expect("the headroom lock is not poisoned") = headroom;
+        *self
+            .headroom
+            .lock()
+            .expect("the headroom lock is not poisoned") = headroom;
     }
     /// The limits the composition root handed in, before anything was saved.
     pub(crate) fn shipped(&self) -> crate::limits::Limits {
