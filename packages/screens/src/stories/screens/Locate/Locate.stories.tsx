@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { repository } from "../../../fixtures/build/base";
-import { CHOSEN, LocateFrom } from "./Locate";
+import { CHOSEN, LocateFrom, TwoWindowsFrom } from "./Locate";
 
 /**
  * Locate — Journey 3's *Getting in* — from the rail's **Add a repository**: a folder added, or a
@@ -91,6 +91,31 @@ export const ACloneFinishedLate: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Open Setup" }));
     await expect(await canvas.findByRole("region", { name: "Workspaces" })).toBeVisible();
     await expect(picker).toHaveValue("/Users/user/code/storefront");
+    await expect(canvas.queryByText("storefront is ready to set up")).toBeNull();
+  },
+};
+
+/** The person moved to another window: the clone is announced there too, and neither window's pick moves. #926. */
+export const ACloneHeardInAnotherWindow: Story = {
+  name: "A late clone, heard in another window",
+  args: { clone: "late" },
+  render: (args) => <TwoWindowsFrom {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const asked = canvas.getByRole("region", { name: "The window that asked" });
+    const other = canvas.getByRole("region", { name: "Another window" });
+    const { dialog } = await cloneFrom(asked);
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Cancel/ }));
+    await expect(await within(other).findByText("storefront is ready to set up", {}, { timeout: 3000 })).toBeVisible();
+    await expect(within(asked).getByText("storefront is ready to set up")).toBeVisible();
+    for (const window of [asked, other]) {
+      await expect(within(window).getByRole("combobox", { name: "Project" })).toHaveValue("/Users/user/armada");
+      await expect(within(window).queryByRole("region", { name: "Workspaces" })).toBeNull();
+    }
+    await userEvent.click(within(other).getByRole("button", { name: "Open Setup" }));
+    await expect(await within(other).findByRole("region", { name: "Workspaces" })).toBeVisible();
+    await expect(within(other).getByRole("combobox", { name: "Project" })).toHaveValue("/Users/user/code/storefront");
+    await userEvent.click(within(asked).getByRole("button", { name: "Dismiss" }));
     await expect(canvas.queryByText("storefront is ready to set up")).toBeNull();
   },
 };

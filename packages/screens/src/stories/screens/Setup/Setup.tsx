@@ -2,7 +2,7 @@
 // called the way `App` calls them. Only the data is made up, and a fake Fleet applies each
 // edit and Write the way Fleet does, as far as a play test presses them.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { connectedTo, PROTOCOL_VERSION, type Connection } from "@armada/protocol";
 import type {
   CheckoutRunSheetRead,
@@ -197,12 +197,18 @@ export function SetupFrom({
   repositories,
   more = 0,
   clone = "took",
+  landed = null,
+  onLanded,
   onAdded,
   onCloned,
   onWritten,
   onVerify,
 }: {
   clone?: CloneGoesTo;
+  /** A clone main published as landed, from this window or another. */
+  landed?: { repository: RepositorySummary; at: number } | null;
+  /** Called as a clone lands, before its answer: main publishes it to every window first. */
+  onLanded?: (repository: RepositorySummary) => void;
   /** Called on every add and every clone Locate sends. */
   onAdded?: (path: string) => void;
   onCloned?: (url: string, parent: string) => void;
@@ -227,15 +233,22 @@ export function SetupFrom({
   const [scope, setScope] = useState(listed[0]?.root ?? "");
   const picked = listed.find((one) => one.root === scope);
   // Fleet serving a folder: listed, and answered. Main's pick is `onLocated` below.
-  const served = (root: string): Promise<LocateAnswer> => {
+  const served = (root: string, cloned = false): Promise<LocateAnswer> => {
     const one = { root, records_root: `/records/${root.split("/").pop()}` };
-    setListed((was) => [...was, one]);
+    setListed((was) => (was.some((held) => held.root === root) ? was : [...was, one]));
+    if (cloned) onLanded?.(one);
     return Promise.resolve({ state: "located", repository: one });
   };
+  // Main lists a landed clone in every window, so this one does too.
+  useEffect(() => {
+    if (landed === null) return;
+    setListed((was) => (was.some((one) => one.root === landed.repository.root) ? was : [...was, landed.repository]));
+  }, [landed]);
   const locate = useLocate({
     onChooseFolder: () => Promise.resolve(CHOSEN),
     onResolveFolder: (path) => Promise.resolve(RESOLVED[path] ?? path),
     nothingServed: listed.length === 0,
+    landed,
     onAdd: (path) => {
       onAdded?.(path);
       return served(path);
@@ -244,7 +257,7 @@ export function SetupFrom({
       onCloned?.(url, parent);
       const into = landsIn(url, RESOLVED[parent] ?? parent)!;
       if (clone === "underway") return new Promise(() => {});
-      if (clone === "late") return new Promise((done) => setTimeout(() => done(served(into)), LATE_MS));
+      if (clone === "late") return new Promise((done) => setTimeout(() => done(served(into, true)), LATE_MS));
       if (clone === "refused") {
         const saying = `git refused the clone: fatal: repository '${url}' not found`;
         return Promise.resolve({ state: "refused", code: "fleet.clone_refused", saying });
@@ -252,7 +265,7 @@ export function SetupFrom({
       if (clone === "occupied") {
         return Promise.resolve({ state: "refused", code: "fleet.destination_occupied", saying: `${into} already exists and is not empty` });
       }
-      return served(into);
+      return served(into, true);
     },
     onLocated: (one) => {
       held.current = widened(NO_ROOT_FILE, more).proposals;

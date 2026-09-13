@@ -23,6 +23,8 @@ export type LocateSlice = {
   onLocated: (repository: RepositorySummary) => void;
   /** Fleet has listed nothing: the dialog opens by itself, since there is nothing else to do. */
   nothingServed?: boolean;
+  /** A clone main heard land, from any window. Announced here unless this window's own send is taking it (#926). */
+  landed?: { repository: RepositorySummary; at: number } | null;
 };
 
 export type Locating = {
@@ -50,6 +52,17 @@ export function useLocate(slice: LocateSlice): Locating {
   latest.current = slice;
   const shown = useRef(open);
   shown.current = open;
+  const mountedAt = useRef(Date.now());
+  // This window's own send, and what it located: that answer is this window's to act on, not to announce.
+  const own = useRef<{ out: boolean; took: string | null }>({ out: false, took: null });
+
+  // Heard after this window opened, and not its own: said as late, which moves no pick.
+  useEffect(() => {
+    const heard = slice.landed;
+    if (heard == null || heard.at < mountedAt.current) return;
+    if (own.current.out || heard.repository.root === own.current.took) return;
+    setLate(heard.repository);
+  }, [slice.landed]);
 
   useEffect(() => {
     if (slice.nothingServed === true) setOpen(true);
@@ -86,11 +99,13 @@ export function useLocate(slice: LocateSlice): Locating {
   async function send(): Promise<void> {
     if (!ready || sending) return;
     setSending(true);
+    own.current.out = true;
     setRefusal(undefined);
     const cloning = mode === "clone";
     try {
       const answer = cloning ? await latest.current.onClone(url.trim(), parent.trim()) : await latest.current.onAdd(path.trim());
       if (answer.state === "located") {
+        own.current.took = answer.repository.root;
         const wasOpen = shown.current;
         reset();
         setOpen(false);
@@ -100,6 +115,7 @@ export function useLocate(slice: LocateSlice): Locating {
       }
       setRefusal(refusalOf(answer, cloning));
     } finally {
+      own.current.out = false;
       setSending(false);
     }
   }

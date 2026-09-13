@@ -34,6 +34,7 @@ import type {
   JobSummary,
   Preferences,
   ProposalInFlight,
+  RepositorySummary,
   UnreadableJob,
 } from "@armada/protocol";
 import type { ManifestReading } from "@armada/protocol";
@@ -174,6 +175,11 @@ export type BridgeState = {
    * none. Main holds the pick — `main/picked.ts`.
    */
   repository: string | null;
+  /**
+   * The last clone Fleet finished serving, and when. Every window receives it so a clone that
+   * outlasts its dialog is announced wherever the person is (#926). It moves no pick.
+   */
+  located: { repository: RepositorySummary; at: number } | null;
   /**
    * The one Job read whole, where a detail is open.
    *
@@ -380,6 +386,7 @@ export const NOTHING_YET: BridgeState = {
   proposing: null,
   holds: { workflows: [], manifests: [], models: null, repositories: [] },
   repository: null,
+  located: null,
   watched: { state: "none" },
   observed: { state: "none" },
   journalled: { state: "none" },

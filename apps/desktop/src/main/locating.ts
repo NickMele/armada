@@ -1,5 +1,5 @@
-// Locate: a repository added by its folder or cloned from a URL, then listed. The window that asked
-// picks it, so a clone finishing behind a closed dialog moves nobody. `docs/journeys/set-up-a-project-manifest.md`.
+// Locate: a repository added by its folder or cloned from a URL, then listed. The window that asked picks it; a
+// clone that lands is told to every window, and moves nobody's pick (#926). `docs/journeys/set-up-a-project-manifest.md`.
 
 import { realpath, stat } from "node:fs/promises";
 
@@ -19,6 +19,8 @@ export type LocatingWiring = {
   port: () => number | null;
   /** Read what Fleet serves again, so the window's pick finds the new root listed. */
   list: (port: number) => Promise<void>;
+  /** A clone Fleet now serves, after it is listed and before the window that asked hears its answer. */
+  landed?: (repository: RepositorySummary) => void;
 };
 
 export class Locating {
@@ -39,10 +41,10 @@ export class Locating {
 
   clone(url: string, parent: string): Promise<LocateAnswer> {
     const body: CloneRepository = { url, parent };
-    return this.send("/repositories/clone", body, CLONE_MS);
+    return this.send("/repositories/clone", body, CLONE_MS, true);
   }
 
-  private async send(path: string, body: unknown, waitMs: number): Promise<LocateAnswer> {
+  private async send(path: string, body: unknown, waitMs: number, cloning = false): Promise<LocateAnswer> {
     const port = this.wiring.port();
     if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
     if (this.out) return { state: "busy" };
@@ -53,6 +55,8 @@ export class Locating {
       // The port a clone started on may be gone ten minutes later.
       const now = this.wiring.port();
       if (now !== null) await this.wiring.list(now);
+      // A clone can outlast its dialog and its window's attention, so every window hears it land.
+      if (cloning) this.wiring.landed?.(answer.repository);
       return answer;
     } finally {
       this.out = false;

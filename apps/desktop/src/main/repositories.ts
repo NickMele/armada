@@ -28,7 +28,12 @@ export class RepositoryReads {
   constructor(wiring: RepositoryWiring) {
     this.wiring = wiring;
     this.picked = wiring.picked;
-    this.locating = new Locating({ port: wiring.port, list: (port) => this.readHoldings(port) });
+    this.locating = new Locating({
+      port: wiring.port,
+      list: (port) => this.readHoldings(port),
+      // On the state main publishes to every window; each renderer decides whether to announce it.
+      landed: (repository) => wiring.publish({ located: { repository, at: Date.now() } }),
+    });
   }
 
   /**
