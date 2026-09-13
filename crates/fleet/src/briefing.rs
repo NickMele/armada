@@ -515,8 +515,8 @@ impl Stopped {
             // for the same paths again.
             EscalationTrigger::ScopeRefused => {
                 "An earlier attempt at this part asked to write files outside what this \
-                 task says it changes, and was told they are not part of it. Nothing it \
-                 did was checked. Do this part inside the files the task already names."
+                 Job says it changes, and was told they are not part of it. Nothing it \
+                 did was checked. Do this part inside the files the Job already names."
             }
             // `Thrashing`'s line is true of this too and leaves out the part
             // this attempt can do differently.
@@ -663,10 +663,9 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
 /// the Judge cannot see, and [`Delivering`] names that file instead.
 ///
 /// **"Plan" already means something else here.** A Job's own plan is now
-/// the word's one meaning to a Drone — `#894` renamed the declared scope's
-/// "the plan you declared" away from it — so this block still leads with
-/// what a Drone is actually holding, a file it wrote for itself, rather than
-/// reaching for the word at all.
+/// the word's one meaning to a Drone — `#894` moved the declared scope off
+/// it — so this block still leads with what a Drone is actually holding, a
+/// file it wrote for itself, rather than reaching for the word at all.
 fn notekeeping(job: &JobId) -> String {
     format!(
         "FILES YOU WRITE FOR YOURSELF\n\nNotes you want to keep \
