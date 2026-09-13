@@ -37,9 +37,11 @@ import {
   JOB_LIFECYCLE,
   plural,
   Button,
+  DockQuestions,
   Select,
   TheShell,
   Tooltip,
+  type DockQuestion,
   type FleetState,
   type StatusBarProps,
 } from "@armada/components";
@@ -89,6 +91,8 @@ export type ShellProps = {
    *  reach for. **It takes the id**: with more than one row, a handler that
    *  ignored which was pressed would land on the wrong screen silently. */
   onSurface?: (surfaceId: string) => void;
+  /** Every question waiting on a person, from every repository, as the dock's cards. Oldest first. */
+  questions?: readonly DockQuestion[];
   children: ReactNode;
 };
 
@@ -109,6 +113,7 @@ export function Shell({
   showing,
   onSurface,
   onOpenLimits,
+  questions = [],
   children,
 }: ShellProps) {
   const collapsed = useNarrow();
@@ -116,7 +121,14 @@ export function Shell({
 
   return (
     <TheShell
-      dock={{ ...dock, folded: collapsed, binding: HELM_KEY }}
+      dock={{
+        ...dock,
+        folded: collapsed,
+        binding: HELM_KEY,
+        questions: questions.length,
+        // None draws the dock's own quiet line, until Helm's conversation (#944) sits under them.
+        children: questions.length === 0 ? undefined : <DockQuestions questions={questions} />,
+      }}
       surfaces={SURFACES.map((surface) => ({
         id: surface.id,
         label: surface.label,

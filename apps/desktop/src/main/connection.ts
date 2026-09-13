@@ -27,6 +27,7 @@ import { JobReads } from "./job-reads";
 import { ObserveSocket } from "./observe";
 import { HeldReader } from "./holding";
 import { OverviewReads } from "./overview";
+import { Questions } from "./questions";
 import { RehearsalConnection } from "./rehearsal";
 import { ManifestFileCommands } from "./editing";
 import { RepositoryAllowsCommands } from "./repository-allows";
@@ -78,6 +79,11 @@ export class FleetConnection {
   readonly repositories: RepositoryReads;
   /** Overview's health and per-repository drift, held while it is open — see `overview.ts`. */
   readonly overview: OverviewReads;
+  /** Every question waiting on a person, from every repository — see `questions.ts`. */
+  private readonly questions = new Questions({
+    current: () => this.current,
+    publish: (change) => this.publish(change),
+  });
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
   /**
@@ -204,6 +210,7 @@ export class FleetConnection {
       repositories: this.repositories,
       rehearsal: this.rehearsal,
       overview: this.overview,
+      questions: this.questions,
       material: this.material,
       socket: this.socket,
       publish: (change) => this.publish(change),
@@ -227,6 +234,8 @@ export class FleetConnection {
     if (fleet !== null) {
       await reread(fleet.port, (change) => this.publish(change), this.wiring.now);
       await this.repositories.readHoldings(fleet.port);
+      // Every question waiting on a person, against the Board just read.
+      await this.questions.readAll(fleet.port);
       // Every region of the open Job — the same list a reconnection takes, so
       // the two cannot drift apart. #472.
       await this.jobFocus.takeAgain(fleet.port, { because: "a_person_asked" });

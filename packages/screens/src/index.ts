@@ -41,6 +41,9 @@ export * from "./copy";
 export * from "./editing";
 export * from "./declared";
 export * from "./detail-keys";
+// Every question waiting on a person, from every repository, as Helm's dock draws them.
+export * from "./dock-questions";
+export * from "./outstanding";
 export * from "./duration";
 export * from "./evidence";
 export * from "./facts";

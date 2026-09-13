@@ -19,6 +19,7 @@ import { connects, PROTOCOL_VERSION, skew } from "@armada/protocol";
 import type { Connection, JobSummary, ServerState, StreamMessage } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
 import type { OverviewReads } from "./overview";
+import type { Questions } from "./questions";
 import type { RehearsalConnection } from "./rehearsal";
 import { ask, capacityOf, limitsOf, preferencesOf } from "./request";
 import type { ReviewMaterial } from "./review";
@@ -38,6 +39,7 @@ export interface ArrivalHost {
   readonly repositories: RepositoryReads;
   readonly rehearsal: RehearsalConnection;
   readonly overview: OverviewReads;
+  readonly questions: Questions;
   readonly material: ReviewMaterial;
   readonly socket: { close(): void; resetUnreachable(): void };
   publish(change: Partial<BridgeState>): void;
@@ -156,6 +158,9 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // And every server Fleet holds, once per connection — `server.*` on
     // `/events` carries each row whole from here on.
     void host.rehearsal.readServers(fleet.port);
+    // And every question waiting on a person, from every repository: events carry only what is
+    // asked next, so what was already waiting is read off the Jobs that can hold one.
+    void host.questions.readAll(fleet.port);
     // **And the open Job's screen, whole.** A resync says where every Job is
     // and nothing about what any one of them holds, so every region of the
     // Job somebody has open is taken again together — `screen.ts` is the
@@ -189,6 +194,8 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // either by hand is how half a row goes stale.
     host.publish({ connection });
     host.fold(event.job);
+    // A question asked on the step it left is gone with it.
+    host.questions.moved(event.job);
     host.refresh(fleet.port, event.job.id);
     return;
   }
@@ -210,6 +217,7 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // per step boundary, and the open Job never re-read at all.
     host.publish({ connection });
     host.fold(event.job);
+    host.questions.moved(event.job);
     host.refresh(fleet.port, event.job.id);
     return;
   }
@@ -287,6 +295,9 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
         job.id === event.job_id ? { ...job, asking: waiting } : job,
       ),
     });
+    // The dock's copy, whole off the event, for every repository's Job.
+    if (event.kind === "job.asking") host.questions.asking(event.job_id, event.asking);
+    else host.questions.commandWaiting(event.job_id, event.waiting);
     host.refresh(fleet.port, event.job_id);
     return;
   }
@@ -331,6 +342,7 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // also a field on `delivery`, which the open Job draws.
     host.publish({ connection });
     host.fold(event.job);
+    host.questions.moved(event.job);
     host.refresh(fleet.port, event.job.id);
     return;
   }
@@ -348,6 +360,7 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // window that raced the event past its own call's answer.
     host.publish({ connection });
     host.forget(event.job_id);
+    host.questions.forgotten(event.job_id);
     return;
   }
   if (event.kind === "manifest.reread") {
@@ -422,6 +435,9 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     readAt: host.now(),
   });
   host.refresh(fleet.port, moved.id);
+  // A Judge refusal is carried by no event, so a Job held for review has its detail read for one.
+  host.questions.moved(moved);
+  if (moved.status === "awaiting_review") void host.questions.read(fleet.port, moved.id);
   // **A status move is the only thing that changes the occupancy**, so this
   // is where the reading is taken rather than on a timer. The machine half
   // rides along on the same call, which means a disk that fills while nothing
