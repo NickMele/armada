@@ -167,6 +167,22 @@ impl Commands for FakeDaemon {
         })
     }
 
+    /// Each field the save names replaces the fake's value. What a save does to
+    /// admission is `fleet::limits`' and tested there.
+    async fn save_limits(&self, save: ipc::SaveLimits) -> Result<ipc::FleetLimits, Refusal> {
+        let mut limits = self.limits.lock().expect("not poisoned");
+        if let Some(v) = save.concurrency {
+            limits.values.concurrency = v.get();
+        }
+        if let Some(v) = save.memory_spare_percent {
+            limits.values.memory_spare_percent = v.get();
+        }
+        if let Some(v) = save.disk_floor_gib {
+            limits.values.disk_floor_gib = v.get();
+        }
+        Ok(*limits)
+    }
+
     /// Refused, naming what was asked for, so a route test can tell the body
     /// arrived. Holding a server is `fleet::servers`' and tested there.
     async fn start_server(

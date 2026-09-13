@@ -42,6 +42,8 @@ mod fleetwide;
 /// **The third voice in the activity log.**
 mod following;
 mod journal;
+/// Fleet's three changeable limits, read and saved.
+mod limiting;
 mod mcp;
 mod observing;
 mod queries;

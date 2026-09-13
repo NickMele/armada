@@ -389,6 +389,15 @@ where
             .map_err(|why| refusing.server_refusal(why, asked.job_id.as_ref()))
     }
 
+    /// A person's limits, saved and put in force for the next admission —
+    /// [`crate::limits`]. **Not `budgeted`**: it waits on the roster at most
+    /// for one admission, and then writes one row.
+    async fn save_limits(&self, save: ipc::SaveLimits) -> Result<ipc::FleetLimits, Refusal> {
+        self.save_limits_now(save)
+            .await
+            .map_err(|why| self.refusal(why))
+    }
+
     /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
     async fn stop_server(&self, named: ipc::NamedServer) -> Result<ipc::ServerState, Refusal> {
         self.stopped_server(&named.id)

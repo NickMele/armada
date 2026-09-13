@@ -13,6 +13,7 @@ mod door;
 mod fake;
 mod following;
 mod journal;
+mod limits;
 mod mcp;
 mod observing;
 mod reference;

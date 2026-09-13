@@ -94,6 +94,9 @@ mod job_settings;
 /// designed around.
 pub mod journal;
 pub mod judging;
+/// The Drones-at-once bound, memory share and disk floor a person saves, and
+/// how a save reaches admission without a restart.
+pub mod limits;
 pub mod keeping;
 mod landing;
 pub mod listener;

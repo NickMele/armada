@@ -196,6 +196,12 @@ impl Queries for FakeDaemon {
         Ok(shapes::capacity())
     }
 
+    /// Whatever the fake's own saves have left, so a route test can read back
+    /// what it saved.
+    async fn get_limits(&self) -> Result<ipc::FleetLimits, Refusal> {
+        Ok(*self.limits.lock().expect("not poisoned"))
+    }
+
     /// **Always a reading, and always one worth saying.** The fake exists so a
     /// route test has a shape to assert on; a `None` here would make the
     /// ordinary case a test of the empty answer.

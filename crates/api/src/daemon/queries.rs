@@ -183,6 +183,13 @@ pub trait Queries: Send + Sync + 'static {
     /// its own roster, which is not a state that has ever occurred.
     fn get_capacity(&self) -> impl Future<Output = Result<FleetCapacity, Refusal>> + Send;
 
+    /// `get_limits` — the Drones-at-once bound, the memory share and the disk
+    /// floor in force, and the values Fleet shipped with.
+    ///
+    /// **What `get_capacity` is measured against**, read on its own because it
+    /// changes only when a person saves. The only `Refusal` is a fault.
+    fn get_limits(&self) -> impl Future<Output = Result<ipc::FleetLimits, Refusal>> + Send;
+
     /// `get_manifest_reading` — what Fleet's last re-read of `armada.yml` came
     /// to, and whether it took.
     ///
