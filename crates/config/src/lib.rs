@@ -39,7 +39,10 @@ mod yaml;
 #[cfg(test)]
 mod tests;
 
-pub use catalogue::{carried, Catalogue, CatalogueRefused, WorkflowSource, Written, CARRIED_AT};
+pub use catalogue::{
+    carried, Catalogue, CatalogueRefused, LeftOut, ResolvedCatalogue, WhyLeftOut, Written,
+    CARRIED_AT,
+};
 pub use error::{Disagreement, Fault, LoadError, Refusal, ResolveError, UnknownCheck};
 pub use live::{Adopted, Frozen, LiveKey, Moved, Reloads};
 pub use manifest::{
@@ -56,5 +59,5 @@ pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
 pub use core_model::{
     AdvanceGate, ContextSource, Covers, DeclarePlanAt, DeclaredPaths, EvidenceScope, EvidenceType,
     FrozenWorkflow, GateVerdict, JudgeCheck, JudgeCriterion, PathPattern, ResolvedCheck,
-    ResolvedStep,
+    ResolvedStep, WorkflowSource,
 };

@@ -40,13 +40,17 @@ fn manifest(text: &str) -> Manifest {
 
 /// The carried set, resolved against `manifest` alone.
 fn carried_against(manifest: &Manifest) -> Vec<ResolvedWorkflow> {
-    let catalogue = Catalogue::of(config::carried(), &roster())
-        .unwrap_or_else(|why| panic!("every carried definition parses: {why:?}"));
-    catalogue
+    let (workflows, left_out) = Catalogue::of(config::carried(), &roster())
+        .unwrap_or_else(|why| panic!("the carried set makes a catalogue: {why:?}"))
         .resolve(manifest)
-        .unwrap_or_else(|why| panic!("every carried definition resolves: {why}"))
-        .into_values()
-        .collect()
+        .unwrap_or_else(|why| panic!("nothing a repository wrote is refused: {why}"))
+        .into_parts();
+    let named: Vec<String> = left_out.iter().map(ToString::to_string).collect();
+    assert!(
+        named.is_empty(),
+        "no carried definition is left out: {named:?}"
+    );
+    workflows.into_values().collect()
 }
 
 /// **What makes a definition carryable, asked of each step**: it gates on
@@ -198,11 +202,14 @@ fn one_file_in_kit_or_the_repository_replaces_a_carried_definition_by_id() {
         "/repo/.armada/workflows/revert.yml".into(),
         one_step("revert"),
     ));
-    let catalogue = Catalogue::of(written, &roster()).expect("the three places merge");
-    let sources: Vec<(&str, WorkflowSource)> = catalogue
-        .sources()
-        .into_iter()
-        .map(|(id, source)| (id.as_str(), source))
+    let held = Catalogue::of(written, &roster())
+        .expect("the three places merge")
+        .resolve(&manifest(NO_CHECKS))
+        .expect("every winner resolves");
+    let sources: Vec<(&str, WorkflowSource)> = held
+        .workflows()
+        .iter()
+        .map(|(id, workflow)| (id.as_str(), workflow.source()))
         .filter(|(id, _)| ["bug", "feature", "revert"].contains(id))
         .collect();
     assert_eq!(

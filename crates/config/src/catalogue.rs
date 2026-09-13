@@ -9,59 +9,23 @@
 //! root's; this is a function over definitions in hand, which is what lets an
 //! acceptance test drive the merge without touching a file.
 //!
-//! **Every definition is parsed, and only the winners are resolved.** A file
-//! that will not parse is wrong wherever it sits. One another source replaced
-//! never runs, so whether its Checks resolve here has no Job behind it.
+//! **A repository's own definitions are strict, and the rest are left out.**
+//! The owner's decision: one from Kit or Armada that will not parse, or will not
+//! resolve against this repository, is set aside and named, and the next place
+//! down answers for its id. One a more specific place replaced is never
+//! resolved, so its Checks have no Job behind them.
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use core_model::WorkflowId;
+use core_model::{WorkflowId, WorkflowSource};
 
 use crate::error::{LoadError, ResolveError};
 use crate::manifest::Manifest;
 use crate::resolve::ResolvedWorkflow;
 use crate::roster::Roster;
 use crate::workflow::WorkflowDef;
-
-/// Which of the three places a workflow was read from.
-///
-/// **Declared least specific first, and the order is the rule**: `Ord` is
-/// what [`Catalogue::of`] compares, so a fourth source is placed by where its
-/// variant is written rather than by a precedence table beside it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum WorkflowSource {
-    /// Compiled into the binary. What a repository with no workflows of its
-    /// own runs on.
-    Armada,
-    /// Kit's Workflows, which a person keeps for every repository they work in.
-    Kit,
-    /// The repository's own `.armada/workflows/`.
-    Repository,
-}
-
-impl WorkflowSource {
-    /// One word, for a machine to read.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            WorkflowSource::Armada => "armada",
-            WorkflowSource::Kit => "kit",
-            WorkflowSource::Repository => "repository",
-        }
-    }
-}
-
-impl fmt::Display for WorkflowSource {
-    /// Where it came from, as a person would say it.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            WorkflowSource::Armada => "carried by Armada",
-            WorkflowSource::Kit => "from Kit",
-            WorkflowSource::Repository => "from the repository",
-        })
-    }
-}
 
 /// Where a carried definition says it was read from. **Not a file** — a name
 /// for a refusal to cite, bracketed so it cannot be mistaken for a path
@@ -164,29 +128,43 @@ pub fn carried() -> Vec<Written> {
         .collect()
 }
 
-/// The definitions a repository runs, one per id, each knowing its source.
-#[derive(Debug, Clone)]
+/// Every definition in hand, grouped by id, and the ones set aside unparsed.
+#[derive(Debug)]
 pub struct Catalogue {
-    held: BTreeMap<WorkflowId, (WorkflowDef, WorkflowSource)>,
+    held: BTreeMap<WorkflowId, Vec<(WorkflowDef, WorkflowSource)>>,
+    left_out: Vec<LeftOut>,
 }
 
 impl Catalogue {
-    /// Parse every definition and keep the most specific one for each id.
+    /// Parse every definition, keeping each beside the others for its id.
     ///
     /// **The order they arrive in decides nothing**, and the source decides
-    /// everything. Two definitions sharing an id *and* a source are refused,
-    /// naming both: within one place, a catalogue that picked would be choosing
-    /// on behalf of whoever wrote the second file. Across places, it is the
-    /// ordinary case once a person overrides anything.
+    /// everything. Two definitions sharing an id *and* a place are refused,
+    /// naming both: a catalogue that picked would be choosing on behalf of
+    /// whoever wrote the second file. Across places, it is an override.
     pub fn of(
         written: impl IntoIterator<Item = Written>,
         roster: &Roster,
     ) -> Result<Catalogue, CatalogueRefused> {
-        let mut held: BTreeMap<WorkflowId, (WorkflowDef, WorkflowSource)> = BTreeMap::new();
+        let mut held: BTreeMap<WorkflowId, Vec<(WorkflowDef, WorkflowSource)>> = BTreeMap::new();
         let mut seen: BTreeMap<(WorkflowSource, WorkflowId), PathBuf> = BTreeMap::new();
+        let mut left_out = Vec::new();
         for one in written {
-            let def = WorkflowDef::parse(&one.path, &one.text, roster)
-                .map_err(CatalogueRefused::Refused)?;
+            let def = match WorkflowDef::parse(&one.path, &one.text, roster) {
+                Ok(def) => def,
+                Err(why) if one.source == WorkflowSource::Repository => {
+                    return Err(CatalogueRefused::Refused(why))
+                }
+                Err(why) => {
+                    left_out.push(LeftOut {
+                        id: None,
+                        source: one.source,
+                        path: one.path,
+                        why: WhyLeftOut::Unparsed(why),
+                    });
+                    continue;
+                }
+            };
             let key = (one.source, def.id().clone());
             if let Some(first) = seen.get(&key) {
                 return Err(CatalogueRefused::DuplicateWorkflowId {
@@ -196,49 +174,129 @@ impl Catalogue {
                 });
             }
             seen.insert(key, one.path);
-            let replaces = match held.get(def.id()) {
-                Some((_, standing)) => one.source > *standing,
-                None => true,
-            };
-            if replaces {
-                held.insert(def.id().clone(), (def, one.source));
+            held.entry(def.id().clone())
+                .or_default()
+                .push((def, one.source));
+        }
+        Ok(Catalogue { held, left_out })
+    }
+
+    /// Resolve the most specific definition for each id against the
+    /// repository's Manifest, stepping down a place past any that will not.
+    ///
+    /// **A repository's own that will not resolve refuses the whole set**, as
+    /// it always has: the repository declared it, and a Fleet quietly running
+    /// Armada's in its place would be running something nobody there chose.
+    pub fn resolve(self, manifest: &Manifest) -> Result<ResolvedCatalogue, ResolveError> {
+        let mut workflows = BTreeMap::new();
+        let mut left_out = self.left_out;
+        for (id, mut candidates) in self.held {
+            candidates.sort_by(|a, b| b.1.cmp(&a.1));
+            for (def, source) in candidates {
+                match ResolvedWorkflow::resolve(&def, manifest) {
+                    Ok(resolved) => {
+                        workflows.insert(id.clone(), resolved.read_from(source));
+                        break;
+                    }
+                    Err(why) if source == WorkflowSource::Repository => return Err(why),
+                    Err(why) => left_out.push(LeftOut {
+                        id: Some(id.clone()),
+                        source,
+                        path: def.path().to_path_buf(),
+                        why: WhyLeftOut::Unresolved(why),
+                    }),
+                }
             }
         }
-        Ok(Catalogue { held })
+        Ok(ResolvedCatalogue {
+            workflows,
+            left_out,
+        })
+    }
+}
+
+/// The workflows a repository runs, and every definition set aside on the way.
+#[derive(Debug)]
+pub struct ResolvedCatalogue {
+    workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
+    left_out: Vec<LeftOut>,
+}
+
+impl ResolvedCatalogue {
+    /// One per id, each knowing its source.
+    pub fn workflows(&self) -> &BTreeMap<WorkflowId, ResolvedWorkflow> {
+        &self.workflows
     }
 
-    /// Which source each id's definition came from.
-    pub fn sources(&self) -> BTreeMap<&WorkflowId, WorkflowSource> {
-        self.held
-            .iter()
-            .map(|(id, (_, source))| (id, *source))
-            .collect()
+    /// **Kept, with the reason, so a person picking a workflow can be told why
+    /// one they wrote is not there** — at start today, and later where they
+    /// pick.
+    pub fn left_out(&self) -> &[LeftOut] {
+        &self.left_out
     }
 
-    /// Resolve every held definition against the repository's Manifest.
-    ///
-    /// The first definition that does not resolve refuses the whole set, as a
-    /// repository's own always has: a Fleet serving the workflows that happened
-    /// to resolve would be a picker quietly shorter than the files.
-    pub fn resolve(
-        &self,
-        manifest: &Manifest,
-    ) -> Result<BTreeMap<WorkflowId, ResolvedWorkflow>, ResolveError> {
-        self.held
-            .iter()
-            .map(|(id, (def, source))| {
-                let resolved = ResolvedWorkflow::resolve(def, manifest)?.read_from(*source);
-                Ok((id.clone(), resolved))
-            })
-            .collect()
+    pub fn into_parts(self) -> (BTreeMap<WorkflowId, ResolvedWorkflow>, Vec<LeftOut>) {
+        (self.workflows, self.left_out)
+    }
+}
+
+/// A definition from Kit or Armada this repository runs without.
+#[derive(Debug)]
+pub struct LeftOut {
+    /// `None` where the file did not parse far enough to say.
+    id: Option<WorkflowId>,
+    source: WorkflowSource,
+    path: PathBuf,
+    why: WhyLeftOut,
+}
+
+/// Why a definition was left out.
+#[derive(Debug)]
+pub enum WhyLeftOut {
+    /// It will not parse.
+    Unparsed(LoadError),
+    /// It parses, and names what this repository does not declare, or says
+    /// something else about what it does.
+    Unresolved(ResolveError),
+}
+
+impl LeftOut {
+    pub fn id(&self) -> Option<&WorkflowId> {
+        self.id.as_ref()
+    }
+
+    pub fn source(&self) -> WorkflowSource {
+        self.source
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn why(&self) -> &WhyLeftOut {
+        &self.why
+    }
+}
+
+impl fmt::Display for LeftOut {
+    /// What Fleet prints at start: which definition, from where, and why.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.id {
+            Some(id) => write!(f, "workflow `{}` {}", id.as_str(), self.source)?,
+            None => write!(f, "a definition {}", self.source)?,
+        }
+        write!(f, " is left out, at {} — ", self.path.display())?;
+        match &self.why {
+            WhyLeftOut::Unparsed(why) => write!(f, "{why}"),
+            WhyLeftOut::Unresolved(why) => write!(f, "{why}"),
+        }
     }
 }
 
 /// Why a set of definitions could not become a catalogue.
 #[derive(Debug)]
 pub enum CatalogueRefused {
-    /// One definition will not parse. Its path says which of the three places
-    /// it is in.
+    /// One of the repository's own definitions will not parse.
     Refused(LoadError),
     /// Two definitions in one place name the same `workflow_id`.
     DuplicateWorkflowId {
