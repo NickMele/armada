@@ -85,6 +85,8 @@ mod journal;
 mod judged;
 /// Fleet's three changeable limits. **A value out of range does not decode.**
 mod limits;
+/// A possible `armada.yml` per workspace, and the edits and Write that finish it.
+mod manifest_proposal;
 /// The Evidence tool's transport. **A different seam** — Fleet to Drone, not
 /// Fleet to Bridge — so it is a module rather than a flat re-export and none of
 /// its types are in `operations.toml`.
@@ -196,6 +198,11 @@ pub use journal::{
 pub use judged::{Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable};
 pub use limits::{
     DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent, SaveLimits, Within,
+};
+pub use manifest_proposal::{
+    Band, EditManifestProposal, ManifestProposal, ManifestProposals, PolicyKey, ProposalEdit,
+    ProposedCheck, ProposedCommand, ProposedId, ProposedPolicy, ProposedPort, ProposedSetup,
+    Provenance, StatedCaps, WriteManifestProposal,
 };
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};

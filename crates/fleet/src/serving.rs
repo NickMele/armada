@@ -240,6 +240,12 @@ where
         Ok(crate::scanning::scan(root, &tree))
     }
 
+    /// A proposal per workspace — `crate::manifest_proposal`, which holds
+    /// them between calls.
+    async fn get_manifest_proposals(&self) -> Result<ipc::ManifestProposals, Refusal> {
+        Ok(self.manifest_proposals())
+    }
+
     /// One Job in full — [`detail`](mod@detail), which is a quarter of this
     /// file's length and the read made on every open of a Job.
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {

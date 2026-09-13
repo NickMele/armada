@@ -119,7 +119,7 @@ A sheet over the picker, one workspace at a time, opened from a row and closed b
 
 ### Policy
 
-**A Policy band sits in the proposal with the Kit and Machine values shown and editable** — `auto_merge` and `review_gate`. Nothing in a repo corresponds to either, so every row reads *from Kit* or *from Machine* in sans rather than citing a file: the one band where absent evidence is the normal case.
+**A Policy band sits in the proposal with the values in force shown and editable** — `auto_merge` and `review_gate`. Nothing in a repo corresponds to either, and both are Manifest-only in `config`, so every row reads *default* in sans rather than citing a file: the one band where absent evidence is the normal case.
 
 **Shown rather than applied silently**, unlike Skills and the allowlist, because these are decisions with consequences at merge time rather than defaults.
 
@@ -127,7 +127,7 @@ A sheet over the picker, one workspace at a time, opened from a row and closed b
 
 **Each control carries a plain-words line naming the consequence of the selected value**, because `checks-pass` means nothing on its own.
 
-**A row reads *from Kit* until touched and *set here* after**, which is the whole inheritance story on this surface.
+**A row reads *default* until touched and *edited during setup* after**, which is the whole inheritance story on this surface.
 
 **An inherited value is an absent key.** Leaving a row at Kit's value writes nothing and the project keeps following Kit if Kit later changes; writing the same value explicitly pins it. Two identical-looking rows with two different futures, which is why the source column is not decoration.
 

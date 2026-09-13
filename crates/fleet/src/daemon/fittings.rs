@@ -253,6 +253,7 @@ where
             aloft: Aloft::default(),
             underway: Underway::default(),
             proposals: Proposals::new(),
+            manifest_proposals: Default::default(),
             judge_model: fittings.judge_model,
             proposer_model: fittings.proposer_model,
             links: fittings.links,

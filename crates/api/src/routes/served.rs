@@ -85,6 +85,23 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/repository/scan",
     },
+    // What Scan's findings become, beside it. The edit spells its act in the last segment.
+    Route {
+        operation: "get_manifest_proposals",
+        method: "GET",
+        path: "/repository/proposals",
+    },
+    Route {
+        operation: "edit_manifest_proposal",
+        method: "POST",
+        path: "/repository/edit_proposal",
+    },
+    // The only route here that makes a file in the main checkout where there was none.
+    Route {
+        operation: "write_manifest_proposal",
+        method: "POST",
+        path: "/repository/write_proposal",
+    },
     // The file itself, where the two rows above are readings of it. Singular
     // and beside them for their reason, and never `/manifests/:id/file`: a
     // Fleet resolves its own `armada.yml`, so there is no id to carry and no

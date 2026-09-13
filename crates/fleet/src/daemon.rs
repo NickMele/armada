@@ -104,6 +104,9 @@ pub struct Fleet<H, V, W> {
     /// **Minted here, not a fitting** — nothing outside this crate holds one,
     /// and it is empty after a restart because a proposal is not a record.
     proposals: Proposals,
+    /// The `armada.yml` proposals Setup is iterating, by workspace. **Never
+    /// written down** — [`crate::manifest_proposal`] says why.
+    manifest_proposals: crate::manifest_proposal::Held,
     judge_model: Model,
     proposer_model: Model,
     links: Arc<dyn LinkLookup + Send + Sync>,

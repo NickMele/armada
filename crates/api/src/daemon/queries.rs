@@ -266,6 +266,12 @@ pub trait Queries: Send + Sync + 'static {
         &self,
     ) -> impl Future<Output = Result<ipc::RepositoryScan, Refusal>> + Send;
 
+    /// `get_manifest_proposals` — a proposal per workspace Scan finds, held between calls
+    /// so edits persist. It cannot refuse; `Result` matches the surface.
+    fn get_manifest_proposals(
+        &self,
+    ) -> impl Future<Output = Result<ipc::ManifestProposals, Refusal>> + Send;
+
     /// `get_job` — one Job in full: its steps and where each got to, the
     /// criteria it is held to, the branch its worktree is on, and the brief it
     /// was given.

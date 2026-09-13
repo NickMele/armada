@@ -20,6 +20,11 @@ use config::{
 };
 use fleet::scanning::{Entry, Read, Tree};
 
+mod setup;
+// Only Reach's own test binary reaches Setup's apparatus; the other milestones compile it unused.
+#[allow(unused_imports)]
+pub use setup::*;
+
 /// The repository's checkout, as a Scan of it would say it read.
 pub const CHECKOUT: &str = "/repos/storefront";
 
@@ -421,4 +426,14 @@ pub fn carried_there(path: &str, text: &str) -> ResolvedWorkflow {
 fn resolved_def(def: &WorkflowDef) -> ResolvedWorkflow {
     ResolvedWorkflow::resolve(def, &written())
         .unwrap_or_else(|why| panic!("{} resolves there: {why}", def.path().display()))
+}
+
+/// The workflow a catalogue resolved to for `id`, against the storefront.
+pub fn held_there(catalogue: &ResolvedCatalogue, id: &str) -> ResolvedWorkflow {
+    catalogue
+        .workflows()
+        .values()
+        .find(|workflow| workflow.id().as_str() == id)
+        .unwrap_or_else(|| panic!("`{id}` is held"))
+        .clone()
 }

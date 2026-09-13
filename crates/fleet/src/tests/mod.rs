@@ -76,6 +76,7 @@ mod limits;
 mod linking;
 mod listener;
 mod looping;
+mod manifest_proposals;
 mod mending;
 mod merging;
 mod migrating;

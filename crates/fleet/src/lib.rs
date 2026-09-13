@@ -104,6 +104,8 @@ mod landing;
 /// how a save reaches admission without a restart.
 pub mod limits;
 pub mod listener;
+/// A possible `armada.yml` per workspace, from Scan, and the Write that ends it.
+pub mod manifest_proposal;
 /// The one act that writes into a repository Fleet did not make: a person
 /// presses, and Fleet merges the pull request their Job opened.
 mod mending;

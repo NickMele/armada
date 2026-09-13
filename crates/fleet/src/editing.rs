@@ -76,6 +76,29 @@ pub(crate) fn save(file: &Path, read: &str, text: &str) -> Result<(), NotSaved> 
     write(file, text).map_err(NotSaved::Unwritable)
 }
 
+/// Why a create did not happen.
+#[derive(Debug)]
+pub(crate) enum NotCreated {
+    /// Something is at the path already, with what it holds where it reads.
+    Appeared(Option<String>),
+    Unwritable(io::Error),
+}
+
+/// Put `text` at `file` only where nothing is there. A hard link, not a rename, so a file
+/// that appeared is refused in the same call that would make the name.
+pub(crate) fn create(file: &Path, text: &str) -> Result<(), NotCreated> {
+    let staged = beside(file);
+    let linked = fs::write(&staged, text).and_then(|()| fs::hard_link(&staged, file));
+    let _ = fs::remove_file(&staged);
+    match linked {
+        Ok(()) => Ok(()),
+        Err(why) if why.kind() == io::ErrorKind::AlreadyExists => {
+            Err(NotCreated::Appeared(fs::read_to_string(file).ok()))
+        }
+        Err(why) => Err(NotCreated::Unwritable(why)),
+    }
+}
+
 /// The replace itself. The mode is carried across, so a save does not quietly
 /// reset what somebody set on the file.
 fn write(file: &Path, text: &str) -> Result<(), io::Error> {

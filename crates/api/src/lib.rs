@@ -46,6 +46,8 @@ mod following;
 mod journal;
 /// Fleet's three changeable limits, read and saved.
 mod limiting;
+/// Setup's proposals, an edit to one, and its Write.
+mod manifest_proposals;
 mod mcp;
 mod observing;
 mod queries;

@@ -14,6 +14,7 @@ mod after_merge;
 mod amending;
 mod catalogue;
 mod fences;
+mod from_nothing;
 mod harness;
 mod live;
 mod loops;
