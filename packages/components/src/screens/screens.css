@@ -830,8 +830,15 @@
   min-width: 0;
 }
 
+/* The label never wraps — the branch is what gives way, onto an ellipsis. */
+.armada-inside__where-head-text > .armada-screen__eyebrow {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* The branch, shown in the collapsed header's own place. */
 .armada-inside__where-branch {
+  min-width: 0;
   overflow: hidden;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
