@@ -228,6 +228,27 @@
   white-space: nowrap;
 }
 
+/* A table's headline shares one track with the handle. A long handle drew over
+   the next column once a fourth fact narrowed that track, so the cell clips and
+   the handle gives way before the title. It still copies whole. */
+.armada-job-row[data-view="table"] .armada-job-row__headline,
+.armada-job-row-list[data-view="table"] .armada-job-row__headline {
+  overflow: hidden;
+}
+
+.armada-job-row[data-view="table"] .armada-job-row__title,
+.armada-job-row-list[data-view="table"] .armada-job-row__title {
+  flex: 0 1 auto;
+}
+
+.armada-job-row[data-view="table"] .armada-job-row__id,
+.armada-job-row-list[data-view="table"] .armada-job-row__id {
+  flex: 0 3 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Line two: the labelled field run, on tracks shared down the list so it reads
    down as well as across. No field is dropped at any width. */
 .armada-job-row__fields {
