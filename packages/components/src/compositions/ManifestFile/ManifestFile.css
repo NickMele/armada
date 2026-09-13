@@ -28,13 +28,17 @@
   line-height: var(--leading-xs);
   color: var(--fg-default);
   overflow-wrap: anywhere;
+  /* The path takes the slack and wraps anywhere, so Save stays at the trailing
+     edge. A path from Fleet is absolute and long. */
+  flex: 1 1 0;
   min-width: 0;
 }
 
-/* The receipt takes the slack, so Save stays at the trailing edge however long
-   the sentence is. */
+/* The receipt keeps its own width and gives way only when the head runs out.
+   Given the slack instead, it lost to the path and broke "Not saved." across
+   two lines — measured in the app, not in a story. */
 .armada-manifest-file__receipt {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   font-family: var(--font-sans);
   font-size: var(--text-xs);

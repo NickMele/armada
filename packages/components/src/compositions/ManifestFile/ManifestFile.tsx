@@ -11,41 +11,30 @@ import { ManifestNotice } from "../ManifestNotice/ManifestNotice";
  * The Manifest as a file — Journey 9's *Editing*, the half behind the toggle
  * named by the file's path.
  *
- * # What this is for
- *
  * Correcting a Check used to mean leaving Bridge for an editor, and finding out
  * whether the correction parsed meant watching Fleet's console. This puts the
  * file and the answer to a save in one place: the text, one Save, and what
  * Fleet's next reading of the file came to, drawn above the text it is about.
  *
- * # Save writes the file and stops
- *
- * No staging and no commit. The file is tracked, so the edit shows in the
- * working tree like any other and is committed with everything else; Armada
- * committing on a person's behalf would be a surprise in the one place they are
- * most sensitive to one.
- *
- * # What a save comes to arrives later than the save
- *
- * Fleet's watch settles before it re-reads, so the write answers first and the
- * reading follows by up to the settle window. The receipt says which of the
- * two has happened, so a person is never left reading a refusal that belongs to
- * the file before their save.
- *
- * # A file that moved under the edit
- *
- * A `git checkout` or a pull landing while this is open changes the file under
- * the edit. Fleet refuses that save and hands back what is on disk now, and
- * both are drawn side by side so nobody loses either. Nothing overwrites the
- * incoming change unless a person presses the control that says it will.
- *
- * # No line numbers
- *
- * A line number appears in one place: `ManifestRefused.summary`, where the
- * document never became a document. A gutter here would put numbers beside
- * faults that are attributed by key, and invite a reading of one against the
- * other that nothing on the wire supports.
+ * **Save writes the file and stops** — no staging, no commit. The file is
+ * tracked, so the edit is committed with everything else; Armada committing on
+ * a person's behalf would be a surprise where they are most sensitive to one.
  */
+
+// **What a save comes to arrives later than the save.** Fleet's watch settles
+// before it re-reads, so the write answers first and the reading follows by up
+// to the settle window. The receipt says which of the two has happened, so a
+// refusal of the file before the save never reads as the answer to it.
+
+// **A file that moved under the edit** — a `git checkout` or a pull landing
+// while this is open — is refused by Fleet with what is on disk now. Both are
+// drawn side by side, and nothing overwrites the incoming change unless a
+// person presses the control that says it will.
+
+// **No line numbers.** A line number appears in one place:
+// `ManifestRefused.summary`, where the document never became a document. A
+// gutter here would put numbers beside faults attributed by key, and invite a
+// reading of one against the other that nothing on the wire supports.
 
 /** What the last save came to. */
 export type ManifestFileSaved = {
