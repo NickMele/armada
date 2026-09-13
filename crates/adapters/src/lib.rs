@@ -43,6 +43,8 @@ mod basing;
 mod ci_workflows;
 mod cloning;
 mod commit;
+/// A Helm conversation's process: one message, resumed by id.
+mod conversing;
 mod delivery;
 mod error;
 mod git_guard;
@@ -66,6 +68,7 @@ mod worktree;
 mod tests;
 
 pub use ci_workflows::ActionsWorkflows;
+pub use conversing::{door_tools, ConversationRefused, Conversing};
 pub use error::{CommitWorkError, CreateWorktreeError, ReadWorkProductError};
 pub use harness::{
     ask_tool, checks_tool, dispatch_tool, evidence_server, evidence_tool, permission_tool,
