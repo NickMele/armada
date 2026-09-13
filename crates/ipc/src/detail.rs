@@ -257,7 +257,7 @@ pub struct JobDetail {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<JobReview>,
     /// Armada's review of the change: confident or not, why, and what needs the person.
-    /// **Since 13.22**, set after [`JobDetail::of`] like `model_override`. #903.
+    /// **Since 13.23**, set after [`JobDetail::of`] like `model_override`. #903.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<JobConfidence>,
     /// Where the Job's frozen workflow came from — `armada`, `kit` or `repository` — off its

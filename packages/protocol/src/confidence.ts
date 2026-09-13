@@ -1,5 +1,5 @@
 /**
- * Armada's review of a change, as a person reads it on the job. Since 13.22, #903.
+ * Armada's review of a change, as a person reads it on the job. Since 13.23, #903.
  * Not `review`: `JobDetail.review` is the text Fleet composes for the pull request.
  * `crates/ipc/src/detail/confidence.rs`.
  */

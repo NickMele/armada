@@ -214,6 +214,7 @@ async fn a_dispatched_drone_may_record_the_plan_its_step_asks_for() {
             claimed: Claimed("The fix is planned as one task."),
             shown_by: ShownBy("the plan recorded with record_plan"),
             not_claimed: NotClaimed(""),
+            review: None,
         },
     )
     .await

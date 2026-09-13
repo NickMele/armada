@@ -251,7 +251,7 @@ export type JobDetail = {
    * than 10.11, which draws the same as one that has not reached a gate.
    */
   review?: JobReview;
-  /** Armada's review of the change: confident or not, why, and what needs the person. Since 13.22. */
+  /** Armada's review of the change: confident or not, why, and what needs the person. Since 13.23. */
   confidence?: JobConfidence;
 };
 

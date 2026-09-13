@@ -808,7 +808,7 @@ shape**: a `repository`-reach row there is now one an older Fleet wrote before
 forward — an old Bridge reading it as before still reads a real historical
 row, so nothing about the field's shape or presence changed under it.
 
-## Protocol 13.22: Armada's review of a change
+## Protocol 13.23: Armada's review of a change
 
 `ipc::JobConfidence`, additive on `get_job`'s `JobDetail` as `confidence`, is the review a person reads at the stop before merging (#903): whether Armada is confident and why, the change's areas, the tests in it, and its findings sorted into needs you, small fixes and for context. `tests.opened_because` names a test removed or loosened with no reason, and that row is `flagged`.
 
