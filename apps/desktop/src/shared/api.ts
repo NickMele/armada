@@ -537,6 +537,12 @@ export type BridgeApi = {
    */
   removeRepositoryAllowedCommand: (run: string) => Promise<RepositoryAllowedCommandsRead>;
 
+  /**
+   * Pick the repository every per-repository read and act names, by a root `holds.repositories`
+   * lists. What changed arrives as state: `repository`, and the reads held open, taken again.
+   */
+  pickRepository: (root: string) => Promise<void>;
+
   /** Start a declared server — this Job's worktree, or the main checkout with
    * no Job. `server.serving`/`server.exited` follow as events. */
   startServer: (name: string, jobId?: string) => Promise<Outcome>;

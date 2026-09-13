@@ -12,6 +12,8 @@ import { answered, readInto, type SetupHeld } from "./setup-view";
 export type SetupSlice = {
   /** Whether Setup is on screen. Nothing is read while it is not. */
   showing: boolean;
+  /** The picked repository's root. Another one is a fresh Setup: its ticks and open sheet are not this one's. */
+  repository?: string;
   onReadScan: () => Promise<RepositoryScanRead>;
   onReadProposals: () => Promise<ManifestProposalsRead>;
   onEditProposal: (body: EditManifestProposal) => Promise<ProposalAnswer>;
@@ -35,6 +37,12 @@ export function useSetup(slice: SetupSlice): Setting {
 
   // Read on every show: another window's edits and a Write are Fleet's, so the picker is
   // re-drawn from them, while ticks and the open proposal stay where the person left them.
+  const [heldFor, setHeldFor] = useState(slice.repository);
+  if (heldFor !== slice.repository) {
+    setHeldFor(slice.repository);
+    setHeld({ state: "reading" });
+  }
+
   useEffect(() => {
     if (!slice.showing) return;
     let current = true;
@@ -49,7 +57,7 @@ export function useSetup(slice: SetupSlice): Setting {
     return () => {
       current = false;
     };
-  }, [slice.showing]);
+  }, [slice.showing, slice.repository]);
 
   const open = (dir: string | null) =>
     setHeld((was) => (was.state === "open" ? { ...was, open: dir } : was));

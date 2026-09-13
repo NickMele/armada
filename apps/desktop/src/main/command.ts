@@ -41,6 +41,7 @@ import type {
 } from "@armada/protocol";
 import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
 import { ask, COMMAND_MS, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
+import type { Picked } from "./picked";
 import { Clearing } from "./clearing";
 import { Limits } from "./limits";
 import { Reporting } from "./reporting";
@@ -58,6 +59,8 @@ import { decide, takeUp, type Decision } from "./review";
 export type Board = {
   /** Where Fleet answers, or `null` when nothing is connected. */
   port: () => number | null;
+  /** The repository a search or a described request is about — `picked.ts`. */
+  picked: Picked;
   /** A Job a command answered with, onto the board. */
   fold: (job: JobSummary) => void;
   /**
@@ -345,8 +348,9 @@ export class JobCommands {
    */
   async searchFiles(query: string): Promise<string[]> {
     const port = this.board.port();
-    if (port === null) return [];
-    const answer = await ask(port, "GET", `/manifest/files?q=${encodeURIComponent(query)}`);
+    const path = this.board.picked.manifest(`/manifest/files?q=${encodeURIComponent(query)}`);
+    if (port === null || path === null) return [];
+    const answer = await ask(port, "GET", path);
     return answer.ok === true ? (answer.body as FilesFound).paths : [];
   }
 

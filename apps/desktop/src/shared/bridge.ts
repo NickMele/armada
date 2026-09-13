@@ -156,6 +156,11 @@ export type BridgeState = {
    */
   holds: Holdings;
   /**
+   * The root of the repository the rail picked, which every per-repository read and act names.
+   * `null` until Fleet lists one. Main holds the pick — `main/picked.ts`.
+   */
+  repository: string | null;
+  /**
    * The one Job read whole, where a detail is open.
    *
    * **Published, not fetched by the component that draws it.** The detail is
@@ -343,7 +348,8 @@ export const NOTHING_YET: BridgeState = {
   readAt: null,
   approving: [],
   proposing: null,
-  holds: { workflows: [], manifests: [], models: null },
+  holds: { workflows: [], manifests: [], models: null, repositories: [] },
+  repository: null,
   watched: { state: "none" },
   observed: { state: "none" },
   journalled: { state: "none" },
@@ -449,6 +455,8 @@ export const CHANNELS = {
   // Fleet names the repository, so neither takes a path or an id.
   listRepositoryAllowedCommands: "bridge:list-repository-allowed-commands",
   removeRepositoryAllowedCommand: "bridge:remove-repository-allowed-command",
+  // The rail's pick. A root and nothing else; main ignores one Fleet does not list.
+  pickRepository: "bridge:pick-repository",
   startServer: "bridge:start-server",
   stopServer: "bridge:stop-server",
   openServerLink: "bridge:open-server-link",

@@ -11,10 +11,13 @@ import { shell } from "electron";
 
 import type { Followed, NamedServer, Outcome, StartServer } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
-import { ask } from "./request";
+import type { Picked } from "./picked";
+import { ask, NOT_SET_UP } from "./request";
 
 export type ServerBoard = {
   port: () => number | null;
+  /** Which main checkout a server with no Job starts in. */
+  picked: Picked;
 };
 
 export class ServerCommands {
@@ -34,7 +37,10 @@ export class ServerCommands {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
     const body: StartServer = jobId === undefined ? { name } : { name, job_id: jobId };
-    const answer = await ask(port, "POST", "/servers/start", body);
+    // A Job names its own repository; the main checkout is the picked one's.
+    const path = jobId === undefined ? this.board.picked.manifest("/servers/start") : "/servers/start";
+    if (path === null) return NOT_SET_UP;
+    const answer = await ask(port, "POST", path, body);
     return answer.ok === true ? { ok: true } : answer.outcome;
   }
 

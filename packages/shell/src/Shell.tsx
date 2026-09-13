@@ -44,7 +44,7 @@ import {
 
 import type { Connection } from "@armada/protocol";
 import type { FleetCapacity, JobSummary } from "@armada/protocol";
-import type { ManifestSummary } from "@armada/protocol";
+import type { RepositorySummary } from "@armada/protocol";
 import type { Statement } from "./fleet";
 import { ADMISSION_HOLD } from "@armada/components";
 import { SURFACE, SURFACES } from "./surfaces";
@@ -53,11 +53,11 @@ export type ShellProps = {
   connection: Connection;
   /** Fleet's state in the words the design contract settles. */
   statement: Statement;
-  /** What Fleet holds. One entry is why the drawing shows the control. */
-  manifests: readonly ManifestSummary[];
-  /** The Manifest the rail names. What a new Job starts pointed at. */
+  /** Every repository Fleet serves, set up or not. One entry is why the drawing shows the control. */
+  repositories: readonly RepositorySummary[];
+  /** The picked repository's root: what every per-repository read and act names. */
   scope: string;
-  onScope: (manifestId: string) => void;
+  onScope: (root: string) => void;
   /** Every Job, for the rail's count and the bar's two. */
   jobs: readonly JobSummary[];
   /** How full the fleet is. `null` is a Fleet that has not answered yet. */
@@ -85,7 +85,7 @@ export type ShellProps = {
 export function Shell({
   connection,
   statement,
-  manifests,
+  repositories,
   scope,
   onScope,
   jobs,
@@ -99,6 +99,11 @@ export function Shell({
   children,
 }: ShellProps) {
   const collapsed = useNarrow();
+  const optionOf = (repository: RepositorySummary) => (
+    <option key={repository.root} value={repository.root} title={repository.root}>
+      {repositoryLabel(repository, repositories)}
+    </option>
+  );
 
   return (
     <TheShell
@@ -126,18 +131,16 @@ export function Shell({
           aria-label="Project"
           value={scope}
           onChange={(event) => onScope(event.target.value)}
-          // A picker over what Fleet holds, like every other id field in
-          // Bridge. Empty until the connection answers, and the option says so
-          // rather than showing a blank control.
-          disabled={manifests.length === 0}
+          // A picker over what Fleet serves. Empty until the connection answers,
+          // and the option says so rather than showing a blank control.
+          disabled={repositories.length === 0}
         >
-          {manifests.length === 0 ? <option value="">No manifest read yet</option> : null}
-          {manifests.map((manifest) => (
-            <option key={manifest.id} value={manifest.id}>
-              {/* The repository, because `armada.yml` declares no name. */}
-              {manifest.repository}
-            </option>
-          ))}
+          {repositories.length === 0 ? <option value="">No repository read yet</option> : null}
+          {repositories.filter((one) => one.manifest !== undefined).map(optionOf)}
+          {/* A group rather than a suffix: the rail clips a long label, and picking one opens Setup. */}
+          {repositories.some((one) => one.manifest === undefined) ? (
+            <optgroup label="Not set up">{repositories.filter((one) => one.manifest === undefined).map(optionOf)}</optgroup>
+          ) : null}
         </Select>
       }
       title={title}
@@ -148,6 +151,20 @@ export function Shell({
       {children}
     </TheShell>
   );
+}
+
+/** What the picker calls a repository: its folder, because `armada.yml` declares no name, and the whole root where two share one. */
+export function repositoryLabel(
+  repository: RepositorySummary,
+  repositories: readonly RepositorySummary[],
+): string {
+  const named = folderOf(repository.root);
+  const shared = repositories.some((other) => other.root !== repository.root && folderOf(other.root) === named);
+  return shared ? repository.root : named;
+}
+
+function folderOf(root: string): string {
+  return root.replace(/\/+$/, "").split("/").pop() || root;
 }
 
 /**

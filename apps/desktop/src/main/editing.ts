@@ -3,9 +3,9 @@
 // Beside `checkout-runs.ts` rather than inside it: both answer routes under
 // `/manifest`, but a run is a rehearsal of the file and this is the file.
 //
-// **Fleet names the file, and nothing here carries a path.** A Fleet serves
-// one repository and already holds the file it was started against, so a
-// caller names the act and Fleet resolves where it lands.
+// **Fleet names the file, and nothing here carries a path.** The picked
+// repository's Manifest id is all that crosses — `picked.ts` — and Fleet
+// resolves where it lands.
 
 import type {
   EditManifest,
@@ -22,7 +22,8 @@ import type {
   ManifestSpendRead,
 } from "@armada/screens/src/editing";
 
-import { ask, type Answer } from "./request";
+import type { Picked } from "./picked";
+import { ask, NOT_SET_UP, type Answer } from "./request";
 import { SetupCommands } from "./setting-up";
 
 /**
@@ -83,19 +84,23 @@ export function editAnswerOf(answer: Answer): ManifestEditAnswer {
 /** `get_manifest_file`, `save_manifest_file`, `edit_manifest` and `get_manifest_spend`. */
 export class ManifestFileCommands {
   private readonly port: () => number | null;
+  private readonly picked: Picked;
   /** Setup's Scan, proposals, edits and Write: the other writer of `armada.yml`. */
   readonly setup: SetupCommands;
 
-  constructor(port: () => number | null) {
+  constructor(port: () => number | null, picked: Picked, written: (port: number) => Promise<void>) {
     this.port = port;
-    this.setup = new SetupCommands(port);
+    this.picked = picked;
+    this.setup = new SetupCommands(port, picked, written);
   }
 
   /** `armada.yml` as it is on disk, whole and unparsed. */
   async readFile(): Promise<ManifestFileRead> {
     const port = this.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", "/manifest/file");
+    const path = this.picked.manifest("/manifest/file");
+    if (path === null) return { ok: false, outcome: NOT_SET_UP };
+    const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, file: answer.body as ManifestFile };
   }
@@ -107,21 +112,27 @@ export class ManifestFileCommands {
   async saveFile(body: SaveManifestFile): Promise<ManifestSaveAnswer> {
     const port = this.port();
     if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
-    return saveAnswerOf(await ask(port, "POST", "/manifest/save_file", body));
+    const path = this.picked.manifest("/manifest/save_file");
+    if (path === null) return { state: "failed", outcome: NOT_SET_UP };
+    return saveAnswerOf(await ask(port, "POST", path, body));
   }
 
   /** A form's edits, by key. **Writes and stops**, and answers with the file as written. */
   async edit(body: EditManifest): Promise<ManifestEditAnswer> {
     const port = this.port();
     if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
-    return editAnswerOf(await ask(port, "POST", "/manifest/edit", body));
+    const path = this.picked.manifest("/manifest/edit");
+    if (path === null) return { state: "failed", outcome: NOT_SET_UP };
+    return editAnswerOf(await ask(port, "POST", path, body));
   }
 
   /** The costliest and the longest past Job against this Manifest. */
   async readSpend(): Promise<ManifestSpendRead> {
     const port = this.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", "/manifest/spend");
+    const path = this.picked.manifest("/manifest/spend");
+    if (path === null) return { ok: false, outcome: NOT_SET_UP };
+    const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, spend: answer.body as ManifestSpend };
   }

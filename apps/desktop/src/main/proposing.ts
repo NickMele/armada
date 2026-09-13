@@ -23,7 +23,7 @@ import {
 } from "@armada/protocol";
 import { randomUUID } from "node:crypto";
 
-import { ask, isJobSummary, NO_WAIT } from "./request";
+import { ask, isJobSummary, NOT_SET_UP, NO_WAIT } from "./request";
 // Type-only, and therefore not a cycle at runtime: `Board` is what an act needs
 // of the connection, and it is declared where the acts are.
 import type { Board } from "./command";
@@ -57,6 +57,8 @@ export async function proposeFromRequest(
   if (port === null) {
     return { ok: false, why: "refused", outcome: { ok: false, why: "not_connected" } };
   }
+  const path = board.picked.manifest("/jobs/from_request");
+  if (path === null) return { ok: false, why: "refused", outcome: NOT_SET_UP };
 
   // The token this window recognises its own call by. Minted here because the
   // request is where it has to travel, and Fleet echoes it back without reading
@@ -83,7 +85,7 @@ export async function proposeFromRequest(
     // spending with nobody to read it. What bounds this now is Fleet's budget
     // at one end and `stopProposal` at the other — a control that reaches the
     // process, offered to somebody who can see how far the call has got.
-    const answer = await ask(port, "POST", "/jobs/from_request", body, NO_WAIT);
+    const answer = await ask(port, "POST", path, body, NO_WAIT);
     if (answer.ok !== true) return notProposed(said, answer.outcome);
     return proposedFrom(board, port, answer.body);
   } finally {

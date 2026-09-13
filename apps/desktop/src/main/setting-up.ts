@@ -1,5 +1,5 @@
 // Setup's reads and acts: Scan, a proposal per workspace, one edit, and Write.
-// No path crosses — Fleet serves the checkout it was started in until Locate (#821) names another.
+// No path crosses but the picked repository's root, which Scan names it by — `picked.ts`.
 
 import type {
   EditManifestProposal,
@@ -14,6 +14,7 @@ import type {
   RepositoryScanRead,
 } from "@armada/screens/src/setup-reads";
 
+import type { Picked } from "./picked";
 import { ask, type Answer } from "./request";
 
 /** Declared in `crates/fleet/src/manifest_proposal/held.rs`. Matched, never minted. */
@@ -47,16 +48,21 @@ export function proposalAnswerOf(answer: Answer): ProposalAnswer {
 
 export class SetupCommands {
   private readonly port: () => number | null;
+  private readonly picked: Picked;
+  /** Re-reads what Fleet serves, so a root Write's new Manifest id is what Verify then names. */
+  private readonly written: (port: number) => Promise<void>;
 
-  constructor(port: () => number | null) {
+  constructor(port: () => number | null, picked: Picked, written: (port: number) => Promise<void>) {
     this.port = port;
+    this.picked = picked;
+    this.written = written;
   }
 
   /** Every workspace in the checkout, read-only. */
   async readScan(): Promise<RepositoryScanRead> {
     const port = this.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", "/repository/scan");
+    const answer = await ask(port, "GET", this.picked.scan("/repository/scan"));
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, scan: answer.body as RepositoryScan };
   }
@@ -65,7 +71,7 @@ export class SetupCommands {
   async readProposals(): Promise<ManifestProposalsRead> {
     const port = this.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const answer = await ask(port, "GET", "/repository/proposals");
+    const answer = await ask(port, "GET", this.picked.scan("/repository/proposals"));
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, proposals: answer.body as ManifestProposals };
   }
@@ -74,13 +80,16 @@ export class SetupCommands {
   async edit(body: EditManifestProposal): Promise<ProposalAnswer> {
     const port = this.port();
     if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
-    return proposalAnswerOf(await ask(port, "POST", "/repository/edit_proposal", body));
+    return proposalAnswerOf(await ask(port, "POST", this.picked.scan("/repository/edit_proposal"), body));
   }
 
   /** Create `armada.yml` for one workspace. **Creates, never replaces**, and stages nothing. */
   async write(body: WriteManifestProposal): Promise<ProposalAnswer> {
     const port = this.port();
     if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
-    return proposalAnswerOf(await ask(port, "POST", "/repository/write_proposal", body));
+    const answer = proposalAnswerOf(await ask(port, "POST", this.picked.scan("/repository/write_proposal"), body));
+    // Awaited, so the sheet that wrote the root has this repository's Manifest to Verify when it redraws.
+    if (answer.state === "took" && body.dir === ".") await this.written(port);
+    return answer;
   }
 }

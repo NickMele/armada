@@ -14,6 +14,7 @@ import { afterEach, expect, it } from "vitest";
 
 import type { WorktreeReclaimed } from "@armada/protocol";
 import type { Board } from "./command";
+import { Picked } from "./picked";
 import { Clearing } from "./clearing";
 
 let listening: Server | null = null;
@@ -63,6 +64,7 @@ async function fleetRecording(into: string[]): Promise<number> {
 function boardOn(port: number, forgotten: string[]): Board {
   return {
     port: () => port,
+    picked: new Picked(),
     fold: () => {},
     forget: (jobId) => forgotten.push(jobId),
     reread: async () => {},

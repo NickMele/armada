@@ -36,7 +36,7 @@ import type { RepositoryAllowedCommandsRead } from "../../../manifest-allows";
 import { useManifestEditing } from "../../../manifest-file";
 import { useManifestForm } from "../../../manifest-form";
 import { appliedTo } from "../ManifestForms/applied";
-import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";
+import { CREATED_AT, repository } from "../../../fixtures/build/base";
 
 /** The moment every elapsed figure on this page is read at, so it never moves. */
 export const NOW = Date.parse("2026-09-12T14:20:00Z");
@@ -343,8 +343,8 @@ export function ManifestFrom({
       <Shell
         connection={CONNECTED}
         statement={statement}
-        manifests={[manifest()]}
-        scope={MANIFEST_ID}
+        repositories={[repository()]}
+        scope={repository().root}
         onScope={noop}
         jobs={[]}
         capacity={{ bound: 4, occupied: 0 }}

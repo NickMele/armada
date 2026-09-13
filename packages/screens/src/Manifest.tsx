@@ -93,6 +93,8 @@ export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
   setup?: ReactNode;
   settingUp?: boolean;
   onSettingUp?: (on: boolean) => void;
+  /** `false` where the picked repository has no `armada.yml` yet: Setup is the only view with anything to show. */
+  setUp?: boolean;
 };
 
 /**
@@ -109,6 +111,7 @@ export function Manifest(props: ManifestProps) {
   // below are branches on what was read rather than on what this holds.
   const slot = useManifestRuns(props);
   const { editing } = props;
+  const onlySetup = props.setUp === false && props.setup !== undefined;
   const [dismissedVerify, setDismissedVerify] = useState<string | null>(null);
   const [verifyRefused, setVerifyRefused] = useState<string | null>(null);
   const verify = verifyPanelOf({
@@ -130,18 +133,22 @@ export function Manifest(props: ManifestProps) {
           what would not read. */}
       <Tabs
         items={[
-          { id: "run", label: "Checks and Commands" },
-          { id: "form", label: "Edit" },
-          { id: "file", label: editing.named },
+          ...(onlySetup
+            ? []
+            : [
+                { id: "run", label: "Checks and Commands" },
+                { id: "form", label: "Edit" },
+                { id: "file", label: editing.named },
+              ]),
           ...(props.setup === undefined ? [] : [{ id: "setup", label: "Set up workspaces" }]),
         ]}
-        value={props.settingUp ? "setup" : editing.view}
+        value={props.settingUp || onlySetup ? "setup" : editing.view}
         onChange={(id) => {
           props.onSettingUp?.(id === "setup");
           if (id !== "setup") editing.onView(id === "file" || id === "form" ? id : "run");
         }}
       />
-      {props.settingUp && props.setup !== undefined ? (
+      {(props.settingUp || onlySetup) && props.setup !== undefined ? (
         props.setup
       ) : editing.view === "file" ? (
         <FileView file={editing.file} />

@@ -1,13 +1,13 @@
 // Setup — Journey 3, *Set Up a Project*: the picker, with each workspace's proposal opening
 // over it, in any order and closing back to it. Not a wizard.
 //
-// Drawn against the checkout this Fleet was started in; Locate (#821) is not built.
+// Drawn against the repository the rail picked.
 //
-// # Verify lands on the sheet only for the Manifest Fleet holds
+// # Verify lands on the sheet only for the root's file
 //
-// `start_checkout_verify` runs the Manifest Fleet was started with, at the root. A file
-// written for `apps/web` is not that one, so its sheet says so rather than offering a Verify
-// that would run another file's Checks.
+// `start_checkout_verify` runs the picked repository's Manifest, at its root. A file written
+// for `apps/web` is not that one, so its sheet says so rather than offering a Verify that
+// would run another file's Checks.
 
 import { useState } from "react";
 import type { CheckoutRunSheetRead, Outcome, ProposalEdit } from "@armada/protocol";
@@ -22,11 +22,11 @@ export type SetupProps = {
   setting: Setting;
   /** The app's one `now`. */
   now: number;
-  /** What the Manifest Fleet holds declares, which is where a Verify is read from. */
+  /** What the picked repository's Manifest declares, which is where a Verify is read from. */
   sheet: CheckoutRunSheetRead;
   onStartVerify: () => Promise<Outcome>;
   onStopRun: (runId: string) => Promise<Outcome>;
-  /** Go to the Manifest's Edit tab, which edits the file this Fleet was started with. */
+  /** Go to the Manifest's Edit tab, which edits the picked repository's root file. */
   onOpenEdit?: () => void;
   /** The window is at `--window-floor`. */
   floor?: boolean;
@@ -75,8 +75,8 @@ export function Setup({ setting, now, sheet, onStartVerify, onStopRun, onOpenEdi
         />
       ) : (
         <p className="text-fg-muted">
-          Verify runs the Manifest this Fleet was started with, at the root of the checkout. This file
-          is not that one, so nothing here would run its Checks.
+          Verify runs this repository's Manifest, at the root of the checkout. This file is not that
+          one, so nothing here would run its Checks.
         </p>
       );
   }
