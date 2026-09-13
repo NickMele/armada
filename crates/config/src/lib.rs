@@ -24,6 +24,8 @@
 //! cache expiry: *when* a Manifest is read again is `armada::watching`'s, and
 //! [`live`](mod@live) says only which keys a re-read may move.
 
+/// Editing `armada.yml` a key at a time, every other byte left where it was.
+mod amending;
 mod catalogue;
 mod error;
 mod judge;
@@ -39,6 +41,10 @@ mod yaml;
 #[cfg(test)]
 mod tests;
 
+pub use amending::{
+    amend, Amended, CheckEdit, CommandEdit, Edit, NewCheck, NewCommand, NewLink, NewNarrowing,
+    NewPort, NotAmended, PortEdit, Unplaceable,
+};
 pub use catalogue::{
     carried, Catalogue, CatalogueRefused, LeftOut, ResolvedCatalogue, WhyLeftOut, Written,
     CARRIED_AT,
