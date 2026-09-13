@@ -213,6 +213,11 @@ impl Queries for FakeDaemon {
         Ok(*self.limits.lock().expect("not poisoned"))
     }
 
+    /// Whatever the fake's own saves have left, `get_limits`' reason.
+    async fn get_preferences(&self) -> Result<ipc::Preferences, Refusal> {
+        Ok(*self.preferences.lock().expect("not poisoned"))
+    }
+
     /// Whatever a test planted, unfiltered — `#836`.
     async fn get_repository_allowed_commands(
         &self,

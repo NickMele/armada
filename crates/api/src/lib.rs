@@ -50,6 +50,9 @@ mod limiting;
 mod manifest_proposals;
 mod mcp;
 mod observing;
+/// A person's Bridge preferences, read and saved. `limiting`'s shape one
+/// table over.
+mod preferring;
 mod queries;
 /// The `:job_id` a route carries, resolved before a handler can reach it.
 mod reference;

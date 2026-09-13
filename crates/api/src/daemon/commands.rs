@@ -829,6 +829,19 @@ pub trait Commands: Send + Sync + 'static {
         save: ipc::SaveLimits,
     ) -> impl Future<Output = Result<ipc::FleetLimits, Refusal>> + Send;
 
+    /// `save_preferences` — save one preference by name, and answer with what
+    /// is now in force. **`limits`' shape one table over, one field at a
+    /// time**: a save names a preference rather than the whole set, and every
+    /// other preference is untouched.
+    ///
+    /// [`Refusal::Unacceptable`] where `name` is outside the closed set —
+    /// refused by name, since `SavePreference.name` is a plain string and
+    /// always decodes.
+    fn save_preferences(
+        &self,
+        save: ipc::SavePreference,
+    ) -> impl Future<Output = Result<ipc::Preferences, Refusal>> + Send;
+
     /// `remove_repository_allowed_command` — take back a rule a person
     /// always-allowed for this Manifest's repository. **Since `#836`.**
     ///

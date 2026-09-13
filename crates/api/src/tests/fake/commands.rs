@@ -238,6 +238,26 @@ impl Commands for FakeDaemon {
         Ok(*limits)
     }
 
+    /// The one preference name this fake knows; anything else is the 422 a
+    /// route test tells apart from a missing route by its code.
+    async fn save_preferences(
+        &self,
+        save: ipc::SavePreference,
+    ) -> Result<ipc::Preferences, Refusal> {
+        let mut preferences = self.preferences.lock().expect("not poisoned");
+        match save.name.as_str() {
+            "where_things_are_open" => {
+                preferences.where_things_are_open = save.value;
+                Ok(*preferences)
+            }
+            other => Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.unknown_preference",
+                format!("`{other}` is not a preference this build reads"),
+                crate::tests::shapes::run_id(),
+            ))),
+        }
+    }
+
     /// The named row goes, by its exact text; one absent is the 409 every
     /// fake give a name that names nothing.
     async fn add_repository(

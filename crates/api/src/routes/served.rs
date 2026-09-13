@@ -60,6 +60,19 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/limits/save",
     },
+    // A person's Bridge preferences, `get_limits`/`save_limits`'s shape one
+    // table over: Fleet-wide, not a Job's, and the save spells its act in the
+    // last segment the way `/limits/save` does.
+    Route {
+        operation: "get_preferences",
+        method: "GET",
+        path: "/preferences",
+    },
+    Route {
+        operation: "save_preferences",
+        method: "POST",
+        path: "/preferences/save",
+    },
     // Fleet's reading of its own Manifest, and singular where `/manifests` is
     // plural on purpose: that route lists what Fleet holds, and this one is the
     // single `armada.yml` Fleet is running on and watching. Not under `/jobs`
