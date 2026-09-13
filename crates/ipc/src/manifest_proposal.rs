@@ -47,6 +47,9 @@ pub struct ManifestProposal {
     /// Absent until Write lands it; after that the proposal takes no edits.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub written: Option<ManifestSaved>,
+    /// An `armada.yml` is at `file` now — one already set up, or one Write put down.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub present: bool,
 }
 
 /// Where a line came from.

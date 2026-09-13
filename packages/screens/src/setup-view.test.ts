@@ -58,7 +58,8 @@ describe("the picker", () => {
     expect(stateOf(proposal("docs", []), false)).toBe("no checks proposed");
     expect(stateOf(proposal("web", ["test"]), true)).toBe("open, being edited");
     expect(stateOf({ ...proposal("web", ["test"]), written: { path: "web/armada.yml", at: "2026-09-13T10:00:00Z" } }, true)).toBe("written");
-    expect(stateOf(proposal("web", ["test"]), false, { appeared: { onDisk: null } })).toBe("a file is already there");
+    expect(stateOf(proposal("web", ["test"]), false, { appeared: { onDisk: null } })).toBe("already set up");
+    expect(stateOf({ ...proposal(".", ["test"]), present: true }, false)).toBe("already set up");
   });
 
   it("says a thin workspace names nothing runnable", () => {
@@ -106,5 +107,10 @@ describe("the sheet", () => {
     expect(sheet.checks[1]?.cited).toEqual({ source: "convention", file: "web/package.json", at: "scripts.lint" });
     expect(sheet.policy[0]?.options.map((one) => one.value)).toEqual(["never", "checks-pass", "always"]);
     expect(sheet.caps).toMatch(/^Jobs here stop at .*5.* or 200 turns/);
+    expect(sheet.setUp).toBe(false);
+  });
+
+  it("offers no Write where an armada.yml is already there", () => {
+    expect(sheetOf(opened(), { ...PROPOSALS.proposals[0]!, present: true }).setUp).toBe(true);
   });
 });

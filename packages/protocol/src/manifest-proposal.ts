@@ -34,6 +34,8 @@ export type ManifestProposal = {
   refused?: ManifestRefused;
   /** Absent until Write lands it; after that it takes no edits. */
   written?: ManifestSaved;
+  /** An `armada.yml` is at `file` now — already set up, or put down by Write. */
+  present?: boolean;
 };
 
 /**

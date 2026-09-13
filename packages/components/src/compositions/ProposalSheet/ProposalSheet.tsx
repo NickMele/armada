@@ -66,6 +66,10 @@ export type ProposalSheetProps = {
   appeared?: { onDisk: string | null };
   /** The receipt once Write landed. The sheet takes no edits after it. */
   written?: ReactNode;
+  /** An `armada.yml` is already here, so nothing is offered to write or edit. */
+  setUp?: boolean;
+  /** Where an already set-up Manifest is edited, where this surface can reach it. */
+  onEditManifest?: () => void;
   /** Verify, mounted on the sheet that wrote the file. */
   verify?: ReactNode;
   busy?: boolean;
@@ -88,7 +92,7 @@ const TITLE: Record<ProposalBand, string> = { checks: "Checks", commands: "Comma
 
 export function ProposalSheet(props: ProposalSheetProps) {
   const { open, dir, file, id, written, busy = false, refused } = props;
-  const locked = written !== undefined || busy;
+  const locked = written !== undefined || busy || props.setUp === true;
   const faultsAt = (prefix: string) =>
     (refused?.faults ?? []).filter((one) => one.key === prefix || one.key.startsWith(`${prefix}.`));
 
@@ -106,6 +110,23 @@ export function ProposalSheet(props: ProposalSheetProps) {
     >
       <div className="armada-proposal-sheet">
         {written === undefined ? null : <Landed>{props.verify}</Landed>}
+        {props.setUp !== true || props.appeared !== undefined ? null : (
+          <Alert
+            tone="neutral"
+            title={`${file} is already here`}
+            action={
+              props.onEditManifest === undefined ? undefined : (
+                <Button variant="secondary" size="sm" onClick={props.onEditManifest}>
+                  Open the Edit tab
+                </Button>
+              )
+            }
+          >
+            {props.onEditManifest === undefined
+              ? "This workspace is set up. Nothing here writes over its file."
+              : "This workspace is set up. Change its Manifest on the Edit tab, not here."}
+          </Alert>
+        )}
         {props.problem === undefined ? null : (
           <Alert tone="caution" title="That edit was not applied">
             {props.problem}
@@ -202,7 +223,7 @@ export function ProposalSheet(props: ProposalSheetProps) {
   );
 }
 
-function Foot({ file, refused, appeared, written, busy = false, onWrite }: ProposalSheetProps) {
+function Foot({ file, refused, appeared, written, busy = false, setUp, onEditManifest, onWrite }: ProposalSheetProps) {
   return (
     <div className="armada-proposal-sheet__foot">
       {refused === undefined ? null : (
@@ -221,15 +242,22 @@ function Foot({ file, refused, appeared, written, busy = false, onWrite }: Propo
         <Alert tone="caution" title={`There is already a file at ${file}`}>
           <p className="armada-proposal-sheet__said">Nothing was written over it. It reads:</p>
           <pre className="armada-proposal-sheet__disk">{appeared.onDisk ?? "(unreadable)"}</pre>
+          {onEditManifest === undefined ? null : (
+            <Button variant="secondary" size="sm" onClick={onEditManifest}>
+              Open the Edit tab
+            </Button>
+          )}
         </Alert>
       )}
-      {/* Beside the press it answers, so it is on screen wherever Write was pressed. */}
+      {/* Beside the press it answers; no press where a file is already here. */}
+      {setUp === true ? null : (
       <div className="armada-proposal-sheet__press">
         {written === undefined ? null : <p className="armada-proposal-sheet__said">{written}</p>}
         <Button variant="primary" disabled={written !== undefined || busy} onClick={onWrite}>
           {written !== undefined ? "Written" : busy ? "Writing" : `Write ${file}`}
         </Button>
       </div>
+      )}
     </div>
   );
 }

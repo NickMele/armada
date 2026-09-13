@@ -26,11 +26,13 @@ export type SetupProps = {
   sheet: CheckoutRunSheetRead;
   onStartVerify: () => Promise<Outcome>;
   onStopRun: (runId: string) => Promise<Outcome>;
+  /** Go to the Manifest's Edit tab, which edits the file this Fleet was started with. */
+  onOpenEdit?: () => void;
   /** The window is at `--window-floor`. */
   floor?: boolean;
 };
 
-export function Setup({ setting, now, sheet, onStartVerify, onStopRun, floor }: SetupProps) {
+export function Setup({ setting, now, sheet, onStartVerify, onStopRun, onOpenEdit, floor }: SetupProps) {
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [verifyRefused, setVerifyRefused] = useState<string | null>(null);
   const { held } = setting;
@@ -88,6 +90,8 @@ export function Setup({ setting, now, sheet, onStartVerify, onStopRun, floor }: 
           {...sheetOf(held, opened)}
           busy={held.busy === opened.dir}
           verify={verify}
+          // Only the root's file is the one the Edit tab edits.
+          {...(opened.dir === "." && onOpenEdit !== undefined ? { onEditManifest: onOpenEdit } : {})}
           floor={floor}
           onClose={setting.onClose}
           onEditId={(id) => edit({ edit: "id", id })}

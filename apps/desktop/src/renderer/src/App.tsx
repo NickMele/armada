@@ -635,6 +635,10 @@ export function App() {
                     sheet={state.checkoutRunSheet}
                     onStartVerify={startCheckoutVerify}
                     onStopRun={stopCheckoutRun}
+                    onOpenEdit={() => {
+                      setSettingUp(false);
+                      editing.onView("form");
+                    }}
                     floor={floor}
                   />
                 }

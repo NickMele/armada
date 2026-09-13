@@ -121,6 +121,19 @@ export const AlreadyThere: Story = {
   },
 };
 
+/** Already set up: no Write and no edit, and the Edit tab offered where the file is reachable. */
+export const AlreadySetUp: Story = {
+  name: "Already set up",
+  args: { ...BASE, setUp: true, onEditManifest: fn() },
+  play: async ({ args, canvasElement, userEvent }) => {
+    const sheet = within(canvasElement);
+    await expect(sheet.queryByRole("button", { name: /^Write / })).toBeNull();
+    await expect(sheet.queryByRole("button", { name: /^Edit / })).toBeNull();
+    await userEvent.click(sheet.getByRole("button", { name: "Open the Edit tab" }));
+    await expect(args.onEditManifest).toHaveBeenCalledTimes(1);
+  },
+};
+
 /** Written: the receipt beside the press, Verify on the sheet that wrote the file, and no edit offered after. */
 export const Written: Story = {
   args: {

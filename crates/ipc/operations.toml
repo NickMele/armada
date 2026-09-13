@@ -356,6 +356,8 @@ The step after Scan, for a repository with no `armada.yml` — `docs/journeys/se
 
 **Provenance is a record, not a value.** A port a file declares reads `read`; every script reads `convention`, because nothing proves a script gates code, so which registry it landed in is a guess. Policy rows read `default`: `auto_merge` and `review_gate` are Manifest-only, so there is no Kit or Machine value to show, and a default row is an absent key. The budget caps cross as `caps`, stated and never written.
 
+**`present` says an `armada.yml` is already at the path**, so a surface reads that workspace as set up rather than offering a Write that 409s.
+
 **Held in Fleet's memory for the Fleet's life, never stored.** The first read of a workspace builds its proposal and later reads return it with every edit applied; a restart loses the edits and costs one Scan. Served against the checkout Fleet was started in until Locate (#821).
 
 `agent_access` is `No`, as for every operation derived from the main checkout, Scan included. Helm will need this read and a draft-shaped edit, at *Drafts only*, and never Write.

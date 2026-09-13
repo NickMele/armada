@@ -78,7 +78,7 @@ export function answered(
 /** The picker's state column. It reports, never instructs, and none of it is hued. */
 export function stateOf(proposal: ManifestProposal, open: boolean, mark: SetupMark = {}): string {
   if (proposal.written !== undefined) return "written";
-  if (mark.appeared !== undefined) return "a file is already there";
+  if (proposal.present === true || mark.appeared !== undefined) return "already set up";
   if (open) return "open, being edited";
   if (proposal.checks.length === 0) return "no checks proposed";
   if (proposal.refused !== undefined) return "would not load";
@@ -190,6 +190,7 @@ type Drawn = Omit<
   | "onAddPort"
   | "onPolicy"
   | "onWrite"
+  | "onEditManifest"
 >;
 
 export function sheetOf(held: SetupOpen, proposal: ManifestProposal): Drawn {
@@ -238,6 +239,7 @@ export function sheetOf(held: SetupOpen, proposal: ManifestProposal): Drawn {
     ...(mark.problem === undefined ? {} : { problem: mark.problem }),
     ...(mark.refused === undefined ? {} : { refused: mark.refused }),
     ...(mark.appeared === undefined ? {} : { appeared: mark.appeared }),
+    setUp: proposal.written === undefined && (proposal.present === true || mark.appeared !== undefined),
     ...(proposal.written === undefined
       ? {}
       : { written: `Wrote ${proposal.file} at ${clockOf(proposal.written.at)}. Nothing was staged or committed.` }),

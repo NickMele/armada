@@ -28,6 +28,8 @@ export const ThePicker: Story = {
     }
     await expect(within(within(list).getByRole("listitem", { name: "docs" })).getByRole("checkbox")).not.toBeChecked();
     await expect(within(within(list).getByRole("listitem", { name: "docs" })).getByText("no checks proposed")).toBeVisible();
+    // This repository's own root already has a Manifest, so it is not offered as writable.
+    await expect(within(within(list).getByRole("listitem", { name: "." })).getByText("already set up")).toBeVisible();
     // `lint` is declared by `apps/web` and not by `services/api`, its one ticked sibling.
     const grid = canvas.getByRole("region", { name: "Check names across the batch" });
     await expect(within(grid).getAllByText("missing")).toHaveLength(1);
@@ -87,10 +89,29 @@ export const Write: Story = {
   },
 };
 
-/** Writing the root lands on Verify, which runs the Manifest Fleet holds. */
+/**
+ * A root with an `armada.yml` already: its sheet offers no Write, and sends a person to the
+ * Edit tab, which edits that file.
+ */
+export const AlreadySetUp: Story = {
+  name: "A workspace already set up",
+  args: {},
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = await canvas.findByRole("region", { name: "Workspaces" });
+    await userEvent.click(within(list).getByRole("button", { name: "Open ." }));
+    const sheet = await canvas.findByRole("dialog", { name: "Proposal for ." });
+    await expect(within(sheet).getByText("armada.yml is already here")).toBeVisible();
+    await expect(within(sheet).queryByRole("button", { name: "Write armada.yml" })).toBeNull();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Open the Edit tab" }));
+    await expect(await canvas.findByRole("tab", { name: "Edit", selected: true })).toBeVisible();
+  },
+};
+
+/** A root nobody set up lands on Verify after Write — the case a repository added by folder meets. */
 export const WriteTheRoot: Story = {
   name: "Write the root, then Verify",
-  args: { write: "took", sheet: { state: "read", sheet: { setup: [], checks: [], commands: [] } } },
+  args: { write: "took", rootSetUp: false, sheet: { state: "read", sheet: { setup: [], checks: [], commands: [] } } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const list = await canvas.findByRole("region", { name: "Workspaces" });
@@ -128,7 +149,8 @@ export const AlreadyThere: Story = {
     const sheet = await canvas.findByRole("dialog", { name: "Proposal for apps/web" });
     await userEvent.click(within(sheet).getByRole("button", { name: "Write apps/web/armada.yml" }));
     await expect(await within(sheet).findByText("Nothing was written over it. It reads:")).toBeVisible();
+    await expect(within(sheet).queryByRole("button", { name: /^Write / })).toBeNull();
     await userEvent.click(within(sheet).getByRole("button", { name: "Back to the workspaces" }));
-    await expect(within(within(list).getByRole("listitem", { name: "apps/web" })).getByText("a file is already there")).toBeVisible();
+    await expect(within(within(list).getByRole("listitem", { name: "apps/web" })).getByText("already set up")).toBeVisible();
   },
 };

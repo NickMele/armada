@@ -77,7 +77,7 @@ function proposal(dir: string, checks: string[], commands: string[] = []): Manif
 export const PROPOSALS: ManifestProposals = {
   checkout: SCAN.checkout,
   proposals: [
-    proposal(".", ["test"]),
+    { ...proposal(".", ["test"]), present: true },
     proposal("apps/web", ["test", "lint", "typecheck"], ["dev"]),
     proposal("services/api", ["test", "typecheck"], ["migrate"]),
     proposal("docs", []),
@@ -124,12 +124,19 @@ export type WriteGoesTo = "took" | "refused" | "appeared";
 export function SetupFrom({
   write = "took",
   sheet = { state: "none" },
+  rootSetUp = true,
 }: {
   write?: WriteGoesTo;
+  /** Whether the root already has an `armada.yml`, as any Fleet's own repository does. */
+  rootSetUp?: boolean;
   /** The Manifest Fleet holds, which a Verify after a root Write reads. */
   sheet?: CheckoutRunSheetRead;
 }) {
-  const held = useRef(PROPOSALS);
+  const held = useRef<ManifestProposals>(
+    rootSetUp
+      ? PROPOSALS
+      : { ...PROPOSALS, proposals: PROPOSALS.proposals.map((one) => (one.dir === "." ? { ...one, present: false } : one)) },
+  );
   const [settingUp, setSettingUp] = useState(true);
   const answer = (dir: string, change: (one: ManifestProposal) => ManifestProposal): Promise<ProposalAnswer> => {
     const next = held.current.proposals.map((one) => (one.dir === dir ? change(one) : one));
@@ -214,7 +221,17 @@ export function SetupFrom({
             settingUp={settingUp}
             onSettingUp={setSettingUp}
             setup={
-              <Setup setting={setting} now={NOW} sheet={sheet} onStartVerify={nothingHappens} onStopRun={nothingHappens} />
+              <Setup
+                setting={setting}
+                now={NOW}
+                sheet={sheet}
+                onStartVerify={nothingHappens}
+                onStopRun={nothingHappens}
+                onOpenEdit={() => {
+                  setSettingUp(false);
+                  editing.onView("form");
+                }}
+              />
             }
           />
         </div>
