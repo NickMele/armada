@@ -63,7 +63,8 @@ export function changedOf(whole: JobWhole | null): number {
   const refused =
     whole.when_refused !== undefined && whole.when_refused !== REFUSED_STARTS_AT ? 1 : 0;
   const model = whole.model_override === undefined ? 0 : 1;
-  return blocked + refused + model + (whole.allowed_commands?.length ?? 0);
+  const reviewModel = whole.review_model_override === undefined ? 0 : 1;
+  return blocked + refused + model + reviewModel + (whole.allowed_commands?.length ?? 0);
 }
 
 /** The header's way in, where the Job has settings. Nothing where it has none. */
@@ -81,6 +82,7 @@ export type SettingsCalls = {
   onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void;
   onSetWhenRefused: (jobId: string, whenRefused: WhenRefused) => void;
   onSetModel: (jobId: string, model: string | null) => void;
+  onSetReviewModel: (jobId: string, model: string | null) => void;
   onRemoveAllowedCommand: (jobId: string, run: string) => void;
   onRaiseCap: (jobId: string, costCapMicros: number) => void;
   onRaiseTurnCap: (jobId: string, turnCap: number) => void;
@@ -98,7 +100,7 @@ export type SettingsSheetProps = SettingsCalls & {
 };
 
 /** A row a change was sent from. */
-type Row = "cost" | "turns" | "model" | "blocked" | "refused" | "allowed";
+type Row = "cost" | "turns" | "model" | "review-model" | "blocked" | "refused" | "allowed";
 
 /** What a row says once its change took, and how to tell that it did. */
 type Told = { row: Row; says: ReactNode; took: (whole: JobWhole) => boolean };
@@ -127,6 +129,7 @@ export function SettingsSheet({
   onSetWhenBlocked,
   onSetWhenRefused,
   onSetModel,
+  onSetReviewModel,
   onRemoveAllowedCommand,
   onRaiseCap,
   onRaiseTurnCap,
@@ -176,6 +179,21 @@ export function SettingsSheet({
         models={models?.models ?? []}
         model={whole.model_override ?? null}
         modelSaid={saidOf("model")}
+        {...(whole.review_step === undefined
+          ? {}
+          : {
+              reviewStep: whole.review_step,
+              reviewModel: whole.review_model_override ?? null,
+              reviewModelSaid: saidOf("review-model"),
+              onReviewModel: (chose: string | null) => {
+                tell(
+                  "review-model",
+                  reviewModelTook(chose),
+                  (next) => (next.review_model_override ?? null) === chose,
+                );
+                onSetReviewModel(job.id, chose);
+              },
+            })}
         choices={WHEN_BLOCKED.map((value) => ({
           value,
           label: WHEN_BLOCKED_LABEL[value],
@@ -270,6 +288,16 @@ function modelTook(model: string | null): ReactNode {
   return (
     <>
       Changed. The next step starts on <span className="mono">{model}</span>.
+    </>
+  );
+}
+
+/** A review model chosen or handed back, once it took. #903. */
+function reviewModelTook(model: string | null): ReactNode {
+  if (model === null) return "Changed. The review starts on the same model as the other steps.";
+  return (
+    <>
+      Changed. The review starts on <span className="mono">{model}</span>.
     </>
   );
 }

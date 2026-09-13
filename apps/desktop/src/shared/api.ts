@@ -249,6 +249,8 @@ export type BridgeApi = {
    * workflow gives each. **Live**: the step running now keeps its model.
    */
   setModel: (jobId: string, model: string | null) => Promise<Outcome>;
+  /** Choose the model a job's review step starts on, or clear it. #903. */
+  setReviewModel: (jobId: string, model: string | null) => Promise<Outcome>;
   /**
    * Take back a command a person allowed for one job, by the command exactly as
    * it was allowed. A line in `armada.yml` is not touched.

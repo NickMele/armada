@@ -56,6 +56,7 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onSetWhenBlocked: noop,
     onSetWhenRefused: noop,
     onSetModel: noop,
+    onSetReviewModel: noop,
     onRemoveAllowedCommand: noop,
     models: MODELS,
     onOverrule: noop,

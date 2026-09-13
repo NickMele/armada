@@ -241,6 +241,14 @@ pub struct JobDetail {
     /// after [`JobDetail::of`], like `when_blocked`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_override: Option<String>,
+    /// The model a person chose for this Job's review step. **Since 13.33**, #903. Absent is
+    /// no choice. `set_review_model` moves it, like `set_model` moves `model_override`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_model_override: Option<String>,
+    /// The label of the step that writes Armada's review. **Since 13.33**, #903. Absent on a
+    /// workflow with no review step, where there is no review model to choose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_step: Option<String>,
     /// The review Fleet composed at this Job's gate — the same text a pull
     /// request carries, where this Job has one. **Since 10.11**, and absent
     /// from a Fleet older than that, which a reader draws as no review at all
@@ -627,6 +635,8 @@ impl JobDetail {
             allowed_commands: Vec::new(),
             repository_allowed_commands: Vec::new(),
             model_override: None,
+            review_model_override: None,
+            review_step: None,
             review,
             confidence: None,
             workflow_source: job.workflow().source().as_wire().to_string(),

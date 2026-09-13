@@ -878,6 +878,17 @@ Refused with a 409 on a model `list_models` does not offer. The picker and the r
 `agent_access` is `No`: which model spends a Job's budget is the owner's to decide, and a Helm that could move it could move it past what the owner priced the Job at.
 """
 
+[operations.set_review_model]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Choose the model one Job's review step runs on, or clear the choice"
+notes = """
+`set_model`'s terms, for the one step that writes Armada's review (#903). **On that step a chosen review model beats the Job's own chosen model**, and every other step ignores it. The body is `model`, a name `list_models` offers or `null` to clear, sent rather than implied. `JobDetail.review_model_override` reads the choice back, and `JobDetail.review_step` names the step it applies to, absent on a workflow with none.
+
+Refused with a 409 on a model `list_models` does not offer. `agent_access` is `No`, for `set_model`'s reason.
+"""
+
 [operations.remove_allowed_command]
 kind = "command"
 transport = "HTTP"

@@ -101,6 +101,8 @@ export type JobDetailProps = {
   onSetWhenRefused: (jobId: string, whenRefused: WhenRefused) => void;
   /** The model this job's later steps start on, or `null` for the workflow's. Live. */
   onSetModel: (jobId: string, model: string | null) => void;
+  /** Choose the model the Job's review step runs on, or clear it. #903. */
+  onSetReviewModel: (jobId: string, model: string | null) => void;
   /** Take back a command allowed for this job. A line in `armada.yml` is not touched. */
   onRemoveAllowedCommand: (jobId: string, run: string) => void;
   /** What `list_models` offers, for the Job settings panel. `null` until it is read. */

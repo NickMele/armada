@@ -832,6 +832,28 @@ where
         self.summarised(&job).await
     }
 
+    /// The model this Job's review step spawns on, chosen or cleared, on `set_model`'s terms.
+    async fn set_review_model(
+        self: Arc<Self>,
+        job_id: JobId,
+        choice: ipc::SetModel,
+    ) -> Result<JobSummary, Refusal> {
+        let job = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            async move {
+                let id = job_id.to_domain();
+                let job = fleet.load(&id).await?;
+                Fleet::set_review_model(&fleet, &id, choice.model.as_deref())
+                    .await
+                    .map_err(|why| why.about(&id))?;
+                Ok(job)
+            }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
     /// A command a person allowed for this Job, taken back.
     async fn remove_allowed_command(
         self: Arc<Self>,

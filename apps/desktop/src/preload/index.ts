@@ -169,6 +169,8 @@ const api: BridgeApi = {
   // clear Fleet asks for by name — not `undefined`, which it would refuse.
   setModel: (jobId: string, model: string | null): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.setModel, jobId, model),
+  setReviewModel: (jobId: string, model: string | null): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.setReviewModel, jobId, model),
   removeAllowedCommand: (jobId: string, run: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.removeAllowedCommand, jobId, run),
 
