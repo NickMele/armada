@@ -64,12 +64,17 @@ pub struct Proposing {
 /// the watched runner exists — see `crate::proposals`. `making` is what decides
 /// who is told and what may stop it; the call itself is the same call either
 /// way, and a Fleet nobody is subscribed to publishes nothing.
+///
+/// `records_root` is read only where both replies are unreadable — it names
+/// where `crate::kept_reply` writes them down, `#831`'s reason for existing at
+/// all.
 pub async fn proposed(
     request: &str,
     workflows: &BTreeMap<WorkflowId, ResolvedWorkflow>,
     proposing: &Proposing,
     making: Watching,
     client_ref: Option<String>,
+    records_root: &str,
 ) -> Result<(ProposalId, Proposal), NotProposed> {
     let brief = Brief::about(request, workflows);
     let ask = Ask::put(
@@ -81,7 +86,12 @@ pub async fn proposed(
     // Begun before the call so that a person may stop one that never gets as
     // far as the vendor — which is precisely the case worth stopping.
     let (making, stopped) = making.begin(client_ref);
-    let answer = watched(
+    // **The id outlives the call, which is what makes a sibling findable.**
+    // Every Job this becomes carries it, and two Jobs carrying one id are the
+    // same request — the only thing on the record that says so, since a split
+    // writes no edge between Jobs that may run in any order.
+    let minted_by = ProposalId::carried(Ulid::carried(making.proposal().as_str()));
+    let first_reply = watched(
         proposing.client.as_ref(),
         &ask,
         proposing.budget,
@@ -90,15 +100,69 @@ pub async fn proposed(
     )
     .await
     .map_err(NotProposed::Call)?;
-    // **The id outlives the call, which is what makes a sibling findable.**
-    // Every Job this becomes carries it, and two Jobs carrying one id are the
-    // same request — the only thing on the record that says so, since a split
-    // writes no edge between Jobs that may run in any order.
-    let minted_by = ProposalId::carried(Ulid::carried(making.proposal().as_str()));
+
+    // `read` never raises `NotProposed::Call` — the call already answered by
+    // the time it runs — so `refused` here is always one of the readings a
+    // second try may fix, never an outage and never `Unresolved`, which is a
+    // successful reading. `#831`: one retry, and only on this.
+    let refused = match brief.read(&first_reply, workflows) {
+        Ok(proposal) => {
+            drop(making);
+            return Ok((minted_by, proposal));
+        }
+        Err(refused) => refused,
+    };
+    let retry_ask = Ask::put(
+        proposing.model.clone(),
+        &restated(brief.question(), &refused),
+        proposing.environment.clone(),
+    )
+    .map_err(|_| NotProposed::Call(CallFailed::NothingToAsk))?;
+    let second_reply = watched(
+        proposing.client.as_ref(),
+        &retry_ask,
+        proposing.budget,
+        &making.telling(),
+        making.retry().asked(),
+    )
+    .await;
     // Held to here and no further: dropping it publishes the coming-back
     // message, and the Jobs this becomes arrive as `job.created` after it.
     drop(making);
-    brief.read(&answer, workflows).map(|read| (minted_by, read))
+    let second_reply = second_reply.map_err(NotProposed::Call)?;
+    match brief.read(&second_reply, workflows) {
+        Ok(proposal) => Ok((minted_by, proposal)),
+        Err(refused_again) => {
+            // Best-effort, and never a reason to fail harder than the
+            // refusal already does — `kept_reply::kept`'s own rule. `None`
+            // is the honest answer where the write itself did not happen.
+            let kept_at = crate::kept_reply::kept(
+                records_root,
+                minted_by.as_str(),
+                &first_reply,
+                &second_reply,
+            );
+            Err(NotProposed::Unreadable {
+                second: Box::new(refused_again),
+                first_reply,
+                second_reply,
+                kept_at,
+            })
+        }
+    }
+}
+
+/// The question asked again, with what the first answer was refused for.
+///
+/// **States the refusal rather than repeating the question unchanged** — a
+/// model told which line was missing is answering a narrower question than
+/// the one it was first asked, and a second call that just asks again would
+/// draw the same shaped reply for the same reason. `#831`.
+fn restated(question: &str, refused: &NotProposed) -> String {
+    format!(
+        "{question}\n\nYour answer was refused: {refused}. Answer again, in \
+         the same format, correcting only that."
+    )
 }
 
 /// How long a request's own link may take to resolve before the request goes
@@ -226,6 +290,7 @@ where
             &proposing,
             self.making(),
             client_ref,
+            &self.host().records_root,
         )
         .await
         .map_err(|cause| Adrift::NotProposed {

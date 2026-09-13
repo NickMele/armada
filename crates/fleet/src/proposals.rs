@@ -178,6 +178,21 @@ impl Making {
         &self.proposal
     }
 
+    /// Reopen the stop channel for one further call under this same proposal.
+    ///
+    /// **The one retry `#831` asks for, watched the same way.** The first
+    /// [`StopWhenAsked`] this proposal minted was consumed by the call it was
+    /// made for; a second call needs its own, registered under the same id so
+    /// a person watching still reaches it — a proposal does not become a new
+    /// one because the reply it got could not be read.
+    pub(crate) fn retry(&self) -> StopWhenAsked {
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        if let Ok(mut held) = self.watching.proposals.0.lock() {
+            held.insert(self.proposal.clone(), stop);
+        }
+        StopWhenAsked(stopped)
+    }
+
     fn moved(&self, progress: CallProgress) {
         let Ok(mut reached) = self.reached.lock() else {
             return;

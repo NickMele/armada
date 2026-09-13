@@ -163,6 +163,23 @@ pub enum NotProposed {
     ///
     /// Only ever a plan of several. One Job's part is the request.
     NamesNoScope { at: usize },
+    /// Asked once more after one of the four readings above, and the second
+    /// answer could not be read either. **Never [`NotProposed::Call`]** — the
+    /// model answered both times; what came back could not be turned into a
+    /// plan. Both raw replies are kept here, and also written by
+    /// `crate::kept_reply` to a file `kept_at` names — `crate::refusing` puts
+    /// only that path on the wire, never the reply text. `#831`.
+    Unreadable {
+        second: Box<NotProposed>,
+        first_reply: String,
+        second_reply: String,
+        /// Where both replies were written, relative to this repository's own
+        /// records. `None` where the write itself did not happen — a
+        /// directory that would not open, or a disk that refused — on
+        /// `crate::kept_reply::kept`'s own rule that a failed write is not a
+        /// reason to fail the refusal it is for.
+        kept_at: Option<String>,
+    },
 }
 
 impl fmt::Display for NotProposed {
@@ -183,6 +200,10 @@ impl fmt::Display for NotProposed {
             NotProposed::NamesNoScope { at } => write!(
                 out,
                 "the answer splits the request and job {at} says no part of it is its own"
+            ),
+            NotProposed::Unreadable { second, .. } => write!(
+                out,
+                "asked once more, and the second answer could not be read either: {second}"
             ),
         }
     }
@@ -310,7 +331,12 @@ impl Brief {
             // below rather than refused: the line was asked to be left out,
             // and a model that wrote one anyway has not said anything the
             // request does not already say better.
-            let scope = field(block, "scope");
+            //
+            // **`scope_field`, not `field`.** `ANSWER_FORMAT` asks for it on
+            // one line, and a reply shaped as a table or a list is the one
+            // that does not comply — `#831`. `field` stays what the Judge
+            // reads unchanged; only the proposer tolerates the wrap.
+            let scope = scope_field(block);
             jobs.push((
                 scope,
                 ProposedJob {
@@ -366,6 +392,51 @@ fn blocks(answer: &str) -> Vec<String> {
 /// Whether this block declines rather than choosing.
 fn declines(block: &str) -> bool {
     field(block, "workflow").is_some_and(|named| named.eq_ignore_ascii_case("none"))
+}
+
+/// Every line that opens a field, in the order [`ANSWER_FORMAT`] states them.
+/// What [`scope_field`] reads until: the next of these, or the end of the
+/// block.
+const FIELD_LINES: [&str; 6] = [
+    "job:",
+    "workflow:",
+    "title:",
+    "scope:",
+    "because:",
+    "after:",
+];
+
+/// Read `scope`, spanning every line after it up to the next field line or the
+/// end of the block, joined with single spaces.
+///
+/// **Only `scope` calls this.** `workflow`, `title`, `because` and `after`
+/// keep [`verification::field`]'s single-line reading — the Judge relies on
+/// it unchanged, and none of the four is asked to hold as much of a request's
+/// own words as `scope` is. A reply shaped as a table or a list is the one
+/// that wraps `scope` onto the lines after it, and this is what a plan of
+/// several stops being refused for that alone. `#831`.
+fn scope_field(block: &str) -> Option<String> {
+    let mut lines = block.lines();
+    let mut value = loop {
+        let line = lines.next()?;
+        if let Some(rest) = line.trim().strip_prefix("scope:") {
+            break rest.trim().to_string();
+        }
+    };
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if FIELD_LINES.iter().any(|known| trimmed.starts_with(known)) {
+            break;
+        }
+        if !value.is_empty() {
+            value.push(' ');
+        }
+        value.push_str(trimmed);
+    }
+    (!value.is_empty()).then_some(value)
 }
 
 /// The job numbers this block waits on. A word that is not a number is dropped

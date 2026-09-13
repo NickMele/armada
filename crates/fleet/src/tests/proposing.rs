@@ -6,12 +6,18 @@
 //!
 //! The cases the capability turns on are here — a request that resolves, one
 //! that resolves to nothing and comes back unchanged, a call that could not be
-//! made, and a plan whose second Job does not start before its first has
-//! landed. So is the one they all exist to prevent: a workflow assigned because
-//! it was the nearest thing on the list.
+//! made, one whose reply cannot be read until asked again, and a plan whose
+//! second Job does not start before its first has landed. So is the one they
+//! all exist to prevent: a workflow assigned because it was the nearest thing
+//! on the list.
 //!
 //! What a request's own link resolves to before any of this runs is
 //! [`crate::tests::linking`]'s — a different claim about a different call.
+//!
+//! **Over 500 lines, and staying one file.** Every status this seam can answer
+//! with is proved from the one call site that raises it, `#831`'s retry among
+//! them — split by status and a change to one still has to be checked against
+//! the others it shares a call with.
 
 use std::collections::BTreeMap;
 
@@ -215,6 +221,122 @@ async fn a_call_that_fails_is_not_a_refusal_to_dispatch() {
     );
     let (loaded, _) = fleet.every_job().await.expect("the board reads");
     assert!(loaded.jobs.is_empty());
+}
+
+/// A reply that cannot be read is asked for once more, stating what was
+/// wrong with it, and a plan comes back from the second call.
+#[tokio::test]
+async fn an_unreadable_reply_is_asked_for_once_more_and_then_accepted() {
+    let home = TempDir::new();
+    let fleet = a_fleet_proposing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_catalogue(),
+        FakeJudge::answering_in_turn(&[
+            "I think this is probably a bug of some kind.",
+            "workflow: bug\ntitle: The log reader drops the last line\n\
+             because: a defect with a reproducible symptom",
+        ]),
+    );
+
+    let made = fleet
+        .propose_from(A_REQUEST, None)
+        .await
+        .expect("the second answer reads, so the first is not the end of it");
+
+    let [job] = &made[..] else {
+        panic!("one Job, not {}", made.len())
+    };
+    assert_eq!(job.workflow_id().as_str(), "bug");
+}
+
+/// A reply that cannot be read twice is refused under its own code, distinct
+/// from an outage — and both replies are kept on the value rather than
+/// thrown away with the first. `#831`.
+#[tokio::test]
+async fn a_reply_unreadable_twice_is_refused_with_both_replies_kept() {
+    let home = TempDir::new();
+    let fleet = a_fleet_proposing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_catalogue(),
+        FakeJudge::answering_in_turn(&[
+            "I think this is probably a bug of some kind.",
+            "still not sure what kind of thing this is.",
+        ]),
+    );
+
+    let refused = fleet
+        .propose_from(A_REQUEST, None)
+        .await
+        .expect_err("neither reply reads");
+
+    match &refused {
+        Adrift::NotProposed {
+            cause:
+                NotProposed::Unreadable {
+                    first_reply,
+                    second_reply,
+                    kept_at,
+                    ..
+                },
+            ..
+        } => {
+            assert_eq!(first_reply, "I think this is probably a bug of some kind.");
+            assert_eq!(second_reply, "still not sure what kind of thing this is.");
+            // Kept somewhere a person can read afterwards, and not only on
+            // the value this match is about to drop — `#831`'s own reason.
+            let path = kept_at.as_ref().expect("the write succeeded");
+            let written =
+                std::fs::read_to_string(home.path().join(path)).expect("the file this names");
+            assert!(written.contains("I think this is probably a bug of some kind."));
+            assert!(written.contains("still not sure what kind of thing this is."));
+        }
+        other => panic!("the new code, not {other:?}"),
+    }
+    let (loaded, _) = fleet.every_job().await.expect("the board reads");
+    assert!(loaded.jobs.is_empty(), "neither call produced a Job");
+}
+
+/// The router answers the new code, and never the outage's.
+#[tokio::test]
+async fn a_reply_unreadable_twice_answers_its_own_code_over_http() {
+    let home = TempDir::new();
+    let app = over_http::served(
+        &home,
+        FakeJudge::answering_in_turn(&[
+            "I think this is probably a bug of some kind.",
+            "still not sure what kind of thing this is.",
+        ]),
+    );
+
+    let (status, body) = crate::tests::http::call(
+        &app,
+        "POST",
+        "/jobs/from_request",
+        r#"{"request": "the log reader drops the last line of every file"}"#,
+    )
+    .await;
+
+    assert_eq!(status, axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    let error: ipc::WireError = ipc::decode("a refusal", &body).expect("a WireError");
+    assert_eq!(error.code, "fleet.proposer_unreadable");
+    assert_ne!(error.code, "fleet.proposer_unreachable");
+    assert!(
+        !format!("{error:?}").contains("I think this is probably a bug of some kind."),
+        "neither reply reaches the wire: {error:?}"
+    );
+    let ipc::WireValue::Str(kept_at) = error
+        .fields
+        .get("kept_at")
+        .expect("the wire error names where the replies were kept")
+    else {
+        panic!("kept_at is a path, not {:?}", error.fields.get("kept_at"))
+    };
+    let written =
+        std::fs::read_to_string(home.path().join(kept_at)).expect("the file the field names");
+    assert!(written.contains("I think this is probably a bug of some kind."));
+    assert!(written.contains("still not sure what kind of thing this is."));
 }
 
 /// A workflow this repository does not hold is refused rather than

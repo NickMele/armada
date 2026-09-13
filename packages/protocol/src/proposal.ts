@@ -70,7 +70,7 @@ export type ProposedPlan = {
 };
 
 /**
- * The two codes this route raises that a surface has to tell apart, mirrored
+ * The codes this route raises that a surface has to tell apart, mirrored
  * from `crates/fleet/src/refusing.rs`, which declares each beside the failure
  * that raises it.
  *
@@ -83,8 +83,8 @@ export type ProposedPlan = {
  * a `WireError`.
  *
  * A code that stops matching falls to `faulted`, which advises asking again —
- * wrong for a decline, and the reason `refusing.rs` says these two must never
- * be rendered as each other.
+ * wrong for a decline, and the reason `refusing.rs` says these must never be
+ * rendered as each other.
  */
 
 /** The request was read and no workflow fits. 422. The request comes back. */
@@ -92,6 +92,13 @@ export const NO_WORKFLOW_FITS = "fleet.no_workflow_fits";
 
 /** The proposer call could not be made — the network, the quota, the timeout. 500. */
 export const PROPOSER_UNREACHABLE = "fleet.proposer_unreachable";
+
+/**
+ * The proposer answered — twice — and neither reply could be turned into a
+ * plan. 500, and never `PROPOSER_UNREACHABLE`: the call was made both times,
+ * and it is what came back that could not be read. `#831`.
+ */
+export const PROPOSER_UNREADABLE = "fleet.proposer_unreadable";
 
 /**
  * Something under the daemon failed. 500, and read here for

@@ -13,6 +13,12 @@
 //! **The codes are declared here rather than in a registry**, beside the thing
 //! that raises them: the set is closed by collection, and a central list would
 //! put every code far from the failure it names.
+//!
+//! **Past 500 lines for that same reason, and staying one file.** Every code
+//! Fleet raises lives beside the arm that raises it — `#831`'s
+//! `PROPOSER_UNREADABLE` is the newest — and splitting this by, say, refusal
+//! kind would separate a code from the one-line comment saying why it is not
+//! its neighbour, which is the whole point of collecting them here.
 
 use adapter_traits::{AgentHarness, Delivery, NotMerged, Vcs, WorkProduct};
 use api::Refusal;
@@ -50,6 +56,10 @@ const PROPOSER_UNREACHABLE: &str = "fleet.proposer_unreachable";
 /// Nothing was created and what they typed comes back, so the surface returns
 /// them to the form rather than to an error.
 const PROPOSER_STOPPED: &str = "fleet.proposer_stopped";
+/// The proposer answered — twice — and neither reply could be turned into a
+/// plan. **Never [`PROPOSER_UNREACHABLE`]** — that code says the call could
+/// not be made; here it was made twice and read both times. `#831`.
+const PROPOSER_UNREADABLE: &str = "fleet.proposer_unreadable";
 /// A redispatch asked for on a Job that is not waiting for a person. A 409 like
 /// a refused move, and a code of its own because the machine was never asked.
 const NOT_REDISPATCHABLE: &str = "fleet.not_redispatchable";
@@ -348,6 +358,24 @@ where
                 WireError::raised(PROPOSER_STOPPED, said, self.run_id())
                     .with_field("request", WireValue::Str(request.clone())),
             ),
+            // Asked twice and read both times; neither reply became a plan.
+            // Its own code for `PROPOSER_UNREADABLE`'s reason — this is not
+            // the outage the arm below answers, and the two replies that led
+            // here stay off the wire: `said` is `NotProposed`'s own message,
+            // which names what was wrong and never quotes what was said.
+            // `kept_at` is the one pointer to where they were written, so a
+            // person can still go and read them.
+            Adrift::NotProposed {
+                request,
+                cause: NotProposed::Unreadable { kept_at, .. },
+            } => {
+                let raised = WireError::raised(PROPOSER_UNREADABLE, said, self.run_id())
+                    .with_field("request", WireValue::Str(request.clone()));
+                Refusal::Fault(match kept_at {
+                    Some(path) => raised.with_field("kept_at", WireValue::Str(path.clone())),
+                    None => raised,
+                })
+            }
             Adrift::NotProposed { request, .. } => Refusal::Fault(
                 WireError::raised(PROPOSER_UNREACHABLE, said, self.run_id())
                     .with_field("request", WireValue::Str(request.clone())),

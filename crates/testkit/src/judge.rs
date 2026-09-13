@@ -35,6 +35,11 @@ pub struct FakeJudge {
     /// How long the rendered program takes before it answers. Zero on every
     /// judge but one a test asked for [`FakeJudge::taking`].
     taking: Duration,
+    /// One answer per call, in order, for [`FakeJudge::answering_in_turn`].
+    /// `None` on every other constructor — a call past the end of the list
+    /// keeps drawing the last entry, which is what lets a test script two
+    /// calls without caring how many more a retry bound might add.
+    sequence: Option<Mutex<(usize, Vec<String>)>>,
 }
 
 impl FakeJudge {
@@ -46,6 +51,7 @@ impl FakeJudge {
             failing: None,
             asked: Mutex::new(Vec::new()),
             taking: Duration::ZERO,
+            sequence: None,
         }
     }
 
@@ -75,6 +81,7 @@ impl FakeJudge {
             failing: None,
             asked: Mutex::new(Vec::new()),
             taking: Duration::ZERO,
+            sequence: None,
         }
     }
 
@@ -87,6 +94,27 @@ impl FakeJudge {
             failing: Some(standing_in_for),
             asked: Mutex::new(Vec::new()),
             taking: Duration::ZERO,
+            sequence: None,
+        }
+    }
+
+    /// One answer per call, in the order the calls arrive. **For the Job
+    /// proposer's one retry**: `saying` cannot express a second answer to the
+    /// same question, and a retry is exactly that — the same question, asked
+    /// again after a stated refusal. A call past the end of `replies` draws
+    /// the last one, so a test naming two still passes if a bound elsewhere
+    /// ever allows a third. `#831`.
+    pub fn answering_in_turn(replies: &[&str]) -> FakeJudge {
+        FakeJudge {
+            default: None,
+            by_criterion: BTreeMap::new(),
+            failing: None,
+            asked: Mutex::new(Vec::new()),
+            taking: Duration::ZERO,
+            sequence: Some(Mutex::new((
+                0,
+                replies.iter().map(|reply| reply.to_string()).collect(),
+            ))),
         }
     }
 
@@ -117,7 +145,20 @@ impl FakeJudge {
     /// What this judge would answer a question. Matched on the question's text
     /// because a criterion id is not on the `Ask` — the model is never told
     /// one, and a citation names the criterion on Fleet's side.
+    ///
+    /// **`sequence` is read once per call and advances**, which is what makes
+    /// it a different answer each time rather than a fragment match against
+    /// the same question asked twice.
     fn answer(&self, question: &str) -> Option<String> {
+        if let Some(sequence) = &self.sequence {
+            let mut state = sequence.lock().expect("not poisoned");
+            let (at, replies) = &mut *state;
+            let chosen = replies.get(*at).or_else(|| replies.last()).cloned();
+            if *at + 1 < replies.len() {
+                *at += 1;
+            }
+            return chosen;
+        }
         self.by_criterion
             .iter()
             .find(|(fragment, _)| question.contains(fragment.as_str()))
@@ -132,13 +173,16 @@ impl ModelClient for FakeJudge {
             .lock()
             .expect("not poisoned")
             .push(ask.question().to_string());
-        let script = match (self.failing, self.answer(ask.question())) {
+        // Read once and reused below: `answer` advances `sequence` a step per
+        // read, and a second read here would spend that step on nothing.
+        let answer = self.answer(ask.question());
+        let script = match (self.failing, &answer) {
             (Some(_), _) => String::from("cat >/dev/null; exit 3"),
             (None, Some(_)) => String::from("cat >/dev/null; printf %s \"$0\""),
             (None, None) => String::from("cat >/dev/null"),
         };
         let mut args = vec![String::from("-c"), format!("{}{script}", self.beat())];
-        if let Some(answer) = self.answer(ask.question()) {
+        if let Some(answer) = answer {
             args.push(answer);
         }
         JudgeCall::rendered(ask, "/bin/sh", args)
