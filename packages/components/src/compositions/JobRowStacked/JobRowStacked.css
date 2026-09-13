@@ -228,9 +228,9 @@
   white-space: nowrap;
 }
 
-/* A table's headline shares one track with the handle. A long handle drew over
-   the next column once a fourth fact narrowed that track, so the cell clips and
-   the handle gives way before the title. It still copies whole. */
+/* A table's headline cell holds the title and the handle on one line. A person
+   reads a Job by its handle (#884), so it never shrinks: the headline track's
+   floor is the handle, so a fourth fact gives way first and the title after. */
 .armada-job-row[data-view="table"] .armada-job-row__headline,
 .armada-job-row-list[data-view="table"] .armada-job-row__headline {
   overflow: hidden;
@@ -238,15 +238,10 @@
 
 .armada-job-row[data-view="table"] .armada-job-row__title,
 .armada-job-row-list[data-view="table"] .armada-job-row__title {
-  flex: 0 1 auto;
-}
-
-.armada-job-row[data-view="table"] .armada-job-row__id,
-.armada-job-row-list[data-view="table"] .armada-job-row__id {
-  flex: 0 3 auto;
+  /* No intrinsic width, so the floor is the handle's rather than the whole title's. */
+  contain: inline-size;
+  flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Line two: the labelled field run, on tracks shared down the list so it reads
@@ -483,18 +478,19 @@
      has words but no carriage to Bridge, and four wherever it does. */
   --armada-job-table-tracks-3:
     minmax(var(--armada-track-badge), max-content)
-    minmax(0, 1fr)
+    minmax(min-content, 1fr)
     minmax(var(--armada-track-origin), auto)
     minmax(var(--armada-track-progress), auto)
     minmax(var(--armada-track-time), auto)
     max-content;
   --armada-job-table-tracks-4:
     minmax(var(--armada-track-badge), max-content)
-    minmax(0, 1fr)
+    minmax(min-content, 1fr)
     minmax(var(--armada-track-origin), auto)
     minmax(var(--armada-track-progress), auto)
     minmax(var(--armada-track-time), auto)
-    minmax(var(--armada-track-provenance), auto)
+    /* No floor: the fourth fact is what gives way first, so the handle never does. */
+    minmax(0, auto)
     max-content;
   --armada-job-table-tracks: var(--armada-job-table-tracks-4);
 }
