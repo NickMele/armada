@@ -64,6 +64,7 @@ export * from "./compositions/Sidebar/Sidebar";
 export * from "./compositions/StatusBar/StatusBar";
 export * from "./compositions/StepActivityMark/StepActivityMark";
 export * from "./compositions/StepBar/StepBar";
+export * from "./compositions/TaskMark/TaskMark";
 export * from "./compositions/TransitionHistory/TransitionHistory";
 export * from "./compositions/UnifiedDiff/UnifiedDiff";
 export * from "./compositions/WorkflowRail/WorkflowRail";

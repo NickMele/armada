@@ -73,3 +73,35 @@ export const RunningNeverPulses: StoryObj = {
     </div>
   ),
 };
+
+/**
+ * A task bar on job detail, `#896`. Done segments keep `--step-advanced` —
+ * Job detail draws one Job, so the rail's own hue applies.
+ */
+export const TasksOnJobDetail: Story = {
+  args: {
+    tasks: ["done", "done", "working", "open", "open"],
+    label: "2 of 4 tasks",
+  },
+};
+
+/**
+ * A task bar on the Board, `#898`. `doneHue="neutral"` is the list rule:
+ * done segments are `--border-strong` and only the working one takes hue,
+ * the same argument that took the accent off a list's step bar.
+ */
+export const TasksOnTheBoard: Story = {
+  args: {
+    tasks: ["done", "done", "working", "open", "open"],
+    doneHue: "neutral",
+    label: "2 of 4 tasks",
+  },
+};
+
+/** Every task done: no segment is working, so none takes `--step-running`. */
+export const TasksAllDone: Story = {
+  args: {
+    tasks: ["done", "done", "done"],
+    label: "3 of 3 tasks",
+  },
+};
