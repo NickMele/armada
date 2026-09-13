@@ -13,7 +13,11 @@ import {
   checkoutChangedRunOf,
   checkoutGroupsOf,
   checkoutOutputOf,
+  checkoutRunDiffReadingOf,
   checkoutRunnablesOf,
+  checkoutUndoOffered,
+  RUN_CHANGED_NO_LINES,
+  RUN_CHANGED_NOTHING,
   runningEntryOf,
 } from "./checkout-runs";
 
@@ -91,20 +95,105 @@ describe("the groups the Manifest surface lists", () => {
   });
 });
 
-describe("what Undo is offered for", () => {
-  it("offers nothing where Fleet says there is no snapshot behind the run", () => {
+describe("which run the changed-files panel is about, and what it offers", () => {
+  it("offers no Undo where Fleet says there is no snapshot behind the run", () => {
     // The rule this exists for: the main checkout holds a person's own
     // uncommitted work, so an Undo that could not be honoured would be the one
     // control on this page whose failure costs somebody theirs.
-    expect(checkoutChangedRunOf([record({ undoable: false })])?.id).toBe("crun_1");
+    const run = checkoutChangedRunOf([record({ undoable: false })]);
+    expect(run?.id).toBe("crun_1");
+    expect(checkoutUndoOffered(run!)).toBe(false);
   });
 
-  it("passes over a run already undone", () => {
-    expect(checkoutChangedRunOf([record({ undone_at: "2026-09-12T14:20:00Z" })])).toBeUndefined();
+  it("keeps a run already undone, so its diff can still be opened, and offers no Undo on it", () => {
+    const run = checkoutChangedRunOf([record({ undone_at: "2026-09-12T14:20:00Z" })]);
+    expect(run?.id).toBe("crun_1");
+    expect(checkoutUndoOffered(run!)).toBe(false);
+  });
+
+  it("does not reach past an undone run to offer Undo on an older one", () => {
+    // Restoring the older run's snapshot would put back a tree from before a
+    // run that has since been undone — a restore nobody could reason about.
+    const newer = record({ id: "crun_2", undone_at: "2026-09-12T14:20:00Z" });
+    const older = record({ id: "crun_1" });
+    expect(checkoutChangedRunOf([newer, older])?.id).toBe("crun_2");
   });
 
   it("passes over a run that changed nothing", () => {
     expect(checkoutChangedRunOf([record({ changed: [] })])).toBeUndefined();
+  });
+});
+
+describe("a run's diff, as the sheet draws it", () => {
+  const PATCH = [
+    "diff --git a/crates/api/src/rehearsing.rs b/crates/api/src/rehearsing.rs",
+    "--- a/crates/api/src/rehearsing.rs",
+    "+++ b/crates/api/src/rehearsing.rs",
+    "@@ -1,1 +1,1 @@",
+    "-fn a() {}",
+    "+fn a() { }",
+  ].join("\n");
+
+  it("draws a snapshot that is gone as gone, in Fleet's words, and nothing in its place", () => {
+    const reading = checkoutRunDiffReadingOf("crun_1", {
+      ok: true,
+      diff: { id: "crun_1", against: "run_snapshot", reading: { state: "gone", why: "no snapshot was taken" } },
+    });
+    expect(reading).toEqual({ state: "gone", why: "no snapshot was taken" });
+  });
+
+  it("does not draw an answer for another run under the one that is open", () => {
+    const reading = checkoutRunDiffReadingOf("crun_2", {
+      ok: true,
+      diff: { id: "crun_1", against: "run_snapshot", reading: { state: "read", files: [], patch: PATCH } },
+    });
+    expect(reading.state).toBe("reading");
+  });
+
+  it("splits the patch into the files and lines git wrote", () => {
+    const reading = checkoutRunDiffReadingOf("crun_1", {
+      ok: true,
+      diff: {
+        id: "crun_1",
+        against: "run_snapshot",
+        reading: {
+          state: "read",
+          files: [{ path: "crates/api/src/rehearsing.rs", change: "modified" }],
+          patch: PATCH,
+        },
+      },
+    });
+    expect(reading.state === "read" && reading.files.map((file) => file.path)).toEqual([
+      "crates/api/src/rehearsing.rs",
+    ]);
+  });
+
+  it("says a run changed nothing only where no file changed", () => {
+    const nothing = checkoutRunDiffReadingOf("crun_1", {
+      ok: true,
+      diff: { id: "crun_1", against: "run_snapshot", reading: { state: "read", files: [] } },
+    });
+    expect(nothing.state === "read" && nothing.emptyNote).toBe(RUN_CHANGED_NOTHING);
+
+    // A binary file changed and git's patch has no line of it. The page lists
+    // the file, so "changed nothing" here would contradict the screen behind.
+    const binary = checkoutRunDiffReadingOf("crun_1", {
+      ok: true,
+      diff: {
+        id: "crun_1",
+        against: "run_snapshot",
+        reading: { state: "read", files: [{ path: "logo.png", change: "modified" }] },
+      },
+    });
+    expect(binary.state === "read" && binary.emptyNote).toBe(RUN_CHANGED_NO_LINES);
+  });
+
+  it("says Fleet did not answer where it refused", () => {
+    const reading = checkoutRunDiffReadingOf("crun_1", {
+      ok: false,
+      outcome: { ok: false, why: "not_connected" },
+    });
+    expect(reading.state).toBe("failed");
   });
 });
 

@@ -409,10 +409,10 @@ export const CHANNELS = {
   listRuns: "bridge:list-runs",
   getRunOutput: "bridge:get-run-output",
   // The same rehearsal in the main checkout — Journey 9's *Running one*.
-  // Seven channels beside the Job's seven rather than a Job id that may be
-  // `null` on each: a route under `/manifest` and a route under `/jobs/:id`
-  // are two operations, and one capability taking which would read as one act
-  // and perform two.
+  // Channels beside the Job's rather than a Job id that may be `null` on each:
+  // a route under `/manifest` and a route under `/jobs/:id` are two
+  // operations, and one capability taking which would read as one act and
+  // perform two. The last is the checkout's own — a Job's diff is `readDiff`.
   watchCheckoutRunSheet: "bridge:watch-checkout-run-sheet",
   observeCheckoutRun: "bridge:observe-checkout-run",
   startCheckoutRun: "bridge:start-checkout-run",
@@ -420,6 +420,7 @@ export const CHANNELS = {
   undoCheckoutRun: "bridge:undo-checkout-run",
   listCheckoutRuns: "bridge:list-checkout-runs",
   getCheckoutRunOutput: "bridge:get-checkout-run-output",
+  getCheckoutRunDiff: "bridge:get-checkout-run-diff",
   // The Manifest file — Journey 9's *Editing*. Two entries, a read and a
   // write, and neither takes a path: Fleet names the file.
   readManifestFile: "bridge:read-manifest-file",

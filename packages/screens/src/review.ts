@@ -59,14 +59,28 @@ export function drawn(work: Work): Drawn {
   const outside = new Set(
     work.files.filter((file) => file.outside_plan === true).map((file) => file.path),
   );
-  const parsed = split(patch);
+  const parsed = drawnOf(patch, cutSentence);
   const files = parsed.files.map((file) => ({
     ...file,
     outsidePlan: outside.has(file.path) || undefined,
   }));
+  return parsed.cut === undefined ? { files } : { files, cut: parsed.cut };
+}
+
+/**
+ * Any patch Fleet served, split and bounded — with the sentence for a cut
+ * patch supplied by the caller.
+ *
+ * **The sentence is the caller's because where the rest lives is.** A Job's
+ * patch names the worktree under *Where the work is*; a run in the main
+ * checkout has no worktree to name. The split and the bound are one, so the
+ * Manifest surface's diff cannot draw a patch differently from a Job's.
+ */
+export function drawnOf(patch: string, cutSaid: (drawnLines: number, total: number) => string): Drawn {
+  const parsed = split(patch);
   return parsed.cutAt === undefined
-    ? { files }
-    : { files, cut: cutSentence(parsed.cutAt, parsed.total) };
+    ? { files: parsed.files }
+    : { files: parsed.files, cut: cutSaid(parsed.cutAt, parsed.total) };
 }
 
 /**

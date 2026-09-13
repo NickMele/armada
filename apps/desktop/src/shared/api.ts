@@ -36,6 +36,7 @@ import type {
 import type { BridgeState, Summons } from "./bridge";
 import type { SaveManifestFile } from "@armada/protocol";
 import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
+import type { CheckoutRunDiffRead } from "@armada/screens/src/checkout-diff";
 
 /**
  * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and
@@ -432,8 +433,8 @@ export type BridgeApi = {
   getRunOutput: (jobId: string, runId: string) => Promise<RunOutputRead>;
 
   // The same rehearsal in the main checkout — Journey 9's *Running one*, the
-  // Manifest surface. **Seven entries beside the seven above rather than a
-  // `jobId` that may be `null` on each**: `/manifest/start_run` and
+  // Manifest surface. **Entries beside the seven above rather than a `jobId`
+  // that may be `null` on each**: `/manifest/start_run` and
   // `/jobs/:id/start_run` are two operations, and a single capability taking
   // which would be a surface that reads as one act and performs two — the rule
   // the two kills are two entries for.
@@ -463,6 +464,12 @@ export type BridgeApi = {
   listCheckoutRuns: () => Promise<CheckoutRunListRead>;
   /** One checkout run's log, read back as a window that says it is one. */
   getCheckoutRunOutput: (runId: string) => Promise<RunOutputRead>;
+  /**
+   * What one checkout run changed, **against the snapshot it took just before
+   * it — never `HEAD`**. A snapshot that is gone is a reading that says so.
+   * A read: it writes, stages and commits nothing.
+   */
+  getCheckoutRunDiff: (runId: string) => Promise<CheckoutRunDiffRead>;
 
   /**
    * `armada.yml` as it is on disk, whole and unparsed — the Manifest surface's

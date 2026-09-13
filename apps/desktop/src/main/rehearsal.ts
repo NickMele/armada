@@ -26,6 +26,7 @@ import type {
 } from "@armada/protocol";
 import type { Outcome } from "@armada/protocol";
 import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
+import type { CheckoutRunDiffRead } from "@armada/screens/src/checkout-diff";
 import type { BridgeState } from "../shared/bridge";
 import { ask, route, serversOf } from "./request";
 import { CheckoutRunCommands, CheckoutRunSocket, CheckoutSheetReader } from "./checkout-runs";
@@ -385,6 +386,11 @@ export class RehearsalConnection {
   /** One checkout run's log, read back as a window that says it is one. */
   getCheckoutRunOutput(runId: string): Promise<RunOutputRead> {
     return this.checkoutRuns.getRunOutput(runId);
+  }
+
+  /** One checkout run's patch, against the snapshot it took. A read. */
+  getCheckoutRunDiff(runId: string): Promise<CheckoutRunDiffRead> {
+    return this.checkoutRuns.getRunDiff(runId);
   }
 
   /** Start a declared server, for a Job's worktree or the main checkout. */

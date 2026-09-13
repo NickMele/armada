@@ -568,6 +568,10 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.getCheckoutRunOutput, (_event, runId: string) =>
     connection?.rehearsal.getCheckoutRunOutput(runId),
   );
+  // What one run changed, against the snapshot it took — never `HEAD`. A read.
+  ipcMain.handle(CHANNELS.getCheckoutRunDiff, (_event, runId: string) =>
+    connection?.rehearsal.getCheckoutRunDiff(runId),
+  );
   // The Manifest file, read and saved. Fleet resolves the path and guards the
   // write against a file that moved; nothing here composes either.
   ipcMain.handle(CHANNELS.readManifestFile, () => connection?.editing.readFile());

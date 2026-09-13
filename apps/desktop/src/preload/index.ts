@@ -21,6 +21,7 @@ import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@arm
 import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
 import type { SaveManifestFile } from "@armada/protocol";
 import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
+import type { CheckoutRunDiffRead } from "@armada/screens/src/checkout-diff";
 import type { CommandAnswer, JudgeAnswer, SaveLimits, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
@@ -258,7 +259,7 @@ const api: BridgeApi = {
   getRunOutput: (jobId: string, runId: string): Promise<RunOutputRead> =>
     ipcRenderer.invoke(CHANNELS.getRunOutput, jobId, runId),
 
-  // The same rehearsal in the main checkout — the Manifest surface. **Seven
+  // The same rehearsal in the main checkout — the Manifest surface. **Its own
   // entries rather than a `jobId` that may be `null` on the seven above**: a
   // route under `/manifest` and a route under `/jobs/:id` are two operations,
   // and one capability taking which would read as one act and perform two.
@@ -284,6 +285,11 @@ const api: BridgeApi = {
 
   getCheckoutRunOutput: (runId: string): Promise<RunOutputRead> =>
     ipcRenderer.invoke(CHANNELS.getCheckoutRunOutput, runId),
+
+  // A read, and one run's only: main composes the route, and the id is
+  // checked against the checkout's own runs by Fleet before any tree is read.
+  getCheckoutRunDiff: (runId: string): Promise<CheckoutRunDiffRead> =>
+    ipcRenderer.invoke(CHANNELS.getCheckoutRunDiff, runId),
 
   // The Manifest file. **A write into the repository**, and still no path: the
   // renderer hands over text and what it started from, and Fleet decides

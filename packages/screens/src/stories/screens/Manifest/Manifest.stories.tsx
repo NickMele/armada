@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type {
+  CheckoutRunDiff,
   CheckoutRunRecord,
   CheckoutRunSheet,
   RunEntry,
@@ -171,14 +172,54 @@ const EARLIER: CheckoutRunRecord = {
   log: "runs/crun_2f19/output.log",
 };
 
+/** What `get_checkout_run_diff` answers for `fmt`: the two trees the run kept, as git wrote the patch. */
+const FMT_DIFF: CheckoutRunDiff = {
+  id: REFORMATTED.id,
+  against: "run_snapshot",
+  reading: {
+    state: "read",
+    files: REFORMATTED.changed,
+    patch: [
+      "diff --git a/crates/fleet/src/rehearsing/checkout.rs b/crates/fleet/src/rehearsing/checkout.rs",
+      "index 3c1d2e0..9a7f441 100644",
+      "--- a/crates/fleet/src/rehearsing/checkout.rs",
+      "+++ b/crates/fleet/src/rehearsing/checkout.rs",
+      "@@ -137,9 +137,7 @@ impl Fleet {",
+      "         let gone = |why: &str| {",
+      "-            answered(ipc::RunDiffReading::Gone {",
+      "-                why: why.to_string(),",
+      "-            })",
+      "+            answered(ipc::RunDiffReading::Gone { why: why.to_string() })",
+      "         };",
+      "diff --git a/crates/api/src/rehearsing.rs b/crates/api/src/rehearsing.rs",
+      "index 51e0b2a..c08d7f3 100644",
+      "--- a/crates/api/src/rehearsing.rs",
+      "+++ b/crates/api/src/rehearsing.rs",
+      "@@ -158,7 +158,8 @@ pub(crate) async fn get_checkout_run_diff",
+      "-    match served.daemon().get_checkout_run_diff(run_id).await {",
+      "+    match served.daemon().get_checkout_run_diff(run_id).await",
+      "+    {",
+      "diff --git a/crates/ipc/src/rehearsal.rs b/crates/ipc/src/rehearsal.rs",
+      "index 0d4e9b1..77a2c5e 100644",
+      "--- a/crates/ipc/src/rehearsal.rs",
+      "+++ b/crates/ipc/src/rehearsal.rs",
+      "@@ -346,3 +346,1 @@ pub enum RunDiffReading {",
+      "-    Gone {",
+      "-        why: String,",
+      "-    },",
+      "+    Gone { why: String },",
+      "",
+    ].join("\n"),
+  },
+};
+
 /**
  * A run that changed the checkout.
  *
  * **This tree holds your own uncommitted work**, which no Job's worktree ever
- * does — so the panel lists what the run wrote and offers to put it back, and
- * Undo confirms by naming every path it would discard. There is no *Open the
- * diff*: the main checkout has no base to be read against, and nothing on the
- * wire answers for one.
+ * does — so the panel lists what the run wrote, offers **Open the diff** to
+ * read how, and offers to put it back. Undo confirms by naming every path it
+ * would discard.
  *
  * The earlier run below it exited 2 where 0 was expected, and takes no colour
  * for it. A remembered verdict here would read as Evidence the moment it sat
@@ -190,6 +231,76 @@ export const ARunThatChangedFiles: Story = {
     sheet: { state: "read", sheet: sheet() },
     runs: { runs: [REFORMATTED, EARLIER], unreadable: [] },
     now: NOW,
+    diff: FMT_DIFF,
+  },
+};
+
+/**
+ * **Open the diff** — the run's own patch, against the snapshot it took just
+ * before it, drawn by the same `UnifiedDiff` a Job's patch is. The sheet says
+ * what it is read against, because the checkout it opens over holds work that
+ * is not the run's.
+ */
+export const TheRunsDiff: Story = {
+  name: "The run's diff",
+  args: { ...ARunThatChangedFiles.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: "Open the diff" }));
+    const sheet = await canvas.findByRole("dialog", { name: "What this run changed" });
+    await expect(sheet).toHaveTextContent(/against the checkout just before the run/);
+    await expect(within(sheet).getByText("crates/ipc/src/rehearsal.rs")).toBeVisible();
+    await expect(within(sheet).getByText(/never against HEAD/)).toBeVisible();
+  },
+};
+
+/**
+ * **An undone run's diff is still shown, marked undone.** Undo restores from
+ * the snapshot and keeps it, so the patch reads; the panel loses Undo, keeps
+ * the files, and says when it was put back.
+ */
+export const AnUndoneRunsDiff: Story = {
+  name: "An undone run's diff",
+  args: {
+    sheet: { state: "read", sheet: sheet() },
+    runs: { runs: [{ ...REFORMATTED, undone_at: "2026-09-12T14:19:30Z" }, EARLIER], unreadable: [] },
+    now: NOW,
+    diff: FMT_DIFF,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText(/These files are back as they were/)).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Undo this run" })).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Open the diff" }));
+    const sheet = await canvas.findByRole("dialog", { name: "What this run changed" });
+    await expect(within(sheet).getByRole("note")).toHaveTextContent(/Undone at/);
+    await expect(within(sheet).getByText("crates/ipc/src/rehearsal.rs")).toBeVisible();
+  },
+};
+
+/**
+ * **A snapshot that is gone is said plainly**, in Fleet's own words, and no
+ * patch stands in for it — a diff against `HEAD` would show your own
+ * uncommitted work as the run's.
+ */
+export const ARunWhoseSnapshotIsGone: Story = {
+  name: "A run whose snapshot is gone",
+  args: {
+    sheet: { state: "read", sheet: sheet() },
+    runs: { runs: [REFORMATTED, EARLIER], unreadable: [] },
+    now: NOW,
+    diff: {
+      id: REFORMATTED.id,
+      against: "run_snapshot",
+      reading: { state: "gone", why: "the snapshot this run kept is no longer in the repository" },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: "Open the diff" }));
+    const sheet = await canvas.findByRole("dialog", { name: "What this run changed" });
+    await expect(await within(sheet).findByText(/no longer in the repository/)).toBeVisible();
+    await expect(within(sheet).queryByText("crates/ipc/src/rehearsal.rs")).toBeNull();
   },
 };
 

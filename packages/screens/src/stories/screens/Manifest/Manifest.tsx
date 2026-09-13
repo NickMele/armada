@@ -8,6 +8,7 @@
 import { useRef, useState } from "react";
 import { connectedTo, PROTOCOL_VERSION, type Connection } from "@armada/protocol";
 import type {
+  CheckoutRunDiff,
   CheckoutRunFollowed,
   CheckoutRunList,
   CheckoutRunSheetRead,
@@ -18,6 +19,7 @@ import type {
 } from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
+import type { CheckoutRunDiffRead } from "../../../checkout-diff";
 import type { ManifestSaveAnswer, ManifestView } from "../../../editing";
 import { useManifestEditing } from "../../../manifest-file";
 import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";
@@ -73,6 +75,7 @@ export function ManifestFrom({
   now = NOW,
   view = "run",
   save = "took",
+  diff,
 }: {
   sheet: CheckoutRunSheetRead;
   followed?: CheckoutRunFollowed;
@@ -83,6 +86,8 @@ export function ManifestFrom({
   view?: ManifestView;
   /** What pressing Save comes to. */
   save?: SaveGoesTo;
+  /** What `get_checkout_run_diff` answers when *Open the diff* is pressed. Absent: not connected. */
+  diff?: CheckoutRunDiff;
 }) {
   // A disk and a watch, faked just far enough to be Fleet's: a read answers
   // what is on disk, a save compares against it, and a reading follows.
@@ -172,6 +177,13 @@ export function ManifestFrom({
             onListRuns={() => Promise.resolve({ ok: true, runs })}
             onGetRunOutput={(): Promise<RunOutputRead> =>
               Promise.resolve({ ok: false, outcome: { ok: false, why: "not_connected" } })
+            }
+            onGetRunDiff={(): Promise<CheckoutRunDiffRead> =>
+              Promise.resolve(
+                diff === undefined
+                  ? { ok: false, outcome: { ok: false, why: "not_connected" } }
+                  : { ok: true, diff },
+              )
             }
             onStartServer={nothingHappens}
             onStopServer={nothingHappens}
