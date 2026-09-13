@@ -414,6 +414,13 @@ impl Queries for FakeDaemon {
         self.runs_nothing_here()
     }
 
+    async fn get_checkout_run_diff(
+        &self,
+        _run_id: String,
+    ) -> Result<ipc::CheckoutRunDiff, Refusal> {
+        self.runs_nothing_here()
+    }
+
     async fn observe_checkout_run(
         &self,
         _run_id: String,

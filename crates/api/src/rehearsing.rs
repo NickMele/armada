@@ -152,6 +152,18 @@ pub(crate) async fn get_checkout_run_output<D: Queries>(
     }
 }
 
+/// What one checkout run changed, against its own snapshot. A read: nothing in
+/// the checkout is written, staged or committed.
+pub(crate) async fn get_checkout_run_diff<D: Queries>(
+    State(served): State<Served<D>>,
+    Path(Ran { run_id }): Path<Ran>,
+) -> Response {
+    match served.daemon().get_checkout_run_diff(run_id).await {
+        Ok(diff) => answer(StatusCode::OK, &diff, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// One checkout run's output, as it prints — `observe_run`'s socket, one
 /// owner over.
 pub(crate) async fn observe_checkout_run<D: Queries>(

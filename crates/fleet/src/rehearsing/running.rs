@@ -325,7 +325,7 @@ async fn settled(
     }
 }
 
-fn wired(file: &adapter_traits::ChangedFile) -> ipc::ChangedFile {
+pub(super) fn wired(file: &adapter_traits::ChangedFile) -> ipc::ChangedFile {
     ipc::ChangedFile {
         path: file.path().to_string(),
         change: crate::footprint::kind(file.change()),

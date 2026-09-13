@@ -11,11 +11,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::WorktreeSpec;
+use axum::http::StatusCode;
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::gate::CheckBudget;
 use crate::tests::daemon::{a_proposal, fittings};
+use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -202,6 +204,78 @@ async fn a_run_that_wrote_is_undone_from_its_own_snapshot() {
         !home.path().join("generated.rs").exists(),
         "the file the run wrote is gone"
     );
+}
+
+/// #782's definition of done: a run that changed a file is read back over the
+/// wire as a patch against **its own snapshot** — the person's uncommitted
+/// edit from before the run and one made after it are both absent — and once
+/// that snapshot is gone the answer says so rather than diffing against `HEAD`.
+#[tokio::test]
+async fn a_runs_diff_is_against_its_own_snapshot_and_says_when_that_is_gone() {
+    let home = TempDir::new();
+    a_repository_at(home.path());
+    std::fs::write(home.path().join("mine.txt"), "a person's own work\n").expect("an edit");
+    let fleet = a_fleet_over(&home);
+    let app = api::router(api::Served::sharing(
+        Arc::clone(&fleet),
+        ipc::RunId::carried("01RUN"),
+        fleet.events(),
+    ));
+
+    let underway = Arc::clone(&fleet)
+        .start_checkout_rehearsal(ipc::StartCheckoutRun {
+            name: String::from("generate"),
+        })
+        .await
+        .expect("underway");
+    finished(&fleet, &underway.id).await;
+    std::fs::write(home.path().join("mine.txt"), "edited after the run\n").expect("an edit");
+    let uri = format!("/manifest/runs/{}/diff", underway.id);
+
+    let (status, body) = call(&app, "GET", &uri, "").await;
+    assert_eq!(status, StatusCode::OK);
+    let diff: ipc::CheckoutRunDiff = ipc::decode("a run's diff", &body).expect("a diff");
+    assert_eq!(diff.id, underway.id);
+    assert_eq!(diff.against, ipc::DiffAgainst::RunSnapshot);
+    let ipc::RunDiffReading::Read { files, patch } = diff.reading else {
+        panic!(
+            "the snapshot is kept, so the patch is read: {:?}",
+            diff.reading
+        );
+    };
+    let paths: Vec<_> = files.iter().map(|file| file.path.as_str()).collect();
+    assert_eq!(paths, vec!["generated.rs"]);
+    let patch = patch.expect("the run wrote something");
+    assert!(patch.contains("+made"), "{patch}");
+    assert!(
+        !patch.contains("mine.txt"),
+        "work either side of the run is not the run's: {patch}"
+    );
+
+    let reference = format!("refs/armada/rehearsals/{}", underway.id);
+    let deleted = Command::new("git")
+        .arg("-C")
+        .arg(home.path())
+        .args(["update-ref", "-d", &reference])
+        .status()
+        .expect("git on PATH");
+    assert!(deleted.success());
+
+    let (status, body) = call(&app, "GET", &uri, "").await;
+    assert_eq!(status, StatusCode::OK);
+    let diff: ipc::CheckoutRunDiff = ipc::decode("a run's diff", &body).expect("a diff");
+    assert!(
+        matches!(diff.reading, ipc::RunDiffReading::Gone { .. }),
+        "a gone snapshot is said, never a patch against HEAD: {:?}",
+        diff.reading
+    );
+    assert!(
+        home.path().join("generated.rs").is_file(),
+        "a read undid nothing"
+    );
+
+    let (status, _) = call(&app, "GET", "/manifest/runs/01NOSUCHRUN/diff", "").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 /// One run at a time is **per owner**: two in the checkout fight over one

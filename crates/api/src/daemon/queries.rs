@@ -614,6 +614,16 @@ pub trait Queries: Send + Sync + 'static {
         run_id: String,
     ) -> impl Future<Output = Result<RunOutput, Refusal>> + Send;
 
+    /// `get_checkout_run_diff` — what one checkout run changed, against the
+    /// snapshot it took just before. **A snapshot that is gone is answered
+    /// as gone**, never as a patch against `HEAD`, which would show a person's
+    /// own uncommitted work as the run's. [`Refusal::Unacceptable`] where
+    /// `run_id` names no finished run of the checkout.
+    fn get_checkout_run_diff(
+        &self,
+        run_id: String,
+    ) -> impl Future<Output = Result<ipc::CheckoutRunDiff, Refusal>> + Send;
+
     /// `observe_checkout_run` — one checkout run's output on a socket of its
     /// own, for [`Queries::observe_run`]'s reasons.
     fn observe_checkout_run(

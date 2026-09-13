@@ -363,6 +363,11 @@ pub const SERVED: &[Route] = &[
         path: "/manifest/runs/:run_id/output",
     },
     Route {
+        operation: "get_checkout_run_diff",
+        method: "GET",
+        path: "/manifest/runs/:run_id/diff",
+    },
+    Route {
         operation: "start_checkout_run",
         method: "POST",
         path: "/manifest/start_run",
