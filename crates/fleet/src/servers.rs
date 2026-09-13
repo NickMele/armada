@@ -167,6 +167,7 @@ where
             id: id.clone(),
             name: name.to_string(),
             job_id,
+            manifest_id: Some(ipc::ManifestId::from(served.manifest().id())),
             phase: ServerPhase::Starting,
             serve: resolved(server.serve()),
             ports: named_ports(&server, &ports),

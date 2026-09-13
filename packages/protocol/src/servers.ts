@@ -24,6 +24,11 @@ export type ServerState = {
   name: string;
   /** Absent: started with no Job, in the main checkout. */
   job_id?: string;
+  /**
+   * The repository it runs in, by its Manifest — a Job's own, or the main
+   * checkout's. Absent only from a Fleet that predates it.
+   */
+  manifest_id?: string;
   /** `starting`, `serving` or `exited`. Only `serving` carries a live address. */
   phase: string;
   /** The `serve` line as it ran, `${port.NAME}` resolved. */
@@ -49,7 +54,10 @@ export type ServerState = {
 /** `GET /servers` — every server held, and the last of each that ended. */
 export type ServerList = { servers: ServerState[] };
 
-/** `POST /servers/start`'s body. A name, never a command line or a port. */
+/**
+ * `POST /servers/start`'s body. A name, never a command line or a port. Which
+ * repository's main checkout is `?manifest_id=`; absent, the one Fleet started in.
+ */
 export type StartServer = {
   name: string;
   /** Absent: the main checkout, on its span. */

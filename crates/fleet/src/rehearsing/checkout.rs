@@ -57,7 +57,7 @@ where
                 &crate::servers::Holder::MainCheckout(place.served.root().to_string()),
                 &manifest,
             ),
-            verify: self.rehearsals().verifies().seen(),
+            verify: self.rehearsals().verifies().seen(&place.served),
         })
     }
 
@@ -70,9 +70,9 @@ where
     ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
         let place = Place::of_checkout(served);
         let owner = place.owner.clone();
-        // A Verify holds the checkout between its steps too: a run slipped in
+        // A Verify holds its own checkout between steps too: a run slipped in
         // there would take the slot its next step is about to be handed.
-        if self.rehearsals().verifies().underway() {
+        if self.rehearsals().verifies().underway(&place.served) {
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
         }
         // The whole tree, always: there is no diff of the checkout's own for a
@@ -114,7 +114,7 @@ where
         served: crate::repositories::Served,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
         let place = Place::of_checkout(served);
-        if self.rehearsals().verifies().underway() {
+        if self.rehearsals().verifies().underway(&place.served) {
             return Err(self.refused_run(&place.owner, Unrehearsable::VerifyUnderway));
         }
         self.undone_at(&place, id)

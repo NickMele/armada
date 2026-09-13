@@ -14,6 +14,7 @@
 //! one; nothing here writes Evidence or reaches Doctor, and what it keeps is in
 //! memory, as a run in flight is.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -28,6 +29,7 @@ use super::owner::Place;
 use super::record::Record;
 use super::unrehearsable::{Unrehearsable, Whose};
 use crate::daemon::Fleet;
+use crate::repositories::Served;
 
 /// How long a finished step waits for its Verify to take the hand-over before
 /// it is published anyway: the next step's start is a directory made.
@@ -61,10 +63,12 @@ fn wired(group: VerifyGroup, entry: &Entry, state: &VerifyStepState) -> VerifySt
     }
 }
 
-/// The checkout's latest Verify, underway or ended. `std`'s lock, never held
+/// Each repository's latest Verify, underway or ended, keyed by its checkout's
+/// root — `Owner::Checkout`'s key, since one Verify holds one tree. Taking a
+/// [`Served`] leaves no way to ask after a Job's. `std`'s lock, never held
 /// across an `.await`.
 #[derive(Clone, Default)]
-pub(crate) struct Verifies(Arc<Mutex<Option<Verifying>>>);
+pub(crate) struct Verifies(Arc<Mutex<BTreeMap<String, Verifying>>>);
 
 struct Verifying {
     id: String,
@@ -74,14 +78,14 @@ struct Verifying {
 }
 
 impl Verifies {
-    pub(crate) fn underway(&self) -> bool {
+    pub(crate) fn underway(&self, served: &Served) -> bool {
         self.held()
-            .as_ref()
+            .get(served.root())
             .is_some_and(|one| one.ended_at.is_none())
     }
 
-    pub(crate) fn seen(&self) -> Option<CheckoutVerify> {
-        self.held().as_ref().map(|one| CheckoutVerify {
+    pub(crate) fn seen(&self, served: &Served) -> Option<CheckoutVerify> {
+        self.held().get(served.root()).map(|one| CheckoutVerify {
             id: one.id.clone(),
             started_at: one.started_at.clone(),
             ended_at: one.ended_at.clone(),
@@ -94,17 +98,20 @@ impl Verifies {
     }
 
     /// Hold `verifying` as the latest, or `false` where one is still underway.
-    fn begin(&self, verifying: Verifying) -> bool {
+    fn begin(&self, served: &Served, verifying: Verifying) -> bool {
         let mut held = self.held();
-        if held.as_ref().is_some_and(|one| one.ended_at.is_none()) {
+        if held
+            .get(served.root())
+            .is_some_and(|one| one.ended_at.is_none())
+        {
             return false;
         }
-        *held = Some(verifying);
+        held.insert(served.root().to_string(), verifying);
         true
     }
 
-    fn step(&self, id: &str, at: usize) -> Option<(VerifyGroup, Entry)> {
-        self.with(id, |one| {
+    fn step(&self, served: &Served, id: &str, at: usize) -> Option<(VerifyGroup, Entry)> {
+        self.with(served, id, |one| {
             one.steps
                 .get(at)
                 .map(|(group, entry, _)| (*group, entry.clone()))
@@ -112,8 +119,8 @@ impl Verifies {
         .flatten()
     }
 
-    fn moved(&self, id: &str, at: usize, state: VerifyStepState) {
-        self.with(id, |one| {
+    fn moved(&self, served: &Served, id: &str, at: usize, state: VerifyStepState) {
+        self.with(served, id, |one| {
             if let Some(step) = one.steps.get_mut(at) {
                 step.2 = state;
             }
@@ -121,8 +128,8 @@ impl Verifies {
     }
 
     /// End it, saying why of every step not reached.
-    fn ended(&self, id: &str, why: &str, now: Instant) {
-        self.with(id, |one| {
+    fn ended(&self, served: &Served, id: &str, why: &str, now: Instant) {
+        self.with(served, id, |one| {
             for step in &mut one.steps {
                 if matches!(step.2, VerifyStepState::Waiting) {
                     step.2 = VerifyStepState::NotRun {
@@ -134,11 +141,19 @@ impl Verifies {
         });
     }
 
-    fn with<T>(&self, id: &str, change: impl FnOnce(&mut Verifying) -> T) -> Option<T> {
-        self.held().as_mut().filter(|one| one.id == id).map(change)
+    fn with<T>(
+        &self,
+        served: &Served,
+        id: &str,
+        change: impl FnOnce(&mut Verifying) -> T,
+    ) -> Option<T> {
+        self.held()
+            .get_mut(served.root())
+            .filter(|one| one.id == id)
+            .map(change)
     }
 
-    fn held(&self) -> MutexGuard<'_, Option<Verifying>> {
+    fn held(&self) -> MutexGuard<'_, BTreeMap<String, Verifying>> {
         self.0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -159,11 +174,11 @@ where
     /// out.
     pub(crate) async fn begin_checkout_verify(
         self: Arc<Self>,
-        served: crate::repositories::Served,
+        served: Served,
     ) -> Result<CheckoutVerify, Refusal> {
         let owner = Place::of_checkout(served.clone()).owner;
         let verifies = self.rehearsals().verifies().clone();
-        if verifies.underway() {
+        if verifies.underway(&served) {
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
         }
         if let Some(out) = self.rehearsals().in_flight(&owner) {
@@ -179,22 +194,25 @@ where
             return Err(self.refused_run(&owner, Unrehearsable::NothingToVerify));
         }
         let id = self.mint().ulid().as_str().to_string();
-        let began = verifies.begin(Verifying {
-            id: id.clone(),
-            started_at: Instant::from(&self.now()),
-            ended_at: None,
-            steps: steps
-                .into_iter()
-                .map(|(group, entry)| (group, entry, VerifyStepState::Waiting))
-                .collect(),
-        });
+        let began = verifies.begin(
+            &served,
+            Verifying {
+                id: id.clone(),
+                started_at: Instant::from(&self.now()),
+                ended_at: None,
+                steps: steps
+                    .into_iter()
+                    .map(|(group, entry)| (group, entry, VerifyStepState::Waiting))
+                    .collect(),
+            },
+        );
         if !began {
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
         }
         let (out, first) = oneshot::channel();
-        tokio::spawn(Arc::clone(&self).verified(id, out, served));
+        tokio::spawn(Arc::clone(&self).verified(id, out, served.clone()));
         let _ = first.await;
-        verifies.seen().ok_or_else(|| {
+        verifies.seen(&served).ok_or_else(|| {
             let why = Unrehearsable::NotKept {
                 why: String::from("the Verify just begun is no longer held"),
             };
@@ -204,17 +222,12 @@ where
 
     /// The steps, one after another. A step's hand-over is answered only once
     /// the step after it is out, or the Verify has ended.
-    async fn verified(
-        self: Arc<Self>,
-        id: String,
-        out: oneshot::Sender<()>,
-        served: crate::repositories::Served,
-    ) {
+    async fn verified(self: Arc<Self>, id: String, out: oneshot::Sender<()>, served: Served) {
         let verifies = self.rehearsals().verifies().clone();
         let mut waiting = vec![out];
         let mut at = 0;
         let why = loop {
-            let Some((group, entry)) = verifies.step(&id, at) else {
+            let Some((group, entry)) = verifies.step(&served, &id, at) else {
                 break String::new();
             };
             let place = Place::of_checkout(served.clone());
@@ -228,6 +241,7 @@ where
                 .await;
             match started {
                 Ok(underway) => verifies.moved(
+                    &served,
                     &id,
                     at,
                     VerifyStepState::Running {
@@ -236,6 +250,7 @@ where
                 ),
                 Err(why) => {
                     verifies.moved(
+                        &served,
                         &id,
                         at,
                         VerifyStepState::NotRun {
@@ -249,12 +264,18 @@ where
             answered(&mut waiting);
             let Ok(Handed { record, ack }) = handed.await else {
                 let why = String::from("its run ended without keeping a record");
-                verifies.moved(&id, at, VerifyStepState::NotRun { why: why.clone() });
+                verifies.moved(
+                    &served,
+                    &id,
+                    at,
+                    VerifyStepState::NotRun { why: why.clone() },
+                );
                 break why;
             };
             waiting.push(ack);
             let cut = cut_short(group, &record);
             verifies.moved(
+                &served,
                 &id,
                 at,
                 VerifyStepState::Ran {
@@ -266,7 +287,7 @@ where
                 break why;
             }
         };
-        verifies.ended(&id, &why, Instant::from(&self.now()));
+        verifies.ended(&served, &id, &why, Instant::from(&self.now()));
         answered(&mut waiting);
     }
 }
