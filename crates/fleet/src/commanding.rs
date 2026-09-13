@@ -805,8 +805,14 @@ where
             let fleet = Arc::clone(&self);
             async move {
                 let id = job_id.to_domain();
-                Fleet::answer_judge(&fleet, &id, answered.answer, answered.asked_at, answered.note)
-                    .await
+                Fleet::answer_judge(
+                    &fleet,
+                    &id,
+                    answered.answer,
+                    answered.asked_at,
+                    answered.note,
+                )
+                .await
             }
         })
         .await

@@ -42,7 +42,7 @@ export type JudgeQuestion = {
 export type JudgeAnswer = "agree" | "disagree_once" | "disagree_always";
 
 /**
- * The body of `answer_judge`. Since protocol 11.1; `asked_at` since 13.34.
+ * The body of `answer_judge`. Since protocol 11.1; `asked_at` since 13.35.
  * `asked_at` is `JudgeQuestion.asked_at`, echoed back — the identity a stale
  * answer is refused by. `note` is never required.
  */

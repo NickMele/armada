@@ -287,7 +287,10 @@ async fn answering_a_stale_question_is_refused() {
         .await
         .expect_err("a mismatched asked_at is refused, not applied");
 
-    assert!(matches!(refused, Adrift::NotAnswerable { .. }), "{refused:?}");
+    assert!(
+        matches!(refused, Adrift::NotAnswerable { .. }),
+        "{refused:?}"
+    );
     assert!(
         fleet.judge_question_of(&job_id).await.is_some(),
         "a refused answer leaves the real question open"
