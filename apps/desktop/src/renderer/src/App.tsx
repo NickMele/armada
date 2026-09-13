@@ -727,9 +727,9 @@ export function App() {
         // has answered, which is what the effect above holds open.
         runnables={checkoutRunnablesOf(state.checkoutRunSheet)}
         jobs={state.jobs.map((job) => ({ id: job.id, label: `${job.id} — ${job.title}` }))}
-        // Bridge serves no settings surface, so the section is empty and draws
-        // no head. A head over nothing is the labelled blank this app refuses.
-        settings={[]}
+        // Fleet settings is the section's first row. It carries no value,
+        // because choosing it opens the sheet rather than stating a field.
+        settings={[{ id: "fleet_settings", label: "Fleet settings" }]}
         dormant={dormantIn({
           reading: reading !== null,
           cursor,
@@ -751,6 +751,9 @@ export function App() {
               if (failing !== null) copyDebugInfoFor(failing, setCopied);
             },
             confirm: (what, jobId) => setConfirming({ act: what, jobId }),
+            openSetting: (id) => {
+              if (id === "fleet_settings") setFleetSettingsOpen(true);
+            },
           })
         }
         // Every destructive act confirms, even from the palette. It hands the

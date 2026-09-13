@@ -93,8 +93,17 @@ export type PaletteRunnable = {
   value: string;
 };
 
-/** A setting, which states its current value in mono right of the label. */
-export type PaletteSetting = { id: string; label: string; value: string };
+/**
+ * A setting, which states its current value in mono right of the label where
+ * it has one.
+ *
+ * **`value` is optional, and a row without one is not a display.** Fleet
+ * settings is the first row this section carries: choosing it opens the
+ * sheet rather than stating a field, because the section is where the app's
+ * standing configuration lives, whether that configuration is read here or
+ * changed behind its own screen.
+ */
+export type PaletteSetting = { id: string; label: string; value?: string };
 
 /**
  * One of the Board's state filters, with the digit that sets it.
@@ -275,7 +284,7 @@ export function Palette({
       id: `set:${setting.id}`,
       section: SETTINGS,
       label: setting.label,
-      value: setting.value,
+      ...(setting.value === undefined ? {} : { value: setting.value }),
     })),
   ];
 
