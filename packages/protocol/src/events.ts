@@ -15,6 +15,7 @@ import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
 import type { CheckoutRunRecord, RunRecord } from "./rehearsal";
 import type { ServerState } from "./servers";
+import type { RepositoryList } from "./setup";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { CommandInFlight } from "./commanding";
@@ -58,6 +59,8 @@ export type Event =
   | ({ kind: "job.remarks_changed" } & JobRemarksChanged)
   | ({ kind: "proposal.moved" } & ProposalMoved)
   | ({ kind: "manifest.reread" } & ManifestReading)
+  /** The repositories Fleet serves changed; the list now, whole, as `list_repositories` answers. */
+  | ({ kind: "repositories.changed" } & RepositoryList)
   | ({ kind: "run.finished" } & RunRecord)
   /** A run in the main checkout ended. Its own kind: the record names no Job. Since 11.9. */
   | ({ kind: "checkout_run.finished" } & CheckoutRunRecord)

@@ -55,7 +55,7 @@ fn proving_manifest() -> Manifest {
 fn a_fleet_that_proves_a_merge(home: &TempDir) -> Fixture {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
     fittings.noticing = Noticing::every(Duration::ZERO);
-    fittings.manifest = proving_manifest();
+    fittings.starting().manifest = proving_manifest();
     Fleet::assembled(fittings)
 }
 
@@ -265,7 +265,7 @@ fn proving_manifest_with_a_port() -> Manifest {
 fn a_fleet_that_proves_ports(home: &TempDir) -> Fixture {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
     fittings.noticing = Noticing::every(Duration::ZERO);
-    fittings.manifest = proving_manifest_with_a_port();
+    fittings.starting().manifest = proving_manifest_with_a_port();
     Fleet::assembled(fittings)
 }
 

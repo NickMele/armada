@@ -118,7 +118,7 @@ fn a_fleet_with(home: &TempDir, harness: FakeHarness, vcs: FakeVcs) -> Fixture {
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.vcs = vcs;
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about a restart"));
     Fleet::assembled(fittings)
@@ -312,7 +312,7 @@ async fn a_restart_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_chec
     let home = TempDir::new();
     let work = FakeWorkProduct::untouched();
     let mut fittings = fitted_with(&home, FakeWorkProduct::untouched(), a_drone_that_leaves());
-    fittings.workflows = one(testkit::resolved(&[Sketch {
+    fittings.starting().workflows = one(testkit::resolved(&[Sketch {
         id: IMPLEMENT,
         label: "Implement",
         evidence_type: Some("diff"),

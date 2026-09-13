@@ -59,7 +59,7 @@ fn two_repositories(home: &TempDir) -> (Arc<Fixture>, Served, Served) {
     let first_text = manifest_text(FIRST, "slow");
     committed(home.path(), &first_text);
     let mut fittings = fittings(home, FakeWorkProduct::changed(&[]));
-    fittings.manifest =
+    fittings.starting().manifest =
         config::Manifest::parse(Path::new("armada.yml"), &first_text).expect("the first loads");
     fittings.budget = CheckBudget::of(Duration::from_secs(120));
     let base = std::net::TcpListener::bind("127.0.0.1:0")

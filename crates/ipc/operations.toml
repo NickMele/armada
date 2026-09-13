@@ -507,7 +507,7 @@ Every Manifest Fleet serves, the one it was started in first: one Fleet serves m
 kind = "query"
 transport = "HTTP"
 agent_access = "No"
-description = "Every repository Fleet serves, the one it was started in first, each with its Manifest where one has loaded"
+description = "Every repository Fleet serves, in the order they were added, each with its Manifest where one has loaded, and none on a Fleet nobody has added one to"
 notes = """
 Beside `list_manifests` rather than instead of it: Setup starts from a folder nobody wrote an `armada.yml` for, and that repository has a root and records before it has a Manifest. The root is what `?repository=` names on Scan and its proposals.
 
@@ -2038,6 +2038,19 @@ It carries `ManifestReading` itself rather than a payload wrapping one, which is
 No actor and no `at` on the envelope. `at` would be a second copy of the reading's own, and an actor would have to claim either that Fleet decided something — it read a file — or that a person did, when nobody pressed anything in Armada at all.
 
 It publishes at the rate somebody saves a file, behind a settle window, so it costs the shared backlog nothing worth stating. A save that moved nothing Fleet reads live is still published: the reading is what Fleet now holds, and a client asks `worth_saying` whether it is news rather than being told only about the readings somebody else judged interesting.
+"""
+
+[operations."repositories.changed"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "The repositories Fleet serves changed, and this is the list now"
+notes = """
+Published when a repository is added by folder, when a clone lands and is added, and when a repository served without a Manifest gains one. It carries `RepositoryList` itself, the answer to `list_repositories`, for `manifest.reread`'s reason: the route and the event are the same fact, and a client replaces its list rather than folding a delta.
+
+Names no Job, no Drone and no step. No actor and no `at`: the add that caused it answered its own caller, and every other Bridge only needs the list.
+
+A resync does not carry it. A client that reconnects asks `list_repositories` again, as it did before this existed.
 """
 
 [operations."run.finished"]

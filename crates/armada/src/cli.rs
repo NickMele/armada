@@ -20,6 +20,7 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verb {
     /// The daemon. Everything below it needs a port, a store and a process.
+    /// `repository` is added at start; none given serves what Fleet remembers.
     Serve { repository: Option<PathBuf> },
     /// One Check the Manifest declares, by name.
     Check { name: String },

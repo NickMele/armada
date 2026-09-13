@@ -366,7 +366,7 @@ async fn a_drone_that_leaves_without_submitting_does_not_leave_the_job_running()
 async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s_file() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::untouched());
-    fittings.workflows = one(two_steps_both_gated_on_a_diff());
+    fittings.starting().workflows = one(two_steps_both_gated_on_a_diff());
     let fleet = Fleet::assembled(fittings);
 
     let job = fleet
@@ -435,8 +435,8 @@ async fn a_shown_step_runs_its_spec_once_and_makes_no_base_checkout() {
         Some("main"),
     );
     let mut fittings = fittings(&home, FakeWorkProduct::untouched());
-    fittings.workflows = one(workflow);
-    fittings.manifest = armada_yml;
+    fittings.starting().workflows = one(workflow);
+    fittings.starting().manifest = armada_yml;
     fittings.vcs =
         testkit::FakeVcs::new().with_ref_at("main", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
     let fleet = Fleet::assembled(fittings);
@@ -500,8 +500,8 @@ async fn a_captured_step_with_no_harness_skips_the_capture_and_says_so() {
 
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::untouched());
-    fittings.workflows = one(shown_step_with_no_harness());
-    fittings.manifest = manifest();
+    fittings.starting().workflows = one(shown_step_with_no_harness());
+    fittings.starting().manifest = manifest();
     let fleet = Fleet::assembled(fittings);
 
     let job = fleet

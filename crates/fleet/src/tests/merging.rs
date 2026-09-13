@@ -49,7 +49,7 @@ const MERGED_INTO: &str = "5b4ec82700000000000000000000000000000000";
 /// what an ask comes to, never how long until one is due.
 fn a_fleet_holding_the_work_for_a_person(home: &TempDir) -> Fixture {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(two_steps_gated_on_a_person(
+    fittings.starting().workflows = one(two_steps_gated_on_a_person(
         "summarise",
         None,
         Some("summarise"),
@@ -62,7 +62,7 @@ fn a_fleet_holding_the_work_for_a_person(home: &TempDir) -> Fixture {
 /// the Job at the gate has no pull request for a press to act on.
 fn a_fleet_holding_work_that_goes_nowhere(home: &TempDir) -> Fixture {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(two_steps_gated_on_a_person("summarise", None, None));
+    fittings.starting().workflows = one(two_steps_gated_on_a_person("summarise", None, None));
     Fleet::assembled(fittings)
 }
 
@@ -400,12 +400,12 @@ async fn a_job_that_is_not_at_a_gate_is_refused_before_anything_is_merged() {
 async fn a_press_proves_the_commit_the_merge_left_behind() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(two_steps_gated_on_a_person(
+    fittings.starting().workflows = one(two_steps_gated_on_a_person(
         "summarise",
         None,
         Some("summarise"),
     ));
-    fittings.manifest = proving_manifest();
+    fittings.starting().manifest = proving_manifest();
     let fleet = Fleet::assembled(fittings);
     let job_id = at_the_gate_having_delivered(&fleet, &home).await;
     fleet

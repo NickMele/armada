@@ -183,7 +183,7 @@ async fn a_step_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_check()
     let home = TempDir::new();
     let work = FakeWorkProduct::untouched();
     let mut fittings = fittings(&home, FakeWorkProduct::untouched());
-    fittings.workflows = one(two_steps_both_gated_on_a_diff());
+    fittings.starting().workflows = one(two_steps_both_gated_on_a_diff());
     fittings.vcs = FakeVcs::new()
         .delivering(Delivering {
             standing: Standing::Behind { commits: 1 },

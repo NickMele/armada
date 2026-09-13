@@ -171,7 +171,7 @@ fn restated(question: &str, refused: &NotProposed) -> String {
 /// network, not a model that will not answer.
 const LOOKUP_BUDGET: Duration = Duration::from_secs(10);
 
-/// What became of the request's own link, once [`propose_from`] looked.
+/// What became of the request's own link, once `propose_from` looked.
 ///
 /// `pub(crate)`: `redispatch::mint_replacement` runs the same lookup against a
 /// failed Job's own `facts`, so it needs to read what came of it too.
@@ -250,18 +250,19 @@ where
     /// **`client_ref` is the caller's own token and Fleet reads nothing from
     /// it** — see `ipc::JobRequest::client_ref`. It is carried this far, echoed
     /// onto every event about the call, and dropped with it.
+    /// In the repository a fixture starts in; every caller is a test.
+    #[cfg(test)]
     pub async fn propose_from(
         &self,
         request: &str,
         client_ref: Option<String>,
     ) -> Result<Vec<Job>, Adrift> {
-        // In the repository Fleet was started in: a test's and a caller's with no other.
-        let served = self.repositories().first();
+        let served = self.first();
         self.propose_from_with_attachments(request, client_ref, Vec::new(), &served)
             .await
     }
 
-    /// [`propose_from`](Self::propose_from), carrying attachments staged
+    /// `propose_from`, carrying attachments staged
     /// against the request onto the head of the plan it becomes.
     ///
     /// **A second method rather than a third parameter on the first.** Most

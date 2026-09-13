@@ -166,7 +166,7 @@ fn watching(home: &TempDir, harness: FakeHarness, clock: Arc<Held>) -> Fixture {
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.clock = clock;
     fittings.liveness = Liveness::of(QUIET_AFTER, 2);
     fittings.norms = StepNorms::of(60, Duration::from_secs(1_500), Duration::from_secs(120));

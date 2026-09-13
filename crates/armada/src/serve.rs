@@ -1,19 +1,21 @@
-//! `armada serve` — Fleet, started by hand, against a repository.
+//! `armada serve` — Fleet, started by hand, serving no repository until one is added.
 //!
 //! # The order is the specification
 //!
 //! 1. Read any runtime file there: refuse over a live Fleet, replace a stale one.
-//! 2. Read the repository's own setup — no `--manifest` flag, [`crate::setup`]
-//!    for why — and **refuse before taking anything.** An `armada.yml` found
-//!    wrong after the bind costs a port and a runtime file, both given back.
+//! 2. Read the folder given, if one was, as an add reads it, and **refuse
+//!    before taking anything.** A folder found wrong after the bind costs a
+//!    port and a runtime file, both given back. None given is none served: the
+//!    working directory is not a repository by default.
 //! 3. Open the store and **claim the listener's port out of it** —
 //!    `fleet::listener`. After the refusal above, for step 2's reason.
 //! 4. Bind the listener: loopback, at the port just claimed.
 //! 5. Write the runtime file carrying the port **read back from the bound
 //!    listener**. Publishing a number nobody listens on gives Bridge a socket
 //!    that refuses and no way to tell that from a wedged Fleet.
-//! 6. Assemble a Fleet over that repository, on the store already open;
-//!    reconcile it against what this process can see.
+//! 6. Assemble a Fleet serving nothing, on the store already open. Serve the
+//!    folder given, then every remembered one, and reconcile them all against
+//!    what this process can see. With none, reconciliation has no Job to move.
 //! 7. Serve, turning the same `Arc` the router holds. The loop starts first,
 //!    because reconciliation can admit a queued Job that needs turning whether
 //!    or not anything ever connects.
@@ -32,6 +34,7 @@ use std::time::Duration;
 use adapters::{ActionsWorkflows, GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
 use fleet::permitting::{self, PermissionHold};
+use fleet::repositories::Locating;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
     detect_ceiling, Allowance, BindConnectProbe, Bytes, CheckBudget, Clock, CommandBudget,
@@ -42,8 +45,8 @@ use ipc::PROTOCOL_VERSION;
 use store::Store;
 
 use crate::{
-    agent_binary, judge_model, model_choices, proposer_model, Setup, AGENT_BINARY, JUDGE_MODEL,
-    MODEL, PROPOSER_MODEL,
+    agent_binary, judge_model, model_choices, proposer_model, AGENT_BINARY, JUDGE_MODEL, MODEL,
+    PROPOSER_MODEL,
 };
 
 /// The store, beside the runtime file rather than inside the repository.
@@ -347,12 +350,11 @@ const PROVISIONAL_ALLOWANCE: Allowance = Allowance::of(Micros::dollars(10), 300)
 /// this loop rather than poll it.
 const PROVISIONAL_TURN_INTERVAL: Duration = Duration::from_millis(250);
 
-/// Serve, starting in `repository` or the working directory, until a signal
-/// says stop.
+/// Serve until a signal says stop, adding `repository` first where one is given.
 ///
-/// **The one argument is the repository Fleet starts in**, positional rather
-/// than a flag. Every other repository is added by folder while Fleet runs —
-/// `add_repository` — and never as a second path here.
+/// **The one argument is added, as `add_repository` would add it**, and kept
+/// for the launchers that name one. Without it Fleet serves what it remembers,
+/// which on a fresh install is nothing.
 pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     let path = runtime::machine_path()?;
 
@@ -372,34 +374,28 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // have is a refusal that costs nothing to discover here and costs a bound
     // socket and a published file to discover later.
     let machine_facts = machine_facts()?;
-    let repository = match repository {
-        Some(given) => given,
-        None => std::env::current_dir()?,
-    };
-    // The roster the workflows are checked against is the one the picker
-    // offers, resolved just above. Two lists would be two answers to "is this a
-    // model this machine has", and a workflow could name something no Job could
-    // be proposed with.
+    // The roster workflows are checked against is the one the picker offers:
+    // two lists would be two answers to "is this a model this machine has".
     let kit = crate::setup::kit(std::path::Path::new(&machine_facts.home))?;
-    let setup = Setup::at(&repository, &kit, &Roster::of(&machine_facts.models.models))?;
+    let machine = path
+        .parent()
+        .expect("the runtime file has a directory")
+        .to_path_buf();
+    let roster = Roster::of(&machine_facts.models.models);
+    // Reads a folder a person adds, and holds every served `armada.yml`'s watch.
+    let locator = Arc::new(crate::locating::Locator::at(&machine, kit, roster));
+    let given = match repository {
+        Some(folder) => Some(locator.located(&folder).map_err(|why| why.to_string())?),
+        None => None,
+    };
     println!(
-        "{} — Checks {} — model {}",
-        setup.root().display(),
-        setup.manifest().check_names().join(", "),
+        "{} — model {}",
+        match &given {
+            Some(located) => format!("adding {}", located.root),
+            None => String::from("no repository given"),
+        },
         machine_facts.models.default
     );
-    for workflow in setup.workflows().values() {
-        println!(
-            "  workflow `{}` ({}), {} step(s), {}",
-            workflow.name(),
-            workflow.id().as_str(),
-            workflow.steps().len(),
-            workflow.source()
-        );
-    }
-    for left in setup.left_out() {
-        println!("  {left}");
-    }
 
     let vacancy = presence
         .vacancy(&path)
@@ -417,15 +413,8 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // The store, opened here rather than inside `assemble`: the port this
     // process binds is claimed out of it, and a claim needs a store to be made
     // in. Everything above this line refuses without having taken anything.
-    let machine = path
-        .parent()
-        .expect("the runtime file has a directory")
-        .to_path_buf();
     std::fs::create_dir_all(&machine)?;
     let mut store = Store::open(&machine.join(STORE_FILE))?;
-    // Reads a folder a person adds, and holds every served `armada.yml`'s watch.
-    let roster = Roster::of(&machine_facts.models.models);
-    let locator = Arc::new(crate::locating::Locator::at(&machine, kit, roster));
 
     // One range for every claim on this machine — a Job's span, the main
     // checkout's, and this one. Its ceiling is detected from the platform's
@@ -457,55 +446,30 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // Two things need this Fleet and both get it. The router serves it and the
     // loop below turns it; a Fleet only one of them could hold would be either
     // unserved or — as it was — dispatched and never settled.
-    let Assembled {
-        fleet,
-        reloads,
-        migrated,
-    } = assemble(
+    let fleet = assemble(
         &machine,
         store,
-        setup,
         bound.port(),
         port_range,
         machine_facts,
-        Arc::clone(&locator),
+        Arc::clone(&locator) as Arc<dyn Locating>,
     )?;
     let fleet = Arc::new(fleet);
+    // Before any repository is served, so every watch hands its re-read to Fleet.
     locator.bind(&fleet);
-
-    // Said whatever it found, including nothing: a boot that stayed quiet
-    // about six directories it checked is a boot nobody can tell moved
-    // anything from one that never had to.
-    if migrated.moved_nothing() {
-        println!("records: nothing to move out of the repository");
-    } else {
-        println!(
-            "records: moved {} file(s) out of the repository{}",
-            migrated.files,
-            if migrated.refused.is_empty() {
-                String::new()
-            } else {
-                format!(", {} could not move", migrated.refused.len())
-            }
-        );
-        for why in &migrated.refused {
-            eprintln!("  {why}");
-        }
-    }
-
-    // **Started before anything is dispatched**, so an edit made while the
-    // reconciliation runs is in force at the first step boundary after it. A
-    // watch that will not start is carried out and Fleet serves anyway: the
-    // Manifest that was read is still the one in force, which is exactly where
-    // this was before `#430`.
-    locator.watch(reloads);
 
     // **Nothing runs until this has.** A Job the store says was running is
     // asked about: a Drone is spawned into a session of its own, so it outlives
     // the Fleet that started it and may still be working. What is gone is
     // `interrupted`; what is still there is adopted, and the Job carries on
     // with a Drone nothing can speak to.
-    // The repositories added before this start, served again so their Jobs are reconciled too.
+    // The folder given, then the repositories added before this start, so their
+    // Jobs are reconciled too. Records move and watches start as each is served.
+    if let Some(located) = given {
+        if let Err(why) = fleet.served_at_start(located).await {
+            eprintln!("  the repository given is not served: {why}");
+        }
+    }
     for why in fleet.served_again().await {
         eprintln!("  a remembered repository is not served: {why}");
     }
@@ -660,37 +624,23 @@ fn machine_facts() -> Result<MachineFacts, Box<dyn Error>> {
     })
 }
 
+/// The Fleet `serve` assembles.
+type Served = Fleet<HeadlessAgent, GitVcs, GitVcs>;
+
 /// Everything Fleet is made of, resolved once, here.
 ///
 /// The clock, the mint, the two host paths and the agent binary are all
 /// resolved at this one point and handed down. Nothing below reads its own
 /// inputs from the process — which is what lets `fleet` be driven by a test
 /// that plants a fixed instant and a countable id.
-/// A Fleet, and the one handle that may re-read the Manifest it holds.
-///
-/// **Two things and not one**, because they go to different places: the Fleet
-/// is shared with the router and the turn loop, and the reload handle goes to
-/// the watch and nowhere else. Fleet is never given a way to move its own
-/// configuration — see `config::live`.
-struct Assembled {
-    fleet: Fleet<HeadlessAgent, GitVcs, GitVcs>,
-    reloads: config::Reloads,
-    /// What the one-time move out of the repository found and did. Always
-    /// present, even where there was nothing to move — a boot after the
-    /// first reports that too, rather than saying nothing about the six
-    /// directories it checked.
-    migrated: fleet::records::migrating::Migrated,
-}
-
 fn assemble(
     machine: &std::path::Path,
     store: Store,
-    setup: Setup,
     port: u16,
     port_range: PortRange,
     facts: MachineFacts,
-    locator: Arc<crate::locating::Locator>,
-) -> Result<Assembled, Box<dyn Error>> {
+    locator: Arc<dyn Locating>,
+) -> Result<Served, Box<dyn Error>> {
     let MachineFacts {
         home,
         user,
@@ -717,25 +667,6 @@ fn assemble(
         &format!("http://127.0.0.1:{port}{}", api::MCP_PATH),
     )?;
 
-    let root = setup.root().to_path_buf();
-    // The other door, published where an agent working in this repository will
-    // find it. A failure is carried out and Fleet serves anyway: what is lost
-    // is an agent's way in, not a Job's.
-    match crate::mcp::publish(&root) {
-        Ok(adapters::Published::Written) => println!(
-            "published the agent door in {}",
-            root.join(adapters::REPOSITORY_CONFIG).display()
-        ),
-        Ok(adapters::Published::AlreadyThere) => {}
-        Err(why) => eprintln!("an agent standing in this repository will not find Armada: {why}"),
-    }
-
-    let left_out = setup
-        .left_out()
-        .iter()
-        .map(fleet::left_out_workflow)
-        .collect();
-    let (manifest, workflows, reloads) = setup.into_parts();
     // The Judge runs the program the Drone runs, so a machine that named one
     // through the override names both — a second variable would let the two
     // disagree about which binary is installed.
@@ -744,24 +675,6 @@ fn assemble(
         judge_model(std::env::var(JUDGE_MODEL).ok()).map_err(|refused| refused.said())?;
     let proposer_model =
         proposer_model(std::env::var(PROPOSER_MODEL).ok()).map_err(|refused| refused.said())?;
-    // Resolved once and used twice: it is what a Drone is given as its
-    // repository, and it is the volume whose free space holds a Job back. Every
-    // worktree is cut beneath it, so it is the disk that actually fills.
-    let repo_root = root.canonicalize()?.to_string_lossy().to_string();
-
-    // Where this repository's Job records live — never under `repo_root`. See
-    // `fleet::records`. Created before the move below runs, and before
-    // anything writes a first brief, transcript, log, Check output,
-    // deliverable or frame under it.
-    let records_root = fleet::records::root(machine, &repo_root);
-    std::fs::create_dir_all(&records_root)?;
-    // A no-op after the first boot: `migrate` reads six directories that are
-    // not there and returns having moved nothing. See
-    // `fleet::records::migrating` for what "moved" means across volumes and
-    // what a boot does when a file is already at the destination.
-    let migrated = fleet::records::migrating::migrate(&repo_root, &records_root);
-    let records_root = records_root.to_string_lossy().to_string();
-
     let fleet = Fleet::assembled(Fittings {
         store,
         harness: agent,
@@ -769,14 +682,10 @@ fn assemble(
         work: GitVcs::new(),
         clock: Arc::new(SystemClock::new()),
         mint: Arc::new(UlidMint::new()),
-        workflows,
-        left_out,
-        manifest,
+        starting_in: None,
         host: Host {
-            repo_root: repo_root.clone(),
-            records_root,
             path,
-            home,
+            home: home.clone(),
             user,
             mcp_config: mcp_config.to_string_lossy().to_string(),
             attachments_dir: attachments_dir.to_string_lossy().to_string(),
@@ -796,7 +705,9 @@ fn assemble(
         // The shell, not a platform crate: `fleet::headroom` carries the
         // argument, which is `fleet::process`'s and is about one spelling on
         // both platforms rather than about convenience.
-        machine: Arc::new(TheMachine::watching(&repo_root)),
+        // Home, where worktrees and builds usually land now that no one
+        // repository is the volume that fills.
+        machine: Arc::new(TheMachine::watching(&home)),
         headroom: PROVISIONAL_HEADROOM,
         polling: PROVISIONAL_RESOURCE_POLL,
         noticing: PROVISIONAL_MERGE_NOTICE,
@@ -826,11 +737,7 @@ fn assemble(
         models,
         events: api::Broadcaster::new(),
     });
-    Ok(Assembled {
-        fleet,
-        reloads,
-        migrated,
-    })
+    Ok(fleet)
 }
 
 /// The two per-user directories on a Drone's `PATH`, before the system ones.

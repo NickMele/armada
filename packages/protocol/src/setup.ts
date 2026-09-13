@@ -152,7 +152,7 @@ export type RepositorySummary = {
   manifest?: ManifestSummary;
 };
 
-/** Every repository Fleet serves, the one it was started in first. */
+/** Every repository Fleet serves, in the order they were added. Empty until a person adds one. */
 export type RepositoryList = {
   repositories: RepositorySummary[];
 };

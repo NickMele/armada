@@ -88,7 +88,7 @@ fn a_fleet_of(bound: usize, home: &TempDir, machine: Arc<dyn Machine>) -> Fixtur
         FakeWorkProduct::changed(&["src/parse.rs"]),
         a_drone_that_stays(),
     );
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about this"));
     fittings.concurrency = Concurrency::of(bound);
     fittings.machine = machine;

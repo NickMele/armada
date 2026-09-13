@@ -42,7 +42,7 @@ const PULL_REQUEST: &str = "https://forge.invalid/armada/pull/1";
 /// interval is `ZERO` for `crate::tests::noticing`'s reason.
 fn a_fleet_asking_every_turn(home: &TempDir) -> Fixture {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(two_steps_gated_on_a_person(
+    fittings.starting().workflows = one(two_steps_gated_on_a_person(
         "summarise",
         None,
         Some("summarise"),

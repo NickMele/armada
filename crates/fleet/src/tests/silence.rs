@@ -113,11 +113,11 @@ fn assembled(
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(workflow);
+    fittings.starting().workflows = one(workflow);
     fittings.clock = clock;
     fittings.liveness = liveness;
     if let Some(says) = says {
-        fittings.manifest = config::Manifest::parse(
+        fittings.starting().manifest = config::Manifest::parse(
             std::path::Path::new("armada.yml"),
             &format!("version: 1\nid: 01FIXTUREMANIFEST\ndrone:\n{says}"),
         )

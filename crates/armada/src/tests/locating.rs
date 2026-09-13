@@ -101,3 +101,23 @@ fn a_repository_whose_manifest_will_not_load_is_refused_with_its_faults() {
     };
     assert!(why.contains("checks"), "the fault names its key: {why}");
 }
+
+/// **One plain sentence**, naming the folder once and saying what to do; git's
+/// own message and codes stay in the cause, which goes to Fleet's log.
+#[test]
+fn a_folder_that_is_not_a_repository_is_refused_in_one_plain_sentence() {
+    let (machine, kit, plain) = (TempDir::new(), TempDir::new(), TempDir::new());
+    let refused = a_locator(&machine, &kit)
+        .located(plain.path())
+        .map(|_| ())
+        .expect_err("refused");
+    let said = refused.to_string();
+    let folder = plain.path().display().to_string();
+    assert_eq!(said.matches(&folder).count(), 1, "{said}");
+    assert!(said.contains("clone"), "it says what to do: {said}");
+    for code in ["class=", "code=", "could not be opened", "\n"] {
+        assert!(!said.contains(code), "no library text in: {said}");
+    }
+    assert_eq!(said.matches(". ").count(), 0, "one sentence: {said}");
+    assert!(!refused.cause().is_empty(), "the cause is kept for the log");
+}

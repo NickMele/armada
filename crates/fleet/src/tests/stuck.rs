@@ -110,7 +110,7 @@ fn a_fleet_with(home: &TempDir, harness: FakeHarness) -> Fixture {
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about this"));
     Fleet::assembled(fittings)
 }
@@ -539,7 +539,7 @@ async fn a_restart_after_a_kill_keeps_the_step_that_already_advanced() {
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         a_drone_that_stays(),
     );
-    fittings.workflows = one(two_steps());
+    fittings.starting().workflows = one(two_steps());
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about this"));
     let fleet: Fixture = Fleet::assembled(fittings);
 

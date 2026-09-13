@@ -248,7 +248,7 @@ async fn a_repositorys_cap_holds_a_job_the_machines_would_have_admitted() {
         fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     fittings.allowance = SHIPPED;
     // A dollar, where the machine allows five.
-    fittings.manifest = repository(Some(1_000_000));
+    fittings.starting().manifest = repository(Some(1_000_000));
     let fleet: Fixture = Fleet::assembled(fittings);
 
     let running = approved(&fleet, &home, "a change that holds the slot").await;

@@ -34,7 +34,7 @@ fn a_fleet_echoing(home: &TempDir, vcs: FakeVcs) -> Fixture {
         FakeWorkProduct::changed(&["src/log.rs"]),
         FakeHarness::that_echoes_its_first_turn(),
     );
-    fittings.workflows = one(two_steps_gated_on_a_person(
+    fittings.starting().workflows = one(two_steps_gated_on_a_person(
         "summarise",
         None,
         Some("summarise"),

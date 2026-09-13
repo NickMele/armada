@@ -48,7 +48,7 @@ fn a_fleet_watched(home: &TempDir, events: &api::Broadcaster) -> Arc<Fixture> {
     let manifest = config::Manifest::parse(Path::new("armada.yml"), MANIFEST)
         .unwrap_or_else(|why| panic!("the fixture manifest did not parse: {why}"));
     let mut fittings = fittings(home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = manifest;
+    fittings.starting().manifest = manifest;
     // Past `sleep`'s thirty seconds, so what ends that run is Stop.
     fittings.budget = CheckBudget::of(Duration::from_secs(120));
     fittings.events = events.clone();

@@ -37,7 +37,7 @@ fn fitted(home: &TempDir, memory_in_use: u32) -> Fittings<FakeHarness, FakeVcs, 
         FakeWorkProduct::changed(&["src/parse.rs"]),
         FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"]),
     );
-    fittings.workflows = one(testkit::resolved(&[Sketch {
+    fittings.starting().workflows = one(testkit::resolved(&[Sketch {
         id: "implement",
         label: "Implement",
         evidence_type: Some("diff"),

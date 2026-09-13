@@ -52,15 +52,6 @@ use crate::underway::Underway;
 /// Public fields and no `Default`, so a caller writes each one out.
 #[derive(Clone, Debug)]
 pub struct Host {
-    /// The repository every worktree is added to. Absolute.
-    pub repo_root: String,
-    /// Where this repository's Job records live: a Judge's brief, a Drone's
-    /// transcript, a Job's log, a Check's output, a kept deliverable, a kept
-    /// frame. **Never under `repo_root`.** `crate::records::root` is what
-    /// resolves it, once, at the composition root — this field exists so
-    /// nothing below `Host` has to resolve it again or hold a second opinion
-    /// about where it is.
-    pub records_root: String,
     /// What a Drone's `PATH` is set to. Fleet's choice, not Fleet's own.
     pub path: String,
     /// The home directory the agent CLI reads its credentials from. **The
@@ -97,6 +88,22 @@ pub(crate) struct Local {
     pub(crate) attachments_dir: String,
 }
 
+/// One repository a Fleet is assembled already serving.
+#[derive(Clone, Debug)]
+pub struct StartingIn {
+    /// Absolute. Every worktree of its Jobs is added here.
+    pub root: String,
+    /// Where its Job records live, never under `root`. `crate::records::root`
+    /// resolves it.
+    pub records_root: String,
+    /// Every workflow a Job there may run, keyed by `workflow_id`, each
+    /// resolved against `manifest`.
+    pub workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
+    /// The Kit and carried definitions left out of `workflows`.
+    pub left_out: Vec<ipc::LeftOutWorkflow>,
+    pub manifest: Manifest,
+}
+
 /// Everything Fleet is assembled from.
 ///
 /// A plain struct with public fields rather than a builder, for the reason
@@ -110,20 +117,10 @@ pub struct Fittings<H, V, W> {
     pub work: W,
     pub clock: Arc<dyn Clock>,
     pub mint: Arc<dyn Mint>,
-    /// Every workflow a Job may run, keyed by the `workflow_id` its definition
-    /// carries. Fleet is pointed at a repository and `.armada/workflows/` may
-    /// hold more than one definition — a proposal names which one it wants,
-    /// and a name this map does not hold is refused at creation instead of
-    /// written onto the record unverified.
-    pub workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
-    /// The Kit and carried definitions left out of `workflows`, as the wire carries them —
-    /// the first repository's, since each resolves its own.
-    pub left_out: Vec<ipc::LeftOutWorkflow>,
-    /// The `armada.yml` that workflow resolved against. Held because a Drone's
-    /// toolbelt is built from the commands it declares.
-    pub manifest: Manifest,
-    /// The repository Fleet was started in is `host.repo_root`, and it is the
-    /// first of [`crate::repositories::Repositories`].
+    /// The repository Fleet is assembled serving, if any. **None at the
+    /// composition root**: a Fleet starts with nothing and a person adds the
+    /// first. A test starts in one, so its cases need no add.
+    pub starting_in: Option<StartingIn>,
     pub host: Host,
     /// Reading a folder a person adds. See [`crate::repositories::Locating`].
     pub locating: Arc<dyn crate::repositories::Locating>,
@@ -261,12 +258,15 @@ where
             work: fittings.work,
             clock: fittings.clock,
             mint: fittings.mint,
-            repositories: Arc::new(crate::repositories::Repositories::starting_in(
-                fittings.host.repo_root,
-                fittings.host.records_root,
-                crate::repositories::SetUp::of(fittings.manifest, fittings.workflows)
-                    .leaving_out(fittings.left_out),
-            )),
+            repositories: Arc::new(match fittings.starting_in {
+                Some(first) => crate::repositories::Repositories::starting_in(
+                    first.root,
+                    first.records_root,
+                    crate::repositories::SetUp::of(first.manifest, first.workflows)
+                        .leaving_out(first.left_out),
+                ),
+                None => crate::repositories::Repositories::none(),
+            }),
             locating: fittings.locating,
             host: Local {
                 path: fittings.host.path,

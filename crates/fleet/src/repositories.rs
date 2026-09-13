@@ -1,5 +1,6 @@
-//! The repositories one Fleet serves: the one it was started in, first, and
-//! every one a person added by folder, or cloned from a URL, since.
+//! The repositories one Fleet serves, in the order a person added them by
+//! folder or cloned them from a URL. **A Fleet starts with none**: a fresh
+//! install has nothing set up, and the person goes to find the first.
 //!
 //! **A Job reaches its repository through `owner_manifest_id`**, so two
 //! repositories are never allowed to hold one Manifest id — [`Repositories::add`]
@@ -68,7 +69,8 @@ pub struct Located {
     pub set_up: Option<SetUp>,
 }
 
-/// Why a folder was not read as a repository.
+/// Why a folder was not read as a repository. Its `Display` is a person's
+/// sentence; [`NotLocated::cause`] is what the log gets beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotLocated {
     /// Not a folder, or not the root of a git repository.
@@ -80,12 +82,24 @@ pub enum NotLocated {
 impl std::fmt::Display for NotLocated {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NotLocated::NotARepository { folder, why } => {
-                write!(out, "{folder} is not the root of a git repository: {why}")
-            }
+            // `why` is the library's, with its codes, and goes to Fleet's log.
+            NotLocated::NotARepository { folder, .. } => write!(
+                out,
+                "{folder} is not the root of a git repository, so choose the repository's root \
+                 folder or clone it instead"
+            ),
             NotLocated::Refused { root, why } => {
                 write!(out, "{root} is a repository Armada will not serve: {why}")
             }
+        }
+    }
+}
+
+impl NotLocated {
+    /// What the reader said underneath, for Fleet's log and never the sentence.
+    pub fn cause(&self) -> &str {
+        match self {
+            NotLocated::NotARepository { why, .. } | NotLocated::Refused { why, .. } => why,
         }
     }
 }
@@ -237,7 +251,12 @@ impl std::fmt::Display for NotAdded {
 pub struct Repositories(RwLock<Vec<Arc<Repository>>>, cloning::Cloning);
 
 impl Repositories {
-    /// The repository Fleet was started in, which always has a Manifest.
+    /// Serving nothing, which is how a Fleet starts.
+    pub fn none() -> Repositories {
+        Repositories(RwLock::new(Vec::new()), cloning::Cloning::default())
+    }
+
+    /// Serving one repository that has a Manifest, for a fixture.
     pub fn starting_in(root: String, records_root: String, set_up: SetUp) -> Repositories {
         let first = Repository::of(root, records_root, Some(set_up));
         Repositories(RwLock::new(vec![first]), cloning::Cloning::default())
@@ -282,9 +301,9 @@ impl Repositories {
         Ok(Served::of(repository).expect("set just above, or already"))
     }
 
-    /// The repository Fleet was started in.
-    pub fn first(&self) -> Served {
-        Served::of(&self.every_held()[0]).expect("the first repository always has a Manifest")
+    /// The first repository added that has a Manifest, or none.
+    pub fn first(&self) -> Option<Served> {
+        self.every_held().iter().find_map(Served::of)
     }
 
     /// The repository whose Manifest has this id.

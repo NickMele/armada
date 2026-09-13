@@ -37,7 +37,7 @@ const PULL_REQUEST: &str = "https://forge.invalid/armada/pull/1";
 /// would ask the forge on its own, which every count below is against.
 fn a_fleet_at_a_gate(home: &TempDir) -> Fixture {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(two_steps_gated_on_a_person(
+    fittings.starting().workflows = one(two_steps_gated_on_a_person(
         "summarise",
         None,
         Some("summarise"),

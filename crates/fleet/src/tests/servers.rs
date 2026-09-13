@@ -69,7 +69,7 @@ fn a_fleet_holding(
     let path = home.path().join("armada.yml");
     std::fs::write(&path, on_disk).expect("the file a Job snapshots");
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.manifest = Manifest::parse(&path, held).expect("the Manifest Fleet holds");
+    fittings.starting().manifest = Manifest::parse(&path, held).expect("the Manifest Fleet holds");
     fittings.events = events.clone();
     fittings.concurrency = Concurrency::of(2);
     fittings.port_range = a_range_of_its_own();

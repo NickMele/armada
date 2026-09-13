@@ -35,7 +35,7 @@ use crate::tests::tools::submitted_by_the_one;
 /// past the parser would be testing a Fleet no `armada.yml` could produce.
 fn a_fleet_requiring(home: &TempDir, run: &str) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.manifest = Manifest::parse(
+    fittings.starting().manifest = Manifest::parse(
         Path::new("armada.yml"),
         &format!(
             "version: 1\nid: 01FIXTUREMANIFEST\ncommands:\n  bootstrap:\n    run: {run}\n\
@@ -215,7 +215,7 @@ async fn preparation_runs_once_for_the_worktree_and_not_once_per_drone() {
 async fn the_log_names_each_command_as_it_is_attempted() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.manifest = Manifest::parse(
+    fittings.starting().manifest = Manifest::parse(
         Path::new("armada.yml"),
         "version: 1\nid: 01FIXTUREMANIFEST\ncommands:\n\
          \x20 bootstrap:\n    run: /bin/mkdir prepared\n\
@@ -307,7 +307,7 @@ fn one_step_delivers() -> config::ResolvedWorkflow {
 async fn the_file_a_step_is_told_to_write_is_there_before_its_drone_is() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(one_step_delivers());
+    fittings.starting().workflows = one(one_step_delivers());
     let fleet = Fleet::assembled(fittings);
 
     let job = fleet
@@ -338,7 +338,7 @@ async fn the_file_a_step_is_told_to_write_is_there_before_its_drone_is() {
 async fn a_step_declaring_no_deliverable_has_nothing_made_for_it() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(one_step_delivers());
+    fittings.starting().workflows = one(one_step_delivers());
     let fleet = Fleet::assembled(fittings);
 
     let job = fleet
@@ -366,7 +366,7 @@ async fn a_step_declaring_no_deliverable_has_nothing_made_for_it() {
 async fn a_deliverable_already_written_survives_being_prepared_again() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(one_step_delivers());
+    fittings.starting().workflows = one(one_step_delivers());
     let fleet = Fleet::assembled(fittings);
 
     let job = fleet

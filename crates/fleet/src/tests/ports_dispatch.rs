@@ -34,7 +34,7 @@ fn a_fleet_declaring_storybook(
     concurrency: usize,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.manifest = Manifest::parse(
+    fittings.starting().manifest = Manifest::parse(
         Path::new("armada.yml"),
         "version: 1\nid: 01FIXTUREMANIFEST\n\
          ports:\n  storybook: {}\n\

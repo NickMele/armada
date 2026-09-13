@@ -97,7 +97,7 @@ pub(super) fn a_fleet_reading(
 ) -> Fixture {
     let mut fittings = fittings(home, work);
     fittings.clock = clock;
-    fittings.workflows = one(one_step(scope));
+    fittings.starting().workflows = one(one_step(scope));
     Fleet::assembled(fittings)
 }
 

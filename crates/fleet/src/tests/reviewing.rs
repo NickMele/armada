@@ -332,9 +332,9 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
         &config::Roster::offering_nothing(),
     )
     .expect("the fixture workflow parses");
-    let workflow = config::ResolvedWorkflow::resolve(&def, &fittings.manifest)
+    let workflow = config::ResolvedWorkflow::resolve(&def, &fittings.starting().manifest)
         .expect("the fixture workflow resolves");
-    fittings.workflows = one(workflow);
+    fittings.starting().workflows = one(workflow);
     fittings.vcs = FakeVcs::new()
         .delivering(Delivering {
             standing: Standing::Behind { commits: 1 },

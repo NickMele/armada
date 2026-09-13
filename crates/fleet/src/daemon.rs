@@ -58,7 +58,7 @@ mod rereading;
 mod seams;
 
 pub(crate) use fittings::Local;
-pub use fittings::{Fittings, Host};
+pub use fittings::{Fittings, Host, StartingIn};
 
 /// The daemon core: **the only writer of Job state.**
 pub struct Fleet<H, V, W> {

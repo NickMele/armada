@@ -109,10 +109,9 @@ where
     /// The Manifest every door answer is given inside — `#698` is what lets a
     /// caller name one.
     async fn scope(&self) -> Result<ManifestId, Refusal> {
-        // The agent door answers inside the repository Fleet was started in.
-        Ok(ManifestId::from(
-            self.repositories().first().manifest().id(),
-        ))
+        // The agent door answers inside the first repository with a Manifest.
+        let served = self.served_named(None)?;
+        Ok(ManifestId::from(served.manifest().id()))
     }
 
     /// The four narrowings, each one rule, stated in `crate::attention`.
