@@ -1,9 +1,14 @@
-/* Setup's picker: the workspace list and the Check-names grid below it. Nothing is hued. */
+/* Setup's picker: the workspace list and the Check-names grid below it. Nothing is hued.
+   One scroller for both, since the mount never scrolls; the proposal sheet is window-level. */
 .armada-setup-picker {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .armada-setup-picker__panel {

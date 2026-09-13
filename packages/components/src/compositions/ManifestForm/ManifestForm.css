@@ -1,11 +1,20 @@
 /* The Manifest as forms — Journey 9's *Editing*. One panel per section, each
-   entry a group inside it, and every row wrapping rather than overflowing. */
+   entry a group inside it, and every row wrapping rather than overflowing.
+
+   **It scrolls itself**, because the mount never does: without this the form is
+   clipped at the window's height and the sticky head has nothing to pin in. */
 .armada-manifest-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  flex: 1 1 auto;
   min-width: 0;
-  padding: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* No top padding: the sticky head pins at the scrollport's padded edge, and
+     a strip above it would show rows scrolling past. */
+  padding: 0 var(--space-4) var(--space-4);
 }
 
 /* Sticky, so Save and what it came to are in reach from the last section. */
