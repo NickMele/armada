@@ -76,7 +76,7 @@ Job-level: a `queued` Job has no current step, so the payload's step field carri
 why = """
 Cascading the failure would write `completed_failed` onto work that never ran, against a diff and worktree that don't exist. Fleet writes that terminal without a person, so one failure could silently terminate an arbitrarily deep dependency chain; escalating stops at the first dependent and asks instead.
 
-Leaving the Job queued under a new readiness reason fails differently: CPU headroom self-clears, but a failed upstream never does, so the Job would wait indefinitely behind a label with no action attached. Every escalation trigger names a malfunction, and a failed upstream is one — which is why `awaiting_attestation` has no home under `escalated` and this trigger does.
+Leaving the Job queued under a new readiness reason fails differently: memory and disk headroom self-clear, but a failed upstream never does, so the Job would wait indefinitely behind a label with no action attached. Every escalation trigger names a malfunction, and a failed upstream is one — which is why `awaiting_attestation` has no home under `escalated` and this trigger does.
 """
 
 [triggers.drone_killed]

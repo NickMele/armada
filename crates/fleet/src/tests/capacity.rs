@@ -232,7 +232,7 @@ async fn a_short_disk_is_named_where_the_bound_has_room() {
             "queued".to_string(),
             Some("waiting_on_resources".to_string())
         ),
-        "one label on the row, and the payload says which of the four it was"
+        "one label on the row, and the payload says which of the three it was"
     );
 }
 
