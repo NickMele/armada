@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { repository } from "../../../fixtures/build/base";
+import { MANIFEST_ID, repository } from "../../../fixtures/build/base";
 import { SCRATCH, SetupFrom } from "./Setup";
 
 /**
@@ -166,10 +166,11 @@ export const BothListed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const picker = canvas.getByRole("combobox", { name: "Project" });
-    await expect(within(picker).getByRole("option", { name: "armada" })).toBeInTheDocument();
+    // A set-up repository reads as its Manifest id.
+    await expect(within(picker).getByRole("option", { name: MANIFEST_ID })).toBeInTheDocument();
     const notSetUp = within(picker).getByRole("group", { name: "Not set up" });
     await expect(within(notSetUp).getByRole("option", { name: "scratch" })).toBeInTheDocument();
-    await expect(within(notSetUp).queryByRole("option", { name: "armada" })).toBeNull();
+    await expect(within(notSetUp).queryByRole("option", { name: MANIFEST_ID })).toBeNull();
     await expect(picker).toHaveValue("/Users/user/armada");
     await expect(canvas.queryByRole("region", { name: "Workspaces" })).toBeNull();
   },

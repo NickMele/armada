@@ -112,3 +112,24 @@ export const ClosedWithNothingDone: Story = {
     await expect(canvas.queryByRole("dialog", { name: "Add a repository" })).toBeNull();
   },
 };
+
+const SET_UP = { ...repository(), root: "/Users/user/code/web-app", manifest: { ...repository().manifest!, id: "storefront" } };
+const LOOSE = { root: "/Users/user/scratch", records_root: "/records/scratch" };
+const API = { root: "/Users/user/code/api", records_root: "/records/api" };
+const OLD_API = { root: "/Users/user/old/api", records_root: "/records/old-api" };
+
+/** The picker names a Manifest by its id and a folder nobody set up by its name; two alike take their parent. */
+export const ThePickersNames: Story = {
+  name: "The picker's names",
+  args: { repositories: [SET_UP, LOOSE, API, OLD_API] },
+  play: async ({ canvasElement }) => {
+    const picker = within(canvasElement).getByRole("combobox", { name: "Project" });
+    const setUp = within(picker).getByRole("option", { name: "storefront" });
+    await expect(setUp).toHaveAttribute("title", SET_UP.root);
+    const notSetUp = within(within(picker).getByRole("group", { name: "Not set up" }));
+    await expect(notSetUp.getByRole("option", { name: "scratch" })).toHaveAttribute("title", LOOSE.root);
+    await expect(notSetUp.getByRole("option", { name: "code/api" })).toHaveAttribute("title", API.root);
+    await expect(notSetUp.getByRole("option", { name: "old/api" })).toHaveAttribute("title", OLD_API.root);
+    await expect(within(picker).queryByRole("option", { name: "web-app" })).toBeNull();
+  },
+};
