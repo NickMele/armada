@@ -15,9 +15,9 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
-    AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobRequest, JudgeAnswered,
-    Overruled, ProposeJob, Redirection, RemarksTakenUp, RestartRequested, SetWhenBlocked,
-    SetWhenRefused, StopProposal, TurnRaise,
+    AddTask, AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, DropTask, FileReport,
+    JobRequest, JudgeAnswered, Overruled, ProposeJob, Redirection, RemarksTakenUp,
+    RestartRequested, SetWhenBlocked, SetWhenRefused, StopProposal, TurnRaise,
 };
 
 use crate::answers::{answer, refused, undecodable};
@@ -433,6 +433,40 @@ pub(crate) async fn redispatch_job<D: Commands>(
 ) -> Response {
     match served.shared().redispatch_job(job.id()).await {
         Ok(both) => answer(StatusCode::OK, &both, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// A person adds a task to the Job's plan. **The plan it leaves comes back**,
+/// so the Plan region redraws without a second read. `#897`.
+pub(crate) async fn add_task<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let add: AddTask = match ipc::decode("a task to add", &body) {
+        Ok(add) => add,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.shared().add_task(job.id(), add).await {
+        Ok(plan) => answer(StatusCode::OK, &plan, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// A person drops a task from the Job's plan, with a reason. **The plan it
+/// leaves comes back**, struck through where it names the dropped task.
+pub(crate) async fn drop_task<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let drop: DropTask = match ipc::decode("a task to drop", &body) {
+        Ok(drop) => drop,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.shared().drop_task(job.id(), drop).await {
+        Ok(plan) => answer(StatusCode::OK, &plan, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }

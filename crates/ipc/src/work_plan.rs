@@ -77,6 +77,31 @@ impl From<core_model::TaskCounts> for TaskCounts {
     }
 }
 
+/// A person adds a task to a Job's plan. `#897`.
+///
+/// **`detail` and `after` may both be `""`.** A task with nothing beyond its
+/// title is legal, and `""` for `after` is the end of the list — the same
+/// spelling the `add_task` MCP tool takes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AddTask {
+    pub title: String,
+    #[serde(default)]
+    pub detail: String,
+    #[serde(default)]
+    pub after: String,
+}
+
+/// A person drops a task from a Job's plan, with a reason. `#897`.
+///
+/// **`reason` is never empty.** A blank one is refused at the Fleet boundary
+/// for `Redirection`'s reason: a decoded request is well-formed, and a reason
+/// with nothing in it is a value that cannot work — a 422 and not a 400.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DropTask {
+    pub task: String,
+    pub reason: String,
+}
+
 impl From<&core_model::PlanAuthor> for ChangedBy {
     fn from(author: &core_model::PlanAuthor) -> ChangedBy {
         match author {

@@ -38,6 +38,9 @@ mod attention;
 pub mod basing;
 mod boundary;
 pub mod briefing;
+/// Racing a plain command's work against [`commanding::CommandBudget`],
+/// split out of `commanding` at the 900-line refusal, `#897`.
+mod budget;
 mod check_output;
 mod checking;
 pub mod clock;
@@ -291,3 +294,4 @@ pub use underway::{Announcing, LiveLog, Underway};
 pub use watch::{Drained, Progress, Watching};
 pub use widening::{NotWidened, Widening};
 pub use wire::left_out_workflow;
+pub use work_plan::PlanChanged;

@@ -183,6 +183,22 @@ impl FakeDaemon {
         }
         Ok(job.clone())
     }
+    /// A person's add or drop, faked on the one thing there is to fake: **an
+    /// id naming no Job is the 404 every fake command gives it.** The plan
+    /// itself, and delivering to a working Drone, are `fleet::work_plan`'s and
+    /// asserted there — this daemon holds no plan and no slot. `#897`.
+    pub(super) async fn fake_plan_change(&self, job_id: JobId) -> Result<ipc::WorkPlan, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if jobs.iter().find(|job| job.id == job_id).is_none() {
+            return Err(self.no_such_job(&job_id));
+        }
+        Ok(ipc::WorkPlan {
+            approach: "a fake plan".to_string(),
+            recorded_by: ipc::ChangedBy::Person,
+            recorded_at: ipc::Instant::carried("2026-09-13T10:00:00.000Z"),
+            tasks: Vec::new(),
+        })
+    }
     /// The answer to a question, faked on the one thing a `JobSummary` shows:
     /// **there is no Drone waiting.** Which question is outstanding and which
     /// labels it offered come off a working slot this daemon has none of.

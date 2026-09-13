@@ -382,6 +382,20 @@ impl Commands for FakeDaemon {
     ) -> Result<JobSummary, Refusal> {
         self.fake_redirect_drone(job_id, _instruction).await
     }
+    async fn add_task(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        _add: ipc::AddTask,
+    ) -> Result<ipc::WorkPlan, Refusal> {
+        self.fake_plan_change(job_id).await
+    }
+    async fn drop_task(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        _drop: ipc::DropTask,
+    ) -> Result<ipc::WorkPlan, Refusal> {
+        self.fake_plan_change(job_id).await
+    }
     async fn answer_question(
         self: std::sync::Arc<Self>,
         job_id: JobId,

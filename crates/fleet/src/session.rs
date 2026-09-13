@@ -39,6 +39,7 @@ use crate::questioning::Answer;
 use crate::resume::Redirection;
 use crate::silence::Poke;
 use crate::terms::{Declaring, Redeclaring};
+use crate::work_plan::PlanChanged;
 
 /// A Drone's live session, from the gate's side.
 ///
@@ -112,6 +113,18 @@ pub trait LiveSession {
     fn redirect(
         &self,
         instruction: &Redirection,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Inject what a person's add or drop changed. `#897`.
+    ///
+    /// **Its own method for [`redirect`](LiveSession::redirect)'s reason, one
+    /// authorship over.** A redirect carries a person's own words; this
+    /// carries Fleet's own sentence about a change a person made, and
+    /// `docs/contracts/agent-prompt.md` gives it drafted wording of its own —
+    /// [`crate::PlanChanged`] is the only way to build one.
+    fn plan_changed(
+        &self,
+        note: &PlanChanged,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Interrupt with a directive to stop and report.
@@ -231,6 +244,13 @@ impl Turn {
         Turn::of(instruction.text())
     }
 
+    /// What a person's add or drop changed, injected into a session already
+    /// running. The wording is [`PlanChanged`]'s and there is no way to send
+    /// other text under it. `#897`.
+    pub fn plan_changed(note: &PlanChanged) -> Turn {
+        Turn::of(note.text())
+    }
+
     /// Fleet's own stop-and-report directive, injected into a session already
     /// running. The wording is `ReportNow`'s and there is no way to send other
     /// text under it.
@@ -290,6 +310,10 @@ pub enum Occasion {
     Outcome,
     /// A person's own words, carried in verbatim.
     Redirect,
+    /// What a person's add or drop changed. `#897` — its own occasion so the
+    /// log shows this was not a redirect: Fleet's own sentence, never a
+    /// person's words.
+    Plan,
     /// A person's answer to a question the Drone asked.
     Answer,
     /// What the live scope check saw.
@@ -308,6 +332,7 @@ impl Occasion {
             Occasion::Opening => "opening",
             Occasion::Outcome => "outcome",
             Occasion::Redirect => "redirect",
+            Occasion::Plan => "plan",
             Occasion::Answer => "answer",
             Occasion::Drift => "drift",
             Occasion::Report => "report",
@@ -451,6 +476,10 @@ impl LiveSession for DroneSession {
 
     async fn redirect(&self, instruction: &Redirection) -> Result<(), io::Error> {
         self.say(&Turn::redirection(instruction)).await
+    }
+
+    async fn plan_changed(&self, note: &PlanChanged) -> Result<(), io::Error> {
+        self.say(&Turn::plan_changed(note)).await
     }
 
     async fn interrupt(&self, directive: &ReportNow) -> Result<(), io::Error> {

@@ -552,6 +552,19 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/redispatch",
     },
+    // A person's two edits to the Job's plan, `#897`. Two routes rather than
+    // one with a kind in the body: add and drop take different fields, and
+    // one route taking either would be a body that means two things.
+    Route {
+        operation: "add_task",
+        method: "POST",
+        path: "/jobs/:job_id/add_task",
+    },
+    Route {
+        operation: "drop_task",
+        method: "POST",
+        path: "/jobs/:job_id/drop_task",
+    },
     // The two acts that resume a step without redispatching. Two routes and
     // not one with a mode: which applies is decided by whether the Job holds a
     // Drone, and a caller that asked for the wrong one is told which is right
