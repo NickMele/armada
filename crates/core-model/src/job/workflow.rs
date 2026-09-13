@@ -40,6 +40,7 @@ use crate::job::judge::JudgeCheck;
 use crate::job::narrowing::Narrowing;
 use crate::job::prerequisite::Prerequisite;
 use crate::job::scope::EvidenceScope;
+use crate::job::source::WorkflowSource;
 use crate::job::verdict::GateVerdict;
 
 /// A deterministic assertion with everything it needs already in hand.
@@ -702,18 +703,22 @@ impl ResolvedStep {
 /// The WorkflowDef a Job follows, as it stood when the Job was created.
 ///
 /// **Fleet reads this and never the file.** The file it came from is not
-/// carried: a path recorded on a record outlives the file at it, and what the
-/// Job needs is the declaration rather than where it was typed.
+/// carried: a path recorded on a record outlives the file at it. Which of the
+/// three places it came from is, because that stays true. #425.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrozenWorkflow {
     id: WorkflowId,
     name: String,
     version: u32,
+    source: WorkflowSource,
     steps: Vec<ResolvedStep>,
 }
 
 impl FrozenWorkflow {
     /// See [`ResolvedStep::frozen`] for why this is public and who calls it.
+    ///
+    /// **Read from the repository** until [`from_source`](Self::from_source)
+    /// says otherwise — the only place a workflow could come from before #425.
     pub fn frozen(
         id: WorkflowId,
         name: String,
@@ -724,8 +729,19 @@ impl FrozenWorkflow {
             id,
             name,
             version,
+            source: WorkflowSource::Repository,
             steps,
         }
+    }
+
+    /// The same workflow, read from `source`.
+    pub fn from_source(self, source: WorkflowSource) -> FrozenWorkflow {
+        FrozenWorkflow { source, ..self }
+    }
+
+    /// Which of the three places this was read from.
+    pub fn source(&self) -> WorkflowSource {
+        self.source
     }
 
     /// The definition's own id — what a proposal's `workflow_id` must name, and

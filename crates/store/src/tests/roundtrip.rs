@@ -11,6 +11,7 @@
 //! edited; [`steps`] is what a step's run produced, in the tables keyed by
 //! step; [`workflow`] is the frozen declaration and the column dialect it is
 //! stored in.
+mod source;
 mod steps;
 mod workflow;
 

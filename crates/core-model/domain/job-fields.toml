@@ -467,7 +467,7 @@ nullable = "No"
 frozen_at = "Creation"
 purpose = "The WorkflowDef this Job follows, as it stood when the Job was created: its steps, their labels, their evidence types and the Checks each declares with the command already lifted out of the Manifest."
 in_code = "Yes"
-notes = "Written once and never updated. Fleet reads this and never `.armada/workflows/`, so editing a definition changes the next Job rather than a running one. `workflow_id` is read off it rather than stored beside it. The file it came from is not carried: a path on a record outlives the file at it."
+notes = "Written once and never updated. Fleet reads this and never `.armada/workflows/`, so editing a definition changes the next Job rather than a running one. `workflow_id` is read off it rather than stored beside it. The file it came from is not carried: a path on a record outlives the file at it. Which of the three places it came from is — `source`, one of `armada`, `kit` or `repository`, inside the frozen document rather than a column, so no migration moved; a row frozen before #425 has none and reads as `repository`, the only place a workflow could come from then."
 why = "A step that declared two Checks when a person approved the Job still declares two when it runs. A gate that can move under an approved Job makes the approval meaningless — the same discipline `acceptance_criteria` already had, applied to the other thing creation freezes."
 
 [fields.workflow_id]
