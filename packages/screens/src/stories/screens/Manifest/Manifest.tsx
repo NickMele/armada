@@ -135,6 +135,7 @@ export function ManifestFrom({
     onReadReports: noop,
     onCloseWorktrees: noop,
     onReadWorktrees: noop,
+    onOpenLimits: noop,
     onRefresh: noop,
     jobs: [],
     onClearTerminal: noop,
@@ -154,6 +155,7 @@ export function ManifestFrom({
         summary={head?.summary}
         actions={head?.actions}
         showing={SURFACE.manifest}
+        onOpenLimits={noop}
       >
         <div className="armada-screen__mounted">
           <Manifest
