@@ -41,6 +41,8 @@ mod forget;
 mod gaming;
 /// Where a verdict's own question was kept, and the column that points at it.
 mod judged;
+/// The Fleet limits a person saved, one row or none.
+mod limits;
 /// What the Manifest read at Job creation, kept whole and off the Job row's
 /// own fields.
 mod manifest_snapshot;
@@ -100,6 +102,7 @@ pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, 
 pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;
 pub use forget::Forgotten;
+pub use limits::SavedLimits;
 pub use migrations::KNOWN_SCHEMA_VERSION;
 pub use open::Store;
 pub use plan::DeclaredPlan;
