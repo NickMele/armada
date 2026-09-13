@@ -28,6 +28,7 @@ use std::path::PathBuf;
 
 use core_model::{
     EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, WorkflowId,
+    WorkflowSource,
 };
 
 use crate::error::{Disagreement, ResolveError, UnknownCheck};
@@ -119,6 +120,20 @@ impl ResolvedWorkflow {
     /// record outlives the file at it, and what a Job needs is the declaration.
     pub fn frozen(&self) -> &FrozenWorkflow {
         &self.frozen
+    }
+
+    /// Which of the three places the definition was read from.
+    ///
+    /// **A definition resolved on its own is the repository's**, the only
+    /// source there was before [`crate::Catalogue`]; only the catalogue can
+    /// say otherwise, so nothing outside this crate can call a file Armada's.
+    pub fn source(&self) -> WorkflowSource {
+        self.frozen.source()
+    }
+
+    pub(crate) fn read_from(mut self, source: WorkflowSource) -> ResolvedWorkflow {
+        self.frozen = self.frozen.from_source(source);
+        self
     }
 
     /// The definition this came from.

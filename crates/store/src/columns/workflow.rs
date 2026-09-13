@@ -18,8 +18,8 @@ use core_model::{
     AdvanceGate, ContextSource, Covers, CriterionId, DeclarePlanAt, EvidenceRef, EvidenceScope,
     EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern, GateVerdict, JudgeCheck,
     JudgeCriterion, ModelName, Narrowing, OnRefusal, PathPattern, Prerequisite, RepoPath,
-    ResolvedCheck, ResolvedStep, StepId, Ulid, WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY,
-    MANIFEST_CHECK,
+    ResolvedCheck, ResolvedStep, StepId, Ulid, WorkflowId, WorkflowSource, ARTIFACT_EXISTS,
+    DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -31,6 +31,8 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
         "workflow_id": workflow.id().as_str(),
         "name": workflow.name(),
         "version": workflow.version(),
+        // Which of the three places it was read from. #425.
+        "source": workflow.source().as_wire(),
         "steps": workflow.steps().iter().map(|step| json!({
             "id": step.id().as_str(),
             "label": step.label(),
@@ -201,7 +203,21 @@ pub fn read_workflow(stored: &str) -> Result<FrozenWorkflow, Malformed> {
         text(root, "name")?,
         version(root)?,
         steps,
-    ))
+    )
+    .from_source(source(root)?))
+}
+
+/// **A row with no `source` was frozen from the repository**, because before
+/// #425 there was nowhere else a workflow could come from. A word outside the
+/// set is refused rather than read as any of them.
+fn source(root: &Map<String, Value>) -> Result<WorkflowSource, Malformed> {
+    match root.get("source") {
+        None | Some(Value::Null) => Ok(WorkflowSource::Repository),
+        Some(Value::String(word)) => {
+            WorkflowSource::from_wire(word).ok_or_else(|| format!("`source` holds `{word}`"))
+        }
+        Some(other) => Err(format!("`source` is {}", kind(other))),
+    }
 }
 
 /// Whether this step's row carries a delivery declaration at all. **Null is

@@ -46,6 +46,7 @@ mod policy;
 mod prerequisite;
 mod record;
 mod scope;
+mod source;
 mod status;
 mod step;
 mod step_machine;
@@ -87,6 +88,7 @@ pub use policy::{AutoMerge, ReviewGate};
 pub use prerequisite::Prerequisite;
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};
+pub use source::WorkflowSource;
 pub use status::{JobStatus, StepState};
 pub use step::{JobStep, Side, StepEvidence, StepFrame, StepSeed, StepVerdict};
 pub use step_machine::{

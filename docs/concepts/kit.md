@@ -24,6 +24,14 @@ The machine's AI tool set and defaults, and everything in `../contracts/configur
 
 Resources, budget, timing, interface and notification routing are **not** here — those are [Machine](machine.md). Setting up your *first project* is also out of scope — that's Manifest's Init, chained together in the broader First-Run Onboarding journey (not yet designed).
 
+## Kit's home
+
+**Kit lives at `~/.armada`, and Workflows are the first thing read from it.** Fleet makes the folder, with `workflows/` inside it, when it starts. A definition in `~/.armada/workflows/` replaces the one Armada carries with the same `workflow_id` in every repository on this machine, and a repository's own `.armada/workflows/` replaces both — [Workflow](workflow.md) holds the rule. #425.
+
+**A folder a person can see and sync**, apart from the store, the runtime file and [Machine](machine.md)'s settings: Kit travels and the Machine does not. Everything else this page lists arrives in the same home under #41, and nothing else is read from it yet.
+
+**A Kit definition that does not fit a repository is left out there, and named.** One that will not parse, names a Check that repository does not declare, or shares its id with another Kit file, is set aside — two sharing an id are both left out, and named together. Fleet starts anyway and says at start which definition was left out, why, and whose runs instead: *Kit's `bug` was left out, because …; Armada's `bug` is used instead.* One bad Kit file never stops Fleet for every repository. The owner's decision. One the repository replaces is never resolved against it. A repository's own definitions stay strict, because the repository declared them.
+
 ## Navigation — two functional groups
 
 The original four groups split across the two concepts: AI Behavior and the tooling half of Safety are Kit; Resources & Budget, Interface & Notifications and Helm action authority are [Machine](machine.md).

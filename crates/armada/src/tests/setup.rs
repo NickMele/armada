@@ -13,7 +13,7 @@
 //! one and not the other is a daemon that refuses to start, discovered by
 //! whoever next tried to start it.
 
-use config::{Fault, LoadError, ResolvedCheck, Roster, WorkflowDef};
+use config::{Fault, LoadError, ResolvedCheck, Roster, WorkflowDef, WorkflowSource};
 
 use crate::setup::{Setup, SetupRefused, MANIFEST, WORKFLOWS};
 use crate::tests::{repository, TempDir};
@@ -24,13 +24,13 @@ use crate::tests::{repository, TempDir};
 /// tests check the shipped definitions against the roster the daemon would
 /// actually use — a list typed here would go on passing after the adapter's
 /// changed.
-fn roster() -> Roster {
+pub(super) fn roster() -> Roster {
     Roster::of(crate::model_choices(None).models)
 }
 
 /// A repository with an `armada.yml` that declares no Checks, so a workflow
 /// gated on nothing resolves against it without also having to write a Check.
-fn a_repository() -> TempDir {
+pub(super) fn a_repository() -> TempDir {
     let dir = TempDir::new();
     dir.write("armada.yml", "version: 1\nid: 01FIXTUREMANIFEST\n");
     dir
@@ -38,7 +38,7 @@ fn a_repository() -> TempDir {
 
 /// A minimal, legal, one-step definition — gated on nothing, so it resolves
 /// against a Manifest that declares no Checks.
-fn a_workflow(id: &str) -> String {
+pub(super) fn a_workflow(id: &str) -> String {
     format!(
         "version: 1\nworkflow_id: {id}\nname: {id}\nstructure: linear\nsteps:\n  - id: only\n    \
          label: \"Only step\"\n    delivers: true\n    advance_gate: auto\n"
@@ -47,7 +47,7 @@ fn a_workflow(id: &str) -> String {
 
 /// Bug, this repository's one workflow the tests below name by hand. The
 /// other six live beside it and are not this file's business.
-fn bug(setup: &Setup) -> &config::ResolvedWorkflow {
+pub(super) fn bug(setup: &Setup) -> &config::ResolvedWorkflow {
     setup
         .workflows()
         .get(&core_model::WorkflowId::carried(core_model::Ulid::carried(
@@ -61,7 +61,7 @@ fn bug(setup: &Setup) -> &config::ResolvedWorkflow {
 /// be dispatched.
 #[test]
 fn this_repositorys_own_setup_loads_and_resolves() {
-    let setup = match Setup::at(&repository(), &roster()) {
+    let setup = match Setup::at(&repository(), TempDir::new().path(), &roster()) {
         Ok(setup) => setup,
         Err(refused) => panic!("{} and {WORKFLOWS} must load:\n{refused}", MANIFEST),
     };
@@ -91,6 +91,11 @@ fn this_repositorys_own_setup_loads_and_resolves() {
          `docs/OPEN.md` says why"
     );
     assert_eq!(bug(&setup).name(), "bug");
+    assert_eq!(
+        bug(&setup).source(),
+        WorkflowSource::Repository,
+        "this repository's own file, over the identical one Armada carries"
+    );
     let steps: Vec<&str> = bug(&setup)
         .steps()
         .iter()
@@ -113,7 +118,8 @@ fn this_repositorys_own_setup_loads_and_resolves() {
 /// in the other resolves to a command nobody meant.
 #[test]
 fn each_named_check_resolved_to_the_command_the_manifest_holds() {
-    let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
+    let setup =
+        Setup::at(&repository(), TempDir::new().path(), &roster()).expect("a setup that loads");
     let resolved: Vec<(&str, &str)> = bug(&setup)
         .steps()
         .iter()
@@ -182,7 +188,8 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
 /// to hold before the seven files switch over as well as after.
 #[test]
 fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
-    let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
+    let setup =
+        Setup::at(&repository(), TempDir::new().path(), &roster()).expect("a setup that loads");
     let text = "version: 1\nworkflow_id: sweeping\nname: sweeping\nstructure: linear\nsteps:\n  \
                 - id: implement\n    label: Implement\n    evidence: {submitted: {type: diff}}\n    \
                 delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      \
@@ -229,7 +236,8 @@ fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
 /// and a `verify` step that can never pass.
 #[test]
 fn the_test_check_excludes_the_crate_that_must_not_compile() {
-    let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
+    let setup =
+        Setup::at(&repository(), TempDir::new().path(), &roster()).expect("a setup that loads");
     let test = setup.manifest().check("test").expect("a `test` Check");
     assert!(
         test.run().contains("--exclude acceptance"),
@@ -294,7 +302,8 @@ fn the_designed_bug_workflow_is_refused_for_a_reason_a_later_milestone_removes()
 /// length would mean one of them had been quietly rewritten into the other.
 #[test]
 fn the_designed_definition_and_m1s_reduced_form_are_not_the_same_workflow() {
-    let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
+    let setup =
+        Setup::at(&repository(), TempDir::new().path(), &roster()).expect("a setup that loads");
     assert_eq!(bug(&setup).steps().len(), 3);
 
     let designed = repository()
@@ -318,10 +327,15 @@ fn two_or_more_workflow_definitions_load_and_are_held_by_their_own_ids() {
     dir.write(".armada/workflows/alpha.yml", &a_workflow("alpha"));
     dir.write(".armada/workflows/beta.yml", &a_workflow("beta"));
 
-    let setup = Setup::at(dir.path(), &roster()).expect("two definitions with distinct ids load");
-    let mut ids: Vec<&str> = setup.workflows().keys().map(|id| id.as_str()).collect();
-    ids.sort();
-    assert_eq!(ids, vec!["alpha", "beta"]);
+    let setup = Setup::at(dir.path(), TempDir::new().path(), &roster())
+        .expect("two definitions with distinct ids load");
+    let held = sources(&setup);
+    for id in ["alpha", "beta"] {
+        assert!(
+            held.contains(&(id, WorkflowSource::Repository)),
+            "{id} in {held:?}"
+        );
+    }
 }
 
 /// **The whole daemon-start path, over a workflow that names no Check.** The
@@ -348,12 +362,13 @@ fn a_repository_whose_workflow_names_no_check_starts_and_keeps_its_order() {
          advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
     );
 
-    let setup = Setup::at(dir.path(), &roster()).expect("a repository that gates on all of them");
+    let setup = Setup::at(dir.path(), TempDir::new().path(), &roster())
+        .expect("a repository that gates on all of them");
     let workflow = setup
         .workflows()
         .values()
-        .next()
-        .expect("the one definition");
+        .find(|workflow| workflow.id().as_str() == "sweeping")
+        .expect("the repository's one definition");
     let ran: Vec<(&str, &str)> = workflow.steps()[0]
         .checks()
         .iter()
@@ -379,7 +394,8 @@ fn a_duplicate_workflow_id_across_two_files_is_refused_naming_both() {
     dir.write(".armada/workflows/first.yml", &a_workflow("shared"));
     dir.write(".armada/workflows/second.yml", &a_workflow("shared"));
 
-    let refused = Setup::at(dir.path(), &roster()).expect_err("two files agree on one id");
+    let refused = Setup::at(dir.path(), TempDir::new().path(), &roster())
+        .expect_err("two files agree on one id");
     assert!(matches!(refused, SetupRefused::DuplicateWorkflowId { .. }));
     let said = refused.to_string();
     assert!(said.contains("first.yml"), "{said}");
@@ -387,13 +403,40 @@ fn a_duplicate_workflow_id_across_two_files_is_refused_naming_both() {
     assert!(said.contains("shared"), "{said}");
 }
 
-/// An empty `.armada/workflows/` is still refused — a repository is not set up
-/// until at least one workflow is there to dispatch.
-#[test]
-fn zero_workflow_files_is_still_refused() {
-    let dir = a_repository();
-    std::fs::create_dir_all(dir.path().join(WORKFLOWS)).expect("the empty directory");
+/// Where each id a Setup holds came from, sorted by id.
+pub(super) fn sources(setup: &Setup) -> Vec<(&str, WorkflowSource)> {
+    setup
+        .workflows()
+        .iter()
+        .map(|(id, workflow)| (id.as_str(), workflow.source()))
+        .collect()
+}
 
-    let refused = Setup::at(dir.path(), &roster()).expect_err("no definition is in the directory");
-    assert!(matches!(refused, SetupRefused::NoWorkflow { .. }));
+/// **A repository nobody set up dispatches on what Armada carries** — with no
+/// `.armada/workflows/`, and with an empty one, which until #425 was refused.
+#[test]
+fn a_repository_with_no_workflows_of_its_own_runs_on_what_armada_carries() {
+    let dir = a_repository();
+    for made in [false, true] {
+        if made {
+            std::fs::create_dir_all(dir.path().join(WORKFLOWS)).expect("the empty directory");
+        }
+        let setup = Setup::at(dir.path(), TempDir::new().path(), &roster())
+            .unwrap_or_else(|why| panic!("no workflows of its own, directory made {made}: {why}"));
+        let carried = [
+            "bug",
+            "code_review",
+            "design_plan",
+            "epic",
+            "feature",
+            "prototype",
+            "refactor",
+            "revert",
+        ];
+        assert_eq!(
+            sources(&setup),
+            carried.map(|id| (id, WorkflowSource::Armada)),
+            "directory made: {made}"
+        );
+    }
 }

@@ -3,7 +3,7 @@
 //!
 //! The flow is the *Set Up a Project* journey — Locate, Scan, Pick, Proposal,
 //! Write, Verify, Fix — and then the half no journey draws: a repository nobody
-//! set up has no `.armada/workflows/`, so today it cannot dispatch at all.
+//! set up has no `.armada/workflows/`, and dispatches on what Armada carries.
 //! **Almost none of it is built**, so this file asserts what the claim stands
 //! on and names the rest. The apparatus is [`bench::reach`]: a repository that
 //! is not this one — its files before anybody set it up, a Manifest and a
@@ -26,8 +26,11 @@
 //! | Each workspace carries how strong its evidence is, and a name every strong sibling declares is marked where one lacks it — the root never a sibling | That a picker ticks by it or draws the grid — #824. The mark is over the batch ticked by default; a batch a person re-ticks is the screen's to recompute |
 //! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That anything wrote it. Scan writes nothing; Proposal and Write are #823's |
 //! | A proposal saying more than the file can hold is refused, every fault in one pass | That a proposal is ever read back before it is written |
-//! | A definition gating on `every_manifest_check` resolves against that repository's own Checks, and one naming Armada's by name is refused there | That any definition reaches that repository. Carrying one is #425's |
-//! | A Job created against it is held to that repository's Checks, prerequisites and all | That the Job's record says where its definition came from — #425 |
+//! | A definition gating on `every_manifest_check` resolves against that repository's own Checks, and one naming Armada's by name is refused there | That a definition written for another repository names only what this one declares. The carried set does; `config`'s `tests/carried.rs` holds it to three other shapes |
+//! | A Job created against it is held to that repository's Checks, prerequisites and all | That any of them runs. A Manifest Check is a process, and the gate is `bug_job.rs`'s claim |
+//! | **Dispatch.** With no workflows of its own, all eight Armada carries resolve there, and a Job on the carried `bug` is created and dispatched | That a Fleet started there serves them. `Setup::at` reads directories, and `armada`'s own tests read them |
+//! | **Override.** One file from Kit replaces a carried definition by id, and the repository's replaces Kit's, whatever order they arrive in | That `~/.armada/workflows/` is where Kit's are read from. That is a directory, `armada`'s tests again |
+//! | **Source.** Each workflow says which of the three places it came from, in words a person reads, and a Job created on the carried `bug` freezes `armada` onto its own record | That the record reads it back out of `store`, which has no in-memory constructor — `store`'s own round-trip test does. That a person sees it on a Job: nothing on the wire carries it, which is Bridge's half |
 //! | Running one Manifest entry in the checkout, and reading and saving the file, are operations Fleet serves | Verify and Fix. One entry is not setup and every Check once, and a saved file is not a row corrected in place |
 //! | A request naming a milestone is offered `epic` with what it is for, in a requester's words, beside its steps — and a definition saying nothing is offered as before | That a model reading it proposes `epic`. Choosing is a model's, and this file calls none |
 
@@ -44,14 +47,6 @@
 //! | Verify | Setup and every Check run once on approval, on the sheet that wrote the file, writing nothing | #719 |
 //! | Fix | The failing Check's command corrected in its row, and only that Check run again | #721 |
 
-//! # Not carried: dispatching into it
-//!
-//! | Step | What is not carried | Carried by |
-//! |---|---|---|
-//! | Dispatch | A Job runs in a repository with no `.armada/workflows/`, on a definition Armada carries or a machine adds | #425 |
-//! | Override | The repository replaces any carried definition by writing one file, and its own wins | #425 |
-//! | Source | A person can tell which of those sources a Job's workflow came from | #425 |
-
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the six.
 #[allow(dead_code)]
@@ -60,7 +55,7 @@ mod bench;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use config::{Fault, ResolveError, ResolvedCheck, ResolvedWorkflow};
+use config::{Fault, ResolveError, ResolvedCheck, ResolvedWorkflow, WorkflowSource};
 use core_model::{JobStatus, StepState, WorkflowId};
 use fleet::scanning::scan;
 use fleet::{Brief, Proposal};
@@ -70,8 +65,8 @@ use ipc::{
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    carried_there, resolved_there, written, Held, A_MILESTONE, CARRYABLE, CHECKOUT, EPIC, EPIC_AT,
-    MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP, WRITTEN,
+    carried_there, catalogued, one_step, resolved_there, written, Held, A_MILESTONE, CARRYABLE,
+    CHECKOUT, EPIC, EPIC_AT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP, WRITTEN,
 };
 use bench::{states, Bench};
 
@@ -449,6 +444,95 @@ fn a_job_against_that_repository_is_held_to_its_checks() {
             ("seed", "pnpm tsx scripts/seed.ts")
         ],
         "and what it requires is frozen with it, commands and all"
+    );
+}
+
+/// The workflow a catalogue resolved to for `id`, against the storefront.
+fn held_there(catalogue: &config::ResolvedCatalogue, id: &str) -> ResolvedWorkflow {
+    catalogue
+        .workflows()
+        .values()
+        .find(|workflow| workflow.id().as_str() == id)
+        .unwrap_or_else(|| panic!("`{id}` is held"))
+        .clone()
+}
+
+/// **A repository with no workflows of its own dispatches on what Armada
+/// carries.** Dispatch.
+///
+/// All eight resolve against the storefront, and a Job on the carried `bug` is
+/// created and dispatched, gated on the storefront's own Checks. Nothing here
+/// read a directory: that the carried set is what `Setup::at` hands a Fleet is
+/// `armada`'s own test.
+#[test]
+fn a_repository_with_no_workflows_of_its_own_dispatches_on_what_armada_carries() {
+    let carried = catalogued(&[], &[]);
+    assert_eq!(carried.workflows().len(), 8, "all eight resolve there");
+    assert!(carried.left_out().is_empty(), "and none is left out");
+    let bug = held_there(&carried, "bug");
+    assert_eq!(bug.source(), WorkflowSource::Armada);
+    assert_eq!(
+        bug.steps()[1]
+            .checks()
+            .iter()
+            .map(ResolvedCheck::label)
+            .collect::<Vec<_>>(),
+        ["test", "lint", "e2e", "diff_nonempty"],
+        "the storefront's Checks, on a definition nobody there wrote"
+    );
+
+    let bench = Bench::judged_by(
+        FakeWorkProduct::untouched(),
+        bug,
+        FakeJudge::that_fails("a Judge that should never be asked"),
+    );
+    let mut run = bench.created("the basket forgets its last item");
+    bench.approved_and_dispatched(&mut run);
+    assert_eq!(run.job.status(), JobStatus::Running);
+    assert_eq!(states(&run.job)[0], ("plan", StepState::Running));
+    assert_eq!(
+        run.job.workflow().source(),
+        WorkflowSource::Armada,
+        "and the Job's own record says where its workflow came from"
+    );
+}
+
+/// **One file replaces a carried definition by id, and the repository's own
+/// wins.** Override, and Source in the words a person reads.
+///
+/// Kit writes `bug` and `revert`; the storefront writes `bug`. Its three-step
+/// `bug` asks no Judge anything, which is how it is told from Armada's.
+#[test]
+fn one_file_replaces_a_carried_definition_and_the_repositorys_own_wins() {
+    let kit = [
+        ("bug.yml", one_step("bug")),
+        ("revert.yml", one_step("revert")),
+    ];
+    let own = [("bug.json", CARRYABLE.to_string())];
+    let catalogue = catalogued(&kit, &own);
+
+    let bug = held_there(&catalogue, "bug");
+    assert_eq!(bug.source(), WorkflowSource::Repository);
+    assert!(bug
+        .steps()
+        .iter()
+        .all(|step| step.judge_checks().is_empty()));
+    assert_eq!(
+        held_there(&catalogue, "revert").steps().len(),
+        1,
+        "Kit's, over Armada's"
+    );
+
+    let said: Vec<String> = ["bug", "revert", "feature"]
+        .map(|id| format!("{id} {}", held_there(&catalogue, id).source()))
+        .into();
+    assert_eq!(
+        said,
+        [
+            "bug from the repository",
+            "revert from Kit",
+            "feature carried by Armada"
+        ]
     );
 }
 

@@ -14,7 +14,10 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use config::{Fault, Manifest, ResolveError, ResolvedWorkflow, Roster, WorkflowDef};
+use config::{
+    Catalogue, Fault, Manifest, ResolveError, ResolvedCatalogue, ResolvedWorkflow, Roster,
+    WorkflowDef, Written,
+};
 use fleet::scanning::{Entry, Read, Tree};
 
 /// The repository's checkout, as a Scan of it would say it read.
@@ -115,10 +118,62 @@ impl Tree for Held {
 /// repository: a web shop on `pnpm`, which shares no Check name with Armada.
 pub const MANIFEST_AT: &str = "/repos/storefront/armada.yml";
 
-/// Where a definition Armada carried would say it was read from. A name for
-/// the refusals to cite, not a file — and deliberately outside the repository,
-/// because a definition from inside it is the one source that works today.
+/// Where a definition written without the repository in view says it was read
+/// from. A name for the refusals to cite, not a file.
 pub const DEFINITION_AT: &str = "/carried/bug.json";
+
+/// Where a person's Kit keeps its Workflows, on a machine that is not this one.
+pub const KIT_AT: &str = "/home/user/.armada/workflows";
+
+/// Where the storefront keeps its own, beside [`MANIFEST_AT`].
+pub const OWN_AT: &str = "/repos/storefront/.armada/workflows";
+
+/// A definition of one ungated step. What a person writes to replace a carried
+/// workflow without caring what it did.
+pub fn one_step(id: &str) -> String {
+    format!(
+        "version: 1\nworkflow_id: {id}\nname: {id}\nstructure: linear\nsteps:\n  - id: only\n    \
+         label: Only\n    delivers: true\n    advance_gate: auto\n"
+    )
+}
+
+/// What Armada carries, merged with what a Kit and the repository wrote, as
+/// `(file, text)`, and resolved against the storefront. Read against a roster
+/// offering exactly the models the carried set names — [`carried_there`] says
+/// why the roster is not this claim.
+pub fn catalogued(kit: &[(&str, String)], own: &[(&str, String)]) -> ResolvedCatalogue {
+    let named: Vec<String> = config::carried()
+        .iter()
+        .filter_map(|one| {
+            WorkflowDef::parse(one.path(), one.text(), &Roster::offering_nothing()).err()
+        })
+        .flat_map(|refused| {
+            refused
+                .refusals()
+                .iter()
+                .filter_map(|refusal| match &refusal.fault {
+                    Fault::NoSuchModel { value, .. } => Some(value.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let at = |dir: &str, file: &str| Path::new(dir).join(file);
+    let written = config::carried()
+        .into_iter()
+        .chain(
+            kit.iter()
+                .map(|(file, text)| Written::in_kit(at(KIT_AT, file), text.clone())),
+        )
+        .chain(
+            own.iter()
+                .map(|(file, text)| Written::in_repository(at(OWN_AT, file), text.clone())),
+        );
+    Catalogue::of(written, &Roster::of(named))
+        .unwrap_or_else(|why| panic!("the three places merge: {why:?}"))
+        .resolve(&self::written())
+        .unwrap_or_else(|why| panic!("nothing the storefront wrote is refused: {why}"))
+}
 
 /// The `armada.yml` a finished Setup would write for that repository.
 ///

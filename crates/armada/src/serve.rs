@@ -380,7 +380,8 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // offers, resolved just above. Two lists would be two answers to "is this a
     // model this machine has", and a workflow could name something no Job could
     // be proposed with.
-    let setup = Setup::at(&repository, &Roster::of(&machine_facts.models.models))?;
+    let kit = crate::setup::kit(std::path::Path::new(&machine_facts.home))?;
+    let setup = Setup::at(&repository, &kit, &Roster::of(&machine_facts.models.models))?;
     println!(
         "{} — Checks {} — model {}",
         setup.root().display(),
@@ -389,11 +390,15 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     );
     for workflow in setup.workflows().values() {
         println!(
-            "  workflow `{}` ({}), {} step(s)",
+            "  workflow `{}` ({}), {} step(s), {}",
             workflow.name(),
             workflow.id().as_str(),
-            workflow.steps().len()
+            workflow.steps().len(),
+            workflow.source()
         );
+    }
+    for left in setup.left_out() {
+        println!("  {left}");
     }
 
     let vacancy = presence
