@@ -71,16 +71,16 @@ use core_model::{JobStatus, StepState, WorkflowId};
 use fleet::scanning::scan;
 use fleet::{Brief, Proposal};
 use ipc::{
-    EvidenceStrength, MissingName, Provenance, RepositoryScan, ScannedWorkspace, ToolFile,
-    VerifyGroup, VerifyStep, VerifyStepState, WorkspaceGlob,
+    EvidenceStrength, MissingName, ProposalEdit, Provenance, RepositoryScan, ScannedWorkspace,
+    ToolFile, VerifyGroup, VerifyStep, VerifyStepState, WorkspaceGlob,
 };
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    as_sent, carried_there, catalogued, convention, e2e_requiring, fault_keys, loads, one_step,
-    proposals, provenance_of, read_from, resolved_there, toward_the_journeys_e2e, written, Held,
-    A_MILESTONE, CARRYABLE, CHECKOUT, EPIC, EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS,
-    OVERREACHING, UNSET_UP, WRITTEN,
+    as_sent, carried_there, catalogued, convention, fault_keys, loads, one_step, proposals,
+    provenance_of, read_from, resolved_there, toward_the_journeys_e2e, written, Held, A_MILESTONE,
+    CARRYABLE, CHECKOUT, EPIC, EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING,
+    UNSET_UP, WRITTEN,
 };
 use bench::{states, Bench};
 
@@ -380,7 +380,12 @@ fn an_edit_moves_the_provenance_of_what_it_touched_and_nothing_else() {
     );
     assert_eq!(manifest.auto_merge(), core_model::AutoMerge::ChecksPass);
 
-    shop.amend(e2e_requiring(&["test"]))
+    let a_check_before_a_check = ProposalEdit::Check {
+        name: "e2e".to_string(),
+        run: "pnpm playwright test".to_string(),
+        requires: vec!["test".to_string()],
+    };
+    shop.amend(a_check_before_a_check)
         .expect("applied, and refused where it is");
     let refused = as_sent(&shop);
     assert_eq!(

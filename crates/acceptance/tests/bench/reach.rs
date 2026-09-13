@@ -20,7 +20,7 @@ use config::{
 };
 use fleet::manifest_proposal::{propose, Draft};
 use fleet::scanning::{scan, Entry, Read, Tree};
-use ipc::{ManifestProposal, PolicyKey, ProposalEdit, Provenance};
+use ipc::{ManifestProposal, ProposalEdit, Provenance};
 
 /// The repository's checkout, as a Scan of it would say it read.
 pub const CHECKOUT: &str = "/repos/storefront";
@@ -451,75 +451,46 @@ pub fn read_from(file: &str, key: &str) -> Provenance {
     }
 }
 
-/// The shop's `e2e`, as the journey writes it, requiring these Commands.
-pub fn e2e_requiring(requires: &[&str]) -> ProposalEdit {
-    ProposalEdit::Check {
-        name: "e2e".to_string(),
-        run: "pnpm playwright test".to_string(),
-        requires: requires.iter().map(|one| one.to_string()).collect(),
-    }
+/// A person's corrections to the shop as a surface sends them, toward the journey's own `e2e`.
+pub fn toward_the_journeys_e2e() -> Vec<ProposalEdit> {
+    ipc::decode("a person's edits", TOWARD_THE_JOURNEYS_E2E.as_bytes()).expect("edits that decode")
 }
 
-/// A person's corrections to the shop, toward the journey's own `e2e`; `test` is re-sent unchanged.
-pub fn toward_the_journeys_e2e() -> Vec<ProposalEdit> {
-    let command = |name: &str, run: &str| ProposalEdit::Command {
-        name: name.to_string(),
-        run: run.to_string(),
-        destructive: false,
-    };
-    vec![
-        command("migrate", "pnpm prisma migrate deploy"),
-        command("seed", "pnpm tsx scripts/seed.ts"),
-        e2e_requiring(&["migrate", "seed"]),
-        ProposalEdit::Move {
-            name: "lint".to_string(),
-        },
-        ProposalEdit::Port {
-            name: "dev".to_string(),
-            container: Some(3000),
-            env: Some("PORT".to_string()),
-        },
-        ProposalEdit::Policy {
-            key: PolicyKey::AutoMerge,
-            value: Some("checks-pass".to_string()),
-        },
-        ProposalEdit::Check {
-            name: "test".to_string(),
-            run: "pnpm run test".to_string(),
-            requires: Vec::new(),
-        },
-    ]
-}
+/// `test` is re-sent exactly as proposed, so it should keep its citation.
+const TOWARD_THE_JOURNEYS_E2E: &str = r#"[
+  {"edit": "command", "name": "migrate", "run": "pnpm prisma migrate deploy"},
+  {"edit": "command", "name": "seed", "run": "pnpm tsx scripts/seed.ts"},
+  {"edit": "check", "name": "e2e", "run": "pnpm playwright test", "requires": ["migrate", "seed"]},
+  {"edit": "move", "name": "lint"},
+  {"edit": "port", "name": "dev", "container": 3000, "env": "PORT"},
+  {"edit": "policy", "key": "auto_merge", "value": "checks-pass"},
+  {"edit": "check", "name": "test", "run": "pnpm run test"}
+]"#;
 
 /// The text Write would put down, loaded where it would be.
 pub fn loads(proposal: &ManifestProposal) -> Manifest {
-    let text = proposal
-        .text
-        .as_deref()
-        .unwrap_or_else(|| panic!("{} is refused: {:?}", proposal.file, proposal.refused));
+    let Some(text) = &proposal.text else {
+        panic!("{} is refused: {:?}", proposal.file, proposal.refused);
+    };
     let at = Path::new(CHECKOUT).join(&proposal.file);
     Manifest::parse(&at, text).unwrap_or_else(|why| panic!("{} loads: {why}", proposal.file))
 }
 
 /// The provenance of the Check or Command named `name`.
 pub fn provenance_of(proposal: &ManifestProposal, name: &str) -> Provenance {
-    let checks = proposal
-        .checks
-        .iter()
-        .map(|one| (&one.name, &one.provenance));
-    let commands = proposal
-        .commands
-        .iter()
-        .map(|one| (&one.name, &one.provenance));
-    let mut lines = checks.chain(commands);
-    let found = lines.find(|(named, _)| *named == name);
-    found
-        .unwrap_or_else(|| panic!("no line named {name}"))
-        .1
-        .clone()
+    for check in &proposal.checks {
+        if check.name == name {
+            return check.provenance.clone();
+        }
+    }
+    for command in &proposal.commands {
+        if command.name == name {
+            return command.provenance.clone();
+        }
+    }
+    panic!("no line named {name}")
 }
 
-/// The keys a proposal's file is refused at, in the parser's order.
 pub fn fault_keys(proposal: &ManifestProposal) -> Vec<&str> {
     let faults = proposal.refused.iter().flat_map(|one| &one.faults);
     faults.map(|one| one.key.as_str()).collect()
