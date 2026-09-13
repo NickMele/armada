@@ -26,7 +26,9 @@ export const BothListed: Story = {
     const canvas = within(canvasElement);
     const picker = canvas.getByRole("combobox", { name: "Project" });
     await expect(within(picker).getByRole("option", { name: "armada" })).toBeInTheDocument();
-    await expect(within(picker).getByRole("option", { name: "scratch · not set up" })).toBeInTheDocument();
+    const notSetUp = within(picker).getByRole("group", { name: "Not set up" });
+    await expect(within(notSetUp).getByRole("option", { name: "scratch" })).toBeInTheDocument();
+    await expect(within(notSetUp).queryByRole("option", { name: "armada" })).toBeNull();
     await expect(picker).toHaveValue("/Users/user/armada");
     await expect(canvas.queryByRole("region", { name: "Workspaces" })).toBeNull();
   },
@@ -40,13 +42,17 @@ export const PickNotSetUp: Story = {
     const picker = canvas.getByRole("combobox", { name: "Project" });
     await userEvent.selectOptions(picker, SCRATCH.root);
     const list = await canvas.findByRole("region", { name: "Workspaces" });
+    // Nothing but Setup has anything to show before the file exists.
+    await expect(canvas.queryByRole("tab", { name: "Edit" })).toBeNull();
     await userEvent.click(within(list).getByRole("button", { name: "Open ." }));
     const sheet = await canvas.findByRole("dialog", { name: "Proposal for ." });
     await userEvent.click(within(sheet).getByRole("button", { name: "Write armada.yml" }));
     const verify = await within(sheet).findByRole("region", { name: "Verify" });
     await expect(within(verify).getByRole("button", { name: "Verify" })).toBeEnabled();
-    // Written, so the picker no longer calls it not set up.
+    // Written, so the picker no longer groups it as not set up, and the Manifest's own views are back.
+    await expect(within(picker).queryByRole("group", { name: "Not set up" })).toBeNull();
     await expect(within(picker).getByRole("option", { name: "scratch" })).toBeInTheDocument();
     await expect(picker).toHaveValue(SCRATCH.root);
+    await expect(canvas.getByRole("tab", { name: "Edit" })).toBeVisible();
   },
 };

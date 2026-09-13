@@ -250,6 +250,7 @@ export function SetupFrom({
             onOpenServerLink={() => Promise.resolve({ ok: false, why: "no_address" } as const)}
             settingUp={settingUp}
             onSettingUp={setSettingUp}
+            setUp={picked.manifest !== undefined}
             setup={
               <Setup
                 setting={setting}

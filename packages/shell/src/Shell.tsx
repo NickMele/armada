@@ -99,6 +99,11 @@ export function Shell({
   children,
 }: ShellProps) {
   const collapsed = useNarrow();
+  const optionOf = (repository: RepositorySummary) => (
+    <option key={repository.root} value={repository.root} title={repository.root}>
+      {repositoryLabel(repository, repositories)}
+    </option>
+  );
 
   return (
     <TheShell
@@ -131,11 +136,11 @@ export function Shell({
           disabled={repositories.length === 0}
         >
           {repositories.length === 0 ? <option value="">No repository read yet</option> : null}
-          {repositories.map((repository) => (
-            <option key={repository.root} value={repository.root} title={repository.root}>
-              {repositoryLabel(repository, repositories)}
-            </option>
-          ))}
+          {repositories.filter((one) => one.manifest !== undefined).map(optionOf)}
+          {/* A group rather than a suffix: the rail clips a long label, and picking one opens Setup. */}
+          {repositories.some((one) => one.manifest === undefined) ? (
+            <optgroup label="Not set up">{repositories.filter((one) => one.manifest === undefined).map(optionOf)}</optgroup>
+          ) : null}
         </Select>
       }
       title={title}
@@ -148,19 +153,14 @@ export function Shell({
   );
 }
 
-/**
- * What the picker calls a repository: its folder, because `armada.yml` declares no name, and
- * the whole root where two share one. **A repository nobody set up says so**, since picking it
- * opens Setup rather than its Manifest.
- */
+/** What the picker calls a repository: its folder, because `armada.yml` declares no name, and the whole root where two share one. */
 export function repositoryLabel(
   repository: RepositorySummary,
   repositories: readonly RepositorySummary[],
 ): string {
   const named = folderOf(repository.root);
   const shared = repositories.some((other) => other.root !== repository.root && folderOf(other.root) === named);
-  const name = shared ? repository.root : named;
-  return repository.manifest === undefined ? `${name} · not set up` : name;
+  return shared ? repository.root : named;
 }
 
 function folderOf(root: string): string {

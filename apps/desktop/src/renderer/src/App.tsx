@@ -635,6 +635,7 @@ export function App() {
                 onOpenServerLink={openServerLink}
                 settingUp={settingUp}
                 onSettingUp={setSettingUp}
+                setUp={repository === undefined || scoped !== undefined}
                 setup={
                   <Setup
                     setting={setting}
