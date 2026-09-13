@@ -89,8 +89,11 @@ where
     /// file under `.armada/transcripts/` is what survives, and the Job's log is
     /// what names it.
     async fn refused(&self, job: &Job) -> Refusals {
-        crate::transcript::refusals(&self.host().records_root, &job.handle(), stopped_step(job))
-            .await
+        let root = match self.served_by(job) {
+            Ok(served) => served.records_root().to_string(),
+            Err(_) => String::from("/dev/null/armada-records"),
+        };
+        crate::transcript::refusals(&root, &job.handle(), stopped_step(job)).await
     }
 
     /// What the gate said when it could not decide, where that is why the
@@ -108,7 +111,7 @@ where
         }
         let step = ipc::StepId::from(step);
         self.job_logs()
-            .read(&job.handle(), 0)
+            .read(&ipc::JobId::from(job.id()), &job.handle(), 0)
             .notes
             .into_iter()
             // The latest one: a step can be asked more than once, and this
@@ -132,7 +135,9 @@ where
             // refuse to find.
             worktree_on_disk: self.surviving_worktree(job).is_ok(),
             checks_passed: checks_passed(ran, job.stopped_on().map(|(step, _)| step)),
-            workflow_held: self.workflow_named(job.workflow_id()).is_some(),
+            workflow_held: self
+                .served_by(job)
+                .is_ok_and(|served| served.workflows().contains_key(job.workflow_id())),
         }
     }
 

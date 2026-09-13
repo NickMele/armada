@@ -4,12 +4,11 @@
 //! scripted here is the other shape: a clean worktree over a branch with commits
 //! its base has not got, which is what a Drone running `git commit` leaves.
 
-use api::{Journal, Queries};
+use api::Queries;
 use core_model::Job;
 use testkit::{Delivered, Delivering, FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
-use crate::journal::JobLogs;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_committing_through, a_proposal, diff_evidence, note_evidence, worktree_directory,
@@ -48,8 +47,7 @@ fn went_out(vcs: &FakeVcs) -> (bool, bool) {
 
 fn log_of(home: &TempDir, job: &Job) -> Vec<String> {
     let root = home.path().to_string_lossy().into_owned();
-    JobLogs::under(&root)
-        .read(&job.handle(), 0)
+    crate::journal::read_from(&root, &job.handle(), 0)
         .notes
         .into_iter()
         .map(|note| note.msg)

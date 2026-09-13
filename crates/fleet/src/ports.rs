@@ -415,7 +415,7 @@ where
     pub(crate) async fn claimed_ports(&self, job: &Job) -> Result<(), Adrift> {
         // Sized from what the Job froze, so the span and the names it is later
         // read back through are the same list — `port_map` below.
-        let (froze, _) = self.effective_manifest(job).await;
+        let (froze, _) = self.effective_manifest(job).await?;
         let claimant = PortClaimant::Job(job.id().clone());
         if let Err(cause) = self.try_claim(claimant, &froze).await {
             self.move_job(
@@ -483,7 +483,9 @@ where
     /// number is its offset in the sorted list, so a `ports:` edit after the
     /// Job was created would otherwise renumber a port a server is bound to.
     pub(crate) async fn port_map(&self, job: &Job) -> BTreeMap<String, u16> {
-        let (froze, _) = self.effective_manifest(job).await;
+        let Ok((froze, _)) = self.effective_manifest(job).await else {
+            return BTreeMap::new();
+        };
         let claim = self
             .store()
             .lock()
@@ -500,7 +502,9 @@ where
     /// Every variable this Job's claimed span sets: `ARMADA_PORT_<NAME>` and
     /// any declared `env`, for every process Fleet spawns in the worktree.
     pub(crate) async fn port_env(&self, job: &Job) -> Vec<(String, String)> {
-        let (froze, _) = self.effective_manifest(job).await;
+        let Ok((froze, _)) = self.effective_manifest(job).await else {
+            return Vec::new();
+        };
         let names = match env_names(&froze) {
             Ok(names) => names,
             // Already refused at claim time, which is upstream of every spawn
@@ -530,19 +534,25 @@ where
     /// a merge draws from this, and so will a server started from the
     /// Manifest surface with no Job, since neither has a worktree of its own
     /// to claim against.
-    pub(crate) async fn main_checkout_ports(&self) -> BTreeMap<String, u16> {
-        if let Some(claim) = self.main_checkout_claim().await {
-            return port_map(self.manifest(), &claim);
+    pub(crate) async fn main_checkout_ports(
+        &self,
+        served: &crate::repositories::Served,
+    ) -> BTreeMap<String, u16> {
+        if let Some(claim) = self.main_checkout_claim(served).await {
+            return port_map(served.manifest(), &claim);
         }
         // First need: nothing to escalate and nobody to tell if this
         // refuses, for `main_checkout_port_env`'s own reason — a proof run
         // with an unresolved `${port.NAME}` is diagnosable from its own log,
         // and there is no Job here to carry a `not_configurable`.
         let _ = self
-            .try_claim(PortClaimant::MainCheckout, self.manifest())
+            .try_claim(
+                PortClaimant::MainCheckout(served.root().to_string()),
+                served.manifest(),
+            )
             .await;
-        match self.main_checkout_claim().await {
-            Some(claim) => port_map(self.manifest(), &claim),
+        match self.main_checkout_claim(served).await {
+            Some(claim) => port_map(served.manifest(), &claim),
             None => BTreeMap::new(),
         }
     }
@@ -550,20 +560,23 @@ where
     /// Every variable the main checkout's claimed span sets:
     /// `ARMADA_PORT_<NAME>` and any declared `env`, for the proof run after a
     /// merge and, later, a server started with no Job.
-    pub(crate) async fn main_checkout_port_env(&self) -> Vec<(String, String)> {
-        let names = match env_names(self.manifest()) {
+    pub(crate) async fn main_checkout_port_env(
+        &self,
+        served: &crate::repositories::Served,
+    ) -> Vec<(String, String)> {
+        let names = match env_names(served.manifest()) {
             Ok(names) => names,
             Err(_) => return Vec::new(),
         };
-        let ports = self.main_checkout_ports().await;
+        let ports = self.main_checkout_ports(served).await;
         env_vars(&names, &ports)
     }
 
-    async fn main_checkout_claim(&self) -> Option<PortClaim> {
+    async fn main_checkout_claim(&self, served: &crate::repositories::Served) -> Option<PortClaim> {
         self.store()
             .lock()
             .await
-            .port_span_for_main_checkout()
+            .port_span_for_main_checkout(served.root())
             .ok()
             .flatten()
     }
@@ -580,14 +593,21 @@ where
     /// so the composition root calls this directly once the turn loop has
     /// drained. See `armada::serve`.
     pub async fn released_main_checkout_ports(&self) {
-        let _ = self
-            .store()
-            .lock()
-            .await
-            .release_port_span(&PortClaimant::MainCheckout);
+        for claim in self.main_checkout_claims().await {
+            let _ = self.store().lock().await.release_port_span(&claim.claimant);
+        }
     }
 
-    /// At boot, confirm a main-checkout claim a crashed Fleet left behind is
+    /// Every repository's main-checkout claim, one per root.
+    async fn main_checkout_claims(&self) -> Vec<PortClaim> {
+        let every = self.store().lock().await.every_port_claim();
+        let every = every.unwrap_or_default().into_iter();
+        every
+            .filter(|claim| matches!(claim.claimant, PortClaimant::MainCheckout(_)))
+            .collect()
+    }
+
+    /// At boot, confirm each main-checkout claim a crashed Fleet left behind is
     /// still good before this process reuses it. **The bind-and-connect
     /// probe rule applies here exactly as it does to a fresh claim** — a row
     /// on disk says nothing about whether the ports it names are still free,
@@ -595,13 +615,11 @@ where
     /// fails the probe is released rather than reused, so the next call to
     /// [`main_checkout_ports`](Fleet::main_checkout_ports) claims a fresh one.
     pub(crate) async fn reconciled_main_checkout_ports(&self) {
-        let Some(claim) = self.main_checkout_claim().await else {
-            return;
-        };
-        let top = claim.base.saturating_add(claim.width.saturating_sub(1));
-        let still_free = (claim.base..=top).all(|port| BindConnectProbe.free(port));
-        if !still_free {
-            self.released_main_checkout_ports().await;
+        for claim in self.main_checkout_claims().await {
+            let top = claim.base.saturating_add(claim.width.saturating_sub(1));
+            if !(claim.base..=top).all(|port| BindConnectProbe.free(port)) {
+                let _ = self.store().lock().await.release_port_span(&claim.claimant);
+            }
         }
     }
 }

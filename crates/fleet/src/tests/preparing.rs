@@ -235,7 +235,7 @@ async fn the_log_names_each_command_as_it_is_attempted() {
         .expect_err("the second command fails");
 
     let log = std::fs::read_to_string(crate::transcript::log_of(
-        &fleet.host().repo_root,
+        fleet.first().records_root(),
         &job.handle(),
     ))
     .expect("the Job has a log");

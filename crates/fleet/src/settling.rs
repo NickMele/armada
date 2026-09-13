@@ -165,8 +165,9 @@ where
         // Assembled here rather than inside the gate: a Judge call
         // authenticates as Fleet, and a value that could not be built is a
         // configuration failure against this Job rather than a verdict.
+        let served = self.served_by(&job)?;
         let judging = self
-            .judging(&job)
+            .judging(&job, &served)
             .map_err(|cause| Adrift::NotConfigurable {
                 job: job_id.clone(),
                 cause,
@@ -235,7 +236,7 @@ where
         // Held across the ruling *and* its record, and dropped only once the
         // rows are written: a surface re-reading on the last message must find
         // each Check's result on `check_runs`, not in neither place.
-        let announcing = self.announcing(&job, &step, attempt);
+        let announcing = self.announcing(&served, &job, &step, attempt);
         let ports = self.port_map(&job).await;
         let port_env = self.port_env(&job).await;
         let refusal_policy = self
@@ -261,8 +262,8 @@ where
             self.work(),
             self.budget(),
             &judging,
-            &Keeping::of(&self.host().records_root, &job.handle()),
-            self.gating_policies(),
+            &Keeping::of(served.records_root(), &job.handle()),
+            self.gating_policies(&served),
             &announcing,
             &ports,
             &port_env,

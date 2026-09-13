@@ -225,7 +225,7 @@ where
             job: job_id.clone(),
             why,
         };
-        let Some(harness) = self.manifest().harness().cloned() else {
+        let Some(harness) = self.served_by(&job)?.manifest().harness().cloned() else {
             return Err(refused(Unshowable::NoHarness));
         };
         let Some(worktree) = self.worktree_on_disk(&job) else {
@@ -319,7 +319,7 @@ where
         let (frames, nothing): (Vec<StepFrame>, Option<String>) = match shown {
             Shown::Frames(frames) => {
                 let copied = kept(
-                    &self.host().records_root,
+                    self.served_by(job)?.records_root(),
                     &job.handle(),
                     &again(&named.step, press),
                     named.attempt,
@@ -388,7 +388,7 @@ where
         };
         let specs: Vec<ipc::NamedSpec> = choices.into_iter().map(named).collect();
         Ok(ipc::ShowAgain {
-            harness: self.manifest().harness().is_some(),
+            harness: self.served_by(job)?.manifest().harness().is_some(),
             worktree_on_disk: worktree.is_some(),
             spec: specs.first().cloned(),
             specs,
@@ -409,7 +409,8 @@ where
     /// repository and has to tell the two apart, and this one only asks whether
     /// there is a directory to run a harness in.
     fn worktree_on_disk(&self, job: &Job) -> Option<PathBuf> {
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).ok()?;
+        let served = self.served_by(job).ok()?;
+        let spec = WorktreeSpec::for_job(served.root(), &job.handle()).ok()?;
         let at = PathBuf::from(spec.worktree_path());
         at.is_dir().then_some(at)
     }

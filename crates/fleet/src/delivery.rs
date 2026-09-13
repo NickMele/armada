@@ -300,7 +300,7 @@ where
         worktree: &Worktree,
     ) -> Result<Option<Base>, Adrift> {
         self.vcs()
-            .base(worktree, self.manifest().base())
+            .base(worktree, self.served_by_id(job_id)?.manifest().base())
             .map_err(|why| Adrift::from_delivery(job_id, why))
     }
 

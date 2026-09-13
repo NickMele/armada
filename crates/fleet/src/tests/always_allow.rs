@@ -78,7 +78,7 @@ async fn always_allow_keeps_the_chosen_rule_and_not_the_whole_command() {
         "the row is the repository's, not this Job's own"
     );
 
-    let allowed = fleet.repository_allowed().await;
+    let allowed = fleet.repository_allowed(&fleet.first()).await;
     assert_eq!(allowed.len(), 1);
     assert_eq!(
         allowed[0].run, "gh issue view",
@@ -130,7 +130,7 @@ async fn a_rule_the_command_does_not_offer_is_refused_and_the_call_still_waits()
         "a rule this command never offered is a 409: {bad:?}"
     );
     assert!(
-        fleet.repository_allowed().await.is_empty(),
+        fleet.repository_allowed(&fleet.first()).await.is_empty(),
         "nothing was recorded on the refused answer"
     );
     assert_eq!(
@@ -251,13 +251,13 @@ async fn removing_the_allow_makes_the_next_question_ask_again() {
             .await
     });
     answered.expect("always allow is offered");
-    assert_eq!(fleet.repository_allowed().await.len(), 1);
+    assert_eq!(fleet.repository_allowed(&fleet.first()).await.len(), 1);
 
     fleet
-        .remove_repository_allowed_command("gh issue view")
+        .remove_repository_allowed_command(&fleet.first(), "gh issue view")
         .await
         .expect("the rule was there to take back");
-    assert!(fleet.repository_allowed().await.is_empty());
+    assert!(fleet.repository_allowed(&fleet.first()).await.is_empty());
 
     let next_command = "gh issue view 900 --repo NickMele/armada";
     let asking = asked("Bash", next_command, "c2");
@@ -303,7 +303,7 @@ async fn a_destructive_command_stays_withheld_even_with_a_row_for_it() {
         .lock()
         .await
         .allow_repository_command(
-            fleet.manifest().id(),
+            fleet.first().manifest().id(),
             &AllowedCommand {
                 run: "npm publish".to_string(),
                 reach: Reach::Repository,

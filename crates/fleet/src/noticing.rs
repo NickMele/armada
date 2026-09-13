@@ -174,9 +174,13 @@ where
         // the question is asked from the repository it was cut from, and about
         // the address rather than the branch — which the merge usually deleted.
         // Off the runtime, not straight on the turn loop's own thread. `#693`.
+        // A repository this Fleet does not serve is asked about when it is.
+        let Ok(served) = self.served_by_id(&asking.job_id) else {
+            return Ok(None);
+        };
         let (vcs, repo_root, url) = (
             Arc::clone(self.vcs()),
-            self.host().repo_root.clone(),
+            served.root().to_string(),
             asking.url.clone(),
         );
         let read = tokio::task::spawn_blocking(move || vcs.landed(&repo_root, &url))
@@ -380,11 +384,15 @@ where
     /// standing in with uncommitted work is left alone and said so.
     async fn caught_the_repository_up(&self, job: &JobId, base: &str) -> RepositoryStanding {
         let _at_the_merge_end = self.merge_end().lock().await;
-        let (vcs, repo_root, owned_base) = (
-            Arc::clone(self.vcs()),
-            self.host().repo_root.clone(),
-            base.to_string(),
-        );
+        let (vcs, owned_base) = (Arc::clone(self.vcs()), base.to_string());
+        let repo_root = match self.served_by_id(job) {
+            Ok(served) => served.root().to_string(),
+            Err(why) => {
+                return RepositoryStanding::LeftAlone {
+                    why: why.to_string(),
+                }
+            }
+        };
         let standing = tokio::task::spawn_blocking(move || {
             vcs.caught_the_repository_up(&repo_root, &owned_base)
         })

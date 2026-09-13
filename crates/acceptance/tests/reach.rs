@@ -22,6 +22,7 @@
 //!
 //! | What holds | What it does not reach |
 //! |---|---|
+//! | **Locate, by folder.** A Fleet started in one repository serves a second a person adds: both Manifests list, a folder or a Manifest id already served is refused, a folder with no `armada.yml` is served without listing as a Manifest, and each repository holds its Jobs to its own Checks | That the folder is a git repository's root and its `armada.yml` is read off disk — `armada`'s `locating` tests. That `add_repository` serves one, a Job is created in each and a restart reconciles both — `fleet`'s `repositories` tests. That a restart remembers what was added: it needs a store table. Clone from a URL, and the dialog on an empty rail |
 //! | Scan reads every workspace of a repository nobody set up, in one pass — workspace globs, lockfiles, package scripts, compose services, the ports a file declares, and each CI step's command with its job and a matrix named once rather than per cell — each finding naming a file the repository has, what it did not read said beside it, and nothing written, because the tree it is handed has no write | That a checkout on disk reads the same, and that Fleet serves it: both touch a repository, and are `fleet`'s and `api`'s own tests. That a CI provider other than the one `adapters` reads is said not followed: naming one is `adapters`' own tests |
 //! | Each workspace carries how strong its evidence is, and a name every strong sibling declares is marked where one lacks it — the root never a sibling | That a picker ticks by it or draws the grid — #824. The mark is over the batch ticked by default; a batch a person re-ticks is the screen's to recompute |
 //! | **Proposal.** Scan's findings become one proposal per workspace: a port cites the file declaring it, every script reads `convention` whichever registry it landed in, and policy reads `default` | That Fleet serves one and holds it between reads — `fleet::manifest_proposal`'s own test, over a real checkout. That a sheet draws it — #824 |
@@ -44,15 +45,6 @@
 //! | **Fix.** A failed Check's command corrected as a form sends it — that Check's `run`, by name — changes that one line: every comment and every other line stays, the result loads, and a correction that would not load is refused with its faults | That a person sees the failing row and corrects it there: the form is Bridge's, a later child of #721. That only that Check runs again: #719's scoped Verify. That Fleet writes it and refuses a file that moved: that touches a file, and is `fleet`'s own tests |
 //! | A request naming a milestone is offered `epic` with what it is for, in a requester's words, beside its steps — and a definition saying nothing is offered as before | That a model reading it proposes `epic`. Choosing is a model's, and this file calls none |
 
-//! # Not carried: setting it up
-//!
-//! **In the order a person meets them, which is the build order.** The one
-//! dependency an issue writes down — #425 says #424 lands first — agrees.
-//!
-//! | Step | What is not carried | Carried by |
-//! |---|---|---|
-//! | Locate | Pointing Armada at a repository it has not seen, by path or by clone. A Fleet reads the one repository it was started in | #821 |
-
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the six.
 #[allow(dead_code)]
@@ -66,6 +58,7 @@ use config::{
     WorkflowSource,
 };
 use core_model::{JobStatus, StepState, WorkflowId};
+use fleet::repositories::NotAdded;
 use fleet::{Brief, Proposal};
 use ipc::{
     EvidenceStrength, MissingName, ProposalEdit, Provenance, ToolFile, VerifyGroup, VerifyStep,
@@ -74,16 +67,40 @@ use ipc::{
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    as_sent, carried_there, catalogued, ci_run, convention, every_line, fault_keys, held_there,
-    loads, one_step, proposal_at, proposals, provenance_of, read_from, received, resolved_there,
-    storefront, toward_the_journeys_e2e, workspace, written, A_MILESTONE, CARRYABLE, CI_RUNS, EPIC,
-    EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, WRITTEN,
+    as_sent, carried_there, catalogued, ci_run, cited, convention, declared_ports, every_line,
+    fault_keys, folder, held_there, held_to, loads, manifest_ids, one_step, proposal_at, proposals,
+    provenance_of, read_from, received, resolved_there, runnable, started_in_the_storefront,
+    storefront, strengths, toward_the_journeys_e2e, workspace, written, A_MILESTONE, CARRYABLE,
+    CI_RUNS, EPIC, EPIC_AT, KEPT, MAILER, MAILER_AT, MANIFEST_AT, NAMING_ARMADAS_CHECKS,
+    OVERREACHING, WRITTEN,
 };
 use bench::{states, Bench};
 
 // ---------------------------------------------------------------------------
-// Scan and Pick
+// Locate, Scan and Pick
 // ---------------------------------------------------------------------------
+
+/// **Locate, by folder: a second repository is served beside the first**, one
+/// already served is refused, and a folder with no Manifest is there for Scan.
+#[test]
+fn a_second_repository_added_by_folder_is_served_beside_the_first() {
+    let served = started_in_the_storefront();
+    let mailer = folder(MAILER_AT, Some(MAILER));
+    served.add(mailer).expect("served");
+    served
+        .add(folder("/repos/unset", None))
+        .expect("served for Scan");
+    assert_eq!(manifest_ids(&served), ["storefront", "mailer"]);
+    assert_eq!(served.every().len(), 3);
+    let again = served.add(folder(MAILER_AT, None)).err();
+    assert!(matches!(again, Some(NotAdded::AlreadyServed { .. })));
+    let copy = served.add(folder("/repos/copy", Some(WRITTEN))).err();
+    assert!(matches!(copy, Some(NotAdded::ManifestServed { .. })));
+    let checks = |id| held_to(&served.serving(id).expect("served"));
+    let (e2e, deliver) = (String::from("e2e"), String::from("deliver"));
+    assert!(checks("storefront").contains(&e2e) && !checks("storefront").contains(&deliver));
+    assert!(checks("mailer").contains(&deliver) && !checks("mailer").contains(&e2e));
+}
 
 /// **Scan reads every workspace of a repository nobody set up, in one pass,
 /// and every finding names a file that repository has.** The Scan step, #822.
@@ -110,17 +127,7 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
     );
 
     for one in &scan.workspaces {
-        let cited = one
-            .manifests
-            .iter()
-            .chain(&one.lockfiles)
-            .map(|found| &found.file)
-            .chain(one.runnables.iter().map(|found| &found.file))
-            .chain(one.tools.iter().map(|found| &found.file))
-            .chain(one.services.iter().map(|found| &found.file))
-            .chain(one.ports.iter().map(|found| &found.file))
-            .chain(one.not_read.iter().map(|found| &found.file));
-        for file in cited {
+        for file in cited(one) {
             assert!(
                 repository.has(file),
                 "{} cites {file}, which is not there",
@@ -137,11 +144,7 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
             entry: "apps/*".to_string()
         }]
     );
-    let e2e = shop
-        .runnables
-        .iter()
-        .find(|one| one.name == "e2e")
-        .expect("e2e");
+    let e2e = runnable(shop, "e2e");
     assert_eq!(
         (e2e.file.as_str(), e2e.key.as_str(), e2e.run.as_str()),
         ("apps/shop/package.json", "scripts.e2e", "playwright test")
@@ -158,14 +161,8 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
         "a shared lockfile is the root's, not copied"
     );
 
-    let ports: Vec<(&str, &str, u16)> = scan
-        .workspaces
-        .iter()
-        .flat_map(|one| &one.ports)
-        .map(|port| (port.file.as_str(), port.key.as_str(), port.container))
-        .collect();
     assert_eq!(
-        ports,
+        declared_ports(&scan),
         [
             ("compose.yaml", "services.db.ports[0]", 5432),
             ("apps/shop/package.json", "scripts.dev", 3000)
@@ -195,13 +192,8 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
 #[test]
 fn pick_ticks_by_evidence_and_marks_a_name_every_strong_sibling_declares() {
     let scan = received(&storefront());
-    let strengths: Vec<(&str, EvidenceStrength)> = scan
-        .workspaces
-        .iter()
-        .map(|one| (one.dir.as_str(), one.evidence))
-        .collect();
     assert_eq!(
-        strengths,
+        strengths(&scan),
         [
             (".", EvidenceStrength::Strong),
             ("apps/admin", EvidenceStrength::Strong),

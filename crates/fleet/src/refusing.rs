@@ -37,6 +37,8 @@ use crate::proposing::NotProposed;
 const NO_SUCH_JOB: &str = "fleet.no_such_job";
 const ILLEGAL_MOVE: &str = "fleet.illegal_move";
 const FAULT: &str = "fleet.fault";
+/// A Job whose repository this Fleet does not serve. A 422.
+const NOT_SERVED: &str = "fleet.repository_not_served";
 /// A proposal that decoded and names something that cannot produce a Drone.
 const UNACCEPTABLE: &str = "fleet.unacceptable_proposal";
 /// The request was read and no workflow fits. **A refusal about the request**,
@@ -316,6 +318,9 @@ where
             // message names the figure to send instead. **Not a 409**: neither
             // is about where the Job stands, and a caller reading a conflict
             // off one would go and look at a status with nothing wrong with it.
+            Adrift::NotServed { job, .. } => Refusal::Unacceptable(
+                WireError::raised(NOT_SERVED, said, self.run_id()).about_job(ipc::JobId::from(job)),
+            ),
             Adrift::Unnameable
             | Adrift::CapNotRaised { .. }
             | Adrift::CapAboveCeiling { .. }

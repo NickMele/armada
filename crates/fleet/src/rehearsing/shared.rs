@@ -61,7 +61,7 @@ where
         let listed = match (worktree_version, place.job.as_ref()) {
             (true, _) => {
                 let theirs = self
-                    .theirs(&tree)
+                    .theirs(place, &tree)
                     .map_err(|why| Unrehearsable::WorktreeManifest { why })?;
                 entries::declared(&theirs)
             }
@@ -106,7 +106,7 @@ where
                 whose,
             });
         };
-        let (root, handle) = (&self.host().records_root, place.handle.clone());
+        let (root, handle) = (place.served.records_root(), place.handle.clone());
         records::swept(
             root,
             &handle,
@@ -140,7 +140,7 @@ where
         place: &Place,
         id: String,
     ) -> Result<Record, Unrehearsable> {
-        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let (root, handle) = (place.served.records_root(), place.handle.as_str());
         let Some((stop, mut done)) = self.rehearsals().stopping(&place.owner, &id) else {
             return Err(match records::read(root, handle, &id) {
                 Some(Ok(_)) => Unrehearsable::NotRunning { id },
@@ -172,7 +172,7 @@ where
         let Some(tree) = self.tree_at(place) else {
             return Err(Unrehearsable::NoWorktree);
         };
-        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let (root, handle) = (place.served.records_root(), place.handle.as_str());
         let mut record = match records::read(root, handle, &id) {
             Some(Ok(record)) => record,
             Some(Err(why)) => return Err(Unrehearsable::NothingToUndo { id, why }),
@@ -233,13 +233,17 @@ where
 
     pub(super) fn history_at(&self, place: &Place) -> (Vec<Record>, Vec<ipc::UnreadableRun>) {
         let running = self.rehearsals().in_flight(&place.owner).map(|out| out.id);
-        records::every(&self.host().records_root, &place.handle, running.as_deref())
+        records::every(
+            place.served.records_root(),
+            &place.handle,
+            running.as_deref(),
+        )
     }
 
     /// One run's log. **The owner's own runs are the allowlist**: an id that
     /// names none of them reaches no file.
     pub(super) fn output_at(&self, place: &Place, id: &str) -> Option<ipc::RunOutput> {
-        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let (root, handle) = (place.served.records_root(), place.handle.as_str());
         let name = match self
             .rehearsals()
             .in_flight(&place.owner)
@@ -255,7 +259,7 @@ where
     }
 
     pub(super) fn observed_at(&self, place: &Place, id: &str) -> Option<Seen> {
-        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let (root, handle) = (place.served.records_root(), place.handle.as_str());
         let (name, live) = match self.rehearsals().watching(&place.owner, id) {
             Some((name, watch)) => (name, Some(watch)),
             None => match records::read(root, handle, id) {
@@ -313,7 +317,7 @@ where
         let raised = WireError::raised(code, why.to_string(), self.run_id());
         refusal(match owner {
             Owner::Job(job) => raised.about_job(ipc::JobId::from(job)),
-            Owner::Checkout => raised,
+            Owner::Checkout(_) => raised,
         })
     }
 
@@ -364,9 +368,9 @@ where
 
     /// Where the Manifest Fleet holds sits, relative to the repository, so the
     /// same file can be read in a worktree and in git.
-    pub(super) fn manifest_file(&self) -> PathBuf {
-        let held = self.manifest().path();
-        held.strip_prefix(&self.host().repo_root)
+    pub(super) fn manifest_file(&self, served: &crate::repositories::Served) -> PathBuf {
+        let held = served.manifest().path();
+        held.strip_prefix(served.root())
             .map(Path::to_path_buf)
             .unwrap_or_else(|_| {
                 held.file_name()
@@ -376,20 +380,22 @@ where
     }
 
     /// The worktree's own Manifest, or why it would not read.
-    pub(super) fn theirs(&self, tree: &Tree) -> Result<config::Manifest, String> {
-        config::Manifest::load(&tree.path.join(self.manifest_file())).map_err(|why| why.to_string())
+    pub(super) fn theirs(&self, place: &Place, tree: &Tree) -> Result<config::Manifest, String> {
+        let file = self.manifest_file(&place.served);
+        config::Manifest::load(&tree.path.join(file)).map_err(|why| why.to_string())
     }
 
     /// When the Manifest was last changed by a commit made at or before
     /// `before` — for a Job, **before it froze it**, not the latest edit.
     pub(super) fn edited_before(
         &self,
+        place: &Place,
         before: &Timestamp,
         tree: Option<&Tree>,
     ) -> Option<ipc::Instant> {
         let before = before.epoch_millis()?.div_euclid(1_000);
-        let root = tree.map_or_else(|| PathBuf::from(&self.host().repo_root), |t| t.path.clone());
-        let file = self.manifest_file();
+        let root = tree.map_or_else(|| PathBuf::from(place.served.root()), |t| t.path.clone());
+        let file = self.manifest_file(&place.served);
         let seconds =
             adapters::snapshot::last_touched(&root, &file.to_string_lossy(), before).ok()??;
         let at = Timestamp::from_rfc3339(crate::clock::rfc3339_utc(seconds.saturating_mul(1_000)));

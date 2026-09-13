@@ -80,6 +80,18 @@ pub const SERVED: &[Route] = &[
     },
     // Scan, and not under `/manifest`: it reads a repository nobody has written
     // an `armada.yml` for, so there is no Manifest for the path to be under.
+    // Every repository served, and one more by folder. Beside Scan, which
+    // reads one of them by the root these answer with.
+    Route {
+        operation: "list_repositories",
+        method: "GET",
+        path: "/repositories",
+    },
+    Route {
+        operation: "add_repository",
+        method: "POST",
+        path: "/repositories/add",
+    },
     Route {
         operation: "get_repository_scan",
         method: "GET",

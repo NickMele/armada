@@ -732,7 +732,7 @@ where
         // no longer refuses a captured step for lacking `evidence:`, so a
         // repository that never declared one reaches here on every captured
         // step, the same as one whose section vanished mid-Job.
-        let Some(harness) = self.manifest().harness() else {
+        let Some(harness) = self.served_by(job)?.manifest().harness().cloned() else {
             return Ok(Some(NotShown::NoHarness));
         };
         let spec = submission.shown_by();
@@ -754,7 +754,7 @@ where
         let ports = self.port_map(job).await;
         let port_env = self.port_env(job).await;
         let shown = show(
-            harness,
+            &harness,
             spec,
             Aimed::at(worktree),
             Side::Branch,
@@ -769,7 +769,7 @@ where
             Shown::Nothing => (Vec::new(), None),
             Shown::Frames(frames) => {
                 let copied = kept(
-                    &self.host().records_root,
+                    self.served_by(job)?.records_root(),
                     handle,
                     step,
                     attempt,
@@ -815,8 +815,8 @@ where
         handle: &str,
         budget: Duration,
     ) -> Before {
-        let checkout = match self.base_to_show_from(job).await {
-            Ok(checkout) => checkout,
+        let (served, checkout) = match self.base_to_show_from(job).await {
+            Ok(both) => both,
             Err(why) => return Before::instead(WhyNoPair::NoBase(why)),
         };
         let ports = self.port_map(job).await;
@@ -838,7 +838,7 @@ where
             Shown::NotShown(why) => return Before::instead(WhyNoPair::NotShown(why)),
         };
         let kept = kept(
-            &self.host().records_root,
+            served.records_root(),
             handle,
             step,
             attempt,

@@ -119,6 +119,32 @@ export type ManifestSummary = {
   checks: string[];
 };
 
+/**
+ * A folder to serve, as a person chose it — `POST /repositories/add`.
+ * `crates/ipc/src/repositories.rs`.
+ */
+export type AddRepository = {
+  /** Absolute. Fleet resolves it before comparing it with what it serves. */
+  path: string;
+};
+
+/**
+ * One repository Fleet serves. **Listed whether or not it has a Manifest**:
+ * Setup starts from a folder nobody wrote an `armada.yml` for.
+ */
+export type RepositorySummary = {
+  /** Resolved. What `?repository=` names on Scan and its proposals. */
+  root: string;
+  records_root: string;
+  /** Absent until an `armada.yml` at `root` loads. */
+  manifest?: ManifestSummary;
+};
+
+/** Every repository Fleet serves, the one it was started in first. */
+export type RepositoryList = {
+  repositories: RepositorySummary[];
+};
+
 /** The models a Job may name, and the one it gets when it names none. */
 export type ModelChoices = {
   models: string[];

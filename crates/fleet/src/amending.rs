@@ -59,8 +59,9 @@ where
     pub(crate) fn edit_manifest_file(
         &self,
         asked: EditManifest,
+        served: &crate::repositories::Served,
     ) -> Result<ManifestEdited, Refusal> {
-        let file = self.manifest().path();
+        let file = served.manifest().path();
         let path = file.display().to_string();
         match fs::read_to_string(file) {
             Ok(on_disk) if on_disk == asked.read => {}

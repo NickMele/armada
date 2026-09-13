@@ -15,6 +15,7 @@ mod clean;
 mod cli;
 mod declared;
 mod kit;
+mod locating;
 mod loopback;
 mod mcp;
 mod setup;

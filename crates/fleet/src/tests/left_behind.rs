@@ -105,7 +105,9 @@ async fn a_group_a_crashed_fleet_left_running_is_ended_at_startup() {
     )
     .expect("recorded");
 
-    let reaped = fleet.reaped_left_servers().await;
+    let reaped = fleet
+        .reaped_left_servers(fleet.first().records_root())
+        .await;
     assert_eq!(reaped.ended, 1, "{reaped:?}");
     assert!(
         left.ended_within(Duration::from_secs(5)),
@@ -125,7 +127,9 @@ async fn a_record_whose_pid_is_now_another_process_is_left_alone() {
     let long_ago = StartedAt::carried("Thu Jan  1 00:00:00 1970");
     recorded(&dir, "01REUSEDPID", "main-checkout", other.pid, &long_ago).expect("recorded");
 
-    let reaped = fleet.reaped_left_servers().await;
+    let reaped = fleet
+        .reaped_left_servers(fleet.first().records_root())
+        .await;
     assert_eq!((reaped.ended, reaped.left_alone), (0, 1), "{reaped:?}");
     assert!(
         !other.ended_within(Duration::from_millis(300)),
@@ -142,7 +146,7 @@ async fn the_main_checkouts_span_is_free_after_the_cleanup() {
     let home = TempDir::new();
     let fleet = a_fleet_serving(&home, &api::Broadcaster::new());
     let port = *fleet
-        .main_checkout_ports()
+        .main_checkout_ports(&fleet.first())
         .await
         .get("storybook")
         .expect("the main checkout's span");
@@ -177,7 +181,10 @@ async fn the_main_checkouts_span_is_free_after_the_cleanup() {
     );
     assert!(BindConnectProbe.free(port), "its port is free");
     assert_eq!(
-        fleet.main_checkout_ports().await.get("storybook"),
+        fleet
+            .main_checkout_ports(&fleet.first())
+            .await
+            .get("storybook"),
         Some(&port),
         "the span was kept, not given up as held"
     );

@@ -27,16 +27,13 @@ impl<H, V, W> Fleet<H, V, W> {
     ///
     /// `pub` rather than `pub(crate)`: the watch lives in the composition root,
     /// above this crate, because what it watches is a path the root resolved.
-    pub fn reread(&self, reading: ipc::ManifestReading) {
-        *self.reading.lock().unwrap_or_else(|held| held.into_inner()) = Some(reading.clone());
+    ///
+    /// `root` is the repository whose `armada.yml` was read; a root no longer
+    /// served is still published and held nowhere.
+    pub fn reread(&self, root: &str, reading: ipc::ManifestReading) {
+        if let Some(repository) = self.repositories.at(root) {
+            repository.read(reading.clone());
+        }
         self.events.publish(ipc::Event::ManifestReread(reading));
-    }
-
-    /// What the last re-read came to, or `None` because there has not been one.
-    pub(crate) fn last_reading(&self) -> Option<ipc::ManifestReading> {
-        self.reading
-            .lock()
-            .unwrap_or_else(|held| held.into_inner())
-            .clone()
     }
 }

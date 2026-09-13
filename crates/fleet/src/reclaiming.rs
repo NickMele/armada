@@ -68,19 +68,19 @@ where
                 status: job.status(),
             });
         }
-        let spec =
-            WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).map_err(|cause| {
-                Adrift::Unworkable {
-                    job: job_id.clone(),
-                    cause,
-                }
-            })?;
+        let served = self.served_by(&job)?;
+        let spec = WorktreeSpec::for_job(served.root(), &job.handle()).map_err(|cause| {
+            Adrift::Unworkable {
+                job: job_id.clone(),
+                cause,
+            }
+        })?;
         // `base:` in `armada.yml` is the repository's own answer to what this
         // branch would have merged into. Where it declares none, `adapters`
         // falls back to the remote's head and then to `main`/`master` — and
         // where nothing answers at all, the branch is kept unanswered rather
         // than deleted on a guess.
-        let reclaimed = adapters::reclaim(&spec, self.manifest().base(), UnmergedWork::Keep)
+        let reclaimed = adapters::reclaim(&spec, served.manifest().base(), UnmergedWork::Keep)
             .map_err(|cause| Adrift::NotReclaimed {
                 job: job_id.clone(),
                 cause,

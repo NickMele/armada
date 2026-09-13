@@ -255,7 +255,9 @@ where
         request: &str,
         client_ref: Option<String>,
     ) -> Result<Vec<Job>, Adrift> {
-        self.propose_from_with_attachments(request, client_ref, Vec::new())
+        // In the repository Fleet was started in: a test's and a caller's with no other.
+        let served = self.repositories().first();
+        self.propose_from_with_attachments(request, client_ref, Vec::new(), &served)
             .await
     }
 
@@ -270,6 +272,7 @@ where
         request: &str,
         client_ref: Option<String>,
         attachments: Vec<ipc::AttachmentRef>,
+        served: &crate::repositories::Served,
     ) -> Result<Vec<Job>, Adrift> {
         let request = request.trim();
         if request.is_empty() {
@@ -286,11 +289,11 @@ where
         let proposing = self.proposing().map_err(Adrift::NotProposable)?;
         let (minted_by, proposal) = proposed(
             request,
-            self.workflows(),
+            served.workflows(),
             &proposing,
             self.making(),
             client_ref,
-            &self.host().records_root,
+            served.records_root(),
         )
         .await
         .map_err(|cause| Adrift::NotProposed {
@@ -337,7 +340,7 @@ where
             };
             let minted = self
                 .proposed_job(
-                    self.as_proposal(job, waits_on, carried),
+                    self.as_proposal(served, job, waits_on, carried),
                     stated,
                     Some(minted_by.clone()),
                 )
@@ -384,6 +387,7 @@ where
     /// for.
     fn as_proposal(
         &self,
+        served: &crate::repositories::Served,
         job: &ProposedJob,
         dependencies: Vec<ipc::DependencyEdge>,
         attachments: Vec<ipc::AttachmentRef>,
@@ -391,7 +395,7 @@ where
         ipc::ProposeJob {
             title: job.title.clone(),
             workflow_id: ipc::WorkflowId::from(&job.workflow_id),
-            owner_manifest_id: ipc::ManifestId::from(self.manifest().id()),
+            owner_manifest_id: ipc::ManifestId::from(served.manifest().id()),
             // The system determined the workflow, which is what this value
             // names. `manual` stays the hand-entered path, so which of the two
             // happened is answerable from the record rather than inferred.

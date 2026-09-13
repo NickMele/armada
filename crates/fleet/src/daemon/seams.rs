@@ -10,18 +10,16 @@
 //! a caller does with a slot afterwards is where the order matters, and
 //! [`crate::slots`] states that order rather than this file restating it.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use adapter_traits::{
     AgentHarness, CiConfiguration, Delivery, LinkLookup, SpawnConfigRefused, Vcs, WorkProduct,
 };
-use config::{Manifest, ResolvedWorkflow};
-use core_model::{Job, JobId, Timestamp, Ulid, WorkflowId};
+use core_model::{Job, JobId, Timestamp, Ulid};
 use store::Store;
 use tokio::sync::Mutex;
 
-use super::{Fleet, Host};
+use super::{Fleet, Local};
 use crate::admitting::Polled;
 use crate::allowance::Allowance;
 use crate::asked::Asked;
@@ -56,7 +54,7 @@ where
     W::Error: std::error::Error + Send + Sync + 'static,
 {
     /// What each Job is called on disk. See [`mod@crate::naming`].
-    pub(crate) fn names(&self) -> &crate::naming::Names {
+    pub(crate) fn names(&self) -> &Arc<crate::naming::Names> {
         &self.names
     }
     pub(crate) fn store(&self) -> &Mutex<Store> {
@@ -71,20 +69,12 @@ where
     pub(crate) fn work(&self) -> &W {
         &self.work
     }
-    /// One workflow by id, or `None` where this Fleet holds no such definition.
-    pub(crate) fn workflow_named(&self, id: &WorkflowId) -> Option<&ResolvedWorkflow> {
-        self.workflows.get(id)
+    /// Every repository this Fleet serves — `crate::repositories`.
+    pub(crate) fn repositories(&self) -> &Arc<crate::repositories::Repositories> {
+        &self.repositories
     }
-    /// Every workflow this Fleet holds, for `serving`'s `list_workflows`.
-    pub(crate) fn workflows(&self) -> &BTreeMap<WorkflowId, ResolvedWorkflow> {
-        &self.workflows
-    }
-    /// What `workflows` runs without, for `serving`'s `list_left_out_workflows`.
-    pub(crate) fn left_out(&self) -> &[ipc::LeftOutWorkflow] {
-        &self.left_out
-    }
-    pub(crate) fn manifest(&self) -> &Manifest {
-        &self.manifest
+    pub(crate) fn locating(&self) -> &Arc<dyn crate::repositories::Locating> {
+        &self.locating
     }
     pub(crate) fn port_range(&self) -> crate::ports::PortRange {
         self.port_range
@@ -99,15 +89,15 @@ where
     /// so the answer is true at the instant it is taken and no longer — which
     /// is why every caller asks again rather than passing one down.
     ///
-    /// **One Manifest today, and the fold is still called.** A Fleet holds one
-    /// `armada.yml`; a Convoy is gated by several, and this is the one function
-    /// that grows when `Job::gate_manifests` can be resolved to files.
-    /// `crate::policy` carries the argument, and `docs/concepts/convoy.md` the
-    /// rule.
-    pub(crate) fn gating_policies(&self) -> Policies {
-        Policies::gating([(self.manifest.auto_merge(), self.manifest.review_gate())])
+    /// **One Manifest per Job today, and the fold is still called.** A Convoy
+    /// is gated by several, and this is the one function that grows when
+    /// `Job::gate_manifests` can be resolved to files. `crate::policy` carries
+    /// the argument, and `docs/concepts/convoy.md` the rule.
+    pub(crate) fn gating_policies(&self, served: &crate::repositories::Served) -> Policies {
+        let manifest = served.manifest();
+        Policies::gating([(manifest.auto_merge(), manifest.review_gate())])
     }
-    pub(crate) fn host(&self) -> &Host {
+    pub(crate) fn host(&self) -> &Local {
         &self.host
     }
     pub(crate) fn budget(&self) -> CheckBudget {
@@ -137,14 +127,15 @@ where
     /// two words collided before either shipped and the names are kept apart on
     /// purpose.
     pub(crate) fn allowance_for(&self, job: &Job) -> Allowance {
-        self.allowance.at(self.manifest(), job)
+        // A Job no served repository owns is held to the machine's tier alone.
+        match self.served_by(job) {
+            Ok(served) => self.allowance.at(served.manifest(), job),
+            Err(_) => self.allowance,
+        }
     }
     /// What a Job may spend on this machine before any Manifest says otherwise.
     pub(crate) fn machine_allowance(&self) -> Allowance {
         self.allowance
-    }
-    pub(crate) fn held_proposals(&self) -> &crate::manifest_proposal::Held {
-        &self.manifest_proposals
     }
     pub(crate) fn norms(&self) -> StepNorms {
         self.norms
@@ -168,7 +159,11 @@ where
     /// what the call was asked is filed under the Job it was asked about. A
     /// Judge call is still assembled from the step and the workflow, and there
     /// is no arrangement of this argument that puts a Job id into a brief.
-    pub(crate) fn judging(&self, job: &Job) -> Result<Judging, SpawnConfigRefused> {
+    pub(crate) fn judging(
+        &self,
+        job: &Job,
+        served: &crate::repositories::Served,
+    ) -> Result<Judging, SpawnConfigRefused> {
         Ok(Judging {
             client: Arc::clone(&self.judge),
             budget: self.judge_budget,
@@ -190,7 +185,7 @@ where
                 Arc::clone(&self.clock),
                 self.judge_budget,
             ),
-            asked: Asked::under(self.host.records_root.clone(), job.handle()),
+            asked: Asked::under(served.records_root().to_string(), job.handle()),
         })
     }
     /// The Judge call that is out, for `serving` to put on `get_job`.
@@ -215,6 +210,7 @@ where
     /// that was told them per call could be told two different ones.
     pub(crate) fn announcing(
         &self,
+        served: &crate::repositories::Served,
         job: &Job,
         step: &core_model::StepId,
         attempt: core_model::Attempt,
@@ -226,7 +222,7 @@ where
             self.underway.clone(),
             self.events.clone(),
             Arc::clone(&self.clock),
-            &self.host.records_root,
+            served.records_root(),
             &job.handle(),
         )
     }

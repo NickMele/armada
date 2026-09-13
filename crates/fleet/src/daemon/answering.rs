@@ -64,27 +64,70 @@ where
         // First of all: the servers a crashed Fleet left running are ended, so
         // the ports they held are free before the probe below. See
         // `crate::servers::left`.
-        self.reaped_left_servers().await;
+        for repository in self.repositories().every() {
+            self.reaped_left_servers(repository.records_root()).await;
+        }
         // Before anything else: a main-checkout claim a crashed Fleet left
         // behind is re-probed before this process trusts it. See
         // `crate::ports::Fleet::reconciled_main_checkout_ports`.
         self.reconciled_main_checkout_ports().await;
-        let (mut loaded, unreadable) = self.every_job().await?;
+        let (loaded, unreadable) = self.every_job().await?;
         // Before anything else reads a path: every Job's name, and the rename
         // of what an older Fleet wrote under a ULID. See
         // [`mod@crate::naming`] and `crate::transcript::migrating`.
         self.names().learn_all(&loaded.jobs);
-        let rekeyed = crate::transcript::rekeyed(&self.host().records_root, &loaded.jobs).await;
-        // Before the Drone-adoption pass below reads these same rows: see
-        // `crate::mending`'s own header for why the order matters.
-        let mended = self.mended_wedged_reviews(&mut loaded.jobs).await?;
         let mut reconciled = Reconciled {
             repaired: loaded.repaired.len(),
             unreadable,
-            rekeyed,
-            mended,
             ..Reconciled::default()
         };
+        // **Each repository over its own Jobs.** A Job whose repository is not
+        // served is left as it stands, and reconciled when that one is added.
+        for served in self.repositories().served() {
+            self.reconciled_jobs(&served, &loaded.jobs, &mut reconciled)
+                .await?;
+        }
+        reconciled.admitted = self.admit_next().await?;
+        Ok(reconciled)
+    }
+
+    /// The same cleanup for one repository added after Fleet started: the
+    /// servers it left and the Jobs the store already holds for it.
+    pub(crate) async fn reconciled_in(
+        &self,
+        served: &crate::repositories::Served,
+    ) -> Result<Reconciled, Adrift> {
+        self.reaped_left_servers(served.records_root()).await;
+        let (loaded, _) = self.every_job().await?;
+        self.names().learn_all(&loaded.jobs);
+        let mut reconciled = Reconciled::default();
+        self.reconciled_jobs(served, &loaded.jobs, &mut reconciled)
+            .await?;
+        reconciled.admitted = self.admit_next().await?;
+        Ok(reconciled)
+    }
+
+    /// One repository's Jobs, out of every Job the boot read found.
+    async fn reconciled_jobs(
+        &self,
+        served: &crate::repositories::Served,
+        every: &[Job],
+        reconciled: &mut Reconciled,
+    ) -> Result<(), Adrift> {
+        let mut jobs: Vec<Job> = every
+            .iter()
+            .filter(|job| served.owns(job.owner_manifest_id().as_str()))
+            .cloned()
+            .collect();
+        let rekeyed = crate::transcript::rekeyed(served.records_root(), &jobs).await;
+        reconciled.rekeyed.logs += rekeyed.logs;
+        reconciled.rekeyed.transcripts += rekeyed.transcripts;
+        reconciled.rekeyed.refused.extend(rekeyed.refused);
+        // Before the Drone-adoption pass below reads these same rows: see
+        // `crate::mending`'s own header for why the order matters.
+        reconciled
+            .mended
+            .extend(self.mended_wedged_reviews(&mut jobs).await?);
         // Every **step** the store says holds a Drone, whatever status its Job
         // is under. A Drone is spoken to through a pipe the Fleet that spawned
         // it holds, so this Fleet has none of them — and `assigned_drone` is
@@ -97,8 +140,7 @@ where
         // Job with no pointer anywhere is still carried here, because a Job
         // marked running by a Fleet that is gone is interrupted whether or not
         // its Drone was ever recorded.
-        let held: Vec<(Job, Vec<StepId>)> = loaded
-            .jobs
+        let held: Vec<(Job, Vec<StepId>)> = jobs
             .iter()
             .map(|job| (job.clone(), steps_holding_a_drone(job)))
             .filter(|(job, steps)| !steps.is_empty() || job.status() == JobStatus::Running)
@@ -123,8 +165,7 @@ where
                 reconciled.interrupted.push(job.id().clone());
             }
         }
-        reconciled.admitted = self.admit_next().await?;
-        Ok(reconciled)
+        Ok(())
     }
 
     /// A Job drafted onto the approval gate. **The gate is unchanged** — what
@@ -172,7 +213,11 @@ where
         // stops that happening at all.
         let mut store = self.store.lock().await;
         let number = store
-            .next_job_number(&self.the_manifest_named(&proposal.owner_manifest_id)?)
+            .next_job_number(
+                self.the_repository_named(&proposal.owner_manifest_id)?
+                    .manifest()
+                    .id(),
+            )
             .map_err(Adrift::Reading)?;
         let (new, origin) = self.drafted(proposal, stated, &at, minted_by, number)?;
         let job = Job::create_top_level(new, origin, at.clone());

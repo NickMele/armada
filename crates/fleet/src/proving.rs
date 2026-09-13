@@ -87,7 +87,10 @@ where
     /// answer; a run already out is one machine; and a store that will not
     /// answer is a line the Job does not turn on. None of the five is news.
     pub(crate) async fn began_proving(&self, job: &JobId, standing: &RepositoryStanding) {
-        let checks = self.manifest().proved_after_a_merge();
+        let Ok(served) = self.served_by_id(job) else {
+            return;
+        };
+        let checks = served.manifest().proved_after_a_merge();
         if checks.is_empty() {
             return;
         }
@@ -127,14 +130,14 @@ where
         );
         // The main checkout's own span — claimed on first need, reused after
         // that. See `crate::ports`.
-        let ports = self.main_checkout_ports().await;
-        let port_env = self.main_checkout_port_env().await;
+        let ports = self.main_checkout_ports(&served).await;
+        let port_env = self.main_checkout_port_env(&served).await;
         spawn_the_run(
             Arc::clone(self.proving()),
             job.clone(),
             checks.to_vec(),
-            self.host().repo_root.clone(),
-            self.host().records_root.clone(),
+            served.root().to_string(),
+            served.records_root().to_string(),
             self.budget().duration(),
             at_commit.to_string(),
             base,

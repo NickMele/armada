@@ -28,7 +28,7 @@ use core_model::{Job, JobId};
 
 /// The id-to-handle index. See the module comment for why it exists and why it
 /// is total.
-pub(crate) struct Names(RwLock<BTreeMap<JobId, String>>);
+pub(crate) struct Names(RwLock<BTreeMap<JobId, (String, String)>>);
 
 impl Names {
     pub(crate) fn new() -> Names {
@@ -38,7 +38,7 @@ impl Names {
     /// Take this Job's name. Idempotent, because a handle cannot change.
     pub(crate) fn learn(&self, job: &Job) {
         if let Ok(mut names) = self.0.write() {
-            names.insert(job.id().clone(), job.handle());
+            names.insert(job.id().clone(), named(job));
         }
     }
 
@@ -46,15 +46,25 @@ impl Names {
     pub(crate) fn learn_all(&self, jobs: &[Job]) {
         if let Ok(mut names) = self.0.write() {
             for job in jobs {
-                names.insert(job.id().clone(), job.handle());
+                names.insert(job.id().clone(), named(job));
             }
         }
     }
 
     /// What this Job is called, or `None` where there is no such Job.
     pub(crate) fn of(&self, job: &JobId) -> Option<String> {
-        self.0.read().ok()?.get(job).cloned()
+        Some(self.0.read().ok()?.get(job)?.0.clone())
     }
+
+    /// The Manifest this Job was created against, which names its repository.
+    pub(crate) fn owner_of(&self, job: &JobId) -> Option<String> {
+        Some(self.0.read().ok()?.get(job)?.1.clone())
+    }
+}
+
+/// A handle counts within a Manifest, so the owner is kept beside it.
+fn named(job: &Job) -> (String, String) {
+    (job.handle(), job.owner_manifest_id().as_str().to_string())
 }
 
 impl<H, V, W> crate::Fleet<H, V, W>
@@ -86,9 +96,9 @@ where
     /// logged. What this adds is the name lookup, which cannot miss for a Job
     /// that exists: see the module comment.
     pub(crate) fn noted_in_the_log(&self, job: &JobId, envelope: &core_model::Envelope) {
-        let Some(handle) = self.name_of(job) else {
+        let (Some(handle), Ok(served)) = (self.name_of(job), self.served_by_id(job)) else {
             return;
         };
-        let _ = crate::transcript::note(&self.host().records_root, &handle, envelope);
+        let _ = crate::transcript::note(served.records_root(), &handle, envelope);
     }
 }

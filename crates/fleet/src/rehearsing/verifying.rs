@@ -157,8 +157,11 @@ where
 {
     /// Begin a Verify in the main checkout, and answer once its first step is
     /// out.
-    pub(crate) async fn begin_checkout_verify(self: Arc<Self>) -> Result<CheckoutVerify, Refusal> {
-        let owner = Place::of_checkout().owner;
+    pub(crate) async fn begin_checkout_verify(
+        self: Arc<Self>,
+        served: crate::repositories::Served,
+    ) -> Result<CheckoutVerify, Refusal> {
+        let owner = Place::of_checkout(served.clone()).owner;
         let verifies = self.rehearsals().verifies().clone();
         if verifies.underway() {
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
@@ -170,7 +173,7 @@ where
             };
             return Err(self.refused_run(&owner, why));
         }
-        let manifest = self.manifest().clone();
+        let manifest = served.manifest().clone();
         let steps = entries::declared(&manifest).verified();
         if steps.is_empty() {
             return Err(self.refused_run(&owner, Unrehearsable::NothingToVerify));
@@ -189,7 +192,7 @@ where
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
         }
         let (out, first) = oneshot::channel();
-        tokio::spawn(Arc::clone(&self).verified(id, out));
+        tokio::spawn(Arc::clone(&self).verified(id, out, served));
         let _ = first.await;
         verifies.seen().ok_or_else(|| {
             let why = Unrehearsable::NotKept {
@@ -201,7 +204,12 @@ where
 
     /// The steps, one after another. A step's hand-over is answered only once
     /// the step after it is out, or the Verify has ended.
-    async fn verified(self: Arc<Self>, id: String, out: oneshot::Sender<()>) {
+    async fn verified(
+        self: Arc<Self>,
+        id: String,
+        out: oneshot::Sender<()>,
+        served: crate::repositories::Served,
+    ) {
         let verifies = self.rehearsals().verifies().clone();
         let mut waiting = vec![out];
         let mut at = 0;
@@ -209,7 +217,7 @@ where
             let Some((group, entry)) = verifies.step(&id, at) else {
                 break String::new();
             };
-            let place = Place::of_checkout();
+            let place = Place::of_checkout(served.clone());
             let Some(tree) = self.tree_at(&place) else {
                 break String::from("this checkout is not on disk");
             };

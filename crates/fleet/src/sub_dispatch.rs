@@ -190,12 +190,17 @@ where
         // Allocated and written under one lock, for `Fleet::proposed_job`'s
         // reason: a number read before it is written is a number two callers
         // can be handed.
+        let served = self.served_by(&parent)?;
         let mut store = self.store().lock().await;
         let number = store
-            .next_job_number(self.manifest().id())
+            .next_job_number(served.manifest().id())
             .map_err(Adrift::Reading)?;
         let (new, _) = self.drafted(
-            proposal(ipc::ManifestId::from(self.manifest().id()), asked, waits_on),
+            proposal(
+                ipc::ManifestId::from(served.manifest().id()),
+                asked,
+                waits_on,
+            ),
             StatedBy::TheSplit {
                 parent: caller.clone(),
             },

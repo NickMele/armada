@@ -107,8 +107,9 @@ where
                 step: Some(step),
             });
         };
+        let served = self.served_by(&job)?;
         let judging = self
-            .judging(&job)
+            .judging(&job, &served)
             .map_err(|cause| Adrift::NotConfigurable {
                 job: job_id.clone(),
                 cause,
@@ -140,7 +141,7 @@ where
         // off the same places. Nothing here is assembled differently, because
         // an easier reading would not be the reading that failed — and that
         // includes saying each Check as it runs, until the rows are written.
-        let announcing = self.announcing(&job, &step, attempt);
+        let announcing = self.announcing(&served, &job, &step, attempt);
         let ports = self.port_map(&job).await;
         let port_env = self.port_env(&job).await;
         let refusal_policy = self
@@ -166,11 +167,11 @@ where
             self.work(),
             self.budget(),
             &judging,
-            &Keeping::of(&self.host().records_root, &job.handle()),
+            &Keeping::of(served.records_root(), &job.handle()),
             // Read now rather than carried from the first gating: a re-gate is
             // a fresh reading of a live setting, and answering it with what the
             // file said the first time would be the one thing `Live` forbids.
-            self.gating_policies(),
+            self.gating_policies(&served),
             &announcing,
             &ports,
             &port_env,

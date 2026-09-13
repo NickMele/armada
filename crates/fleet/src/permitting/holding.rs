@@ -331,21 +331,29 @@ where
         // `#836`: a repository-wide allow lives in Fleet's own table now, keyed
         // by Manifest rather than by Job, so a Job that never itself pressed
         // Always allow still reads what a person allowed a different Job.
-        allowed.extend(self.repository_allowed_commands().await);
+        // A Job no served repository owns is allowed its own row and nothing else.
+        let mut destructive = Vec::new();
+        if let Ok(served) = self.served_by_id(job) {
+            allowed.extend(self.repository_allowed_commands(&served).await);
+            destructive = self.destructive_commands(&served);
+        }
         let command = asked.command();
         first(
             &asked.tool,
             command,
             &allowed,
-            &self.destructive_commands(),
+            &destructive,
             command.and_then(|run| self.ungrantable(run)),
             when,
         )
     }
 
     /// Every command the Manifest declares destructive, as `(name, run)`.
-    pub(super) fn destructive_commands(&self) -> Vec<(String, String)> {
-        let manifest = self.manifest();
+    pub(super) fn destructive_commands(
+        &self,
+        served: &crate::repositories::Served,
+    ) -> Vec<(String, String)> {
+        let manifest = served.manifest();
         manifest
             .command_names()
             .into_iter()
@@ -437,7 +445,10 @@ where
             tool,
             command,
             &[],
-            &self.destructive_commands(),
+            &self
+                .served_by(job)
+                .map(|served| self.destructive_commands(&served))
+                .unwrap_or_default(),
             ungrantable,
             WhenBlocked::AskMe,
         );
@@ -619,7 +630,8 @@ where
         job: &Job,
         call: &str,
     ) -> Option<(String, Option<String>)> {
-        let records = &self.host().records_root;
+        let served = self.served_by(job).ok()?;
+        let records = served.records_root();
         let handle = job.handle();
         let refusals =
             crate::transcript::refusals(records, &handle, crate::stuck::stopped_step(job)).await;
@@ -685,7 +697,12 @@ where
                     }
                     None => command.to_string(),
                 };
-                self.allow_in_repository(&declared_as).await
+                let served = self
+                    .served_by_id(job)
+                    .map_err(|why| NotPermitted::NotRecorded {
+                        cause: why.to_string(),
+                    })?;
+                self.allow_in_repository(&served, &declared_as).await
             }
         }
     }

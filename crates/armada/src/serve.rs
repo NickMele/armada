@@ -41,7 +41,6 @@ use fleet::{
 use ipc::PROTOCOL_VERSION;
 use store::Store;
 
-use crate::watching;
 use crate::{
     agent_binary, judge_model, model_choices, proposer_model, Setup, AGENT_BINARY, JUDGE_MODEL,
     MODEL, PROPOSER_MODEL,
@@ -348,11 +347,12 @@ const PROVISIONAL_ALLOWANCE: Allowance = Allowance::of(Micros::dollars(10), 300)
 /// this loop rather than poll it.
 const PROVISIONAL_TURN_INTERVAL: Duration = Duration::from_millis(250);
 
-/// Serve `repository`, or the working directory, until a signal says stop.
+/// Serve, starting in `repository` or the working directory, until a signal
+/// says stop.
 ///
-/// **The one argument is the repository**, positional rather than a flag,
-/// because there is exactly one of them and a flag would invite a second — and
-/// the second is the pair of file paths this step exists to refuse.
+/// **The one argument is the repository Fleet starts in**, positional rather
+/// than a flag. Every other repository is added by folder while Fleet runs —
+/// `add_repository` — and never as a second path here.
 pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     let path = runtime::machine_path()?;
 
@@ -423,6 +423,9 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         .to_path_buf();
     std::fs::create_dir_all(&machine)?;
     let mut store = Store::open(&machine.join(STORE_FILE))?;
+    // Reads a folder a person adds, and holds every served `armada.yml`'s watch.
+    let roster = Roster::of(&machine_facts.models.models);
+    let locator = Arc::new(crate::locating::Locator::at(&machine, kit, roster));
 
     // One range for every claim on this machine — a Job's span, the main
     // checkout's, and this one. Its ceiling is detected from the platform's
@@ -465,8 +468,10 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         bound.port(),
         port_range,
         machine_facts,
+        Arc::clone(&locator),
     )?;
     let fleet = Arc::new(fleet);
+    locator.bind(&fleet);
 
     // Said whatever it found, including nothing: a boot that stayed quiet
     // about six directories it checked is a boot nobody can tell moved
@@ -493,40 +498,17 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // watch that will not start is carried out and Fleet serves anyway: the
     // Manifest that was read is still the one in force, which is exactly where
     // this was before `#430`.
-    let manifest_file = reloads.path().to_path_buf();
-    let _watching = match watching::watch(reloads, {
-        let file = manifest_file.clone();
-        // **Both, and neither instead of the other.** The console is where a
-        // person running `armada fleet start` in a terminal reads this, and
-        // Fleet is where a person running Bridge does — the whole of `#446` is
-        // that only the first of those existed. `Fleet::reread` holds the
-        // reading as well as publishing it, so a Bridge opened after the save
-        // still learns that its Manifest was refused.
-        let fleet = Arc::clone(&fleet);
-        let clock = SystemClock::new();
-        move |read| {
-            fleet.reread(watching::reading(&read, &file, clock.now()));
-            watching::say(read, &file)
-        }
-    }) {
-        Ok(watching) => {
-            println!("watching {} for edits", manifest_file.display());
-            Some(watching)
-        }
-        Err(why) => {
-            eprintln!(
-                "{} will not be watched, so an edit to it needs a restart: {why}",
-                manifest_file.display()
-            );
-            None
-        }
-    };
+    locator.watch(reloads);
 
     // **Nothing runs until this has.** A Job the store says was running is
     // asked about: a Drone is spawned into a session of its own, so it outlives
     // the Fleet that started it and may still be working. What is gone is
     // `interrupted`; what is still there is adopted, and the Job carries on
     // with a Drone nothing can speak to.
+    // The repositories added before this start, served again so their Jobs are reconciled too.
+    for why in fleet.served_again().await {
+        eprintln!("  a remembered repository is not served: {why}");
+    }
     let reconciled = fleet.reconcile().await?;
     println!(
         "reconciled: {} interrupted, {} adopted, {} repaired, {} unreadable, {} mended{}",
@@ -707,6 +689,7 @@ fn assemble(
     port: u16,
     port_range: PortRange,
     facts: MachineFacts,
+    locator: Arc<crate::locating::Locator>,
 ) -> Result<Assembled, Box<dyn Error>> {
     let MachineFacts {
         home,
@@ -803,6 +786,7 @@ fn assemble(
             // matches its port against. See `fleet::peer`.
             port,
         },
+        locating: locator,
         port_range,
         run_log_retention: RUN_LOG_RETENTION,
         // The kernel, because the question is which process holds a socket.

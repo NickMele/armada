@@ -218,7 +218,9 @@ where
             &step_facts(
                 self.aloft(),
                 self.underway(),
-                &self.host().records_root,
+                self.served_by(&job)
+                    .map_err(|why| self.refusal(why))?
+                    .records_root(),
                 &job,
                 ran_every_attempt,
                 judged_every_attempt,
@@ -251,7 +253,7 @@ where
             .map(ipc::AllowedCommandRow::from)
             .collect();
         detail.repository_allowed_commands = self
-            .repository_allowed()
+            .repository_allowed(&self.served_by(&job).map_err(|why| self.refusal(why))?)
             .await
             .iter()
             .map(ipc::AllowedCommandRow::from)

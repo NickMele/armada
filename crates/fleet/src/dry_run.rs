@@ -395,8 +395,13 @@ where
             .map_err(|cause| NotRun::CouldNotRead {
                 cause: cause.to_string(),
             })?;
+        let served = self
+            .served_by(&plan.record)
+            .map_err(|cause| NotRun::CouldNotRead {
+                cause: cause.to_string(),
+            })?;
         let rows = check_output::kept_dry(
-            &self.host().records_root,
+            served.records_root(),
             &plan.record.handle(),
             &plan.step,
             on,

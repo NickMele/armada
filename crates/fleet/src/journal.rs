@@ -47,25 +47,45 @@ pub const NOTES: usize = 512;
 /// the listener at startup and is the only thing on that side that knows
 /// `.armada/logs/` exists.
 pub struct JobLogs {
-    records_root: String,
+    names: std::sync::Arc<crate::naming::Names>,
+    repositories: std::sync::Arc<crate::repositories::Repositories>,
 }
 
 impl JobLogs {
-    pub fn under(records_root: impl Into<String>) -> JobLogs {
-        JobLogs {
-            records_root: records_root.into(),
-        }
+    /// Where this Job's records are. `None` is a Job no served repository owns,
+    /// which has no log this Fleet can read.
+    fn records_of(&self, job: &ipc::JobId) -> Option<String> {
+        let owner = self.names.owner_of(&job.to_domain())?;
+        let served = self.repositories.serving(&owner)?;
+        Some(served.records_root().to_string())
     }
 }
 
 impl Journal for JobLogs {
-    fn read(&self, handle: &str, from: u64) -> Reading {
-        read_from(&self.records_root, handle, from)
+    fn read(&self, job: &ipc::JobId, handle: &str, from: u64) -> Reading {
+        match self.records_of(job) {
+            Some(root) => read_from(&root, handle, from),
+            None => Reading {
+                notes: Vec::new(),
+                from,
+                skipped: 0,
+                unreadable: false,
+            },
+        }
     }
 
-    fn window(&self, handle: &str) -> Window {
-        window_of(&self.records_root, handle)
+    fn window(&self, job: &ipc::JobId, handle: &str) -> Window {
+        match self.records_of(job) {
+            Some(root) => window_of(&root, handle),
+            None => window_of(&unowned_root(), handle),
+        }
     }
+}
+
+/// A records root nothing is ever written under, so a Job no served
+/// repository owns reads as a Job with no log yet.
+fn unowned_root() -> String {
+    String::from("/dev/null/armada-records")
 }
 
 /// Everything appended after `from`, and where the next pass starts.
@@ -73,7 +93,7 @@ impl Journal for JobLogs {
 /// **A log that is not there is nothing at `from`**, not a fault. A Job at the
 /// approval gate has written no line, and neither has one proposed before any
 /// of this existed.
-fn read_from(records_root: &str, handle: &str, from: u64) -> Reading {
+pub(crate) fn read_from(records_root: &str, handle: &str, from: u64) -> Reading {
     let at = log_of(records_root, handle);
     let Ok(mut file) = File::open(&at) else {
         return nothing(from);
@@ -148,7 +168,7 @@ fn read_from(records_root: &str, handle: &str, from: u64) -> Reading {
 /// single line of it can be arbitrarily long; every line here is Fleet's own
 /// writing about one Job, which `ipc::journal` already argues is why nothing
 /// on this stream is cut per note.
-fn window_of(records_root: &str, handle: &str) -> Window {
+pub(crate) fn window_of(records_root: &str, handle: &str) -> Window {
     let path = relative_log(handle);
     let at = log_of(records_root, handle);
     // A log that is not there is an empty window, never a fault — [`read_from`]'s
@@ -354,6 +374,9 @@ where
     /// crate learns that `.armada/logs/` is where they are — which is the same
     /// line [`crate::serving`] holds for every other answer Fleet gives.
     pub fn job_logs(&self) -> JobLogs {
-        JobLogs::under(&self.host().records_root)
+        JobLogs {
+            names: std::sync::Arc::clone(self.names()),
+            repositories: std::sync::Arc::clone(self.repositories()),
+        }
     }
 }

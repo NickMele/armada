@@ -116,12 +116,14 @@ where
     async fn propose_from_request(
         &self,
         request: ipc::JobRequest,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::ProposedPlan, Refusal> {
         let made = self
             .propose_from_with_attachments(
                 &request.request,
                 request.client_ref,
                 request.attachments,
+                &self.served_named(manifest_id.as_ref())?,
             )
             .await
             .map_err(|why| self.refusal(why))?;
@@ -332,32 +334,40 @@ where
     async fn start_checkout_run(
         self: std::sync::Arc<Self>,
         run: ipc::StartCheckoutRun,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
-        Fleet::start_checkout_rehearsal(self, run).await
+        let served = self.served_named(manifest_id.as_ref())?;
+        Fleet::start_checkout_rehearsal(self, run, served).await
     }
 
     /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
     async fn stop_checkout_run(
         &self,
         run: ipc::NamedRun,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
-        self.stop_checkout_rehearsal(run.id).await
+        self.stop_checkout_rehearsal(run.id, self.served_named(manifest_id.as_ref())?)
+            .await
     }
 
     /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
     async fn undo_checkout_run(
         &self,
         run: ipc::NamedRun,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
-        self.undo_checkout_rehearsal(run.id).await
+        self.undo_checkout_rehearsal(run.id, self.served_named(manifest_id.as_ref())?)
+            .await
     }
 
     /// Verify in the main checkout. **The `Arc` is handed on**: its steps
     /// outlive the call — `crate::rehearsing::verifying`.
     async fn start_checkout_verify(
         self: std::sync::Arc<Self>,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutVerify, Refusal> {
-        Fleet::begin_checkout_verify(self).await
+        let served = self.served_named(manifest_id.as_ref())?;
+        Fleet::begin_checkout_verify(self, served).await
     }
 
     /// A corrected Manifest, written and nothing more —
@@ -369,8 +379,9 @@ where
     async fn save_manifest_file(
         &self,
         asked: ipc::SaveManifestFile,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::ManifestSaved, Refusal> {
-        self.write_manifest_file(asked)
+        self.write_manifest_file(asked, &self.served_named(manifest_id.as_ref())?)
     }
 
     /// A form's edits, placed and written — [`amending`](mod@crate::amending).
@@ -380,24 +391,33 @@ where
     async fn edit_manifest(
         &self,
         asked: ipc::EditManifest,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::ManifestEdited, Refusal> {
-        self.edit_manifest_file(asked)
+        self.edit_manifest_file(asked, &self.served_named(manifest_id.as_ref())?)
     }
 
     /// One edit to a Setup proposal. Held in memory, so nothing is written.
     async fn edit_manifest_proposal(
         &self,
         asked: ipc::EditManifestProposal,
+        repository: Option<String>,
     ) -> Result<ipc::ManifestProposal, Refusal> {
-        self.edit_manifest_proposal(asked)
+        self.edit_manifest_proposal(
+            asked,
+            self.repository_named(repository.as_deref())?.as_ref(),
+        )
     }
 
     /// A Setup proposal, created on disk and never over a file that is there.
     async fn write_manifest_proposal(
         &self,
         asked: ipc::WriteManifestProposal,
+        repository: Option<String>,
     ) -> Result<ipc::ManifestProposal, Refusal> {
-        self.write_manifest_proposal(asked)
+        self.write_manifest_proposal(
+            asked,
+            self.repository_named(repository.as_deref())?.as_ref(),
+        )
     }
 
     /// A person starting a server, for a Job or the main checkout. **The `Arc`
@@ -408,6 +428,7 @@ where
     async fn start_server(
         self: std::sync::Arc<Self>,
         asked: ipc::StartServer,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::ServerState, Refusal> {
         let place = match &asked.job_id {
             Some(job_id) => crate::servers::Place::Job(
@@ -415,7 +436,7 @@ where
                     .await
                     .map_err(|why| self.refusal(why))?,
             ),
-            None => crate::servers::Place::MainCheckout,
+            None => crate::servers::Place::MainCheckout(self.served_named(manifest_id.as_ref())?),
         };
         let refusing = std::sync::Arc::clone(&self);
         Fleet::hold_server(self, place, &asked.name, ipc::StartedBy::Person)
@@ -439,18 +460,28 @@ where
     async fn remove_repository_allowed_command(
         &self,
         removing: ipc::RemoveRepositoryAllowedCommand,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::RepositoryAllowedCommands, Refusal> {
-        Fleet::remove_repository_allowed_command(self, &removing.run)
+        let served = self.served_named(manifest_id.as_ref())?;
+        Fleet::remove_repository_allowed_command(self, &served, &removing.run)
             .await
             .map_err(|why| self.repository_allow_refusal(why))?;
         Ok(ipc::RepositoryAllowedCommands {
             commands: self
-                .repository_allowed()
+                .repository_allowed(&served)
                 .await
                 .iter()
                 .map(ipc::AllowedCommandRow::from)
                 .collect(),
         })
+    }
+
+    /// Serve one more repository, from a folder — `crate::repositories`.
+    async fn add_repository(
+        &self,
+        asked: ipc::AddRepository,
+    ) -> Result<ipc::RepositorySummary, Refusal> {
+        self.added_repository(asked).await
     }
 
     /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.

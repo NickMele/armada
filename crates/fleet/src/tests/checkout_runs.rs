@@ -87,7 +87,10 @@ fn a_repository_at(at: &Path) {
 async fn finished(fleet: &Fixture, id: &str) -> ipc::CheckoutRunRecord {
     tokio::time::timeout(Duration::from_secs(30), async {
         loop {
-            let history = fleet.checkout_rehearsal_history().await.expect("a history");
+            let history = fleet
+                .checkout_rehearsal_history(fleet.first())
+                .await
+                .expect("a history");
             if let Some(record) = history.runs.into_iter().find(|run| run.id == id) {
                 return record;
             }
@@ -105,7 +108,10 @@ async fn the_sheet_lists_the_manifest_with_no_job_in_the_store() {
     let home = TempDir::new();
     let fleet = a_fleet_over(&home);
 
-    let sheet = fleet.checkout_run_sheet().await.expect("a sheet");
+    let sheet = fleet
+        .checkout_run_sheet(fleet.first())
+        .await
+        .expect("a sheet");
 
     assert_eq!(
         sheet
@@ -149,9 +155,12 @@ async fn a_run_leaves_its_record_and_its_log_under_armada_runs() {
     let fleet = a_fleet_over(&home);
 
     let underway = Arc::clone(&fleet)
-        .start_checkout_rehearsal(ipc::StartCheckoutRun {
-            name: String::from("lint"),
-        })
+        .start_checkout_rehearsal(
+            ipc::StartCheckoutRun {
+                name: String::from("lint"),
+            },
+            fleet.first(),
+        )
         .await
         .expect("underway");
     let record = finished(&fleet, &underway.id).await;
@@ -164,7 +173,7 @@ async fn a_run_leaves_its_record_and_its_log_under_armada_runs() {
         "the record is under .armada/runs/main/<run>/"
     );
     let output = fleet
-        .checkout_rehearsal_output(underway.id.clone())
+        .checkout_rehearsal_output(underway.id.clone(), fleet.first())
         .await
         .expect("the log");
     assert_eq!(output.lines, vec!["linted".to_string()]);
@@ -182,9 +191,12 @@ async fn a_run_that_wrote_is_undone_from_its_own_snapshot() {
     let fleet = a_fleet_over(&home);
 
     let underway = Arc::clone(&fleet)
-        .start_checkout_rehearsal(ipc::StartCheckoutRun {
-            name: String::from("generate"),
-        })
+        .start_checkout_rehearsal(
+            ipc::StartCheckoutRun {
+                name: String::from("generate"),
+            },
+            fleet.first(),
+        )
         .await
         .expect("underway");
     let record = finished(&fleet, &underway.id).await;
@@ -192,7 +204,7 @@ async fn a_run_that_wrote_is_undone_from_its_own_snapshot() {
     assert!(record.undoable, "a snapshot was kept, so Undo is offered");
     assert!(home.path().join("generated.rs").is_file());
     let undone = fleet
-        .undo_checkout_rehearsal(underway.id.clone())
+        .undo_checkout_rehearsal(underway.id.clone(), fleet.first())
         .await
         .expect("the tree put back");
     assert!(undone.undone_at.is_some());
@@ -223,9 +235,12 @@ async fn a_runs_diff_is_against_its_own_snapshot_and_says_when_that_is_gone() {
     ));
 
     let underway = Arc::clone(&fleet)
-        .start_checkout_rehearsal(ipc::StartCheckoutRun {
-            name: String::from("generate"),
-        })
+        .start_checkout_rehearsal(
+            ipc::StartCheckoutRun {
+                name: String::from("generate"),
+            },
+            fleet.first(),
+        )
         .await
         .expect("underway");
     finished(&fleet, &underway.id).await;
@@ -294,15 +309,21 @@ async fn a_checkout_run_and_a_jobs_run_do_not_lock_each_other_out() {
     std::fs::create_dir_all(spec.worktree_path()).expect("the worktree");
 
     let theirs = Arc::clone(&fleet)
-        .start_checkout_rehearsal(ipc::StartCheckoutRun {
-            name: String::from("sleep"),
-        })
+        .start_checkout_rehearsal(
+            ipc::StartCheckoutRun {
+                name: String::from("sleep"),
+            },
+            fleet.first(),
+        )
         .await
         .expect("the checkout's run");
     let second = Arc::clone(&fleet)
-        .start_checkout_rehearsal(ipc::StartCheckoutRun {
-            name: String::from("lint"),
-        })
+        .start_checkout_rehearsal(
+            ipc::StartCheckoutRun {
+                name: String::from("lint"),
+            },
+            fleet.first(),
+        )
         .await;
     assert!(
         second.is_err(),
@@ -322,7 +343,7 @@ async fn a_checkout_run_and_a_jobs_run_do_not_lock_each_other_out() {
 
     assert_ne!(theirs.id, jobs.id);
     fleet
-        .stop_checkout_rehearsal(theirs.id)
+        .stop_checkout_rehearsal(theirs.id, fleet.first())
         .await
         .expect("the checkout's run stopped");
     fleet
@@ -344,9 +365,12 @@ async fn a_checkout_run_ends_with_its_own_kind_on_the_stream() {
     let mut watching = events.subscribe();
 
     let underway = Arc::clone(&fleet)
-        .start_checkout_rehearsal(ipc::StartCheckoutRun {
-            name: String::from("lint"),
-        })
+        .start_checkout_rehearsal(
+            ipc::StartCheckoutRun {
+                name: String::from("lint"),
+            },
+            fleet.first(),
+        )
         .await
         .expect("underway");
 

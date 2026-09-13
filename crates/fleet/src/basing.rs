@@ -238,8 +238,12 @@ where
     ///
     /// `adapters` cannot read a Manifest — the layers forbid it — so this is
     /// where the two are held together.
-    pub(crate) fn based(&self, worktree: Worktree) -> Worktree {
-        match self.manifest().base() {
+    pub(crate) fn based(
+        &self,
+        served: &crate::repositories::Served,
+        worktree: Worktree,
+    ) -> Worktree {
+        match served.manifest().base() {
             Some(base) => worktree.from_base(base),
             None => worktree,
         }
@@ -253,8 +257,14 @@ where
     /// photographing a commit the branch has long since left behind — the
     /// failure a shared cache has that a per-Job one does not. Asking each time
     /// costs one ref lookup and a directory probe.
-    pub(crate) async fn base_to_show_from(&self, job: &Job) -> Result<BaseCheckout, NoBase> {
-        let spec = self.base_spec()?;
+    pub(crate) async fn base_to_show_from(
+        &self,
+        job: &Job,
+    ) -> Result<(crate::repositories::Served, BaseCheckout), NoBase> {
+        let served = self.served_by(job).map_err(|why| NoBase::NotCheckedOut {
+            why: why.to_string(),
+        })?;
+        let spec = self.base_spec(&served)?;
         let checkout = self
             .vcs()
             .base_checkout(&spec)
@@ -262,17 +272,18 @@ where
                 why: cause.to_string(),
             })?;
         if checkout.prepared() {
-            return Ok(checkout);
+            return Ok((served, checkout));
         }
-        self.prepare_the_base(job, &spec, checkout).await
+        let prepared = self.prepare_the_base(job, &spec, checkout, &served).await?;
+        Ok((served, prepared))
     }
 
     /// Which commit is the base, as a spec.
-    fn base_spec(&self) -> Result<BaseSpec, NoBase> {
-        let root = &self.host().repo_root;
+    fn base_spec(&self, served: &crate::repositories::Served) -> Result<BaseSpec, NoBase> {
+        let root = served.root();
         let at = self
             .vcs()
-            .base_commit(root, self.manifest().base())
+            .base_commit(root, served.manifest().base())
             .map_err(|cause| NoBase::NotCheckedOut {
                 why: cause.to_string(),
             })?
@@ -297,8 +308,9 @@ where
         job: &Job,
         spec: &BaseSpec,
         checkout: BaseCheckout,
+        served: &crate::repositories::Served,
     ) -> Result<BaseCheckout, NoBase> {
-        let required = self.manifest().prepared_by();
+        let required = served.manifest().prepared_by();
         let at = Path::new(checkout.path());
         if !required.is_empty() {
             self.noted_basing(
@@ -357,8 +369,16 @@ where
     /// A repository that names no base sweeps nothing. Its checkouts, if any
     /// were ever made, are held rather than guessed about.
     pub(crate) fn bases_gone_by(&self) -> Vec<String> {
-        let root = &self.host().repo_root;
-        let Ok(Some(current)) = self.vcs().base_commit(root, self.manifest().base()) else {
+        let served = self.repositories().served();
+        served
+            .iter()
+            .flat_map(|one| self.bases_gone_by_in(one))
+            .collect()
+    }
+
+    fn bases_gone_by_in(&self, served: &crate::repositories::Served) -> Vec<String> {
+        let root = served.root();
+        let Ok(Some(current)) = self.vcs().base_commit(root, served.manifest().base()) else {
             return Vec::new();
         };
         let Ok(spec) = BaseSpec::at(root, &current) else {

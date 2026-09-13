@@ -12,6 +12,7 @@ use serde::Deserialize;
 
 use crate::answers::{answer, refused};
 use crate::daemon::Queries;
+use crate::scoped::InManifest;
 use crate::served::Served;
 
 /// The `:drone_id` segment.
@@ -74,8 +75,11 @@ pub(crate) async fn get_usage<D: Queries>(State(served): State<Served<D>>) -> Re
 }
 
 /// What this Manifest's past Jobs have cost, at most.
-pub(crate) async fn get_manifest_spend<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().get_manifest_spend().await {
+pub(crate) async fn get_manifest_spend<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().get_manifest_spend(scope.manifest()).await {
         Ok(spend) => answer(StatusCode::OK, &spend, served.run_id()),
         Err(refusal) => refused(refusal),
     }

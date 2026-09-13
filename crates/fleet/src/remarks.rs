@@ -101,9 +101,8 @@ where
         // being asked about.
         self.at_the_gate(&job)?;
         let pull_request = self.pull_request_of(job_id).await?;
-        let read = self
-            .vcs()
-            .under_review(&self.host().repo_root, &pull_request);
+        let served = self.served_by_id(job_id)?;
+        let read = self.vcs().under_review(served.root(), &pull_request);
         if !read.was_answered() {
             return Err(Adrift::ReviewUnreadable {
                 job: job_id.clone(),
@@ -111,10 +110,7 @@ where
             });
         }
         let mut remarks = read.remarks;
-        remarks.extend(
-            self.vcs()
-                .inline_remarks(&self.host().repo_root, &pull_request),
-        );
+        remarks.extend(self.vcs().inline_remarks(served.root(), &pull_request));
         let taken_up = self
             .store()
             .lock()

@@ -21,8 +21,11 @@ use config::{
 };
 use fleet::scanning::{Entry, Read, Tree};
 
+mod locating;
 mod setup;
 // Only Reach's own test binary reaches Setup's apparatus; the other milestones compile it unused.
+#[allow(unused_imports)]
+pub use locating::*;
 #[allow(unused_imports)]
 pub use setup::*;
 

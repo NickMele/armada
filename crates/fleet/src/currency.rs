@@ -61,6 +61,9 @@ where
         let Ok(job) = self.load(job_id).await else {
             return;
         };
+        let Ok(served) = self.served_by(&job) else {
+            return;
+        };
         // **The cheap read, asked first.** A local `git rev-parse` against no
         // worktree, so a base that has not moved past what was already tried
         // costs one process rather than a scratch checkout and a rebase. Read
@@ -70,7 +73,7 @@ where
         // Off the runtime, not straight on the turn loop's own thread. `#693`.
         let (vcs, repo_root, owned_base) = (
             Arc::clone(self.vcs()),
-            self.host().repo_root.clone(),
+            served.root().to_string(),
             base.to_string(),
         );
         let tip = tokio::task::spawn_blocking(move || vcs.base_tip(&repo_root, &owned_base))
@@ -95,7 +98,7 @@ where
             let _at_the_merge_end = self.merge_end().lock().await;
             let (vcs, repo_root, handle, owned_base) = (
                 Arc::clone(self.vcs()),
-                self.host().repo_root.clone(),
+                served.root().to_string(),
                 job.handle(),
                 base.to_string(),
             );

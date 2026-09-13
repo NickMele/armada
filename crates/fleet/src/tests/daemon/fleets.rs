@@ -91,6 +91,8 @@ pub fn fitted_with(
                 .to_string_lossy()
                 .to_string(),
         },
+        // Reads no folder: the cases about adding a repository plant their own.
+        locating: Arc::new(crate::tests::repositories::Planted::nothing()),
         // Wide, and far from any port a test fixture or this machine's own
         // services are likely to hold — no fixture here declares `ports:`, so
         // nothing claims from it, and the one suite that does plants its own.

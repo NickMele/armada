@@ -11,11 +11,9 @@
 
 use std::io::Write;
 
-use api::Journal;
 use core_model::{Component, Envelope, FieldValue, JobId, Level, Timestamp, Ulid};
 use ipc::{NoteLevel, Voice};
 
-use crate::journal::JobLogs;
 use crate::tests::tmp::TempDir;
 use crate::transcript::{log_of, note};
 
@@ -40,12 +38,12 @@ fn envelope(msg: &str) -> Envelope {
 }
 
 fn read(root: &str, from: u64) -> api::Reading {
-    JobLogs::under(root).read(handle(), from)
+    crate::journal::read_from(root, handle(), from)
 }
 
 /// The settled read — `get_job_log`'s answer, off the same file.
 fn window(root: &str) -> api::Window {
-    JobLogs::under(root).window(handle())
+    crate::journal::window_of(root, handle())
 }
 
 /// The claim: what Fleet wrote about a Job with no Drone on it comes back.

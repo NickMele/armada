@@ -39,9 +39,12 @@ where
     /// apart from [`repository_allowed`](Fleet::repository_allowed): a
     /// listing for a person shows every row it ever wrote, and a grant does
     /// not.
-    pub(crate) async fn repository_allowed_commands(&self) -> Vec<AllowedCommand> {
-        let stored = self.repository_allowed().await;
-        let destructive = self.destructive_commands();
+    pub(crate) async fn repository_allowed_commands(
+        &self,
+        served: &crate::repositories::Served,
+    ) -> Vec<AllowedCommand> {
+        let stored = self.repository_allowed(served).await;
+        let destructive = self.destructive_commands(served);
         stored
             .into_iter()
             .filter(|allowed| !destructive.iter().any(|(_, run)| covers(run, &allowed.run)))
@@ -50,7 +53,11 @@ where
 
     /// Write down that a person always-allowed this rule for the repository.
     /// **Commits nothing** — see the module doc.
-    pub(crate) async fn allow_in_repository(&self, run: &str) -> Result<(), NotPermitted> {
+    pub(crate) async fn allow_in_repository(
+        &self,
+        served: &crate::repositories::Served,
+        run: &str,
+    ) -> Result<(), NotPermitted> {
         let allowed = AllowedCommand {
             run: run.to_string(),
             reach: Reach::Repository,
@@ -60,7 +67,7 @@ where
         self.store()
             .lock()
             .await
-            .allow_repository_command(self.manifest().id(), &allowed)
+            .allow_repository_command(served.manifest().id(), &allowed)
             .map_err(|cause| NotPermitted::NotRecorded {
                 cause: cause.to_string(),
             })
@@ -71,11 +78,14 @@ where
     /// leaves it grantable. **Empty where the store will not read**, which is
     /// what [`repository_allowed_commands`](Fleet::repository_allowed_commands)
     /// reads too.
-    pub async fn repository_allowed(&self) -> Vec<AllowedCommand> {
+    pub async fn repository_allowed(
+        &self,
+        served: &crate::repositories::Served,
+    ) -> Vec<AllowedCommand> {
         self.store()
             .lock()
             .await
-            .repository_allowed_commands(self.manifest().id())
+            .repository_allowed_commands(served.manifest().id())
             .unwrap_or_default()
     }
 
@@ -86,12 +96,16 @@ where
     /// keeps it for the step it is on.
     ///
     /// Refused where nothing a person allowed this Manifest is spelled `run`.
-    pub async fn remove_repository_allowed_command(&self, run: &str) -> Result<(), NotPermitted> {
+    pub async fn remove_repository_allowed_command(
+        &self,
+        served: &crate::repositories::Served,
+        run: &str,
+    ) -> Result<(), NotPermitted> {
         let removed = self
             .store()
             .lock()
             .await
-            .remove_repository_allowed_command(self.manifest().id(), run)
+            .remove_repository_allowed_command(served.manifest().id(), run)
             .map_err(|cause| NotPermitted::NotChanged {
                 cause: cause.to_string(),
             })?;

@@ -115,3 +115,46 @@ pub fn fault_keys(proposal: &ManifestProposal) -> Vec<&str> {
     let faults = proposal.refused.iter().flat_map(|one| &one.faults);
     faults.map(|one| one.key.as_str()).collect()
 }
+
+/// Every file one workspace's findings cite, what it did not read included.
+pub fn cited(one: &ScannedWorkspace) -> Vec<&String> {
+    let found = one
+        .manifests
+        .iter()
+        .chain(&one.lockfiles)
+        .map(|found| &found.file);
+    let runnables = one.runnables.iter().map(|found| &found.file);
+    let tools = one.tools.iter().map(|found| &found.file);
+    let services = one.services.iter().map(|found| &found.file);
+    let ports = one.ports.iter().map(|found| &found.file);
+    let unread = one.not_read.iter().map(|found| &found.file);
+    found
+        .chain(runnables)
+        .chain(tools)
+        .chain(services)
+        .chain(ports)
+        .chain(unread)
+        .collect()
+}
+
+/// Every port a scan found, as `(file, key, container)`.
+pub fn declared_ports(scan: &RepositoryScan) -> Vec<(&str, &str, u16)> {
+    let every = scan.workspaces.iter().flat_map(|one| &one.ports);
+    every
+        .map(|port| (port.file.as_str(), port.key.as_str(), port.container))
+        .collect()
+}
+
+/// Each workspace's evidence strength, by directory.
+pub fn strengths(scan: &RepositoryScan) -> Vec<(&str, ipc::EvidenceStrength)> {
+    scan.workspaces
+        .iter()
+        .map(|one| (one.dir.as_str(), one.evidence))
+        .collect()
+}
+
+/// One workspace's runnable, by name.
+pub fn runnable<'a>(one: &'a ScannedWorkspace, name: &str) -> &'a ipc::Runnable {
+    let found = one.runnables.iter().find(|runnable| runnable.name == name);
+    found.unwrap_or_else(|| panic!("{} runs {name}", one.dir))
+}

@@ -8,11 +8,10 @@
 use core_model::{JobStatus, StepState, Timestamp};
 use testkit::{Delivered, FakeVcs, FakeWorkProduct};
 
-use api::{Journal, Queries};
+use api::Queries;
 use ipc::NoteLevel;
 
 use crate::gate::Ruling;
-use crate::journal::JobLogs;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_committing_through, a_fleet_delivering_nothing, a_fleet_gated_on_a_person, a_proposal,
@@ -195,7 +194,7 @@ async fn a_job_that_changed_nothing_is_answered_rather_than_committed() {
     // and a person would otherwise read the same blank row as a workflow that
     // delivers nothing by design.
     let root = home.path().to_string_lossy().into_owned();
-    let said = JobLogs::under(&root).read(&job.handle(), 0);
+    let said = crate::journal::read_from(&root, &job.handle(), 0);
     assert!(
         said.notes
             .iter()
@@ -287,7 +286,7 @@ async fn a_refused_commit_still_completes_the_job_and_says_so() {
     // out would read on the Job's page exactly like a workflow that delivers
     // nothing by design.
     let root = home.path().to_string_lossy().into_owned();
-    let said = JobLogs::under(&root).read(&job.handle(), 0);
+    let said = crate::journal::read_from(&root, &job.handle(), 0);
     let line = said
         .notes
         .iter()

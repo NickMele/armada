@@ -285,8 +285,13 @@ where
             &adding,
             &request.reason,
         );
+        let served = self
+            .served_by(&record)
+            .map_err(|why| NotWidened::CouldNotAsk {
+                cause: why.to_string(),
+            })?;
         let judging = self
-            .judging(&record)
+            .judging(&record, &served)
             .map_err(|why| NotWidened::CouldNotAsk {
                 cause: format!("{why:?}"),
             })?;

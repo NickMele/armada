@@ -199,7 +199,7 @@ where
             // a `WorktreeSpec` is derived from *this* Fleet's root, so another
             // Manifest's Job would name a path under a repository it never ran
             // in. `armada clean` selects on the same column for the same reason.
-            .filter(|job| job.owner_manifest_id().as_str() == self.manifest().id().as_str())
+            .filter(|job| self.served_by(job).is_ok())
             .collect();
         let mut holding = Vec::new();
         for job in &mine {
@@ -266,8 +266,9 @@ where
     /// know what is in it. What the order buys is that a Job whose worktree git
     /// cannot be asked about still reports the reasons that do not need git.
     fn holding_of(&self, job: &Job, board: &[&Job]) -> Option<Holding> {
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).ok()?;
-        let stands = adapters::standing(&spec, self.manifest().base()).ok()?;
+        let served = self.served_by(job).ok()?;
+        let spec = WorktreeSpec::for_job(served.root(), &job.handle()).ok()?;
+        let stands = adapters::standing(&spec, served.manifest().base()).ok()?;
         if stands.empty_handed() {
             return None;
         }
@@ -324,8 +325,9 @@ where
     /// a second reading that disagreed with the first would be caught by it
     /// rather than acted on.
     fn gave_back(&self, job: &JobId, handle: &str) -> Option<GaveBack> {
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, handle).ok()?;
-        let reclaimed = adapters::reclaim(&spec, self.manifest().base(), UnmergedWork::Keep)
+        let served = self.served_by_id(job).ok()?;
+        let spec = WorktreeSpec::for_job(served.root(), handle).ok()?;
+        let reclaimed = adapters::reclaim(&spec, served.manifest().base(), UnmergedWork::Keep)
             .inspect_err(|cause| self.noted_unreclaimed(job, &cause.why))
             .ok()?;
         self.noted_reclaimed(job, &reclaimed);

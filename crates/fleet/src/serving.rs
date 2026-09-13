@@ -61,19 +61,15 @@ where
     /// answers with the id and the handle together, so nothing downstream loads
     /// the Job a second time to derive a path from it.
     ///
-    /// **The Manifest is this Fleet's own.** A number counts within one, and a
-    /// Fleet serves one repository — so the scope is not a parameter and cannot
-    /// be chosen by a caller. A store holding two Manifests answers about this
-    /// one or answers nothing.
+    /// **A number counts within a Manifest**, and Fleet serves several: one
+    /// that more than one of them holds is refused rather than guessed.
     async fn resolve_job(&self, named: String) -> Result<Resolved, Refusal> {
         let Some(reference) = JobReference::read(&named) else {
             return Err(self.refusal(Adrift::Unresolvable(ResolveJobError::NoSuchJob { named })));
         };
         let found = self
-            .store()
-            .lock()
+            .resolve_job_across(&reference, &self.repositories().served())
             .await
-            .resolve_job(&reference, Some(self.manifest().id()))
             .map_err(|why| self.refusal(Adrift::Unresolvable(why)))?;
         Ok(Resolved::of(JobId::from(&found.job_id), found.handle))
     }
@@ -110,10 +106,13 @@ where
         })
     }
 
-    /// The Manifest every answer is given inside. **This Fleet's own**, which
-    /// is the whole of the scope today — `#698` is what lets a caller name one.
+    /// The Manifest every door answer is given inside — `#698` is what lets a
+    /// caller name one.
     async fn scope(&self) -> Result<ManifestId, Refusal> {
-        Ok(ManifestId::from(self.manifest().id()))
+        // The agent door answers inside the repository Fleet was started in.
+        Ok(ManifestId::from(
+            self.repositories().first().manifest().id(),
+        ))
     }
 
     /// The four narrowings, each one rule, stated in `crate::attention`.
@@ -154,12 +153,15 @@ where
 
     /// The costliest and the longest Job against this Manifest — the budget
     /// form's warning, read beside the caps it is set against.
-    async fn get_manifest_spend(&self) -> Result<ipc::ManifestSpend, Refusal> {
+    async fn get_manifest_spend(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::ManifestSpend, Refusal> {
         let past = self
             .store()
             .lock()
             .await
-            .past_spend_for(self.manifest().id())
+            .past_spend_for(self.served_named(manifest_id.as_ref())?.manifest().id())
             .map_err(|why| self.refusal(crate::adrift::Adrift::Reading(why)))?;
         Ok(ipc::ManifestSpend {
             jobs: past.jobs,
@@ -203,10 +205,11 @@ where
     /// `crate::permitting::repository`.
     async fn get_repository_allowed_commands(
         &self,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::RepositoryAllowedCommands, Refusal> {
         Ok(ipc::RepositoryAllowedCommands {
             commands: self
-                .repository_allowed()
+                .repository_allowed(&self.served_named(manifest_id.as_ref())?)
                 .await
                 .iter()
                 .map(ipc::AllowedCommandRow::from)
@@ -222,8 +225,14 @@ where
     /// has not re-read the file since it started with it, which is a real
     /// answer rather than a gap — the configuration in force is then the one it
     /// booted on.
-    async fn get_manifest_reading(&self) -> Result<Option<ManifestReading>, Refusal> {
-        Ok(self.last_reading())
+    async fn get_manifest_reading(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<Option<ManifestReading>, Refusal> {
+        Ok(self
+            .served_named(manifest_id.as_ref())?
+            .repository()
+            .reading())
     }
 
     /// `armada.yml` as it is on disk, for the view that edits it —
@@ -232,8 +241,11 @@ where
     /// **Unparsed, and whole.** A file that does not parse is the case a
     /// person opening this is most likely to be in, and what the parse came to
     /// is `get_manifest_reading` beside it.
-    async fn get_manifest_file(&self) -> Result<ManifestFile, Refusal> {
-        self.read_manifest_file()
+    async fn get_manifest_file(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ManifestFile, Refusal> {
+        self.read_manifest_file(&self.served_named(manifest_id.as_ref())?)
     }
 
     /// Whether the repository still has what `armada.yml` names —
@@ -241,17 +253,25 @@ where
     ///
     /// **Against the main checkout, not a Job's worktree**, and it takes no
     /// lock and starts no process.
-    async fn get_manifest_drift(&self) -> Result<ManifestDrift, Refusal> {
-        let checkout = std::path::Path::new(&self.host().repo_root);
-        Ok(crate::drifting::drift(self.manifest(), checkout))
+    async fn get_manifest_drift(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ManifestDrift, Refusal> {
+        let served = self.served_named(manifest_id.as_ref())?;
+        let checkout = std::path::Path::new(served.root());
+        Ok(crate::drifting::drift(served.manifest(), checkout))
     }
 
     /// What Scan finds in the checkout Fleet was started in —
     /// [`scanning`](mod@crate::scanning). **It never reads `self.manifest()`**:
     /// Scan is for a repository with none, and the one Fleet holds is beside
     /// the point until Locate (#821) names another checkout.
-    async fn get_repository_scan(&self) -> Result<ipc::RepositoryScan, Refusal> {
-        let root = &self.host().repo_root;
+    async fn get_repository_scan(
+        &self,
+        repository: Option<String>,
+    ) -> Result<ipc::RepositoryScan, Refusal> {
+        let repository = self.repository_named(repository.as_deref())?;
+        let root = repository.root();
         let tree = crate::scanning::Checkout::at(root);
         Ok(crate::scanning::scan(
             root,
@@ -262,8 +282,11 @@ where
 
     /// A proposal per workspace — `crate::manifest_proposal`, which holds
     /// them between calls.
-    async fn get_manifest_proposals(&self) -> Result<ipc::ManifestProposals, Refusal> {
-        Ok(self.manifest_proposals())
+    async fn get_manifest_proposals(
+        &self,
+        repository: Option<String>,
+    ) -> Result<ipc::ManifestProposals, Refusal> {
+        Ok(self.manifest_proposals(self.repository_named(repository.as_deref())?.as_ref()))
     }
 
     /// One Job in full — [`detail`](mod@detail), which is a quarter of this
@@ -443,7 +466,8 @@ where
             .load(&job_id.to_domain())
             .await
             .map_err(|why| self.refusal(why))?;
-        crate::transcript::arguments(&self.host().records_root, &job.handle(), &call_id)
+        let served = self.served_by(&job).map_err(|why| self.refusal(why))?;
+        crate::transcript::arguments(served.records_root(), &job.handle(), &call_id)
             .await
             .ok_or_else(|| self.refusal(Adrift::NoSuchCall { named: call_id }))
     }
@@ -493,8 +517,14 @@ where
                 .step_checks_every_attempt(&id)
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?
         };
-        crate::check_output::kept_output(&self.host().records_root, &kept, &ran)
-            .ok_or_else(|| self.refusal(Adrift::NoSuchCheckOutput { named: kept }))
+        crate::check_output::kept_output(
+            self.served_by_id(&id)
+                .map_err(|why| self.refusal(why))?
+                .records_root(),
+            &kept,
+            &ran,
+        )
+        .ok_or_else(|| self.refusal(Adrift::NoSuchCheckOutput { named: kept }))
     }
 
     /// One running Check's log, as it is written.
@@ -548,8 +578,14 @@ where
         // Every frame the record holds, including a person's presses — the
         // second list the allowlist is. `showing::frames_held` composes it.
         let frames = self.frames_held(&id).await?;
-        let (held, bytes) = crate::showing::frame_bytes(&self.host().records_root, &kept, &frames)
-            .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;
+        let (held, bytes) = crate::showing::frame_bytes(
+            self.served_by_id(&id)
+                .map_err(|why| self.refusal(why))?
+                .records_root(),
+            &kept,
+            &frames,
+        )
+        .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;
         Ok((crate::showing::as_wire(&held), bytes))
     }
 
@@ -569,9 +605,15 @@ where
         let id = job_id.to_domain();
         self.load(&id).await.map_err(|why| self.refusal(why))?;
         let frames = self.frames_held(&id).await?;
-        let (held, part) =
-            crate::showing::frame_part(&self.host().records_root, &kept, &frames, span)
-                .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;
+        let (held, part) = crate::showing::frame_part(
+            self.served_by_id(&id)
+                .map_err(|why| self.refusal(why))?
+                .records_root(),
+            &kept,
+            &frames,
+            span,
+        )
+        .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;
         Ok((crate::showing::as_wire(&held), part))
     }
 
@@ -601,24 +643,47 @@ where
     }
 
     /// The Manifest surface's five reads — `crate::rehearsing::checkout`.
-    async fn get_checkout_run_sheet(&self) -> Result<ipc::CheckoutRunSheet, Refusal> {
-        self.checkout_run_sheet().await
+    async fn get_checkout_run_sheet(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::CheckoutRunSheet, Refusal> {
+        self.checkout_run_sheet(self.served_named(manifest_id.as_ref())?)
+            .await
     }
 
-    async fn list_checkout_runs(&self) -> Result<ipc::CheckoutRunList, Refusal> {
-        self.checkout_rehearsal_history().await
+    async fn list_checkout_runs(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::CheckoutRunList, Refusal> {
+        self.checkout_rehearsal_history(self.served_named(manifest_id.as_ref())?)
+            .await
     }
 
-    async fn get_checkout_run_output(&self, run_id: String) -> Result<ipc::RunOutput, Refusal> {
-        self.checkout_rehearsal_output(run_id).await
+    async fn get_checkout_run_output(
+        &self,
+        run_id: String,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::RunOutput, Refusal> {
+        self.checkout_rehearsal_output(run_id, self.served_named(manifest_id.as_ref())?)
+            .await
     }
 
-    async fn get_checkout_run_diff(&self, run_id: String) -> Result<ipc::CheckoutRunDiff, Refusal> {
-        self.checkout_rehearsal_diff(run_id).await
+    async fn get_checkout_run_diff(
+        &self,
+        run_id: String,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::CheckoutRunDiff, Refusal> {
+        self.checkout_rehearsal_diff(run_id, self.served_named(manifest_id.as_ref())?)
+            .await
     }
 
-    async fn observe_checkout_run(&self, run_id: String) -> Result<ObservedCheckoutRun, Refusal> {
-        self.observe_checkout_rehearsal(run_id).await
+    async fn observe_checkout_run(
+        &self,
+        run_id: String,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ObservedCheckoutRun, Refusal> {
+        self.observe_checkout_rehearsal(run_id, self.served_named(manifest_id.as_ref())?)
+            .await
     }
 
     /// Every server Fleet holds — `crate::servers`.
@@ -634,25 +699,37 @@ where
     /// Every workflow this Fleet holds, so a caller can name one that will not
     /// be refused.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
-        let manifest_id = self.manifest().id();
-        Ok(self
-            .workflows()
-            .values()
-            .map(|workflow| workflow_summary(workflow, manifest_id))
+        let served = self.repositories().served();
+        Ok(served
+            .iter()
+            .flat_map(|one| {
+                one.workflows()
+                    .values()
+                    .map(|workflow| workflow_summary(workflow, one.manifest().id()))
+            })
             .collect())
     }
 
-    /// The Kit and carried definitions this Fleet runs without, each with why.
-    async fn list_left_out_workflows(&self) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
-        Ok(self.left_out().to_vec())
+    /// The Kit and carried definitions one repository runs without, each with why.
+    async fn list_left_out_workflows(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
+        Ok(self.served_named(manifest_id.as_ref())?.left_out().to_vec())
     }
 
-    /// The one Manifest this Fleet was started against.
+    /// Every Manifest this Fleet serves, the one it was started in first.
     async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
-        Ok(vec![manifest_summary(
-            self.manifest(),
-            &self.host().records_root,
-        )])
+        let served = self.repositories().served();
+        Ok(served
+            .iter()
+            .map(|one| manifest_summary(one.manifest(), one.records_root()))
+            .collect())
+    }
+
+    /// Every repository served, Manifest or none — `crate::repositories`.
+    async fn list_repositories(&self) -> Result<ipc::RepositoryList, Refusal> {
+        Ok(self.repository_list())
     }
 
     /// What a Job may be spawned as, resolved once by the composition root.
@@ -722,8 +799,13 @@ where
             .await
             .map_err(|why| self.refusal(why))?;
         let live = self.turns().watching(&job_id);
-        let (history, skipped) =
-            crate::transcript::history(&self.host().records_root, &job.handle()).await;
+        let (history, skipped) = crate::transcript::history(
+            self.served_by(&job)
+                .map_err(|why| self.refusal(why))?
+                .records_root(),
+            &job.handle(),
+        )
+        .await;
         Ok(Observed {
             job_id,
             live,
@@ -735,8 +817,13 @@ where
     /// Paths under the checkout narrowed against typed text, for Bridge's `@`
     /// mention popup. `crate::files::search` is the walk; this only names the
     /// root it walks and cannot refuse.
-    async fn search_files(&self, query: String) -> Result<ipc::FilesFound, Refusal> {
-        let root = std::path::Path::new(&self.host().repo_root);
+    async fn search_files(
+        &self,
+        query: String,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::FilesFound, Refusal> {
+        let served = self.served_named(manifest_id.as_ref())?;
+        let root = std::path::Path::new(served.root());
         Ok(ipc::FilesFound {
             paths: crate::files::search(root, &query),
         })

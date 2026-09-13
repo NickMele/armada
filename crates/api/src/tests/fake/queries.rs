@@ -176,7 +176,10 @@ impl Queries for FakeDaemon {
         Ok(shapes::usage())
     }
 
-    async fn get_manifest_spend(&self) -> Result<ipc::ManifestSpend, Refusal> {
+    async fn get_manifest_spend(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::ManifestSpend, Refusal> {
         Ok(ipc::ManifestSpend {
             jobs: 2,
             most_cost_micros: 7_120_000,
@@ -213,6 +216,7 @@ impl Queries for FakeDaemon {
     /// Whatever a test planted, unfiltered — `#836`.
     async fn get_repository_allowed_commands(
         &self,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::RepositoryAllowedCommands, Refusal> {
         Ok(ipc::RepositoryAllowedCommands {
             commands: self
@@ -226,7 +230,10 @@ impl Queries for FakeDaemon {
     /// **Always a reading, and always one worth saying.** The fake exists so a
     /// route test has a shape to assert on; a `None` here would make the
     /// ordinary case a test of the empty answer.
-    async fn get_manifest_reading(&self) -> Result<Option<ManifestReading>, Refusal> {
+    async fn get_manifest_reading(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<Option<ManifestReading>, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
@@ -235,7 +242,10 @@ impl Queries for FakeDaemon {
 
     /// **A file that does not parse**, matching the reading beside it: the two
     /// answers a surface draws together are about one `armada.yml`.
-    async fn get_manifest_file(&self) -> Result<ManifestFile, Refusal> {
+    async fn get_manifest_file(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ManifestFile, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
@@ -244,14 +254,20 @@ impl Queries for FakeDaemon {
 
     /// **Always two rows, one of each verdict.** A fake answering all `current`
     /// or all `gone` would let a route test pass against a constant.
-    async fn get_manifest_drift(&self) -> Result<ManifestDrift, Refusal> {
+    async fn get_manifest_drift(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ManifestDrift, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
         Ok(shapes::manifest_drift())
     }
 
-    async fn get_repository_scan(&self) -> Result<ipc::RepositoryScan, Refusal> {
+    async fn get_repository_scan(
+        &self,
+        _repository: Option<String>,
+    ) -> Result<ipc::RepositoryScan, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
@@ -260,7 +276,10 @@ impl Queries for FakeDaemon {
 
     /// **No proposals and a stated cap**: what a proposal holds is
     /// `fleet::manifest_proposal`'s and tested there against a Scan.
-    async fn get_manifest_proposals(&self) -> Result<ipc::ManifestProposals, Refusal> {
+    async fn get_manifest_proposals(
+        &self,
+        _repository: Option<String>,
+    ) -> Result<ipc::ManifestProposals, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
@@ -442,7 +461,10 @@ impl Queries for FakeDaemon {
     /// **The fake declares nothing**, so the sheet is empty rather than
     /// refused: `get_checkout_run_sheet` answers on a repository that has
     /// never had a Job in it, and an empty Manifest is that answer.
-    async fn get_checkout_run_sheet(&self) -> Result<ipc::CheckoutRunSheet, Refusal> {
+    async fn get_checkout_run_sheet(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::CheckoutRunSheet, Refusal> {
         Ok(ipc::CheckoutRunSheet {
             setup: Vec::new(),
             checks: Vec::new(),
@@ -454,20 +476,28 @@ impl Queries for FakeDaemon {
         })
     }
 
-    async fn list_checkout_runs(&self) -> Result<ipc::CheckoutRunList, Refusal> {
+    async fn list_checkout_runs(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::CheckoutRunList, Refusal> {
         Ok(ipc::CheckoutRunList {
             runs: Vec::new(),
             unreadable: Vec::new(),
         })
     }
 
-    async fn get_checkout_run_output(&self, _run_id: String) -> Result<ipc::RunOutput, Refusal> {
+    async fn get_checkout_run_output(
+        &self,
+        _run_id: String,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::RunOutput, Refusal> {
         self.runs_nothing_here()
     }
 
     async fn get_checkout_run_diff(
         &self,
         _run_id: String,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutRunDiff, Refusal> {
         self.runs_nothing_here()
     }
@@ -475,6 +505,7 @@ impl Queries for FakeDaemon {
     async fn observe_checkout_run(
         &self,
         _run_id: String,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<crate::ObservedCheckoutRun, Refusal> {
         self.runs_nothing_here()
     }
@@ -545,7 +576,10 @@ impl Queries for FakeDaemon {
         Ok(shapes::workflows())
     }
 
-    async fn list_left_out_workflows(&self) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
+    async fn list_left_out_workflows(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
         Ok(Vec::new())
     }
 
@@ -611,7 +645,17 @@ impl Queries for FakeDaemon {
         })
     }
 
-    async fn search_files(&self, query: String) -> Result<FilesFound, Refusal> {
+    async fn list_repositories(&self) -> Result<ipc::RepositoryList, Refusal> {
+        Ok(ipc::RepositoryList {
+            repositories: Vec::new(),
+        })
+    }
+
+    async fn search_files(
+        &self,
+        query: String,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<FilesFound, Refusal> {
         Ok(FilesFound {
             paths: shapes::files_found(&query),
         })

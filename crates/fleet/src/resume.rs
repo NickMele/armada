@@ -557,13 +557,13 @@ where
     /// reach, and a worktree can still be reclaimed — at which point the
     /// earlier steps' work is not on disk and there is nothing to resume onto.
     pub(crate) fn surviving_worktree(&self, job: &Job) -> Result<Worktree, Adrift> {
-        let spec =
-            WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).map_err(|cause| {
-                Adrift::Unworkable {
-                    job: job.id().clone(),
-                    cause,
-                }
-            })?;
+        let served = self.served_by(job)?;
+        let spec = WorktreeSpec::for_job(served.root(), &job.handle()).map_err(|cause| {
+            Adrift::Unworkable {
+                job: job.id().clone(),
+                cause,
+            }
+        })?;
         if !Path::new(&spec.worktree_path()).is_dir() {
             return Err(Adrift::WorktreeGone {
                 job: job.id().clone(),
@@ -576,7 +576,7 @@ where
             .branch()
             .map(|branch| branch.as_str().to_string())
             .unwrap_or_else(|| spec.branch());
-        Ok(self.based(Worktree::at(spec.worktree_path(), branch)))
+        Ok(self.based(&served, Worktree::at(spec.worktree_path(), branch)))
     }
 
     /// Why this step stopped, read off the record.

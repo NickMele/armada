@@ -58,8 +58,10 @@ mod reference;
 mod rehearsing;
 /// Rules a person always-allowed for a Manifest's repository, read and taken
 /// back — kept by Fleet itself since `#836`, never `armada.yml`.
+mod repositories;
 mod repository_allow;
 mod routes;
+mod scoped;
 /// Everything a handler is given. **Next door to the table**, which is what
 /// the gate rule reads.
 mod served;

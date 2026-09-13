@@ -26,7 +26,7 @@ Every number below was measured on macOS 27.0 / 26A5406e, launchd 7.0.0.
 - **Fleet crashes — signal or non-zero exit.** launchd restarts it automatically. Doctor's row flips fail → pass with no user action. **There is no cap and no backoff curve** — a flat `ThrottleInterval`, forever.
 - **Fleet is wedged — alive, not answering.** `launchctl kickstart -k gui/$UID/com.armada.fleet`. **26 ms** to a new PID. This is what the "Restart Fleet" button does, and it means **skip the throttle wait**, not *recover*.
 - **Fleet exits 0 deliberately.** launchd leaves it down by design. Kickstarting just makes it exit 0 again. Doctor must show the **reason**, not a restart button.
-- **On any restart.** Reconciles SQLite job state against live OS processes. A Job marked running with no matching process is flagged `interrupted`. **A Job whose Drone is still alive and orphaned is not yet specified** — tracked in `../contracts/system-architecture.md`, and see the `setsid` constraint below. Also sweeps worktrees for terminal Jobs past retention.
+- **On any restart.** Reconciles SQLite job state against live OS processes, for every repository it serves. A Job marked running with no matching process is flagged `interrupted`. **A Job whose Drone is still alive and orphaned is not yet specified** — tracked in `../contracts/system-architecture.md`, and see the `setsid` constraint below. Also sweeps worktrees for terminal Jobs past retention.
 - **Uninstall.** Must `launchctl bootout`, not merely delete the plist. A loaded job survives deletion of its own plist — verified.
 
 Two plist keys do not mean what they read. **`RunAtLoad=false` is a lie in the presence of `KeepAlive`** — both `true` and `{SuccessfulExit:false}` started the job the moment it was bootstrapped. **`Crashed:true` means signal-terminated, not failed** — `exit 1` left the job down, and a Rust panic exits 101.
@@ -62,6 +62,24 @@ If Fleet stays up while `checks-runner` dies, nothing sweeps until the next rest
 #### Where the platform difference belongs
 
 Process-group semantics differ across platforms, and where that difference belongs is tracked in `../contracts/adapters.md`.
+
+## Repositories
+
+**One Fleet serves many repositories, and one Board lists every one's Jobs.** The repository `armada serve` starts in is the first; a person adds another by folder, and the rail's project picker switches between their Manifests. The rejected alternative was one Fleet per repository, which would have put a Board, a store and a listener per project in front of a person who wanted one.
+
+> **Rule.** A Job belongs to the repository whose Manifest it was created against, found through `owner_manifest_id`.
+> Why: every path a Job writes to — its worktree, its records, its main checkout — is that repository's, and a lookup that fell back to another would work a Job in a tree it never ran in.
+
+> **Rule.** Two served repositories never declare the same Manifest id, and a folder already served is refused.
+> Why: the id is the whole of how a Job names its repository, so a second holder would make that name ambiguous.
+
+**A folder with no `armada.yml` is served, for Scan to read.** It lists as a repository and not as a Manifest, and it gains its Manifest when Write puts one at its root. A folder that is not the root of a git repository is refused.
+
+**Each repository keeps its own Manifest, workflows, records, worktrees and checkout runs.** A route acting on one names it — `?manifest_id=` where it has a Manifest, `?repository=` on Scan and its proposals — and an absent name is the repository Fleet started in.
+
+**Restart and adding reconcile the same way.** Fleet remembers every repository it serves, serves them again on restart before reconciling, and reconciles each over its own Jobs. A remembered folder that is gone is said and stays remembered; a Job whose repository is not served is left as it stands, and is reconciled when that repository is added.
+
+**What stays Fleet-wide:** the concurrency cap and headroom, the store, the listener, and one Verify at a time.
 
 ## Scheduling and gating
 
@@ -261,7 +279,7 @@ Fleet asks about **one** pull request per sweep and rotates, because the turn in
 
 ## Ports
 
-A Job claims a contiguous span of ports for the life of its worktree. The main checkout claims one too, held while Fleet runs; the proof run after a merge and any server started with no Job draw from it. Fleet's own listener claims a single port the same way, out of the same range.
+A Job claims a contiguous span of ports for the life of its worktree. Each repository's main checkout claims one too, held while Fleet runs; the proof run after a merge and any server started with no Job draw from it. Fleet's own listener claims a single port the same way, out of the same range.
 
 ### The range
 

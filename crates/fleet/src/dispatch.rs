@@ -88,18 +88,18 @@ where
 
         let job = self.move_job(&job, Target::Running, Actor::Fleet).await?;
 
-        let spec =
-            WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).map_err(|cause| {
-                Adrift::Unworkable {
-                    job: job_id.clone(),
-                    cause,
-                }
-            })?;
+        let served = self.served_by(&job)?;
+        let spec = WorktreeSpec::for_job(served.root(), &job.handle()).map_err(|cause| {
+            Adrift::Unworkable {
+                job: job_id.clone(),
+                cause,
+            }
+        })?;
         // **With the Manifest's base on it**, which `Vcs` cannot put there —
         // `adapters` may not read a Manifest. Without it this step's readings
         // measure from the checkout's HEAD and later steps' from the base.
         let worktree = match self.vcs().create_worktree(&spec) {
-            Ok(worktree) => self.based(worktree),
+            Ok(worktree) => self.based(&served, worktree),
             Err(cause) => {
                 self.stopped_before_a_drone(&job, EscalationTrigger::NoWorktree)
                     .await?;

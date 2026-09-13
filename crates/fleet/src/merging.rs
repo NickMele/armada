@@ -91,7 +91,8 @@ where
         // line written afterwards would be missing on exactly the run where
         // somebody most wants to know what was attempted.
         self.said_about_the_merge(&job, Level::Warn, why, &url, None);
-        match self.vcs().merge(&self.host().repo_root, &url) {
+        let served = self.served_by(&job)?;
+        match self.vcs().merge(served.root(), &url) {
             Ok(Merged::Taken) => self.said_about_the_merge(
                 &job,
                 Level::Info,
@@ -129,7 +130,7 @@ where
         // it merged into, whether the forge agrees it is merged, and what the
         // base is on now are one `landed` — and everything that follows a merge
         // is `crate::noticing`'s, reached rather than done again.
-        let read: WhatBecameOfIt = self.vcs().landed(&self.host().repo_root, &url);
+        let read: WhatBecameOfIt = self.vcs().landed(served.root(), &url);
         // **Held, never raised.** The merge happened; a record that would not
         // write must not leave a person told their press failed and their work
         // on `main`. The sweep asks again on its next rotation, because a Job
@@ -198,7 +199,10 @@ where
         if !asked_for_it {
             return;
         }
-        if !self.gating_policies().a_machine_may_merge(forge) {
+        let Ok(served) = self.served_by_id(job_id) else {
+            return;
+        };
+        if !self.gating_policies(&served).a_machine_may_merge(forge) {
             return;
         }
         {

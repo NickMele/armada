@@ -232,15 +232,20 @@ async fn a_fleet_refuses_a_moved_save_with_the_disk_on_the_refusal_and_admits_an
     fittings.manifest = Manifest::parse(&file, GOOD).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
-    let opened = fleet.read_manifest_file().expect("the file view opens");
+    let opened = fleet
+        .read_manifest_file(&fleet.first())
+        .expect("the file view opens");
     let incoming = "version: 1\nid: edited\nchecks:\n  test:\n    run: cargo nextest run\n";
     std::fs::write(&file, incoming).expect("a pull lands while the view is open");
 
     let refused = fleet
-        .write_manifest_file(SaveManifestFile {
-            read: opened.text.clone(),
-            text: "version: 1\nid: mine\n".to_string(),
-        })
+        .write_manifest_file(
+            SaveManifestFile {
+                read: opened.text.clone(),
+                text: "version: 1\nid: mine\n".to_string(),
+            },
+            &fleet.first(),
+        )
         .expect_err("a save over a file that moved is refused");
     assert_eq!(refused.status(), 409, "a conflict, not a fault");
     assert_eq!(refused.error().code, "fleet.manifest_moved_under_the_edit");
@@ -251,12 +256,17 @@ async fn a_fleet_refuses_a_moved_save_with_the_disk_on_the_refusal_and_admits_an
     );
     assert_eq!(std::fs::read_to_string(&file).expect("reads"), incoming);
 
-    let reopened = fleet.read_manifest_file().expect("the view reopens");
+    let reopened = fleet
+        .read_manifest_file(&fleet.first())
+        .expect("the view reopens");
     let saved = fleet
-        .write_manifest_file(SaveManifestFile {
-            read: reopened.text,
-            text: "version: 1\nid: mine\n".to_string(),
-        })
+        .write_manifest_file(
+            SaveManifestFile {
+                read: reopened.text,
+                text: "version: 1\nid: mine\n".to_string(),
+            },
+            &fleet.first(),
+        )
         .expect("a save over the text it read lands");
     assert_eq!(saved.path, reopened.path, "one file, spelled one way");
     assert_eq!(
