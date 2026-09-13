@@ -422,6 +422,11 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/manifest/undo_run",
     },
+    Route {
+        operation: "start_checkout_verify",
+        method: "POST",
+        path: "/manifest/start_verify",
+    },
     // Servers: a Command that stays running. Not under `/jobs` because one
     // started with no Job belongs to none; the start and stop are segments of
     // the collection, `stop_proposal`'s shape, since an instance's id is all a

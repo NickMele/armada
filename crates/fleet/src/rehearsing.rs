@@ -24,6 +24,8 @@ pub(crate) mod records;
 mod running;
 mod shared;
 mod unrehearsable;
+/// Verify: setup and every Check once, as a sequence of checkout runs.
+mod verifying;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,6 +40,7 @@ pub(crate) use in_flight::Rehearsals;
 use owner::Place;
 use record::Record;
 pub use unrehearsable::{Unrehearsable, Whose};
+pub use verifying::verify_steps;
 
 /// How long a stop waits for a stopped run's record. The group is ended with
 /// `SIGKILL`, so what is left is one tree read and one file write.
@@ -134,6 +137,7 @@ where
                 command,
                 narrowed,
                 asked.worktree_version,
+                None,
             )
             .await
             .map_err(|why| self.refused_run(&owner, why))?;

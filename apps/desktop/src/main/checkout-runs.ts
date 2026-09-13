@@ -22,6 +22,9 @@ import type {
   CheckoutRunSheet,
   CheckoutRunSheetRead,
   CheckoutRunUnderway,
+  CheckoutVerify,
+  ManifestDrift,
+  ManifestDriftRead,
   NamedRun,
   Outcome,
   RunOutput,
@@ -100,6 +103,56 @@ export class CheckoutSheetReader {
   }
 }
 
+/**
+ * `GET /manifest/drift`, read on opening the Manifest surface and again when
+ * Fleet re-reads the file. **`CheckoutSheetReader`'s rules, for its reasons**:
+ * no id to check an answer against, and only the newest read publishes.
+ */
+export class DriftReader {
+  private readonly publish: (read: ManifestDriftRead) => void;
+  private wanted = false;
+  private asked = 0;
+
+  constructor(publish: (read: ManifestDriftRead) => void) {
+    this.publish = publish;
+  }
+
+  get open(): boolean {
+    return this.wanted;
+  }
+
+  async want(port: number | null, want: boolean): Promise<void> {
+    this.wanted = want;
+    if (!want) {
+      this.publish({ state: "none" });
+      return;
+    }
+    this.publish({ state: "reading" });
+    if (port === null) {
+      this.publish({ state: "failed", outcome: { ok: false, why: "not_connected" } });
+      return;
+    }
+    await this.again(port);
+  }
+
+  async again(port: number): Promise<void> {
+    if (!this.wanted) return;
+    this.asked += 1;
+    const asked = this.asked;
+    const answer = await ask(port, "GET", `${MANIFEST}/drift`);
+    if (!this.wanted || this.asked !== asked) return;
+    if (answer.ok !== true) {
+      this.publish({ state: "failed", outcome: answer.outcome });
+      return;
+    }
+    this.publish({ state: "read", drift: answer.body as ManifestDrift });
+  }
+
+  close(): void {
+    this.wanted = false;
+  }
+}
+
 /** What starting and stopping a checkout run needs of the connection. */
 export type CheckoutBoard = {
   port: () => number | null;
@@ -131,6 +184,22 @@ export class CheckoutRunCommands {
     if (answer.ok !== true) return answer.outcome;
     const running = answer.body as CheckoutRunUnderway;
     this.board.follow(port, running.id);
+    await this.board.refreshSheet(port);
+    return { ok: true };
+  }
+
+  /**
+   * Verify — setup and every Check once, one after another. **Answers once
+   * the first step is out**, and follows it; each step after is followed as
+   * the sheet's own `running` moves on `checkout_run.finished`.
+   */
+  async startVerify(): Promise<Outcome> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+    const answer = await ask(port, "POST", `${MANIFEST}/start_verify`);
+    if (answer.ok !== true) return answer.outcome;
+    const out = (answer.body as CheckoutVerify).steps.find((step) => step.state === "running");
+    if (out?.state === "running") this.board.follow(port, out.run_id);
     await this.board.refreshSheet(port);
     return { ok: true };
   }

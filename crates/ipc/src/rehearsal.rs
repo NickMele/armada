@@ -245,6 +245,12 @@ pub struct CheckoutRunSheet {
     /// Not in `commands`: a server is started with `start_server`.
     #[serde(default)]
     pub servers: Vec<crate::servers::ServerEntry>,
+    /// The latest Verify in this checkout: underway, or ended and not yet
+    /// replaced by the next. **Absent where none has run since Fleet started.**
+    /// It is held in memory, as a run in flight is; each step's own record is
+    /// on disk under `.armada/runs/` like any other run's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify: Option<CheckoutVerify>,
 }
 
 /// `start_checkout_run`'s body. **A name and nothing else.**
@@ -379,4 +385,70 @@ pub struct CheckoutRunOpened {
     pub live: bool,
     /// Older lines the opening read left out, because the window is bounded.
     pub skipped: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Verify — Journey 9, *Verify*: setup and every Check once, in the checkout
+// ---------------------------------------------------------------------------
+//
+// **A sequence of ordinary checkout runs, not a record of its own.** Each step
+// is a run like one a person starts by hand, with its own log, snapshot, diff
+// and Undo — so nothing here restates a run's shape. What this adds is the
+// order, which step is out, and why a step did not run.
+
+/// `start_checkout_verify`'s answer, and `CheckoutRunSheet::verify`.
+///
+/// **A rehearsal of the whole file, never a verdict on it.** No step writes
+/// Evidence or a Check row, nothing reaches Doctor, and no field here is a
+/// pass or a fail: a step that ran carries its record, whose exit code is a
+/// fact read beside the code it expects.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckoutVerify {
+    pub id: String,
+    pub started_at: Instant,
+    /// When the last step ended or the rest were not run. **Absent while it is
+    /// underway.**
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<Instant>,
+    /// Setup in `setup.requires` order, then every Check in the order the
+    /// Manifest writes them — what Verify runs, and nothing else it declares.
+    pub steps: Vec<VerifyStep>,
+}
+
+/// One step of a Verify, and where it has got to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifyStep {
+    pub group: VerifyGroup,
+    /// The Command or Check's own name in the Manifest.
+    pub name: String,
+    /// Its `run` line, exactly as declared.
+    pub run: String,
+    #[serde(flatten)]
+    pub state: VerifyStepState,
+}
+
+/// Which of the file's two runnable groups a step is from. **Commands that
+/// `setup.requires` does not name, and servers, are in neither**: Verify runs
+/// what makes a tree workable and what gates code, and nothing else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VerifyGroup {
+    Setup,
+    Checks,
+}
+
+/// Where one step has got to. **No state is a verdict**: `ran` is a run that
+/// ended however it ended, and `not_run` says why in a sentence.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum VerifyStepState {
+    /// Not reached yet.
+    Waiting,
+    /// Out now, as the checkout's one run — followed on `observe_checkout_run`.
+    Running { run_id: String },
+    /// Ended, with the record `list_checkout_runs` also lists.
+    Ran { record: CheckoutRunRecord },
+    /// Never started, and why: a stop, a step before it that cut the rest
+    /// short, or a run Fleet could not start.
+    NotRun { why: String },
 }

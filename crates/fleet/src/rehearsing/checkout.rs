@@ -51,6 +51,7 @@ where
                 .in_flight(&place.owner)
                 .map(|out| out.of_checkout()),
             servers: self.declared_servers(&crate::servers::Holder::MainCheckout, &manifest),
+            verify: self.rehearsals().verifies().seen(),
         })
     }
 
@@ -62,6 +63,11 @@ where
     ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
         let place = Place::of_checkout();
         let owner = place.owner.clone();
+        // A Verify holds the checkout between its steps too: a run slipped in
+        // there would take the slot its next step is about to be handed.
+        if self.rehearsals().verifies().underway() {
+            return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
+        }
         // The whole tree, always: there is no diff of the checkout's own for a
         // narrowing to measure against, and `StartCheckoutRun` carries no flag
         // asking for one.
@@ -71,7 +77,7 @@ where
             .map_err(|why| self.refused_run(&owner, why))?;
         let command = entry.run.clone();
         let underway = Arc::clone(&self)
-            .started_at(place, tree, entry, command, false, false)
+            .started_at(place, tree, entry, command, false, false, None)
             .await
             .map_err(|why| self.refused_run(&owner, why))?;
         Ok(underway.of_checkout())
@@ -99,6 +105,9 @@ where
         id: String,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
         let place = Place::of_checkout();
+        if self.rehearsals().verifies().underway() {
+            return Err(self.refused_run(&place.owner, Unrehearsable::VerifyUnderway));
+        }
         self.undone_at(&place, id)
             .await
             .map(|record| record.of_checkout())

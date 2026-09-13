@@ -37,7 +37,7 @@ import type {
 } from "@armada/protocol";
 import type { ManifestReading } from "@armada/protocol";
 import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
-import type { CheckoutRunFollowed, CheckoutRunSheetRead } from "@armada/protocol";
+import type { CheckoutRunFollowed, CheckoutRunSheetRead, ManifestDriftRead } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
 
 
@@ -314,6 +314,12 @@ export type BridgeState = {
   /** The checkout run a window is reading, as it prints. Its own socket,
    * `runFollowed`'s shape one owner over. One at a time. */
   checkoutRunFollowed: CheckoutRunFollowed;
+  /**
+   * Whether the repository still has what `armada.yml` names — drift, the
+   * Manifest surface's free read on opening. **Held open by that surface
+   * alone**, and read again when Fleet re-reads the file.
+   */
+  manifestDrift: ManifestDriftRead;
 };
 
 /**
@@ -357,6 +363,7 @@ export const NOTHING_YET: BridgeState = {
   servers: { servers: [] },
   checkoutRunSheet: { state: "none" },
   checkoutRunFollowed: { state: "none" },
+  manifestDrift: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -421,6 +428,10 @@ export const CHANNELS = {
   listCheckoutRuns: "bridge:list-checkout-runs",
   getCheckoutRunOutput: "bridge:get-checkout-run-output",
   getCheckoutRunDiff: "bridge:get-checkout-run-diff",
+  // Journey 9's *Verify*, as two channels: drift is a read the surface holds
+  // open, and Verify is an act behind its own button.
+  watchManifestDrift: "bridge:watch-manifest-drift",
+  startCheckoutVerify: "bridge:start-checkout-verify",
   // The Manifest file — Journey 9's *Editing*. Two entries, a read and a
   // write, and neither takes a path: Fleet names the file.
   readManifestFile: "bridge:read-manifest-file",

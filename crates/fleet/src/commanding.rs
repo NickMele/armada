@@ -352,6 +352,14 @@ where
         self.undo_checkout_rehearsal(run.id).await
     }
 
+    /// Verify in the main checkout. **The `Arc` is handed on**: its steps
+    /// outlive the call — `crate::rehearsing::verifying`.
+    async fn start_checkout_verify(
+        self: std::sync::Arc<Self>,
+    ) -> Result<ipc::CheckoutVerify, Refusal> {
+        Fleet::begin_checkout_verify(self).await
+    }
+
     /// A corrected Manifest, written and nothing more —
     /// [`editing`](mod@crate::editing).
     ///

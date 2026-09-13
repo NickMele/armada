@@ -292,6 +292,12 @@ const api: BridgeApi = {
   getCheckoutRunDiff: (runId: string): Promise<CheckoutRunDiffRead> =>
     ipcRenderer.invoke(CHANNELS.getCheckoutRunDiff, runId),
 
+  // Drift, held open by the Manifest surface; Verify, pressed on it.
+  watchManifestDrift: (want: boolean): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.watchManifestDrift, want),
+
+  startCheckoutVerify: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.startCheckoutVerify),
+
   // The Manifest file. **A write into the repository**, and still no path: the
   // renderer hands over text and what it started from, and Fleet decides
   // where it lands and whether the disk still matches.

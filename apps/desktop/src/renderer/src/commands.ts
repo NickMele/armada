@@ -105,6 +105,11 @@ export const undoCheckoutRun = (runId: string) => window.armada.undoCheckoutRun(
 export const listCheckoutRuns = () => window.armada.listCheckoutRuns();
 export const getCheckoutRunOutput = (runId: string) => window.armada.getCheckoutRunOutput(runId);
 export const getCheckoutRunDiff = (runId: string) => window.armada.getCheckoutRunDiff(runId);
+// Journey 9's *Verify*. Drift is held open by the surface; Verify is only ever
+// pressed, so nothing here starts one on a read.
+export const watchManifestDrift = (want: boolean): void =>
+  void window.armada.watchManifestDrift(want);
+export const startCheckoutVerify = () => window.armada.startCheckoutVerify();
 // The Manifest file. Held by the app, like the sheet above, so an unsaved edit
 // outlives the surface it was made on.
 export const readManifestFile = () => window.armada.readManifestFile();

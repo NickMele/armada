@@ -572,6 +572,11 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.getCheckoutRunDiff, (_event, runId: string) =>
     connection?.rehearsal.getCheckoutRunDiff(runId),
   );
+  // Drift, held open by the Manifest surface; Verify, only ever pressed there.
+  ipcMain.handle(CHANNELS.watchManifestDrift, (_event, want: boolean) =>
+    connection?.rehearsal.watchManifestDrift(want),
+  );
+  ipcMain.handle(CHANNELS.startCheckoutVerify, () => connection?.rehearsal.startCheckoutVerify());
   // The Manifest file, read and saved. Fleet resolves the path and guards the
   // write against a file that moved; nothing here composes either.
   ipcMain.handle(CHANNELS.readManifestFile, () => connection?.editing.readFile());

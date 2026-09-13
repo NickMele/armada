@@ -19,7 +19,6 @@
 //! claim — `docs/practices/acceptance-tests.md`.
 
 //! # Carried, and asserted below
-//!
 //! | What holds | What it does not reach |
 //! |---|---|
 //! | Scan reads every workspace of a repository nobody set up, in one pass — workspace globs, lockfiles, package scripts, compose services, the ports a file declares — each finding naming a file the repository has, what it did not read said beside it, and nothing written, because the tree it is handed has no write | That a checkout on disk reads the same, and that Fleet serves it: both touch a repository, and are `fleet`'s and `api`'s own tests. CI configuration is reported unread and never read, since naming whose it is belongs to `adapters` |
@@ -31,7 +30,8 @@
 //! | **Dispatch.** With no workflows of its own, all eight Armada carries resolve there, and a Job on the carried `bug` is created and dispatched | That a Fleet started there serves them. `Setup::at` reads directories, and `armada`'s own tests read them |
 //! | **Override.** One file from Kit replaces a carried definition by id, and the repository's replaces Kit's, whatever order they arrive in | That `~/.armada/workflows/` is where Kit's are read from. That is a directory, `armada`'s tests again |
 //! | **Source.** Each workflow says which of the three places it came from, in words a person reads, and a Job created on the carried `bug` freezes `armada` onto its own record | That the record reads it back out of `store`, which has no in-memory constructor — `store`'s own round-trip test does. That a person sees it on a Job: nothing on the wire carries it, which is Bridge's half |
-//! | Running one Manifest entry in the checkout, and reading, saving and editing the file, are operations Fleet serves | Verify. One entry is not setup and every Check once |
+//! | Running one Manifest entry in the checkout, and reading, saving and editing the file, are operations Fleet serves | — |
+//! | **Verify.** What it runs is setup in `setup.requires` order, then every Check in written order, once each, and nothing else the file declares — a Check's prerequisites run inside its own run, other Commands and the server not at all — and starting one is an act Fleet serves | That any of it runs, one step at a time, writing nothing: those are processes, and `fleet`'s `verify_runs` tests. That Verify is offered on the sheet that wrote the file, which is Write's, #823. That a failed setup skips the Checks after it, as a Job's does |
 //! | **Fix.** A failed Check's command corrected as a form sends it — that Check's `run`, by name — changes that one line: every comment and every other line stays, the result loads, and a correction that would not load is refused with its faults | That a person sees the failing row and corrects it there: the form is Bridge's, a later child of #721. That only that Check runs again: #719's scoped Verify. That Fleet writes it and refuses a file that moved: that touches a file, and is `fleet`'s own tests |
 //! | A request naming a milestone is offered `epic` with what it is for, in a requester's words, beside its steps — and a definition saying nothing is offered as before | That a model reading it proposes `epic`. Choosing is a model's, and this file calls none |
 
@@ -45,7 +45,6 @@
 //! | Locate | Pointing Armada at a repository it has not seen, by path or by clone. A Fleet reads the one repository it was started in | #821 |
 //! | Proposal | Every line cites the file it came from, or says `convention` | #823 |
 //! | Write | One `armada.yml` per workspace, whatever the proposal was iterated to | #823 |
-//! | Verify | Setup and every Check run once on approval, on the sheet that wrote the file, writing nothing | #719 |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the six.
@@ -63,7 +62,8 @@ use core_model::{JobStatus, StepState, WorkflowId};
 use fleet::scanning::scan;
 use fleet::{Brief, Proposal};
 use ipc::{
-    EvidenceStrength, MissingName, RepositoryScan, ScannedWorkspace, ToolFile, WorkspaceGlob,
+    EvidenceStrength, MissingName, RepositoryScan, ScannedWorkspace, ToolFile, VerifyGroup,
+    VerifyStep, VerifyStepState, WorkspaceGlob,
 };
 use testkit::{FakeJudge, FakeWorkProduct};
 
@@ -607,9 +607,9 @@ fn a_request_naming_a_milestone_is_offered_the_workflow_that_runs_one() {
 /// **Running one Manifest entry with no Job, and reading and saving the file,
 /// are operations Fleet serves.**
 ///
-/// Verify runs setup and every Check once, and Fix corrects one row and runs
-/// that Check again — neither is here. What is here is what #719 says the
-/// dry-run reuses whole, and the write a corrected line would go through.
+/// Fix corrects one row and runs that Check again, and is not here. What is
+/// here is what the dry-run below is made of, and the write a corrected line
+/// would go through.
 /// `api::SERVED` is the table `api`'s own tests walk against the router.
 #[test]
 fn running_one_entry_and_saving_the_file_are_operations_fleet_serves() {
@@ -686,5 +686,53 @@ fn a_failed_check_corrected_in_its_row_changes_that_line_and_still_loads() {
             .any(|refusal| refusal.key.starts_with("checks.e2e.requires")),
         "refused for the name nothing declares: {:?}",
         why.refusals()
+    );
+}
+
+// Verify
+// ---------------------------------------------------------------------------
+
+/// **Verify runs setup, then every Check, once each, and nothing else the file
+/// declares.** The Verify step, #719.
+///
+/// Read as the steps of a Verify that has not started, through the wire and
+/// back. `e2e`'s `migrate` and `seed` are not steps: they run inside `e2e`'s
+/// own run. `reset` is a Command and `dev` a server, and Verify runs neither.
+/// **That the steps run, one at a time, writing nothing, is not asserted** —
+/// they are processes, and `fleet`'s `verify_runs` tests run them.
+#[test]
+fn verify_runs_setup_then_every_check_and_nothing_else() {
+    let sent = ipc::encode(&fleet::verify_steps(&written())).expect("steps that serialise");
+    let steps: Vec<VerifyStep> =
+        ipc::decode("a Verify's steps", sent.as_bytes()).expect("read back");
+    let order: Vec<(VerifyGroup, &str, &str)> = steps
+        .iter()
+        .map(|step| (step.group, step.name.as_str(), step.run.as_str()))
+        .collect();
+    assert_eq!(
+        order,
+        [
+            (
+                VerifyGroup::Setup,
+                "install",
+                "pnpm install --frozen-lockfile"
+            ),
+            (VerifyGroup::Checks, "test", "pnpm vitest run"),
+            (VerifyGroup::Checks, "lint", "pnpm eslint ."),
+            (VerifyGroup::Checks, "e2e", "pnpm playwright test"),
+        ],
+        "setup, then the Checks in the order the file writes them"
+    );
+    assert!(
+        steps
+            .iter()
+            .all(|step| step.state == VerifyStepState::Waiting),
+        "and listing them ran nothing"
+    );
+    assert!(
+        api::SERVED
+            .iter()
+            .any(|route| route.operation == "start_checkout_verify"),
+        "and starting one is an act Fleet serves"
     );
 }

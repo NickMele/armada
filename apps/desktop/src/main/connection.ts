@@ -533,6 +533,7 @@ export class FleetConnection {
       // refusal standing, and a merge would keep the old fault on screen
       // beside the news that the file is now fine.
       this.publish({ connection, manifestReading: event });
+      this.rehearsal.onManifestReread(fleet.port);
       return;
     }
     if (event.kind === "run.finished") {

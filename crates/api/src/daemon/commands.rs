@@ -720,6 +720,19 @@ pub trait Commands: Send + Sync + 'static {
         run: NamedRun,
     ) -> impl Future<Output = Result<CheckoutRunRecord, Refusal>> + Send;
 
+    /// `start_checkout_verify` — run setup and every Check once in the main
+    /// checkout, one after another, each an ordinary checkout run: Journey 9,
+    /// *Verify*. Answers once the first step is out.
+    ///
+    /// **By `Arc`, for [`Commands::start_run`]'s reason**: the steps outlive
+    /// the call.
+    ///
+    /// [`Refusal::IllegalMove`] where a run or a Verify is already out in the
+    /// checkout; [`Refusal::Unacceptable`] where there is nothing to run.
+    fn start_checkout_verify(
+        self: std::sync::Arc<Self>,
+    ) -> impl Future<Output = Result<ipc::CheckoutVerify, Refusal>> + Send;
+
     /// `save_manifest_file` — write a corrected `armada.yml` to disk, and stop
     /// there.
     ///

@@ -136,3 +136,44 @@ fn a_checkout_runs_diff_names_its_base_and_a_gone_snapshot_is_a_state() {
     let back: CheckoutRunDiff = decode("a run's diff", json.as_bytes()).expect("it reads");
     assert_eq!(back, gone);
 }
+
+/// **A Verify step spells its state beside its name**, one level deep, and
+/// reads back whichever state it is in.
+#[test]
+fn a_verify_step_carries_its_state_flat_and_reads_back() {
+    use crate::{CheckoutVerify, VerifyGroup, VerifyStep, VerifyStepState};
+    let verify = CheckoutVerify {
+        id: "01VERIFY".to_string(),
+        started_at: at("2026-09-12T10:00:00.000Z"),
+        ended_at: None,
+        steps: vec![
+            VerifyStep {
+                group: VerifyGroup::Setup,
+                name: "bootstrap".to_string(),
+                run: "pnpm install".to_string(),
+                state: VerifyStepState::Running {
+                    run_id: "01RUN".to_string(),
+                },
+            },
+            VerifyStep {
+                group: VerifyGroup::Checks,
+                name: "test".to_string(),
+                run: "cargo test".to_string(),
+                state: VerifyStepState::Waiting,
+            },
+            VerifyStep {
+                group: VerifyGroup::Checks,
+                name: "lint".to_string(),
+                run: "cargo clippy".to_string(),
+                state: VerifyStepState::NotRun {
+                    why: "Verify was stopped during `test`".to_string(),
+                },
+            },
+        ],
+    };
+    let sent = encode(&verify).expect("encodes");
+    assert!(sent.contains(r#""group":"setup","name":"bootstrap","run":"pnpm install","state":"running","run_id":"01RUN""#), "{sent}");
+    assert!(sent.contains(r#""state":"waiting""#), "{sent}");
+    let back: CheckoutVerify = decode("a Verify", sent.as_bytes()).expect("reads back");
+    assert_eq!(back, verify);
+}

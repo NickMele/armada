@@ -260,6 +260,7 @@ pub use readopting::Recovered;
 pub use reconciled::Reconciled;
 pub use redaction::Redactor;
 pub use redispatch::Replacement;
+pub use rehearsing::verify_steps;
 pub use reporting::{Counted, Filed, NotFiled};
 pub use resume::Roused;
 pub use runtime::{

@@ -471,6 +471,17 @@ export type BridgeApi = {
    * A read: it writes, stages and commits nothing.
    */
   getCheckoutRunDiff: (runId: string) => Promise<CheckoutRunDiffRead>;
+  /**
+   * Whether the repository still has what `armada.yml` names, or `false` to
+   * stop. **A read, and free** — held open by the Manifest surface, and never
+   * a dry-run.
+   */
+  watchManifestDrift: (want: boolean) => Promise<void>;
+  /**
+   * Run setup and every Check once in the main checkout, one after another.
+   * **Only ever pressed.** Each step is followed as the checkout's own run.
+   */
+  startCheckoutVerify: () => Promise<Outcome>;
 
   /**
    * `armada.yml` as it is on disk, whole and unparsed — the Manifest surface's

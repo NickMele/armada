@@ -1,0 +1,126 @@
+/* Verify — Journey 9's live dry-run, behind its own button. A panel of its
+   own beside drift's, above the run page. Nothing in it is hued. */
+.armada-verify-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.armada-verify-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-3);
+}
+
+.armada-verify-panel__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-verify-panel__says {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-verify-panel__acts {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.armada-verify-panel__note,
+.armada-verify-panel__ended {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+/* Bounded for the same reason drift's rows are: a Manifest with a dozen
+   Checks must not push the run page and its live output below the window.
+   One line a step is what lets a Manifest's usual ten fit without scrolling. */
+.armada-verify-panel__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: calc(var(--space-12) * 6);
+  overflow-y: auto;
+}
+
+.armada-verify-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.armada-verify-panel__group-label {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+.armada-verify-panel__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One line: the name, its `run` line clipped between, and where it got to.
+   The whole line is in the title, so clipping hides nothing for good. */
+.armada-verify-panel__step {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-verify-panel__name {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+.armada-verify-panel__run {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.armada-verify-panel__state {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-verify-panel__scope {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

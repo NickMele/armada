@@ -213,6 +213,16 @@ impl Listed {
         )
     }
 
+    /// What Verify runs: setup, then every Check, each as it would run alone.
+    pub(crate) fn verified(self) -> Vec<(ipc::VerifyGroup, Entry)> {
+        let setup = self.setup.into_iter().map(|e| (ipc::VerifyGroup::Setup, e));
+        let checks = self
+            .checks
+            .into_iter()
+            .map(|e| (ipc::VerifyGroup::Checks, e));
+        setup.chain(checks).collect()
+    }
+
     fn every(&self) -> impl Iterator<Item = &Entry> {
         self.setup
             .iter()

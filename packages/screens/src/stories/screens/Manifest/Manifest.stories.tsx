@@ -2,12 +2,21 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import type {
   CheckoutRunDiff,
   CheckoutRunRecord,
-  CheckoutRunSheet,
-  RunEntry,
-  ServerEntry,
 } from "@armada/protocol";
 import { expect, userEvent, within } from "storybook/test";
-import { GH_ISSUE_VIEW, ManifestFrom, MANIFEST_TEXT, NOW, PULLED_TEXT } from "./Manifest";
+import {
+  BUILD_FOLLOWED,
+  BUILD_OUT,
+  DRIFT_GONE,
+  GH_ISSUE_VIEW,
+  ManifestFrom,
+  MANIFEST_TEXT,
+  NOW,
+  PULLED_TEXT,
+  sheet,
+  VERIFY_ENDED,
+  VERIFY_UNDERWAY,
+} from "./Manifest";
 
 /**
  * Bridge's Manifest surface, at `⌘4` — Journey 9's *Running one*, with no Job
@@ -32,62 +41,6 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-/** One row, in the shape `RunEntry` has with nothing narrowed against it. */
-function entry(
-  name: string,
-  run: string,
-  extra: Partial<RunEntry> = {},
-): RunEntry {
-  return {
-    name,
-    run,
-    narrows: false,
-    requires: [],
-    expect_exit_code: 0,
-    destructive: false,
-    // Nothing in the main checkout is frozen: this is the file Fleet holds.
-    frozen: false,
-    ...extra,
-  };
-}
-
-const STORYBOOK: ServerEntry = {
-  name: "storybook_dev",
-  serve: "pnpm -C packages/components exec storybook dev -p 41207 --no-open --ci",
-  ready: "curl -sf http://localhost:41207",
-  links: [{ url: "http://localhost:41207", name: "Storybook" }],
-  destructive: false,
-};
-
-/** This repository's Manifest, as `get_checkout_run_sheet` answers it. */
-function sheet(over: Partial<CheckoutRunSheet> = {}): CheckoutRunSheet {
-  return {
-    setup: [
-      entry("bootstrap", "pnpm install --frozen-lockfile"),
-      entry(
-        "browsers",
-        "pnpm -C packages/components exec playwright install chromium --only-shell",
-      ),
-    ],
-    checks: [
-      entry("build", "cargo build --workspace --locked", { narrows: true }),
-      entry("test", "cargo nextest run --workspace --exclude acceptance", { narrows: true }),
-      entry("typecheck", "pnpm typecheck"),
-      entry("bridge_build", "pnpm -C apps/desktop build"),
-      entry("storybook", "pnpm -C packages/components build-storybook"),
-      entry("bridge_test", "pnpm bridge-test"),
-      entry("format", "cargo fmt --all --check", { narrows: true }),
-    ],
-    commands: [
-      entry("fmt", "cargo fmt --all", { destructive: true }),
-      entry("gate", "cargo xtask verify-foundations", { expect_exit_code: 0 }),
-    ],
-    manifest_edited_at: "2026-09-10T09:14:00Z",
-    servers: [STORYBOOK],
-    ...over,
-  };
-}
 
 /** Nothing has run: three groups, and a control that reads as an instruction. */
 export const AtRest: Story = {
@@ -455,5 +408,49 @@ export const ASaveOverAFileThatMoved: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Save" }));
     await expect(await canvas.findByRole("textbox", { name: "On disk now" })).toHaveValue(PULLED_TEXT);
     await expect(canvas.getByRole("textbox", { name: "Your edit" })).toHaveValue(`${MANIFEST_TEXT}# a note\n`);
+  },
+};
+
+/**
+ * **A Check whose script the repository no longer has**, found on opening:
+ * `bridge_test` runs a script `package.json` lost. `gone`, in amber, naming
+ * what is missing, and nothing on the row to press.
+ */
+export const DriftWithAGoneLine: Story = {
+  name: "Drift with a gone line",
+  args: { sheet: { state: "read", sheet: sheet() }, drift: DRIFT_GONE },
+  play: async ({ canvasElement }) => {
+    const drift = within(within(canvasElement).getByRole("region", { name: "Drift" }));
+    await expect(drift.getByText("gone")).toBeVisible();
+    await expect(drift.getByText("package.json: scripts.bridge-test")).toBeVisible();
+    const pressable = drift.getAllByRole("button").map((button) => button.textContent);
+    await expect(pressable).toEqual(["Show the 2 lines still current"]);
+  },
+};
+
+/** **A Verify underway**: `build` streams below as any run does, and no second Verify can start. */
+export const AVerifyUnderway: Story = {
+  name: "A Verify underway",
+  args: {
+    sheet: { state: "read", sheet: sheet({ running: BUILD_OUT, verify: VERIFY_UNDERWAY }) },
+    followed: BUILD_FOLLOWED,
+  },
+  play: async ({ canvasElement }) => {
+    const verify = within(within(canvasElement).getByRole("region", { name: "Verify" }));
+    await expect(verify.getByRole("button", { name: "Verify" })).toBeDisabled();
+    await expect(verify.getByText(/running now/)).toBeVisible();
+    await expect(verify.getByRole("button", { name: "Stop" })).toBeVisible();
+  },
+};
+
+/** **A Verify with a failure**: exit 2 is a fact in a chip, the Check after it still ran, and nothing is hued. */
+export const AVerifyWithAFailure: Story = {
+  name: "A Verify with a failure",
+  args: { sheet: { state: "read", sheet: sheet({ verify: VERIFY_ENDED }) } },
+  play: async ({ canvasElement }) => {
+    const verify = within(within(canvasElement).getByRole("region", { name: "Verify" }));
+    await expect(verify.getByText("exit 2 (expects 0)")).toBeVisible();
+    await expect(verify.getByText(/Ran 4 of 4\. 1 ended with a code other than the one it expects\./)).toBeVisible();
+    await expect(verify.getByRole("button", { name: "Verify" })).toBeEnabled();
   },
 };

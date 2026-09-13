@@ -222,3 +222,7 @@
 
 /* One checkout run's patch, opened from the Manifest surface — Journey 9. */
 @import "./compositions/RunDiffSheet/RunDiffSheet.css";
+
+/* Drift and Verify on the Manifest surface — Journey 9's *Verify*. */
+@import "./compositions/DriftPanel/DriftPanel.css";
+@import "./compositions/VerifyPanel/VerifyPanel.css";
