@@ -146,7 +146,3 @@ corrects the data.
   schema, so either the catalogue is incomplete or the samples carry keys
   nothing reads. Only one can be true, and the answer decides what a parser
   accepts.
-- **[review-findings-evidence-type]** `review_findings`, used by the Code
-  Review workflow, is not among `evidence_type`'s legal values.
-  What decides it: the source flags this against itself. Either the value set
-  grows or Code Review submits evidence under an existing type.

@@ -659,6 +659,15 @@ pub trait Delivery {
     /// [`landed`](Delivery::landed)'s reason.
     fn inline_remarks(&self, in_repo: &str, pull_request: &str) -> Vec<Remark>;
 
+    /// The diff of a pull request somebody else opened, for a Code Review Job whose review is
+    /// checked against it. #903. **`None` is the forge's silence**, for
+    /// [`landed`](Delivery::landed)'s reason.
+    fn pull_request_diff(
+        &self,
+        in_repo: &str,
+        pull_request: &str,
+    ) -> Option<crate::PullRequestDiff>;
+
     /// Merge a pull request Armada opened.
     ///
     /// **The one method on this trait that writes into a repository nobody on

@@ -473,3 +473,13 @@ mod tests {
         assert_eq!(read.checks_said(), "1 of its 3 checks did not pass");
     }
 }
+
+/// The diff of a pull request somebody else opened: its paths, and the patch. #903.
+///
+/// **What a Code Review Job's review is checked against**, because on Code Review the change
+/// is the Drone's input rather than anything in its worktree.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PullRequestDiff {
+    pub files: Vec<String>,
+    pub patch: String,
+}

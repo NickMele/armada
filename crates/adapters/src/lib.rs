@@ -55,6 +55,7 @@ mod judge;
 mod keeping_current;
 mod landing;
 mod mcp;
+mod pull_request_diff;
 mod reclaim;
 /// A worktree before a person's run, and putting back what the run changed.
 pub mod snapshot;

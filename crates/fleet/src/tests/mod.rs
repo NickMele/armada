@@ -36,6 +36,7 @@ mod checkout_runs;
 mod checkouts_apart;
 mod checks;
 mod cloning;
+mod code_review;
 mod concurrency;
 mod confidence;
 mod conflict_resolution;

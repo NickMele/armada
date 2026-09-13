@@ -215,6 +215,14 @@ impl Delivery for GitVcs {
         crate::inline_comments::read(in_repo, pull_request)
     }
 
+    fn pull_request_diff(
+        &self,
+        in_repo: &str,
+        pull_request: &str,
+    ) -> Option<adapter_traits::PullRequestDiff> {
+        crate::pull_request_diff::read(in_repo, pull_request)
+    }
+
     fn kept_current(&self, in_repo: &str, handle: &str, base: &str) -> KeptCurrent {
         crate::keeping_current::kept_current(in_repo, handle, base)
     }

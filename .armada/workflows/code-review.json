@@ -7,10 +7,10 @@
 # while the parser deferred it; #264 carries it now, and `deliver` still says
 # `auto` -- Code Review lands no code, so the rule that stops every producing
 # workflow before it merges has nothing here to stop. Turning it back on is a
-# one-word edit and a decision, not a repair. `assess`'s
-# `evidence_type` is `facts_note` rather than the designed `review_findings`,
-# which is not a value the schema has -- `[review-findings-evidence-type]` in
-# `docs/OPEN.md`.
+# one-word edit and a decision, not a repair. `assess` hands in `review`,
+# which is what the designed `review_findings` became with #903: Fleet checks it
+# against the pull request the Job's `subject` names, and `assess` stops for a
+# person with the review open -- the owner's call, 13 Sep 2026.
 #
 # **`assess` carries no Judge, and what holds it is the diff.** On Code Review
 # the diff is the Drone's *input* rather than its output, so it is not in the
@@ -53,7 +53,7 @@
       "id": "assess",
       "label": "Assess",
       "evidence": {
-        "submitted": { "type": "facts_note" }
+        "submitted": { "type": "review" }
       },
       "mechanical_checks": [
         {
@@ -65,7 +65,7 @@
         "context_source": "hybrid"
       },
       "delivers": false,
-      "advance_gate": "auto"
+      "advance_gate": "human_always"
     },
     {
       "id": "deliver",
