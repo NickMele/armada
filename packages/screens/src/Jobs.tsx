@@ -75,15 +75,14 @@ import type { JobSummary, RepositorySummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { BoardEmpty } from "./BoardEmpty";
 import {
+  BOARD_COLUMNS,
   BOARD_SORTS,
   BOARD_TABS,
-  columnsFor,
   DEFAULT_SORT,
   emptiedBy,
   FIRST_TAB,
   inTab,
   matches,
-  repositoryOf,
   sectionsOf,
   sorted,
   tabOf,
@@ -361,7 +360,6 @@ export function Jobs({
       stale={stale}
       now={now}
       workflows={workflows}
-      repository={repositoryOf(job, served)}
       selected={job.id === selected}
       focused={job.id === cursor}
       onOpen={onOpen}
@@ -407,7 +405,7 @@ export function Jobs({
         selectable
         label="Job Board"
         view={view}
-        columns={columnsFor(served)}
+        columns={BOARD_COLUMNS}
         controls={
           <BoardControls
             query={query}

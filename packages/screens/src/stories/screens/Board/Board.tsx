@@ -71,6 +71,7 @@ export function BoardFrom({
         scope={repositories[0]?.root ?? ""}
         onScope={noop}
         jobs={jobs}
+        boardJobs={jobs}
         capacity={{ bound: 4, occupied: 2 }}
         title={head?.title}
         summary={head?.summary}

@@ -1161,6 +1161,9 @@ escalation count  --status-escalated, shown only when non-zero
 approval count    --status-awaiting-review, shown only when non-zero
 ```
 
+Both counts span every repository Fleet serves, whichever one the rail has
+picked.
+
 The two counts are the only status color in the bar. Everything else
 stays `--fg-muted`, or the bar becomes a second alert surface and the
 escalations-interrupt / approvals-queue distinction collapses.
@@ -1704,12 +1707,6 @@ opened this board, and every Job on it is theirs. Spending a track on it
 costs the one that answers "is this stuck", which is elapsed. It stays on
 the detail view, where a reader is asking about one Job rather than
 comparing several.
-
-The cost is real and is worth writing down rather than discovering: the
-Job list is not scoped by the rail's Manifest picker — that picker sets
-what a new Job starts pointed at — so a board holding Jobs from more than
-one project cannot say which project a row belongs to. Revisit when a
-second project is dispatched against, not before.
 
 **Spend follows the active billing mode.** Personal-machine mode gates
 on the quota % floor, so the row shows quota % remaining, which is

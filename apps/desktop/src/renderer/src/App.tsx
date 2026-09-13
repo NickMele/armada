@@ -16,7 +16,8 @@
 // `commands.ts` for what the host is asked to do, `failing.ts` for which
 // failure is on screen, and `palette.ts` for what the palette can reach.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ofPicked } from "@armada/screens";
 import { Dialog, Textarea } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
@@ -407,7 +408,10 @@ export function App() {
   }
 
   // What a new Job is proposed against: the picked repository's Manifest, absent until it has one.
-  const scoped = repositories.find((one) => one.root === state.repository)?.manifest;
+  const pickedRepository = repositories.find((one) => one.root === state.repository) ?? null;
+  const scoped = pickedRepository?.manifest;
+  // The Board's Jobs follow the pick. The status bar, the palette and held worktrees read every Job.
+  const boardJobs = useMemo(() => ofPicked(state.jobs, pickedRepository), [state.jobs, pickedRepository]);
   const head = headOf({
     reading: reading !== null,
     composing,
@@ -425,7 +429,7 @@ export function App() {
     // Which Manifest view is up, so the head describes the one on screen.
     manifest: manifesting ? editing.view : false,
     onRefresh: () => void commands.refresh(),
-    jobs: state.jobs,
+    jobs: boardJobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
     onForgetTerminal: (jobIds) => void commands.forgetTerminal(jobIds),
   });
@@ -441,6 +445,7 @@ export function App() {
         onScope={pick}
         onAddRepository={locate.onOpen}
         jobs={state.jobs}
+        boardJobs={boardJobs}
         capacity={state.capacity}
         title={head?.title}
         summary={
@@ -743,7 +748,7 @@ export function App() {
                 <Jobs
                   onCursor={setCursor}
                   reach={reach}
-                  jobs={state.jobs}
+                  jobs={boardJobs}
                   stale={!live}
                   now={now}
                   workflows={state.holds.workflows}

@@ -37,7 +37,7 @@ Fix exists only when a Check fails. Once every Manifest is written, each workspa
 
 **A Fleet can start with nothing, and a fresh install does.** No repository is served until a person adds the first one, so Bridge opens on *Add a repository* over a rail that says nothing is set up yet. Nothing on screen reads as a fault meanwhile, and the first repository added lands on Setup. Locate is that dialog, and the rail's *Add a repository* opens it for every repository after. It exists because the flow otherwise assumed Armada already knew which repo it was looking at.
 
-**The rail's picker names a set-up repository by its Manifest id alone.** Fleet refuses to serve one id twice, so nothing else is needed to tell two apart. A repository not yet set up has no id and reads as its folder, with its parent only where two such folders share a name. Every Bridge follows an add made anywhere, and a Board with more than one repository names each Job's.
+**The rail's picker names a set-up repository by its Manifest id alone.** Fleet refuses to serve one id twice, so nothing else is needed to tell two apart. A repository not yet set up has no id and reads as its folder, with its parent only where two such folders share a name. Every Bridge follows an add made anywhere, and the Board lists the picked repository's Jobs, per [Job Board](../concepts/job-board.md).
 
 **A clone can outlast its dialog.** Closing the dialog leaves git running. When the clone finishes, Bridge says so wherever the person is, with a way to its Setup, and never moves the window there on its own. The preview names the folder Fleet will use, a parent under a symlink included.
 

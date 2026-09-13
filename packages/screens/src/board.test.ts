@@ -19,6 +19,7 @@ import {
   FIRST_TAB,
   inTab,
   matches,
+  ofPicked,
   sectionOf,
   sectionsOf,
   needsYou,
@@ -48,6 +49,23 @@ function job(over: Partial<JobSummary> = {}): JobSummary {
     ...over,
   };
 }
+
+describe("which Jobs the Board lists", () => {
+  const ours = job({ id: "ours", owner_manifest_id: "armada" });
+  const theirs = job({ id: "theirs", owner_manifest_id: "ynap" });
+
+  it("lists only the picked repository's Jobs", () => {
+    expect(ofPicked([ours, theirs], { manifest: { id: "armada" } })).toEqual([ours]);
+  });
+
+  it("lists no Job for a picked repository that has no Manifest yet", () => {
+    expect(ofPicked([ours, theirs], {})).toEqual([]);
+  });
+
+  it("lists every Job when Fleet has listed no repository to pick", () => {
+    expect(ofPicked([ours, theirs], null)).toEqual([ours, theirs]);
+  });
+});
 
 describe("which tab a job is in", () => {
   it("puts every terminal status under Finished", () => {
