@@ -39,8 +39,9 @@ use crate::waiting::{QuestionInFlight, RedirectInFlight, RedirectWaiting};
 use crate::work::JobFootprint;
 
 pub use confidence::{
-    AreaRow, ChangedTestRow, DismissedRow, FindingDismissed, FindingRow, JobConfidence,
-    OpenedBecause, ProvesRow, Says, TestsSection, UntestedRow,
+    AreaRow, ChangedTestRow, DismissedRow, FindingDismissed, FindingQueued, FindingRow,
+    FollowedRow, IssueFiled, JobConfidence, OpenedBecause, ProvesRow, Says, TestsSection,
+    UntestedRow,
 };
 pub use step::{JudgeInFlight, StepDetail, StepFacts, StepPass, Verdict};
 

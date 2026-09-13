@@ -224,3 +224,14 @@
   padding: 0;
   list-style: none;
 }
+
+/* What a For context finding became. #906. */
+.armada-confidence__became {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}

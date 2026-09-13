@@ -36,6 +36,9 @@ pub struct JobConfidence {
     /// Findings a person dismissed, taken out of the three lists above. Since 13.29, #907.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dismissed: Vec<DismissedRow>,
+    /// What a person made of a finding: a Job queued behind this one, or an issue. Since 13.35, #906.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub followed: Vec<FollowedRow>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,6 +129,32 @@ pub struct FindingDismissed {
     pub reason: String,
 }
 
+/// What a finding became. Since 13.35, #906. **One of `job` or `issue`**, whichever was made.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FollowedRow {
+    pub finding: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job: Option<crate::JobId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue: Option<String>,
+}
+
+/// `queue_after_finding`'s body: a For context finding, in the words the review served it
+/// in. Since 13.35, #906.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FindingQueued {
+    pub finding: String,
+}
+
+/// `file_finding_issue`'s body: the finding, and the issue as the person left the draft.
+/// Since 13.35, #906. **A blank title is refused by Fleet**, a 422.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IssueFiled {
+    pub finding: String,
+    pub title: String,
+    pub body: String,
+}
+
 impl JobConfidence {
     pub fn of(record: &core_model::ReviewRecord) -> JobConfidence {
         JobConfidence {
@@ -149,6 +178,7 @@ impl JobConfidence {
             small_fixes: in_bucket(record, core_model::Bucket::SmallFix),
             for_context: in_bucket(record, core_model::Bucket::ForContext),
             dismissed: Vec::new(),
+            followed: Vec::new(),
         }
     }
 
@@ -163,6 +193,25 @@ impl JobConfidence {
             .map(|gone| DismissedRow {
                 finding: gone.finding.clone(),
                 reason: gone.reason.clone(),
+            })
+            .collect();
+        self
+    }
+
+    /// The same review, with what each finding became named beside it.
+    pub fn following(mut self, followed: &[core_model::FollowUp]) -> JobConfidence {
+        self.followed = followed
+            .iter()
+            .map(|up| FollowedRow {
+                finding: up.finding.clone(),
+                job: match &up.became {
+                    core_model::Became::Queued { job } => Some(crate::JobId::from(job)),
+                    core_model::Became::Issue { .. } => None,
+                },
+                issue: match &up.became {
+                    core_model::Became::Issue { url } => Some(url.clone()),
+                    core_model::Became::Queued { .. } => None,
+                },
             })
             .collect();
         self

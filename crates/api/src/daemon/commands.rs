@@ -20,10 +20,11 @@ use std::future::Future;
 use crate::daemon::{Redirector, Refusal};
 use ipc::{
     AddTask, AnswerCommand, CapRaise, ChangesRequested, CheckoutRunRecord, CheckoutRunUnderway,
-    ChosenAnswer, DropTask, FileReport, FindingDismissed, JobExamined, JobForgotten, JobId,
-    JobSummary, JudgeAnswered, ManifestSaved, NamedRun, ProposeJob, Redirection, Redispatched,
-    RemarksTakenUp, Report, RestartRequested, RunRecord, RunUnderway, SaveManifestFile,
-    SetWhenBlocked, SetWhenRefused, StartCheckoutRun, StartRun, TurnRaise, WorktreeReclaimed,
+    ChosenAnswer, DropTask, FileReport, FindingDismissed, FindingQueued, IssueFiled, JobExamined,
+    JobForgotten, JobId, JobSummary, JudgeAnswered, ManifestSaved, NamedRun, ProposeJob,
+    Redirection, Redispatched, RemarksTakenUp, Report, RestartRequested, RunRecord, RunUnderway,
+    SaveManifestFile, SetWhenBlocked, SetWhenRefused, StartCheckoutRun, StartRun, TurnRaise,
+    WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -427,6 +428,22 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         job_id: JobId,
         dismissed: FindingDismissed,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `queue_after_finding` — a person turns a For context finding into a Job that waits on
+    /// this one, so it starts when this one lands. #906. The Job itself moves nothing.
+    fn queue_after_finding(
+        &self,
+        job_id: JobId,
+        queued: FindingQueued,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `file_finding_issue` — a person confirms an issue drafted from a For context finding,
+    /// and the forge files it as them. #906. Refused on a blank title.
+    fn file_finding_issue(
+        &self,
+        job_id: JobId,
+        filed: IssueFiled,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `override_verdict` — the Judge refused, a person disagrees, and the step

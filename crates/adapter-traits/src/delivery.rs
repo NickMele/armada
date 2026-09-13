@@ -674,6 +674,12 @@ pub trait Delivery {
     /// Nothing is posted on the pull request.
     fn rerun_failed(&self, in_repo: &str, pull_request: &str) -> Result<Rerun, NotRerun>;
 
+    /// File an issue on the forge from a review finding. #906.
+    ///
+    /// **A write to the forge, taken only from a person's confirm** of a draft they could edit,
+    /// because the issue is written as them.
+    fn file_issue(&self, in_repo: &str, title: &str, body: &str) -> Result<FiledIssue, NotFiled>;
+
     /// Merge a pull request Armada opened.
     ///
     /// **The one method on this trait that writes into a repository nobody on
@@ -791,5 +797,18 @@ pub struct Rerun {
 /// Why failed CI runs were not started again, in the words the forge or the tool used.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NotRerun {
+    pub said: String,
+}
+
+/// An issue the forge filed. #906.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FiledIssue {
+    /// Where the issue is, as the forge printed it.
+    pub url: String,
+}
+
+/// Why no issue was filed, in the words the forge or the tool used.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NotFiled {
     pub said: String,
 }

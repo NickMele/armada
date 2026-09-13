@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const openExternal = vi.fn(async (_url: string) => undefined);
 vi.mock("electron", () => ({ shell: { openExternal: (url: string) => openExternal(url) } }));
 
-const { openPullRequest, openRemarkLink } = await import("./forge");
+const { openFindingIssue, openPullRequest, openRemarkLink } = await import("./forge");
 
 import { NOTHING_YET } from "../shared/bridge";
 import type { BridgeState } from "../shared/bridge";
@@ -189,5 +189,46 @@ describe("opening one comment's link", () => {
       ok: false,
       why: "unknown_job",
     });
+  });
+});
+
+describe("openFindingIssue", () => {
+  const FINDING = "`headroom.rs` has grown";
+  const ISSUE = "https://forge.invalid/NickMele/armada/issues/990";
+
+  /** Main holding the Job open, with what its review's findings became. */
+  function holdingFollowed(
+    followed: NonNullable<JobDetail["confidence"]>["followed"],
+  ): BridgeState {
+    const state = holding(undefined);
+    if (state.watched.state !== "read") throw new Error("holding reads a Job");
+    const confidence: NonNullable<JobDetail["confidence"]> = {
+      says: "confident",
+      reasons: [],
+      areas: [],
+      needs_you: [],
+      small_fixes: [],
+      for_context: [],
+      ...(followed === undefined ? {} : { followed }),
+    };
+    return {
+      ...state,
+      watched: { ...state.watched, detail: { ...state.watched.detail, confidence } },
+    };
+  }
+
+  it("hands over the issue the finding became, read off the Job main holds", async () => {
+    const state = holdingFollowed([{ finding: FINDING, issue: ISSUE }]);
+    await expect(openFindingIssue(state, JOB_ID, FINDING)).resolves.toEqual({ ok: true });
+    expect(openExternal).toHaveBeenCalledWith(ISSUE);
+  });
+
+  it("says so where the finding became a Job and not an issue", async () => {
+    const state = holdingFollowed([{ finding: FINDING, job: JOB_ID }]);
+    await expect(openFindingIssue(state, JOB_ID, FINDING)).resolves.toEqual({
+      ok: false,
+      why: "no_address",
+    });
+    expect(openExternal).not.toHaveBeenCalled();
   });
 });

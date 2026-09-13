@@ -379,6 +379,17 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/dismiss_finding",
     },
+    // What a For context finding becomes: a Job queued behind this one, or an issue. #906.
+    Route {
+        operation: "queue_after_finding",
+        method: "POST",
+        path: "/jobs/:job_id/queue_after_finding",
+    },
+    Route {
+        operation: "file_finding_issue",
+        method: "POST",
+        path: "/jobs/:job_id/file_finding_issue",
+    },
     // The fourth answer, and the only route on this table that writes into a
     // repository Fleet did not make. Its own route for the reason the three
     // above have three: it does something different to the world, and one route

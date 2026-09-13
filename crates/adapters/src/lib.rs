@@ -47,6 +47,7 @@ mod commit;
 mod conversing;
 mod delivery;
 mod error;
+mod filing;
 mod git_guard;
 mod harness;
 mod inline_comments;

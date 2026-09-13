@@ -16,9 +16,9 @@ use std::time::Duration;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
 use ipc::{
-    AddTask, CapRaise, ChangesRequested, DropTask, FindingDismissed, JobExamined, JobForgotten,
-    JobId, JobSummary, Overruled, Preferences, ProposeJob, Redirection, Redispatched,
-    RemarksTakenUp, SavePreference, TurnRaise, WorkPlan, WorktreeReclaimed,
+    AddTask, CapRaise, ChangesRequested, DropTask, FindingDismissed, FindingQueued, IssueFiled,
+    JobExamined, JobForgotten, JobId, JobSummary, Overruled, Preferences, ProposeJob, Redirection,
+    Redispatched, RemarksTakenUp, SavePreference, TurnRaise, WorkPlan, WorktreeReclaimed,
 };
 
 use crate::adrift::Adrift;
@@ -228,6 +228,18 @@ where
 
     async fn dismiss_finding(&self, id: JobId, d: FindingDismissed) -> Result<JobSummary, Refusal> {
         self.dismissing(id, d).await
+    }
+
+    async fn queue_after_finding(
+        &self,
+        id: JobId,
+        q: FindingQueued,
+    ) -> Result<JobSummary, Refusal> {
+        self.queueing_after(id, q).await
+    }
+
+    async fn file_finding_issue(&self, id: JobId, f: IssueFiled) -> Result<JobSummary, Refusal> {
+        self.filing_issue(id, f).await
     }
 
     /// The Judge refused, a person disagrees, and the step advances anyway.

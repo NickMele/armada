@@ -154,6 +154,21 @@ impl fmt::Display for Adrift {
                 "no check failed on {}'s pull request when Fleet last read it, so there is nothing to investigate",
                 job.as_str()
             ),
+            Adrift::FindingNotForContext { job, finding } => write!(
+                out,
+                "{}'s latest review did not raise \"{finding}\" for context, so there is nothing to follow up",
+                job.as_str()
+            ),
+            Adrift::NoIssueTitle { job } => write!(
+                out,
+                "the issue drafted from {}'s review has no title, so it was not filed",
+                job.as_str()
+            ),
+            Adrift::IssueNotFiled { job, said } => write!(
+                out,
+                "the forge did not file the issue drafted from {}'s review: {said}",
+                job.as_str()
+            ),
             Adrift::NothingToResolve { job } => write!(
                 out,
                 "{} has no open pull request to resolve a conflict against",
@@ -638,6 +653,9 @@ impl Adrift {
             | Adrift::NothingToRerun { job }
             | Adrift::RerunRefused { job, .. }
             | Adrift::NothingToInvestigate { job }
+            | Adrift::FindingNotForContext { job, .. }
+            | Adrift::NoIssueTitle { job }
+            | Adrift::IssueNotFiled { job, .. }
             | Adrift::NoStepToRedo { job }
             | Adrift::UnpushedDelivery { job, .. }
             | Adrift::NotMerged { job, .. }
@@ -824,6 +842,9 @@ impl Error for Adrift {
             | Adrift::NothingToRerun { .. }
             | Adrift::RerunRefused { .. }
             | Adrift::NothingToInvestigate { .. }
+            | Adrift::FindingNotForContext { .. }
+            | Adrift::NoIssueTitle { .. }
+            | Adrift::IssueNotFiled { .. }
             // The two a conflict resolution makes, on the same ground.
             | Adrift::NothingToResolve { .. }
             | Adrift::NoStepToRedo { .. }

@@ -47,6 +47,7 @@ import {
   examine,
   openArtifact,
   openPullRequest,
+  openFindingIssue,
   openRemarkLink,
   openServerLink,
   observeRun,
@@ -594,12 +595,15 @@ export function App() {
                 }
                 onRerunFailedChecks={(jobId) => void commands.rerunFailedChecks(jobId)}
                 onInvestigateFailedChecks={(jobId) => void commands.investigateFailedChecks(jobId)}
+                onQueueAfterFinding={(jobId, finding) => void commands.queueAfterFinding(jobId, finding)}
+                onFileFindingIssue={(jobId, finding, title, body) => void commands.fileFindingIssue(jobId, finding, title, body)}
                 onApproveReview={(jobId) => void commands.decide(jobId, "approve")}
                 onRequestChanges={(jobId, note) => void commands.decide(jobId, "changes", note)}
                 onReject={(jobId) => void commands.decide(jobId, "reject")}
                 onTakeUpRemarks={(jobId, remarks) => void commands.takeUpRemarks(jobId, remarks)}
                 onDismissFinding={(jobId, finding, reason) => void commands.dismissFinding(jobId, finding, reason)}
                 onOpenRemarkLink={(jobId, remarkId) => void openRemarkLink(jobId, remarkId)}
+                onOpenFindingIssue={(jobId, finding) => void openFindingIssue(jobId, finding)}
                 onCopied={setCopied}
                 onSaid={setTelling}
                 whereOpen={whereOpen}

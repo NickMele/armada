@@ -155,6 +155,12 @@ const NOTHING_TO_RERUN: &str = "fleet.nothing_to_rerun";
 const RERUN_REFUSED: &str = "fleet.rerun_refused";
 /// Investigate pressed where no check failed. A 409. #905.
 const NOTHING_TO_INVESTIGATE: &str = "fleet.nothing_to_investigate";
+/// A follow-up pressed on a finding the review did not raise for context. A 409. #906.
+const FINDING_NOT_FOR_CONTEXT: &str = "fleet.finding_not_for_context";
+/// An issue confirmed with a blank title. A 422. #906.
+const NO_ISSUE_TITLE: &str = "fleet.no_issue_title";
+/// The forge would not file the issue. A 409, carrying what it said. #906.
+const ISSUE_NOT_FILED: &str = "fleet.issue_not_filed";
 /// A conflict resolution asked for on a workflow with no step before the one
 /// that delivers. `#663`.
 const NO_STEP_TO_REDO: &str = "fleet.no_step_to_redo";
@@ -536,6 +542,20 @@ where
             Adrift::NothingToInvestigate { job } => Refusal::IllegalMove(
                 WireError::raised(NOTHING_TO_INVESTIGATE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::FindingNotForContext { job, finding } => Refusal::IllegalMove(
+                WireError::raised(FINDING_NOT_FOR_CONTEXT, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("finding", WireValue::Str(finding.clone())),
+            ),
+            Adrift::NoIssueTitle { job } => Refusal::Unacceptable(
+                WireError::raised(NO_ISSUE_TITLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::IssueNotFiled { job, said: forge } => Refusal::IllegalMove(
+                WireError::raised(ISSUE_NOT_FILED, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("forge", WireValue::Str(forge.clone())),
             ),
             Adrift::NothingToResolve { job } => Refusal::IllegalMove(
                 WireError::raised(NOTHING_TO_RESOLVE, said, self.run_id())

@@ -272,3 +272,20 @@ export function dismiss(
 ): Promise<Answer> {
   return ask(port, "POST", `/jobs/${encodeURIComponent(jobId)}/dismiss_finding`, { finding, reason });
 }
+
+/** Queue a Job after this one lands, from a For context finding. It moves nothing. #906. */
+export function queueAfter(port: number, jobId: string, finding: string): Promise<Answer> {
+  return ask(port, "POST", `/jobs/${encodeURIComponent(jobId)}/queue_after_finding`, { finding });
+}
+
+/** File the issue a person confirmed, drafted from a For context finding. #906. */
+export function fileIssue(
+  port: number,
+  jobId: string,
+  finding: string,
+  title: string,
+  body: string,
+): Promise<Answer> {
+  const path = `/jobs/${encodeURIComponent(jobId)}/file_finding_issue`;
+  return ask(port, "POST", path, { finding, title, body });
+}

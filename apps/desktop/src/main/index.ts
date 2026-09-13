@@ -23,7 +23,7 @@ import type { EditManifestProposal, WriteManifestProposal } from "@armada/protoc
 import { FleetConnection } from "./connection";
 import { resolvedFolder } from "./locating";
 import { openArtifact } from "./open";
-import { openPullRequest, openRemarkLink } from "./forge";
+import { openFindingIssue, openPullRequest, openRemarkLink } from "./forge";
 import { RemarksPoll } from "./remarks-poll";
 import { openServerLink } from "./servers";
 import { frameStream, FRAME_SCHEME } from "./streaming";
@@ -742,6 +742,14 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.investigateFailedChecks, (_event, jobId: string) =>
     connection?.commands.investigateFailedChecks(jobId),
   );
+  ipcMain.handle(CHANNELS.queueAfterFinding, (_event, jobId: string, finding: string) =>
+    connection?.commands.queueAfterFinding(jobId, finding),
+  );
+  ipcMain.handle(
+    CHANNELS.fileFindingIssue,
+    (_event, jobId: string, finding: string, title: string, body: string) =>
+      connection?.commands.fileFindingIssue(jobId, finding, title, body),
+  );
   ipcMain.handle(CHANNELS.requestChanges, (_event, jobId: string, note: string) =>
     connection?.commands.requestChanges(jobId, note),
   );
@@ -779,6 +787,9 @@ void app.whenReady().then(() => {
   // published, never off a string the renderer sent.
   ipcMain.handle(CHANNELS.openRemarkLink, (_event, jobId: string, remarkId: string) =>
     openRemarkLink(published, jobId, remarkId),
+  );
+  ipcMain.handle(CHANNELS.openFindingIssue, (_event, jobId: string, finding: string) =>
+    openFindingIssue(published, jobId, finding),
   );
 
   createWindow();

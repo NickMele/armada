@@ -99,6 +99,20 @@ impl Commands for FakeDaemon {
     async fn investigate_failed_checks(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.unmoved(&job_id)
     }
+    async fn queue_after_finding(
+        &self,
+        job_id: JobId,
+        _queued: ipc::FindingQueued,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
+    async fn file_finding_issue(
+        &self,
+        job_id: JobId,
+        _filed: ipc::IssueFiled,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
     async fn request_changes(
         self: std::sync::Arc<Self>,
         job_id: JobId,

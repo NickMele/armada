@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Eye } from "lucide-react";
 import type {
   AreaRow,
   FindingRow,
+  FollowedRow,
   JobConfidence,
   OpenedBecause,
   TestsSection,
@@ -25,6 +26,8 @@ export type ConfidenceSheetProps = {
   onView?: (view: ConfidenceView) => void;
   /** The pull request's CI, and what a person can do about it. #905. Absent draws no row. */
   ci?: ConfidenceCi;
+  /** What a For context finding can become. #906. Absent leaves its buttons out. */
+  followUp?: ConfidenceFollowUp;
 };
 
 /** The Pull request CI row: the forge's own CI, never totalled with Armada's Checks. #905. */
@@ -42,6 +45,15 @@ export type ConfidenceCi = {
   disabled?: boolean;
 };
 
+/** Queue after this lands and File an issue, on a For context finding. #906. */
+export type ConfidenceFollowUp = {
+  onQueueAfter: (finding: string) => void;
+  onFileIssue: (finding: string) => void;
+  /** Opens the issue a finding became. Absent says it was filed, with nothing to press. */
+  onOpenIssue?: (finding: string) => void;
+  disabled?: boolean;
+};
+
 /** What a View button hands over: what the View is of, and its steps. */
 export type ConfidenceView = {
   title: string;
@@ -52,7 +64,7 @@ export type ConfidenceView = {
 
 type OnView = ConfidenceSheetProps["onView"];
 
-export function ConfidenceSheet({ confidence, onView, ci }: ConfidenceSheetProps) {
+export function ConfidenceSheet({ confidence, onView, ci, followUp }: ConfidenceSheetProps) {
   const { says, reasons, areas, tests, needs_you, small_fixes, for_context } = confidence;
   const dismissed = confidence.dismissed ?? [];
   return (
@@ -140,7 +152,12 @@ export function ConfidenceSheet({ confidence, onView, ci }: ConfidenceSheetProps
       )}
       {for_context.length > 0 && (
         <Fold title="For context" summary={findingCount(for_context)}>
-          <Findings findings={for_context} onView={onView} />
+          <Findings
+            findings={for_context}
+            onView={onView}
+            followed={confidence.followed ?? []}
+            {...(followUp === undefined ? {} : { followUp })}
+          />
         </Fold>
       )}
       {dismissed.length > 0 && (
@@ -351,10 +368,14 @@ function Findings({
   findings,
   marked,
   onView,
+  followed = [],
+  followUp,
 }: {
   findings: readonly FindingRow[];
   marked?: boolean;
   onView: OnView;
+  followed?: readonly FollowedRow[];
+  followUp?: ConfidenceFollowUp;
 }) {
   const viewable = viewColumn(findings, onView);
   return (
@@ -364,6 +385,7 @@ function Findings({
           <th scope="col">Finding</th>
           <th scope="col">Why it is here</th>
           {viewable && <th scope="col" className="armada-confidence__act" aria-label="View" />}
+          {followUp && <th scope="col" className="armada-confidence__act" aria-label="Follow up" />}
         </tr>
       </thead>
       <tbody>
@@ -379,10 +401,53 @@ function Findings({
                 onView={onView}
               />
             )}
+            {followUp && <FollowUpCell finding={row.finding} followed={followed} followUp={followUp} />}
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** What a For context finding can become, or what it became. #906. */
+function FollowUpCell({
+  finding,
+  followed,
+  followUp,
+}: {
+  finding: string;
+  followed: readonly FollowedRow[];
+  followUp: ConfidenceFollowUp;
+}) {
+  const queued = followed.some((row) => row.finding === finding && row.job !== undefined);
+  const filed = followed.some((row) => row.finding === finding && row.issue !== undefined);
+  if (!queued && !filed) {
+    return (
+      <td className="armada-confidence__act">
+        <SplitButton
+          items={[{ label: "File an issue", onSelect: () => followUp.onFileIssue(finding) }]}
+          disabled={followUp.disabled}
+          onAction={() => followUp.onQueueAfter(finding)}
+          menuLabel="More ways to follow up"
+        >
+          Queue after this lands
+        </SplitButton>
+      </td>
+    );
+  }
+  return (
+    <td className="armada-confidence__act">
+      <span className="armada-confidence__became">
+        {queued ? "Job queued. It starts when this one lands." : null}
+        {!filed ? null : followUp.onOpenIssue === undefined ? (
+          "Issue filed."
+        ) : (
+          <Button size="sm" onClick={() => followUp.onOpenIssue?.(finding)}>
+            Open the issue
+          </Button>
+        )}
+      </span>
+    </td>
   );
 }
 

@@ -191,6 +191,8 @@ pub enum Delivered {
     AskedForTheDiff { pull_request: String },
     /// The forge was asked to start a pull request's failed CI runs again. A write, like a merge.
     RerunFailed { pull_request: String },
+    /// An issue was filed on the forge. A write, on a person's confirm. #906.
+    FiledIssue { title: String },
     /// The branch was asked to be kept current against a base that moved —
     /// `Delivery::kept_current`, in place of the close-and-reopen this
     /// replaced. **Counted for
@@ -248,6 +250,8 @@ pub struct Delivering {
     pub pull_request_diff: Option<adapter_traits::PullRequestDiff>,
     /// What re-running failed CI runs comes to. One run started again by default.
     pub rerun: Result<adapter_traits::Rerun, adapter_traits::NotRerun>,
+    /// What filing an issue comes to. Filed by default.
+    pub filed: Result<adapter_traits::FiledIssue, adapter_traits::NotFiled>,
     /// What keeping the branch current comes to. A clean rebase by default,
     /// because the case a test has to write out is the one where it conflicted
     /// or found no branch.
@@ -282,6 +286,9 @@ impl Default for Delivering {
             inline_remarks: Vec::new(),
             pull_request_diff: None,
             rerun: Ok(adapter_traits::Rerun { runs: 1 }),
+            filed: Ok(adapter_traits::FiledIssue {
+                url: String::from("https://forge.invalid/armada/issues/1"),
+            }),
             kept_current: KeptCurrent::Rebased {
                 onto: String::from("5b4ec82700000000000000000000000000000000"),
                 commits: 1,
@@ -731,6 +738,21 @@ impl Delivery for FakeVcs {
                 pull_request: pull_request.to_string(),
             });
         self.delivery.lock().expect("not poisoned").rerun.clone()
+    }
+
+    fn file_issue(
+        &self,
+        _in_repo: &str,
+        title: &str,
+        _body: &str,
+    ) -> Result<adapter_traits::FiledIssue, adapter_traits::NotFiled> {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::FiledIssue {
+                title: title.to_string(),
+            });
+        self.delivery.lock().expect("not poisoned").filed.clone()
     }
 
     fn merge(&self, _in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged> {

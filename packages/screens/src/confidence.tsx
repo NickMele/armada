@@ -8,6 +8,8 @@ import {
 } from "@armada/components";
 import type { Diff, JobConfidence } from "@armada/protocol";
 import { smallFixesOf } from "./changes";
+import { issueDraftOf, type IssueDraft } from "./followup";
+import { IssueDraftDialog } from "./issue-draft";
 import { viewStepsOf } from "./view";
 
 export type ReviewAtGateProps = {
@@ -22,6 +24,16 @@ export type ReviewAtGateProps = {
   onDismissFinding?: (finding: string, reason: string) => void;
   /** The pull request's CI, and what a person can do about it. #905. */
   ci?: ConfidenceCi;
+  /** What a For context finding can become. #906. */
+  acts?: FindingActs;
+};
+
+/** Queue after this lands and File an issue, bound to the Job by the caller. #906. */
+export type FindingActs = {
+  onQueueAfter: (finding: string) => void;
+  onFileIssue: (finding: string, title: string, body: string) => void;
+  onOpenIssue?: (finding: string) => void;
+  disabled: boolean;
 };
 
 /** Armada's review at the gate, and the View a row of it opens. #903, #904. */
@@ -33,14 +45,26 @@ export function ReviewAtGate({
   onAddNote,
   onDismissFinding,
   ci,
+  acts,
 }: ReviewAtGateProps) {
   const [viewing, setViewing] = useState<ConfidenceView | null>(null);
+  const [drafting, setDrafting] = useState<IssueDraft | null>(null);
   return (
     <>
       <ConfidenceSheet
         confidence={confidence}
         onView={setViewing}
         {...(ci === undefined ? {} : { ci })}
+        {...(acts === undefined
+          ? {}
+          : {
+              followUp: {
+                onQueueAfter: acts.onQueueAfter,
+                onFileIssue: (finding: string) => setDrafting(issueDraftOf(confidence, finding)),
+                ...(acts.onOpenIssue === undefined ? {} : { onOpenIssue: acts.onOpenIssue }),
+                disabled: acts.disabled,
+              },
+            })}
       />
       {viewing === null ? null : (
         <ViewSheet
@@ -68,6 +92,16 @@ export function ReviewAtGate({
                 },
               })}
           onClose={() => setViewing(null)}
+        />
+      )}
+      {drafting === null || acts === undefined ? null : (
+        <IssueDraftDialog
+          draft={drafting}
+          onFile={(title, body) => {
+            acts.onFileIssue(drafting.finding, title, body);
+            setDrafting(null);
+          }}
+          onCancel={() => setDrafting(null)}
         />
       )}
     </>
