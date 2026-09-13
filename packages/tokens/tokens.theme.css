@@ -172,10 +172,12 @@
   --breakpoint-*: initial;
   --breakpoint-wide: 1100px;
   --breakpoint-narrow: 880px;
+  --breakpoint-desktop: 768px;
 }
 
 /* Read from CSS as var(--token). No namespace carries them:
-   --window-floor — a window bound the main process reads
+   --window-floor — the desktop window's bound, read by the main process and floor.ts
+   --touch-floor — the narrowest touch client drawn; no window to bound
    --z-menu — a stacking order, not a scale value
    --z-tooltip — a stacking order, not a scale value
    --z-modal — a stacking order, not a scale value

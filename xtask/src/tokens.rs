@@ -89,7 +89,7 @@ pub enum Slot {
     /// into a media feature value — `@media (width >= …)` — and `var()` is not
     /// legal there, so a browser drops the whole rule and `max-narrow:`
     /// compiles to nothing. `inline` guarantees the value is a `var()`, so the
-    /// two collapse points carry their literal and cannot be moved by a theme.
+    /// collapse points carry their literal and cannot be moved by a theme.
     Breakpoint(&'static str),
 }
 
@@ -212,15 +212,20 @@ pub const THEME: &[(&str, Slot)] = &[
     ),
     (
         "--window-floor",
-        Slot::CssOnly("a window bound the main process reads"),
+        Slot::CssOnly("the desktop window's bound, read by the main process and floor.ts"),
     ),
-    // The two collapse points, in the namespace Tailwind reads for responsive
+    (
+        "--touch-floor",
+        Slot::CssOnly("the narrowest touch client drawn; no window to bound"),
+    ),
+    // The collapse points, in the namespace Tailwind reads for responsive
     // variants. A component that spells `narrow:` resolves from here, which is
     // what stops it writing an `@media` that cannot read a custom property —
     // and is why `Slot::Breakpoint` is the one slot that leaves the `inline`
     // block, since an aliased breakpoint would write exactly that `@media`.
     ("--layout-breakpoint", Slot::Breakpoint("wide")),
     ("--layout-breakpoint-narrow", Slot::Breakpoint("narrow")),
+    ("--layout-breakpoint-desktop", Slot::Breakpoint("desktop")),
 ];
 
 /// One declared custom property, with the comment that explains it.

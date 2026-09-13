@@ -536,6 +536,15 @@
   size = "16px"
   status = "Specified"
   paired_with = "chevron-down"
+  reserved = "Two uses, told apart by position. Leading a tree row, it expands in place and pairs with chevron-down or chevron-up. Trailing a label, it goes to another view and pairs with nothing. Never a disclosure caret on a closed record or a split button, which is chevron-down's, and never a sort or direction indicator."
+
+  [[icons.chevron-right.usage]]
+    means = "goes to"
+    group = "Chrome"
+    size = "12px"
+    status = "Specified"
+    reserved = "Trailing the label of a control that opens another view or a sheet, and between a trail's segments. Never leading, never alone without a label, and never a control that expands in place."
+    notes = "Carries no pair, because nothing closes a destination from the mark that reached it. 12px because it sits after text at the text's own size, as WhereRow's into act and Job detail's Details act draw it."
 
 [conventions.step_activity_borrowing]
   glyphs = ["circle-dot", "eye", "rotate-cw", "check", "x", "power"]
