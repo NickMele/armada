@@ -223,3 +223,45 @@ fn an_empty_steps_list_is_refused() {
 fn refused_names_a_step(refusals: &[crate::error::Refusal]) -> bool {
     refused(refusals, "steps[0]")
 }
+
+/// **A definition that says nothing about what it is for loads as it did.**
+/// Seven of the eight shipped definitions declare none, and every one written
+/// before the key existed is that.
+#[test]
+fn a_definition_that_says_nothing_about_what_it_is_for_loads() {
+    let def = parse(BUG).expect("the worked example declares none");
+    assert_eq!(def.for_requests(), None);
+}
+
+/// And one that does is read back in the words it was written in.
+#[test]
+fn a_definition_may_say_what_requests_it_is_for() {
+    let def = parse(&BUG.replace(
+        "name: bug\n",
+        "name: bug\nfor_requests: Something that used to work and has stopped\n",
+    ))
+    .expect("the key is optional and legal");
+    assert_eq!(
+        def.for_requests(),
+        Some("Something that used to work and has stopped")
+    );
+}
+
+/// Present and blank is a key started and not finished, and is refused rather
+/// than read as a definition declaring nothing.
+#[test]
+fn a_blank_account_of_what_it_is_for_is_refused() {
+    let refused = refusals(parse(
+        &BUG.replace("name: bug\n", "name: bug\nfor_requests: \"  \"\n"),
+    ));
+    assert_eq!(fault_at(&refused, "for_requests"), &Fault::Empty);
+}
+
+/// Carried through resolution, because the proposer reads the resolved copy.
+#[test]
+fn what_it_is_for_survives_resolution() {
+    let def = parse(&BUG.replace("name: bug\n", "name: bug\nfor_requests: A regression\n"))
+        .expect("the key is legal");
+    let resolved = crate::ResolvedWorkflow::resolve(&def, &manifest()).expect("it resolves");
+    assert_eq!(resolved.for_requests(), Some("A regression"));
+}

@@ -23,6 +23,7 @@
 //! | A definition gating on `every_manifest_check` resolves against that repository's own Checks, and one naming Armada's by name is refused there | That any definition reaches that repository. Carrying one is #425's |
 //! | A Job created against it is held to that repository's Checks, prerequisites and all | That the Job's record says where its definition came from — #425 |
 //! | Running one Manifest entry in the checkout, and reading and saving the file, are operations Fleet serves | Verify and Fix. One entry is not setup and every Check once, and a saved file is not a row corrected in place |
+//! | A request naming a milestone is offered `epic` with what it is for, in a requester's words, beside its steps — and a definition saying nothing is offered as before | That a model reading it proposes `epic`. Choosing is a model's, and this file calls none |
 
 //! # Not carried: setting it up
 //!
@@ -43,7 +44,6 @@
 //!
 //! | Step | What is not carried | Carried by |
 //! |---|---|---|
-//! | Propose | A request naming a milestone proposes the workflow that runs one, because a definition can say which requests it is for | #424 |
 //! | Dispatch | A Job runs in a repository with no `.armada/workflows/`, on a definition Armada carries or a machine adds | #425 |
 //! | Override | The repository replaces any carried definition by writing one file, and its own wins | #425 |
 //! | Source | A person can tell which of those sources a Job's workflow came from | #425 |
@@ -53,14 +53,17 @@
 #[allow(dead_code)]
 mod bench;
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
-use config::{Fault, ResolveError, ResolvedCheck};
-use core_model::{JobStatus, StepState};
+use config::{Fault, ResolveError, ResolvedCheck, ResolvedWorkflow};
+use core_model::{JobStatus, StepState, WorkflowId};
+use fleet::{Brief, Proposal};
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    resolved_there, written, CARRYABLE, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, WRITTEN,
+    carried_there, resolved_there, written, A_MILESTONE, CARRYABLE, EPIC, EPIC_AT, MANIFEST_AT,
+    NAMING_ARMADAS_CHECKS, OVERREACHING, WRITTEN,
 };
 use bench::{states, Bench};
 
@@ -289,6 +292,66 @@ fn a_job_against_that_repository_is_held_to_its_checks() {
         ],
         "and what it requires is frozen with it, commands and all"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Proposing a Job there
+// ---------------------------------------------------------------------------
+
+/// **A request naming a milestone is offered the workflow that runs one, in
+/// words the request could match.** The Propose step, and #424.
+///
+/// What the proposer reads is asserted on the brief, without a model: `epic` as
+/// the file ships, carried to the storefront beside a `bug` that declares
+/// nothing. The line saying what `epic` is for sits under its name and names a
+/// milestone; `wave`, the steps' word, is not in it; the steps are still there;
+/// and the definition that declares nothing is offered exactly as it was
+/// before the key existed. An answer choosing `epic` then reads back as `epic`.
+///
+/// **What a model does with it is not asserted**, and the header says so.
+#[test]
+fn a_request_naming_a_milestone_is_offered_the_workflow_that_runs_one() {
+    let held: BTreeMap<WorkflowId, ResolvedWorkflow> = [
+        carried_there(EPIC_AT, EPIC),
+        resolved_there(CARRYABLE).expect("a carryable definition resolves there"),
+    ]
+    .into_iter()
+    .map(|workflow| (workflow.id().clone(), workflow))
+    .collect();
+    let brief = Brief::about(A_MILESTONE, &held);
+    let question = brief.question();
+
+    let offered = "  epic — epic\n    for: ";
+    let at = question
+        .find(offered)
+        .expect("epic is offered with what it is for, on the line under its name");
+    let what_for = question[at + offered.len()..]
+        .lines()
+        .next()
+        .expect("the line has words on it");
+    assert!(
+        what_for.contains("milestone"),
+        "in the word the request used: {what_for}"
+    );
+    assert!(
+        !what_for.to_lowercase().contains("wave"),
+        "and not in the steps' word, which is the defect restated: {what_for}"
+    );
+    assert!(
+        question[at..].contains("\n    Plan the wave -> Dispatch the wave -> Roll up the wave\n"),
+        "the steps stay beside it — they answer a different question"
+    );
+    assert!(
+        question.contains("  bug — bug\n    Plan the change -> Implement -> Summarise\n"),
+        "a definition that says nothing is offered exactly as before"
+    );
+
+    let Ok(Proposal::Resolved(jobs)) =
+        brief.read("workflow: epic\ntitle: Finish the Board milestone", &held)
+    else {
+        panic!("an answer choosing the offered workflow is a proposal");
+    };
+    assert_eq!(jobs[0].workflow_id.as_str(), "epic");
 }
 
 // ---------------------------------------------------------------------------

@@ -38,7 +38,14 @@ use crate::roster::Roster;
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of a WorkflowDef.
-const TOP_LEVEL: &[&str] = &["version", "workflow_id", "name", "structure", "steps"];
+const TOP_LEVEL: &[&str] = &[
+    "version",
+    "workflow_id",
+    "name",
+    "for_requests",
+    "structure",
+    "steps",
+];
 
 /// How the steps are wired. **Both of the schema's two values.**
 ///
@@ -91,6 +98,7 @@ pub struct WorkflowDef {
     id: WorkflowId,
     version: u32,
     name: String,
+    for_requests: Option<String>,
     structure: Structure,
     steps: Vec<Step>,
 }
@@ -155,6 +163,25 @@ impl WorkflowDef {
         &self.name
     }
 
+    /// **What a person asks for when this is the workflow they want**, in their
+    /// words rather than the steps'. `None` where the definition says nothing,
+    /// which is legal and is most of them.
+    ///
+    /// Read by one caller, the Job proposer, which is shown each workflow's id,
+    /// name and step labels. Those tell one workflow from its neighbours and
+    /// say nothing about whether a request is this kind of work at all: `epic`
+    /// runs milestones, and nothing in `epic — epic` or `Plan the wave ->
+    /// Dispatch the wave` is a word a person asking for a milestone uses — so a
+    /// proposer told to decline rather than guess declined. #424.
+    ///
+    /// **Optional because a required one gets written badly to get past the
+    /// parser**, and because every definition written before it existed has to
+    /// go on loading. Present and blank is refused: that is a key somebody
+    /// started and did not finish, not a definition declaring nothing.
+    pub fn for_requests(&self) -> Option<&str> {
+        self.for_requests.as_deref()
+    }
+
     pub fn structure(&self) -> Structure {
         self.structure
     }
@@ -179,6 +206,9 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
     let name = top
         .required("name", out)
         .and_then(|value| yaml::text("name", value, out));
+    let for_requests = top
+        .optional("for_requests")
+        .and_then(|value| yaml::text("for_requests", value, out));
     let structure = top.required("structure", out).and_then(|value| {
         yaml::word(
             "structure",
@@ -315,6 +345,7 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
         id: WorkflowId::carried(Ulid::carried(id?)),
         version: version?,
         name: name?,
+        for_requests,
         structure: structure?,
         steps,
     })

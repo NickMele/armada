@@ -13,7 +13,7 @@
 
 use std::path::Path;
 
-use config::{Manifest, ResolveError, ResolvedWorkflow, Roster, WorkflowDef};
+use config::{Fault, Manifest, ResolveError, ResolvedWorkflow, Roster, WorkflowDef};
 
 /// Where the repository's Manifest would be. Absolute, and not this
 /// repository: a web shop on `pnpm`, which shares no Check name with Armada.
@@ -137,6 +137,22 @@ pub const CARRYABLE: &str = r#"{
   ]
 }"#;
 
+/// **Armada's own `epic`, as the file ships** — the workflow whose subject is
+/// running a milestone.
+///
+/// Held by `include_str!`, so it is compiled in rather than read at run time and
+/// the test still touches no file. The real file rather than a fixture shaped
+/// like it: a fixture would go on saying what `epic` is for after `epic.json`
+/// had stopped.
+pub const EPIC: &str = include_str!("../../../../.armada/workflows/epic.json");
+
+/// Where a carried `epic` would say it was read from. See [`DEFINITION_AT`].
+pub const EPIC_AT: &str = "/carried/epic.json";
+
+/// What a person types when the work is a milestone. **No word of any `epic`
+/// step label is in it**, which is the case #424 was filed on.
+pub const A_MILESTONE: &str = "Finish the Board milestone, every issue still open under it";
+
 /// The same step gating on Armada's own two Checks **by name** — the way a
 /// definition written for one repository reads when it is carried to another.
 pub const NAMING_ARMADAS_CHECKS: &str = r#"{
@@ -177,4 +193,35 @@ pub fn definition(text: &str) -> WorkflowDef {
 /// resolves one at start.
 pub fn resolved_there(text: &str) -> Result<ResolvedWorkflow, ResolveError> {
     ResolvedWorkflow::resolve(&definition(text), &written())
+}
+
+/// A shipped definition resolved against the repository's own Manifest, read
+/// against a roster offering **exactly the models it names**.
+///
+/// The roster is not this claim: whether a shipped model is one this machine
+/// can run is `crates/config/tests/shipped.rs`, against the adapter's own list.
+/// Spelling that list here would put a vendor's aliases in a crate gate rule six
+/// keeps them out of, so the first read's `NoSuchModel` refusals are the roster
+/// for the second — and any other refusal still fails the second read.
+pub fn carried_there(path: &str, text: &str) -> ResolvedWorkflow {
+    let named: Vec<String> =
+        match WorkflowDef::parse(Path::new(path), text, &Roster::offering_nothing()) {
+            Ok(def) => return resolved_def(&def),
+            Err(refused) => refused
+                .refusals()
+                .iter()
+                .filter_map(|refusal| match &refusal.fault {
+                    Fault::NoSuchModel { value, .. } => Some(value.clone()),
+                    _ => None,
+                })
+                .collect(),
+        };
+    let def = WorkflowDef::parse(Path::new(path), text, &Roster::of(named))
+        .unwrap_or_else(|why| panic!("{path} parses: {why}"));
+    resolved_def(&def)
+}
+
+fn resolved_def(def: &WorkflowDef) -> ResolvedWorkflow {
+    ResolvedWorkflow::resolve(def, &written())
+        .unwrap_or_else(|why| panic!("{} resolves there: {why}", def.path().display()))
 }

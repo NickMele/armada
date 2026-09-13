@@ -42,6 +42,11 @@ use crate::workflow::{MechanicalCheck, Step, WorkflowDef};
 pub struct ResolvedWorkflow {
     workflow: PathBuf,
     manifest: PathBuf,
+    /// Held beside the frozen copy rather than in it. **It is read before a Job
+    /// exists and never after**: the proposer chooses with it, and nothing a
+    /// Job does once it has a workflow depends on what requests that workflow
+    /// is for — so a record carrying it would store a sentence nobody reads.
+    for_requests: Option<String>,
     frozen: FrozenWorkflow,
 }
 
@@ -100,6 +105,7 @@ impl ResolvedWorkflow {
         Ok(ResolvedWorkflow {
             workflow: def.path().to_path_buf(),
             manifest: manifest.path().to_path_buf(),
+            for_requests: def.for_requests().map(str::to_string),
             frozen: FrozenWorkflow::frozen(
                 def.id().clone(),
                 def.name().to_string(),
@@ -133,6 +139,12 @@ impl ResolvedWorkflow {
 
     pub fn name(&self) -> &str {
         self.frozen.name()
+    }
+
+    /// What requests this workflow is for, in a requester's words. See
+    /// [`crate::WorkflowDef::for_requests`].
+    pub fn for_requests(&self) -> Option<&str> {
+        self.for_requests.as_deref()
     }
 
     pub fn version(&self) -> u32 {

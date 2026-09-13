@@ -260,3 +260,30 @@ fn this_repositorys_own_manifest_loads_and_states_its_patience() {
     // the two halves fall back separately — so an absent one is the assertion.
     assert_eq!(manifest.poke_limit(), None);
 }
+
+/// **The workflow that runs milestones says so, in the words of somebody
+/// asking for one.** #424: a request to finish a milestone was declined with
+/// `epic` on the list, because nothing the proposer was shown about it was a
+/// word the request used.
+///
+/// Asserted off the file, and against the steps' vocabulary as well as for the
+/// requester's: a line that restates `Plan the wave -> Dispatch the wave` is
+/// the defect at greater length. Only `epic` is asserted — a definition that
+/// declares nothing is legal, and the others do not yet.
+#[test]
+fn the_epic_says_it_is_for_a_milestone_in_a_requesters_words() {
+    let path = root().join(".armada/workflows/epic.json");
+    let text = std::fs::read_to_string(&path).expect("a readable definition");
+    let def = config::WorkflowDef::parse(&path, &text, &roster())
+        .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
+    let what_for = def
+        .for_requests()
+        .expect("epic says what requests it is for");
+    assert!(what_for.contains("milestone"), "{what_for}");
+    for steps_word in ["wave", "roll up", "dispatch"] {
+        assert!(
+            !what_for.to_lowercase().contains(steps_word),
+            "`{steps_word}` is the steps' word, not a requester's: {what_for}"
+        );
+    }
+}
