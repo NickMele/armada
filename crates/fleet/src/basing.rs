@@ -259,10 +259,12 @@ where
     /// costs one ref lookup and a directory probe.
     pub(crate) async fn base_to_show_from(
         &self,
-        served: &crate::repositories::Served,
         job: &Job,
-    ) -> Result<BaseCheckout, NoBase> {
-        let spec = self.base_spec(served)?;
+    ) -> Result<(crate::repositories::Served, BaseCheckout), NoBase> {
+        let served = self.served_by(job).map_err(|why| NoBase::NotCheckedOut {
+            why: why.to_string(),
+        })?;
+        let spec = self.base_spec(&served)?;
         let checkout = self
             .vcs()
             .base_checkout(&spec)
@@ -270,9 +272,10 @@ where
                 why: cause.to_string(),
             })?;
         if checkout.prepared() {
-            return Ok(checkout);
+            return Ok((served, checkout));
         }
-        self.prepare_the_base(job, &spec, checkout, served).await
+        let prepared = self.prepare_the_base(job, &spec, checkout, &served).await?;
+        Ok((served, prepared))
     }
 
     /// Which commit is the base, as a spec.

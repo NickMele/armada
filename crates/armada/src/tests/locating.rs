@@ -81,3 +81,23 @@ fn a_folder_that_is_not_a_repository_root_is_refused() {
         );
     }
 }
+
+/// An `armada.yml` that is there and will not load is refused with its faults,
+/// as `armada serve` refuses one at startup — never served without a Manifest.
+#[test]
+fn a_repository_whose_manifest_will_not_load_is_refused_with_its_faults() {
+    let (machine, kit, repository) = (TempDir::new(), TempDir::new(), TempDir::new());
+    git_init(repository.path());
+    repository.write(
+        "armada.yml",
+        "version: 1\nid: 01LOCATEDMANIFEST\nchecks: nonsense\n",
+    );
+    let refused = a_locator(&machine, &kit)
+        .located(repository.path())
+        .map(|_| ())
+        .expect_err("refused");
+    let NotLocated::Refused { why, .. } = &refused else {
+        panic!("refused as a repository Armada will not serve, not {refused}");
+    };
+    assert!(why.contains("checks"), "the fault names its key: {why}");
+}

@@ -732,8 +732,7 @@ where
         // no longer refuses a captured step for lacking `evidence:`, so a
         // repository that never declared one reaches here on every captured
         // step, the same as one whose section vanished mid-Job.
-        let served = self.served_by(job)?;
-        let Some(harness) = served.manifest().harness() else {
+        let Some(harness) = self.served_by(job)?.manifest().harness().cloned() else {
             return Ok(Some(NotShown::NoHarness));
         };
         let spec = submission.shown_by();
@@ -755,7 +754,7 @@ where
         let ports = self.port_map(job).await;
         let port_env = self.port_env(job).await;
         let shown = show(
-            harness,
+            &harness,
             spec,
             Aimed::at(worktree),
             Side::Branch,
@@ -770,7 +769,7 @@ where
             Shown::Nothing => (Vec::new(), None),
             Shown::Frames(frames) => {
                 let copied = kept(
-                    served.records_root(),
+                    self.served_by(job)?.records_root(),
                     handle,
                     step,
                     attempt,
@@ -816,16 +815,8 @@ where
         handle: &str,
         budget: Duration,
     ) -> Before {
-        let served = match self.served_by(job) {
-            Ok(served) => served,
-            Err(why) => {
-                return Before::instead(WhyNoPair::NoBase(crate::basing::NoBase::NotCheckedOut {
-                    why: why.to_string(),
-                }))
-            }
-        };
-        let checkout = match self.base_to_show_from(&served, job).await {
-            Ok(checkout) => checkout,
+        let (served, checkout) = match self.base_to_show_from(job).await {
+            Ok(both) => both,
             Err(why) => return Before::instead(WhyNoPair::NoBase(why)),
         };
         let ports = self.port_map(job).await;
