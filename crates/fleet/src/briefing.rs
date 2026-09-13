@@ -34,6 +34,7 @@ use verification::TheBaseMoved;
 use crate::crossing::{
     Crossed, Dismissed, Overtaken, Produced, Reconciling, Redirected, SentBack, ThePlan,
 };
+use crate::review_term::Reviewing;
 use crate::terms::{Capturing, Checking, Declaring, Delivering, RecordingThePlan, Splitting};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
@@ -647,6 +648,9 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
         }
         if let Some(records) = RecordingThePlan::at(step) {
             blocks.headed(records.text(), ipc::BlockKind::AboutThisJob);
+        }
+        if let Some(reviews) = Reviewing::at(step) {
+            blocks.headed(reviews.text(), ipc::BlockKind::AboutThisJob);
         }
         if let Some(asked) = Declaring::at(step) {
             blocks.headed(asked.text(), ipc::BlockKind::Standing);

@@ -30,9 +30,10 @@
 # says the word outright where the designed one reads the same answer off a
 # Manifest rule. A repository may now say otherwise; this one does not.
 #
-# **`model: haiku` on the reporting step, and nowhere else.** Owner's call,
-# 31 Aug 2026: cheap by default, strong where the thinking is. `plan` and
-# `implement` decide, name no model, and so run as the Job was proposed.
+# **`model: haiku` was on the reporting step, and is on none now.** Owner's call,
+# 31 Aug 2026: cheap by default, strong where the thinking is. `handoff` stopped
+# reporting and started reviewing with #903's step 7, which is thinking. `plan`,
+# `implement` and `handoff` name no model, and so run as the Job was proposed.
 # Switching model re-caches the prompt prefix rather than reading one --
 # `docs/spikes/005-what-does-a-job-cost.md` measured 58.6% of a cold run's bill
 # on cache writes against 27.6% warm -- which is the argument against
@@ -149,11 +150,10 @@
     },
     {
       "id": "handoff",
-      "label": "Summarise",
+      "label": "Review the change",
       "evidence": {
-        "submitted": { "type": "facts_note" }
+        "submitted": { "type": "review" }
       },
-      "model": "haiku",
       "delivers": true,
       "advance_gate": "human_always"
     }
