@@ -44,7 +44,11 @@ export type HeadProps = {
    */
   clearing: boolean;
   /**
-   * The Manifest surface — Journey 9's *Running one*.
+   * The Manifest surface, and which of its views is showing — Journey 9's
+   * *Running one*, or the file half of *Editing*. `false` is any other surface.
+   *
+   * **The view and not a flag beside it**, so a head cannot describe a view
+   * the surface is not showing.
    *
    * **A name and no way out, and the missing control is the point.** Manifest
    * is a rail destination: a person who pressed `⌘4` did not come from the
@@ -53,7 +57,7 @@ export type HeadProps = {
    * is here only because the page's own rows never say what surface they
    * belong to.
    */
-  manifest: boolean;
+  manifest: false | "run" | "file";
   /** A live connection. What stops a new Job being proposed into nothing. */
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
@@ -93,15 +97,20 @@ export function headOf({
   onClearTerminal,
   onForgetTerminal,
 }: HeadProps): Head | null {
-  if (manifest) {
+  if (manifest !== false) {
     return {
       title: "Manifest",
-      // What the surface is *for*, and the one thing about it that surprises
-      // people: a run from here goes into the tree they are working in, and
-      // leaves no verdict behind for any Job. Both halves are Journey 9's own
-      // rules, said once here rather than repeated on every row.
+      // What the view is *for*, and the one thing about it that surprises
+      // people, said once here rather than repeated on every row.
+      //
+      // Running: a run goes into the tree they are working in, and leaves no
+      // verdict behind for any Job. Editing: a save goes to disk and no
+      // further — the file is tracked, and Armada committing on a person's
+      // behalf is the surprise Journey 9 rules out.
       summary:
-        "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict.",
+        manifest === "file"
+          ? "Edit this repository's Manifest. Save writes the file to disk and stops, without staging or committing it."
+          : "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict.",
       // No action. The rail is how a person leaves a rail destination.
       actions: null,
     };

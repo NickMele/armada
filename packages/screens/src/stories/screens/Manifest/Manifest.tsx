@@ -125,7 +125,8 @@ export function ManifestFrom({
     composing: false,
     auditing: false,
     clearing: false,
-    manifest: true,
+    // The view the surface is showing, as `App` passes it.
+    manifest: editing.view,
     live: true,
     refreshing: false,
     onCloseComposer: noop,

@@ -228,6 +228,12 @@ export const TheFile: Story = {
     await expect(await canvas.findByRole("textbox", { name: /armada\.yml$/ })).toHaveValue(MANIFEST_TEXT);
     // Nothing typed, so nothing to save.
     await expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled();
+    // **The head describes the view on screen**, and moves with the toggle.
+    await expect(canvas.getByText(/Save writes the file to disk and stops/)).toBeVisible();
+    await expect(canvas.queryByText(/Nothing here is a verdict/)).toBeNull();
+    await userEvent.click(canvas.getByRole("tab", { name: "Checks and Commands" }));
+    await expect(await canvas.findByText(/Nothing here is a verdict/)).toBeVisible();
+    await expect(canvas.queryByText(/Save writes the file to disk and stops/)).toBeNull();
   },
 };
 

@@ -349,7 +349,8 @@ export function App() {
     onReadReports: () => setAuditing(true),
     onCloseWorktrees: () => setClearing(false),
     onReadWorktrees: () => setClearing(true),
-    manifest: manifesting,
+    // Which Manifest view is up, so the head describes the one on screen.
+    manifest: manifesting ? editing.view : false,
     onRefresh: () => void commands.refresh(),
     jobs: state.jobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
