@@ -49,6 +49,20 @@ CREATE TABLE job_shown_again (
 ) STRICT;
 "#;
 
+/// Version 54 — which spec a press ran.
+///
+/// **A person can pick one now**, so the step and the run no longer say it: a
+/// Job whose Drones named three specs can be pressed three ways, and two sets
+/// filed under one step would be told apart by nothing but the minute they ran.
+///
+/// **Empty rather than backfilled, for [`V42`](crate::showing::V42)'s rule.**
+/// Every press written before this ran the last spec the record held, and that
+/// is a spec today's record can no longer point at — a later run may have
+/// renamed it. Empty reads as *this set does not say*.
+pub(crate) const V54: &str = r#"
+ALTER TABLE job_shown_again ADD COLUMN spec TEXT NOT NULL DEFAULT '';
+"#;
+
 fn unreadable(cause: rusqlite::Error) -> LoadJobError {
     LoadJobError::Unreadable(RowError::Database(fault("reading what a press kept")(
         cause,
@@ -59,24 +73,36 @@ impl Store {
     /// The spec a Drone last named on a step Fleet captures, and the run that
     /// named it — or `None` where no Drone ever did.
     ///
-    /// **Captured steps only, and the caller says which.** `shown_by` is
-    /// required on every submission, but only a captured step's names a spec:
-    /// on any other it points at whatever shows the claim, a test or a file.
-    ///
-    /// **The ids come in rather than off the row**, because since `#777` being
-    /// captured is a fact about the step and a submission carries only its own
-    /// type. This filtered on `evidence_type = 'shown'`, which is the reading
-    /// that could not see a step handing in a diff *and* being captured.
-    ///
-    /// **The latest by when it was recorded**, across every step: a
-    /// resubmission inside one run replaces its row.
+    /// **The first of [`specs_named`](Store::specs_named)**, so what a press
+    /// runs when nobody picks is the head of the list a person picks from and
+    /// the two can never disagree.
     pub fn spec_last_named(
         &self,
         job_id: &JobId,
         captured: &[StepId],
     ) -> Result<Option<SpecNamed>, LoadJobError> {
+        Ok(self.specs_named(job_id, captured)?.into_iter().next())
+    }
+
+    /// Every spec this Job's Drones named on a step Fleet captures, latest
+    /// first — the choices a person presses one of.
+    ///
+    /// **Captured steps only, and the caller says which.** `shown_by` is
+    /// required on every submission, but only a captured step's names a spec:
+    /// on any other it points at whatever shows the claim, a test or a file.
+    /// The ids come in rather than off the row because since `#777` being
+    /// captured is a fact about the step and a submission carries only its own
+    /// type.
+    ///
+    /// **One entry per spec.** A step worked three times naming one spec each
+    /// time is one choice, kept under the last run that named it.
+    pub fn specs_named(
+        &self,
+        job_id: &JobId,
+        captured: &[StepId],
+    ) -> Result<Vec<SpecNamed>, LoadJobError> {
         if captured.is_empty() {
-            return Ok(None);
+            return Ok(Vec::new());
         }
         let mut asking = self
             .conn
@@ -97,32 +123,32 @@ impl Store {
         // Filtered here rather than in an `IN` clause assembled from the slice:
         // one Job's rows are few, and building a parameter list is the one
         // place this dialect would have to interpolate SQL.
-        let mut found = None;
+        let mut named: Vec<SpecNamed> = Vec::new();
         for row in rows {
             let (step, attempt, spec) = row.map_err(unreadable)?;
-            if captured.iter().any(|id| id.as_str() == step) {
-                found = Some((step, attempt, spec));
-                break;
+            if !captured.iter().any(|id| id.as_str() == step) {
+                continue;
             }
+            if named.iter().any(|held| held.spec == spec) {
+                continue;
+            }
+            // Zero is refused by the table's own `CHECK`, so a row holding one
+            // was written by something that did not share it — a corrupt row,
+            // and refused rather than read as a first run.
+            let Some(attempt) = u32::try_from(attempt).ok().and_then(Attempt::stored) else {
+                return Err(LoadJobError::Unreadable(RowError::MalformedColumn {
+                    table: "job_step_evidence",
+                    column: "attempt",
+                    detail: format!("{attempt} is not a run"),
+                }));
+            };
+            named.push(SpecNamed {
+                step: StepId::new(step),
+                attempt,
+                spec,
+            });
         }
-        let Some((step, attempt, spec)) = found else {
-            return Ok(None);
-        };
-        // Zero is refused by the table's own `CHECK`, so a row holding one was
-        // written by something that did not share it — a corrupt row, and
-        // refused rather than read as a first run.
-        let Some(attempt) = u32::try_from(attempt).ok().and_then(Attempt::stored) else {
-            return Err(LoadJobError::Unreadable(RowError::MalformedColumn {
-                table: "job_step_evidence",
-                column: "attempt",
-                detail: format!("{attempt} is not a run"),
-            }));
-        };
-        Ok(Some(SpecNamed {
-            step: StepId::new(step),
-            attempt,
-            spec,
-        }))
+        Ok(named)
     }
 
     /// The number the next press on this Job will be kept under.
@@ -177,8 +203,8 @@ impl Store {
             tx.execute(
                 "INSERT INTO job_shown_again (
                      job_id, press, step_id, attempt, ordinal, name, path, bytes, digest,
-                     pressed_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                     pressed_at, spec
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 rusqlite::params![
                     job_id.as_str(),
                     press,
@@ -190,6 +216,7 @@ impl Store {
                     frame.bytes as i64,
                     frame.digest.as_str(),
                     at.as_str(),
+                    named.spec.as_str(),
                 ],
             )
             .map_err(fault("writing a frame a press captured"))
@@ -210,7 +237,7 @@ impl Store {
         let mut asking = self
             .conn
             .prepare(
-                "SELECT press, step_id, attempt, name, path, bytes, digest, pressed_at
+                "SELECT press, step_id, attempt, name, path, bytes, digest, pressed_at, spec
                  FROM job_shown_again WHERE job_id = ?1 ORDER BY press, ordinal",
             )
             .map_err(unreadable)?;
@@ -220,12 +247,13 @@ impl Store {
                 let step: String = row.get("step_id")?;
                 let attempt: i64 = row.get("attempt")?;
                 let pressed_at: String = row.get("pressed_at")?;
-                Ok((press, step, attempt, pressed_at, pressed(row)))
+                let spec: String = row.get("spec")?;
+                Ok((press, step, attempt, pressed_at, spec, pressed(row)))
             })
             .map_err(unreadable)?;
         let mut sets: Vec<ShownAgain> = Vec::new();
         for row in rows {
-            let (press, step, attempt, pressed_at, frame) = row.map_err(unreadable)?;
+            let (press, step, attempt, pressed_at, spec, frame) = row.map_err(unreadable)?;
             let frame = frame.map_err(LoadJobError::Unreadable)?;
             let press = press.max(1) as u32;
             match sets.last_mut() {
@@ -235,6 +263,7 @@ impl Store {
                     pressed_at: Timestamp::from_rfc3339(pressed_at),
                     step: StepId::new(step),
                     attempt: attempt.max(1) as u32,
+                    spec,
                     frames: vec![frame],
                 }),
             }
@@ -280,6 +309,9 @@ pub struct ShownAgain {
     /// The step whose spec was rerun, and the run of it that named the spec.
     pub step: StepId,
     pub attempt: u32,
+    /// The spec this press ran. **Empty on a set kept before [`V54`]**, which
+    /// is that migration's *does not say* rather than a spec called nothing.
+    pub spec: String,
     /// Never empty — a press that captured nothing wrote no set.
     pub frames: Vec<StepFrame>,
 }
