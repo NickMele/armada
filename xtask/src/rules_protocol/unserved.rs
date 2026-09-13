@@ -52,30 +52,11 @@ const NOT_BUILT: &[(&str, &str)] = &[
          for them at the moment the record is least trustworthy",
     ),
     (
-        "alert.raised",
-        "Fleet keeps no Alert record. `list_alerts` derives its two buckets from the Jobs it \
-         already holds, so every change to that answer arrives as the `job.state_changed` \
-         that caused it, and a kind of its own would publish one fact twice",
-    ),
-    (
-        "review.ready",
-        "A Job reaching a human gate is a `job.state_changed` into `awaiting_review`, which \
-         is what the Needs-you tab is already drawn from. A second kind carrying the same \
-         transition is two events a client has to reconcile into one row",
-    ),
-    (
-        "usage.threshold",
-        "Nothing crosses a threshold. `settings.budget-quota-floor-for-interactive-use` \
-         records that no quantity reaches Armada from a Drone's stream, and the two cost \
-         ceilings refuse the next dispatch rather than firing — which is a `queued_reason` \
-         on a `job.state_changed`",
-    ),
-    (
         "evidence.submitted",
-        "It would put a submission's payload on the one drop-oldest channel every Job shares, \
-         which is what that channel's bound exists to keep off it. What a client sees of a \
-         submission is the step move or the gate that followed, and the bundle is \
-         `get_evidence`",
+        "Build it as a pointer, never as a payload. A submission's payload has no business on \
+         the one drop-oldest channel every Job shares, which is what that channel's bound \
+         exists to keep off it — `job.step_advanced` is the precedent: a kind that names the \
+         moment, and leaves the bundle for a client to fetch from `get_evidence`",
     ),
 ];
 

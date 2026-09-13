@@ -20,7 +20,7 @@ fn findings(report: &Report) -> Vec<String> {
         .collect()
 }
 
-const INVENTORY_SOURCE: &str = r#"
+const INVENTORY_SOURCE: &str = r##"
 [operations.list_jobs]
 kind = "query"
 
@@ -29,7 +29,8 @@ kind = "event"
 
 [operations."drone.spawned"]
 kind = "event"
-"#;
+unbuilt = "#1"
+"##;
 
 const TABLE_SOURCE: &str = r#"
 pub const SERVED: &[Route] = &[
@@ -114,6 +115,112 @@ fn parsing_reads_every_rename_between_the_braces_and_nothing_after() {
     );
     let kinds = published_event_kinds(&source);
     assert_eq!(kinds, vec!["job.created", "drone.spawned"]);
+}
+
+/// An event with no variant and no `unbuilt` — #645's own finding, the shape
+/// `alert.raised` and its three siblings sat in for two weeks.
+#[test]
+fn a_declared_event_with_no_variant_and_no_mark_fails() {
+    const INVENTORY_WITH_UNMARKED_EVENT: &str = r#"
+[operations."job.created"]
+kind = "event"
+
+[operations."drone.spawned"]
+kind = "event"
+"#;
+    let mut report = Report::new("test");
+    check(
+        INVENTORY_WITH_UNMARKED_EVENT,
+        &table_and_router(TABLE_SOURCE),
+        EVENT_SOURCE_FULLY_LISTED,
+        &mut report,
+    );
+    let findings = findings(&report);
+    assert!(report.failed(), "{findings:?}");
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.contains("drone.spawned") && f.contains("no variant")),
+        "expected a finding naming the unmarked, unsent event: {findings:?}"
+    );
+}
+
+/// A mark on an event `Event` already publishes is the same lie in reverse.
+#[test]
+fn a_mark_on_an_event_that_is_sent_fails() {
+    const EVENT_SOURCE_BOTH_LISTED: &str = r#"
+#[serde(tag = "kind")]
+pub enum Event {
+    #[serde(rename = "job.created")]
+    JobCreated(JobCreated),
+    #[serde(rename = "drone.spawned")]
+    DroneSpawned(DroneSpawned),
+}
+"#;
+    let mut report = Report::new("test");
+    check(
+        INVENTORY_SOURCE,
+        &table_and_router(TABLE_SOURCE),
+        EVENT_SOURCE_BOTH_LISTED,
+        &mut report,
+    );
+    let findings = findings(&report);
+    assert!(report.failed(), "{findings:?}");
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.contains("drone.spawned") && f.contains("already publishes")),
+        "expected a finding naming the marked, sent event: {findings:?}"
+    );
+}
+
+/// A marked, unsent event is the deliberately-ahead case: it warns, on
+/// `unbuilt`'s own precedent, and does not fail the gate.
+#[test]
+fn a_marked_unsent_event_warns_and_does_not_fail() {
+    let mut report = Report::new("test");
+    check(
+        INVENTORY_SOURCE,
+        &table_and_router(TABLE_SOURCE),
+        EVENT_SOURCE_FULLY_LISTED,
+        &mut report,
+    );
+    let findings = findings(&report);
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.contains("drone.spawned") && f.contains("not sent yet")),
+        "expected a warning naming the marked event: {findings:?}"
+    );
+}
+
+/// `unbuilt`'s value is an issue reference or nothing, on `actions.toml`'s own
+/// rule for the column of the same name.
+#[test]
+fn an_unbuilt_value_that_is_not_an_issue_reference_fails() {
+    const INVENTORY_WITH_BARE_MARK: &str = r#"
+[operations."job.created"]
+kind = "event"
+
+[operations."drone.spawned"]
+kind = "event"
+unbuilt = "soon"
+"#;
+    let mut report = Report::new("test");
+    check(
+        INVENTORY_WITH_BARE_MARK,
+        &table_and_router(TABLE_SOURCE),
+        EVENT_SOURCE_FULLY_LISTED,
+        &mut report,
+    );
+    let findings = findings(&report);
+    assert!(report.failed(), "{findings:?}");
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.contains("\"soon\"") && f.contains("not an issue reference")),
+        "expected a finding naming the bare mark: {findings:?}"
+    );
 }
 
 /// **The gate's own failure mode.** A rule that finds nothing to compare must

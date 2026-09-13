@@ -29,6 +29,13 @@
 #                 on the machine, on one shared set — which on a command is
 #                 the Intervention Ladder rung
 #   description - what the operation returns or does, in one line
+#   unbuilt     - an event declared here and not yet sent, naming the issue
+#                 that will send it. Absent means the event is sent. The
+#                 precedent is `crates/core-model/domain/actions.toml`'s
+#                 `unbuilt`: a value that is not an issue reference refuses,
+#                 and the gate refuses the row silently outliving either
+#                 direction of that claim — a mark on an event that is sent,
+#                 or a sent-or-mark-less event with no variant behind it
 #   notes       - the reasoning the row carried, where it carried any
 
 
@@ -1581,12 +1588,6 @@ agent_access = "No"
 description = "Restarts a Job after a Fleet crash"
 
 
-[operations."alert.raised"]
-kind = "event"
-transport = "WebSocket"
-agent_access = "Bridge only"
-description = "An Alert is raised, carrying its Alert Level"
-
 [operations."drone.exited"]
 kind = "event"
 transport = "WebSocket"
@@ -1604,6 +1605,7 @@ kind = "event"
 transport = "WebSocket"
 agent_access = "Bridge only"
 description = "An Evidence MCP call lands"
+unbuilt = "#813"
 
 [operations."job.created"]
 kind = "event"
@@ -1835,14 +1837,3 @@ notes = """
 `stopped: false` is a server that fell over, with its exit code and a sentence; its log stays readable on `observe_server`. A Job's servers publish this before the Job's own terminal `job.state_changed`, because they are torn down before its span is released.
 """
 
-[operations."review.ready"]
-kind = "event"
-transport = "WebSocket"
-agent_access = "Bridge only"
-description = "A Job reaches a human gate"
-
-[operations."usage.threshold"]
-kind = "event"
-transport = "WebSocket"
-agent_access = "Bridge only"
-description = "Spend or quota crosses the Machine gate"
