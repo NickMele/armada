@@ -39,7 +39,10 @@ bridge_label="$label.bridge"
 bridge_plist="$support/$bridge_label.plist"
 bridge_service="$domain/$bridge_label"
 
-say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+# `say` is commentary, not the answer — it goes to stderr so a caller that
+# captures this script's stdout for the final report never captures a
+# progress line by accident.
+say() { printf '\n\033[1m%s\033[0m\n' "$*" >&2; }
 fail() {
   echo "restart: $*" >&2
   exit 1
@@ -52,7 +55,7 @@ fail() {
 cargo_home="${CARGO_HOME:-$home/.cargo}"
 armada_bin="$cargo_home/bin/armada"
 
-# 1. Refuse while a Drone is working.
+# Refuse while a Drone is working.
 #
 # **Read off the roster, never off the Jobs.** `crates/ipc/src/drones.rs`:
 # an escalated Job keeps its Drone alive and idle, so a status count would
@@ -60,16 +63,26 @@ armada_bin="$cargo_home/bin/armada"
 # What refuses is a Drone whose Job is `running` — `docs/concepts/fleet.md`'s
 # own reading of `job-statuses.toml`, where `running` is the one status a live
 # Drone process stands for.
-old_pid=""
-old_port=""
-if [[ -f "$runtime" ]]; then
-  old_pid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pid"])' "$runtime" 2>/dev/null || true)
-  old_port=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["port"])' "$runtime" 2>/dev/null || true)
-fi
+#
+# **Called twice, deliberately.** Once here, before paying for a rebuild that
+# can run minutes, so an obvious refusal is fast. Again immediately before
+# Fleet is touched, because a queued Job can be admitted while `cargo install`
+# and `pnpm build` run, and the read from before the build is stale by then.
+# Sets `old_pid`/`old_port` as plain (not `local`) variables — this runs as a
+# statement, never inside `$(...)`, because `fail`'s `exit` would only kill a
+# subshell wrapped around a command substitution and the refusal would go
+# unnoticed by the caller.
+refuse_if_drone_working() {
+  old_pid=""
+  old_port=""
+  if [[ -f "$runtime" ]]; then
+    old_pid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pid"])' "$runtime" 2>/dev/null || true)
+    old_port=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["port"])' "$runtime" 2>/dev/null || true)
+  fi
 
-if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
-  say "Fleet is running (pid $old_pid, port $old_port) — checking for a working Drone"
-  result=$(python3 - "$old_port" <<'PY'
+  if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+    say "Fleet is running (pid $old_pid, port $old_port) — checking for a working Drone"
+    result=$(python3 - "$old_port" <<'PY'
 import json, sys, urllib.error, urllib.request
 
 port = sys.argv[1]
@@ -91,44 +104,67 @@ try:
 except (urllib.error.URLError, OSError, ValueError) as e:
     print(f"ERROR:{e}")
 PY
-  )
-  case "$result" in
-    OK)
-      say "No Drone is working"
-      ;;
-    REFUSE:*)
-      fail "refusing — ${result#REFUSE:}'s Drone is working"
-      ;;
-    ERROR:*)
-      fail "fleet.json names a live pid but the API on port $old_port did not answer: ${result#ERROR:}"
-      ;;
-    *)
-      fail "could not read what $old_port answered: $result"
-      ;;
-  esac
-fi
+    )
+    case "$result" in
+      OK)
+        say "No Drone is working"
+        ;;
+      REFUSE:*)
+        fail "refusing — ${result#REFUSE:}'s Drone is working"
+        ;;
+      ERROR:*)
+        fail "fleet.json names a live pid but the API on port $old_port did not answer: ${result#ERROR:}"
+        ;;
+      *)
+        fail "could not read what $old_port answered: $result"
+        ;;
+    esac
+  fi
+}
 
-# 2. Rebuild.
+refuse_if_drone_working
+
+# Rebuild.
 say "Installing armada from $root"
 cargo install --path crates/armada --debug --locked
 
-bridge_marker="$root/apps/desktop/out/main/index.js"
+# **A stamp this script writes, not a build output's own mtime.** A first
+# attempt compared source files against `out/main/index.js`, and every build
+# leaves `out/preload/index.js` and `out/renderer/**` newer than that one file
+# — so the "did anything change" question always answered yes, on a tree that
+# had not moved since the previous run. The stamp is touched only after a
+# build succeeds, so it is always at least as new as everything that build
+# wrote.
+bridge_stamp="$root/apps/desktop/out/.armada-restart-stamp"
 bridge_rebuilt=false
-if [[ ! -f "$bridge_marker" ]]; then
+if [[ ! -f "$bridge_stamp" ]]; then
   bridge_rebuilt=true
-elif [[ -n "$(find "$root/apps" "$root/packages" -type f -newer "$bridge_marker" \
-    -not -path '*/node_modules/*' -print 2>/dev/null | head -n 1)" ]]; then
-  bridge_rebuilt=true
+else
+  changed=$(find "$root/apps" "$root/packages" -type f \
+      -not -path '*/node_modules/*' \
+      -not -path "$root/apps/desktop/out/*" \
+      -not -path "$root/apps/desktop/release/*" \
+      -not -name '*.tsbuildinfo' \
+      -newer "$bridge_stamp" -print 2>/dev/null | head -n 1)
+  [[ -n "$changed" ]] && bridge_rebuilt=true
 fi
 
 if $bridge_rebuilt; then
   say "Building Bridge — apps/ or packages/ moved since its last build"
   pnpm --filter @armada/desktop build
+  mkdir -p "$root/apps/desktop/out"
+  touch "$bridge_stamp"
 else
   say "Bridge is unchanged since its last build"
 fi
 
-# 3. Restart Fleet under launchd.
+# Refuse again, fresh, right before Fleet is touched — see the comment on
+# `refuse_if_drone_working` above. This is also the read `old_pid`/`old_port`
+# below are taken from; the one before the rebuild is not reused; a build can
+# run for minutes and Fleet's own state is not this script's to assume.
+refuse_if_drone_working
+
+# Restart Fleet under launchd.
 #
 # **Two Fleets is stopping a stray one by the pid the runtime file names, never
 # by name.** `scripts/dev` reasons about the same incident (Storybook, ports
@@ -151,6 +187,12 @@ if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null && ! $already_ours; the
     kill -0 "$old_pid" 2>/dev/null || break
     sleep 0.25
   done
+  # SIGTERM waits for the turn in flight to finish — `docs/practices/running-
+  # locally.md`, Stopping Fleet — which can hold the whole Check budget. Fail
+  # rather than bootstrap a second Fleet beside one that has not let go yet.
+  if kill -0 "$old_pid" 2>/dev/null; then
+    fail "the Fleet at pid $old_pid has not stopped yet — SIGTERM waits for its turn in flight; try again once it exits"
+  fi
 fi
 
 python3 - "$plist" "$label" "$armada_bin" "$root" "$home" "$PATH" <<'PY'
@@ -178,29 +220,87 @@ PY
 chmod 644 "$plist"
 mkdir -p "$home/Library/Logs/Armada"
 
-if ! launchctl print "$service" >/dev/null 2>&1; then
+# A fresh bootstrap already starts the job — `KeepAlive` fires the moment it
+# is loaded, regardless of `RunAtLoad` (fleet.md, Daemon lifecycle) — so a
+# `kickstart -k` right after would only kill and replace what bootstrap just
+# started. Kickstart is for the job that was already loaded.
+if launchctl print "$service" >/dev/null 2>&1; then
+  say "Kickstarting $service onto the new build"
+  launchctl kickstart -k "$service"
+else
   say "Bootstrapping $service"
   launchctl bootstrap "$domain" "$plist"
 fi
-say "Kickstarting $service onto the new build"
-launchctl kickstart -k "$service"
 
+# **Wait for a *fresh* runtime file, not merely a present one.** `kickstart -k`
+# does not go through Fleet's own shutdown — fleet.md measures it at 26ms, far
+# faster than a graceful exit — so it leaves the old runtime file exactly
+# where it was until the new process publishes over it. A loop that only
+# checks the file exists passes on the old file and can hand back the old
+# pid, which is the file the previous instance already left behind, atomic
+# rename or not.
+new_pid=""
 for _ in $(seq 80); do
-  [[ -f "$runtime" ]] && break
+  if [[ -f "$runtime" ]]; then
+    candidate=$(python3 -c '
+import json, sys
+try:
+    print(json.load(open(sys.argv[1]))["pid"])
+except Exception:
+    print("")
+' "$runtime" 2>/dev/null || true)
+    if [[ -n "$candidate" && "$candidate" != "$old_pid" ]] && kill -0 "$candidate" 2>/dev/null; then
+      new_pid="$candidate"
+      break
+    fi
+  fi
   sleep 0.25
 done
-[[ -f "$runtime" ]] || fail "the runtime file never came back — read $home/Library/Logs/Armada/$label.log"
+[[ -n "$new_pid" ]] || fail "no fresh Fleet came up — read $home/Library/Logs/Armada/$label.log"
 
-new_pid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pid"])' "$runtime")
 new_port=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["port"])' "$runtime")
 protocol=$(python3 -c 'import json,sys; v=json.load(open(sys.argv[1]))["protocol_version"]; print(str(v["major"]) + "." + str(v["minor"]))' "$runtime")
 
-# 4. Reopen Bridge, only if it was rebuilt. Otherwise it reconnects on its own
-#    — apps/desktop/src/main/socket.ts.
+# Reopen Bridge, only if it was rebuilt. Otherwise it reconnects on its own
+# — apps/desktop/src/main/socket.ts.
 bridge_reopened=false
 if $bridge_rebuilt; then
-  pnpm_bin=$(command -v pnpm) || fail "pnpm is not on PATH — cannot reopen Bridge"
-  python3 - "$bridge_plist" "$bridge_label" "$pnpm_bin" "$root" "$home" "$PATH" <<'PY'
+  # **Quit the running Bridge by a handle proven to be this repository's,
+  # never by name.** The owner's Bridge today is as likely to be a plain
+  # `electron-vite preview` from `scripts/dev` in his terminal as anything
+  # this script started, so there is no service to kickstart in place. What
+  # is provable without guessing: Electron's own binary lives under this
+  # repository's `node_modules`, nowhere else, so a process running exactly
+  # that binary with no arguments but `.` is this repository's Bridge and
+  # nothing else's — a path match, not a name pattern. Exactly one match is
+  # quit by its pid; more than one, or one that will not quit, is left alone
+  # and reported rather than guessed at.
+  bridge_pattern="^${root}/node_modules/.*/Electron\\.app/Contents/MacOS/Electron \\.\$"
+  existing=$(pgrep -f "$bridge_pattern" 2>/dev/null || true)
+  existing_count=0
+  [[ -n "$existing" ]] && existing_count=$(printf '%s\n' "$existing" | grep -c .)
+
+  reopen_ok=true
+  if [[ "$existing_count" -eq 1 ]]; then
+    old_bridge_pid="$existing"
+    say "Quitting the running Bridge (pid $old_bridge_pid) for this repository"
+    kill -TERM "$old_bridge_pid" 2>/dev/null || true
+    for _ in $(seq 40); do
+      kill -0 "$old_bridge_pid" 2>/dev/null || break
+      sleep 0.25
+    done
+    if kill -0 "$old_bridge_pid" 2>/dev/null; then
+      echo "restart: Bridge (pid $old_bridge_pid) did not quit in time — leaving it. Restart Bridge by hand." >&2
+      reopen_ok=false
+    fi
+  elif [[ "$existing_count" -gt 1 ]]; then
+    echo "restart: more than one Bridge window is open for this repository — not guessing which to quit. Restart Bridge by hand." >&2
+    reopen_ok=false
+  fi
+
+  if $reopen_ok; then
+    pnpm_bin=$(command -v pnpm) || fail "pnpm is not on PATH — cannot reopen Bridge"
+    python3 - "$bridge_plist" "$bridge_label" "$pnpm_bin" "$root" "$home" "$PATH" <<'PY'
 import plistlib, sys
 
 path, label, pnpm_bin, root, home, path_env = sys.argv[1:7]
@@ -218,13 +318,16 @@ plistlib.dump(
     open(path, "wb"),
 )
 PY
-  chmod 644 "$bridge_plist"
-  if ! launchctl print "$bridge_service" >/dev/null 2>&1; then
-    launchctl bootstrap "$domain" "$bridge_plist"
+    chmod 644 "$bridge_plist"
+    if launchctl print "$bridge_service" >/dev/null 2>&1; then
+      say "Reopening Bridge"
+      launchctl kickstart -k "$bridge_service"
+    else
+      say "Reopening Bridge"
+      launchctl bootstrap "$domain" "$bridge_plist"
+    fi
+    bridge_reopened=true
   fi
-  say "Reopening Bridge"
-  launchctl kickstart -k "$bridge_service"
-  bridge_reopened=true
 fi
 
 say "Done"
