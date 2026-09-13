@@ -1,5 +1,5 @@
 import { connectedTo, PROTOCOL_VERSION, type Connection, type JobSummary } from "@armada/protocol";
-import type { WorkflowSummary } from "@armada/protocol";
+import type { RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Jobs } from "../../../Jobs";
 import { CREATED_AT, repository } from "../../../fixtures/build/base";
@@ -29,9 +29,12 @@ export function BoardFrom({
   workflows,
   connection = CONNECTED,
   now = NOW,
+  repositories = [repository()],
 }: {
   jobs: readonly JobSummary[];
   workflows: readonly WorkflowSummary[];
+  /** What Fleet serves. More than one names each row's repository. */
+  repositories?: readonly RepositorySummary[];
   connection?: Connection;
   /** When the Board is read. A recording passes its own, or run times go negative. */
   now?: number;
@@ -63,8 +66,9 @@ export function BoardFrom({
       <Shell
         connection={connection}
         statement={statement}
-        repositories={[repository()]}
-        scope={repository().root}
+        repositories={repositories}
+        listed={live}
+        scope={repositories[0]?.root ?? ""}
         onScope={noop}
         jobs={jobs}
         capacity={{ bound: 4, occupied: 2 }}
@@ -80,6 +84,7 @@ export function BoardFrom({
             stale={!live}
             now={now}
             workflows={workflows}
+            served={live ? repositories : null}
             disconnected={live ? null : statement.headline}
             selected={null}
             onOpen={noop}

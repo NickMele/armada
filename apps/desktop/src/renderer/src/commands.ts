@@ -112,8 +112,9 @@ export const watchManifestDrift = (want: boolean): void =>
   void window.armada.watchManifestDrift(want);
 export const startCheckoutVerify = () => window.armada.startCheckoutVerify();
 export const pickRepository = (root: string): void => void window.armada.pickRepository(root);
-// Locate: a folder from the OS dialog, and a repository added or cloned. Main picks it before answering.
+// Locate: a folder from the OS dialog, and a repository added or cloned. The window picks what it located.
 export const chooseFolder = () => window.armada.chooseFolder();
+export const resolveFolder = (path: string) => window.armada.resolveFolder(path);
 export const addRepository = (path: string) => window.armada.addRepository(path);
 export const cloneRepository = (url: string, parent: string) => window.armada.cloneRepository(url, parent);
 // The Manifest file. Held by the app, like the sheet above, so an unsaved edit

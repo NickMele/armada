@@ -26,6 +26,7 @@ import type { BridgeIdentity, Connection, Outcome } from "@armada/protocol";
 import type { Failure, Statement, Uncaught } from "@armada/shell";
 import { fleetFailure, refusalFailure, transportFailure, uncaughtFailure } from "@armada/shell";
 import { statementOf } from "@armada/shell";
+import { servesNothing } from "@armada/screens";
 
 /** What the window has been published, as far as a failure is concerned. */
 export type Published = {
@@ -68,7 +69,7 @@ export function failingIn(published: Published): Failing {
     outcome === null || outcome.ok
       ? null
       : outcome.why === "refused"
-        ? refusalFailure(outcome.error, bridge)
+        ? servesNothing(outcome) ? null : refusalFailure(outcome.error, bridge)
         : outcome.why === "transport"
           ? transportFailure(outcome, bridge)
           : null;

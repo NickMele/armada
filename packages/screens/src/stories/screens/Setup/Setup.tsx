@@ -20,8 +20,8 @@ import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
 import { useManifestEditing } from "../../../manifest-file";
 import { useManifestForm } from "../../../manifest-form";
-import { Locate, useLocate } from "../../../Locate";
-import { landsIn, type LocateAnswer } from "../../../locate-reads";
+import { Locate, LocatedNotice, useLocate } from "../../../Locate";
+import { landsIn, NO_REPOSITORY, type LocateAnswer } from "../../../locate-reads";
 import { Setup } from "../../../Setup";
 import { useSetup } from "../../../setup-held";
 import type { ProposalAnswer } from "../../../setup-reads";
@@ -159,8 +159,24 @@ const NO_ROOT_FILE: ManifestProposals = {
   proposals: PROPOSALS.proposals.map((one) => (one.dir === "." ? { ...one, present: false } : one)),
 };
 
-/** What a clone comes to in a story: served, refused by git, into a folder already full, or still running. */
-export type CloneGoesTo = "took" | "refused" | "occupied" | "underway";
+/** What a clone comes to in a story: served, refused by git, into a folder already full, still running, or served late. */
+export type CloneGoesTo = "took" | "refused" | "occupied" | "underway" | "late";
+
+/** How long a late clone runs: long enough for a play to close its dialog first. */
+const LATE_MS = 800;
+
+/** What main resolves a parent to. `/tmp` is a symlink on macOS, and Fleet clones under its target. */
+const RESOLVED: Record<string, string> = { "/tmp": "/private/tmp" };
+
+/** What Fleet answers a per-repository read with while it serves none. */
+const NOTHING_SERVED: CheckoutRunSheetRead = {
+  state: "failed",
+  outcome: {
+    ok: false,
+    why: "refused",
+    error: { code: NO_REPOSITORY, message: "No repository has a Manifest yet, so add one by folder or clone one from its URL", run_id: "01M1RUN", fields: {}, chain: [] },
+  },
+};
 
 /** What the OS folder dialog answers in a story. Nothing native opens. */
 export const CHOSEN = "/Users/user/scratch";
@@ -193,8 +209,8 @@ export function SetupFrom({
   repositories?: RepositorySummary[];
 }) {
   const [listed, setListed] = useState<RepositorySummary[]>(repositories ?? [repository()]);
-  const [scope, setScope] = useState(listed[0]!.root);
-  const picked = listed.find((one) => one.root === scope)!;
+  const [scope, setScope] = useState(listed[0]?.root ?? "");
+  const picked = listed.find((one) => one.root === scope);
   // Fleet serving a folder: listed, and answered. Main's pick is `onLocated` below.
   const served = (root: string): Promise<LocateAnswer> => {
     const one = { root, records_root: `/records/${root.split("/").pop()}` };
@@ -203,14 +219,17 @@ export function SetupFrom({
   };
   const locate = useLocate({
     onChooseFolder: () => Promise.resolve(CHOSEN),
+    onResolveFolder: (path) => Promise.resolve(RESOLVED[path] ?? path),
+    nothingServed: listed.length === 0,
     onAdd: (path) => {
       onAdded?.(path);
       return served(path);
     },
     onClone: (url, parent) => {
       onCloned?.(url, parent);
-      const into = landsIn(url, parent)!;
+      const into = landsIn(url, RESOLVED[parent] ?? parent)!;
       if (clone === "underway") return new Promise(() => {});
+      if (clone === "late") return new Promise((done) => setTimeout(() => done(served(into)), LATE_MS));
       if (clone === "refused") {
         const saying = `git refused the clone: fatal: repository '${url}' not found`;
         return Promise.resolve({ state: "refused", code: "fleet.clone_refused", saying });
@@ -226,8 +245,8 @@ export function SetupFrom({
       setSettingUp(true);
     },
   });
-  const held = useRef<ManifestProposals>(rootSetUp && picked.manifest !== undefined ? PROPOSALS : NO_ROOT_FILE);
-  const [settingUp, setSettingUp] = useState(repositories === undefined || picked.manifest === undefined);
+  const held = useRef<ManifestProposals>(rootSetUp && picked?.manifest !== undefined ? PROPOSALS : NO_ROOT_FILE);
+  const [settingUp, setSettingUp] = useState(repositories === undefined || picked?.manifest === undefined);
   const answer = (dir: string, change: (one: ManifestProposal) => ManifestProposal): Promise<ProposalAnswer> => {
     const next = held.current.proposals.map((one) => (one.dir === dir ? change(one) : one));
     held.current = { ...held.current, proposals: next };
@@ -250,7 +269,7 @@ export function SetupFrom({
       if (write === "appeared") return Promise.resolve({ state: "appeared", onDisk: "version: 1\nid: web\n" });
       const file = dir === "." ? "armada.yml" : `${dir}/armada.yml`;
       if (dir === ".") {
-        const setUp = { ...manifestOf(picked), id: "scratch" };
+        const setUp = { ...manifestOf(picked!), id: "scratch" };
         setListed((was) => was.map((one) => (one.root === scope ? { ...one, manifest: setUp } : one)));
       }
       return answer(dir, (one) => {
@@ -263,7 +282,9 @@ export function SetupFrom({
 
   // Main's read for a repository with no Manifest refuses before it is sent; after Write it is the sheet.
   const verifiable: CheckoutRunSheetRead =
-    picked.manifest === undefined ? { state: "failed", outcome: { ok: false, why: "not_set_up" } } : sheet;
+    picked === undefined
+      ? NOTHING_SERVED
+      : picked.manifest === undefined ? { state: "failed", outcome: { ok: false, why: "not_set_up" } } : sheet;
 
   // The Manifest surface's other views, faked only far enough to mount.
   const readFile = () => Promise.resolve({ ok: false as const, outcome: { ok: false as const, why: "not_connected" as const } });
@@ -288,6 +309,7 @@ export function SetupFrom({
         connection={CONNECTED}
         statement={statementOf(CONNECTED, NOW, NOW)}
         repositories={listed}
+        listed
         scope={scope}
         onScope={(root) => {
           // `App`'s own rule: a repository nobody set up opens on Setup.
@@ -306,6 +328,7 @@ export function SetupFrom({
         onAddRepository={locate.onOpen}
       >
         <div className="armada-screen__mounted">
+          <LocatedNotice locating={locate} repositories={listed} />
           <Manifest
             key={scope}
             sheet={verifiable}
@@ -331,7 +354,7 @@ export function SetupFrom({
             onOpenServerLink={() => Promise.resolve({ ok: false, why: "no_address" } as const)}
             settingUp={settingUp}
             onSettingUp={setSettingUp}
-            setUp={picked.manifest !== undefined}
+            setUp={picked?.manifest !== undefined}
             setup={
               <Setup
                 setting={setting}

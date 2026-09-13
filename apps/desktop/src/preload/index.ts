@@ -343,8 +343,9 @@ const api: BridgeApi = {
   // `jobId` was optional here before that surface existed.
   pickRepository: (root: string): Promise<void> => ipcRenderer.invoke(CHANNELS.pickRepository, root),
 
-  // Locate: the OS folder dialog, and a repository added or cloned. Main asks Fleet and picks it.
+  // Locate: the OS folder dialog, a clone parent as Fleet will spell it, and a repository added or cloned.
   chooseFolder: (): Promise<string | null> => ipcRenderer.invoke(CHANNELS.chooseFolder),
+  resolveFolder: (path: string): Promise<string | null> => ipcRenderer.invoke(CHANNELS.resolveFolder, path),
   addRepository: (path: string): Promise<LocateAnswer> => ipcRenderer.invoke(CHANNELS.addRepository, path),
   cloneRepository: (url: string, parent: string): Promise<LocateAnswer> => ipcRenderer.invoke(CHANNELS.cloneRepository, url, parent),
 

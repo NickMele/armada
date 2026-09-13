@@ -330,6 +330,11 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     host.rehearsal.onManifestReread(fleet.port);
     return;
   }
+  if (event.kind === "repositories.changed") {
+    // Carried whole, so an add made in another window or at the CLI lands without a round trip.
+    host.publish({ connection });
+    return void host.repositories.listed(event, fleet.port);
+  }
   if (event.kind === "run.finished") {
     host.publish({ connection });
     host.rehearsal.onRunFinished(event.job_id, fleet.port);

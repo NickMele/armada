@@ -10,6 +10,20 @@ export type LocateAnswer =
   | { state: "busy" }
   | { state: "failed"; outcome: Outcome };
 
+/** Fleet's code for a read or act that needs a repository, while it serves none. */
+export const NO_REPOSITORY = "fleet.no_repository";
+
+/** What Bridge says where Fleet serves nothing yet: where a fresh install starts, not a fault. */
+export const NOTHING_SERVED = {
+  title: "Nothing is set up yet",
+  next: "Add a repository from the rail, and Setup opens for it.",
+} as const;
+
+/** Whether an answer is Fleet saying it serves no repository yet. */
+export function servesNothing(outcome: Outcome): boolean {
+  return !outcome.ok && outcome.why === "refused" && outcome.error.code === NO_REPOSITORY;
+}
+
 /** Fleet's code for a clone destination that is already there and not empty. */
 export const DESTINATION_OCCUPIED = "fleet.destination_occupied";
 

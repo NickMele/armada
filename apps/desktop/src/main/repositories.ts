@@ -2,7 +2,7 @@
 // Manifest reading scoped to it. Beside `connection.ts`, which is at the length the gate refuses.
 
 import type { BridgeState } from "../shared/bridge";
-import type { Holdings } from "@armada/protocol";
+import type { Holdings, RepositoryList } from "@armada/protocol";
 import type { Picked } from "./picked";
 import type { RehearsalConnection } from "./rehearsal";
 import { Locating } from "./locating";
@@ -25,7 +25,7 @@ export class RepositoryReads {
   constructor(wiring: RepositoryWiring) {
     this.wiring = wiring;
     this.picked = wiring.picked;
-    this.locating = new Locating({ port: wiring.port, list: (port) => this.readHoldings(port), pick: (root) => this.pick(root) });
+    this.locating = new Locating({ port: wiring.port, list: (port) => this.readHoldings(port) });
   }
 
   /**
@@ -34,7 +34,14 @@ export class RepositoryReads {
    * awaited so Setup's Verify redraws on this repository's sheet.
    */
   async readHoldings(port: number, moved = false): Promise<void> {
-    const listed = await repositoriesOf(port);
+    await this.listed(await repositoriesOf(port), port, moved);
+  }
+
+  /**
+   * A listing, read or carried whole by `repositories.changed`. Every window follows it, because
+   * main publishes one state to all of them; the pick stays where it is still served.
+   */
+  async listed(listed: RepositoryList | null, port: number, moved = false): Promise<void> {
     const shifted = listed !== null && this.picked.hold(listed.repositories);
     const held = this.wiring.holds();
     const kept = listed === null ? held : { ...held, repositories: listed.repositories };

@@ -68,20 +68,22 @@
 // nothing else, and the row shape carries one secondary control which a queued
 // replacement already spends on `Approve dispatch`.
 
-import { ActiveJobsList, BoardControls, BoardEmptyState, Button } from "@armada/components";
+import { ActiveJobsList, BoardControls, Button } from "@armada/components";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { JobSummary } from "@armada/protocol";
+import type { JobSummary, RepositorySummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
+import { BoardEmpty } from "./BoardEmpty";
 import {
-  BOARD_COLUMNS,
   BOARD_SORTS,
   BOARD_TABS,
+  columnsFor,
   DEFAULT_SORT,
   emptiedBy,
   FIRST_TAB,
   inTab,
   matches,
+  repositoryOf,
   sectionsOf,
   sorted,
   tabOf,
@@ -113,6 +115,8 @@ export type JobsProps = {
   now: number;
   /** What Fleet holds, so a row can say `bug` where it carried a ULID. */
   workflows: readonly WorkflowSummary[];
+  /** Every repository Fleet serves, or `null` before it has listed: more than one names each row's. */
+  served?: readonly RepositorySummary[] | null;
   /** The whole reading of the connection, for the empty state that is a fault. */
   disconnected: string | null;
   /** The Job whose detail is open, where one is. */
@@ -151,6 +155,7 @@ export function Jobs({
   stale,
   now,
   workflows,
+  served = null,
   disconnected,
   selected,
   onOpen,
@@ -356,6 +361,7 @@ export function Jobs({
       stale={stale}
       now={now}
       workflows={workflows}
+      repository={repositoryOf(job, served)}
       selected={job.id === selected}
       focused={job.id === cursor}
       onOpen={onOpen}
@@ -401,7 +407,7 @@ export function Jobs({
         selectable
         label="Job Board"
         view={view}
-        columns={BOARD_COLUMNS}
+        columns={columnsFor(served)}
         controls={
           <BoardControls
             query={query}
@@ -421,38 +427,13 @@ export function Jobs({
           />
         }
         empty={
-          disconnected !== null ? (
-            // The three empty states differ because the three situations do: a
-            // Fleet that is up with no work is a null result, one that is not
-            // running is a fault Bridge cannot fix, and a filter that emptied
-            // the list is neither — it is a control saying so.
-            <BoardEmptyState command="armada fleet start" note={disconnected}>
-              Fleet is not connected, so there is nothing to show.
-            </BoardEmptyState>
-          ) : why !== null ? (
-            // **The control offered is the one that emptied the list.** Only
-            // one of the two can have, because a search suspends the tab — so
-            // clearing the search restores whatever tab was set rather than
-            // discarding it, which is the whole reason suspending won over
-            // resetting. A single "Show every job" here would have spent the
-            // filter at the last moment it could have been kept.
-            <BoardEmptyState
-              quiet
-              action={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => (suspended ? setQuery("") : setTab("all"))}
-                >
-                  {suspended ? "Clear the search" : "Show every job"}
-                </Button>
-              }
-            >
-              {why}
-            </BoardEmptyState>
-          ) : (
-            <BoardEmptyState quiet>No jobs. Propose one above.</BoardEmptyState>
-          )
+          <BoardEmpty
+            disconnected={disconnected}
+            why={why}
+            suspended={suspended}
+            nothingServed={served?.length === 0}
+            onClear={() => (suspended ? setQuery("") : setTab("all"))}
+          />
         }
       >
         {grouped ? null : drawn.map(rowOf)}

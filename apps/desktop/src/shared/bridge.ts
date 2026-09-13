@@ -459,6 +459,7 @@ export const CHANNELS = {
   pickRepository: "bridge:pick-repository",
   // Locate: the OS folder dialog, and a repository added or cloned. Main asks Fleet; the renderer names paths.
   chooseFolder: "bridge:choose-folder",
+  resolveFolder: "bridge:resolve-folder",
   addRepository: "bridge:add-repository",
   cloneRepository: "bridge:clone-repository",
   startServer: "bridge:start-server",

@@ -47,6 +47,7 @@ import type { Connection } from "@armada/protocol";
 import type { FleetCapacity, JobSummary } from "@armada/protocol";
 import type { RepositorySummary } from "@armada/protocol";
 import type { Statement } from "./fleet";
+import { repositoryLabel } from "./repository-label";
 import { ADMISSION_HOLD } from "@armada/components";
 import { SURFACE, SURFACES } from "./surfaces";
 
@@ -56,6 +57,8 @@ export type ShellProps = {
   statement: Statement;
   /** Every repository Fleet serves, set up or not. One entry is why the drawing shows the control. */
   repositories: readonly RepositorySummary[];
+  /** Whether Fleet has answered the listing, so an empty one says nothing is set up rather than not read. */
+  listed?: boolean;
   /** The picked repository's root: what every per-repository read and act names. */
   scope: string;
   onScope: (root: string) => void;
@@ -89,6 +92,7 @@ export function Shell({
   connection,
   statement,
   repositories,
+  listed = false,
   scope,
   onScope,
   onAddRepository,
@@ -140,7 +144,7 @@ export function Shell({
           // and the option says so rather than showing a blank control.
           disabled={repositories.length === 0}
         >
-          {repositories.length === 0 ? <option value="">No repository read yet</option> : null}
+          {repositories.length === 0 ? <option value="">{listed ? "Nothing set up yet" : "No repository read yet"}</option> : null}
           {repositories.filter((one) => one.manifest !== undefined).map(optionOf)}
           {/* A group rather than a suffix: the rail clips a long label, and picking one opens Setup. */}
           {repositories.some((one) => one.manifest === undefined) ? (
@@ -166,35 +170,6 @@ export function Shell({
       {children}
     </TheShell>
   );
-}
-
-/**
- * What the picker calls a repository: its Manifest's id, or its folder where it has none yet.
- * Where two read alike each takes its parent folder, and the whole root past that; the root is
- * always the option's title.
- */
-export function repositoryLabel(
-  repository: RepositorySummary,
-  repositories: readonly RepositorySummary[],
-): string {
-  const others = repositories.filter((other) => other.root !== repository.root);
-  const named = nameOf(repository);
-  if (!others.some((other) => nameOf(other) === named)) return named;
-  const placed = placedOf(repository);
-  return others.some((other) => placedOf(other) === placed) ? repository.root : placed;
-}
-
-function nameOf(repository: RepositorySummary): string {
-  return repository.manifest?.id ?? folderOf(repository.root);
-}
-
-function placedOf(repository: RepositorySummary): string {
-  const parent = repository.root.replace(/\/+$/, "").split("/").slice(0, -1).join("/");
-  return `${folderOf(parent)}/${nameOf(repository)}`;
-}
-
-function folderOf(root: string): string {
-  return root.replace(/\/+$/, "").split("/").pop() || root;
 }
 
 /**
