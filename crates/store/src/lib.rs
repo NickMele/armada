@@ -92,6 +92,9 @@ mod showing;
 mod shown_again;
 /// What a Job's Drones have cost it: one row per Drone, summed per Job.
 mod spend;
+/// A Job's plan and its tasks, kept as every change made to them. Not
+/// [`plan`](mod@plan), which is a step's declared scope.
+mod work_plan;
 #[cfg(feature = "wreckage")]
 mod wreckage;
 mod write;
@@ -122,3 +125,4 @@ pub use review::Review;
 pub use showing::KeptFrame;
 pub use shown_again::{ShownAgain, SpecNamed};
 pub use spend::{DroneSpend, PastSpend, Spend};
+pub use work_plan::{PlanHand, PlanNotKept};

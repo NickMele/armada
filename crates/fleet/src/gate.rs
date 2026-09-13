@@ -105,6 +105,7 @@ pub use crate::ruling::Ruling;
 /// | `ports`, `port_env` | The Job's claimed span, resolved to a name-to-port map and to the environment it sets. **Handed in for `lifted`'s reason** — this function is given a step and not a Job, and only a caller holding one can ask the store for its claim. `crate::ports` |
 /// | `refusal_policy` | This Job's `WhenRefused` setting, off the store. **Handed in for `lifted`'s reason** — a step cannot ask the store for a Job-level setting, and a setting read here for itself would be a second reader of the value `crate::asking::answer_judge` writes |
 /// | `tolerated` | Every criterion this repository has stood down with "always disagree", off the store. **Handed in and read once per pass**, so a criterion answered before this Job existed is never asked about again without a second query per criterion |
+/// | `plan` | How many tasks the Job's plan holds in each state, off the store, or `None` where none was recorded. **Read by `plan_recorded` and nothing else** — a task's state never gates a submission |
 #[allow(clippy::too_many_arguments)]
 pub async fn rule_on<W>(
     at: AtStep<'_>,
@@ -124,6 +125,7 @@ pub async fn rule_on<W>(
     port_env: &[(String, String)],
     refusal_policy: WhenRefused,
     tolerated: &[CriterionId],
+    plan: Option<core_model::TaskCounts>,
 ) -> Ruling
 where
     W: WorkProduct,
@@ -217,6 +219,7 @@ where
         announcing,
         ports,
         port_env,
+        plan,
     )
     .await
     {

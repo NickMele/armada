@@ -148,4 +148,18 @@ impl Tools for FakeDaemon {
             because: format!("the fake daemon starts no server, `{name}` included"),
         })
     }
+
+    /// Taken while a Job is running, answering with the tool that was called so
+    /// a router test can tell the call arrived. **Which step may call which** is
+    /// `fleet::work_plan`'s and is tested there.
+    async fn change_plan(
+        &self,
+        _caller: crate::Caller,
+        call: ipc::mcp::PlanCall,
+    ) -> Result<Receipt, NotRecorded> {
+        self.while_working("plan to be about")?;
+        Ok(Receipt {
+            word: call.tool.to_string(),
+        })
+    }
 }

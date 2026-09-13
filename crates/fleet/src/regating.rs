@@ -156,6 +156,13 @@ where
             .await
             .tolerated_criteria()
             .unwrap_or_default();
+        let plan = self
+            .store()
+            .lock()
+            .await
+            .work_plan(job_id)
+            .map_err(Adrift::Reading)?
+            .map(|plan| plan.counts());
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             Request::of(&job),
@@ -177,6 +184,7 @@ where
             &port_env,
             refusal_policy,
             &tolerated,
+            plan,
         )
         .await;
 

@@ -26,8 +26,8 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{PermissionAnswer, Tools};
 use ipc::mcp::{
-    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt,
-    RequestScope, ServerReport, SubmitEvidence,
+    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, PlanCall,
+    Receipt, RequestScope, ServerReport, SubmitEvidence,
 };
 
 use crate::daemon::Fleet;
@@ -202,5 +202,19 @@ where
             .map_err(|why| NotRecorded {
                 because: why.to_string(),
             })
+    }
+
+    /// The working Drone keeping its Job's plan. Which step may make which
+    /// change, and the binding, are `Fleet::change_plan`'s under the slot lock.
+    async fn change_plan(
+        &self,
+        caller: api::Caller,
+        call: PlanCall,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        let plan = Fleet::change_plan(self, &job, &call.change).await?;
+        Ok(Receipt {
+            word: crate::work_plan::receipt_word(&call.change, &plan),
+        })
     }
 }

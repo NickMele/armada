@@ -24,6 +24,7 @@
 mod ask;
 mod dispatch;
 mod permission;
+mod planning;
 mod report;
 mod serving;
 mod tools;
@@ -37,6 +38,7 @@ use crate::codec::{encode, Unencodable};
 pub use ask::{AskQuestion, AskedOption, ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 pub use dispatch::{DispatchJob, DISPATCH_FIELDS, DISPATCH_TOOL};
 pub use permission::{PermissionAsked, PERMISSION_FIELDS, PERMISSION_TOOL};
+pub use planning::{PlanArgument, PlanCall, ADD_TASK_TOOL, RECORD_PLAN_TOOL, UPDATE_TASK_TOOL};
 pub use report::{CheckExcerpt, CheckRan, CheckReport};
 pub use serving::{ServerReport, SERVER_FIELDS, SERVER_TOOL};
 pub use tools::{
@@ -180,6 +182,11 @@ pub enum Incoming {
     Permission {
         id: CallId,
         asked: PermissionAsked,
+    },
+    /// A plan tool's call, read as its change. Whether this step may make it is the daemon's.
+    Plan {
+        id: CallId,
+        call: PlanCall,
     },
     /// A tool call this server would not take. **Answered as a tool error and
     /// never as a transport failure** — a Drone reads a tool error and can act
@@ -414,6 +421,12 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
     if tool == PERMISSION_TOOL {
         return match permission::asked(arguments) {
             Ok(asked) => Incoming::Permission { id, asked },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
+    if let Some(read) = planning::read(tool, arguments) {
+        return match read {
+            Ok(call) => Incoming::Plan { id, call },
             Err(why) => Incoming::NotASubmission { id, why },
         };
     }

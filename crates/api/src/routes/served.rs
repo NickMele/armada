@@ -727,6 +727,13 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // A Job's plan was recorded or a task changed. The counts ride along; the
+    // plan is `get_job`'s. `#893`.
+    Route {
+        operation: "job.plan_changed",
+        method: "GET",
+        path: "/events",
+    },
     // The one kind on this stream that names no Job. A proposal is the interval
     // before any exists, which is why it carries an id of its own.
     Route {

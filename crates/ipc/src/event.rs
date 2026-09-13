@@ -29,6 +29,7 @@ use crate::servers::ServerState;
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
+use crate::work_plan::JobPlanChanged;
 
 /// A position in the stream. Monotonic, assigned by Fleet, never reused.
 ///
@@ -120,6 +121,9 @@ pub enum Event {
     JobLanded(JobLanded),
     #[serde(rename = "job.remarks_changed")]
     JobRemarksChanged(JobRemarksChanged),
+    // The counts and not the plan; `crate::work_plan` says why.
+    #[serde(rename = "job.plan_changed")]
+    JobPlanChanged(JobPlanChanged),
     #[serde(rename = "proposal.moved")]
     ProposalMoved(ProposalMoved),
     #[serde(rename = "manifest.reread")]

@@ -860,6 +860,14 @@ vocabulary = "Evidence type"
 in_code = ""
 notes = "Design Plan's product, and the contract's table calls it `Document or mockup`. The verb takes the narrower half: a mockup is a document here, and a verb naming both would ask a reader to pick which one arrived when the type does not distinguish them. Neither glyph nor token, for `diff`'s reason."
 
+[verbs.evidence_type.plan]
+verb = "a plan"
+icon = ""
+status_token = ""
+vocabulary = "Evidence type"
+in_code = ""
+notes = "An approach and a list of tasks, recorded with `record_plan` into a record Fleet holds rather than written to a file. `#893`. Not the declared scope a step names with `declare_scope`, which is where work will be rather than what it is. Neither glyph nor token, for `diff`'s reason."
+
 [verbs.change_kind.added]
 verb = "added"
 icon = ""

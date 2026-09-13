@@ -64,6 +64,7 @@ async fn the_call_carries_the_patch_and_the_facts_and_nothing_the_drone_wrote() 
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -149,6 +150,7 @@ async fn a_step_whose_work_product_is_a_note_is_judged_against_the_note() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -207,6 +209,7 @@ async fn a_later_step_is_measured_against_what_an_earlier_one_established() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -260,6 +263,7 @@ async fn a_step_with_nothing_to_show_costs_no_call_and_draws_no_verdict() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -322,6 +326,7 @@ async fn a_criterion_asking_what_was_requested_reaches_a_call_that_carries_it() 
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 

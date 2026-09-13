@@ -29,6 +29,10 @@ use serde_json::{json, Map, Value};
 use super::ask::{ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 use super::dispatch::{DISPATCH_FIELDS, DISPATCH_TOOL};
 use super::permission::{PERMISSION_FIELDS, PERMISSION_TOOL};
+use super::planning::{
+    ADD_TASK_FIELDS, ADD_TASK_TOOL, RECORD_PLAN_FIELDS, RECORD_PLAN_TOOL, UPDATE_TASK_FIELDS,
+    UPDATE_TASK_TOOL,
+};
 use super::serving::{SERVER_FIELDS, SERVER_TOOL};
 use super::widening::{WIDEN_FIELDS, WIDEN_TOOL};
 
@@ -159,6 +163,9 @@ pub enum NotAnArgument {
     /// is allowed per part, so a request for nothing would spend the only ask
     /// the Drone had.
     AskedForNothing,
+    /// A plan tool's arguments that did not read as a change. The rules are
+    /// [`planning`](mod@super::planning)'s, beside the tools they belong to.
+    Planning(super::planning::PlanArgument),
 }
 
 impl core::fmt::Display for NotAnArgument {
@@ -170,7 +177,8 @@ impl core::fmt::Display for NotAnArgument {
                 out,
                 "there is no tool called `{named}`. The tools are `{TOOL}`, \
                  `{SCOPE_TOOL}`, `{WIDEN_TOOL}`, `{CHECKS_TOOL}`, \
-                 `{SERVER_TOOL}`, `{DISPATCH_TOOL}` and `{ASK_TOOL}`"
+                 `{SERVER_TOOL}`, `{DISPATCH_TOOL}`, `{ASK_TOOL}`, \
+                 `{RECORD_PLAN_TOOL}`, `{ADD_TASK_TOOL}` and `{UPDATE_TASK_TOOL}`"
             ),
             NotAnArgument::NoArguments { tool, takes } => write!(
                 out,
@@ -277,6 +285,7 @@ impl core::fmt::Display for NotAnArgument {
                  task's scope does not already cover, or get on with the work \
                  inside the scope you have",
             ),
+            NotAnArgument::Planning(why) => write!(out, "{why}"),
         }
     }
 }
@@ -401,6 +410,9 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
         DISPATCH_TOOL => Ok(DISPATCH_TOOL),
         ASK_TOOL => Ok(ASK_TOOL),
         PERMISSION_TOOL => Ok(PERMISSION_TOOL),
+        RECORD_PLAN_TOOL => Ok(RECORD_PLAN_TOOL),
+        ADD_TASK_TOOL => Ok(ADD_TASK_TOOL),
+        UPDATE_TASK_TOOL => Ok(UPDATE_TASK_TOOL),
         other => Err(NotAnArgument::NoSuchTool {
             named: other.to_string(),
         }),
@@ -439,6 +451,18 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
         PERMISSION_TOOL => NotAnArgument::NoArguments {
             tool: PERMISSION_TOOL,
             takes: PERMISSION_FIELDS,
+        },
+        RECORD_PLAN_TOOL => NotAnArgument::NoArguments {
+            tool: RECORD_PLAN_TOOL,
+            takes: RECORD_PLAN_FIELDS,
+        },
+        ADD_TASK_TOOL => NotAnArgument::NoArguments {
+            tool: ADD_TASK_TOOL,
+            takes: ADD_TASK_FIELDS,
+        },
+        UPDATE_TASK_TOOL => NotAnArgument::NoArguments {
+            tool: UPDATE_TASK_TOOL,
+            takes: UPDATE_TASK_FIELDS,
         },
         _ => NotAnArgument::NoArguments {
             tool: TOOL,
@@ -495,6 +519,9 @@ pub(crate) fn listed() -> Vec<Value> {
         super::dispatch::dispatch_tool(),
         super::ask::ask_tool(),
         super::permission::permission_tool(),
+        super::planning::record_plan_tool(),
+        super::planning::add_task_tool(),
+        super::planning::update_task_tool(),
     ]
 }
 

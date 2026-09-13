@@ -20,6 +20,7 @@ import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { CommandInFlight } from "./commanding";
 import type { ProtocolVersion } from "./version";
+import type { JobPlanChanged } from "./work-plan";
 
 /** One message from Fleet to a connected client. `crates/ipc/src/event.rs`. */
 export type StreamMessage =
@@ -57,6 +58,8 @@ export type Event =
   | ({ kind: "job.forgotten" } & JobForgotten)
   | ({ kind: "job.landed" } & JobLanded)
   | ({ kind: "job.remarks_changed" } & JobRemarksChanged)
+  /** A Job's plan was recorded or a task changed. Since 13.21. */
+  | ({ kind: "job.plan_changed" } & JobPlanChanged)
   | ({ kind: "proposal.moved" } & ProposalMoved)
   | ({ kind: "manifest.reread" } & ManifestReading)
   /** The repositories Fleet serves changed; the list now, whole, as `list_repositories` answers. */

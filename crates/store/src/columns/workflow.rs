@@ -19,7 +19,7 @@ use core_model::{
     EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern, GateVerdict, JudgeCheck,
     JudgeCriterion, ModelName, Narrowing, OnRefusal, PathPattern, Prerequisite, RepoPath,
     ResolvedCheck, ResolvedStep, StepId, Ulid, WorkflowId, WorkflowSource, ARTIFACT_EXISTS,
-    DIFF_NONEMPTY, MANIFEST_CHECK,
+    DIFF_NONEMPTY, MANIFEST_CHECK, PLAN_RECORDED,
 };
 use serde_json::{json, Map, Value};
 
@@ -41,6 +41,9 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             // that asks to be read rather than looked at, and every row written
             // before the key existed.
             "captured": step.captured().then_some(true),
+            // Absent rather than `false`, for `captured`'s reason: every row
+            // frozen before a step could work a plan reads back as one that did not.
+            "follows_plan": step.follows_plan().then_some(true),
             "advance_gate": step.advance_gate().as_wire(),
             "retry_limit": step.retry_limit(),
             // The loop, written as the pair it is read as. Absent rather than
@@ -166,6 +169,10 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                     "type": ARTIFACT_EXISTS,
                     "target": target,
                 }),
+                ResolvedCheck::PlanRecorded { min_tasks } => json!({
+                    "type": PLAN_RECORDED,
+                    "min_tasks": min_tasks.get(),
+                }),
             }).collect::<Vec<Value>>(),
         })).collect::<Vec<Value>>(),
     })
@@ -284,7 +291,17 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
     .gating_on_every_check(read_gates_on_every_check(entry)?)
     .looping(read_verdict_routing(entry)?, read_iteration_cap(entry)?)
     .quiet_after(read_patience(entry, "quiet_after_seconds")?)
-    .poking(read_patience(entry, "poke_limit")?))
+    .poking(read_patience(entry, "poke_limit")?)
+    .following_plan(read_follows_plan(entry)?))
+}
+
+/// Whether the step works the plan. **Absent and null read as no.**
+fn read_follows_plan(entry: &Map<String, Value>) -> Result<bool, Malformed> {
+    match entry.get("follows_plan") {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(set)) => Ok(*set),
+        Some(other) => Err(format!("`follows_plan` is {}", kind(other))),
+    }
 }
 
 /// Where the step's gate verdicts route. **Absent and null both read as no
@@ -604,6 +621,14 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
         DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),
         ARTIFACT_EXISTS => Ok(ResolvedCheck::ArtifactExists {
             target: text(entry, "target")?,
+        }),
+        // Zero is refused rather than read as one: no workflow could freeze it.
+        PLAN_RECORDED => Ok(ResolvedCheck::PlanRecorded {
+            min_tasks: field(entry, "min_tasks")?
+                .as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .and_then(std::num::NonZeroU32::new)
+                .ok_or_else(|| "`min_tasks` is not a count of one or more".to_string())?,
         }),
         other => Err(format!("`type` holds `{other}`")),
     }

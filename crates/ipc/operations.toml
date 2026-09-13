@@ -1933,6 +1933,19 @@ Only for a Job the merge sweep found still open — `notice_a_merge` calls `read
 It adds nothing measurable to the unbounded-sink risk `docs/practices/protocol.md` names. The rotation produces at most one of these per `Noticing` interval across every open pull request Fleet holds, which is `job.asking`'s own bound one order slower — a person answers faster than a sweep rotates.
 """
 
+[operations."job.plan_changed"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "A Job's plan was recorded, or one of its tasks was added or changed state"
+notes = """
+`#893`. Published when a Drone's `record_plan`, `add_task` or `update_task` is kept, and by a person's add or drop once that act exists (#897).
+
+**The counts ride along and the plan does not.** A Board redraws a row's task figure from them without a read per row, and an open Job reads `get_job`, whose `work_plan` is the plan whole. A plan's approach and titles are free text, and this stream is one bounded drop-oldest channel every Job shares.
+
+It adds nothing measurable to the unbounded-sink risk `docs/practices/protocol.md` names: one message per kept change, and a Drone makes a handful per task.
+"""
+
 [operations."job.asking"]
 kind = "event"
 transport = "WebSocket"

@@ -88,6 +88,7 @@ async fn ruled(judge: Arc<FakeJudge>, asked: Asked, worktree: &Worktree) -> Ruli
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await
 }

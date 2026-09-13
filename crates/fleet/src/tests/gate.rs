@@ -323,6 +323,7 @@ async fn evidence_and_every_check_passing_advances_the_step() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -360,6 +361,7 @@ async fn evidence_with_every_check_failing_advances_nothing() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -409,6 +411,7 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -447,6 +450,7 @@ async fn a_hanging_check_fails_rather_than_hanging() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
     let took = started.elapsed();
@@ -493,6 +497,7 @@ async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -536,6 +541,7 @@ async fn the_check_output_comes_back_for_a_person_to_read() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -572,6 +578,7 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -616,6 +623,7 @@ async fn a_diff_that_cannot_be_read_decides_nothing_and_stops_the_job() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -665,6 +673,7 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -702,6 +711,7 @@ async fn a_failed_check_holds_the_job_and_fleet_is_the_actor() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
     let moved = apply(&running_job(), &ruling, at(NOW))
@@ -746,6 +756,7 @@ async fn an_advancing_step_does_not_move_the_job() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
     assert!(apply(&running_job(), &ruling, at(NOW)).is_none());
@@ -777,6 +788,7 @@ async fn the_last_step_advancing_completes_the_job() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
     let moved = apply(&job_with_every_step_advanced(), &ruling, at(NOW))

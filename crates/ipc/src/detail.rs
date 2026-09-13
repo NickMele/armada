@@ -255,6 +255,11 @@ pub struct JobDetail {
     /// own record, so a definition changed since still reads as the one this Job runs.
     #[serde(default)]
     pub workflow_source: String,
+    /// The Job's plan whole: its approach and every task in plan order.
+    /// **Absent is a Job no plan was recorded for.** Filled after
+    /// [`JobDetail::of`], like `when_blocked`. Since 13.21.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_plan: Option<crate::WorkPlan>,
 }
 
 /// The review Fleet composed, in the four parts it is made of. No heading
@@ -615,6 +620,7 @@ impl JobDetail {
             model_override: None,
             review,
             workflow_source: job.workflow().source().as_wire().to_string(),
+            work_plan: None,
         }
     }
 }

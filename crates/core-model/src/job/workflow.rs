@@ -30,6 +30,7 @@
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::num::NonZeroU32;
 
 use crate::job::attempt::{Iteration, Spent};
 use crate::job::covers::Covers;
@@ -94,7 +95,13 @@ pub enum ResolvedCheck {
     /// one path because Fleet has to be able to name it to the next step's
     /// Drone, and "whichever file matched" is not a name.
     ArtifactExists { target: String },
+    /// The Job's plan holds at least `min_tasks` tasks not dropped. Fleet's own
+    /// record is read, never the Drone's word. Zero is not a count this holds.
+    PlanRecorded { min_tasks: NonZeroU32 },
 }
+
+/// The schema's `type` value for the built-in plan assertion.
+pub const PLAN_RECORDED: &str = "plan_recorded";
 
 /// The schema's `type` value for a named Check. **Spelled once**, here, so the
 /// parser, the wire and a recorded result cannot disagree about what a check is
@@ -121,6 +128,7 @@ impl ResolvedCheck {
             ResolvedCheck::ManifestCheck { .. } => MANIFEST_CHECK,
             ResolvedCheck::DiffNonempty => DIFF_NONEMPTY,
             ResolvedCheck::ArtifactExists { .. } => ARTIFACT_EXISTS,
+            ResolvedCheck::PlanRecorded { .. } => PLAN_RECORDED,
         }
     }
 
@@ -136,7 +144,7 @@ impl ResolvedCheck {
         match self {
             ResolvedCheck::ManifestCheck { name, .. } => Some(name),
             ResolvedCheck::ArtifactExists { target } => Some(target),
-            ResolvedCheck::DiffNonempty => None,
+            ResolvedCheck::DiffNonempty | ResolvedCheck::PlanRecorded { .. } => None,
         }
     }
 
@@ -145,7 +153,9 @@ impl ResolvedCheck {
     pub fn run(&self) -> Option<&str> {
         match self {
             ResolvedCheck::ManifestCheck { run, .. } => Some(run),
-            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => None,
         }
     }
 
@@ -161,7 +171,9 @@ impl ResolvedCheck {
     pub fn when(&self) -> Option<&Covers> {
         match self {
             ResolvedCheck::ManifestCheck { when, .. } => when.as_ref(),
-            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => None,
         }
     }
 
@@ -191,7 +203,9 @@ impl ResolvedCheck {
     pub fn narrowing(&self) -> Option<&Narrowing> {
         match self {
             ResolvedCheck::ManifestCheck { narrow, .. } => narrow.as_ref(),
-            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => None,
         }
     }
 
@@ -201,7 +215,9 @@ impl ResolvedCheck {
     pub fn requires(&self) -> &[Prerequisite] {
         match self {
             ResolvedCheck::ManifestCheck { requires, .. } => requires,
-            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => &[],
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => &[],
         }
     }
 
@@ -211,7 +227,9 @@ impl ResolvedCheck {
             ResolvedCheck::ManifestCheck {
                 expect_exit_code, ..
             } => Some(*expect_exit_code),
-            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => None,
         }
     }
 }
@@ -349,6 +367,10 @@ pub struct ResolvedStep {
     /// Drone gets no nudge at all, and the first silence past the threshold
     /// escalates.
     poke_limit: Option<u32>,
+    /// Whether this step works the Job's plan, and so is given `add_task` and
+    /// `update_task`. **False on every step that does not say so**, and on
+    /// every row frozen before a step could.
+    follows_plan: bool,
 }
 
 impl ResolvedStep {
@@ -392,7 +414,28 @@ impl ResolvedStep {
             verdict_routing: BTreeMap::new(),
             quiet_after_seconds: None,
             poke_limit: None,
+            follows_plan: false,
         }
+    }
+
+    /// Whether this step works the plan, for [`dispatching`](Self::dispatching)'s
+    /// reason: the steps after a plan step say so, and every other would be
+    /// restating a `false`.
+    pub fn following_plan(mut self, follows: bool) -> ResolvedStep {
+        self.follows_plan = follows;
+        self
+    }
+
+    /// **The one thing that grants `add_task` and `update_task`.**
+    pub fn follows_plan(&self) -> bool {
+        self.follows_plan
+    }
+
+    /// **The one thing that grants `record_plan`**: the step's product is a
+    /// plan. Read off the evidence type rather than a second flag that could
+    /// disagree with it.
+    pub fn records_plan(&self) -> bool {
+        self.evidence_type == Some(EvidenceType::Plan)
     }
 
     /// The dispatch grant, for the reason [`frozen`](Self::frozen) is not

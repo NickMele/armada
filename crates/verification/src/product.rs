@@ -67,7 +67,12 @@ impl<'a> Written<'a> {
             // `bundle` is the accumulated evidence of prior steps, and the
             // accumulation arrives as `reference_docs` rather than here. What
             // the step itself wrote is still its deliverable.
-            EvidenceType::FactsNote | EvidenceType::Document | EvidenceType::Bundle => {
+            // `plan`'s record is Fleet's and reaches a Judge through #895; what
+            // the Drone wrote about it here is still the step's own words.
+            EvidenceType::FactsNote
+            | EvidenceType::Document
+            | EvidenceType::Bundle
+            | EvidenceType::Plan => {
                 let submission = accepted.submission();
                 Some(Written {
                     claimed: submission.claimed(),

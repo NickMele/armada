@@ -259,6 +259,14 @@ where
             .map(ipc::AllowedCommandRow::from)
             .collect();
         detail.model_override = self.model_override_of(job.id()).await;
+        // The row nested here is built inside `JobDetail::of`, so its counts are
+        // filled from the same reading as the plan beside it.
+        let plan = self
+            .plan_of(job.id())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        detail.job.tasks = plan.as_ref().map(|plan| plan.counts().into());
+        detail.work_plan = plan.as_ref().map(ipc::WorkPlan::from);
         if let Some(stuck) = detail.stuck.as_mut() {
             for refused in &mut stuck.refused {
                 let command = (refused.tool == "Bash").then(|| refused.detail.clone());

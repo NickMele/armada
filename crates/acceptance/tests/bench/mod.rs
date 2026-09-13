@@ -29,6 +29,9 @@ pub mod focus;
 /// Landing's own apparatus: the workflow that names a delivering step, and the
 /// run that reaches the gate on it. See its own header.
 pub mod landing;
+/// Plan's own apparatus: a workflow with a plan step, built frozen until #895.
+/// See its own header.
+pub mod plan;
 /// Reach's own apparatus: a Manifest and a workflow definition for a
 /// repository that is not this one, held as text. See its own header.
 pub mod reach;
@@ -447,6 +450,7 @@ impl Bench {
             &[],
             core_model::WhenRefused::default(),
             &[],
+            None,
         )
         .await;
         // What `fleet::dispatch` does with the store, done with a list: the

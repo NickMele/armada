@@ -76,14 +76,19 @@ where
         // spend until somebody answers.
         let asking = self.question_awaited(job.id()).await.is_some()
             || self.command_awaited(job.id()).await.is_some();
-        Ok(JobSummary::of(
+        let mut summary = JobSummary::of(
             job,
             reason.as_ref(),
             queued.reason,
             queued.budget,
             asking,
             self.resumption(job),
-        ))
+        );
+        summary.tasks = self
+            .task_counts(job.id())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        Ok(summary)
     }
 
     /// Why an approved Job has not started, worked out from the board as it

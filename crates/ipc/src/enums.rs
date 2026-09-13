@@ -214,6 +214,11 @@ wire_enum! {
     /// the two moments that change it and nothing else about a Drone's life.
     DronePresence, core_model::DronePresence, "a drone presence"
 }
+wire_enum! {
+    /// Where one task of a Job's plan stands. **A Drone's claim or a person's,
+    /// and it gates nothing** — Bridge draws a mark from it and matches on it.
+    TaskState, core_model::TaskState, "a task state"
+}
 
 /// The four origins a Job proposed over the wire may claim.
 ///

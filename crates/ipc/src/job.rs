@@ -209,6 +209,13 @@ pub struct JobSummary {
     /// only a directory that might be gone for some other reason.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reclaimed_at: Option<Instant>,
+    /// How many of the Job's plan tasks stand where. **Absent is a Job with no
+    /// plan**, not a plan of none — a row draws no task field for it.
+    ///
+    /// Filled by Fleet off the store, like [`landed`](JobSummary::landed):
+    /// `core_model::Job` holds no plan. Since 13.21.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tasks: Option<crate::TaskCounts>,
 }
 
 impl JobSummary {
@@ -259,6 +266,8 @@ impl JobSummary {
             // and a single-Job answer leaves it out, because the alternative
             // is a store read per row on a list that redraws on every event.
             landed: None,
+            // Filled by the caller that holds a store, for `landed`'s reason.
+            tasks: None,
         }
     }
 }

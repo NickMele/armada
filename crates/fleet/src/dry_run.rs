@@ -353,6 +353,16 @@ where
         let mut narrowed_to = Vec::with_capacity(declared.checks().len());
         let ports = self.port_map(&plan.record).await;
         let port_env = self.port_env(&plan.record).await;
+        // The same reading the gate takes, so `plan_recorded` answers alike.
+        let tasks = self
+            .store()
+            .lock()
+            .await
+            .work_plan(plan.record.id())
+            .map_err(|cause| NotRun::CouldNotRead {
+                cause: cause.to_string(),
+            })?
+            .map(|recorded| recorded.counts());
         for done in crate::checking::ran(
             declared.checks(),
             &touched,
@@ -365,6 +375,7 @@ where
             &crate::underway::Announcing::nowhere(),
             &ports,
             &port_env,
+            tasks,
         )
         .await
         {

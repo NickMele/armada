@@ -53,6 +53,7 @@ mod step_machine;
 mod stuck;
 mod transition;
 mod verdict;
+mod work_plan;
 mod workflow;
 
 #[cfg(test)]
@@ -99,7 +100,11 @@ pub use transition::{
     CriteriaOwed, Edge, IllegalTransition, PilotReason, Target, TransitionReason, EDGES,
 };
 pub use verdict::GateVerdict;
+pub use work_plan::{
+    Approach, DropReason, NewTask, NotAnUpdate, PlanAuthor, PlanChange, PlanEntry, PlanRefused,
+    PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan,
+};
 pub use workflow::{
     FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS, DIFF_NONEMPTY,
-    EVERY_MANIFEST_CHECK, MANIFEST_CHECK,
+    EVERY_MANIFEST_CHECK, MANIFEST_CHECK, PLAN_RECORDED,
 };

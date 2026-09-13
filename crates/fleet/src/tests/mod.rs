@@ -90,6 +90,7 @@ mod overruling;
 mod paying;
 mod peer;
 mod permitting;
+mod plan_tools;
 mod planning;
 mod planted;
 mod policy_gate;
@@ -140,6 +141,7 @@ mod stuck;
 mod sub_dispatch;
 mod superseding;
 mod terms;
+mod work_plan;
 // `pub(crate)`, not `mod`: `crate::records::migrating`'s own tests are not a
 // descendant of this module and need the same temporary directory every
 // fixture here already uses, rather than a second one invented beside it.

@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use checks_runner::{Attempt, Narrowed, Output};
-use core_model::{Prerequisite, ResolvedCheck};
+use core_model::{Prerequisite, ResolvedCheck, TaskCounts};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
@@ -310,6 +310,9 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 /// Fleet method with a store to ask. Both are empty where the Job declared no
 /// `ports:`, or where there is no Job at all — `crate::proving`'s own call,
 /// proving a merged commit nothing dispatched.
+///
+/// `plan` is the Job's plan counts off the store, handed in for `ports`' reason;
+/// `None` is a Job no plan was recorded for.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn ran(
     checks: &[ResolvedCheck],
@@ -321,6 +324,7 @@ pub(crate) async fn ran(
     announcing: &Announcing,
     ports: &BTreeMap<String, u16>,
     env: &[(String, String)],
+    plan: Option<TaskCounts>,
 ) -> Vec<Completed> {
     let mut planned: Vec<Planned> = checks
         .iter()
@@ -334,6 +338,9 @@ pub(crate) async fn ran(
                 ResolvedCheck::ArtifactExists { target } => {
                     Planned::Already(Observed::Artifact(looked_for(worktree, target)))
                 }
+                ResolvedCheck::PlanRecorded { .. } => Planned::Already(Observed::Plan {
+                    tasks: plan.map(|counts| counts.not_dropped()),
+                }),
             },
         })
         .collect();

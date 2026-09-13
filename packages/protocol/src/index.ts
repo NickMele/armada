@@ -53,3 +53,4 @@ export * from "./underway";
 export * from "./version";
 export * from "./waiting";
 export * from "./work";
+export * from "./work-plan";
