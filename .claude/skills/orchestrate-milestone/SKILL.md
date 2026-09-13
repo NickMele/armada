@@ -115,6 +115,15 @@ All of it, every time:
 | `verify-docs` is green | a stale `docs/OPEN.md` fails it |
 | You have read the diff | not the report |
 
+**After a rebase, what moved decides what reruns.** Where every commit the
+branch crosses touches none of its files, no gate rule under `xtask/`, no
+`armada.yml`, no lockfile and no protocol version, run both gates and the
+acceptance run by test name again. Anything else, the whole bar again. Either
+way the whole bar has run once on the branch before its first merge attempt, and
+the gates always rerun: they are what a rebase breaks without touching the
+branch. Confirmed 12 Sep 2026, when `main` took a merge every 7–14 minutes and a
+whole bar on two branches outlasted every gap, so neither landed.
+
 **Then give the worktree back** — see `agent-worktrees`. At the merge, not later.
 
 **Restart Fleet when the protocol moves**, and after a store migration. A running
