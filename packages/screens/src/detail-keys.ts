@@ -316,14 +316,6 @@ export type DetailKeys = {
     openId: string | null;
     onOpen: (rowId: string | null) => void;
   };
-  /**
-   * Whether Where things are is open. **Closed by default**, `#896`: the
-   * Plan region makes the rail denser, and this is read rarely once a Job is
-   * open. Held here rather than in `JobDetail` for `openSteps`'s own reason —
-   * it must survive a `job.plan_changed` redraw without resetting.
-   */
-  whereOpen: boolean;
-  onOpenWhere: (open: boolean) => void;
 };
 
 /** A row of a log, which is a row and the log it is in. */
@@ -341,8 +333,6 @@ export function useDetailKeys(shape: DetailShape): DetailKeys {
   const [openSteps, setOpenSteps] = useState<readonly string[] | null>(null);
   const [openChapter, setOpenChapter] = useState<string | null>(null);
   const [openEntry, setOpenEntry] = useState<OpenEntry | null>(null);
-  // Closed by default, `#896` — see `DetailKeys.whereOpen`.
-  const [whereOpen, setWhereOpen] = useState(false);
 
   // Seeded from the run the first time it has rows — which is the moment an
   // uncontrolled tree would have mounted and seeded itself from `factsOpen`,
@@ -396,8 +386,6 @@ export function useDetailKeys(shape: DetailShape): DetailKeys {
       openId: openEntry?.region === region ? openEntry.row : null,
       onOpen: (row) => setOpenEntry(row === null ? null : { region, row }),
     }),
-    whereOpen,
-    onOpenWhere: setWhereOpen,
   };
 }
 

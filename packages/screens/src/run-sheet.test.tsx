@@ -25,7 +25,7 @@
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
-import { JobDetail } from "./JobDetail";
+import { JobDetail, WHERE_OPEN_KEY } from "./JobDetail";
 import { running } from "./fixtures/build/running";
 import { propsFor } from "./fixtures/props";
 import { mount, unmount } from "./mounted";
@@ -33,6 +33,9 @@ import { mount, unmount } from "./mounted";
 afterEach(unmount);
 
 test("pressing Run… opens the sheet instead of selecting the click event", async () => {
+  // Where things are is remembered (`remembered.ts`) — cleared so this
+  // test's own press is what opens it, whatever another test left behind.
+  localStorage.removeItem(`armada.${WHERE_OPEN_KEY}`);
   mount(<JobDetail {...propsFor(running())} />);
 
   // Where things are opens collapsed, `#896` — the worktree row it holds is

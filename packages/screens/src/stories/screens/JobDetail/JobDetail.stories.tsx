@@ -35,6 +35,7 @@ import {
 import { JOB_ID, spend, watchedRead } from "../../../fixtures/build/base";
 import { WAITING_CALL } from "../../../fixtures/build/running";
 import { recorded } from "../../../fixtures/recorded";
+import { WHERE_OPEN_KEY } from "../../../JobDetail";
 import { JobDetailFrom } from "./JobDetail";
 
 /**
@@ -133,7 +134,13 @@ function withPlan(work_plan: WorkPlan): JobFixture {
 /** The Plan region, partway done — one segment past, one working, one open. */
 export const PlanPartwayDone: Story = {
   name: "Plan, partway done",
-  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  render: () => {
+    // Where things are is remembered (`remembered.ts`), so another story's
+    // press must not decide this one's default — cleared before the mount
+    // that reads it, since a story's own `play` runs after.
+    localStorage.removeItem(`armada.${WHERE_OPEN_KEY}`);
+    return <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />;
+  },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("Plan")).toBeVisible();
     await expect(canvas.getByText("1 of 3")).toBeVisible();
@@ -576,7 +583,12 @@ export const FleetUnreachable: Story = { name: "Fleet unreachable", render: draw
  */
 export const StillReading: Story = {
   name: "Still reading",
-  render: drawing(reading),
+  render: () => {
+    // Where things are is remembered (`remembered.ts`) — cleared before the
+    // mount that reads it, so this story's own press is what opens it.
+    localStorage.removeItem(`armada.${WHERE_OPEN_KEY}`);
+    return <JobDetailFrom fixture={reading()} />;
+  },
   play: async ({ canvas, userEvent }) => {
     const run = canvas.getByRole("status", { name: "Reading the run" });
     await expect(within(run).getByText("Reproduction")).toBeVisible();
@@ -840,18 +852,23 @@ export const RunStreaming: Story = {
 
 export const ServingRow: Story = {
   name: "Serving row, link opens the system browser",
-  render: () => (
-    <JobDetailFrom
-      fixture={running()}
-      on={{
-        rehearsal: {
-          ...propsFor(running()).rehearsal,
-          servers: { servers: [SERVING] },
-          onOpenServerLink: openServerLink,
-        },
-      }}
-    />
-  ),
+  render: () => {
+    // Where things are is remembered (`remembered.ts`) — cleared before the
+    // mount that reads it, so this story's own press is what opens it.
+    localStorage.removeItem(`armada.${WHERE_OPEN_KEY}`);
+    return (
+      <JobDetailFrom
+        fixture={running()}
+        on={{
+          rehearsal: {
+            ...propsFor(running()).rehearsal,
+            servers: { servers: [SERVING] },
+            onOpenServerLink: openServerLink,
+          },
+        }}
+      />
+    );
+  },
   play: async ({ canvas, userEvent }) => {
     openServerLink.mockClear();
     // Where things are opens collapsed, `#896` — the Serving row it holds is
