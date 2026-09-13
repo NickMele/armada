@@ -85,11 +85,11 @@ kind = "Action"
 tier = "Global"
 verb = "Helm"
 icon = "message-square"
-shortcut = "⌘6"
+shortcut = "⌘J"
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "The digit after the last Bridge surface, and a sibling surface rather than a sixth Bridge one. It read ⌘5 until 2026-09-03, when Held worktrees became the fifth surface: the rail reads in order and the newest surface goes last, so the four surfaces used most keep the keys people know and this is the one key that moves. Moved now, while one person is using it, rather than left to be moved when more are — and the palette displays the binding beside every entry, which is how anyone would notice. The glyph is the registry's own assignment for Helm."
+notes = "Toggles Helm's dock, which sits beside the content on every Bridge surface rather than in the rail. Decided with the owner on 2026-09-13 (#948): Helm left the rail, so it no longer takes the digit after the last surface, and the rail's digits are the rail's alone. It read ⌘5 until 2026-09-03 and ⌘6 until this. The glyph is the registry's own assignment for Helm."
 
 [actions.toggle_sidebar]
 kind = "Action"

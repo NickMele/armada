@@ -1,0 +1,82 @@
+/* Helm's dock and the edge strip it folds to. The frame around them is screens.css's. */
+
+/* Positioned, so a folded dock's sheet covers the work and leaves the rail and the bar in view. */
+.armada-shell__work {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A fixed width; the panel takes the slack. Chrome, so the rail's ground and edge. */
+.armada-shell__dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  width: var(--w-dock);
+  min-height: 0;
+  background: var(--bg-sunken);
+  border-left: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-shell__dock-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-shell__dock-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+}
+
+.armada-shell__dock-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+}
+
+/* The rail's width on the opposite edge. The whole strip is the control. */
+.armada-shell__strip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: var(--sidebar-rail);
+  padding: var(--space-3) 0;
+  border: 0;
+  border-left: var(--border-width) solid var(--border-subtle);
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.armada-shell__strip:hover {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+.armada-shell__strip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--border-width) * -2);
+}
+
+.armada-shell__strip-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+}

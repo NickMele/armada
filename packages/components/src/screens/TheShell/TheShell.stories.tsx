@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
+import { expect } from "storybook/test";
 import { ClipboardList, HardDrive, Megaphone } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { ActiveJobsList } from "../../compositions/ActiveJobsList/ActiveJobsList";
@@ -176,4 +177,46 @@ export const OneRowInATallWindow: Story = {
     ),
   },
   render: Shell.render,
+};
+
+/** The dock's own open state, so a story can press what the app presses. */
+function WithDock(args: ComponentProps<typeof TheShell>) {
+  const [open, setOpen] = useState(args.dock?.open ?? false);
+  const dock = args.dock === undefined ? undefined : { ...args.dock, open, onOpen: setOpen };
+  return <TheShell {...args} dock={dock} />;
+}
+
+/** At `--layout-breakpoint` and wider: Helm's dock beside the content, on every surface. */
+export const DockBesideTheContent: Story = {
+  args: { ...shell, dock: { open: true, binding: "⌘J", onOpen: () => {} } },
+  render: (args) => (
+    <div className="armada-screen">
+      <div className="armada-screen__window">
+        <WithDock {...args} />
+      </div>
+    </div>
+  ),
+};
+
+/** Below the breakpoint: the dock folds to an edge strip carrying the questions waiting, and opens as a sheet. */
+export const DockFoldedToAStrip: Story = {
+  args: {
+    ...shell,
+    collapsed: true,
+    dock: { open: false, folded: true, questions: 3, binding: "⌘J", onOpen: () => {} },
+  },
+  render: (args) => (
+    <div className="armada-screen" style={{ width: "var(--layout-breakpoint-narrow)" }}>
+      <div className="armada-screen__window">
+        <WithDock {...args} />
+      </div>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByRole("dialog", { name: "Helm" })).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Open Helm, 3 questions waiting" }));
+    await expect(canvas.getByRole("dialog", { name: "Helm" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: /^Close/ }));
+    await expect(canvas.queryByRole("dialog", { name: "Helm" })).toBeNull();
+  },
 };

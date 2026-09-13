@@ -108,7 +108,7 @@ export const ACTIONS: readonly Action[] = [
     verb: "Helm",
     icon: MessageSquare,
     iconAbsent: null,
-    shortcut: "⌘6",
+    shortcut: "⌘J",
     scope: "anywhere",
     destructive: false,
     confirms: false,

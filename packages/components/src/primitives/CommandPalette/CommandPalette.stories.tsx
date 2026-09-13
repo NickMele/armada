@@ -301,7 +301,7 @@ export const TheNewestSurfaceTookTheLastDigit: Story = {
     await expect(canvas.getByRole("option", { name: /^Held worktrees/ })).toHaveAccessibleName(
       "Held worktrees ⌘ 5",
     );
-    await expect(canvas.getByRole("option", { name: /^Helm/ })).toHaveAccessibleName("Helm ⌘ 6");
+    await expect(canvas.getByRole("option", { name: /^Helm/ })).toHaveAccessibleName("Helm ⌘ J");
   },
 };
 

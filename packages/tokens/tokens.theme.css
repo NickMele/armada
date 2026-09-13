@@ -127,6 +127,7 @@
   --spacing-max: var(--sidebar-max);
   --spacing-rail: var(--sidebar-rail);
   --spacing-run-column: var(--w-run-column);
+  --spacing-dock: var(--w-dock);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
   --spacing-dialog: var(--w-dialog);
