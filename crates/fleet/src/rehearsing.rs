@@ -42,6 +42,8 @@ pub(crate) use in_flight::Rehearsals;
 use record::Record;
 pub use unrehearsable::{Unrehearsable, Whose};
 pub use verifying::verify_steps;
+#[cfg(test)]
+pub(crate) use workspace::claimant as workspace_claimant;
 
 /// How long a stop waits for a stopped run's record. The group is ended with
 /// `SIGKILL`, so what is left is one tree read and one file write.

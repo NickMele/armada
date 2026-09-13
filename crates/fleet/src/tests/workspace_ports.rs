@@ -106,8 +106,7 @@ fn port(word: &str) -> u16 {
 }
 
 fn workspace_claimant(fleet: &Fixture) -> PortClaimant {
-    let dir = Path::new(fleet.first().root()).join("apps/web");
-    PortClaimant::MainCheckout(dir.to_string_lossy().into_owned())
+    crate::rehearsing::workspace_claimant(fleet.first().root(), "apps/web")
 }
 
 async fn claims(fleet: &Fixture) -> Vec<PortClaim> {
@@ -192,5 +191,79 @@ async fn a_span_a_crashed_verify_left_is_reclaimed_by_its_key() {
     assert!(
         claims(&fleet).await.is_empty(),
         "the leftover went with the Verify"
+    );
+}
+
+/// **Shutdown gives back a workspace span a crashed Verify left**, reading it
+/// as it reads every main checkout's.
+#[tokio::test]
+async fn shutdown_releases_a_workspace_span_left_behind() {
+    let home = TempDir::new();
+    let fleet = a_checkout(&home, BARE_ROOT, PortRange::of(44_600, 44_699, 8));
+    let left = PortClaim {
+        claimant: workspace_claimant(&fleet),
+        base: 44_690,
+        width: 2,
+        claimed_at: fleet.now(),
+    };
+    fleet
+        .store()
+        .lock()
+        .await
+        .claim_port_span(&left)
+        .expect("a leftover row");
+
+    fleet.released_main_checkout_ports().await;
+    assert!(claims(&fleet).await.is_empty(), "released at shutdown");
+}
+
+/// **A repository served at a directory that is also another's workspace keeps
+/// its span through that workspace's Verify**, at the same base and width.
+#[tokio::test]
+async fn a_repository_served_at_a_workspace_keeps_its_span_through_that_verify() {
+    let home = TempDir::new();
+    let fleet = a_checkout(&home, BARE_ROOT, PortRange::of(44_900, 44_999, 8));
+    let nested = Path::new(fleet.first().root()).join("apps/web");
+    let manifest = config::Manifest::parse(&nested.join("armada.yml"), WEB).expect("loads");
+    fleet
+        .repositories()
+        .add(crate::repositories::Located {
+            root: nested.to_string_lossy().into_owned(),
+            records_root: home
+                .path()
+                .join("web-records")
+                .to_string_lossy()
+                .into_owned(),
+            set_up: Some(crate::repositories::SetUp::of(
+                manifest,
+                std::collections::BTreeMap::new(),
+            )),
+        })
+        .expect("served at the workspace's directory");
+    let served = fleet
+        .repositories()
+        .serving("01WEBMANIFEST")
+        .expect("served");
+    let before = fleet.main_checkout_ports(&served).await;
+    assert!(before.contains_key("web"), "{before:?}");
+    let held = |claims: Vec<PortClaim>| {
+        claims
+            .into_iter()
+            .find(|claim| claim.claimant == PortClaimant::MainCheckout(served.root().to_string()))
+    };
+    let kept = held(claims(&fleet).await).expect("its own span");
+
+    let seen = verified(&home, &fleet).await;
+    let after = held(claims(&fleet).await).expect("still held after the Verify");
+    assert_eq!((after.base, after.width), (kept.base, kept.width));
+    assert_eq!(
+        fleet.main_checkout_ports(&served).await,
+        before,
+        "its ports did not move"
+    );
+    assert_ne!(
+        before.get("web").map(u16::to_string).as_deref(),
+        seen.first().map(String::as_str),
+        "the Verify drew a span of its own"
     );
 }

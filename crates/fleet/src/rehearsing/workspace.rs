@@ -112,11 +112,15 @@ impl Within {
     }
 }
 
-/// The key a workspace's span is kept under: the main checkout of its own
-/// directory, so boot reconciliation and shutdown find a row a crash left.
+/// The key a workspace's span is kept under, beside the main checkouts' so boot
+/// reconciliation and shutdown find a row a crash left. **Not a path**: a served
+/// root is canonical and absolute, so no repository's key can equal it.
 pub(crate) fn claimant(root: &str, dir: &str) -> PortClaimant {
-    PortClaimant::MainCheckout(Path::new(root).join(dir).to_string_lossy().into_owned())
+    let at = Path::new(root).join(dir);
+    PortClaimant::MainCheckout(format!("{WORKSPACE_KEY}{}", at.to_string_lossy()))
 }
+
+const WORKSPACE_KEY: &str = "workspace:";
 
 impl<H, V, W> Fleet<H, V, W>
 where
