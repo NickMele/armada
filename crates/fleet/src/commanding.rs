@@ -334,9 +334,10 @@ where
         self: std::sync::Arc<Self>,
         run: ipc::StartCheckoutRun,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
-        let served = self.served_named(manifest_id.as_ref())?;
-        Fleet::start_checkout_rehearsal(self, run, served).await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        Fleet::start_checkout_rehearsal(self, run, checkout).await
     }
 
     /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
@@ -355,9 +356,10 @@ where
         &self,
         run: ipc::NamedRun,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
-        self.undo_checkout_rehearsal(run.id, self.served_named(manifest_id.as_ref())?)
-            .await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        self.undo_checkout_rehearsal(run.id, checkout).await
     }
 
     /// Verify in the main checkout. **The `Arc` is handed on**: its steps

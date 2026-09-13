@@ -713,6 +713,7 @@ pub trait Queries: Send + Sync + 'static {
     fn list_checkout_runs(
         &self,
         manifest_id: Option<ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<CheckoutRunList, Refusal>> + Send;
 
     /// `get_checkout_run_output` — one checkout run's log, as a window that
@@ -723,6 +724,7 @@ pub trait Queries: Send + Sync + 'static {
         &self,
         run_id: String,
         manifest_id: Option<ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<RunOutput, Refusal>> + Send;
 
     /// `get_checkout_run_diff` — what one checkout run changed, against the
@@ -734,6 +736,7 @@ pub trait Queries: Send + Sync + 'static {
         &self,
         run_id: String,
         manifest_id: Option<ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<ipc::CheckoutRunDiff, Refusal>> + Send;
 
     /// `observe_checkout_run` — one checkout run's output on a socket of its

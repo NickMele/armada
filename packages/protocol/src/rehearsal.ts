@@ -225,7 +225,7 @@ export type CheckoutRunSheet = {
  * frozen Manifest to choose against and no diff to narrow to, so neither of
  * `StartRun`'s two flags has an answer here.
  */
-export type StartCheckoutRun = { name: string };
+export type StartCheckoutRun = { name: string; workspace?: string };
 
 /** A checkout run that has started and not finished. */
 export type CheckoutRunUnderway = {

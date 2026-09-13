@@ -14,11 +14,12 @@ use std::sync::Arc;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::Refusal;
 
-use super::entries;
-use super::owner::{Checkout, Place};
+use super::entries::{self, Entry};
+use super::owner::{Checkout, Place, Tree};
 use super::record::Record;
 use super::records;
 use super::unrehearsable::Unrehearsable;
+use super::workspace;
 use crate::daemon::Fleet;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -67,13 +68,14 @@ where
     }
 
     /// Start one run in the main checkout, and answer as soon as it is
-    /// underway.
+    /// underway. `asked.workspace` names a directory whose own file declares
+    /// the entry, run there with that file's ports.
     pub(crate) async fn start_checkout_rehearsal(
         self: Arc<Self>,
         asked: ipc::StartCheckoutRun,
-        served: crate::repositories::Served,
+        checkout: impl Into<Checkout>,
     ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
-        let place = Place::of_checkout(served);
+        let place = Place::of_checkout(checkout);
         let owner = place.owner.clone();
         // A Verify holds its own checkout between steps too: a run slipped in
         // there would take the slot its next step is about to be handed.
@@ -83,16 +85,56 @@ where
         // The whole tree, always: there is no diff of the checkout's own for a
         // narrowing to measure against, and `StartCheckoutRun` carries no flag
         // asking for one.
-        let (entry, tree) = self
-            .entry_at(&place, &asked.name, false)
-            .await
+        let workspace = workspace::resolved(place.checkout.root(), asked.workspace.as_deref())
             .map_err(|why| self.refused_run(&owner, why))?;
+        let (entry, mut tree) = match &workspace {
+            None => self.entry_at(&place, &asked.name, false).await,
+            Some(one) => self.workspace_entry_at(&place, &one.manifest, &asked.name),
+        }
+        .map_err(|why| self.refused_run(&owner, why))?;
+        if let Some(one) = workspace {
+            tree.within = Some(self.workspace_claimed(&place.checkout, one).await);
+        }
+        let within = tree.within.clone();
         let command = entry.run.clone();
-        let underway = Arc::clone(&self)
+        let started = Arc::clone(&self)
             .started_at(place, tree, entry, command, false, false, None)
-            .await
-            .map_err(|why| self.refused_run(&owner, why))?;
-        Ok(underway.of_checkout())
+            .await;
+        match started {
+            Ok(underway) => Ok(underway.of_checkout()),
+            Err(why) => {
+                if let Some(within) = &within {
+                    self.released_workspace_ports(within).await;
+                }
+                Err(self.refused_run(&owner, why))
+            }
+        }
+    }
+
+    /// `entry_at`'s refusals, against a workspace's own file rather than the
+    /// root's.
+    fn workspace_entry_at(
+        &self,
+        place: &Place,
+        manifest: &config::Manifest,
+        name: &str,
+    ) -> Result<(Entry, Tree), Unrehearsable> {
+        let whose = place.whose();
+        if manifest.server(name).is_some() {
+            return Err(Unrehearsable::IsAServer {
+                name: name.to_string(),
+            });
+        }
+        let Some(tree) = self.tree_at(place) else {
+            return Err(Unrehearsable::NoWorktree);
+        };
+        if let Some(out) = self.rehearsals().in_flight(&place.owner) {
+            return Err(Unrehearsable::AlreadyRunning {
+                name: out.name,
+                whose,
+            });
+        }
+        Ok((entries::declared(manifest).named(name, whose)?, tree))
     }
 
     /// End the checkout's run, and answer with its record once it is written.
@@ -116,9 +158,9 @@ where
     pub(crate) async fn undo_checkout_rehearsal(
         &self,
         id: String,
-        served: crate::repositories::Served,
+        checkout: impl Into<Checkout>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
-        let place = Place::of_checkout(served);
+        let place = Place::of_checkout(checkout);
         if self.rehearsals().verifies().underway(place.checkout.root()) {
             return Err(self.refused_run(&place.owner, Unrehearsable::VerifyUnderway));
         }
@@ -136,9 +178,9 @@ where
     pub(crate) async fn checkout_rehearsal_diff(
         &self,
         id: String,
-        served: crate::repositories::Served,
+        checkout: impl Into<Checkout>,
     ) -> Result<ipc::CheckoutRunDiff, Refusal> {
-        let place = Place::of_checkout(served);
+        let place = Place::of_checkout(checkout);
         let refused = |why| self.refused_run(&place.owner, why);
         if self
             .rehearsals()
@@ -194,9 +236,9 @@ where
     /// The checkout's earlier runs, newest first.
     pub(crate) async fn checkout_rehearsal_history(
         &self,
-        served: crate::repositories::Served,
+        checkout: impl Into<Checkout>,
     ) -> Result<ipc::CheckoutRunList, Refusal> {
-        let (kept, unreadable) = self.history_at(&Place::of_checkout(served));
+        let (kept, unreadable) = self.history_at(&Place::of_checkout(checkout));
         Ok(ipc::CheckoutRunList {
             runs: kept.iter().map(Record::of_checkout).collect(),
             unreadable,
@@ -208,9 +250,9 @@ where
     pub(crate) async fn checkout_rehearsal_output(
         &self,
         id: String,
-        served: crate::repositories::Served,
+        checkout: impl Into<Checkout>,
     ) -> Result<ipc::RunOutput, Refusal> {
-        let place = Place::of_checkout(served);
+        let place = Place::of_checkout(checkout);
         self.output_at(&place, &id)
             .ok_or_else(|| self.no_such_run(&place, id))
     }

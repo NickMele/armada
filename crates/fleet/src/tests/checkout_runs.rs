@@ -158,6 +158,7 @@ async fn a_run_leaves_its_record_and_its_log_under_armada_runs() {
         .start_checkout_rehearsal(
             ipc::StartCheckoutRun {
                 name: String::from("lint"),
+                workspace: None,
             },
             fleet.first(),
         )
@@ -194,6 +195,7 @@ async fn a_run_that_wrote_is_undone_from_its_own_snapshot() {
         .start_checkout_rehearsal(
             ipc::StartCheckoutRun {
                 name: String::from("generate"),
+                workspace: None,
             },
             fleet.first(),
         )
@@ -238,6 +240,7 @@ async fn a_runs_diff_is_against_its_own_snapshot_and_says_when_that_is_gone() {
         .start_checkout_rehearsal(
             ipc::StartCheckoutRun {
                 name: String::from("generate"),
+                workspace: None,
             },
             fleet.first(),
         )
@@ -312,6 +315,7 @@ async fn a_checkout_run_and_a_jobs_run_do_not_lock_each_other_out() {
         .start_checkout_rehearsal(
             ipc::StartCheckoutRun {
                 name: String::from("sleep"),
+                workspace: None,
             },
             fleet.first(),
         )
@@ -321,6 +325,7 @@ async fn a_checkout_run_and_a_jobs_run_do_not_lock_each_other_out() {
         .start_checkout_rehearsal(
             ipc::StartCheckoutRun {
                 name: String::from("lint"),
+                workspace: None,
             },
             fleet.first(),
         )
@@ -368,6 +373,7 @@ async fn a_checkout_run_ends_with_its_own_kind_on_the_stream() {
         .start_checkout_rehearsal(
             ipc::StartCheckoutRun {
                 name: String::from("lint"),
+                workspace: None,
             },
             fleet.first(),
         )

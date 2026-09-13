@@ -138,6 +138,7 @@ async fn two_repositories_verify_at_once_and_each_sheet_answers_its_own() {
 
     let quick = ipc::StartCheckoutRun {
         name: String::from("quick"),
+        workspace: None,
     };
     Arc::clone(&fleet)
         .start_checkout_rehearsal(quick.clone(), second.clone())

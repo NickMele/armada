@@ -186,7 +186,8 @@ export class CheckoutRunCommands {
   }
 
   /**
-   * Run one Check or Command in the main checkout, as it is on disk.
+   * Run one Check or Command in the main checkout, as it is on disk. `body.workspace` names the
+   * directory whose own `armada.yml` declares it; absent is the root's.
    *
    * **Answers at once, with the run underway.** Fleet takes a snapshot first
    * and the output streams on `observe_checkout_run`, which this opens the
@@ -195,7 +196,7 @@ export class CheckoutRunCommands {
   async startRun(body: StartCheckoutRun): Promise<Outcome> {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
-    const path = this.board.picked.manifest("/manifest/start_run");
+    const path = this.board.picked.checkout("/manifest/start_run");
     if (path === null) return NOT_SET_UP;
     const answer = await ask(port, "POST", path, body);
     if (answer.ok !== true) return answer.outcome;
@@ -248,7 +249,7 @@ export class CheckoutRunCommands {
   async undoRun(id: string): Promise<Outcome> {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
-    const path = this.board.picked.manifest("/manifest/undo_run");
+    const path = this.board.picked.checkout("/manifest/undo_run");
     if (path === null) return NOT_SET_UP;
     const body: NamedRun = { id };
     const answer = await ask(port, "POST", path, body);
@@ -259,7 +260,7 @@ export class CheckoutRunCommands {
   async listRuns(): Promise<CheckoutRunListRead> {
     const port = this.board.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const path = this.board.picked.manifest("/manifest/runs");
+    const path = this.board.picked.checkout("/manifest/runs");
     if (path === null) return { ok: false, outcome: NOT_SET_UP };
     const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
@@ -270,7 +271,7 @@ export class CheckoutRunCommands {
   async getRunOutput(runId: string): Promise<RunOutputRead> {
     const port = this.board.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const path = this.board.picked.manifest(`/manifest/runs/${encodeURIComponent(runId)}/output`);
+    const path = this.board.picked.checkout(`/manifest/runs/${encodeURIComponent(runId)}/output`);
     if (path === null) return { ok: false, outcome: NOT_SET_UP };
     const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
@@ -287,7 +288,7 @@ export class CheckoutRunCommands {
   async getRunDiff(runId: string): Promise<CheckoutRunDiffRead> {
     const port = this.board.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    const path = this.board.picked.manifest(`/manifest/runs/${encodeURIComponent(runId)}/diff`);
+    const path = this.board.picked.checkout(`/manifest/runs/${encodeURIComponent(runId)}/diff`);
     if (path === null) return { ok: false, outcome: NOT_SET_UP };
     const answer = await ask(port, "GET", path);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };

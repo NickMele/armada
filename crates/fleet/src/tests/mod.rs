@@ -170,4 +170,5 @@ mod verify_runs;
 mod watching;
 mod widening;
 mod workspace_ports;
+mod workspace_runs;
 mod workspace_verify;

@@ -144,6 +144,13 @@ where
         // Given back before anybody is told, so a caller that starts the next
         // run on `run.finished` is not refused as though this one were out.
         drop(held);
+        // A person's workspace run claimed its file's ports for itself; a
+        // Verify's steps share the Verify's, given back when it ends.
+        if verify.is_none() {
+            if let Some(within) = plan.tree.within.as_ref() {
+                self.released_workspace_ports(within).await;
+            }
+        }
         // A Verify's next step takes the slot just given back before anybody
         // is told, so a reader of the sheet on this event finds it out.
         if let Some(verify) = verify {

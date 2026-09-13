@@ -253,7 +253,7 @@ pub struct CheckoutRunSheet {
     pub verify: Option<CheckoutVerify>,
 }
 
-/// `start_checkout_run`'s body. **A name and nothing else.**
+/// `start_checkout_run`'s body: a name, and the workspace whose file declares it.
 ///
 /// Not [`StartRun`]: there is no frozen Manifest to choose against and no
 /// Job's diff to narrow to, so neither of that type's two flags has an answer
@@ -261,6 +261,10 @@ pub struct CheckoutRunSheet {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartCheckoutRun {
     pub name: String,
+    /// A directory below the repository root whose own `armada.yml` declares
+    /// `name`, run in that directory. Absent, empty or `.` is the root's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
 }
 
 /// A checkout run that has started and not finished. `start_checkout_run`'s

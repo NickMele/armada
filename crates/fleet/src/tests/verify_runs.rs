@@ -276,6 +276,7 @@ async fn a_verify_holds_the_checkout_and_stop_ends_it() {
         .start_checkout_rehearsal(
             ipc::StartCheckoutRun {
                 name: String::from("after"),
+                workspace: None,
             },
             fleet.first(),
         )

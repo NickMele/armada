@@ -253,10 +253,21 @@ describe("every per-repository call", () => {
     await everyCall(port, picked);
     const scoped = asked.filter((url) => !FLEETWIDE.has(url));
     expect(scoped.every((url) => url.endsWith("repository=%2FUsers%2Fuser%2Fscratch"))).toBe(true);
-    // A workspace verifies before the root has a Manifest, so its panel's reads go too.
-    expect(scoped.map((url) => url.split("?")[0]).sort()).toEqual(
-      ["/manifest/run_sheet", "/manifest/start_verify", "/manifest/stop_run", "/repository/edit_proposal", "/repository/proposals", "/repository/scan", "/repository/write_proposal"],
-    );
+    // A workspace verifies and runs before the root has a Manifest, so its runs' reads go too.
+    expect(scoped.map((url) => url.split("?")[0]).sort()).toEqual([
+      "/manifest/run_sheet",
+      "/manifest/runs",
+      "/manifest/runs/run-1/diff",
+      "/manifest/runs/run-1/output",
+      "/manifest/start_run",
+      "/manifest/start_verify",
+      "/manifest/stop_run",
+      "/manifest/undo_run",
+      "/repository/edit_proposal",
+      "/repository/proposals",
+      "/repository/scan",
+      "/repository/write_proposal",
+    ]);
     const editing = new ManifestFileCommands(() => port, picked, async () => {});
     expect(await editing.readFile()).toEqual({ ok: false, outcome: { ok: false, why: "not_set_up" } });
   });

@@ -771,6 +771,7 @@ pub trait Commands: Send + Sync + 'static {
         self: std::sync::Arc<Self>,
         run: StartCheckoutRun,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<CheckoutRunUnderway, Refusal>> + Send;
 
     /// `stop_checkout_run` — end the run's process group, and answer with its
@@ -797,6 +798,7 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         run: NamedRun,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<CheckoutRunRecord, Refusal>> + Send;
 
     /// `start_checkout_verify` — run setup and every Check once in the main

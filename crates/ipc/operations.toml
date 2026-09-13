@@ -1835,6 +1835,8 @@ transport = "HTTP"
 agent_access = "No"
 description = "The main checkout's earlier runs: name, exit code, when, how long, what changed, and the log"
 notes = """
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
+
 `list_runs` read off `.armada/runs/main/` rather than `.armada/runs/<job>/`. A Job handle always begins with the Job's own number, so no Job can be called `main` and the two cannot collide.
 
 Kept for the Machine's ad-hoc run log retention, swept when the checkout next starts a run.
@@ -1846,6 +1848,8 @@ transport = "HTTP"
 agent_access = "No"
 description = "One checkout run's log, read back as a window that says it is one"
 notes = """
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
+
 `get_run_output`'s shape and its allowlist: `:run_id` names a run the checkout recorded or the one in flight, resolved against its own run directories before anything is opened.
 """
 
@@ -1855,6 +1859,8 @@ transport = "HTTP"
 agent_access = "No"
 description = "What one checkout run changed, as a patch against the snapshot it took just before it"
 notes = """
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
+
 **Against the run's own snapshot, never `HEAD`.** The main checkout holds a person's own uncommitted work, and a patch against `HEAD` would show all of it as the run's. Both trees are the ones the run kept — just before and just after — so an edit made since the run is not in it either. `against` says so on the wire.
 
 **A snapshot that is gone is a state, not a fallback.** `reading.state` is `gone` where no snapshot was taken or its ref is no longer in the repository; nothing stands in for it. The ref is let go when retention sweeps the run's record, and an Undo does not let it go.
@@ -1885,9 +1891,11 @@ transport = "HTTP"
 agent_access = "No"
 description = "Run one Check or Command in the main checkout's working tree - a rehearsal that records nothing anywhere"
 notes = """
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
+
 **In the working tree as it is on disk.** There is no throwaway copy and no Where control: a copy would be a worktree by another name, and a Job's own run sheet is already that tree — Journey 9, *Running one*.
 
-**The request names an entry and carries nothing else.** `StartCheckoutRun` has neither `narrowed` nor `worktree_version`: there is no diff of the checkout's own to narrow against and no frozen second Manifest to choose between, so a caller cannot ask for either because the field is not there to set.
+**The request names an entry, and the workspace whose file declares it.** `StartCheckoutRun.workspace` is `StartCheckoutVerify.workspace`'s shape: a directory relative to the repository root whose own `armada.yml` is read from disk, with the entry run in that directory on that file's ports. Absent, empty or `.` is the root's, and with no root Manifest that is refused as having nothing to run. `StartCheckoutRun` has neither `narrowed` nor `worktree_version`: there is no diff of the checkout's own to narrow against and no frozen second Manifest to choose between, so a caller cannot ask for either because the field is not there to set.
 
 **One run at a time is per owner, not per repository.** A checkout run and a Job's run are in different trees and neither waits for the other; two checkout runs are in one tree and the second is refused.
 
@@ -1913,6 +1921,8 @@ transport = "HTTP"
 agent_access = "No"
 description = "Put back the files one checkout run changed, from the snapshot taken just before it"
 notes = """
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
+
 **Never offered where no snapshot was taken.** This tree holds a person's own uncommitted work, which no Job's worktree does, so a run with nothing kept behind it is refused rather than discarded from — `CheckoutRunRecord.undoable` is that answer, given before anything is offered.
 
 Refused while a run is in flight, on a run already undone or with no snapshot, and where a path the run changed has moved since. The confirmation naming what would be discarded is Bridge's.
