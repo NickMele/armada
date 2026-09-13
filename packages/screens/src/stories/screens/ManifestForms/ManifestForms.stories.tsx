@@ -66,22 +66,24 @@ export const RemoveACommand: Story = {
   },
 };
 
-/** Fleet refused a result that would not load. Nothing was written, and the edit is still on screen. */
+/**
+ * A Command removed that a Check still runs first. Fleet refuses the result,
+ * names the key, and writes nothing; the removal is still on screen to undo.
+ */
 export const AFormEditRefused: Story = {
   name: "A refused save on the forms",
   args: { ...TheForms.args, edit: "refused" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const checks = await canvas.findByRole("region", { name: "Checks" });
-    const build = within(checks).getByRole("group", { name: "build" });
-    const command = within(build).getByLabelText("Command");
-    await userEvent.type(command, " --offline");
+    const commands = await canvas.findByRole("region", { name: "Commands" });
+    const bootstrap = within(commands).getByRole("group", { name: "bootstrap" });
+    await userEvent.click(within(bootstrap).getByRole("button", { name: "Remove" }));
 
     await userEvent.click(canvas.getByRole("button", { name: "Save" }));
     await expect(await canvas.findByText("Not saved")).toBeVisible();
     await expect(canvas.getByText("checks.typecheck.requires")).toBeVisible();
-    await expect(command).toHaveValue("cargo build --workspace --locked --offline");
-    await expect(canvas.getByRole("button", { name: "Save" })).toBeEnabled();
+    await expect(within(commands).queryByRole("group", { name: "bootstrap" })).toBeNull();
+    await expect(canvas.getByRole("button", { name: "Discard changes" })).toBeEnabled();
   },
 };
 

@@ -81,7 +81,7 @@ export const Refused: Story = {
     receipt: "Not saved.",
     refused: {
       saying: "armada.yml would not load after these edits: 1 fault",
-      faults: [{ key: "checks.bridge_test.requires", fault: "names `browsers`, which no Command declares" }],
+      faults: [{ key: "checks.bridge_test.requires", fault: "names browsers, which no Command declares" }],
     },
   },
   play: async ({ canvasElement }) => {

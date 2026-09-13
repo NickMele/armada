@@ -5,6 +5,19 @@
   flex-direction: column;
   gap: var(--space-4);
   min-width: 0;
+  padding: var(--space-4);
+}
+
+/* Sticky, so Save and what it came to are in reach from the last section. */
+.armada-manifest-form__top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  background: var(--bg-base);
 }
 
 .armada-manifest-form__head {
@@ -144,4 +157,18 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-2);
+}
+
+.armada-manifest-form__hinted {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-manifest-form__hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
 }

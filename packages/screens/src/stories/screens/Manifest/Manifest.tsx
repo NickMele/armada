@@ -303,7 +303,7 @@ export function ManifestFrom({
         return Promise.resolve({
           state: "refused",
           saying: "armada.yml would not load after these edits: 1 fault",
-          faults: [{ key: "checks.typecheck.requires", fault: "names `browsers`, which no Command declares" }],
+          faults: [{ key: "checks.typecheck.requires", fault: "names bootstrap, which no Command declares" }],
         });
       }
       declared.current = appliedTo(declared.current, body.edits);

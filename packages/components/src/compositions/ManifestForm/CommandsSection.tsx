@@ -2,7 +2,7 @@ import { Button } from "../../primitives/Button/Button";
 import { Input } from "../../primitives/Input/Input";
 import { Switch } from "../../primitives/Switch/Switch";
 
-import { AddEntry, Entry, replaced, Section } from "./Entries";
+import { AddEntry, Entry, Hinted, replaced, Section } from "./Entries";
 import type { ManifestFormCommand, ManifestFormProps } from "./ManifestForm";
 
 export function CommandsSection({ draft, onDraft, problems }: ManifestFormProps) {
@@ -33,22 +33,24 @@ export function CommandsSection({ draft, onDraft, problems }: ManifestFormProps)
             >
               Destructive
             </Switch>
-            <Input
-              label="Serves"
-              mono
-              message="A command that keeps running makes this a server."
-              value={command.serve}
-              onChange={(event) => set(at, { ...command, serve: event.target.value })}
-            />
+            <Hinted hint="A command that keeps running makes this a server.">
+              <Input
+                label="Serves"
+                mono
+                value={command.serve}
+                onChange={(event) => set(at, { ...command, serve: event.target.value })}
+              />
+            </Hinted>
             {!server ? null : (
               <div className="armada-manifest-form__nested">
-                <Input
-                  label="Ready when"
-                  mono
-                  message="A command that exits 0 once the server answers."
-                  value={command.ready}
-                  onChange={(event) => set(at, { ...command, ready: event.target.value })}
-                />
+                <Hinted hint="A command that exits 0 once the server answers.">
+                  <Input
+                    label="Ready when"
+                    mono
+                    value={command.ready}
+                    onChange={(event) => set(at, { ...command, ready: event.target.value })}
+                  />
+                </Hinted>
                 {problems[`commands.${command.name}.links`] === undefined ? null : (
                   <p className="armada-manifest-form__problem">{problems[`commands.${command.name}.links`]}</p>
                 )}

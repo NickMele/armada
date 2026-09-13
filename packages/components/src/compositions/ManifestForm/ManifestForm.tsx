@@ -88,6 +88,8 @@ export function ManifestForm(props: ManifestFormProps) {
   const blocked = Object.keys(problems).length > 0;
   return (
     <div className="armada-manifest-form">
+      {/* One sticky block, so a refusal is on screen wherever Save was pressed. */}
+      <div className="armada-manifest-form__top">
       <div className="armada-manifest-form__head">
         <span className="armada-manifest-form__path">{path}</span>
         <span className="armada-manifest-form__receipt">{receipt}</span>
@@ -134,6 +136,7 @@ export function ManifestForm(props: ManifestFormProps) {
           </div>
         </Alert>
       )}
+      </div>
 
       <ChecksSection {...props} />
       <CommandsSection {...props} />

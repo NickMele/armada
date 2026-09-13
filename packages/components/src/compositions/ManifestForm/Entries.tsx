@@ -68,3 +68,13 @@ export function AddEntry({ noun, taken, onAdd }: { noun: string; taken: string[]
 export function replaced<T>(list: readonly T[], at: number, next: T): T[] {
   return list.map((one, index) => (index === at ? next : one));
 }
+
+/** A field and the line that says how to fill it, shown whether or not it is valid. */
+export function Hinted({ hint, children }: { hint: string; children: ReactNode }) {
+  return (
+    <div className="armada-manifest-form__hinted">
+      {children}
+      <p className="armada-manifest-form__hint">{hint}</p>
+    </div>
+  );
+}

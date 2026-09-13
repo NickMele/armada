@@ -3,7 +3,7 @@ import { Input } from "../../primitives/Input/Input";
 import { Switch } from "../../primitives/Switch/Switch";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 
-import { AddEntry, Entry, replaced, Section } from "./Entries";
+import { AddEntry, Entry, Hinted, replaced, Section } from "./Entries";
 import type { ManifestFormCheck, ManifestFormProps } from "./ManifestForm";
 
 export function ChecksSection({ draft, onDraft, problems }: ManifestFormProps) {
@@ -29,13 +29,15 @@ export function ChecksSection({ draft, onDraft, problems }: ManifestFormProps) {
               message={problems[`checks.${check.name}.run`]}
               onChange={(event) => set(at, { ...check, run: event.target.value })}
             />
-            <Textarea
-              label="Runs when a change touches"
-              message="One path pattern a line. Empty runs it on every change."
-              value={check.when}
-              spellCheck={false}
-              onChange={(event) => set(at, { ...check, when: event.target.value })}
-            />
+            <Hinted hint="One path pattern a line. Empty runs it on every change.">
+              <Textarea
+                label="Runs when a change touches"
+                value={check.when}
+                rows={2}
+                spellCheck={false}
+                onChange={(event) => set(at, { ...check, when: event.target.value })}
+              />
+            </Hinted>
             {named.length === 0 ? null : (
               <div className="armada-manifest-form__choices" role="group" aria-label="Runs first">
                 <span className="armada-manifest-form__label">Runs first</span>
@@ -80,34 +82,40 @@ export function ChecksSection({ draft, onDraft, problems }: ManifestFormProps) {
                   value={narrow.run}
                   onChange={(event) => set(at, { ...check, narrow: { ...narrow, run: event.target.value } })}
                 />
-                <Input
-                  label="Each changed path becomes"
-                  mono
-                  message="{} is the path, as in -p {}."
-                  value={narrow.each}
-                  onChange={(event) => set(at, { ...check, narrow: { ...narrow, each: event.target.value } })}
-                />
-                <Input
-                  label="Paths under"
-                  mono
-                  message="The directory whose entries a changed path is read as. Empty takes the path itself."
-                  value={narrow.under}
-                  onChange={(event) => set(at, { ...check, narrow: { ...narrow, under: event.target.value } })}
-                />
-                <Textarea
-                  label="Only paths matching"
-                  message="One path pattern a line. Empty takes every changed path."
-                  value={narrow.from}
-                  spellCheck={false}
-                  onChange={(event) => set(at, { ...check, narrow: { ...narrow, from: event.target.value } })}
-                />
-                <Textarea
-                  label="Never"
-                  message="One name a line, left out of the narrowed run."
-                  value={narrow.except}
-                  spellCheck={false}
-                  onChange={(event) => set(at, { ...check, narrow: { ...narrow, except: event.target.value } })}
-                />
+                <Hinted hint="{} is the path, as in -p {}.">
+                  <Input
+                    label="Each changed path becomes"
+                    mono
+                    value={narrow.each}
+                    onChange={(event) => set(at, { ...check, narrow: { ...narrow, each: event.target.value } })}
+                  />
+                </Hinted>
+                <Hinted hint="The directory whose entries a changed path is read as. Empty takes the path itself.">
+                  <Input
+                    label="Paths under"
+                    mono
+                    value={narrow.under}
+                    onChange={(event) => set(at, { ...check, narrow: { ...narrow, under: event.target.value } })}
+                  />
+                </Hinted>
+                <Hinted hint="One path pattern a line. Empty takes every changed path.">
+                  <Textarea
+                    label="Only paths matching"
+                    value={narrow.from}
+                    rows={2}
+                    spellCheck={false}
+                    onChange={(event) => set(at, { ...check, narrow: { ...narrow, from: event.target.value } })}
+                  />
+                </Hinted>
+                <Hinted hint="One name a line, left out of the narrowed run.">
+                  <Textarea
+                    label="Never"
+                    value={narrow.except}
+                    rows={2}
+                    spellCheck={false}
+                    onChange={(event) => set(at, { ...check, narrow: { ...narrow, except: event.target.value } })}
+                  />
+                </Hinted>
               </div>
             )}
           </Entry>
