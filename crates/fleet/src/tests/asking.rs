@@ -210,7 +210,7 @@ async fn agreeing_escalates_the_job_through_running_and_strands_nothing() {
     let (fleet, job_id, asked_at) = asking_a_question(&home).await;
 
     let answered = fleet
-        .answer_judge(&job_id, JudgeAnswer::Agree, asked_at, None)
+        .answer_judge(&job_id, JudgeAnswer::Agree, Some(asked_at), None)
         .await
         .expect("agreeing takes the declared route through `running`");
 
@@ -239,7 +239,7 @@ async fn disagreeing_once_advances_and_queues() {
     let (fleet, job_id, asked_at) = asking_a_question(&home).await;
 
     let answered = fleet
-        .answer_judge(&job_id, JudgeAnswer::DisagreeOnce, asked_at, None)
+        .answer_judge(&job_id, JudgeAnswer::DisagreeOnce, Some(asked_at), None)
         .await
         .expect("disagreeing walks an edge that was already legal");
 
@@ -260,7 +260,7 @@ async fn disagreeing_always_advances_and_queues() {
     let (fleet, job_id, asked_at) = asking_a_question(&home).await;
 
     let answered = fleet
-        .answer_judge(&job_id, JudgeAnswer::DisagreeAlways, asked_at, None)
+        .answer_judge(&job_id, JudgeAnswer::DisagreeAlways, Some(asked_at), None)
         .await
         .expect("disagreeing walks an edge that was already legal");
 
@@ -283,7 +283,7 @@ async fn answering_a_stale_question_is_refused() {
     let stale = ipc::Instant::carried(format!("{}-stale", asked_at.as_str()));
 
     let refused = fleet
-        .answer_judge(&job_id, JudgeAnswer::Agree, stale, None)
+        .answer_judge(&job_id, JudgeAnswer::Agree, Some(stale), None)
         .await
         .expect_err("a mismatched asked_at is refused, not applied");
 
@@ -295,4 +295,19 @@ async fn answering_a_stale_question_is_refused() {
         fleet.judge_question_of(&job_id).await.is_some(),
         "a refused answer leaves the real question open"
     );
+}
+
+/// A peer built before 13.35 sends none, and this trusts whatever is open —
+/// the whole of what `answer_judge` did before `asked_at` existed.
+#[tokio::test]
+async fn answering_with_no_asked_at_trusts_whatever_is_open() {
+    let home = TempDir::new();
+    let (fleet, job_id, _asked_at) = asking_a_question(&home).await;
+
+    let answered = fleet
+        .answer_judge(&job_id, JudgeAnswer::Agree, None, None)
+        .await
+        .expect("an absent asked_at answers the question genuinely open");
+
+    assert_eq!(answered.status(), JobStatus::Escalated);
 }

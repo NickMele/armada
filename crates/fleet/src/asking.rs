@@ -146,13 +146,15 @@ where
     /// leaves it open rather than stranding an answered, stopped step with
     /// nothing left to retry.
     ///
-    /// **`asked_at` is checked against the question genuinely open now** —
-    /// the same `Superseded` shape as `crate::questioning::NotAnswered`.
+    /// **`asked_at`, where sent, is checked against the question genuinely
+    /// open now** — the same `Superseded` shape as
+    /// `crate::questioning::NotAnswered`. Absent, a peer built before 13.35
+    /// trusts whatever is open, as this always did.
     pub async fn answer_judge(
         &self,
         job_id: &JobId,
         answer: JudgeAnswer,
-        asked_at: ipc::Instant,
+        asked_at: Option<ipc::Instant>,
         note: Option<String>,
     ) -> Result<Job, Adrift> {
         let job = self.load(job_id).await?;
@@ -172,13 +174,15 @@ where
                 job: job_id.clone(),
                 because: "this job is not holding a judge question open".to_string(),
             })?;
-        if ipc::Instant::from(&open.asked_at) != asked_at {
-            return Err(Adrift::NotAnswerable {
-                job: job_id.clone(),
-                because: "the judge question being answered is not the one open now. Read \
-                          the job again and answer the one it names"
-                    .to_string(),
-            });
+        if let Some(named) = asked_at {
+            if ipc::Instant::from(&open.asked_at) != named {
+                return Err(Adrift::NotAnswerable {
+                    job: job_id.clone(),
+                    because: "the judge question being answered is not the one open now. Read \
+                              the job again and answer the one it names"
+                        .to_string(),
+                });
+            }
         }
         let step = StepId::new(open.step_id);
         let job = match answer {

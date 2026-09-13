@@ -1,7 +1,7 @@
 // Answering a card in Helm's dock (#936). Each kind's answer calls the endpoint Job detail
 // already sends to; this is the wiring, apart from `App.tsx` for the reason `commands.ts` is.
 
-import { useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { CommandAnswer, JudgeAnswer, Outcome } from "@armada/protocol";
 import type { DockActs, Outstanding } from "@armada/screens";
 import { outstandingId, refusalWords } from "@armada/screens";
@@ -13,22 +13,31 @@ import type { useCommands } from "./commands";
  * id — cleared on a fresh attempt. `answering` reads `commands.acting`, the one flag every other
  * answer on this window already sets, so a card and a Job detail band open on the same Job agree
  * about whether something is on its way to Fleet.
+ *
+ * **Memoised on `refusals` and `commands.acting` alone.** `commands` itself is rebuilt every
+ * render — `commands.ts`'s own choice — so closing over it directly would defeat the memo `App.tsx`
+ * builds the dock's cards under; a ref carries the latest one instead.
  */
 export function useDockAnswering(commands: ReturnType<typeof useCommands>): DockActs {
   const [refusals, setRefusals] = useState<Record<string, string>>({});
+  const latest = useRef(commands);
+  latest.current = commands;
 
-  async function onAnswer(question: Outstanding, answer: string): Promise<void> {
+  const onAnswer = useCallback(async (question: Outstanding, answer: string): Promise<void> => {
     const id = outstandingId(question);
     setRefusals(({ [id]: _dropped, ...rest }) => rest);
-    const outcome = await sent(commands, question, answer);
+    const outcome = await sent(latest.current, question, answer);
     if (!outcome.ok) setRefusals((was) => ({ ...was, [id]: refusalWords(outcome) }));
-  }
+  }, []);
 
-  return {
-    onAnswer,
-    answering: (question) => commands.acting === question.job_id,
-    refusalFor: (question) => refusals[outstandingId(question)],
-  };
+  return useMemo(
+    () => ({
+      onAnswer,
+      answering: (question: Outstanding) => commands.acting === question.job_id,
+      refusalFor: (question: Outstanding) => refusals[outstandingId(question)],
+    }),
+    [onAnswer, refusals, commands.acting],
+  );
 }
 
 function sent(

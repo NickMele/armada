@@ -73,7 +73,12 @@ pub struct JudgeAnswered {
     /// left open across [`crate::ChosenAnswer::question_id`] can. Refused as
     /// stale where it does not match the one open now, the same shape as
     /// that seam's `Superseded`.
-    pub asked_at: Instant,
+    ///
+    /// **Optional so 13.35 is additive.** A peer built before this field
+    /// existed sends none, and `answer_judge` reads that as trusting whatever
+    /// is open — the whole of what it did before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asked_at: Option<Instant>,
     /// Never required. Rides along for whoever reads the record later; Fleet
     /// asks nothing further of it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
