@@ -137,7 +137,9 @@ export function Sheet({
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
-      // A popover open inside the sheet is the top layer, and takes the press itself, wherever focus is.
+      // A popover over the sheet is the top layer. Either it took the press already, or it is still
+      // open and will: listeners on one window run in no order this can rely on.
+      if (event.defaultPrevented) return;
       if (closeRef.current?.closest('[role="dialog"]')?.querySelector(".armada-popover__panel")) return;
       if (event.key === "Escape") {
         event.preventDefault();

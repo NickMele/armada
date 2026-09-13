@@ -25,12 +25,13 @@ export function Popover({ trigger, children, align = "start", defaultOpen = fals
   const [open, setOpen] = useState(defaultOpen);
   const root = useRef<HTMLDivElement>(null);
 
-  // Esc closes an overlay, per the global tier, and stops there: in capture, so a sheet under it
-  // does not close on the same press.
+  // Esc closes an overlay, per the global tier, and stops there. Marked taken as well as stopped:
+  // a sheet listening on the same window cannot be stopped, and reads the mark instead.
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      event.preventDefault();
       event.stopPropagation();
       setOpen(false);
     }
