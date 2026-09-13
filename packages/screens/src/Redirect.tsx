@@ -81,27 +81,21 @@ export function RedirectControl({
             it, unseparated, because a `<p>` carries no margin under this
             app's reset. */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          <p>
-            The instruction is sent to the drone as a new turn. The job stays at the same step, with
-            the same session — nothing is spawned and nothing already done is thrown away.
-          </p>
-          {/* Said before the press, because the wait is the surprising half: a job
-              that does not move on the send would otherwise read as a redirect
-              that never arrived. What it did is on the job afterwards —
-              `recovery.ts` on a job that stopped, `steering.ts` on one that did
-              not. */}
+          {/* Said before the press, because the wait is the surprising half: a
+              job that does not move on the send would otherwise read as a
+              redirect that never arrived. Which half is true is the one fact
+              that changes the decision to send, so it is what survives here —
+              everything else that used to be said is machinery a person does
+              not need to decide. */}
           {drone === "holding" ? (
             <p>
-              Where a step stopped, the job runs again straight away. Where it escalated without
-              stopping one, it stays escalated until the drone takes a turn — sending is not evidence
-              that it read anything.
+              A stopped drone starts again right away. An escalated one waits until it takes your
+              instruction up.
             </p>
           ) : (
             <p>
-              This job is running and stays running: nothing on screen moves when the instruction
-              lands, and sending is not evidence that the drone read anything. It buys no time
-              either — the step's clocks and its ceilings go on from where they are. Where it shows
-              up is the step's activity log, as a turn a person asked for.
+              The working drone gets your instruction now. Nothing restarts, and its limits keep
+              counting.
             </p>
           )}
           {/* No `autoFocus`: the dialog's own contract puts initial focus on

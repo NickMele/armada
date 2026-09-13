@@ -292,9 +292,8 @@ export function ReportControl({
               {/* What this is, before what it asks for. The record is already
                   written down; the sentence is the part that is not. */}
               <p>
-                Everything armada knows about this job is attached for you — every move it made,
-                what each gate said, what the drone claimed, and what it changed. What it does not
-                have is why you think it was wrong.
+                Everything armada knows about this job is already attached. What's missing is why you
+                think it was wrong.
               </p>
               <RadioGroup label="What was wrong">
                 {CLAIMS.map((option) => (
