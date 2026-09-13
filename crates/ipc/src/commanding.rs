@@ -108,11 +108,11 @@ pub struct CommandInFlight {
     /// Candidate Always-allow rules for this command, shortest first — the
     /// leading cuts of it, stopping short of anything that chains. Empty where
     /// [`offers`](CommandInFlight::offers) does not carry
-    /// [`CommandAnswer::AlwaysAllow`]. **Since 13.3.**
+    /// [`CommandAnswer::AlwaysAllow`]. **Since 13.4.**
     #[serde(default)]
     pub rules: Vec<String>,
     /// The rule pre-selected for a person, always one of
-    /// [`rules`](CommandInFlight::rules) where it is `Some`. **Since 13.3.**
+    /// [`rules`](CommandInFlight::rules) where it is `Some`. **Since 13.4.**
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggested_rule: Option<String>,
 }
@@ -150,7 +150,7 @@ pub struct AnswerCommand {
     /// it** — naming one on any other answer would ask Fleet to declare a rule
     /// on a command that was never always-allowed. A name outside that
     /// command's own candidates is a 409. Absent is the whole command, which
-    /// is what every Fleet before 13.3 always declared. **Since 13.3.**
+    /// is what every Fleet before 13.4 always declared. **Since 13.4.**
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rule: Option<String>,
 }

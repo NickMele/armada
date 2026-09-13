@@ -427,12 +427,12 @@ export type Refusal = {
   withheld?: string;
   /**
    * Candidate Always-allow rules for this command, shortest first. Empty
-   * where `offers` does not carry `always_allow`. Since protocol 13.3.
+   * where `offers` does not carry `always_allow`. Since protocol 13.4.
    */
   rules?: string[];
   /**
    * The rule pre-selected for a person, always one of `rules` where present.
-   * Since protocol 13.3.
+   * Since protocol 13.4.
    */
   suggested_rule?: string;
 };
