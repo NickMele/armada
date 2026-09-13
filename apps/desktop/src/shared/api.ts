@@ -36,7 +36,7 @@ import type {
 import type { BridgeState, Summons } from "./bridge";
 import type { SaveManifestFile } from "@armada/protocol";
 import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
-import type { CheckoutRunDiffRead } from "@armada/screens/src/checkout-diff";
+import type { CheckoutRunDiffRead } from "@armada/protocol";
 
 /**
  * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and

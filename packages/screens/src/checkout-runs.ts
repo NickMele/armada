@@ -18,7 +18,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   ConsoleOutputProps,
-  RunDiffReading,
   RunPageEntry,
   RunPageGroup,
   RunPagePastRun,
@@ -26,8 +25,8 @@ import type {
   RunPageResult,
   RunPageServerStatus,
 } from "@armada/components";
-import type { CheckoutRunDiffRead } from "./checkout-diff";
 import type {
+  CheckoutRunDiffRead,
   CheckoutRunFollowed,
   CheckoutRunListRead,
   CheckoutRunRecord,
@@ -41,9 +40,8 @@ import type {
   ServerState,
   StartCheckoutRun,
 } from "@armada/protocol";
-import { said } from "./copy";
-import { absoluteOf, span } from "./duration";
-import { drawnOf } from "./review";
+import { checkoutChangedOf, checkoutRunDiffReadingOf } from "./checkout-run-diff";
+import { absoluteOf, clockOf, span } from "./duration";
 import { openServerLink } from "./opening";
 import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
 
@@ -194,89 +192,6 @@ export function checkoutPastRunOf(
   };
 }
 
-/** `HH:MM:SS`, off an ISO instant — a run row here carries no date, and
- * neither does a save's receipt beside the file it saved. */
-export function clockOf(at: string): string {
-  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-/**
- * The newest run that wrote something — **undone or not**.
- *
- * It skipped an undone run until *Open the diff* existed, and that was right
- * while Undo was the panel's only act: an undone run had nothing left to
- * offer. It has now. Undo keeps the snapshot, so an undone run's diff still
- * reads, and a person deciding whether to run `fmt` again may want to see what
- * it did. Whether Undo is offered is `checkoutUndoOffered`'s question.
- *
- * It also stops the panel reaching past an undone run to an older one and
- * offering to undo *that* — a restore from a snapshot taken before a run that
- * has since been put back.
- */
-export function checkoutChangedRunOf(
-  runs: readonly CheckoutRunRecord[],
-): CheckoutRunRecord | undefined {
-  return runs.find((run) => run.changed.length > 0);
-}
-
-/**
- * Whether Undo is offered for a run.
- *
- * **`undoable` is Fleet's answer and not a guess.** A run with no snapshot
- * behind it has nothing to restore from, and this tree holds a person's own
- * uncommitted work — so an Undo offered where Fleet cannot honour it would be
- * the one control on this page whose failure costs somebody their work. A run
- * already undone has nothing left to put back.
- */
-export function checkoutUndoOffered(run: CheckoutRunRecord): boolean {
-  return run.undoable && run.undone_at === undefined;
-}
-
-/** What a reading with no files in it says. Ordinary, and never an error. */
-export const RUN_CHANGED_NOTHING = "Against the snapshot it took, this run changed nothing.";
-
-/**
- * What a reading says where files changed and git's patch holds no line of
- * them. **Not "changed nothing"** — the page lists the files beside it, and a
- * binary file or a mode change is a change with no text to draw.
- */
-export const RUN_CHANGED_NO_LINES =
-  "The files this run changed have no lines git can draw — a binary file or a mode change. " +
-  "The page behind this lists them.";
-
-/** A cut patch, naming what is missing. There is no worktree to send a reader to. */
-function checkoutCutSentence(drawnLines: number, total: number): string {
-  return (
-    `This is the first ${drawnLines.toLocaleString()} lines of a ${total.toLocaleString()}-line ` +
-    "patch. The rest is not on screen — Bridge bounds a patch rather than freezing on one."
-  );
-}
-
-/**
- * What `RunDiffSheet` draws for one reading.
- *
- * **The id is checked**, `DecidedDiff`'s reason: an answer for the run opened a
- * moment ago must not be drawn under the one that is. **A snapshot that is
- * gone is drawn as gone**, with Fleet's own why, and nothing stands in for it.
- */
-export function checkoutRunDiffReadingOf(
-  runId: string,
-  read: "reading" | CheckoutRunDiffRead,
-): RunDiffReading {
-  if (read === "reading") return { state: "reading" };
-  if (!read.ok) return { state: "failed", saying: `Fleet did not answer: ${said(read.outcome)}` };
-  if (read.diff.id !== runId) return { state: "reading" };
-  const reading = read.diff.reading;
-  if (reading.state === "gone") return { state: "gone", why: reading.why };
-  const drawn = reading.patch === undefined ? { files: [] } : drawnOf(reading.patch, checkoutCutSentence);
-  return {
-    state: "read",
-    files: drawn.files,
-    ...(drawn.cut === undefined ? {} : { cut: drawn.cut }),
-    emptyNote: reading.files.length === 0 ? RUN_CHANGED_NOTHING : RUN_CHANGED_NO_LINES,
-  };
-}
-
 /** Whether the page should draw a running strip, and what it says. */
 export function checkoutRunningOf(
   sheet: CheckoutRunSheet | undefined,
@@ -410,7 +325,6 @@ export function useManifestRuns(
   const shown = selected ?? runningEntryOf(groups, data?.running?.name) ?? null;
 
   const runningNow = checkoutRunningOf(data, now);
-  const changedRun = checkoutChangedRunOf(runs);
   const diffRun = diffOpen === null ? undefined : runs.find((record) => record.id === diffOpen.runId);
   const server = checkoutServerStatusOf(data, shown, now);
   const live = checkoutOutputOf(followed, shown === null ? undefined : nameOf(shown));
@@ -462,25 +376,16 @@ export function useManifestRuns(
     ...(runs.length === 0
       ? {}
       : { runs: runs.map((record) => checkoutPastRunOf(record, openPastRun)) }),
-    ...(changedRun === undefined || dismissed
+    // **The panel is the result line's run**, and nothing else's. Following
+    // the newest run that changed something put `fmt`'s files and Undo under
+    // a `format` result, which read as format having written them.
+    ...(about === undefined
       ? {}
       : {
-          changed: {
-            files: changedRun.changed,
-            // Against the snapshot the run took, never `HEAD` — so it is
-            // offered for an undone run too, which still has that snapshot.
-            onOpenDiff: () => openDiff(changedRun.id),
-            // Offered only where Fleet says it can be honoured — `undoable` is
-            // its answer, not a guess — and never twice.
-            ...(checkoutUndoOffered(changedRun)
-              ? { onUndo: () => void onUndoRun(changedRun.id).then(refreshRuns) }
-              : {}),
-            ...(changedRun.undone_at === undefined
-              ? {}
-              : {
-                  undone: `Undone at ${clockOf(changedRun.undone_at)}. These files are back as they were before the run.`,
-                }),
-          },
+          changed: checkoutChangedOf(about, {
+            onOpenDiff: openDiff,
+            onUndo: (id) => void onUndoRun(id).then(refreshRuns),
+          }),
         }),
     ...(diffOpen === null || diffReading === undefined
       ? {}

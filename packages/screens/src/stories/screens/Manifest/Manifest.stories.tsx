@@ -304,6 +304,42 @@ export const ARunWhoseSnapshotIsGone: Story = {
   },
 };
 
+/** `format` after `fmt`: a Check that changed nothing, run after a Command that did. */
+const FORMAT_CHECKED: CheckoutRunRecord = {
+  ...EARLIER,
+  id: "crun_4d02",
+  name: "format",
+  command: "cargo fmt --all --check",
+  started_at: "2026-09-12T14:19:10Z",
+  ended_at: "2026-09-12T14:19:12Z",
+  duration_ms: 1810,
+  exit_code: 0,
+  log: "runs/crun_4d02/output.log",
+};
+
+/**
+ * **The panel is the result line's run.** `format` is newest and changed
+ * nothing, so the panel says so and offers neither act — `fmt`'s files and its
+ * Undo under a `format` result would read as format having written them.
+ * `fmt`'s changes are still reached from *Earlier runs*.
+ */
+export const TheNewestRunChangedNothing: Story = {
+  name: "The newest run changed nothing",
+  args: {
+    sheet: { state: "read", sheet: sheet() },
+    runs: { runs: [FORMAT_CHECKED, REFORMATTED], unreadable: [] },
+    now: NOW,
+    diff: FMT_DIFF,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("This run changed nothing.")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Open the diff" })).toBeNull();
+    await expect(canvas.queryByRole("button", { name: "Undo this run" })).toBeNull();
+    await expect(canvas.queryByText("crates/fleet/src/rehearsing/checkout.rs")).toBeNull();
+  },
+};
+
 /** Fleet is up and could not read `armada.yml` — the page says so and lists nothing. */
 export const TheManifestWouldNotRead: Story = {
   name: "The Manifest would not read",

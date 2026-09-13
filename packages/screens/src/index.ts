@@ -33,7 +33,7 @@ export * from "./calls";
 export * from "./outputs";
 export * from "./chapters";
 export * from "./checkout-runs";
-export * from "./checkout-diff";
+export * from "./checkout-run-diff";
 export * from "./checks";
 export * from "./copy";
 export * from "./editing";

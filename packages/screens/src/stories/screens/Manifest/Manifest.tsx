@@ -9,6 +9,7 @@ import { useRef, useState } from "react";
 import { connectedTo, PROTOCOL_VERSION, type Connection } from "@armada/protocol";
 import type {
   CheckoutRunDiff,
+  CheckoutRunDiffRead,
   CheckoutRunFollowed,
   CheckoutRunList,
   CheckoutRunSheetRead,
@@ -19,7 +20,6 @@ import type {
 } from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
-import type { CheckoutRunDiffRead } from "../../../checkout-diff";
 import type { ManifestSaveAnswer, ManifestView } from "../../../editing";
 import { useManifestEditing } from "../../../manifest-file";
 import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";

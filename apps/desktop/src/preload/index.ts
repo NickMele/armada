@@ -21,7 +21,7 @@ import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@arm
 import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
 import type { SaveManifestFile } from "@armada/protocol";
 import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
-import type { CheckoutRunDiffRead } from "@armada/screens/src/checkout-diff";
+import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { CommandAnswer, JudgeAnswer, SaveLimits, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 

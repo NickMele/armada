@@ -28,7 +28,7 @@ import type {
   RunOutputRead,
   StartCheckoutRun,
 } from "@armada/protocol";
-import type { CheckoutRunDiffRead } from "@armada/screens/src/checkout-diff";
+import type { CheckoutRunDiffRead } from "@armada/protocol";
 import { ask } from "./request";
 import { HOST } from "./runtime-file";
 

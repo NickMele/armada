@@ -4,34 +4,9 @@ import { railOfPatch } from "../JobDiffSheet/JobDiffSheet";
 import { UnifiedDiff, type DiffFile } from "../UnifiedDiff/UnifiedDiff";
 
 /**
- * What one run in the main checkout changed — Journey 9's **Open the diff**,
- * on the Manifest surface.
- *
- * # Why this is not `JobDiffSheet`
- *
- * **There is no Job.** That sheet is titled *Job diff*, names a branch, and
- * says its counts are *since the branch was cut* — three claims, each false
- * here. A run in the main checkout is read against the snapshot Fleet took
- * just before it, and nothing else, because this tree holds a person's own
- * uncommitted work and a patch against `HEAD` would show all of it as the
- * run's. The wire says so in `against`, and the header says it in words.
- *
- * **No file rail.** `JobDiffSheet`'s rail exists to carry the one step-scoped
- * fact a Job-wide patch has — which step wrote each file. A run has no steps,
- * and the page this opens over already lists the run's files. The counts a
- * rail would have carried are summed into the header instead.
- *
- * **The patch is `UnifiedDiff`, not a second renderer.** Two diffs drawn by
- * two components is how two diffs in one app come to look different.
- *
- * # Nothing here is hued
- *
- * No run from this surface is a verdict. The only colour is the diff's own
- * `+` and `−`, which restate the marker rather than judge anything. An undone
- * run is a band of plain words; a snapshot that is gone is a sentence.
- *
- * **A read, not an act.** Opening it changes nothing, and it offers nothing to
- * press but Close.
+ * One checkout run's patch, **read against the snapshot the run took, never
+ * `HEAD`** — the main checkout holds a person's own uncommitted work, which a
+ * patch against `HEAD` would show as the run's. Journey 9, *Running one*.
  */
 export type RunDiffReading =
   /** Fleet has been asked and has not answered. */

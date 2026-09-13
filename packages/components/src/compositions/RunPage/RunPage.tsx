@@ -176,6 +176,8 @@ export type RunPageProps = {
      * keeps the snapshot, so what the run did can still be read.
      */
     undone?: ReactNode;
+    /** Why what the run changed could not be read. Drawn instead of the list. */
+    unreadable?: ReactNode;
   };
   /**
    * The run's patch, on a trailing sheet over this page. Present while it is
@@ -311,11 +313,15 @@ export function RunPage({
 
             {changed === undefined ? null : (
               <div className="armada-run-page__changed">
-                <ChangedFiles files={changed.files} emptyNote="This run changed nothing." />
+                {changed.unreadable === undefined ? (
+                  <ChangedFiles files={changed.files} emptyNote="This run changed nothing." />
+                ) : (
+                  <p className="armada-run-page__changed-note">{changed.unreadable}</p>
+                )}
                 {/* Unhued, like everything here: undone is a fact about the
                     checkout since, not a result. */}
                 {changed.undone === undefined ? null : (
-                  <p className="armada-run-page__undone">{changed.undone}</p>
+                  <p className="armada-run-page__changed-note">{changed.undone}</p>
                 )}
                 {changed.onOpenDiff === undefined && changed.onUndo === undefined ? null : (
                   <div className="armada-run-page__changed-acts">
