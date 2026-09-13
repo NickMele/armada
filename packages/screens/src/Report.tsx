@@ -59,13 +59,13 @@ import type { FileReport, JobDetail as JobWhole, Report } from "@armada/protocol
 export const CLAIMS: { value: string; label: string; note: string }[] = [
   {
     value: "wrongly_refused",
-    label: "The judge refused work that was right",
-    note: "The verdict is on the record and this does not lift it — overruling is the act that does.",
+    label: "The Judge refused work that was right",
+    note: "This doesn't lift the verdict.",
   },
   {
     value: "wrongly_passed",
     label: "Something wrong got through",
-    note: "Nothing in armada surfaces this on its own, which is why saying it is the whole of the record.",
+    note: "Nothing in Armada surfaces this on its own, which is why saying it is the whole of the record.",
   },
   {
     value: "armada_misbehaved",
@@ -292,7 +292,7 @@ export function ReportControl({
               {/* What this is, before what it asks for. The record is already
                   written down; the sentence is the part that is not. */}
               <p>
-                Everything armada knows about this job is already attached. What's missing is why you
+                Everything Armada knows about this job is already attached. What's missing is why you
                 think it was wrong.
               </p>
               <RadioGroup label="What was wrong">
