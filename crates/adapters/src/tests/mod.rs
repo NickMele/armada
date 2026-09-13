@@ -11,6 +11,7 @@
 //! credential, a network, or an agent.
 
 mod basing;
+mod ci_workflows;
 mod commit;
 mod delivery;
 mod git_guard_gaps;

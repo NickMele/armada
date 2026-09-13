@@ -222,9 +222,9 @@ pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
 };
 pub use scan::{
-    ComposeService, DeclaredPort, EvidenceStrength, MissingName, NotRead, PackageWorkspaces,
-    RepositoryScan, Runnable, ScannedWorkspace, ToolFile, ToolSection, WorkspaceGlob,
-    WorkspaceGlobs,
+    CiCommand, ComposeService, DeclaredPort, EvidenceStrength, MissingName, NotRead,
+    PackageWorkspaces, RepositoryScan, Runnable, ScannedWorkspace, ToolFile, ToolSection,
+    WorkspaceGlob, WorkspaceGlobs,
 };
 pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,

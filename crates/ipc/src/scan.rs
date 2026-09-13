@@ -25,6 +25,10 @@ pub struct RepositoryScan {
     /// is always here**: a single-workspace repository's Manifest is the root,
     /// and a monorepo's root holds its own commands.
     pub workspaces: Vec<ScannedWorkspace>,
+    /// What the repository's CI jobs run, each with its file and job. **Evidence,
+    /// not a Check**: which of these gates code is still the proposal's guess.
+    #[serde(default)]
+    pub ci_commands: Vec<CiCommand>,
     /// What belongs to no workspace and was not read, and why — a directory
     /// that would not list, a workspace pattern this read does not expand, a
     /// YAML file under a hidden directory. Never evidence of absence.
@@ -151,6 +155,23 @@ pub struct MissingName {
     pub name: String,
     /// Every sibling that declares it, by directory.
     pub declared_in: Vec<String>,
+}
+
+/// One command a CI job runs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CiCommand {
+    /// Relative to the checkout.
+    pub file: String,
+    /// The job, by its id in that file.
+    pub job: String,
+    /// Where in the file — `jobs.test.steps[2].run`.
+    pub key: String,
+    /// Verbatim as the file writes it.
+    pub run: String,
+    /// The matrix cell it was read as, where the job has one: one finding per
+    /// command, never one per cell. Rendered, never matched on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cell: Option<String>,
 }
 
 /// Something that was not read, and why.

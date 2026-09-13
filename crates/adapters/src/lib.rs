@@ -40,6 +40,7 @@
 
 mod base;
 mod basing;
+mod ci_workflows;
 mod commit;
 mod delivery;
 mod error;
@@ -63,6 +64,7 @@ mod worktree;
 #[cfg(test)]
 mod tests;
 
+pub use ci_workflows::ActionsWorkflows;
 pub use error::{CommitWorkError, CreateWorktreeError, ReadWorkProductError};
 pub use harness::{
     ask_tool, checks_tool, dispatch_tool, evidence_server, evidence_tool, permission_tool,

@@ -29,6 +29,7 @@ dependencies = [
  "git2",
  "ipc",
  "serde",
+ "serde_yaml_ng",
 ]
 
 [[package]]
