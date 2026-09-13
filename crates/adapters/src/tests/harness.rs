@@ -651,3 +651,30 @@ fn a_push_behind_a_redirect_flag_is_still_refused_as_a_push() {
         "{refused:?}"
     );
 }
+
+/// **The plan tools are granted per step**, like the dispatch tool: the step
+/// that records the plan and the steps that follow it are different Drones,
+/// and neither is handed the other's tools.
+#[test]
+fn each_plan_grant_puts_only_its_own_tools_on_the_list() {
+    let listed = |belt: Toolbelt| {
+        value_after(&rendered(belt), "--allowedTools").expect("an allowlist is rendered")
+    };
+    let plain = listed(Toolbelt::evidence_only().and(Grant::ReadTheWorktree));
+    for tool in ["record_plan", "add_task", "update_task"] {
+        assert!(!plain.contains(tool), "{plain}");
+    }
+    let recording = listed(Toolbelt::evidence_only().and(Grant::RecordThePlan));
+    assert!(recording
+        .split(',')
+        .any(|entry| entry == "mcp__armada__record_plan"));
+    assert!(!recording.contains("update_task"), "{recording}");
+    let following = listed(Toolbelt::evidence_only().and(Grant::WorkThePlan));
+    for tool in ["mcp__armada__add_task", "mcp__armada__update_task"] {
+        assert!(
+            following.split(',').any(|entry| entry == tool),
+            "{following}"
+        );
+    }
+    assert!(!following.contains("record_plan"), "{following}");
+}

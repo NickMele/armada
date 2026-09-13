@@ -137,6 +137,9 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
         "dispatch_job",
         "ask_question",
         "permission",
+        "record_plan",
+        "add_task",
+        "update_task",
     ] {
         assert!(
             answered.body.contains(&format!("\"name\":\"{named}\"")),
@@ -153,7 +156,7 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
     // nests an object for its options and `dispatch_job`'s nests one for its
     // edges; neither adds an `inputSchema`, because the nested shapes are
     // `items` and `properties`.
-    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 8);
+    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 11);
     assert_eq!(
         answered
             .body
@@ -583,4 +586,23 @@ async fn a_checks_call_with_nothing_working_is_a_tool_error() {
     .await;
     assert_eq!(answered.status, StatusCode::OK);
     assert!(answered.is_error());
+}
+
+/// A plan tool's call reaches the daemon and its receipt comes back. Which step
+/// may call which is `fleet::work_plan`'s, and tested there.
+#[tokio::test]
+async fn a_plan_call_is_taken_and_answers_with_a_receipt() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_task",
+           "arguments":{"task":"T1","state":"done","reason":""}}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(!answered.is_error(), "{}", answered.body);
+    assert_eq!(answered.text(), "update_task");
 }

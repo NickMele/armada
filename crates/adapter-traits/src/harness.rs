@@ -213,6 +213,12 @@ pub enum Grant {
     /// a Drone inventing work a call that is not on its list rather than a call
     /// somebody remembered to refuse.
     DispatchAJob,
+    /// Record the Job's plan: `record_plan`. **Granted only on the step whose
+    /// product is a plan**, so a later step cannot replace the plan it works from.
+    RecordThePlan,
+    /// Keep the plan current: `add_task` and `update_task`. Granted on the
+    /// steps that follow the plan, and nowhere else.
+    WorkThePlan,
 }
 
 /// What a Drone may call.

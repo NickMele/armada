@@ -40,6 +40,7 @@ mod limits;
 mod mcp;
 /// The one tool the harness calls rather than the model, and the two answers.
 mod permission;
+mod planning;
 /// The one DTO on this seam a peer *writes*, and what it refuses.
 mod proposals;
 /// A given-back worktree, and the absent halves Bridge reads as absent.

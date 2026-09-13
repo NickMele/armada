@@ -197,6 +197,12 @@ async fn called<D: Tools>(
             Ok(receipt) => Answered::Recorded { id, receipt },
             Err(why) => Answered::Refused { id, why },
         },
+        // **Answered from the record**, like a declaration: the change is kept
+        // or refused before the reply, and a refusal is words the Drone reads.
+        Incoming::Plan { id, call } => match served.daemon().change_plan(caller, call).await {
+            Ok(receipt) => Answered::Recorded { id, receipt },
+            Err(why) => Answered::Refused { id, why },
+        },
         // **The third call held open**, and the harness's rather than the
         // Drone's: the call it asks about runs on an allow and not otherwise,
         // so the answer has to be in the reply. What bounds the wait is the

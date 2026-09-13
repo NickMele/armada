@@ -90,6 +90,7 @@ mod overruling;
 mod paying;
 mod peer;
 mod permitting;
+mod plan_tools;
 mod planning;
 mod planted;
 mod policy_gate;

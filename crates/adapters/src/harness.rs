@@ -91,6 +91,13 @@ const SERVER_TOOL: &str = "mcp__armada__start_server";
 /// refuses the same call in words on its own side.
 const DISPATCH_TOOL: &str = "mcp__armada__dispatch_job";
 
+/// **Granted like the dispatch tool, per step**: the plan's recorder and its
+/// followers are different steps, and a Drone denied one silently is told why
+/// by Fleet's own refusal of the same call.
+const RECORD_PLAN_TOOL: &str = "mcp__armada__record_plan";
+const ADD_TASK_TOOL: &str = "mcp__armada__add_task";
+const UPDATE_TASK_TOOL: &str = "mcp__armada__update_task";
+
 /// **In no toolbelt and never in `--allowedTools`.** The CLI calls it itself,
 /// on `--permission-prompt-tool`, with each call the allowlist does not cover,
 /// and its answer is whether that call runs. The Drone's model is not shown it,
@@ -321,6 +328,11 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
                 allowed.push(command_rule(run)?)
             }
             Grant::DispatchAJob => allowed.push(DISPATCH_TOOL.into()),
+            Grant::RecordThePlan => allowed.push(RECORD_PLAN_TOOL.into()),
+            Grant::WorkThePlan => {
+                allowed.push(ADD_TASK_TOOL.into());
+                allowed.push(UPDATE_TASK_TOOL.into());
+            }
         }
     }
     Ok(allowed.join(","))

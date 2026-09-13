@@ -17,8 +17,8 @@ use std::future::Future;
 
 use crate::mcp::Caller;
 use ipc::mcp::{
-    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt,
-    RequestScope, ServerReport, SubmitEvidence,
+    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, PlanCall,
+    Receipt, RequestScope, ServerReport, SubmitEvidence,
 };
 
 /// Whether a call outside a Drone's toolbelt may run.
@@ -233,4 +233,18 @@ pub trait Tools: Send + Sync + 'static {
         caller: Caller,
         name: String,
     ) -> impl Future<Output = Result<ServerReport, NotRecorded>> + Send;
+
+    /// `record_plan`, `add_task` and `update_task` — the working Drone keeps
+    /// the Job's plan. **Kept or refused before the reply**, and nothing moves:
+    /// a task's state gates no submission.
+    ///
+    /// Bound to a Job and a step the caller never names, for
+    /// [`submit_evidence`](Tools::submit_evidence)'s reason. Which step may
+    /// call which of the three is the implementation's answer, off the frozen
+    /// workflow.
+    fn change_plan(
+        &self,
+        caller: Caller,
+        call: PlanCall,
+    ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 }

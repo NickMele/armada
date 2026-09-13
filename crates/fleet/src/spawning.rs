@@ -422,6 +422,15 @@ where
         if dispatches(job, step) {
             belt = belt.and(Grant::DispatchAJob);
         }
+        // The same two predicates `crate::work_plan` refuses a call by.
+        for grant in job
+            .workflow()
+            .step(step)
+            .map(crate::work_plan::plan_grants)
+            .unwrap_or_default()
+        {
+            belt = belt.and(grant);
+        }
         belt
     }
 }
