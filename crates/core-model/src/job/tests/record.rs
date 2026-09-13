@@ -262,7 +262,7 @@ fn each_enums_size_is_pinned_here_and_compared_to_no_registry() {
     assert_eq!(CriterionSource::ALL.len(), 3);
     assert_eq!(DependencyDirection::ALL.len(), 2);
     assert_eq!(NotRunReason::ALL.len(), 4);
-    assert_eq!(Actor::ALL.len(), 3);
+    assert_eq!(Actor::ALL.len(), 4);
 }
 
 #[test]
