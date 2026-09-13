@@ -1,13 +1,12 @@
 //! Plan's claim: **a running Job says how far through its plan it is.** Every
 //! assertion is made against what crossed [`ipc::encode`], as `board.rs`'s are,
-//! and the apparatus is [`bench::plan`]. #893, #894, #895 and #897 are what
-//! this file carries; the rest of the claim is a row, in the order a person
-//! meets it:
+//! and the apparatus is [`bench::plan`]. Every step of the claim is carried:
+//! #893 to #895 and #897 here, and #896 and #898 as the values their screens draw.
 //!
-//! | Step of the claim | Carried by |
+//! | Not proved here | Why not, and what proves it |
 //! |---|---|
-//! | Job detail's Plan region draws the plan | #896 |
-//! | The Board's row draws "2 of 4" | #898 |
+//! | That job detail's Plan region draws the plan | Nothing here renders. `JobDetail.work_plan` is asserted below; `planOf` is exercised only by the `PlanPartwayDone` and `PlanWithADroppedTask` stories |
+//! | That the Board's row draws "2 of 4" | The same. `JobSummary.tasks` is asserted below, the dropped task left out of the figure; `taskFigureOf` and `taskBarSegmentsOf` are tested in `board.test.ts` |
 //!
 //! Which step is given which tool is `fleet::work_plan`, `pub(crate)`, and is
 //! asserted in `fleet`'s own tests beside the store's append-only history.
