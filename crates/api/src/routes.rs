@@ -30,11 +30,10 @@ use crate::attention::{get_activity_feed, list_alerts, list_job_board, list_revi
 use crate::commands::{
     add_task, answer_command, answer_judge, answer_question, approve_dispatch, approve_review,
     delete_branch, dismiss_finding, drop_task, examine_job, file_report, forget_job, kill_drone,
-    kill_job,
-    merge_pull_request, override_verdict, propose_from_request, propose_job, raise_cost_cap,
-    raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job, reject_job, request_changes,
-    rerun_gate, resolve_pull_request_conflict, restart_step, set_when_blocked, set_when_refused,
-    show_again, stop_proposal, take_up_remarks,
+    kill_job, merge_pull_request, override_verdict, propose_from_request, propose_job,
+    raise_cost_cap, raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job, reject_job,
+    request_changes, rerun_gate, resolve_pull_request_conflict, restart_step, set_when_blocked,
+    set_when_refused, show_again, stop_proposal, take_up_remarks,
 };
 use crate::conversing::{ask_helm, observe_helm, start_helm_fresh};
 use crate::daemon::Daemon;
