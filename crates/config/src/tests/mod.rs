@@ -12,6 +12,7 @@
 
 mod after_merge;
 mod amending;
+mod amending_sections;
 mod catalogue;
 mod fences;
 mod from_nothing;

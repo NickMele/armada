@@ -129,12 +129,69 @@ pub enum ManifestEdit {
         #[serde(deserialize_with = "stated")]
         turn_cap_per_job: Option<u32>,
     },
+    /// `0` removes a written code, since absent already means `0`.
+    SetCheckExpectExitCode {
+        name: String,
+        expect_exit_code: i64,
+    },
+    /// `null` removes the key, and Armada infers a base.
+    SetBase {
+        #[serde(deserialize_with = "stated")]
+        base: Option<String>,
+    },
+    AddEvidence {
+        evidence: EvidenceDraft,
+    },
+    /// Takes `evidence:` and the comment block directly above it.
+    RemoveEvidence,
+    SetEvidenceServe {
+        #[serde(deserialize_with = "stated")]
+        serve: Option<String>,
+    },
+    SetEvidenceReady {
+        #[serde(deserialize_with = "stated")]
+        ready: Option<String>,
+    },
+    SetEvidenceRun {
+        run: String,
+    },
+    SetEvidenceFrames {
+        frames: String,
+    },
+    SetEvidenceNever {
+        never: Vec<String>,
+    },
+    /// Empty removes `after_merge`, which holds nothing else.
+    SetAfterMergeChecks {
+        checks: Vec<String>,
+    },
+    /// Empty removes `setup`, which holds nothing else.
+    SetSetupRequires {
+        requires: Vec<String>,
+    },
+    /// `null` defers to what Fleet runs with.
+    SetQuietAfterSeconds {
+        #[serde(deserialize_with = "stated")]
+        quiet_after_seconds: Option<u32>,
+    },
+    /// `null` defers to what Fleet runs with.
+    SetPokeLimit {
+        #[serde(deserialize_with = "stated")]
+        poke_limit: Option<u32>,
+    },
+    /// Empty defers to what Fleet runs with.
+    SetExcludePaths {
+        exclude_paths: Vec<String>,
+    },
 }
 
 /// A Check a form declares.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheckDraft {
     pub run: String,
+    /// Absent is `0`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub expect_exit_code: i64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -177,6 +234,19 @@ pub struct LinkDraft {
     pub url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+}
+
+/// `evidence:`, whole. `serve` and `ready` go together or not at all.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EvidenceDraft {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serve: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ready: Option<String>,
+    pub run: String,
+    pub frames: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub never: Vec<String>,
 }
 
 /// A port a form declares. Neither field is a port Armada places.
@@ -225,6 +295,26 @@ pub struct ManifestDeclared {
     /// `drone.turn_cap_per_job`, absent where the file defers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turn_cap_per_job: Option<u32>,
+    /// Absent where the file names none and Armada infers one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<EvidenceDraft>,
+    /// `after_merge.checks`, in the file's order. Empty: none run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub after_merge_checks: Vec<String>,
+    /// `setup.requires`, in the order they run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub setup_requires: Vec<String>,
+    /// `drone.quiet_after_seconds`, absent where the file defers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quiet_after_seconds: Option<u32>,
+    /// `drone.poke_limit`, absent where the file defers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poke_limit: Option<u32>,
+    /// `drone.exclude_paths`, empty where the file defers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_paths: Vec<String>,
 }
 
 /// A Check the file declares, by name.
@@ -255,6 +345,10 @@ pub struct PolicyWords {
     /// In force, the default where the file says nothing.
     pub written: String,
     pub offered: Vec<String>,
+}
+
+fn is_zero(code: &i64) -> bool {
+    *code == 0
 }
 
 /// An `Option` whose key must be present, for `commanding`'s reason: a

@@ -12,6 +12,9 @@
 use core_model::{AutoMerge, ReviewGate};
 use serde_yaml_ng::{Mapping, Number, Value};
 
+use super::drafts::{
+    links_node, NewCheck, NewCommand, NewEvidence, NewLink, NewNarrowing, NewPort,
+};
 use super::{NotAmended, Unplaceable};
 
 /// One edit a form makes.
@@ -43,6 +46,17 @@ pub enum Edit {
     CostCapMicrosPerJob(Option<u32>),
     /// `drone.turn_cap_per_job`. `None` defers to what Fleet runs with.
     TurnCapPerJob(Option<u32>),
+    /// `base`. `None` removes the key, and Armada infers one.
+    Base(Option<String>),
+    Evidence(EvidenceEdit),
+    /// `after_merge.checks`. Empty removes `after_merge`, which holds nothing else.
+    AfterMergeChecks(Vec<String>),
+    /// `drone.quiet_after_seconds`. `None` defers to what Fleet runs with.
+    QuietAfterSeconds(Option<u32>),
+    /// `drone.poke_limit`. `None` defers to what Fleet runs with.
+    PokeLimit(Option<u32>),
+    /// `drone.exclude_paths`. Empty defers to what Fleet runs with.
+    ExcludePaths(Vec<String>),
 }
 
 /// An edit to one Check.
@@ -55,6 +69,9 @@ pub enum CheckEdit {
     Requires(Vec<String>),
     When(Vec<String>),
     Narrow(Option<NewNarrowing>),
+    /// Absent already means `0`, so `0` removes a written code and leaves a
+    /// written `0` alone.
+    ExpectExitCode(i64),
 }
 
 /// An edit to one Command.
@@ -81,47 +98,17 @@ pub enum PortEdit {
     Env(Option<String>),
 }
 
-/// A Check a form declares.
+/// An edit to `evidence:`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewCheck {
-    pub run: String,
-    pub requires: Vec<String>,
-    pub when: Vec<String>,
-    pub narrow: Option<NewNarrowing>,
-}
-
-/// `checks.<name>.narrow`, whole.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewNarrowing {
-    pub run: String,
-    pub each: String,
-    pub from: Vec<String>,
-    pub under: Option<String>,
-    pub except: Vec<String>,
-}
-
-/// A Command a form declares.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewCommand {
-    pub run: Option<String>,
-    pub destructive: bool,
-    pub serve: Option<String>,
-    pub ready: Option<String>,
-    pub links: Vec<NewLink>,
-}
-
-/// One address a server offers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewLink {
-    pub url: String,
-    pub name: Option<String>,
-}
-
-/// A port a form declares. Both absent is `{}`, which is a port Armada places.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewPort {
-    pub container: Option<u32>,
-    pub env: Option<String>,
+pub enum EvidenceEdit {
+    Add(NewEvidence),
+    /// The section and the comment block directly above it, as an entry goes.
+    Remove,
+    Serve(Option<String>),
+    Ready(Option<String>),
+    Run(String),
+    Frames(String),
+    Never(Vec<String>),
 }
 
 /// A value to write, in the shapes a Manifest has.
@@ -191,6 +178,12 @@ impl Edit {
             Edit::ReviewGate(_) => "review_gate".to_string(),
             Edit::CostCapMicrosPerJob(_) => "drone.cost_cap_micros_per_job".to_string(),
             Edit::TurnCapPerJob(_) => "drone.turn_cap_per_job".to_string(),
+            Edit::Base(_) => "base".to_string(),
+            Edit::Evidence(_) => "evidence".to_string(),
+            Edit::AfterMergeChecks(_) => "after_merge.checks".to_string(),
+            Edit::QuietAfterSeconds(_) => "drone.quiet_after_seconds".to_string(),
+            Edit::PokeLimit(_) => "drone.poke_limit".to_string(),
+            Edit::ExcludePaths(_) => "drone.exclude_paths".to_string(),
         }
     }
 
@@ -223,6 +216,21 @@ impl Edit {
             )]),
             Edit::CostCapMicrosPerJob(cap) => Ok(vec![dial(doc, "cost_cap_micros_per_job", *cap)]),
             Edit::TurnCapPerJob(cap) => Ok(vec![dial(doc, "turn_cap_per_job", *cap)]),
+            Edit::Base(base) => Ok(vec![optional(&["base"], base.as_deref())]),
+            Edit::Evidence(edit) => evidence(doc, edit),
+            Edit::AfterMergeChecks(names) => Ok(vec![match names.is_empty() {
+                true => Op::remove(&["after_merge"]),
+                false => Op::set(&["after_merge", "checks"], texts(names)),
+            }]),
+            Edit::QuietAfterSeconds(seconds) => {
+                Ok(vec![dial(doc, "quiet_after_seconds", *seconds)])
+            }
+            Edit::PokeLimit(limit) => Ok(vec![dial(doc, "poke_limit", *limit)]),
+            Edit::ExcludePaths(paths) => Ok(vec![match paths.is_empty() {
+                false => Op::set(&["drone", "exclude_paths"], texts(paths)),
+                true if only_key(doc, &["drone"], "exclude_paths") => Op::remove(&["drone"]),
+                true => Op::remove(&["drone", "exclude_paths"]),
+            }]),
         }
     }
 }
@@ -237,14 +245,25 @@ fn check(doc: &Value, name: &str, edit: &CheckEdit) -> Result<Vec<Op>, NotAmende
         CheckEdit::Remove => vec![removal(doc, "checks", name)?],
         other => {
             declared(doc, "checks", name, true)?;
-            vec![match other {
-                CheckEdit::Run(run) => Op::set(&at("run"), text(run)),
-                CheckEdit::Requires(names) => listed(&at("requires"), names),
-                CheckEdit::When(patterns) => listed(&at("when"), patterns),
-                CheckEdit::Narrow(Some(narrow)) => Op::set(&at("narrow"), narrow.node()),
-                CheckEdit::Narrow(None) => Op::remove(&at("narrow")),
+            match other {
+                CheckEdit::Run(run) => vec![Op::set(&at("run"), text(run))],
+                CheckEdit::Requires(names) => vec![listed(&at("requires"), names)],
+                CheckEdit::When(patterns) => vec![listed(&at("when"), patterns)],
+                CheckEdit::Narrow(Some(narrow)) => vec![Op::set(&at("narrow"), narrow.node())],
+                CheckEdit::Narrow(None) => vec![Op::remove(&at("narrow"))],
+                // Absent already means `0`: a written `0` is somebody's, and stays.
+                CheckEdit::ExpectExitCode(0) => match found(doc, &at("expect_exit_code")) {
+                    Some(Value::Number(code)) if code.as_i64() != Some(0) => {
+                        vec![Op::remove(&at("expect_exit_code"))]
+                    }
+                    _ => Vec::new(),
+                },
+                CheckEdit::ExpectExitCode(code) => vec![Op::set(
+                    &at("expect_exit_code"),
+                    Node::Number(Number::from(*code)),
+                )],
                 CheckEdit::Add(_) | CheckEdit::Remove => unreachable!("matched above"),
-            }]
+            }
         }
     })
 }
@@ -280,6 +299,27 @@ fn command(doc: &Value, name: &str, edit: &CommandEdit) -> Result<Vec<Op>, NotAm
             }
         }
     })
+}
+
+/// A form edits `evidence:` by key once it is declared, and adds or removes it whole.
+fn evidence(doc: &Value, edit: &EvidenceEdit) -> Result<Vec<Op>, NotAmended> {
+    let at = |key: &'static str| ["evidence", key];
+    let declared = holds(doc, &["evidence"]);
+    if declared == matches!(edit, EvidenceEdit::Add(_)) {
+        return Err(NotAmended::Misnamed {
+            key: "evidence".to_string(),
+            declared,
+        });
+    }
+    Ok(vec![match edit {
+        EvidenceEdit::Add(new) => Op::set(&["evidence"], new.node()),
+        EvidenceEdit::Remove => Op::remove_entry(&["evidence"]),
+        EvidenceEdit::Serve(serve) => optional(&at("serve"), serve.as_deref()),
+        EvidenceEdit::Ready(ready) => optional(&at("ready"), ready.as_deref()),
+        EvidenceEdit::Run(run) => Op::set(&at("run"), text(run)),
+        EvidenceEdit::Frames(frames) => Op::set(&at("frames"), text(frames)),
+        EvidenceEdit::Never(paths) => listed(&at("never"), paths),
+    }])
 }
 
 fn port(doc: &Value, name: &str, edit: &PortEdit) -> Result<Vec<Op>, NotAmended> {
@@ -378,102 +418,14 @@ fn listed(path: &[&str], items: &[String]) -> Op {
     }
 }
 
-fn text(value: &str) -> Node {
+pub(super) fn text(value: &str) -> Node {
     Node::Text(value.to_string())
 }
 
-fn texts(items: &[String]) -> Node {
+pub(super) fn texts(items: &[String]) -> Node {
     Node::List(items.iter().map(|item| text(item)).collect())
 }
 
-fn number(value: u32) -> Node {
+pub(super) fn number(value: u32) -> Node {
     Node::Number(Number::from(u64::from(value)))
-}
-
-fn links_node(links: &[NewLink]) -> Node {
-    Node::List(
-        links
-            .iter()
-            .map(|link| {
-                let mut entry = vec![("url".to_string(), text(&link.url))];
-                if let Some(name) = &link.name {
-                    entry.push(("name".to_string(), text(name)));
-                }
-                Node::Map(entry)
-            })
-            .collect(),
-    )
-}
-
-/// Builds a map in the order a Manifest's own key lists spell it, leaving out
-/// what is absent.
-struct Entries(Vec<(String, Node)>);
-
-impl Entries {
-    fn new() -> Entries {
-        Entries(Vec::new())
-    }
-
-    fn with(mut self, key: &str, node: Option<Node>) -> Entries {
-        if let Some(node) = node {
-            self.0.push((key.to_string(), node));
-        }
-        self
-    }
-
-    fn list(self, key: &str, items: &[String]) -> Entries {
-        let node = (!items.is_empty()).then(|| texts(items));
-        self.with(key, node)
-    }
-
-    fn done(self) -> Node {
-        Node::Map(self.0)
-    }
-}
-
-impl NewCheck {
-    fn node(&self) -> Node {
-        Entries::new()
-            .with("run", Some(text(&self.run)))
-            .list("requires", &self.requires)
-            .list("when", &self.when)
-            .with("narrow", self.narrow.as_ref().map(NewNarrowing::node))
-            .done()
-    }
-}
-
-impl NewNarrowing {
-    fn node(&self) -> Node {
-        Entries::new()
-            .with("run", Some(text(&self.run)))
-            .with("each", Some(text(&self.each)))
-            .list("from", &self.from)
-            .with("under", self.under.as_deref().map(text))
-            .list("except", &self.except)
-            .done()
-    }
-}
-
-impl NewCommand {
-    fn node(&self) -> Node {
-        Entries::new()
-            .with("run", self.run.as_deref().map(text))
-            .with("destructive", self.destructive.then_some(Node::Flag(true)))
-            .with("serve", self.serve.as_deref().map(text))
-            .with("ready", self.ready.as_deref().map(text))
-            .with(
-                "links",
-                (!self.links.is_empty()).then(|| links_node(&self.links)),
-            )
-            .done()
-    }
-}
-
-impl NewPort {
-    fn node(&self) -> Node {
-        Entries::new()
-            .with("container", self.container.map(number))
-            .with("env", self.env.as_deref().map(text))
-            .done()
-    }
 }

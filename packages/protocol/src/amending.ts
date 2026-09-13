@@ -54,11 +54,35 @@ export type ManifestEdit =
   /** `null` defers to what Fleet runs with. */
   | { edit: "set_cost_cap_micros_per_job"; cost_cap_micros_per_job: number | null }
   /** `null` defers to what Fleet runs with. */
-  | { edit: "set_turn_cap_per_job"; turn_cap_per_job: number | null };
+  | { edit: "set_turn_cap_per_job"; turn_cap_per_job: number | null }
+  /** `0` removes a written code; absent already means `0`. */
+  | { edit: "set_check_expect_exit_code"; name: string; expect_exit_code: number }
+  /** `null` removes the key, and Armada infers a base. */
+  | { edit: "set_base"; base: string | null }
+  | { edit: "add_evidence"; evidence: EvidenceDraft }
+  /** Takes `evidence:` and the comment block directly above it. */
+  | { edit: "remove_evidence" }
+  | { edit: "set_evidence_serve"; serve: string | null }
+  | { edit: "set_evidence_ready"; ready: string | null }
+  | { edit: "set_evidence_run"; run: string }
+  | { edit: "set_evidence_frames"; frames: string }
+  | { edit: "set_evidence_never"; never: string[] }
+  /** Empty removes `after_merge`. */
+  | { edit: "set_after_merge_checks"; checks: string[] }
+  /** Empty removes `setup`. */
+  | { edit: "set_setup_requires"; requires: string[] }
+  /** `null` defers to what Fleet runs with. */
+  | { edit: "set_quiet_after_seconds"; quiet_after_seconds: number | null }
+  /** `null` defers to what Fleet runs with. */
+  | { edit: "set_poke_limit"; poke_limit: number | null }
+  /** Empty defers to what Fleet runs with. */
+  | { edit: "set_exclude_paths"; exclude_paths: string[] };
 
 /** A Check a form declares. */
 export type CheckDraft = {
   run: string;
+  /** Absent is `0`. */
+  expect_exit_code?: number;
   requires?: string[];
   when?: string[];
   narrow?: NarrowingDraft;
@@ -86,6 +110,15 @@ export type CommandDraft = {
 export type LinkDraft = {
   url: string;
   name?: string;
+};
+
+/** `evidence:`, whole. `serve` and `ready` go together or not at all. */
+export type EvidenceDraft = {
+  serve?: string;
+  ready?: string;
+  run: string;
+  frames: string;
+  never?: string[];
 };
 
 /** A port a form declares. Neither field is a port Armada places. */
@@ -122,6 +155,17 @@ export type ManifestDeclared = {
   /** Absent where the file defers to what Fleet runs with. */
   cost_cap_micros_per_job?: number;
   turn_cap_per_job?: number;
+  /** Absent where the file names none and Armada infers one. */
+  base?: string;
+  evidence?: EvidenceDraft;
+  /** `after_merge.checks`, in the file's order. Absent: none run. */
+  after_merge_checks?: string[];
+  /** `setup.requires`, in the order they run. */
+  setup_requires?: string[];
+  /** The `drone:` dials; absent where the file defers to what Fleet runs with. */
+  quiet_after_seconds?: number;
+  poke_limit?: number;
+  exclude_paths?: string[];
 };
 
 /** A policy's value and every word it takes — the registry is Fleet's. */

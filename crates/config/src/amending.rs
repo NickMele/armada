@@ -12,14 +12,14 @@
 //! built only from text [`Manifest::parse`] accepted.
 
 mod document;
+mod drafts;
 mod edits;
 mod emit;
 mod merge;
 mod splice;
 
-pub use edits::{
-    CheckEdit, CommandEdit, Edit, NewCheck, NewCommand, NewLink, NewNarrowing, NewPort, PortEdit,
-};
+pub use drafts::{NewCheck, NewCommand, NewEvidence, NewLink, NewNarrowing, NewPort};
+pub use edits::{CheckEdit, CommandEdit, Edit, EvidenceEdit, PortEdit};
 
 use std::fmt;
 use std::path::Path;
@@ -55,8 +55,8 @@ impl Amended {
 /// Why the edits did not become a file.
 #[derive(Debug)]
 pub enum NotAmended {
-    /// An edit names a Check, Command or port the text does not declare, or
-    /// adds one it already does. **The form was drawn from another reading**,
+    /// An edit names a Check, Command, port or section the text does not
+    /// declare, or adds one it already does. **The form was drawn from another reading**,
     /// and what a person does next is read the file again.
     Misnamed {
         /// `checks.lint`, `ports.web` — where it was looked for.

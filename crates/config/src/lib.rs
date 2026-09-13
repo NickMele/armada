@@ -42,8 +42,8 @@ mod yaml;
 mod tests;
 
 pub use amending::{
-    amend, Amended, CheckEdit, CommandEdit, Edit, NewCheck, NewCommand, NewLink, NewNarrowing,
-    NewPort, NotAmended, PortEdit, Unplaceable,
+    amend, Amended, CheckEdit, CommandEdit, Edit, EvidenceEdit, NewCheck, NewCommand, NewEvidence,
+    NewLink, NewNarrowing, NewPort, NotAmended, PortEdit, Unplaceable,
 };
 pub use catalogue::{
     carried, Catalogue, CatalogueRefused, LeftOut, ResolvedCatalogue, WhyLeftOut, Written,
