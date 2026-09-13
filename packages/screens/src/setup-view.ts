@@ -94,7 +94,7 @@ export function pickerOf(held: SetupOpen): Pick<SetupPickerProps, "rows" | "name
       workspace?.evidence === "not_followed"
         ? "Nothing here could be read."
         : workspace?.evidence === "thin"
-          ? "No file here names anything runnable."
+          ? "No file here names a script, so anything proposed is convention."
           : undefined;
     return {
       dir: proposal.dir,
@@ -240,6 +240,6 @@ export function sheetOf(held: SetupOpen, proposal: ManifestProposal): Drawn {
     ...(mark.appeared === undefined ? {} : { appeared: mark.appeared }),
     ...(proposal.written === undefined
       ? {}
-      : { written: `Wrote ${proposal.written.path} at ${clockOf(proposal.written.at)}. Nothing was staged or committed.` }),
+      : { written: `Wrote ${proposal.file} at ${clockOf(proposal.written.at)}. Nothing was staged or committed.` }),
   };
 }

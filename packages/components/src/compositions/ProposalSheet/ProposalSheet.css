@@ -75,7 +75,9 @@
 
 .armada-proposal-sheet__rows {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  grid-template-columns:
+    max-content minmax(calc(var(--space-12) * 5), 1fr) minmax(min-content, max-content)
+    minmax(min-content, max-content);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -139,6 +141,8 @@
 
 .armada-proposal-sheet__acts {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-1);
 }
 
@@ -163,6 +167,14 @@
   align-items: flex-end;
   gap: var(--space-2);
   min-width: 0;
+}
+
+.armada-proposal-sheet__press {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }
 
 .armada-proposal-sheet__faults {

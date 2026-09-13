@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Alert } from "../../primitives/Alert/Alert";
 import { Button } from "../../primitives/Button/Button";
@@ -105,12 +105,7 @@ export function ProposalSheet(props: ProposalSheetProps) {
       footer={<Foot {...props} />}
     >
       <div className="armada-proposal-sheet">
-        {written === undefined ? null : (
-          <div className="armada-proposal-sheet__landed">
-            <p className="armada-proposal-sheet__said">{written}</p>
-            {props.verify}
-          </div>
-        )}
+        {written === undefined ? null : <Landed>{props.verify}</Landed>}
         {props.problem === undefined ? null : (
           <Alert tone="caution" title="That edit was not applied">
             {props.problem}
@@ -132,17 +127,24 @@ export function ProposalSheet(props: ProposalSheetProps) {
           ) : (
             <ul className="armada-proposal-sheet__rows" aria-label="Ports">
               {props.ports.map((port) => (
-                <Row key={port.name} name={port.name} cited={port.cited} faults={faultsAt(`ports.${port.name}`)}>
+                <Row
+                  key={port.name}
+                  name={port.name}
+                  cited={port.cited}
+                  faults={faultsAt(`ports.${port.name}`)}
+                  acts={
+                    locked ? null : (
+                      <Button variant="ghost" size="sm" onClick={() => props.onRemove("ports", port.name)}>
+                        Remove
+                      </Button>
+                    )
+                  }
+                >
                   <span className="armada-proposal-sheet__mono">
                     {port.env === undefined
                       ? `${port.container ?? "?"}, rewritten in the compose file`
                       : `${port.container ?? "?"} → $${port.env}`}
                   </span>
-                  {locked ? null : (
-                    <Button variant="ghost" size="sm" onClick={() => props.onRemove("ports", port.name)}>
-                      Remove
-                    </Button>
-                  )}
                 </Row>
               ))}
             </ul>
@@ -221,9 +223,27 @@ function Foot({ file, refused, appeared, written, busy = false, onWrite }: Propo
           <pre className="armada-proposal-sheet__disk">{appeared.onDisk ?? "(unreadable)"}</pre>
         </Alert>
       )}
-      <Button variant="primary" disabled={written !== undefined || busy} onClick={onWrite}>
-        {busy ? "Writing" : `Write ${file}`}
-      </Button>
+      {/* Beside the press it answers, so it is on screen wherever Write was pressed. */}
+      <div className="armada-proposal-sheet__press">
+        {written === undefined ? null : <p className="armada-proposal-sheet__said">{written}</p>}
+        <Button variant="primary" disabled={written !== undefined || busy} onClick={onWrite}>
+          {written !== undefined ? "Written" : busy ? "Writing" : `Write ${file}`}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** What follows a Write, at the top of the body, brought into view when it arrives. */
+function Landed({ children }: { children: ReactNode }) {
+  const at = useRef<HTMLDivElement>(null);
+  // A block, so nothing `scrollIntoView` returns is taken for a cleanup.
+  useEffect(() => {
+    at.current?.scrollIntoView?.({ block: "start" });
+  }, []);
+  return (
+    <div ref={at} className="armada-proposal-sheet__landed">
+      {children}
     </div>
   );
 }
@@ -250,7 +270,24 @@ function Registry({
       ) : (
         <ul className="armada-proposal-sheet__rows" aria-label={TITLE[band]}>
           {entries.map((entry) => (
-            <Row key={entry.name} name={entry.name} cited={entry.cited} faults={faultsAt(`${band}.${entry.name}`)}>
+            <Row
+              key={entry.name}
+              name={entry.name}
+              cited={entry.cited}
+              faults={faultsAt(`${band}.${entry.name}`)}
+              acts={
+                locked ? null : (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => props.onMove(band, entry.name)}>
+                      {`Move to ${TITLE[OTHER[band]]}`}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => props.onRemove(band, entry.name)}>
+                      Remove
+                    </Button>
+                  </>
+                )
+              }
+            >
               <span className="armada-proposal-sheet__run">
                 {entry.requires === undefined || entry.requires.length === 0 ? null : (
                   <span className="armada-proposal-sheet__mono">{`${entry.requires.join(", ")} →`}</span>
@@ -263,16 +300,6 @@ function Registry({
                 />
                 {entry.destructive ? <span className="armada-proposal-sheet__says">destructive</span> : null}
               </span>
-              {locked ? null : (
-                <span className="armada-proposal-sheet__acts">
-                  <Button variant="ghost" size="sm" onClick={() => props.onMove(band, entry.name)}>
-                    {`Move to ${TITLE[OTHER[band]]}`}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => props.onRemove(band, entry.name)}>
-                    Remove
-                  </Button>
-                </span>
-              )}
             </Row>
           ))}
         </ul>
@@ -299,17 +326,20 @@ function Row({
   cited,
   faults,
   children,
+  acts,
 }: {
   name: string;
   cited: ProvenanceProps;
   faults: { key: string; fault: string }[];
   children: ReactNode;
+  acts?: ReactNode;
 }) {
   return (
     <li className="armada-proposal-sheet__row" aria-label={name} data-refused={faults.length > 0 || undefined}>
       <span className="armada-proposal-sheet__name">{name}</span>
       {children}
       <Provenance {...cited} />
+      <span className="armada-proposal-sheet__acts">{acts}</span>
       {faults.length === 0 ? null : (
         <span className="armada-proposal-sheet__fault">{faults.map((one) => one.fault).join(" ")}</span>
       )}

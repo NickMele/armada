@@ -63,7 +63,7 @@ describe("the picker", () => {
 
   it("says a thin workspace names nothing runnable", () => {
     const docs = pickerOf(opened()).rows.find((row) => row.dir === "docs");
-    expect(docs?.note).toBe("No file here names anything runnable.");
+    expect(docs?.note).toBe("No file here names a script, so anything proposed is convention.");
   });
 });
 

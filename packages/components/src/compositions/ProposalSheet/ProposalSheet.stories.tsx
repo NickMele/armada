@@ -121,7 +121,7 @@ export const AlreadyThere: Story = {
   },
 };
 
-/** Written: the receipt and Verify on the sheet that wrote the file, and no edit offered after. */
+/** Written: the receipt beside the press, Verify on the sheet that wrote the file, and no edit offered after. */
 export const Written: Story = {
   args: {
     ...BASE,
@@ -131,7 +131,8 @@ export const Written: Story = {
   play: async ({ canvasElement }) => {
     const sheet = within(canvasElement);
     await expect(sheet.getByRole("region", { name: "Verify" })).toBeVisible();
-    await expect(sheet.getByRole("button", { name: "Write apps/web/armada.yml" })).toBeDisabled();
+    await expect(sheet.getByRole("button", { name: "Written" })).toBeDisabled();
+    await expect(sheet.getByText(/^Wrote apps\/web\/armada.yml/)).toBeVisible();
     await expect(sheet.queryByRole("button", { name: /^Edit / })).toBeNull();
     await expect(sheet.queryByRole("button", { name: "Remove" })).toBeNull();
   },
