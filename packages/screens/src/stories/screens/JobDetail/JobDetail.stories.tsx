@@ -35,7 +35,6 @@ import {
 import { JOB_ID, spend, watchedRead } from "../../../fixtures/build/base";
 import { WAITING_CALL } from "../../../fixtures/build/running";
 import { recorded } from "../../../fixtures/recorded";
-import { WHERE_OPEN_KEY } from "../../../JobDetail";
 import { JobDetailFrom } from "./JobDetail";
 
 /**
@@ -134,13 +133,9 @@ function withPlan(work_plan: WorkPlan): JobFixture {
 /** The Plan region, partway done — one segment past, one working, one open. */
 export const PlanPartwayDone: Story = {
   name: "Plan, partway done",
-  render: () => {
-    // Where things are is remembered (`remembered.ts`), so another story's
-    // press must not decide this one's default — cleared before the mount
-    // that reads it, since a story's own `play` runs after.
-    localStorage.removeItem(`armada.${WHERE_OPEN_KEY}`);
-    return <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />;
-  },
+  // `whereOpen` defaults to `false` in `propsFor` — Fleet's own preference,
+  // closed until it says otherwise, `#927`.
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
   play: async ({ canvas }) => {
     await expect(canvas.getByText("Plan")).toBeVisible();
     await expect(canvas.getByText("1 of 3")).toBeVisible();
@@ -583,18 +578,12 @@ export const FleetUnreachable: Story = { name: "Fleet unreachable", render: draw
  */
 export const StillReading: Story = {
   name: "Still reading",
-  render: () => {
-    // Where things are is remembered (`remembered.ts`) — cleared before the
-    // mount that reads it, so this story's own press is what opens it.
-    localStorage.removeItem(`armada.${WHERE_OPEN_KEY}`);
-    return <JobDetailFrom fixture={reading()} />;
-  },
-  play: async ({ canvas, userEvent }) => {
+  // Open, so its rows draw against what the Board already held — `whereOpen`
+  // is Fleet's own preference and a story sets it directly, `#927`.
+  render: () => <JobDetailFrom fixture={reading()} on={{ whereOpen: true }} />,
+  play: async ({ canvas }) => {
     const run = canvas.getByRole("status", { name: "Reading the run" });
     await expect(within(run).getByText("Reproduction")).toBeVisible();
-    // Where things are opens collapsed, `#896` — its rows are still what the
-    // Board already held, one press away.
-    await userEvent.click(canvas.getByRole("button", { name: /Where things are/ }));
     await expect(canvas.getByText("Branch")).toBeVisible();
     await expect(canvas.queryByText("Reading this job.")).toBeNull();
   },
@@ -852,28 +841,23 @@ export const RunStreaming: Story = {
 
 export const ServingRow: Story = {
   name: "Serving row, link opens the system browser",
-  render: () => {
-    // Where things are is remembered (`remembered.ts`) — cleared before the
-    // mount that reads it, so this story's own press is what opens it.
-    localStorage.removeItem(`armada.${WHERE_OPEN_KEY}`);
-    return (
-      <JobDetailFrom
-        fixture={running()}
-        on={{
-          rehearsal: {
-            ...propsFor(running()).rehearsal,
-            servers: { servers: [SERVING] },
-            onOpenServerLink: openServerLink,
-          },
-        }}
-      />
-    );
-  },
+  // Open, so the Serving row it holds is drawn — `whereOpen` is Fleet's own
+  // preference and a story sets it directly, `#927`.
+  render: () => (
+    <JobDetailFrom
+      fixture={running()}
+      on={{
+        whereOpen: true,
+        rehearsal: {
+          ...propsFor(running()).rehearsal,
+          servers: { servers: [SERVING] },
+          onOpenServerLink: openServerLink,
+        },
+      }}
+    />
+  ),
   play: async ({ canvas, userEvent }) => {
     openServerLink.mockClear();
-    // Where things are opens collapsed, `#896` — the Serving row it holds is
-    // one press away.
-    await userEvent.click(await canvas.findByRole("button", { name: /Where things are/ }));
     const link = await canvas.findByRole("button", { name: "Storybook" });
     await userEvent.click(link);
     await expect(openServerLink).toHaveBeenCalledWith(SERVING.id, SERVING.links[0]!.url);

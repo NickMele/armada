@@ -114,5 +114,9 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
       onStopServer: async () => NOT_CONNECTED,
       onOpenServerLink: async () => UNKNOWN_JOB_FOLLOWED,
     },
+    // Fleet's own preference (`#927`), closed until it says otherwise — a
+    // story is a reading of one moment and no Fleet is behind it.
+    whereOpen: false,
+    onOpenWhere: noop,
   };
 }

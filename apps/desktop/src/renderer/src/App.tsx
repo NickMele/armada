@@ -581,6 +581,13 @@ export function App() {
                 onOpenRemarkLink={(jobId, remarkId) => void openRemarkLink(jobId, remarkId)}
                 onCopied={setCopied}
                 onSaid={setTelling}
+                // Where things are' own open choice — Fleet's, not this
+                // window's: `state.preferences` is republished on every
+                // save, `#927`.
+                whereOpen={state.preferences.where_things_are_open}
+                onOpenWhere={(open) =>
+                  void commands.savePreference({ name: "where_things_are_open", value: open })
+                }
                 // The run sheet — Journey 9 — and the servers it starts.
                 rehearsal={{
                   runSheet: state.runSheet,

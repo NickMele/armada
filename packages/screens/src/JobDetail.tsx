@@ -28,7 +28,6 @@ const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames } from "./frames";
 import { openArtifact } from "./opening";
 import { planOf } from "./plan";
-import { useRememberedBoolean } from "./remembered";
 import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
 import { named } from "./run-labels";
 import { useAtFloor } from "@armada/shell";
@@ -76,24 +75,18 @@ export type { JobDetailProps } from "./detail-props";
 import type { JobDetailProps } from "./detail-props";
 
 /**
- * Where things are' own open state survives what `OneJob` does not — a
- * Job switch, and a relaunch. `remembered.ts` is Bridge's own mechanism for
- * a choice like this one; nothing else in the app persists a preference yet.
- */
-export const WHERE_OPEN_KEY = "job-detail.where-open";
-
-/**
  * The screen, **remounted for every Job it is handed.** Everything below holds
  * the open state of one reading, and none of it is the next Job's — so the
  * reset is the key, rather than an effect per piece that lands a frame late and
  * a piece nobody wrote one for.
  *
- * **Where things are is the one exception**, held here rather than below the
- * key: it is a person's standing preference, not this reading's.
+ * **Where things are is the one exception**, and it is not held here at all:
+ * `whereOpen` is Fleet's own preference, handed in and saved by the caller —
+ * this package stays free of Electron. That is what survives a Job switch
+ * and a relaunch alike, on its own.
  */
 export function JobDetail(props: JobDetailProps) {
-  const [whereOpen, onOpenWhere] = useRememberedBoolean(WHERE_OPEN_KEY, false);
-  return <OneJob key={props.job.id} {...props} whereOpen={whereOpen} onOpenWhere={onOpenWhere} />;
+  return <OneJob key={props.job.id} {...props} />;
 }
 
 function OneJob({
@@ -154,10 +147,7 @@ function OneJob({
   onCopied,
   onSaid,
   rehearsal,
-}: JobDetailProps & {
-  whereOpen: boolean;
-  onOpenWhere: (open: boolean) => void;
-}) {
+}: JobDetailProps) {
   // Which step the panel is showing. **The whole of navigation inside a Job**:
   // `null` means the one Fleet says is current, so a Job that moves on carries
   // the reader with it until they choose a step themselves.
