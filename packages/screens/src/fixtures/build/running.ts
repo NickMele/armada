@@ -78,6 +78,8 @@ export function runningWaitingOnACommand(): JobFixture {
       truncated: false,
       length: 26,
       offers: ["allow_for_job", "always_allow", "reject"],
+      rules: ["pnpm", "pnpm add"],
+      suggested_rule: "pnpm add",
     },
   });
   return {

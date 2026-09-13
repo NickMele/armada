@@ -172,6 +172,37 @@ export const WaitingOnACommand: Story = {
       WAITING_CALL,
       "allow_for_job",
       undefined,
+      undefined,
+    );
+  },
+};
+
+/**
+ * The same command, always allowed — with the rule Fleet suggested, cut short
+ * of the version pin.
+ *
+ * **What goes is the rule picked, never the whole command.** `pnpm` is the
+ * candidate a person did not choose, and `pnpm add` is what Fleet declares.
+ */
+export const AlwaysAllowingWithARule: Story = {
+  name: "Always allowing, with a rule",
+  render: () => (
+    <JobDetailFrom fixture={runningWaitingOnACommand()} on={{ onAnswerCommand: answerCommand }} />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    answerCommand.mockClear();
+    await userEvent.click(
+      await canvas.findByRole("radio", { name: "Always allow in this repository" }),
+    );
+    await expect(canvas.getByRole("radio", { name: "pnpm add" })).toBeChecked();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Send this answer" }));
+    await expect(answerCommand).toHaveBeenCalledWith(
+      JOB_ID,
+      WAITING_CALL,
+      "always_allow",
+      undefined,
+      "pnpm add",
     );
   },
 };
@@ -201,6 +232,7 @@ export const RejectingWithAReason: Story = {
       WAITING_CALL,
       "reject",
       "we are not taking that dependency",
+      undefined,
     );
   },
 };

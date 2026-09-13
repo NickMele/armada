@@ -235,6 +235,31 @@ describe("what a person may answer on a refused row", () => {
     ]);
   });
 
+  it("carries Fleet's candidate rules onto the always-allow answer alone", () => {
+    const drawn = refusedIn(
+      whole({
+        refused: [
+          refusal({
+            offers: offered,
+            rules: ["gh", "gh issue", "gh issue view"],
+            suggested_rule: "gh issue view",
+          }),
+        ],
+        refusals: 1,
+      }),
+    );
+    expect(drawn?.refused[0]?.answers).toEqual([
+      { answer: "allow_for_job", label: "Allow for this job" },
+      {
+        answer: "always_allow",
+        label: "Always allow in this repository",
+        rules: ["gh", "gh issue", "gh issue view"],
+        suggestedRule: "gh issue view",
+      },
+      { answer: "reject", label: "Reject" },
+    ]);
+  });
+
   it("draws no answers where Fleet offered none", () => {
     // An older Fleet sends no list, and a job stopped for anything but policy
     // sends an empty one. Both are a row nothing can be done about from here.

@@ -127,11 +127,19 @@ const ALLOWED_FROM_ITS_ROW =
  * stop and not a capital, because its first word is often a file name.
  */
 function answersOf(one: Refusal): Pick<Refused, "call" | "answers" | "withheld"> {
-  const offered = offeredOf(one.offers ?? []);
+  const offered = offeredOf(one.offers ?? [], { rules: one.rules, suggestedRule: one.suggested_rule });
   return {
     ...(offered.length === 0
       ? {}
-      : { call: one.call, answers: offered.map(({ offer, label }) => ({ answer: offer, label })) }),
+      : {
+          call: one.call,
+          answers: offered.map(({ offer, label, rules, suggestedRule }) => ({
+            answer: offer,
+            label,
+            ...(rules === undefined ? {} : { rules }),
+            ...(suggestedRule === undefined ? {} : { suggestedRule }),
+          })),
+        }),
     ...(one.withheld === undefined || one.withheld === ""
       ? {}
       : { withheld: /[.!?]$/.test(one.withheld) ? one.withheld : `${one.withheld}.` }),

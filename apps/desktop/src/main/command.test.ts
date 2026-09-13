@@ -170,6 +170,24 @@ it("drops a blank note rather than sending an empty one", async () => {
   expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({ call: "call_1", answer: "reject" });
 });
 
+/**
+ * **The rule rides with an always-allow**, since protocol 13.1. What is
+ * declared is the rule a person picked off the offer's own candidates, never
+ * the whole command.
+ */
+it("sends an always-allow's rule with the answer", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  await commands.answerCommand(A_JOB.id, "call_1", "always_allow", undefined, "gh issue view");
+
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({
+    call: "call_1",
+    answer: "always_allow",
+    rule: "gh issue view",
+  });
+});
+
 /** An allow tells the drone everything it acts on, so it carries no prose. */
 it("sends an allow exactly as it did before a note existed", async () => {
   const asked: Asked[] = [];

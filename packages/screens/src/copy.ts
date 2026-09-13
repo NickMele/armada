@@ -347,18 +347,42 @@ export const COMMAND_ANSWER: Record<CommandAnswer, { label: string; means: strin
   },
 };
 
+/** One answer, worded, and the Always-allow rule reading it carries. */
+export type OfferedAnswer = {
+  offer: CommandAnswer;
+  label: string;
+  means: string;
+  rules?: readonly string[];
+  suggestedRule?: string;
+};
+
 /**
  * The answers one command offers, as words, in the order Fleet sent them. **An
  * answer from a Fleet ahead of this build is left out** rather than drawn as a
  * control with no words on it — one control fewer is honest, a blank one is not.
+ *
+ * **`rules` rides only on `always_allow`**, and only where Fleet sent at least
+ * one candidate — never computed here, per `chains`.
  */
 export function offeredOf(
   offers: readonly CommandAnswer[],
-): { offer: CommandAnswer; label: string; means: string }[] {
+  rules?: { rules?: readonly string[]; suggestedRule?: string },
+): OfferedAnswer[] {
   const known: Partial<Record<string, { label: string; means: string }>> = COMMAND_ANSWER;
   return offers.flatMap((offer) => {
     const said = known[offer];
-    return said === undefined ? [] : [{ offer, ...said }];
+    if (said === undefined) return [];
+    const candidates = offer === "always_allow" ? rules?.rules : undefined;
+    return [
+      {
+        offer,
+        ...said,
+        ...(candidates === undefined || candidates.length === 0 ? {} : { rules: candidates }),
+        ...(candidates === undefined || candidates.length === 0 || rules?.suggestedRule === undefined
+          ? {}
+          : { suggestedRule: rules.suggestedRule }),
+      },
+    ];
   });
 }
 

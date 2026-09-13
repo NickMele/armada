@@ -36,6 +36,8 @@ const REFUSED_POLICY: Refusal = {
   // All three: the Job stopped at `blocked_by_policy` and its Drone is still
   // there to be told no, which is what Fleet offers Reject on.
   offers: ["allow_for_job", "always_allow", "reject"],
+  rules: ["npm", "npm publish"],
+  suggested_rule: "npm publish",
 };
 
 /** `fix`, frozen `running` — every one of these five stops mid-step. */
