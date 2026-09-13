@@ -163,6 +163,10 @@ approximations.
   — whether a Drone refused a command can wait on a person's answer through a
   permission tool, how long the agent CLI waits over stdio and over HTTP, and
   what a tool that fails does to the call.
+- [`spikes/016-can-fleet-resume-a-headless-session.md`](spikes/016-can-fleet-resume-a-headless-session.md)
+  — whether `--resume` recovers a headless session after it exits, whether it
+  needs the original working directory, how an unknown id fails, and what
+  `cleanupPeriodDays` governs.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 
