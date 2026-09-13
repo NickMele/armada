@@ -138,6 +138,19 @@ where
         ))
     }
 
+    /// Forget every Helm session past `settings.helm-session-retention-
+    /// expiry`, on every reply rather than on a timer. **Best-effort**: a
+    /// store fault sweeping old rows must not stop the reply it rides in on,
+    /// so nothing here is surfaced past a swallow. `#943`.
+    async fn swept_stale_helm_sessions(&self) {
+        let now = self.now();
+        let _ = self
+            .store()
+            .lock()
+            .await
+            .forget_stale_helm_sessions(&now, self.helm_session_retention());
+    }
+
     /// One reply, start to finish. **Always answered**: whatever happens, the
     /// thread says what, and the conversation stops counting this message.
     async fn reply(
@@ -148,6 +161,7 @@ where
         text: String,
     ) {
         let _turn = conversation.turn.lock().await;
+        self.swept_stale_helm_sessions().await;
         conversation.thread.say(HelmMessage::Asked(HelmAsked {
             ts: Instant::from(&self.now()),
             text: text.clone(),

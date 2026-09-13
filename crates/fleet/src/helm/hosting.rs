@@ -97,6 +97,13 @@ impl Drop for Listed<'_> {
 
 /// How long one reply may take before its process is ended. A reply that reads
 /// a dozen Jobs is a dozen tool calls, so it is generous.
+///
+/// **Not an idle timeout, and `#943` found none to add.** [`ProcessHost`]
+/// starts one process per message and closes its input the moment the message
+/// is written, so nothing here ever sits idle waiting for one — the shape the
+/// module doc names. This bounds one reply's own length instead, which is a
+/// different question and, like the model above, has no settings row of its
+/// own to read.
 const REPLY_BUDGET: Duration = Duration::from_secs(15 * 60);
 
 /// The agent's door as a repository's `.mcp.json` names it —
@@ -146,12 +153,19 @@ impl ProcessHost {
     /// The CLI on the Drone's `PATH`, with the Drone's environment, and the
     /// door's file beside the Drone's own.
     ///
-    /// **The model is the adapter's default until `#943` reads Helm's
-    /// settings**, and the binary override the composition root reads for a
-    /// Drone does not reach here yet.
+    /// **The program is `host.agent_binary`, not a fresh `PATH` search.**
+    /// `#943`: the composition root resolves the `AGENT_BINARY` override once,
+    /// for a Drone, the Judge and Helm alike, and hands the same program name
+    /// down here — a machine that names an override no longer leaves Helm's
+    /// host to find whatever the daemon's own `PATH` happens to hold.
+    ///
+    /// **The model stays the adapter's default.** There is no settings row for
+    /// it to read: `settings.toml` names three Helm rows and a model is not
+    /// one of them, so this is a constant until a row exists to say
+    /// otherwise.
     pub(crate) fn on_this_machine(host: &Host) -> ProcessHost {
         ProcessHost::new(
-            HeadlessAgent::on_path(),
+            HeadlessAgent::at(host.agent_binary.clone()),
             HeadlessAgent::default_model(),
             Path::new(&host.mcp_config).with_file_name(DOOR_FILE),
             HostPaths {

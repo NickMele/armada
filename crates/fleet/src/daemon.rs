@@ -79,6 +79,14 @@ pub struct Fleet<H, V, W> {
     /// `settings.ad-hoc-run-log-retention`. How long a run fired by hand from
     /// the Manifest surface keeps its log — see [`mod@crate::rehearsing`].
     run_log_retention: std::time::Duration,
+    /// `settings.helm-action-authority-tier-1-redirect-enabled-vs-read-only`.
+    /// How far this machine lets Helm act rather than only read. `#943` —
+    /// [`crate::helm::admitting`] is the one place it is asked.
+    helm_authority: crate::helm::Authority,
+    /// `settings.helm-session-retention-expiry`. How long a closed Helm
+    /// session's stored session id is kept before the next reply's write
+    /// sweeps it away. `#943` — see [`mod@crate::helm::serving`].
+    helm_session_retention: std::time::Duration,
     budget: CheckBudget,
     norms: StepNorms,
     liveness: Liveness,

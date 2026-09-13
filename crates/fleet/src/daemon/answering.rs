@@ -1,11 +1,13 @@
 //! What Fleet answers when it is asked: the boot read, the two acts a person
 //! takes on a Job, and the reads every surface makes between them.
 //!
-//! **Two acts, and both of them a person's.** A Job is proposed and a Job is
-//! approved. Everything else that moves a Job moves it from inside — from a
-//! turn, a Check, or a Drone's own submission — through the modules around this
-//! one, so the actor recorded here is `human` and Fleet is not allowed to be
-//! recorded as having approved anything.
+//! **Two acts.** A Job is proposed and a Job is approved. Everything else that
+//! moves a Job moves it from inside — from a turn, a Check, or a Drone's own
+//! submission — through the modules around this one. **Approval stays a
+//! person's alone** — the primary autonomy control, and Fleet is not allowed
+//! to be recorded as having approved anything. **Proposal is a person's or
+//! Helm's**, `#943`: the door lets a Helm session draft a Job too, and
+//! [`Fleet::propose`] records which asked.
 //!
 //! **A read never quietly shortens.** [`Fleet::every_job`] answers with the rows
 //! that would not load beside the ones that did: a caller handed a short list
@@ -176,15 +178,43 @@ where
     /// nothing woke Bridge. `job.created` is the kind that says a row appeared,
     /// and it carries the row whole so a Board inserts it rather than re-reading.
     ///
-    /// The actor is **human**. A proposal is a person's act or Helm's; Fleet
-    /// creates no Job of its own accord at M1, and the log envelope's actor
-    /// vocabulary has no fourth value to distinguish the two with.
+    /// **A person's**, and every one of the hundreds of fixtures across this
+    /// crate that call it directly is a person's too — `propose_as`'s doc
+    /// carries the reason this stays the one-argument call the whole test
+    /// suite already spells rather than growing a parameter nothing in it
+    /// wants.
     pub async fn propose(&self, proposal: ipc::ProposeJob) -> Result<Job, Adrift> {
+        self.propose_as(proposal, api::Redirector::Person).await
+    }
+
+    /// [`Fleet::propose`], naming who asked. **`Commands::propose_job`'s own
+    /// call** — the door lets a Helm session draft a Job too (`#941`'s reach),
+    /// and what `job.created` and entry zero's `approved_by` record has to
+    /// say so rather than assume a person. `#943`.
+    ///
+    /// A second method rather than a parameter on `propose`, because every
+    /// caller inside this crate but this one is a fixture proposing as a
+    /// person, and a parameter the whole suite would have to spell `Person`
+    /// at every call is a parameter nothing there wants.
+    pub async fn propose_as(
+        &self,
+        proposal: ipc::ProposeJob,
+        by: api::Redirector,
+    ) -> Result<Job, Adrift> {
         // Hand entry, which is the override rather than the path. Entry zero
-        // records that a person stated this scope and not the call, which is
-        // what makes the call evaluable against the decisions people made.
-        // A person drafting a Job by hand read nothing and split nothing.
-        self.proposed_job(proposal, StatedBy::APerson, None).await
+        // records that the caller stated this scope and not the call, which
+        // is what makes the call evaluable against the decisions people made.
+        // A person or a Helm session drafting a Job by hand read nothing and
+        // split nothing.
+        let stated = match by {
+            api::Redirector::Person => StatedBy::APerson,
+            api::Redirector::Helm => StatedBy::AHelmSession,
+        };
+        let actor = match by {
+            api::Redirector::Person => Actor::Human,
+            api::Redirector::Helm => Actor::Helm,
+        };
+        self.proposed_job(proposal, stated, None, actor).await
     }
 
     /// The same creation, with who stated the scope carried through to entry
@@ -195,11 +225,18 @@ where
     /// shape is what a caller drafts, and a caller claiming membership of a
     /// reading it did not make would be claiming a sibling it does not have.
     /// Fleet mints the id and Fleet is the only thing that may write it.
+    ///
+    /// `by` is who `job.created` is published against — the caller, never
+    /// `stated`: the proposer path states `TheProposer` regardless of who
+    /// asked it to read a request, because the scope decision is Fleet's
+    /// proposer model's either way, but the Job it minted is still that
+    /// caller's draft. `#943`.
     pub(crate) async fn proposed_job(
         &self,
         proposal: ipc::ProposeJob,
         stated: StatedBy,
         minted_by: Option<ProposalId>,
+        by: Actor,
     ) -> Result<Job, Adrift> {
         let at = self.now();
         // Before `drafted`, which is sync and cannot read the board: an edge is
@@ -230,7 +267,7 @@ where
         // silently remove it.
         self.publish(ipc::Event::JobCreated(ipc::JobCreated {
             job: ipc::JobSummary::from(&job),
-            actor: Actor::Human.into(),
+            actor: by.into(),
             at: (&at).into(),
         }));
         Ok(job)

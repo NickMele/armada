@@ -62,6 +62,14 @@ pub struct Host {
     pub user: String,
     /// The strict MCP configuration a Drone is bound to.
     pub mcp_config: String,
+    /// The headless agent CLI's program, resolved once by the composition
+    /// root's `AGENT_BINARY` override or its default. **Held here for Helm's
+    /// host and not for a Drone's** — a Drone's own is `harness`'s, a typed
+    /// [`AgentHarness`]; this is the plain program name
+    /// `crate::helm::ProcessHost` runs, so a machine that names an override
+    /// names it for a Drone, the Judge and Helm alike rather than leaving
+    /// Helm on whatever `PATH` happens to hold. `#943`.
+    pub agent_binary: String,
     /// The loopback port Fleet is listening on.
     ///
     /// **Held because a connection to it is what names a Drone** — see
@@ -131,6 +139,12 @@ pub struct Fittings<H, V, W> {
     /// `settings.ad-hoc-run-log-retention`. How long a run fired by hand from
     /// the Manifest surface keeps its log — see [`mod@crate::rehearsing`].
     pub run_log_retention: std::time::Duration,
+    /// `settings.helm-action-authority-tier-1-redirect-enabled-vs-read-only`,
+    /// resolved here like every other Machine setting. `#943`.
+    pub helm_authority: crate::helm::Authority,
+    /// `settings.helm-session-retention-expiry`, resolved here for
+    /// `run_log_retention`'s reason. `#943`.
+    pub helm_session_retention: std::time::Duration,
     /// How a caller is placed: which process holds the connection a tool call
     /// arrived on. **A seam so a test can plant one** — the shipped answer is
     /// [`peer::Kernel`](crate::peer::Kernel), and a fixture has no sockets to
@@ -281,6 +295,8 @@ where
             },
             port_range: fittings.port_range,
             run_log_retention: fittings.run_log_retention,
+            helm_authority: fittings.helm_authority,
+            helm_session_retention: fittings.helm_session_retention,
             budget: fittings.budget,
             norms: fittings.norms,
             liveness: fittings.liveness,

@@ -454,13 +454,13 @@ Toggle to pause all dispatch for this project (a release freeze, say), independe
 name = "Helm action authority (Tier 1 Redirect enabled vs read-only)"
 scope = "Machine"
 default = "on"
-lifetime = "Live"
+lifetime = "Daemon start"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Helm"
-read_by = "unassigned (no crate)"
+read_by = "fleet"
 notes = """
-Helm acts on Tier 1 Redirect by default per the concept design; this is the switch to disable that per project. Read by nothing: Helm has no crate in the twelve-crate structure, so no code path in the graph reads this today.
+Helm acts on Tier 1 Redirect by default per the concept design; this is the switch to disable that per project. Read from `#943`: `Fleet::helm_authority` (`crates/fleet/src/daemon/seams.rs`) answers this rather than the `Authority::Acting` constant it returned before, and both the brief (`crates/fleet/src/helm/brief.rs`) and the agent door's reach (`crates/fleet/src/helm/admitting.rs`, `reach.rs`) follow that one answer. Resolved once at daemon start by the composition root (`HELM_ACTION_AUTHORITY` in `crates/armada/src/serve.rs`), corrected from this row's earlier `Live` — nothing saves an override while Fleet runs, so there is no live path to a changed value yet.
 """
 
 [settings.helm-budget-soft-warning-threshold]
@@ -473,19 +473,22 @@ peer_polarity = "n/a — single layer"
 owner = "Helm"
 read_by = "unassigned (no crate)"
 notes = """
-Helm sits outside hard budget gating (visibility only); this sets the usage level at which a soft warning surfaces. Same orphan as Helm action authority.
+Helm sits outside hard budget gating (visibility only); this sets the usage level at which a soft warning surfaces. Decided with the owner 13 Sep 2026 (`#943`): stays unset and unread until a value is chosen. Cost shows on each reply instead, which is what a person reads today in place of a threshold crossing.
 """
 
 [settings.helm-session-retention-expiry]
 name = "Helm session retention / expiry"
 scope = "Machine"
+default = "30 days"
 lifetime = "Daemon start"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Fleet"
-read_by = "store"
+read_by = "fleet, store"
 notes = """
 Session-per-topic model — how long closed Helm sessions are kept before cleanup. Same shape as Job retention / archival window, applied to Helm rather than to Jobs. Owner corrected from Helm to Fleet in the Aug 2026 spot-check: nothing in Helm sweeps expired sessions, and the reaper that does is the same one Job retention names. Helm is what the setting is about, which is provenance, not ownership.
+
+Read from `#943`: resolved once at daemon start (`HELM_SESSION_RETENTION` in `crates/armada/src/serve.rs`, `Fleet::helm_session_retention` in `crates/fleet/src/daemon/seams.rs`) and swept by `Store::forget_stale_helm_sessions` (`crates/store/src/helm_sessions.rs`) on every Helm reply rather than on a timer — `crate::rehearsing::records::swept`'s reason: a conversation still in use refreshes `kept_at` on that same reply, so it is never the row being swept.
 """
 
 [settings.job-board-default-view-list-vs-graph]

@@ -44,8 +44,14 @@ use crate::daemon::Fleet;
 pub(crate) enum StatedBy {
     /// The Job proposer, and what it said about the scope it chose.
     TheProposer(String),
-    /// Somebody who filled the form in.
+    /// Somebody who filled the form in directly, through Bridge or their own
+    /// agent's door session.
     APerson,
+    /// A Helm session filled the form in directly, through the acts `#941`
+    /// lets it draft. **Its own variant and not folded into `APerson`** —
+    /// `#943`: `propose_job` is now reachable by either, and entry zero's
+    /// `approved_by` is where the Job's own record says which.
+    AHelmSession,
     /// The Drone of the Job this one is a child of, on the step a person
     /// cleared the plan of. **`Actor::Fleet`, like the proposer** — the
     /// vocabulary has three values and none of them is "a Drone", and the act
@@ -59,6 +65,7 @@ impl StatedBy {
         match self {
             StatedBy::TheProposer(_) | StatedBy::TheSplit { .. } => Actor::Fleet,
             StatedBy::APerson => Actor::Human,
+            StatedBy::AHelmSession => Actor::Helm,
         }
     }
 
@@ -66,6 +73,9 @@ impl StatedBy {
         match self {
             StatedBy::TheProposer(said) => said.clone(),
             StatedBy::APerson => String::from("hand-entered at the dispatch form"),
+            StatedBy::AHelmSession => {
+                String::from("hand-entered at the dispatch form, through a Helm session")
+            }
             StatedBy::TheSplit { parent } => format!(
                 "dispatched by {} as one piece of the split a person approved",
                 parent.as_str()

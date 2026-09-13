@@ -360,6 +360,29 @@ async fn a_redirect_from_helm_is_recorded_as_helm_and_anyone_elses_as_a_person()
     );
 }
 
+/// **A draft is recorded the same way a redirect is.** `#943`: the door lets
+/// only a Helm session call `propose_job` at all (`Drafts only`, `#941`) —
+/// unlike a redirect, there is no "anyone else" arm to compare it against
+/// here, because a person drafts through Bridge's own call to the same route,
+/// never through this door — see `crate::tests::served`'s
+/// `a_plain_call_to_propose_job_is_recorded_as_a_persons`.
+#[tokio::test]
+async fn a_proposal_from_helm_is_recorded_as_helm() {
+    let daemon = helm_holding(acting);
+    let app = shared(&daemon);
+    let propose = calling(
+        "propose_job",
+        r#"{"body":{"title":"read the failing test first","workflow_id":"bug",
+            "owner_manifest_id":"01MANIFEST","origin":"auto_detected",
+            "urgency":"normal","atomic":false}}"#,
+    );
+    from(&app, HELM, &propose).await;
+    assert_eq!(
+        *daemon.proposed_by.lock().expect("not poisoned"),
+        vec![Redirector::Helm]
+    );
+}
+
 #[tokio::test]
 async fn read_only_refuses_every_command_and_still_reads() {
     let app = shared(&helm_holding(read_only));

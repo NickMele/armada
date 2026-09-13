@@ -8,8 +8,8 @@
 use ipc::door::Reachable;
 
 /// How far this machine lets Helm go: the Machine setting *Helm action
-/// authority*, resolved. Nothing reads the setting yet (`#943`), so a caller
-/// says which it is.
+/// authority*, resolved. `Fleet::helm_authority` (`crate::daemon::seams`) is
+/// the one place the setting becomes one of these two; `#943`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Authority {
     /// The setting's shipped value: every read, and the acts in [`ACTS`].

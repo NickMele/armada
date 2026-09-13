@@ -57,10 +57,14 @@ impl HelmReach {
     }
 }
 
-/// Who steered a Drone through `Commands::redirect_drone`.
+/// Who is behind a call the transport places rather than the body: originally
+/// `Commands::redirect_drone`'s alone, and `#943` gave `Commands::propose_job`
+/// and `Commands::propose_from_request` the same word for the same reason —
+/// the door lets a Helm session draft a Job, and what Fleet records for the
+/// draft has to say so.
 ///
-/// **Two, because nothing else steers one**, so Fleet or a Drone recorded as
-/// having redirected is not a value this can carry.
+/// **Two, because nothing else places a call this way**, so Fleet or a Drone
+/// recorded as having redirected or drafted is not a value this can carry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Redirector {
     /// A person, through Bridge or through their own agent's door session.

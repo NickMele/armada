@@ -52,14 +52,16 @@ impl Commands for FakeDaemon {
         &self,
         request: ipc::JobRequest,
         _manifest_id: Option<ipc::ManifestId>,
+        by: crate::Redirector,
     ) -> Result<ipc::ProposedPlan, Refusal> {
-        self.fake_propose_from_request(request).await
+        self.fake_propose_from_request(request, by).await
     }
     async fn propose_job(
         self: std::sync::Arc<Self>,
         proposal: ProposeJob,
+        by: crate::Redirector,
     ) -> Result<JobSummary, Refusal> {
-        self.fake_propose_job(proposal).await
+        self.fake_propose_job(proposal, by).await
     }
     async fn stop_proposal(
         &self,

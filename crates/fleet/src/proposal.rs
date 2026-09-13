@@ -250,7 +250,10 @@ where
     /// **`client_ref` is the caller's own token and Fleet reads nothing from
     /// it** — see `ipc::JobRequest::client_ref`. It is carried this far, echoed
     /// onto every event about the call, and dropped with it.
-    /// In the repository a fixture starts in; every caller is a test.
+    /// In the repository a fixture starts in; every caller is a test, and
+    /// every one of them a person's — `#943`'s Helm caller is
+    /// `propose_from_with_attachments`'s own parameter, and no fixture here
+    /// is about it.
     #[cfg(test)]
     pub async fn propose_from(
         &self,
@@ -258,8 +261,14 @@ where
         client_ref: Option<String>,
     ) -> Result<Vec<Job>, Adrift> {
         let served = self.first();
-        self.propose_from_with_attachments(request, client_ref, Vec::new(), &served)
-            .await
+        self.propose_from_with_attachments(
+            request,
+            client_ref,
+            Vec::new(),
+            &served,
+            api::Redirector::Person,
+        )
+        .await
     }
 
     /// `propose_from`, carrying attachments staged
@@ -268,12 +277,17 @@ where
     /// **A second method rather than a third parameter on the first.** Most
     /// callers — every test that predates attachments among them — have none
     /// to carry, and `propose_from` stays their call unchanged.
+    ///
+    /// `by` is the transport's word, `Fleet::propose`'s reason: the door lets
+    /// a Helm session read a request too, and `job.created` for every Job
+    /// this mints is published against that caller. `#943`.
     pub async fn propose_from_with_attachments(
         &self,
         request: &str,
         client_ref: Option<String>,
         attachments: Vec<ipc::AttachmentRef>,
         served: &crate::repositories::Served,
+        by: api::Redirector,
     ) -> Result<Vec<Job>, Adrift> {
         let request = request.trim();
         if request.is_empty() {
@@ -287,12 +301,18 @@ where
             Enriched::Resolved(text) => format!("{request}\n\n{text}"),
         };
         let request = enriched.as_str();
+        // The caller's word, once — `ProposalMoved` and every `job.created`
+        // this call mints are published against the same actor. `#943`.
+        let actor = match by {
+            api::Redirector::Person => core_model::Actor::Human,
+            api::Redirector::Helm => core_model::Actor::Helm,
+        };
         let proposing = self.proposing().map_err(Adrift::NotProposable)?;
         let (minted_by, proposal) = proposed(
             request,
             served.workflows(),
             &proposing,
-            self.making(),
+            self.making(actor),
             client_ref,
             served.records_root(),
         )
@@ -344,6 +364,7 @@ where
                     self.as_proposal(served, job, waits_on, carried),
                     stated,
                     Some(minted_by.clone()),
+                    actor,
                 )
                 .await?;
             if let Enriched::Failed(cause) = &outcome {

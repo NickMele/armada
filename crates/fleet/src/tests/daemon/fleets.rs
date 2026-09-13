@@ -93,6 +93,9 @@ pub fn fitted_over<V>(
             path: "/usr/bin:/bin".to_string(),
             home: root,
             mcp_config: "/etc/armada/mcp.json".to_string(),
+            // Never actually run: a fixture that asks Helm anything swaps this
+            // Fleet's host with `hosting_helm_on` first — `crate::tests::helm_conversation`.
+            agent_binary: "the-agent".to_string(),
             // A port nothing is listening on. Attribution is planted in these
             // fixtures, so this is the other half of a pair no fake ever
             // matches on.
@@ -113,6 +116,11 @@ pub fn fitted_over<V>(
         // window, so this is the number that ships rather than one invented
         // for the test.
         run_log_retention: Duration::from_secs(30 * 24 * 60 * 60),
+        // The setting's own default. No fixture here asserts on `ReadOnly`.
+        helm_authority: crate::helm::Authority::Acting,
+        // The production default, `run_log_retention`'s reason: no fixture
+        // here asserts on the sweep window.
+        helm_session_retention: Duration::from_secs(30 * 24 * 60 * 60),
         // Nothing to place. A fake harness opens no sockets, so a fixture that
         // answered otherwise would be asserting against the machine rather than
         // against Fleet. `crate::tests::peer` plants one where the subject is

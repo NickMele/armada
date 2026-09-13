@@ -60,10 +60,17 @@ where
 {
     /// Draft a Job onto the approval gate. **Creation publishes `job.created`**
     /// — not a state change, because a created Job has no status it moved from.
-    async fn propose_job(self: Arc<Self>, proposal: ProposeJob) -> Result<JobSummary, Refusal> {
+    ///
+    /// `by` is the transport's word: `Redirector::Helm` only where the door
+    /// placed the call in a Helm session, `#943`'s reason for existing.
+    async fn propose_job(
+        self: Arc<Self>,
+        proposal: ProposeJob,
+        by: api::Redirector,
+    ) -> Result<JobSummary, Refusal> {
         let job = budgeted(self.command_budget(), {
             let fleet = Arc::clone(&self);
-            async move { fleet.propose(proposal).await }
+            async move { fleet.propose_as(proposal, by).await }
         })
         .await
         .map_err(|why| self.refusal(why))?;
@@ -77,6 +84,7 @@ where
         &self,
         request: ipc::JobRequest,
         manifest_id: Option<ipc::ManifestId>,
+        by: api::Redirector,
     ) -> Result<ipc::ProposedPlan, Refusal> {
         let made = self
             .propose_from_with_attachments(
@@ -84,6 +92,7 @@ where
                 request.client_ref,
                 request.attachments,
                 &self.served_named(manifest_id.as_ref())?,
+                by,
             )
             .await
             .map_err(|why| self.refusal(why))?;

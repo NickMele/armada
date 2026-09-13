@@ -203,6 +203,28 @@ async fn every_operation_runs_with_no_network() {
     assert_eq!(ended.status.as_wire(), "killed");
 }
 
+/// **A call that never went through the agent door is a person's.** `#943`:
+/// `crate::tests::door`'s `a_proposal_from_helm_is_recorded_as_helm` is the
+/// only road to `propose_job` a Helm session has — this is Bridge's, the same
+/// route with no `HelmCalled` extension riding on it.
+#[tokio::test]
+async fn a_plain_call_to_propose_job_is_recorded_as_a_persons() {
+    let events = Broadcaster::new();
+    let daemon = std::sync::Arc::new(FakeDaemon::new(events.clone()));
+    let app = router(Served::sharing(
+        std::sync::Arc::clone(&daemon),
+        run_id(),
+        events,
+    ));
+
+    call(&app, "POST", "/jobs", A_PROPOSAL).await;
+
+    assert_eq!(
+        *daemon.proposed_by.lock().expect("not poisoned"),
+        vec![crate::Redirector::Person]
+    );
+}
+
 /// **A step's gates cross before any of them acts, over HTTP and whole.**
 ///
 /// This is the JSON a rail is drawn from, and until it carried these two keys
