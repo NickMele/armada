@@ -71,6 +71,9 @@ pub struct FakeDaemon {
     pub live: Mutex<Option<(String, crate::LiveOutput)>>,
     /// The limits in force, which the fake's own saves change.
     limits: Mutex<ipc::FleetLimits>,
+    /// Every rule a person always-allowed for the repository. Set by a test,
+    /// and changed by the fake's own removes — `#836`.
+    pub repository_allowed: Mutex<Vec<ipc::AllowedCommandRow>>,
 }
 
 impl FakeDaemon {
@@ -94,6 +97,7 @@ impl FakeDaemon {
             mute: Mutex::new(false),
             live: Mutex::new(None),
             limits: Mutex::new(shapes::limits()),
+            repository_allowed: Mutex::new(Vec::new()),
         }
     }
 

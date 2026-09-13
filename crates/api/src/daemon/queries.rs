@@ -190,6 +190,17 @@ pub trait Queries: Send + Sync + 'static {
     /// changes only when a person saves. The only `Refusal` is a fault.
     fn get_limits(&self) -> impl Future<Output = Result<ipc::FleetLimits, Refusal>> + Send;
 
+    /// `get_repository_allowed_commands` — every rule a person always-allowed
+    /// for this Manifest's repository, oldest first. **Since `#836`.**
+    ///
+    /// **Fleet-wide, and unfiltered**: every row this Fleet ever wrote for
+    /// this Manifest, whether or not `armada.yml` still leaves it grantable.
+    /// `JobDetail.repository_allowed_commands` is the same list, for a person
+    /// reading one Job. The only `Refusal` is a fault.
+    fn get_repository_allowed_commands(
+        &self,
+    ) -> impl Future<Output = Result<ipc::RepositoryAllowedCommands, Refusal>> + Send;
+
     /// `get_manifest_reading` — what Fleet's last re-read of `armada.yml` came
     /// to, and whether it took.
     ///

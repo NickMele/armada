@@ -118,6 +118,19 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/manifest/files",
     },
+    // A rule a person always-allowed for the repository is Fleet's own, kept
+    // per Manifest rather than any one Job's — `#836`. The remove spells the
+    // act in its last segment for `save_manifest_file`'s reason.
+    Route {
+        operation: "get_repository_allowed_commands",
+        method: "GET",
+        path: "/manifest/allowed_commands",
+    },
+    Route {
+        operation: "remove_repository_allowed_command",
+        method: "POST",
+        path: "/manifest/allowed_commands/remove",
+    },
     // The path taken, under the Job that took it. `get_job_events` drops
     // `get_` and `job_` for the reason `redispatch` drops `_job`: the segment
     // before it already names the Job. It is not `/events`, which is the

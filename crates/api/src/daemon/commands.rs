@@ -784,4 +784,15 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         save: ipc::SaveLimits,
     ) -> impl Future<Output = Result<ipc::FleetLimits, Refusal>> + Send;
+
+    /// `remove_repository_allowed_command` — take back a rule a person
+    /// always-allowed for this Manifest's repository. **Since `#836`.**
+    ///
+    /// **Fleet-wide, and touches no running Job**: read by the next permission
+    /// question and the next spawn, so a Drone already granted the rule keeps
+    /// it for the step it is on. Refused where nothing is spelled `run`.
+    fn remove_repository_allowed_command(
+        &self,
+        removing: ipc::RemoveRepositoryAllowedCommand,
+    ) -> impl Future<Output = Result<ipc::RepositoryAllowedCommands, Refusal>> + Send;
 }

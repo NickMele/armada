@@ -353,6 +353,7 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // Absent for the setting's reason: a person's allows and model choice
         // are a Fleet's store, and this daemon holds none.
         allowed_commands: Vec::new(),
+        repository_allowed_commands: Vec::new(),
         model_override: None,
         // Absent again: a waiting note is a column on `jobs`, and this
         // daemon's Jobs are wire summaries rather than records.
