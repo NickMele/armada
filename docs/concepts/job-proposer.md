@@ -99,13 +99,15 @@ Why: the resolved definition is frozen into the Job at creation and becomes the 
 | Given | Detail |
 | --- | --- |
 | The request | Verbatim. Fleet opens no link and fetches nothing |
-| The workflows this Manifest holds | Each one's id, name and step labels |
+| The workflows this Manifest holds | Each one's id, name and step labels, and what requests it is for where the definition declares `for_requests` |
 
 **It is given nothing else.** Not the repository, not the `armada.yml`, not the Board, not the Jobs already running.
 
 Why: every extra token is money on a call that fires on every dispatch, and a call that can reach the repository is a [Drone](drone.md) under another name.
 
 **Step labels are how one workflow is told from another.** A name alone separates Bug from Revert and does not separate Feature from Refactor.
+
+**`for_requests` is how a request is matched to a workflow at all.** Labels are in the workflow's own vocabulary, so they cannot say whether a request is this kind of work: nothing in Epic's `Plan the wave` is a word somebody asking to finish a milestone uses. The line is written in a requester's words, rendered beside the labels rather than instead of them, and optional — a definition declaring none is shown by its id, name and labels alone. `crates/core-model/domain/workflowdef-fields.toml` holds the field.
 
 ## It runs on every dispatch
 
