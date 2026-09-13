@@ -447,6 +447,7 @@ impl Bench {
             &[],
             core_model::WhenRefused::default(),
             &[],
+            None,
         )
         .await;
         // What `fleet::dispatch` does with the store, done with a list: the

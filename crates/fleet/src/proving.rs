@@ -264,6 +264,8 @@ fn spawn_the_run(
             // declares no `ports:`.
             &ports,
             &port_env,
+            // No Job, so no plan; `after_merge` cannot name `plan_recorded`.
+            None,
         )
         .await;
         let observed: Vec<verification::Observed> =

@@ -108,6 +108,7 @@ pub(super) async fn ruled_by(
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await
 }
@@ -663,6 +664,7 @@ async fn a_step_with_no_scope_is_asked_nothing_it_did_not_declare() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -710,6 +712,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");

@@ -27,6 +27,7 @@ mod gaming;
 mod gate;
 mod judge;
 mod located;
+mod plan;
 mod product;
 mod quoted;
 mod request;

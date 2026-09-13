@@ -77,6 +77,7 @@ pub async fn gate_against(
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
     let mut held = bench.recorded.borrow_mut();

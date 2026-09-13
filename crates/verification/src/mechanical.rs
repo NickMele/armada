@@ -21,6 +21,7 @@
 //! different meanings — which is exactly the vacuous pass this crate exists to
 //! make unreachable.
 
+use std::num::NonZeroU32;
 use std::time::Duration;
 
 use config::{ResolvedCheck, ResolvedStep};
@@ -150,6 +151,9 @@ pub enum Observed {
     /// Fleet read the worktree. Fleet's own reading, never a path the Drone
     /// reported having written.
     Artifact(Artifact),
+    /// How many tasks not dropped the Job's plan holds, off Fleet's own record.
+    /// `None` is a Job no plan was recorded for, which is not a plan of none.
+    Plan { tasks: Option<u32> },
     /// The check declares which paths it covers and the step changed none of
     /// them, so it was not run.
     ///
@@ -167,6 +171,7 @@ impl Observed {
             Observed::Command(_) => "a command run",
             Observed::Diff { .. } => "a diff",
             Observed::Artifact(_) => "a look for a file",
+            Observed::Plan { .. } => "a reading of the plan",
             Observed::Skipped { .. } => "a skipped check",
         }
     }
@@ -228,6 +233,12 @@ pub enum CheckFailed {
     /// artifact is missing without being told where it was looked for cannot
     /// act on it.
     ArtifactNotThere { target: String, found: Artifact },
+    /// The step declares `plan_recorded` and the plan holds fewer tasks not
+    /// dropped than it asks for — or no plan was recorded at all.
+    TooFewTasks {
+        min_tasks: NonZeroU32,
+        recorded: Option<u32>,
+    },
     /// The declaration itself was not one the step could be measured against —
     /// none arrived, or it named a path the step's own denylist refuses.
     ///
@@ -265,6 +276,7 @@ impl CheckFailed {
             CheckFailed::WrongExitCode { .. }
             | CheckFailed::DiffEmpty
             | CheckFailed::ArtifactNotThere { .. }
+            | CheckFailed::TooFewTasks { .. }
             | CheckFailed::OutOfScope(_)
             | CheckFailed::OutOfBounds { .. } => CheckOutcome::Failed,
             CheckFailed::Signalled { .. } => CheckOutcome::Signalled,
@@ -293,6 +305,9 @@ impl CheckFailed {
             CheckFailed::DiffEmpty => "the step changes at least one file".to_string(),
             CheckFailed::ArtifactNotThere { target, .. } => {
                 format!("the step writes `{target}`")
+            }
+            CheckFailed::TooFewTasks { min_tasks, .. } => {
+                format!("the step records a plan of at least {min_tasks} tasks with `record_plan`")
             }
             CheckFailed::OutOfScope(OutsideScope::NothingDeclared) => {
                 "the step declares which paths its work is in".to_string()
@@ -328,6 +343,10 @@ impl CheckFailed {
                 Artifact::Empty => format!("`{target}` is there and holds nothing"),
                 Artifact::NotAFile => format!("`{target}` is not a file"),
                 Artifact::Missing => format!("nothing is at `{target}`"),
+            },
+            CheckFailed::TooFewTasks { recorded, .. } => match recorded {
+                None => "no plan was recorded".to_string(),
+                Some(tasks) => format!("the plan holds {tasks} tasks not dropped"),
             },
             CheckFailed::OutOfScope(outside) => outside.to_string(),
             CheckFailed::OutOfBounds { paths } => reaches(paths),
@@ -660,6 +679,19 @@ fn verdict(
                 }
             })))
         }
+        (ResolvedCheck::PlanRecorded { min_tasks }, Observed::Plan { tasks }) => {
+            Ok(answered(tasks.is_none_or(|n| n < min_tasks.get()).then(
+                || CheckFailed::TooFewTasks {
+                    min_tasks: *min_tasks,
+                    recorded: *tasks,
+                },
+            )))
+        }
+        (ResolvedCheck::PlanRecorded { .. }, other) => Err(ChecksOutstanding::WrongKind {
+            at,
+            check: "plan_recorded",
+            observed: other.kind(),
+        }),
         (ResolvedCheck::ManifestCheck { .. }, other) => Err(ChecksOutstanding::WrongKind {
             at,
             check: "a Manifest Check",

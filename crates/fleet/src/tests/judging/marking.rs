@@ -65,6 +65,7 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
     drop(judging);

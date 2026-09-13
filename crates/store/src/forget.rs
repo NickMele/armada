@@ -96,6 +96,10 @@ pub struct Forgotten {
     /// Paths a step edited outside its declared plan, one row per path first
     /// seen.
     pub scope_drift: usize,
+    /// Every change made to the Job's plan, one row each.
+    pub plan_changes: usize,
+    /// The tasks each whole recording of the plan named, one row each.
+    pub plan_tasks: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -138,6 +142,8 @@ impl Forgotten {
             "port_claims" => &mut self.port_claims,
             "job_judge_questions" => &mut self.judge_questions,
             "job_scope_drift" => &mut self.scope_drift,
+            "job_work_plan_changes" => &mut self.plan_changes,
+            "job_work_plan_tasks" => &mut self.plan_tasks,
             _ => return None,
         })
     }

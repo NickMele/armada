@@ -55,3 +55,7 @@ pub use job::{
     WriteTargets, ADVANCING_STATUSES, ARTIFACT_EXISTS, CREDENTIAL_NAMES, DIFF_NONEMPTY, EDGES,
     EVERY_MANIFEST_CHECK, MANIFEST_CHECK, STEP_EDGES,
 };
+pub use job::{
+    Approach, DropReason, NewTask, NotAnUpdate, PlanAuthor, PlanChange, PlanEntry, PlanRefused,
+    PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, PLAN_RECORDED,
+};

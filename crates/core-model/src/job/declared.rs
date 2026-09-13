@@ -28,6 +28,9 @@ pub enum EvidenceType {
     TestSuiteRun,
     Bundle,
     Document,
+    /// A plan Fleet holds: an approach and tasks, recorded through
+    /// `record_plan` rather than written to a file. `crate::WorkPlan`.
+    Plan,
 }
 
 /// What it takes to advance past a step. **Five variants, of the schema's four
@@ -88,6 +91,7 @@ impl EvidenceType {
         EvidenceType::TestSuiteRun,
         EvidenceType::Bundle,
         EvidenceType::Document,
+        EvidenceType::Plan,
     ];
 
     /// The wire value, which is also the WorkflowDef schema's spelling.
@@ -99,6 +103,7 @@ impl EvidenceType {
             EvidenceType::TestSuiteRun => "test_suite_run",
             EvidenceType::Bundle => "bundle",
             EvidenceType::Document => "document",
+            EvidenceType::Plan => "plan",
         }
     }
 

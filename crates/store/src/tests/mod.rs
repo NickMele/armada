@@ -44,6 +44,7 @@ mod roundtrip;
 mod showing;
 mod spend;
 mod tmp;
+mod work_plan;
 
 use std::collections::BTreeMap;
 

@@ -69,6 +69,7 @@ async fn ruled(judge: FakeJudge, worktree: &Worktree) -> Ruling {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await
 }
@@ -176,6 +177,7 @@ async fn a_failed_check_holds_the_job_somewhere_else_than_a_refusal() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -392,6 +394,7 @@ async fn a_step_that_declares_no_criterion_never_asks() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
@@ -450,6 +453,7 @@ async fn a_failing_check_never_reaches_the_judge() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
     )
     .await;
 
