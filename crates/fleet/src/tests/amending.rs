@@ -60,6 +60,60 @@ async fn a_form_edit_changes_its_line_on_disk_and_answers_with_the_file_as_writt
     assert_eq!(disk, KEPT.replace("pnpm eslint .", "pnpm -r lint"));
     assert_eq!(edited.text, disk, "the answer is what is on disk");
     assert_eq!(edited.path, opened.path, "one file, spelled one way");
+
+    // The forms redraw from what was written, in the order the file writes it.
+    let drawn = |declared: &ipc::ManifestDeclared| -> Vec<(String, String)> {
+        declared
+            .checks
+            .iter()
+            .map(|named| (named.name.clone(), named.check.run.clone()))
+            .collect()
+    };
+    let before = opened
+        .declared
+        .as_ref()
+        .expect("a file that loads is declared");
+    assert_eq!(
+        drawn(before),
+        [
+            ("lint".to_string(), "pnpm eslint .".to_string()),
+            ("test".to_string(), "pnpm vitest run".to_string())
+        ]
+    );
+    assert_eq!(
+        before.auto_merge.written, "never",
+        "the default where the file says nothing"
+    );
+    assert!(before
+        .auto_merge
+        .offered
+        .iter()
+        .any(|word| word == "checks-pass"));
+    assert_eq!(
+        drawn(&edited.declared),
+        [
+            ("lint".to_string(), "pnpm -r lint".to_string()),
+            ("test".to_string(), "pnpm vitest run".to_string())
+        ]
+    );
+}
+
+/// **A file mid-correction still reads.** The forms have nothing to draw from
+/// text that does not load, and the file view is what is left.
+#[tokio::test]
+async fn a_file_that_does_not_load_reads_whole_with_nothing_declared() {
+    let home = TempDir::new();
+    let file = kept_in(&home);
+    let mut fittings = crate::tests::daemon::fittings(&home, FakeWorkProduct::changed(&[]));
+    fittings.manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
+    let fleet = crate::daemon::Fleet::assembled(fittings);
+
+    let broken = "version: 1\nid: edited\ndrone:\n  poke_limit: soon\n";
+    std::fs::write(&file, broken).expect("a correction under way");
+
+    let opened = fleet.read_manifest_file().expect("the file view opens");
+    assert_eq!(opened.text, broken);
+    assert_eq!(opened.declared, None);
 }
 
 /// A pull lands while the form is open. The edits are refused as a save is —

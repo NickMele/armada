@@ -44,3 +44,17 @@ pub struct FleetUsage {
     /// ceiling each hit. Empty is the ordinary answer.
     pub over_budget: Vec<Overspending>,
 }
+
+/// What this Manifest's past Jobs have cost, at most — `get_manifest_spend`.
+///
+/// **The highest and not a total**, because a cap is set per Job: one below
+/// the costliest Job is one that Job would have stopped at.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ManifestSpend {
+    /// How many Jobs have spent anything. Zero leaves nothing to warn against.
+    pub jobs: u64,
+    /// The costliest Job's priced Drones, added up — a floor where one was unpriced.
+    pub most_cost_micros: u64,
+    /// The most turns any one Job took.
+    pub most_turns: u64,
+}

@@ -146,8 +146,8 @@ mod tests;
 
 pub use alerts::{Alert, AlertList};
 pub use amending::{
-    CheckDraft, CommandDraft, EditManifest, LinkDraft, ManifestEdit, ManifestEdited,
-    NarrowingDraft, PortDraft,
+    CheckDraft, CommandDraft, EditManifest, LinkDraft, ManifestDeclared, ManifestEdit,
+    ManifestEdited, NamedCheck, NamedCommand, NamedPort, NarrowingDraft, PolicyWords, PortDraft,
 };
 pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, WhenRefused};
 pub use attempt::{Move, StepAttempt};
@@ -241,7 +241,7 @@ pub use underway::{
     CheckUnderway, ChecksUnderway, OutputClosed, OutputEnded, OutputLines, OutputMessage,
     OutputOpened,
 };
-pub use usage::{FleetUsage, Overspending};
+pub use usage::{FleetUsage, ManifestSpend, Overspending};
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
 pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};
 pub use work::{

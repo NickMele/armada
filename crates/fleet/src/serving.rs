@@ -152,6 +152,22 @@ where
         self.usage().await
     }
 
+    /// The costliest and the longest Job against this Manifest — the budget
+    /// form's warning, read beside the caps it is set against.
+    async fn get_manifest_spend(&self) -> Result<ipc::ManifestSpend, Refusal> {
+        let past = self
+            .store()
+            .lock()
+            .await
+            .past_spend_for(self.manifest().id())
+            .map_err(|why| self.refusal(crate::adrift::Adrift::Reading(why)))?;
+        Ok(ipc::ManifestSpend {
+            jobs: past.jobs,
+            most_cost_micros: past.most_cost_micros,
+            most_turns: past.most_turns,
+        })
+    }
+
     /// What this repository declares — `crate::configured`.
     async fn get_manifest(&self, manifest_id: ManifestId) -> Result<ManifestConfig, Refusal> {
         self.manifest_config(manifest_id)

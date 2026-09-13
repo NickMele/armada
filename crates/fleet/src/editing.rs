@@ -141,9 +141,14 @@ where
                 cause,
             })
         })?;
+        // Parsed only for the forms: a file that does not load still reads.
+        let declared = config::Manifest::parse(file, &text)
+            .ok()
+            .map(|manifest| crate::amending::declared_in(&manifest));
         Ok(ManifestFile {
             path: file.display().to_string(),
             text,
+            declared,
         })
     }
 

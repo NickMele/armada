@@ -201,6 +201,58 @@ pub struct ManifestEdited {
     pub at: Instant,
     /// The whole file as written — the next edit's `read`.
     pub text: String,
+    /// What that text loads as, so the form redraws from the file it wrote.
+    pub declared: ManifestDeclared,
+}
+
+/// What a form draws: every key an edit can reach, **as the file declares it**.
+/// Built from the same drafts an edit sends, so a value read is a value sent.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ManifestDeclared {
+    /// In the order the file writes them, which is the order the gate starts them.
+    pub checks: Vec<NamedCheck>,
+    /// Commands and servers together, sorted — `serve` is what tells them apart.
+    pub commands: Vec<NamedCommand>,
+    /// Sorted.
+    pub ports: Vec<NamedPort>,
+    pub auto_merge: PolicyWords,
+    pub review_gate: PolicyWords,
+    /// `drone.cost_cap_micros_per_job`, absent where the file defers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_cap_micros_per_job: Option<u32>,
+    /// `drone.turn_cap_per_job`, absent where the file defers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_cap_per_job: Option<u32>,
+}
+
+/// A Check the file declares, by name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedCheck {
+    pub name: String,
+    pub check: CheckDraft,
+}
+
+/// A Command the file declares, by name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedCommand {
+    pub name: String,
+    pub command: CommandDraft,
+}
+
+/// A port the file declares, by name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedPort {
+    pub name: String,
+    pub port: PortDraft,
+}
+
+/// A policy's value and every word it takes. **The words cross** because the
+/// registry is `core_model`'s, and a form retyping it would drift from it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyWords {
+    /// In force, the default where the file says nothing.
+    pub written: String,
+    pub offered: Vec<String>,
 }
 
 /// An `Option` whose key must be present, for `commanding`'s reason: a

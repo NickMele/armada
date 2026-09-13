@@ -806,6 +806,11 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/manifests/:manifest_id",
     },
+    Route {
+        operation: "get_manifest_spend",
+        method: "GET",
+        path: "/manifest/spend",
+    },
     // What crossed the stream, counted. **Not `/events`**, which is the socket:
     // this is the read for a caller that cannot hold one, and `?since=` carries
     // a position rather than naming a resource.

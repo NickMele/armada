@@ -20,8 +20,8 @@ use crate::ids::Instant;
 
 /// `armada.yml` as it is on disk, for the view that draws it.
 ///
-/// **The bytes, not a document.** Nothing here is parsed, so a file that does
-/// not parse reads back as well as one that does — which is the case a person
+/// **The bytes first.** A file that does not parse reads back as well as one
+/// that does — which is the case a person
 /// opening this is most likely to be in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestFile {
@@ -35,6 +35,10 @@ pub struct ManifestFile {
     /// and says so: a partial text handed to an editor would be saved back over
     /// the rest.
     pub text: String,
+    /// What `text` loads as, for the forms. **Absent where it does not load**,
+    /// which the file view is for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared: Option<crate::ManifestDeclared>,
 }
 
 /// A corrected Manifest, on its way to disk. **Both fields are required**, so

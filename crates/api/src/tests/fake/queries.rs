@@ -176,6 +176,14 @@ impl Queries for FakeDaemon {
         Ok(shapes::usage())
     }
 
+    async fn get_manifest_spend(&self) -> Result<ipc::ManifestSpend, Refusal> {
+        Ok(ipc::ManifestSpend {
+            jobs: 2,
+            most_cost_micros: 7_120_000,
+            most_turns: 212,
+        })
+    }
+
     /// A Manifest this fake does not hold is a 422 and never a 404: the request
     /// is well-formed and names something not in the record.
     async fn get_manifest(&self, manifest_id: ManifestId) -> Result<ManifestConfig, Refusal> {
