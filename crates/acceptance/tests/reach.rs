@@ -77,10 +77,10 @@ use ipc::{
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    as_sent, carried_there, catalogued, convention, e2e_requiring, loads, one_step, proposals,
-    read_from, resolved_there, toward_the_journeys_e2e, written, Held, A_MILESTONE, CARRYABLE,
-    CHECKOUT, EPIC, EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP,
-    WRITTEN,
+    as_sent, carried_there, catalogued, convention, e2e_requiring, fault_keys, loads, one_step,
+    proposals, provenance_of, read_from, resolved_there, toward_the_journeys_e2e, written, Held,
+    A_MILESTONE, CARRYABLE, CHECKOUT, EPIC, EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS,
+    OVERREACHING, UNSET_UP, WRITTEN,
 };
 use bench::{states, Bench};
 
@@ -244,13 +244,12 @@ fn pick_ticks_by_evidence_and_marks_a_name_every_strong_sibling_declares() {
 fn a_proposal_cites_the_file_each_line_came_from() {
     let repository = Held::of(UNSET_UP);
     let proposals: Vec<_> = proposals(&repository).iter().map(as_sent).collect();
-    let scanned: Vec<String> = received(&repository)
-        .workspaces
-        .into_iter()
-        .map(|one| one.dir)
-        .collect();
-    let dirs: Vec<String> = proposals.iter().map(|one| one.dir.clone()).collect();
-    assert_eq!(dirs, scanned, "one per workspace Scan found");
+    let scanned = received(&repository).workspaces;
+    let dirs = proposals.iter().map(|one| &one.dir);
+    assert!(
+        dirs.eq(scanned.iter().map(|one| &one.dir)),
+        "one per workspace Scan found"
+    );
 
     for one in &proposals {
         assert_eq!(one.id.provenance, convention(&one.dir, None));
@@ -345,15 +344,7 @@ fn an_edit_moves_the_provenance_of_what_it_touched_and_nothing_else() {
     }
 
     let sent = as_sent(&shop);
-    let source = |name: &str| {
-        let checks = sent.checks.iter().map(|one| (&one.name, &one.provenance));
-        let mut lines = checks.chain(sent.commands.iter().map(|one| (&one.name, &one.provenance)));
-        lines
-            .find(|(named, _)| *named == name)
-            .expect("a line by that name")
-            .1
-            .clone()
-    };
+    let source = |name: &str| provenance_of(&sent, name);
     assert_eq!(
         [source("migrate"), source("e2e"), source("lint")],
         [
@@ -373,24 +364,13 @@ fn an_edit_moves_the_provenance_of_what_it_touched_and_nothing_else() {
     assert_eq!(sent.ports[0].provenance, Provenance::EditedDuringSetup);
     assert_eq!(sent.ports[0].env.as_deref(), Some("PORT"));
 
-    let e2e = sent
-        .checks
-        .iter()
-        .find(|one| one.name == "e2e")
-        .expect("e2e");
-    assert_eq!(
-        e2e.requires,
-        ["migrate", "seed"],
-        "Commands by name, in the order they run"
-    );
-    let checks: Vec<&str> = sent.checks.iter().map(|one| one.name.as_str()).collect();
-    assert_eq!(checks, ["e2e", "test"]);
     assert_eq!(
         (sent.policy[0].value.as_str(), &sent.policy[0].provenance),
         ("checks-pass", &Provenance::EditedDuringSetup)
     );
 
     let manifest = loads(&sent);
+    assert_eq!(manifest.checks_as_written(), ["e2e", "test"]);
     let e2e = manifest.check("e2e").expect("declared");
     let requires: Vec<&str> = e2e.requires().iter().map(|one| one.name()).collect();
     assert_eq!(
@@ -403,29 +383,23 @@ fn an_edit_moves_the_provenance_of_what_it_touched_and_nothing_else() {
     shop.amend(e2e_requiring(&["test"]))
         .expect("applied, and refused where it is");
     let refused = as_sent(&shop);
-    let keys: Vec<&str> = refused
-        .refused
-        .iter()
-        .flat_map(|one| &one.faults)
-        .map(|one| one.key.as_str())
-        .collect();
     assert_eq!(
-        keys,
+        fault_keys(&refused),
         ["checks.e2e.requires[0]"],
         "what Write refuses, at the line it is on"
     );
     assert!(refused.text.is_none(), "and no text that would not load");
 
-    let acts = [
+    for act in [
         "get_manifest_proposals",
         "edit_manifest_proposal",
         "write_manifest_proposal",
-    ];
-    let served = |act: &&str| api::SERVED.iter().any(|route| route.operation == *act);
-    assert!(
-        acts.iter().all(served),
-        "a proposal, its edits and Write are served"
-    );
+    ] {
+        assert!(
+            api::SERVED.iter().any(|route| route.operation == act),
+            "{act} is served"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

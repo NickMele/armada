@@ -500,3 +500,27 @@ pub fn loads(proposal: &ManifestProposal) -> Manifest {
     let at = Path::new(CHECKOUT).join(&proposal.file);
     Manifest::parse(&at, text).unwrap_or_else(|why| panic!("{} loads: {why}", proposal.file))
 }
+
+/// The provenance of the Check or Command named `name`.
+pub fn provenance_of(proposal: &ManifestProposal, name: &str) -> Provenance {
+    let checks = proposal
+        .checks
+        .iter()
+        .map(|one| (&one.name, &one.provenance));
+    let commands = proposal
+        .commands
+        .iter()
+        .map(|one| (&one.name, &one.provenance));
+    let mut lines = checks.chain(commands);
+    let found = lines.find(|(named, _)| *named == name);
+    found
+        .unwrap_or_else(|| panic!("no line named {name}"))
+        .1
+        .clone()
+}
+
+/// The keys a proposal's file is refused at, in the parser's order.
+pub fn fault_keys(proposal: &ManifestProposal) -> Vec<&str> {
+    let faults = proposal.refused.iter().flat_map(|one| &one.faults);
+    faults.map(|one| one.key.as_str()).collect()
+}
