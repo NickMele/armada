@@ -745,21 +745,17 @@ async fn an_answer_at_the_end_of_the_hold_is_delivered_once() {
     }
 }
 
-/// The branch tip's `armada.yml`, scripted as the fake's [`FakeVcs::commits`]
-/// script is: the on-disk copy in the Job's worktree is never read for it.
-pub(super) const THE_TIP: &str = "version: 1\nid: 01FIXTUREMANIFEST\n";
-
 /// What a Drone's own uncommitted edit to `armada.yml` looks like, left dirty
 /// in the worktree by the time a person answers a held command.
 pub(super) const DRONES_EDIT: &str = "version: 1\nid: 01FIXTUREMANIFEST\n# the drone's own edit\n";
 
-/// A Fleet whose version control is scripted, on a Job whose worktree already
-/// holds a dirty `armada.yml` — the shape `#6` is about: a Drone edited the
-/// file and never committed it, and then a person picks "Always allow in this
-/// repository" for a command it reached for.
+/// A Fleet on a Job whose worktree already holds a dirty `armada.yml` — the
+/// shape `#6` is about: a Drone edited the file and never committed it, and
+/// then a person picks "Always allow in this repository" for a command it
+/// reached for. Since `#836` this proves the edit is left alone rather than
+/// read for a commit; nothing here still reads the branch tip.
 pub(super) async fn dirty_manifest_job(home: &TempDir) -> (Fixture, JobId, std::path::PathBuf) {
-    let mut fittings = the_fittings(home, a_drone_that_reached_for("c1"));
-    fittings.vcs = FakeVcs::new().with_tip_content("armada.yml", THE_TIP);
+    let fittings = the_fittings(home, a_drone_that_reached_for("c1"));
     let fleet = Fleet::assembled(fittings);
     let job = fleet
         .propose(a_proposal("publish the package"))

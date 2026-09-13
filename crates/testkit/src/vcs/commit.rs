@@ -13,12 +13,12 @@ pub struct FakeCommit {
     pub branch: String,
     pub message: String,
     pub at: CommitTime,
-    /// What it committed: everything, some paths as the working directory
-    /// holds them, or one path's content given directly.
+    /// What it committed: everything, or some paths as the working directory
+    /// holds them.
     pub scope: CommitScope,
 }
 
-/// What one commit covered. **Three variants because the real trait has three
+/// What one commit covered. **Two variants because the real trait has two
 /// methods that write one**, and a test asserting on `scope` is asserting on
 /// which of them was called.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,9 +27,6 @@ pub enum CommitScope {
     All,
     /// `commit_paths`: these paths, as the working directory holds them.
     Paths(Vec<String>),
-    /// `commit_content`: this one path, given this exact content — the
-    /// working directory is never consulted.
-    Content { path: String, content: String },
 }
 
 /// What the fake does when asked to commit.

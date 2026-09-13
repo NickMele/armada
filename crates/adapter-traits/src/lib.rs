@@ -265,42 +265,6 @@ pub trait Vcs {
         message: &str,
         at: CommitTime,
     ) -> Result<Committed, Self::CommitError>;
-
-    /// The content this path holds at the branch tip, ignoring the working
-    /// directory entirely.
-    ///
-    /// `None` where the tip has no such path — a branch whose first commit is
-    /// still ahead, or a file the Drone has only ever written, never
-    /// committed. `Self::CommitError` rather than `Self::Error`: this read
-    /// exists only to feed [`commit_content`](Vcs::commit_content), and a
-    /// second error enum crossing over here would be pure plumbing.
-    fn content_at_tip(
-        &self,
-        worktree: &Worktree,
-        path: &str,
-    ) -> Result<Option<alloc::string::String>, Self::CommitError>;
-
-    /// Commit this exact content at `path`, on top of the branch tip, and
-    /// touch the working directory nowhere in the process.
-    ///
-    /// **The one difference from [`commit_paths`](Vcs::commit_paths).** That
-    /// one takes the path as the working directory holds it; this one is
-    /// handed the bytes, so whatever the working directory holds for `path` —
-    /// dirty, staged, absent — is undisturbed by the call. The index still
-    /// moves, to what was just committed rather than to the working
-    /// directory, which is what keeps a person's `git status` reading as one
-    /// change — the working directory against the new commit — rather than
-    /// two.
-    ///
-    /// [`Committed::NothingToCommit`] where `content` already matches the tip.
-    fn commit_content(
-        &self,
-        worktree: &Worktree,
-        path: &str,
-        content: &str,
-        message: &str,
-        at: CommitTime,
-    ) -> Result<Committed, Self::CommitError>;
 }
 
 /// Credential access, brokered. A Drone never holds a secret directly, and what

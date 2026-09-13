@@ -62,9 +62,8 @@ fn nothing_it_recorded_ever_goes_away() {
     assert_eq!(vcs.created().len(), 2);
 }
 
-/// A test can tell a commit of some paths, a commit of everything, and a
-/// commit of exact content apart, which is the whole of what separates the
-/// three calls.
+/// A test can tell a commit of some paths and a commit of everything apart,
+/// which is the whole of what separates the two calls.
 #[test]
 fn a_commit_of_some_paths_records_which() {
     let vcs = FakeVcs::new();
@@ -73,8 +72,6 @@ fn a_commit_of_some_paths_records_which() {
     vcs.commit_all(&made, "everything", at).unwrap();
     vcs.commit_paths(&made, &["a.txt", "b/c.txt"], "some", at)
         .unwrap();
-    vcs.commit_content(&made, "armada.yml", "commands: {}\n", "content", at)
-        .unwrap();
 
     let scopes: Vec<CommitScope> = vcs.committed().into_iter().map(|made| made.scope).collect();
     assert_eq!(
@@ -82,27 +79,8 @@ fn a_commit_of_some_paths_records_which() {
         vec![
             CommitScope::All,
             CommitScope::Paths(vec!["a.txt".to_string(), "b/c.txt".to_string()]),
-            CommitScope::Content {
-                path: "armada.yml".to_string(),
-                content: "commands: {}\n".to_string(),
-            },
         ]
     );
-}
-
-/// The tip's content is answered from what a test scripted, regardless of
-/// what a real repository would ever hold, and `None` for a path nobody
-/// scripted.
-#[test]
-fn the_tip_answers_what_was_scripted_and_nothing_else() {
-    let vcs = FakeVcs::new().with_tip_content("armada.yml", "version: 1\n");
-    let made = vcs.create_worktree(&spec(JOB)).unwrap();
-
-    assert_eq!(
-        vcs.content_at_tip(&made, "armada.yml").unwrap(),
-        Some("version: 1\n".to_string())
-    );
-    assert_eq!(vcs.content_at_tip(&made, "other.yml").unwrap(), None);
 }
 
 #[test]
