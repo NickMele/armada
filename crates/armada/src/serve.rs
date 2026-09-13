@@ -747,6 +747,7 @@ fn assemble(
         Err(why) => eprintln!("an agent standing in this repository will not find Armada: {why}"),
     }
 
+    let left_out = setup.left_out().iter().map(fleet::left_out_workflow).collect();
     let (manifest, workflows, reloads) = setup.into_parts();
     // The Judge runs the program the Drone runs, so a machine that named one
     // through the override names both — a second variable would let the two
@@ -782,6 +783,7 @@ fn assemble(
         clock: Arc::new(SystemClock::new()),
         mint: Arc::new(UlidMint::new()),
         workflows,
+        left_out,
         manifest,
         host: Host {
             repo_root: repo_root.clone(),

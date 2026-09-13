@@ -81,6 +81,10 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/from_request", post(propose_from_request::<D>))
         .route("/proposals/stop", post(stop_proposal::<D>))
         .route("/workflows", get(list_workflows::<D>))
+        .route(
+            "/workflows/left_out",
+            get(crate::queries::list_left_out_workflows::<D>),
+        )
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))
         .route("/capacity", get(get_capacity::<D>))

@@ -233,6 +233,7 @@ pub use commanding::CommandBudget;
 pub use converging::{NoReport, ReportNow, Stage, StepNorms, Tripwire, Wandering, FORCED_REPORT};
 pub use crossing::{Cleared, Crossed, Dispatched, Produced, Reconciling, Redirected};
 pub use daemon::{Fittings, Fleet, Host};
+pub use wire::left_out_workflow;
 pub use delivery::Delivered;
 pub use detach::Detached;
 pub use drone::{

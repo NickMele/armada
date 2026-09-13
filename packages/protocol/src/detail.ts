@@ -57,6 +57,8 @@ import type { JudgeQuestion, WhenRefused } from "./asking";
 export type JobDetail = {
   /** The board row, unchanged. A field added to the row reaches here for free. */
   job: JobSummary;
+  /** Where the frozen workflow came from, off the Job's record. Absent from an older Fleet. */
+  workflow_source?: string;
   /** What a whole-Job elapsed is measured from. Creation is not a transition. */
   created_at: string;
   /** Absent until a worktree exists. A Job at the gate has no branch. */

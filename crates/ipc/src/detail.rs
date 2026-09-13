@@ -251,6 +251,10 @@ pub struct JobDetail {
     /// step at all, carries nothing here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<JobReview>,
+    /// Where the Job's frozen workflow came from — `armada`, `kit` or `repository` — off its
+    /// own record, so a definition changed since still reads as the one this Job runs.
+    #[serde(default)]
+    pub workflow_source: String,
 }
 
 /// The review Fleet composed, in the four parts it is made of. No heading
@@ -610,6 +614,7 @@ impl JobDetail {
             repository_allowed_commands: Vec::new(),
             model_override: None,
             review,
+            workflow_source: job.workflow().source().as_wire().to_string(),
         }
     }
 }

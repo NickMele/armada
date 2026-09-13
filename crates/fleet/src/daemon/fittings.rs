@@ -103,6 +103,8 @@ pub struct Fittings<H, V, W> {
     /// and a name this map does not hold is refused at creation instead of
     /// written onto the record unverified.
     pub workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
+    /// The Kit and carried definitions left out of `workflows`, as the wire carries them.
+    pub left_out: Vec<ipc::LeftOutWorkflow>,
     /// The `armada.yml` that workflow resolved against. Held because a Drone's
     /// toolbelt is built from the commands it declares.
     pub manifest: Manifest,
@@ -242,6 +244,7 @@ where
             clock: fittings.clock,
             mint: fittings.mint,
             workflows: fittings.workflows,
+            left_out: fittings.left_out,
             manifest: fittings.manifest,
             host: fittings.host,
             port_range: fittings.port_range,

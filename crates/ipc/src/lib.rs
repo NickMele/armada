@@ -231,7 +231,7 @@ pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,
     ServerPort, ServerState, StartServer, StartedBy,
 };
-pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
+pub use setup::{LeftOutWorkflow, ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet, SpecPicked};
 pub use since::{EventTally, EventsSince};
 pub use turn::{

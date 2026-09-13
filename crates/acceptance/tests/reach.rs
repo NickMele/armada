@@ -37,8 +37,8 @@
 //! | A definition gating on `every_manifest_check` resolves against that repository's own Checks, and one naming Armada's by name is refused there | That a definition written for another repository names only what this one declares. The carried set does; `config`'s `tests/carried.rs` holds it to three other shapes |
 //! | A Job created against it is held to that repository's Checks, prerequisites and all | That any of them runs. A Manifest Check is a process, and the gate is `bug_job.rs`'s claim |
 //! | **Dispatch.** With no workflows of its own, all eight Armada carries resolve there, and a Job on the carried `bug` is created and dispatched | That a Fleet started there serves them. `Setup::at` reads directories, and `armada`'s own tests read them |
-//! | **Override.** One file from Kit replaces a carried definition by id, and the repository's replaces Kit's, whatever order they arrive in | That `~/.armada/workflows/` is where Kit's are read from. That is a directory, `armada`'s tests again |
-//! | **Source.** Each workflow says which of the three places it came from, in words a person reads, and a Job created on the carried `bug` freezes `armada` onto its own record | That the record reads it back out of `store`, which has no in-memory constructor — `store`'s own round-trip test does. That a person sees it on a Job: nothing on the wire carries it, which is Bridge's half |
+//! | **Override.** One file from Kit replaces a carried definition by id, and the repository's replaces Kit's, whatever order they arrive in. One from Kit that does not fit is left out, and crosses the wire saying why and whose runs instead | That `~/.armada/workflows/` is where Kit's are read from. That is a directory, `armada`'s tests again |
+//! | **Source.** Each workflow says which of the three places it came from, in words a person reads, and a Job created on the carried `bug` freezes `armada` onto its own record | That the record reads it back out of `store`, which has no in-memory constructor — `store`'s own round-trip test does. That Fleet serves it and a person sees it on a Job and at the picker: `fleet`'s own tests, and #824 |
 //! | Running one Manifest entry in the checkout, and reading, saving and editing the file, are operations Fleet serves | — |
 //! | **Verify.** What it runs is setup in `setup.requires` order, then every Check in written order, once each, and nothing else the file declares — a Check's prerequisites run inside its own run, other Commands and the server not at all — and starting one is an act Fleet serves | That any of it runs, one step at a time, writing nothing: those are processes, and `fleet`'s `verify_runs` tests. That Verify is offered on the sheet that wrote the file — #824. That a failed setup skips the Checks after it, as a Job's does |
 //! | **Fix.** A failed Check's command corrected as a form sends it — that Check's `run`, by name — changes that one line: every comment and every other line stays, the result loads, and a correction that would not load is refused with its faults | That a person sees the failing row and corrects it there: the form is Bridge's, a later child of #721. That only that Check runs again: #719's scoped Verify. That Fleet writes it and refuses a file that moved: that touches a file, and is `fleet`'s own tests |
@@ -682,6 +682,14 @@ fn one_file_replaces_a_carried_definition_and_the_repositorys_own_wins() {
             "feature carried by Armada"
         ]
     );
+
+    let misfit = catalogued(&[("bug.json", NAMING_ARMADAS_CHECKS.to_string())], &[]);
+    let left = fleet::left_out_workflow(&misfit.left_out()[0]);
+    assert_eq!(
+        (left.source.as_str(), left.instead.as_deref()),
+        ("kit", Some("armada"))
+    );
+    assert!(left.said.starts_with("Kit's `bug` was left out"), "{}", left.said);
 }
 
 // ---------------------------------------------------------------------------

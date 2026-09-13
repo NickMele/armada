@@ -552,6 +552,21 @@ A step was a bare id until `mechanical_checks` was added to it. Bridge printed "
 **A step now carries its advance gate and what it asks the Judge, which is the whole of what this answers that `get_job` does not answer sooner.** This is where a person decides whether to approve a dispatch: afterwards the rail says what happened, and here they are agreeing to it. A workflow that will stop and wait for them at `handoff`, and spend Judge calls at `implement`, previewed as neither. Both are the shapes the rail already uses, and the criteria themselves stay off the wire — counts and states, never a question.
 """
 
+[operations.list_left_out_workflows]
+kind = "query"
+transport = "HTTP"
+agent_access = "Yes"
+description = "The Kit and carried workflow definitions Fleet runs without, each with why and what runs instead"
+notes = """
+#425. `config`'s catalogue leaves out a Kit or carried definition that will not parse, will not resolve against this repository, or shares an id with a sibling in its own place, and Fleet printed each only at start. A person who customised `bug` in Kit and picks `bug` in the composer was running Armada's without any way to find out.
+
+**A route of its own, not a field on `list_workflows`**, whose answer is a list: wrapping it in an object is a major bump. A repository's own definition is never here, because one that does not fit refuses Fleet's start instead.
+
+`said` is the sentence Fleet prints, rendered and never matched on. `file` is absolute, on `ManifestSummary.path`'s ground: two processes on one machine agreeing where a file is.
+
+`agent_access` is `Yes` on `list_workflows`' terms: a Helm about to propose `bug` should be able to see that the `bug` it would get is not Kit's.
+"""
+
 [operations.list_worktrees]
 kind = "query"
 transport = "HTTP"
