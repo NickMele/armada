@@ -110,14 +110,14 @@ impl std::fmt::Display for NotDispatched {
             // any argument, and telling it to "call again later" would make it
             // spend turns finding that out.
             NotDispatched::NotItsToDispatch { .. } => out.write_str(
-                "creating Jobs is not part of the task you are on. Only the dispatching \
-                 part of a task that decomposes work may do it, and a task that was \
+                "creating Jobs is not part of the work you are on. Only the dispatching \
+                 part of a Job that decomposes work may do it, and a Job that was \
                  itself created that way may not do it at all — report what you have \
                  instead",
             ),
             NotDispatched::NotASibling { named } => write!(
                 out,
-                "`{named}` is not one of the Jobs you created for this task, so nothing \
+                "`{named}` is not one of the Jobs you created for this Job, so nothing \
                  can be made to wait for it. Name only the ids this tool gave you back",
             ),
             NotDispatched::Adrift(cause) => write!(out, "{cause}"),

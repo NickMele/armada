@@ -114,34 +114,34 @@ impl fmt::Display for NotWidened {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             NotWidened::NothingIsWorking => out.write_str(
-                "no task is being worked on this connection, so there is no \
-                 scope for this request to be about. Stop — the task this drone \
+                "no Job is being worked on this connection, so there is no \
+                 scope for this request to be about. Stop — the Job this drone \
                  was started for has already ended",
             ),
             NotWidened::NotRunning { status } => write!(
                 out,
-                "this task is {} rather than running, so its scope is not \
+                "this Job is {} rather than running, so its scope is not \
                  something to be changed from here",
                 status.as_wire()
             ),
             NotWidened::NoSuchStep { step } => write!(
                 out,
-                "the task is standing at step `{}`, which its workflow does not \
+                "the Job is standing at step `{}`, which its workflow does not \
                  name. This is a fault in Fleet and not in the request",
                 step.as_str()
             ),
             NotWidened::ScopeUndetermined => out.write_str(
-                "this task does not state which files it writes, so there is \
+                "this Job does not state which files it writes, so there is \
                  nothing for these paths to be outside of. Say where this part's \
                  work will be with declare_scope and get on with it",
             ),
             NotWidened::AlreadyInScope => out.write_str(
-                "every path you named is already inside what this task says it \
+                "every path you named is already inside what this Job says it \
                  writes. Nothing is being asked for — get on with the work",
             ),
             NotWidened::Forbidden { paths } => write!(
                 out,
-                "{} is out of bounds for every part of every task, and nothing \
+                "{} is out of bounds for every part of every Job, and nothing \
                  here can allow it — this was not looked at and asking again \
                  will not change the answer. Ask again without it, or do the \
                  part you were given without it",
@@ -149,7 +149,7 @@ impl fmt::Display for NotWidened {
             ),
             NotWidened::AlreadyAsked { step } => write!(
                 out,
-                "this part has already asked to change what the task writes, and \
+                "this part has already asked to change what the Job writes, and \
                  it may ask once. Work inside the scope you have, and say what \
                  you could not do in `not_claimed` when you submit — step `{}`",
                 step.as_str()
@@ -165,7 +165,7 @@ impl fmt::Display for NotWidened {
             } => write!(
                 out,
                 "the request was not taken. {because}\n\nA person has been asked \
-                 about it and this task is waiting on them. Stop here"
+                 about it and this Job is waiting on them. Stop here"
             ),
             NotWidened::Refused { because, .. } => write!(
                 out,
@@ -176,7 +176,7 @@ impl fmt::Display for NotWidened {
             NotWidened::NotKept { cause } => write!(
                 out,
                 "the request was looked at and the answer could not be written \
-                 down: {cause}. The task's scope has not changed"
+                 down: {cause}. The Job's scope has not changed"
             ),
         }
     }

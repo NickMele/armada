@@ -198,7 +198,7 @@ async fn a_drone_on_a_workflow_that_dispatches_nothing_is_refused() {
     assert!(
         refused
             .to_string()
-            .contains("not part of the task you are on"),
+            .contains("not part of the work you are on"),
         "{refused}"
     );
 }

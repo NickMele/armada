@@ -585,7 +585,7 @@ kind — the already-asking call is not recorded as one.
 
 ```
 ┌─ NOT GRANTED ──────────────────────────────────
-│ This task is not granted `npm publish --access
+│ This Job is not granted `npm publish --access
 │ public`. A person decides whether to allow it.
 │ Do not try to get the same result another way.
 └────────────────────────────────────────────────
@@ -605,7 +605,7 @@ kind — the already-asking call is not recorded as one.
 ┌─ REJECTED ─────────────────────────────────────
 │ A person said no to `npm publish --access
 │ public`. Do not run it, or anything that does
-│ the same thing. Carry on without it if the task
+│ the same thing. Carry on without it if the work
 │ allows, or ask a question if it cannot be done
 │ without it.
 └────────────────────────────────────────────────
@@ -615,7 +615,7 @@ kind — the already-asking call is not recorded as one.
 ┌─ WITHHELD ─────────────────────────────────────
 │ `rm -rf .armada/store.db` is declared
 │ destructive in this repository, and an
-│ unattended task never runs it. Do not try to
+│ unattended Job never runs it. Do not try to
 │ get the same result another way.
 └────────────────────────────────────────────────
 ```
@@ -636,7 +636,7 @@ names the command and says what to do next and nothing else.
 ```
 ┌─ TURN ─────────────────────────────────────────
 │ A person allowed `npm publish --access public`
-│ for this task. Run it again now; it will not be
+│ for this Job. Run it again now; it will not be
 │ refused.
 └────────────────────────────────────────────────
 ```
