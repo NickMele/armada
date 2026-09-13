@@ -63,7 +63,7 @@ What the rail draws is what is built, which is not yet the whole roster. A surfa
 
 **Alerts is the one that stays.** An alert is a condition on a Job rather than a status a Job holds — thrashing, fan-out abuse and evidence-suspect are none of them Job states — so it is a different population with its own level and trigger structure, not a filter of this one.
 
-> **Rule.** Alerts lists every repository Fleet serves, where the Board lists only the picked one's.
+> **Rule.** Alerts lists every repository Fleet serves, and never follows the Board's own pick.
 > Why: an escalation interrupts, and one held back until a person switched repositories would not.
 
 **The status bar reports Fleet and Doctor health continuously.** The Manifest surface's Doctor strip can therefore disappear when every module passes, without its absence being ambiguous.

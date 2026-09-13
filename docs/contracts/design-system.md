@@ -1708,6 +1708,11 @@ costs the one that answers "is this stuck", which is elapsed. It stays on
 the detail view, where a reader is asking about one Job rather than
 comparing several.
 
+**On All repositories, with more than one served, the row names its
+repository.** There the repository is not implicit the way workspace is,
+so a reader needs it to tell one Job's row from another's — see
+[Job Board](../concepts/job-board.md).
+
 **Spend follows the active billing mode.** Personal-machine mode gates
 on the quota % floor, so the row shows quota % remaining, which is
 provider-reported and therefore measured. Work-machine mode gates on
