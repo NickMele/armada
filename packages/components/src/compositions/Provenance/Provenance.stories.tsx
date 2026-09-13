@@ -12,7 +12,7 @@ export default meta;
 type Story = StoryObj<typeof Provenance>;
 
 /** A port a compose file declares: the file, in mono, and nothing else. */
-export const Read: Story = { args: { source: "read", file: "docker-compose.yml", at: "services.db.ports" } };
+export const Read: Story = { args: { source: "read", file: "compose.yaml", at: "services.db.ports" } };
 
 /** A script placed by guess: the file it was read from, and the word that says the placement is a guess. */
 export const Convention: Story = { args: { source: "convention", file: "package.json", at: "scripts.test" } };

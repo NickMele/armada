@@ -159,7 +159,6 @@
 
 .armada-proposal-sheet__value:focus-visible {
   outline: var(--focus-ring);
-  outline-offset: 2px;
 }
 
 .armada-proposal-sheet__acts {

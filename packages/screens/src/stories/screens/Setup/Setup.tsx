@@ -66,7 +66,7 @@ function proposal(dir: string, checks: string[], commands: string[] = []): Manif
     id: { value: dir === "." ? "storefront" : dir.split("/").pop()!, provenance: convention(file, "name") },
     ports:
       dir === "services/api"
-        ? [{ name: "db", container: 5432, provenance: { source: "read", file: "docker-compose.yml", key: "services.db.ports" } }]
+        ? [{ name: "db", container: 5432, provenance: { source: "read", file: "compose.yaml", key: "services.db.ports" } }]
         : [],
     checks: checks.map((name) => ({ name, run: `pnpm ${name}`, provenance: convention(file, `scripts.${name}`) })),
     commands: commands.map((name) => ({ name, run: `pnpm ${name}`, provenance: convention(file, `scripts.${name}`) })),

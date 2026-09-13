@@ -68,7 +68,7 @@ export const CorrectAndClose: Story = {
     await expect(within(within(list).getByRole("listitem", { name: "apps/web" })).getByText("ready to write")).toBeVisible();
     await userEvent.click(within(list).getByRole("button", { name: "Open services/api" }));
     const api = await canvas.findByRole("dialog", { name: "Proposal for services/api" });
-    await expect(within(within(api).getByRole("list", { name: "Ports" })).getByText("docker-compose.yml services.db.ports")).toBeVisible();
+    await expect(within(within(api).getByRole("list", { name: "Ports" })).getByText("compose.yaml services.db.ports")).toBeVisible();
   },
 };
 
