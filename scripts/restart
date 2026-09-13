@@ -48,6 +48,65 @@ fail() {
   exit 1
 }
 
+# One restart at a time. Two runs overlapping on 12 Sep left one sending
+# SIGTERM to Fleet while the other's late Drone check found the pid alive
+# and its API refusing connections, and failed on it. macOS has no
+# `flock(1)`, so the lock is a symlink — `lock_path` pointing at the holder's
+# pid — rather than a directory with a pid file written into it after the
+# fact. `ln -s` is one syscall: the link either comes into being already
+# naming its holder, or the call fails, so there is no window where a lock
+# exists and a reader sees no pid yet. A `mkdir`-then-write pair has exactly
+# that window, and a second run landing inside it would read an empty pid,
+# call the lock stale, and take it out from under the first run — the
+# concurrent case this exists to prevent. Derived from `$home`, like
+# everything else here, so a scratch-`HOME` test can never contend with the
+# owner's own restart.
+#
+# **A dead pid is never broken automatically.** A first attempt did: two
+# runs that both read the same dead pid could each remove what the other
+# had just recreated and both come away holding the lock — a race a
+# 50-round loop kept reproducing no matter how the removal was made atomic,
+# because the removal and the recreation are still two separate steps that
+# a second run can interleave with. A lock only outlives its holder when a
+# restart itself was killed, which is rare, so this refuses instead and
+# names the fix: remove the lock directory yourself and run again. One
+# manual `rm` beats a race in the one case this lock exists for.
+lock_path="$support/restart.lock"
+
+release_lock() {
+  [[ "${lock_held:-false}" == true ]] && rm -f "$lock_path" 2>/dev/null || true
+}
+
+# A symlink's target is fixed at creation, so this is the one read that can
+# never land mid-write: either the link is not there, or it names a pid in
+# full.
+read_lock_pid() { readlink "$lock_path" 2>/dev/null || true; }
+
+acquire_lock() {
+  mkdir -p "$support"
+
+  if ln -s "$$" "$lock_path" 2>/dev/null; then
+    lock_held=true
+    return
+  fi
+
+  local held_pid
+  held_pid=$(read_lock_pid)
+  if [[ -n "$held_pid" ]] && kill -0 "$held_pid" 2>/dev/null; then
+    fail "another restart is already in progress (pid $held_pid)"
+  fi
+
+  if [[ -n "$held_pid" ]]; then
+    fail "a previous restart (pid $held_pid) died holding the lock — remove $lock_path and run again"
+  fi
+  fail "a previous restart died holding the lock and left $lock_path naming no pid — remove it and run again"
+}
+
+lock_held=false
+trap release_lock EXIT
+trap 'exit 1' INT TERM HUP
+acquire_lock
+
 # cargo's own default install root, so a `$HOME` overridden for testing does
 # not also relocate where `armada` gets installed — that is shared machine
 # tooling, not Fleet's per-home state, and installing it from this working
@@ -132,10 +191,25 @@ cargo install --path crates/armada --debug --locked
 # attempt compared source files against `out/main/index.js`, and every build
 # leaves `out/preload/index.js` and `out/renderer/**` newer than that one file
 # — so the "did anything change" question always answered yes, on a tree that
-# had not moved since the previous run. The stamp is touched only after a
-# build succeeds, so it is always at least as new as everything that build
-# wrote.
+# had not moved since the previous run.
+#
+# **The stamp's value is when the build started, and it is written when the
+# run stops being able to vouch for Bridge running it.** Both matter, and
+# each fixes its own incident. On 12 Sep a run built Bridge, stamped it right
+# there, and then failed at the late Drone check before Fleet or Bridge were
+# touched: the old process kept running, but the stamp said it was current,
+# so nothing later reopened it — the *write* is deferred to wherever this
+# script finishes deciding whether the running Bridge matches the build:
+# after a successful reopen, or after deciding none was needed. Separately,
+# `pnpm build` can run for minutes, and a source file edited while it runs
+# is newer than "now" once the run finally ends — stamping "now" there would
+# mark this run as covering an edit it never saw. `bridge_pending` is
+# touched immediately before the build starts, so its mtime is the instant
+# this run stopped being able to vouch for anything past it; that mtime, not
+# "now", is what is later renamed into the stamp — `mv` carries a file's
+# mtime with it.
 bridge_stamp="$root/apps/desktop/out/.armada-restart-stamp"
+bridge_pending="$root/apps/desktop/out/.armada-restart-stamp.pending"
 bridge_rebuilt=false
 if [[ ! -f "$bridge_stamp" ]]; then
   bridge_rebuilt=true
@@ -151,9 +225,9 @@ fi
 
 if $bridge_rebuilt; then
   say "Building Bridge — apps/ or packages/ moved since its last build"
-  pnpm --filter @armada/desktop build
   mkdir -p "$root/apps/desktop/out"
-  touch "$bridge_stamp"
+  touch "$bridge_pending"
+  pnpm --filter @armada/desktop build
 else
   say "Bridge is unchanged since its last build"
 fi
@@ -327,6 +401,23 @@ PY
       launchctl bootstrap "$domain" "$bridge_plist"
     fi
     bridge_reopened=true
+  fi
+fi
+
+# The running Bridge now matches this build only if it was actually reopened
+# onto it — not merely built. Left false (a quit that did not land, or more
+# than one window open), `bridge_pending` is left where it is and the build
+# already on disk stays unstamped, so the next run still finds Bridge
+# changed and tries the reopen again rather than trusting a build nobody is
+# running yet. Nothing needed here when Bridge was never rebuilt — the
+# existing stamp already covers it, and touching it would only move its
+# time later for no reason.
+if $bridge_rebuilt && $bridge_reopened; then
+  mkdir -p "$root/apps/desktop/out"
+  if [[ -f "$bridge_pending" ]]; then
+    mv -f "$bridge_pending" "$bridge_stamp"
+  else
+    touch "$bridge_stamp"
   fi
 fi
 

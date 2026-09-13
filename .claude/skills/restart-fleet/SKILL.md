@@ -47,6 +47,16 @@ does for a crash.
 **Nothing else waits.** A queued Job, a Job at a human gate, a Job a person
 is piloting — none of them hold a process the restart would interrupt.
 
+**A restart already in progress.** Only one runs at a time; a second one
+refuses at once, naming the pid of the one already running, rather than
+racing it to stop and rebuild Fleet. If you see that refusal, wait for the
+first to finish rather than retrying it.
+
+**A restart that died holding the lock.** This refuses too, naming the pid
+that died and the lock file to remove. It is never broken automatically —
+tell the owner rather than removing it yourself, since a lock only outlives
+its holder when a restart itself was killed.
+
 ## What it does not decide for you
 
 It does not ask the owner anything itself — no prompt, no confirmation read

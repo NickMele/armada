@@ -125,6 +125,40 @@ miss that Drone or refuse a restart nothing is using. A queued Job, a Job at a
 human gate, or one a person is piloting holds no process the restart would
 interrupt, so none of those refuse it.
 
+**Only one restart runs at a time.** An exclusive lock is taken before the
+first Drone check, under the same support directory as the plist and
+runtime file. macOS has no `flock(1)`, so the lock is a symlink naming its
+holder's pid — `ln -s` is one syscall, so the link is never observed to
+exist without already naming who holds it, which a directory created and
+then written into separately cannot promise. A second run refuses at once,
+naming the pid of the one already in progress, rather than racing it to
+stop and rebuild Fleet. The lock is released on every exit, including a
+refusal or a signal.
+
+**A lock left behind by a run that died holding it is never broken
+automatically.** A dead pid refuses too, naming the lock and the pid that
+died holding it, and says to remove it by hand and run again. An earlier
+attempt broke a dead-pid lock on the caller's behalf, and a race loop kept
+finding a way through it no matter how the removal itself was made atomic:
+two runs that both read the same dead pid could each act on what the other
+had just recreated, because reading "it is stale" and taking it are still
+two separate steps for a second run to land between. A lock only outlives
+its holder when a restart itself was killed, which happens rarely, so a
+person clearing it by hand beats a machine racing to guess it is safe — the
+one case this lock exists for.
+
+**The Bridge build stamp records when the build it reflects started, not
+when the run around it ended.** A marker is written the moment Bridge's
+build begins, before `pnpm build` runs, and only that marker's time — never
+"now" — becomes the stamp once this run decides the running Bridge matches
+it: after a successful reopen, or after deciding none was needed. Stamping
+"now" at the end would mark a run as covering edits made *during* its own
+multi-minute build, which a later run would then never see as changed. A
+run that fails or refuses anywhere after the build (the late Drone check,
+Fleet's own restart, a Bridge that would not quit) leaves the stamp exactly
+as it was, so the next run still finds Bridge changed and rebuilds and
+reopens it rather than trusting a build nobody is running yet.
+
 **It runs Fleet under a launchd job it bootstraps on first use**, the design
 `docs/concepts/fleet.md` (Daemon lifecycle, Restarting Fleet) specifies: the
 plist lives beside the runtime file, outside `~/Library/LaunchAgents` so it is
