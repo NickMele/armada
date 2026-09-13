@@ -382,6 +382,8 @@ pub(crate) fn declared_in(manifest: &config::Manifest) -> ManifestDeclared {
         })
         .collect();
     ManifestDeclared {
+        id: Some(manifest.id().as_str().to_string()),
+        version: Some(manifest.version()),
         checks,
         commands,
         ports,

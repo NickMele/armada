@@ -281,6 +281,13 @@ pub struct ManifestEdited {
 /// Built from the same drafts an edit sends, so a value read is a value sent.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestDeclared {
+    /// `id`, shown and never edited: past Jobs are recorded against it.
+    /// Absent from an older Fleet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// `version`, shown and never edited. Absent from an older Fleet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<u32>,
     /// In the order the file writes them, which is the order the gate starts them.
     pub checks: Vec<NamedCheck>,
     /// Commands and servers together, sorted — `serve` is what tells them apart.

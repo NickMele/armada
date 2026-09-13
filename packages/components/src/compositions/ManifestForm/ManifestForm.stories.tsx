@@ -66,6 +66,7 @@ const DRAFT: ManifestFormDraft = {
 
 const BASE = {
   path: "/Users/user/armada/armada.yml",
+  identity: { id: "armada", version: 1 },
   draft: DRAFT,
   onDraft: noop,
   autoMergeWords: ["never", "checks-pass", "always"],

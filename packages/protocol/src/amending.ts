@@ -144,6 +144,10 @@ export type ManifestEdited = {
  * the drafts an edit sends — so a value read is a value sent.
  */
 export type ManifestDeclared = {
+  /** Shown, never edited: past Jobs are recorded against it. Absent from an older Fleet. */
+  id?: string;
+  /** Shown, never edited. Absent from an older Fleet. */
+  version?: number;
   /** In the order the file writes them. */
   checks: { name: string; check: CheckDraft }[];
   /** Commands and servers together, sorted. `serve` tells them apart. */

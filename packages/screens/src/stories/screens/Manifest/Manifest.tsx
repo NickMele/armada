@@ -73,6 +73,8 @@ checks:
  * Commands, as `GET /manifest/file` carries them beside the text.
  */
 export const DECLARED: ManifestDeclared = {
+  id: "armada",
+  version: 1,
   checks: [
     { name: "build", check: { run: "cargo build --workspace --locked" } },
     { name: "typecheck", check: { run: "pnpm typecheck", requires: ["bootstrap"] } },

@@ -237,6 +237,8 @@ pub fn manifest_declared() -> ipc::ManifestDeclared {
         offered: offered.iter().map(|word| word.to_string()).collect(),
     };
     ipc::ManifestDeclared {
+        id: None,
+        version: None,
         checks: vec![ipc::NamedCheck {
             name: "lint".to_string(),
             check: ipc::CheckDraft {

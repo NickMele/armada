@@ -100,6 +100,8 @@ export type ManifestFormProps = {
   problems: Record<string, string>;
   /** Where a cap is below what a past Job here cost. */
   budgetWarnings: string[];
+  /** `id` and `version`, shown and never edited. Absent where Fleet did not say. */
+  identity?: { id: string; version: number };
   /** Whether the draft would send any edit. Save is offered only then. */
   changed: boolean;
   saving?: boolean;
@@ -114,7 +116,7 @@ export type ManifestFormProps = {
 };
 
 export function ManifestForm(props: ManifestFormProps) {
-  const { path, changed, saving = false, onSave, onDiscard, receipt, refused, moved, problems } = props;
+  const { path, identity, changed, saving = false, onSave, onDiscard, receipt, refused, moved, problems } = props;
   const blocked = Object.keys(problems).length > 0;
   return (
     <div className="armada-manifest-form">
@@ -167,6 +169,24 @@ export function ManifestForm(props: ManifestFormProps) {
         </Alert>
       )}
       </div>
+
+      {identity === undefined ? null : (
+        <section className="armada-manifest-form__identity" aria-label="This Manifest">
+          <dl className="armada-manifest-form__facts">
+            <div>
+              <dt>Id</dt>
+              <dd className="armada-manifest-form__key">{identity.id}</dd>
+            </div>
+            <div>
+              <dt>Version</dt>
+              <dd className="armada-manifest-form__key">{identity.version}</dd>
+            </div>
+          </dl>
+          <p className="armada-manifest-form__hint">
+            Past Jobs here are recorded against this id, so it is not changed from a form.
+          </p>
+        </section>
+      )}
 
       <ChecksSection {...props} />
       <CommandsSection {...props} />

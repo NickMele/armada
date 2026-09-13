@@ -183,6 +183,9 @@ export function useManifestForm({
     state: "open",
     props: {
       path: held.path,
+      ...(declared.id === undefined || declared.version === undefined
+        ? {}
+        : { identity: { id: declared.id, version: declared.version } }),
       draft,
       onDraft: (next) => setHeld((prev) => (prev.state === "open" ? { ...prev, draft: next } : prev)),
       autoMergeWords: declared.auto_merge.offered,

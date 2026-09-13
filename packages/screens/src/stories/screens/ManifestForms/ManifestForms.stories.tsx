@@ -231,3 +231,17 @@ export const PolicyInWords: Story = {
     );
   },
 };
+
+/** `id` and `version` are shown and offer nothing to type into: past Jobs are recorded against the id. */
+export const TheIdentityIsReadOnly: Story = {
+  name: "The id and version, read-only",
+  args: { ...TheForms.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const identity = await canvas.findByRole("region", { name: "This Manifest" });
+    await expect(within(identity).getByText("armada")).toBeVisible();
+    await expect(within(identity).getByText("1")).toBeVisible();
+    await expect(within(identity).queryByRole("textbox")).toBeNull();
+    await expect(within(identity).getByText(/not changed from a form/)).toBeVisible();
+  },
+};
