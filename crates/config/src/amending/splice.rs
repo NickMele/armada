@@ -5,10 +5,10 @@
 //! started from.
 //!
 //! **What a removal takes is the key's own lines** — its key line through its
-//! last content line, comments inside it included — **and nothing above it.**
-//! A comment written over a Check stays when the Check goes: the owner's rule
-//! is that a form leaves every comment it did not touch, and a comment above a
-//! key is not the key.
+//! last content line, comments inside it included. **An entry a form removes
+//! also takes the comment block directly above it**, with no blank line
+//! between: the owner's rule, Journey 9, *Editing*. A comment set off by a
+//! blank line may be about the section or a neighbour, and stays.
 
 use serde_yaml_ng::{Mapping, Value};
 
@@ -28,9 +28,10 @@ pub(super) fn apply(
     before: &Value,
     path: &[String],
     to: Option<&Node>,
+    attached: bool,
 ) -> Result<String, Shape> {
     let map = before.as_mapping().ok_or("a document that is not a map")?;
-    let splice = within(doc, 0..doc.lines.len(), None, map, path, to)?;
+    let splice = within(doc, 0..doc.lines.len(), None, map, path, to, attached)?;
     Ok(format!(
         "{}{}{}",
         &doc.text[..splice.start],
@@ -46,6 +47,7 @@ fn within(
     map: &Mapping,
     path: &[String],
     to: Option<&Node>,
+    attached: bool,
 ) -> Result<Splice, Shape> {
     let entries = doc.map(region)?;
     let agrees = entries.len() == map.len()
@@ -71,7 +73,7 @@ fn within(
             insert(doc, owner, &entries, name, &wrapped)
         }
         (Some(at), _) if rest.is_empty() => match to {
-            None => remove(doc, owner, &entries, at),
+            None => remove(doc, owner, &entries, at, attached),
             Some(node) => set(doc, &entries[at], &map[name.as_str()], node),
         },
         (Some(at), _) => {
@@ -90,6 +92,7 @@ fn within(
                 child,
                 rest,
                 to,
+                attached,
             )
         }
     }
@@ -123,10 +126,16 @@ fn insert(
             with: format!("{lead}{}{nl}", lines.join(nl)),
         });
     };
-    let after = &doc.lines[doc.insertion(last, col)];
     let spaced = entries
         .last()
         .is_some_and(|sibling| doc.spaced(sibling.line, col));
+    // Past the comments still inside the map only where a blank line will set
+    // the new key off from them. Written directly under one, the key would
+    // take that comment with it when a form removed it again.
+    let after = &doc.lines[match spaced {
+        true => doc.insertion(last, col),
+        false => last,
+    }];
     let gap = if spaced { nl } else { "" };
     let with = match after.next == after.end {
         // The last line of a file with no newline at its end, which stays so.
@@ -140,25 +149,31 @@ fn insert(
     })
 }
 
-/// A key's own lines out. **A map's last key leaves `{}`** rather than a key
-/// with no value, which would read as nothing at all.
+/// A key's own lines out, and with `attached` the comment block directly
+/// above it. **A map's last key leaves `{}`** rather than a key with no value,
+/// which would read as nothing at all.
 fn remove(
     doc: &Document<'_>,
     owner: Option<&Entry>,
     entries: &[Entry],
     at: usize,
+    attached: bool,
 ) -> Result<Splice, Shape> {
     if let (1, Some(owner)) = (entries.len(), owner) {
         return replace(doc, owner, &Node::Map(Vec::new()));
     }
     let entry = &entries[at];
-    let mut start = doc.lines[entry.line].start;
+    let mut first = entry.line;
+    while attached && first > 0 && doc.lines[first - 1].kind == Kind::Comment {
+        first -= 1;
+    }
+    let mut start = doc.lines[first].start;
     // The blank line that spaced it goes with it, so the keys either side of
     // it are spaced as they were rather than twice.
-    let above = entry.line.checked_sub(1).map(|line| doc.lines[line].kind);
+    let above = first.checked_sub(1).map(|line| doc.lines[line].kind);
     let below = doc.lines.get(entry.last + 1).map(|line| line.kind);
     if above == Some(Kind::Blank) && matches!(below, None | Some(Kind::Blank)) {
-        start = doc.lines[entry.line - 1].start;
+        start = doc.lines[first - 1].start;
     }
     // A file with no newline at its end keeps none: the newline before the
     // key's first line goes with the key.

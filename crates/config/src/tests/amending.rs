@@ -230,7 +230,9 @@ fn every_edit_a_form_makes_round_trips_this_repositorys_manifest_byte_for_byte()
 }
 
 /// Each edit on its own, taken back on its own — so a pair that only cancels
-/// out when run together cannot hide in the one above.
+/// out when run together cannot hide in the one above. **The additions carry
+/// no comment**, so taking them back gives the file back byte for byte even
+/// though a removal takes the comment block directly above what it removes.
 #[test]
 fn each_edit_taken_back_on_its_own_leaves_the_file_as_it_was() {
     for (there, again) in forward().into_iter().zip(back()) {
@@ -277,17 +279,84 @@ fn an_edit_to_the_value_already_there_changes_nothing() {
     assert_eq!(amended(OWN, &same), OWN);
 }
 
-/// A comment above a Check is not the Check.
+/// `text` with its lines `first..=last` taken out, counted from zero.
+fn without(text: &str, first: usize, last: usize) -> String {
+    text.lines()
+        .enumerate()
+        .filter(|(at, _)| !(first..=last).contains(at))
+        .map(|(_, line)| format!("{line}\n"))
+        .collect()
+}
+
+/// Where `line` is in `text`, exactly once.
+fn line_of(text: &str, line: &str) -> usize {
+    let found: Vec<usize> = text
+        .lines()
+        .enumerate()
+        .filter(|(_, have)| *have == line)
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(found.len(), 1, "`{line}` is in the file once");
+    found[0]
+}
+
+/// **The owner's rule, on the file it was decided against.** The `storybook`
+/// port is the last port, so removing it takes `ports:` — and the comment
+/// block written directly above that goes with it. The blank lines and the
+/// comments set off by them either side stay, and so does every other byte.
 #[test]
-fn removing_a_check_takes_its_lines_and_leaves_the_comment_above_it() {
-    let edited = amended(OWN, &[check("format", CheckEdit::Remove)]);
-    assert!(!edited.contains("  format:\n"));
-    assert!(
-        !edited.contains("rustfmt --check"),
-        "its lines went, the ones inside it too"
+fn removing_an_entry_takes_the_comment_block_directly_above_it_and_nothing_else() {
+    let edited = amended(OWN, &[port("storybook", PortEdit::Remove)]);
+    let comment = line_of(
+        OWN,
+        "# Armada places these, so two worktrees never bind the same number.",
     );
-    assert!(edited.contains("  # `format`, not `fmt`: that name is a Command below"));
-    assert!(keeps_every_line(&edited, OWN));
+    let storybook = line_of(OWN, "  storybook: {}");
+    assert_eq!(
+        storybook,
+        comment + 2,
+        "the comment is attached: no blank between"
+    );
+    assert_eq!(
+        edited,
+        without(OWN, comment - 1, storybook),
+        "the attached comment, the section, and the blank that spaced it — nothing else"
+    );
+    assert!(edited.contains(
+        "        name: Storybook\n\n# How this repository shows what a change looks like."
+    ));
+    assert!(crate::Manifest::parse(at(), &edited).is_ok());
+}
+
+/// A comment set off by a blank line is not the entry's. The `storybook`
+/// Check has one above it and none attached, so only its own lines go.
+#[test]
+fn removing_an_entry_with_a_blank_line_above_it_leaves_the_comments_around_it() {
+    let edited = amended(OWN, &[check("storybook", CheckEdit::Remove)]);
+    let key = line_of(OWN, "  storybook:");
+    let last = line_of(
+        OWN,
+        "    # Shorter than the two above: nothing under `apps/` concerns it.",
+    ) + 5;
+    assert_eq!(OWN.lines().nth(key - 1), Some(""), "a blank line above it");
+    assert_eq!(edited, without(OWN, key - 1, last));
+}
+
+/// A Check with a comment block written directly over it takes the block, and
+/// the blank line above the block that spaced it; the comment starting the
+/// next section, set off by a blank, stays.
+#[test]
+fn removing_a_check_takes_the_comment_written_over_it() {
+    let edited = amended(OWN, &[check("format", CheckEdit::Remove)]);
+    let comment = line_of(
+        OWN,
+        "  # `format`, not `fmt`: that name is a Command below and both registries",
+    );
+    let next = line_of(
+        OWN,
+        "# Commands gate nothing — they are what a Drone is given to run.",
+    );
+    assert_eq!(edited, without(OWN, comment - 1, next - 2));
 }
 
 /// Text that would read back as something else is quoted, and a list that

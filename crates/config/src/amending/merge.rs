@@ -164,6 +164,7 @@ pub(super) fn expand(doc: &Value, op: Op) -> Vec<Op> {
         let step = Op {
             path: within(key),
             to: Some(node.clone()),
+            attached: false,
         };
         ops.extend(expand(doc, step));
     }
@@ -172,6 +173,7 @@ pub(super) fn expand(doc: &Value, op: Op) -> Vec<Op> {
             ops.push(Op {
                 path: within(key),
                 to: None,
+                attached: false,
             });
         }
     }

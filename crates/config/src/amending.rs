@@ -153,7 +153,7 @@ fn apply(text: &str, op: &Op) -> Result<String, NotAmended> {
         return Ok(text.to_string());
     }
     let doc = document::Document::read(text).map_err(|shape| refused(Unplaceable::Shape(shape)))?;
-    let after = splice::apply(&doc, &before, &op.path, op.to.as_ref())
+    let after = splice::apply(&doc, &before, &op.path, op.to.as_ref(), op.attached)
         .map_err(|shape| refused(Unplaceable::Shape(shape)))?;
     match merge::read(&after) {
         Some(reread) if merge::same(&reread, &expected) => Ok(after),

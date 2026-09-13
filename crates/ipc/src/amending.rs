@@ -2,7 +2,8 @@
 //! left — Journey 9, *Editing*, and `#721`.
 //!
 //! **Edits, not text.** A form knows which key it changed, and Fleet splices
-//! exactly that key, so every comment and untouched line stays byte for byte.
+//! exactly that key, so every untouched line stays byte for byte. A removed
+//! entry takes the comment block directly above it.
 //! The vocabulary is closed — no dotted path — so a form reaches only the keys
 //! somebody decided it may. Clearing a list removes its key.
 //!

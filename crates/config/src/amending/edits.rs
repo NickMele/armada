@@ -134,6 +134,10 @@ pub(crate) struct Op {
     pub(crate) path: Vec<String>,
     /// `None` removes the key.
     pub(crate) to: Option<Node>,
+    /// Whether a removal takes the comment block written directly above the
+    /// key. **Only an entry a form removes** — a Check, a Command, a port, or
+    /// the section its last one leaves empty — never a field or a dial.
+    pub(crate) attached: bool,
 }
 
 impl Op {
@@ -141,6 +145,7 @@ impl Op {
         Op {
             path: path.iter().map(|key| key.to_string()).collect(),
             to: Some(to),
+            attached: false,
         }
     }
 
@@ -148,6 +153,15 @@ impl Op {
         Op {
             path: path.iter().map(|key| key.to_string()).collect(),
             to: None,
+            attached: false,
+        }
+    }
+
+    /// An entry out, with the comment block directly above it.
+    fn remove_entry(path: &[&str]) -> Op {
+        Op {
+            attached: true,
+            ..Op::remove(path)
         }
     }
 
@@ -298,12 +312,13 @@ fn dial(doc: &Value, key: &str, cap: Option<u32>) -> Op {
 }
 
 /// Removing a registry's last entry removes the registry, for [`dial`]'s
-/// reason one section over.
+/// reason one section over. **Either way the comment block directly above
+/// what goes, goes with it** — the owner's rule, Journey 9, *Editing*.
 fn removal(doc: &Value, registry: &str, name: &str) -> Result<Op, NotAmended> {
     declared(doc, registry, name, true)?;
     Ok(match only_key(doc, &[registry], name) {
-        true => Op::remove(&[registry]),
-        false => Op::remove(&[registry, name]),
+        true => Op::remove_entry(&[registry]),
+        false => Op::remove_entry(&[registry, name]),
     })
 }
 

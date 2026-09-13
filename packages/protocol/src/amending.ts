@@ -3,8 +3,8 @@
 //
 // **Edits, not text.** `SaveManifestFile` carries a whole file because a person
 // typed it; a form knows which key it changed and says so, and Fleet splices
-// exactly that key into the file. Every comment and every line the form did not
-// touch stays byte for byte.
+// exactly that key into the file. Every line the form did not touch stays byte
+// for byte; a removed entry takes the comment block directly above it.
 //
 // **What a form produces always loads.** Fleet refuses edits whose result would
 // not parse — a 422 under `fleet.manifest_edit_refused`, carrying `faults` as
