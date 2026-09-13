@@ -1664,7 +1664,11 @@ kind = "event"
 transport = "WebSocket"
 agent_access = "Bridge only"
 description = "An Evidence MCP call lands"
-unbuilt = "#813"
+notes = """
+**A pointer, never a payload.** The submission's three sentences stay off this channel — it is one bounded drop-oldest broadcast shared by every Job, and `get_evidence` already serves the bundle to whoever opens the Job. What travels is the Job, the step, and what the frozen step asked the work product to be.
+
+It exists because the moment had no message. Job detail inferred a submission from the Drone's process exiting and then `job.checking` starting, both of which happen after it and neither of which is the same fact.
+"""
 
 [operations."job.created"]
 kind = "event"

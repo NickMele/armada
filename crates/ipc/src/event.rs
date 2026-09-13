@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::commanding::CommandInFlight;
 use crate::detail::{JudgeInFlight, Settled};
-use crate::enums::{Actor, JobStatus, StepState};
+use crate::enums::{Actor, EvidenceType, JobStatus, StepState};
 use crate::ids::ProposalId;
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
@@ -107,6 +107,8 @@ pub enum Event {
     JobJudging(JobJudging),
     #[serde(rename = "job.checking")]
     JobChecking(JobChecking),
+    #[serde(rename = "evidence.submitted")]
+    EvidenceSubmitted(EvidenceSubmitted),
     #[serde(rename = "job.asking")]
     JobAsking(JobAsking),
     #[serde(rename = "job.command_waiting")]
@@ -594,6 +596,38 @@ pub struct JobChecking {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checking: Option<ChecksUnderway>,
     /// Always Fleet. A Check is Fleet's own run, never a Drone's.
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+/// A Drone handed in its report. **The gate has not started.**
+///
+/// The moment between the Drone submitting and [`JobChecking`] that nothing
+/// else carried: a surface inferred it from the Drone's process exiting and
+/// then the Checks beginning, and neither is the same fact. #813.
+///
+/// **A pointer, never a payload.** What was claimed, what shows it and what it
+/// left alone are three free-text sentences, and this channel is one bounded
+/// drop-oldest broadcast shared by every Job. [`JobStepAdvanced`] is the
+/// precedent: a kind that names the moment. The bundle has a route of its own,
+/// `get_evidence`, fetched when somebody opens the Job.
+///
+/// **One message per submission**, and a step's second is refused while its
+/// first waits for the gate. It names no [`JobSummary`](crate::JobSummary) on
+/// [`JobChecking`]'s grounds: nothing on the Board's row moves.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EvidenceSubmitted {
+    pub job_id: JobId,
+    /// The step the submission is against, read off the working slot under the
+    /// lock that binds the submission — so it is the step the evidence will be
+    /// ruled against, not the one the Job is on when a reader folds this.
+    pub step_id: StepId,
+    /// What the step's workflow asked the work product to be. Fleet's, off the
+    /// frozen step: a Drone names no evidence type and cannot set this. The one
+    /// field here that is not an id, and a closed set of one word.
+    pub evidence_type: EvidenceType,
+    /// Always [`Actor::Drone`]. The Evidence tool is the only sanctioned way a
+    /// Drone reports completion, and nothing else reaches this.
     pub actor: Actor,
     pub at: Instant,
 }

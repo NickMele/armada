@@ -374,9 +374,36 @@ where
         let Some(at_work) = working.as_ref() else {
             return Err(NotSubmitted::NothingIsWorking);
         };
-        EvidenceTool::for_job(at_work.standing().0, self.inbox())
-            .submit(call, at)
-            .map_err(NotSubmitted::Malformed)
+        let (job, step, _) = at_work.standing();
+        let evidence_type = call.evidence_type;
+        let recorded = EvidenceTool::for_job(job.clone(), self.inbox())
+            .submit(call, at.clone())
+            .map_err(NotSubmitted::Malformed)?;
+        self.published_submission(&job, &step, evidence_type, &at);
+        Ok(recorded)
+    }
+
+    /// Say that a submission landed. **The moment, and not the submission.**
+    ///
+    /// Published here rather than from the gate because here is where the fact
+    /// exists: the gate notices on its next turn, and a message sent from there
+    /// would be dated wrong and would say what `job.checking` already says.
+    ///
+    /// After the submit, so nothing is announced that was refused as malformed.
+    fn published_submission(
+        &self,
+        job: &JobId,
+        step: &StepId,
+        evidence_type: EvidenceType,
+        at: &Timestamp,
+    ) {
+        self.publish(ipc::Event::EvidenceSubmitted(ipc::EvidenceSubmitted {
+            job_id: job.into(),
+            step_id: step.into(),
+            evidence_type: evidence_type.into(),
+            actor: core_model::Actor::Drone.into(),
+            at: at.into(),
+        }));
     }
 
     /// The same thing, from a Drone's tool call rather than from a typed
@@ -423,7 +450,7 @@ where
         if self.inbox().waiting_for_job(&job) > 0 {
             return Err(NotSubmitted::AlreadyWaiting { step });
         }
-        EvidenceTool::for_job(job, self.inbox())
+        let recorded = EvidenceTool::for_job(job.clone(), self.inbox())
             .submit(
                 Call {
                     evidence_type,
@@ -431,9 +458,11 @@ where
                     shown_by: ShownBy(&submission.shown_by),
                     not_claimed: NotClaimed(&submission.not_claimed),
                 },
-                at,
+                at.clone(),
             )
-            .map_err(NotSubmitted::Malformed)
+            .map_err(NotSubmitted::Malformed)?;
+        self.published_submission(&job, &step, evidence_type, &at);
+        Ok(recorded)
     }
 
     /// How many submissions are waiting for the gate, over every Job.

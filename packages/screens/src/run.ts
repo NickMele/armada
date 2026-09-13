@@ -24,11 +24,12 @@
 import type { RunTreeFact, RunTreeSkeletonStep, RunTreeStep, StepActivity } from "@armada/components";
 
 import type { Turn, Watched, WorkflowSummary } from "@armada/protocol";
-import { CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, ESCALATION_REASON, STEP_STATE } from "@armada/components";
+import { CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, ESCALATION_REASON, EVIDENCE_TYPE, STEP_STATE } from "@armada/components";
 import type {
   ChangedFile,
   CheckRun,
   Criterion,
+  EvidenceSubmitted,
   JobDetail as JobWhole,
   Judged,
   StepDetail,
@@ -74,6 +75,8 @@ export function runOf(
   now: number,
   selected: string | undefined,
   rows: readonly Turn[],
+  /** The moment this Job's Drone handed in, where one has arrived. `#813`. */
+  handed?: EvidenceSubmitted,
 ): RunTreeStep[] {
   const wrote = producedBy(rows);
   const criteria = whole.acceptance_criteria;
@@ -85,7 +88,16 @@ export function runOf(
     // Scoped to this step, like `JobDetail.tsx`'s own read of it — a question
     // about a different step is not this step's criterion to hold open.
     const asking = question?.step_id === step.step_id ? question.criterion_id : undefined;
-    const facts = factsOfStep(step, activity, wrote.get(step.step_id) ?? [], criteria, asking);
+    const waiting = handed?.step_id === step.step_id ? handed : undefined;
+    const facts = factsOfStep(
+      step,
+      activity,
+      wrote.get(step.step_id) ?? [],
+      criteria,
+      asking,
+      waiting,
+      now,
+    );
     return {
       id: step.step_id,
       label: step.label,
@@ -121,6 +133,9 @@ function factsOfStep(
   criteria: readonly Criterion[],
   /** The criterion a live judge question holds open on this step, where one is. */
   asking?: string,
+  /** The moment this step's Drone handed in, where one has arrived. */
+  handed?: EvidenceSubmitted,
+  now?: number,
 ): RunTreeFact[] {
   const facts: RunTreeFact[] = [];
   // **A Drone at work is not a gate that failed.** `check_runs` and `judged`
@@ -149,6 +164,15 @@ function factsOfStep(
   //
   // **While the gate runs them, the fact is what is running**, in the words the
   // Checks chapter uses — one reading, two places.
+  // **The window the wire used to say nothing in.** A Drone hands in, and the
+  // gate starts on Fleet's next turn — until `job.checking` arrives the step
+  // drew as one nothing had reached, which is what `#813` names. It goes above
+  // the Checks because it is what the Checks are waiting on, and it is gone the
+  // moment they start: `step.checking` is the gate's own reading of the same
+  // window, one message later.
+  const submitted = handedFact(handed, step, working, now);
+  if (submitted !== undefined) facts.push(submitted);
+
   const checks =
     step.checking === undefined
       ? checksFact(step, gateOf(step.check_runs, live, working))
@@ -252,6 +276,28 @@ function beforeFact(step: StepDetail): RunTreeFact | undefined {
   return { label: `Attempt ${before.attempt}`, value: said };
 }
 
+
+/**
+ * The Drone handed in, and the gate has not started. `#813`.
+ *
+ * **Only in that window.** `step.checking` present is the gate reading the same
+ * moment one message later, and a step no longer being worked has a verdict to
+ * read instead — either of them says more than this does, so this stands down.
+ *
+ * The evidence type is the frozen step's word for what was asked for, so the
+ * row says what landed without anybody fetching it.
+ */
+function handedFact(
+  handed: EvidenceSubmitted | undefined,
+  step: StepDetail,
+  working: boolean,
+  now: number | undefined,
+): RunTreeFact | undefined {
+  if (handed === undefined || !working || step.checking !== undefined) return undefined;
+  const ago = now === undefined ? null : span(handed.at, now);
+  const kind = EVIDENCE_TYPE[handed.evidence_type]?.verb ?? handed.evidence_type;
+  return { label: "Handed in", value: ago === null ? kind : `${kind} · ${ago} ago` };
+}
 
 /**
  * What this step wrote, as a count. The files themselves are the Produced

@@ -209,6 +209,12 @@ function publishing() {
       if (seen.some(holds)) return Promise.resolve();
       return new Promise((keep) => wanted.push({ holds, keep }));
     },
+    /** The state as last published. Read after an `until` that pinned it. */
+    latest(): BridgeState {
+      const last = seen[seen.length - 1];
+      if (last === undefined) throw new Error("nothing has been published yet");
+      return last;
+    },
   };
 }
 
@@ -598,6 +604,81 @@ it("re-reads the comments on job.remarks_changed, only where a person asked for 
   );
   await published.until(() => fleet.read(REMARKS_ROUTE) === 3);
   expect(fleet.read(REMARKS_ROUTE)).toBe(3);
+});
+
+/**
+ * `#813`: the moment a Drone hands in. Held for the Job somebody has open, so
+ * its step says a submission is waiting for the gate — and the claims are read
+ * again where a surface was already holding them.
+ */
+it("holds the moment a Drone submits, for the open Job, and re-reads its claims", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
+  await published.until((state) => state.connection.state === "connected");
+
+  const handing = (cursor: number, jobId: string, at: string): string =>
+    JSON.stringify({
+      message: "event",
+      cursor,
+      event: {
+        kind: "evidence.submitted",
+        job_id: jobId,
+        step_id: "implement",
+        evidence_type: "diff",
+        actor: "drone",
+        at,
+      },
+    });
+
+  // Nobody has the Job open, so there is no moment to hold — and nobody has
+  // read its claims, so the event has nothing to wake.
+  stream.send(handing(2, A_JOB, "2026-09-12T10:00:00Z"));
+  await published.until(
+    (state) => state.connection.state === "connected" && state.connection.cursor === 2,
+  );
+  expect(published.latest().handed.state).toBe("none");
+  expect(fleet.read(SCREEN.evidence)).toBe(0);
+
+  await connection.watchJob(A_JOB);
+  await published.until((state) => state.watched.state === "read");
+  stream.send(handing(3, A_JOB, "2026-09-12T10:01:00Z"));
+  await published.until((state) => state.handed.state === "heard");
+  const held = published.latest().handed;
+  expect(held.state === "heard" && held.jobId).toBe(A_JOB);
+  expect(held.state === "heard" && held.moment.step_id).toBe("implement");
+  expect(held.state === "heard" && held.moment.evidence_type).toBe("diff");
+
+  // **The claims are a read, not a payload.** The event carries none of the
+  // submission, so the panel that is holding them asks again.
+  await connection.readEvidence(A_JOB);
+  await published.until((state) => state.evidence.state === "read");
+  expect(fleet.read(SCREEN.evidence)).toBe(1);
+  stream.send(handing(4, A_JOB, "2026-09-12T10:02:00Z"));
+  await published.until(() => fleet.read(SCREEN.evidence) === 2);
+
+  // Another Job's submission is not this Job's moment and not this Job's read.
+  stream.send(handing(5, "01M1HQZAKN001AJ5MT3PT0OTHR", "2026-09-12T10:03:00Z"));
+  await published.until(
+    (state) => state.connection.state === "connected" && state.connection.cursor === 5,
+  );
+  const still = published.latest().handed;
+  expect(still.state === "heard" && still.moment.at).toBe("2026-09-12T10:02:00Z");
+  expect(fleet.read(SCREEN.evidence)).toBe(2);
+
+  // And it belongs to the Job it was heard on. Opening another drops it.
+  await connection.watchJob("01M1HQZAKN001AJ5MT3PT0OTHR");
+  await published.until((state) => state.handed.state === "none");
 });
 
 /**

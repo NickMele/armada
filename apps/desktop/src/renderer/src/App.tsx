@@ -459,6 +459,7 @@ export function App() {
                 onExamine={examine}
                 recorded={{
                   footprint: state.footprint,
+                  handed: state.handed,
                   evidence: state.evidence,
                   diff: state.diff,
                   remarks: state.remarks,

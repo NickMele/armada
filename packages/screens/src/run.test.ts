@@ -189,3 +189,45 @@ describe("a step being worked again", () => {
     expect(factsOf(rest).get("Verdict")).toBe("stopped at the gate");
   });
 });
+
+/**
+ * `#813`: the window between a Drone handing in and the gate starting. It used
+ * to draw as a step nothing had reached — `job.checking` is the next message
+ * and it can be minutes away.
+ */
+describe("the moment a Drone handed in", () => {
+  const handed = {
+    job_id: "01M22TYSAE0023MADDP5ZQEYGW",
+    step_id: "tests",
+    evidence_type: "diff",
+    actor: "drone",
+    at: "2026-09-11T09:58:00Z",
+  };
+
+  function factsWith(showing: StepDetail, moment = handed) {
+    const [drawn] = runOf(whole(showing), NOW, showing.step_id, [], moment);
+    return new Map((drawn?.facts ?? []).map((fact) => [fact.label, fact.value]));
+  }
+
+  it("says what landed and how long it has been waiting", () => {
+    const working = step({ state: "running", checking: undefined });
+    expect(factsWith(working).get("Handed in")).toBe("a diff \u00b7 2m 00s ago");
+  });
+
+  it("stands down the moment the gate starts, which reads the same window", () => {
+    const checking = step({
+      state: "running",
+      checking: { attempt: 1, checks: [{ name: "build" }] },
+    });
+    expect(factsWith(checking).has("Handed in")).toBe(false);
+  });
+
+  it("is not drawn on a step that is no longer being worked", () => {
+    expect(factsWith(step()).has("Handed in")).toBe(false);
+  });
+
+  it("belongs to the step it names and no other", () => {
+    const working = step({ state: "running", checking: undefined });
+    expect(factsWith(working, { ...handed, step_id: "implement" }).has("Handed in")).toBe(false);
+  });
+});

@@ -94,6 +94,9 @@ export function replayed(recording: Recording): JobFixture {
       // only while the Job is open. A recording opens the Job after the fact,
       // which is the reading Bridge has on a Job opened late.
       footprint: { state: "none" },
+      // `evidence.submitted`'s moment, pushed on the same socket and for the
+      // same reason absent here: a recording opens the Job after it landed.
+      handed: { state: "none" },
       evidence: read(jobId, at("/evidence"), reads.evidence, (body) => ({
         steps: (body as JobEvidence).steps,
       })),
