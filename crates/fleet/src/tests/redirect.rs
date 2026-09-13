@@ -25,6 +25,7 @@
 //! `/bin/sh` can stand in for one.
 
 mod admitting;
+mod by_helm;
 mod rousing;
 mod unfreezing;
 mod waiting;

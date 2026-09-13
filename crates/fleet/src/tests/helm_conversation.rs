@@ -313,6 +313,10 @@ impl Hosting for Silent {
     fn carry<'a>(&'a self, _carry: Carry, _heard: &'a dyn Heard) -> Carrying<'a> {
         Box::pin(std::future::pending()) as Pin<Box<dyn Future<Output = _> + Send>>
     }
+
+    fn running(&self) -> Vec<u32> {
+        Vec::new()
+    }
 }
 
 #[tokio::test]

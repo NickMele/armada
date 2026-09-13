@@ -194,11 +194,13 @@ impl FakeDaemon {
         &self,
         job_id: JobId,
         _instruction: ipc::Redirection,
+        by: crate::Redirector,
     ) -> Result<JobSummary, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
             return Err(self.no_such_job(&job_id));
         };
+        self.redirected_by.lock().expect("not poisoned").push(by);
         if job.assigned_drone.is_none() {
             return Err(Refusal::IllegalMove(ipc::WireError::raised(
                 "fake.no_drone_to_redirect",

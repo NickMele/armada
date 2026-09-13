@@ -386,8 +386,9 @@ impl Commands for FakeDaemon {
         self: std::sync::Arc<Self>,
         job_id: JobId,
         _instruction: ipc::Redirection,
+        by: crate::Redirector,
     ) -> Result<JobSummary, Refusal> {
-        self.fake_redirect_drone(job_id, _instruction).await
+        self.fake_redirect_drone(job_id, _instruction, by).await
     }
     async fn add_task(
         self: std::sync::Arc<Self>,

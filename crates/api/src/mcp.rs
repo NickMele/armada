@@ -87,7 +87,7 @@ pub fn mounted<D: Tools>() -> Router<Served<D>> {
 /// without `into_make_service_with_connect_info` answers
 /// [`Caller::unplaceable`] instead of rejecting the request. A rejection would
 /// be a 500 where the honest answer is that nothing said who called.
-fn who_called(parts: &axum::http::request::Parts) -> Caller {
+pub(crate) fn who_called(parts: &axum::http::request::Parts) -> Caller {
     match parts.extensions.get::<ConnectInfo<SocketAddr>>() {
         Some(ConnectInfo(peer)) => Caller::at(*peer),
         None => Caller::unplaceable(),

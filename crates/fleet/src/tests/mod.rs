@@ -70,6 +70,7 @@ mod group;
 mod headings;
 mod headroom;
 mod helm_conversation;
+mod helm_door;
 mod history;
 mod holding;
 mod host;

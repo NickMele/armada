@@ -24,11 +24,13 @@
 //! drew that line through the transport, and the trait was the one place in
 //! this crate that did not follow it. Each module below states its own half.
 
+mod admitting;
 mod commands;
 mod conversing;
 mod queries;
 mod tools;
 
+pub use admitting::{offerable, Admitting, HelmReach, Redirector};
 pub use commands::Commands;
 pub use conversing::Conversations;
 pub use queries::{FramePart, FrameSpan, Queries};
@@ -62,9 +64,14 @@ use ipc::WireError;
 ///
 /// [`Conversations`] is whole on its own and is the part `#73` keeps movable,
 /// so its module argues it rather than this one.
-pub trait Daemon: Queries + Commands + Tools + Conversations {}
+///
+/// # Why who opened the door is a fifth
+///
+/// [`Admitting`] answers for a caller rather than for a Job or a message, and
+/// its module says why the answer is placed rather than asked for.
+pub trait Daemon: Queries + Commands + Tools + Conversations + Admitting {}
 
-impl<D: Queries + Commands + Tools + Conversations> Daemon for D {}
+impl<D: Queries + Commands + Tools + Conversations + Admitting> Daemon for D {}
 
 /// A request the daemon would not serve.
 ///

@@ -6,7 +6,8 @@
 //!
 //! The tool set is [`REACHABLE`], emitted by `build.rs` from the inventory's
 //! own `agent_access` column. A list written by hand is how a tool gets added
-//! to the file and stays unreachable.
+//! to the file and stays unreachable. [`DRAFTING`] is the `Drafts only` rows,
+//! which only a Helm session is offered.
 //!
 //! The Drone's endpoint is [`crate::mcp`] and is a different seam: its peer is
 //! a process Fleet spawned, and its eight tools are in no inventory.

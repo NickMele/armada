@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use core_model::Timestamp;
+use core_model::{Actor, Timestamp};
 
 use tokio::sync::oneshot;
 
@@ -34,6 +34,8 @@ use crate::working::Working;
 pub(super) struct Awaiting {
     turned: usize,
     sent_at: Timestamp,
+    /// Who sent it, so the move its answer makes is recorded against them.
+    by: Actor,
 }
 
 impl Working {
@@ -159,11 +161,17 @@ impl Working {
     /// **A second redirect replaces the first.** Nothing bounds how often a Job
     /// may be redirected, and a baseline kept from the earlier one would let a
     /// turn taken before the new instruction answer it.
-    pub(crate) fn awaiting_answer(&mut self, turned: usize, at: Timestamp) {
+    pub(crate) fn awaiting_answer(&mut self, turned: usize, at: Timestamp, by: Actor) {
         self.answering = Some(Awaiting {
             turned,
             sent_at: at,
+            by,
         });
+    }
+
+    /// Who sent the outstanding redirect, where one is.
+    pub(crate) fn awaiting_by(&self) -> Option<Actor> {
+        self.answering.as_ref().map(|awaiting| awaiting.by)
     }
 
     /// When the outstanding redirect went into the session, where one is.

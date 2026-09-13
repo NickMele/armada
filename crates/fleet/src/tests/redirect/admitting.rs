@@ -51,7 +51,7 @@ async fn a_stalled_job_with_a_live_drone_admits_a_redirect() {
     let job = stalled(&fleet, &home).await;
 
     let after = fleet
-        .redirect(&job, &advice())
+        .redirect(&job, &advice(), api::Redirector::Person)
         .await
         .expect("a Drone that is there can be told something");
 
@@ -79,7 +79,9 @@ async fn a_stalled_job_whose_drone_is_gone_refuses_a_redirect() {
 
     assert!(
         matches!(
-            fleet.redirect(&job, &advice()).await,
+            fleet
+                .redirect(&job, &advice(), api::Redirector::Person)
+                .await,
             Err(Adrift::NoDroneToRedirect { .. })
         ),
         "a redirect needs a session, and there is none"
@@ -113,6 +115,7 @@ async fn a_redirect_with_no_drone_answers_409_over_the_wire() {
         ipc::Redirection {
             instruction: String::from("read tests/parse.rs first"),
         },
+        api::Redirector::Person,
     )
     .await
     .expect_err("no Drone is there to redirect");
@@ -154,7 +157,9 @@ async fn a_job_escalated_with_its_drone_gone_still_refuses_both_acts() {
     );
 
     assert!(matches!(
-        fleet.redirect(&job, &advice()).await,
+        fleet
+            .redirect(&job, &advice(), api::Redirector::Person)
+            .await,
         Err(Adrift::NoDroneToRedirect { .. })
     ));
     assert!(matches!(
@@ -178,7 +183,7 @@ async fn a_healthy_job_takes_a_redirect_and_still_refuses_a_restart() {
     let moved = job_moves(&fleet, &job).await;
 
     let after = fleet
-        .redirect(&job, &advice())
+        .redirect(&job, &advice(), api::Redirector::Person)
         .await
         .expect("a Drone that is working can be told something");
 
@@ -222,7 +227,9 @@ async fn a_job_past_its_step_refuses_a_redirect_even_with_a_drone_in_the_slot() 
 
     assert!(
         matches!(
-            fleet.redirect(&job, &advice()).await,
+            fleet
+                .redirect(&job, &advice(), api::Redirector::Person)
+                .await,
             Err(Adrift::NotResumable {
                 status: JobStatus::AwaitingReview,
                 ..

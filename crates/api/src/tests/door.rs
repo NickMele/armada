@@ -10,9 +10,16 @@ use axum::Router;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use ipc::door::Reachable;
+
 use crate::tests::fake::{running, FakeDaemon};
-use crate::tests::shapes::{run_id, THE_CALL, THE_DRONE, THE_FRAME, THE_MANIFEST, THE_OUTPUT};
-use crate::{offered, router, Broadcaster, Served, DOOR_PATH, SERVED};
+use crate::tests::shapes::{
+    run_id, A_PROPOSAL, THE_CALL, THE_DRONE, THE_FRAME, THE_MANIFEST, THE_OUTPUT,
+};
+use crate::{offerable, offered, router, Broadcaster, Redirector, Served, DOOR_PATH, SERVED};
 
 fn wired(daemon: FakeDaemon) -> Router {
     let events = Broadcaster::new();
@@ -246,6 +253,159 @@ async fn a_get_or_a_delete_is_refused_the_way_the_drones_endpoint_refuses_one() 
         let (status, _) = method(&app, verb, "").await;
         assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED, "{verb}");
     }
+}
+
+/// The port a planted Helm session calls from, and one nobody placed.
+const HELM: u16 = 52000;
+const ANYONE: u16 = 52001;
+
+/// An acting Helm, as a test states it. **Not `fleet::helm::may`**, which this
+/// crate cannot name and which is tested beside itself; here the door is under
+/// test, and any predicate proves it enforces what it was handed.
+fn acting(row: &Reachable) -> bool {
+    row.kind == "query" || row.operation != "undo_run"
+}
+
+fn read_only(row: &Reachable) -> bool {
+    row.kind == "query"
+}
+
+fn helm_holding(may: fn(&Reachable) -> bool) -> Arc<FakeDaemon> {
+    let daemon = holding_one();
+    *daemon.helm_on.lock().expect("not poisoned") = Some((HELM, may));
+    Arc::new(daemon)
+}
+
+fn shared(daemon: &Arc<FakeDaemon>) -> Router {
+    router(Served::sharing(
+        Arc::clone(daemon),
+        run_id(),
+        Broadcaster::new(),
+    ))
+}
+
+async fn from(app: &Router, port: u16, body: &str) -> String {
+    let peer: SocketAddr = format!("127.0.0.1:{port}").parse().expect("an address");
+    let request = Request::builder()
+        .method("POST")
+        .uri(DOOR_PATH)
+        .header("content-type", "application/json")
+        .extension(axum::extract::ConnectInfo(peer))
+        .body(Body::from(body.to_string()))
+        .expect("a well-formed request");
+    let response = app.clone().oneshot(request).await.expect("an answer");
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("a readable body")
+        .to_bytes();
+    String::from_utf8_lossy(&body).to_string()
+}
+
+fn calling(tool: &str, arguments: &str) -> String {
+    format!(
+        r#"{{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{{"name":"{tool}","arguments":{arguments}}}}}"#
+    )
+}
+
+const LISTING: &str = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#;
+
+/// **Only a Helm session is narrowed, and only it may draft.** Every other
+/// caller is listed exactly what the door listed before.
+#[tokio::test]
+async fn a_helm_session_is_listed_what_it_may_call_and_anyone_else_what_they_were() {
+    let app = shared(&helm_holding(acting));
+    let helm = from(&app, HELM, LISTING).await;
+    assert!(helm.contains("\"name\":\"propose_job\""), "{helm}");
+    assert!(helm.contains("\"name\":\"redirect_drone\""), "{helm}");
+    assert!(!helm.contains("\"name\":\"undo_run\""), "{helm}");
+
+    let anyone = from(&app, ANYONE, LISTING).await;
+    assert!(anyone.contains("\"name\":\"undo_run\""), "{anyone}");
+    assert!(!anyone.contains("\"name\":\"propose_job\""), "{anyone}");
+    let unplaced = call(&app, LISTING).await.1;
+    assert_eq!(unplaced, anyone, "a call with no peer is any agent");
+}
+
+#[tokio::test]
+async fn an_undo_from_helm_is_refused_by_name_and_reaches_no_route() {
+    let app = shared(&helm_holding(acting));
+    let body = from(
+        &app,
+        HELM,
+        &calling("undo_run", r#"{"job_id":"1","run":"a-run"}"#),
+    )
+    .await;
+    assert!(body.contains("\"isError\":true"), "{body}");
+    assert!(body.contains("`undo_run` is not Helm's to call"), "{body}");
+}
+
+/// **Who acted is the transport's word.** The same bytes from a session the
+/// daemon did not place are a person's redirect.
+#[tokio::test]
+async fn a_redirect_from_helm_is_recorded_as_helm_and_anyone_elses_as_a_person() {
+    let daemon = helm_holding(acting);
+    let app = shared(&daemon);
+    let redirect = calling(
+        "redirect_drone",
+        r#"{"job_id":"1","body":{"instruction":"read the failing test first"}}"#,
+    );
+    let body = from(&app, HELM, &redirect).await;
+    assert!(!body.contains("not Helm's to call"), "{body}");
+    from(&app, ANYONE, &redirect).await;
+    assert_eq!(
+        *daemon.redirected_by.lock().expect("not poisoned"),
+        vec![Redirector::Helm, Redirector::Person]
+    );
+}
+
+#[tokio::test]
+async fn read_only_refuses_every_command_and_still_reads() {
+    let app = shared(&helm_holding(read_only));
+    for row in offerable().filter(|row| row.kind == "command") {
+        let body = from(
+            &app,
+            HELM,
+            &calling(row.operation, r#"{"job_id":"1","body":{}}"#),
+        )
+        .await;
+        assert!(
+            body.contains(&format!("`{}` is not Helm's to call", row.operation)),
+            "{}: {body}",
+            row.operation
+        );
+    }
+    let read = from(&app, HELM, &calling("get_job", r#"{"job_id":"1"}"#)).await;
+    assert!(
+        read.contains("1-a-job") && read.contains("\"isError\":false"),
+        "{read}"
+    );
+}
+
+/// A drafted Job lands where every proposal does: at the approval gate.
+#[tokio::test]
+async fn a_job_helm_drafts_reaches_the_approval_gate() {
+    let app = shared(&helm_holding(acting));
+    let body = from(
+        &app,
+        HELM,
+        &calling("propose_job", &format!(r#"{{"body":{A_PROPOSAL}}}"#)),
+    )
+    .await;
+    assert!(body.contains("\"isError\":false"), "{body}");
+    assert!(body.contains("awaiting_approval"), "{body}");
+
+    let refused = from(
+        &app,
+        ANYONE,
+        &calling("propose_job", &format!(r#"{{"body":{A_PROPOSAL}}}"#)),
+    )
+    .await;
+    assert!(
+        refused.contains("is not a tool this Fleet offers"),
+        "{refused}"
+    );
 }
 
 /// The Drone's endpoint keeps its own tools, and this door does not widen it.

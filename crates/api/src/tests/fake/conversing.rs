@@ -30,6 +30,14 @@ impl FakeDaemon {
     }
 }
 
+impl crate::Admitting for FakeDaemon {
+    fn helm_at(&self, caller: crate::Caller) -> Option<crate::HelmReach> {
+        let planted = *self.helm_on.lock().expect("not poisoned");
+        let (port, may) = planted?;
+        (caller.port() == Some(port)).then(|| crate::HelmReach::deciding(may, "a test withheld it"))
+    }
+}
+
 impl Conversations for FakeDaemon {
     async fn observe_helm(&self, manifest_id: Option<ManifestId>) -> Result<ObservedHelm, Refusal> {
         let manifest_id = self.serving(manifest_id)?;

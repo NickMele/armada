@@ -17,7 +17,7 @@
 
 use std::future::Future;
 
-use crate::daemon::Refusal;
+use crate::daemon::{Redirector, Refusal};
 use ipc::{
     AddTask, AnswerCommand, CapRaise, ChangesRequested, CheckoutRunRecord, CheckoutRunUnderway,
     ChosenAnswer, DropTask, FileReport, FindingDismissed, JobExamined, JobForgotten, JobId,
@@ -231,10 +231,14 @@ pub trait Commands: Send + Sync + 'static {
     /// redirect that spawned is a restart that lost the session for nothing,
     /// and the two are separate methods so that neither can quietly become the
     /// other.
+    ///
+    /// `by` is the transport's word, never the body's: [`Redirector::Helm`]
+    /// only where the door placed the call in a Helm session.
     fn redirect_drone(
         self: std::sync::Arc<Self>,
         job_id: JobId,
         instruction: Redirection,
+        by: Redirector,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `restart_step` — a fresh Drone on the worktree the last one left, at the

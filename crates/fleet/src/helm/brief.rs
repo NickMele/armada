@@ -6,7 +6,6 @@
 use std::path::Path;
 
 use config::Manifest;
-use ipc::door::REACHABLE;
 
 use super::reach::{may, Authority};
 
@@ -120,17 +119,14 @@ fn this_repository(manifest: &Manifest) -> String {
     )
 }
 
-/// Listed from [`may`] over what the door offers, so the brief and the door's
-/// refusal cannot name different acts.
+/// Listed from [`may`] over what the door could offer a Helm session, so the
+/// brief and the door's refusal cannot name different acts.
 fn what_you_may_do(authority: Authority) -> String {
     match authority {
         Authority::ReadOnly => READ_ONLY.to_string(),
         Authority::Acting => {
             let mut block = MAY_ACT.to_string();
-            for row in REACHABLE
-                .iter()
-                .filter(|row| row.kind == "command" && may(authority, row))
-            {
+            for row in api::offerable().filter(|row| row.kind == "command" && may(authority, row)) {
                 block.push_str("\n  ");
                 block.push_str(row.operation);
             }
