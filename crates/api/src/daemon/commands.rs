@@ -767,12 +767,8 @@ pub trait Commands: Send + Sync + 'static {
         edit: ipc::EditManifest,
     ) -> impl Future<Output = Result<ipc::ManifestEdited, Refusal>> + Send;
 
-    /// `edit_manifest_proposal` — one edit to one workspace's proposal, which
-    /// moves the provenance of what it touched. **No edit names a provenance.**
-    ///
-    /// [`Refusal::Unacceptable`] for a workspace Scan does not find, or an edit
-    /// that cannot apply. **A value `config` would refuse is not refused here**:
-    /// a proposal is iterated through wrong states, and Write is what refuses.
+    /// `edit_manifest_proposal` — one edit to one proposal. [`Refusal::Unacceptable`] for an
+    /// unknown workspace or an edit that cannot apply; a bad value is Write's to refuse.
     fn edit_manifest_proposal(
         &self,
         asked: ipc::EditManifestProposal,

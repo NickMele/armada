@@ -77,27 +77,16 @@ pub(crate) fn save(file: &Path, read: &str, text: &str) -> Result<(), NotSaved> 
 }
 
 /// Why a create did not happen.
-// Write's, which puts down the text #721's writer produces. Tested on its own
-// until Write calls it.
-#[allow(dead_code)]
+#[allow(dead_code)] // Write's, which is not built yet.
 #[derive(Debug)]
 pub(crate) enum NotCreated {
-    /// Something is at the path already — **what it holds where it reads**.
+    /// Something is at the path already, with what it holds where it reads.
     Appeared(Option<String>),
-    /// The bytes would not go down.
     Unwritable(io::Error),
 }
 
-/// Put `text` at `file` — **only where nothing is there**.
-///
-/// **Beside `save` and not a mode of it.** `save` refuses a missing file
-/// because a missing file under an edit is a deletion somebody made; here a
-/// present file is the thing somebody made, so the guard is the other way up.
-///
-/// **A hard link and not a rename.** A rename replaces whatever arrived in the
-/// meantime, so a check in front of it would be the race `save` accepts. A link
-/// refuses an existing name in the same call that makes it, so there is no
-/// window here at all, and the staged bytes are whole before the name exists.
+/// Put `text` at `file` only where nothing is there. A hard link, not a rename, so a file
+/// that appeared is refused in the same call that would make the name.
 #[allow(dead_code)]
 pub(crate) fn create(file: &Path, text: &str) -> Result<(), NotCreated> {
     let staged = beside(file);

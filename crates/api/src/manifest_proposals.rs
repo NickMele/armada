@@ -1,9 +1,5 @@
-//! Setup's proposal routes: the proposals, and an edit to one.
-//!
-//! **Under `/repository` beside Scan, not under `/manifest`**, for Scan's
-//! reason: they are for a workspace that has no `armada.yml` yet. **No path
-//! parameter**, for `editing`'s: a Fleet serves one checkout, and a proposal is
-//! named by the workspace Scan found, in the body.
+//! Setup's proposal routes, under `/repository` beside Scan: there is no `armada.yml` yet
+//! for them to sit under `/manifest`.
 
 use axum::body::Bytes;
 use axum::extract::State;

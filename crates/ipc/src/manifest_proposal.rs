@@ -1,27 +1,14 @@
-//! A possible `armada.yml` per workspace, built from what Scan read — the
-//! *Proposal* step of the Setup journey. Not [`ProposeJob`](crate::ProposeJob):
-//! no Job exists.
-//!
-//! **Every line says where it came from, and a person cannot say otherwise.**
-//! [`Provenance`] is on each line and on no edit: an edit moves it to
-//! `edited_during_setup` or `added_during_setup`. A record, not a value.
-//!
-//! **Placement is a guess; a port is not.** A port a file declares is `read`;
-//! every script is `convention`, whichever registry it landed in.
-//!
-//! **Lines, not text.** The file comes with Write, from `config`'s one writer.
+//! A possible `armada.yml` per workspace, built from Scan, as lines that each carry their
+//! source. No edit names a provenance, so provenance stays a record.
 
 use serde::{Deserialize, Serialize};
 
-/// `get_manifest_proposals`: one proposal per workspace Scan found.
+/// `get_manifest_proposals`: one proposal per workspace Scan found, root first.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestProposals {
-    /// The checkout the proposals are for, as Scan spelled it.
     pub checkout: String,
-    /// The root first, then by path — Scan's order.
     pub proposals: Vec<ManifestProposal>,
-    /// The ceilings a Job here would stop at. **Stated, never written**: at
-    /// Setup no Job has run here, so a control would ask for a guess.
+    /// Stated at Setup and never written: no Job has run here to set them against.
     pub caps: StatedCaps,
 }
 
@@ -32,25 +19,21 @@ pub struct StatedCaps {
     pub turns: u64,
 }
 
-/// A possible `armada.yml` for one workspace, as far as it has been iterated.
+/// One workspace's proposal, as far as it has been iterated.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestProposal {
-    /// The workspace, `.` for the root — what an edit names.
+    /// `.` for the root. What an edit names.
     pub dir: String,
     /// Where the file would be, relative to the checkout.
     pub file: String,
-    /// The header, not a row: what every Job here is keyed to once written.
     pub id: ProposedId,
-    /// First, because the lists below read them.
     pub ports: Vec<ProposedPort>,
-    /// In the order they would be written, which is the order the gate starts
-    /// them in.
+    /// In written order, which is the order the gate starts them in.
     pub checks: Vec<ProposedCheck>,
     pub commands: Vec<ProposedCommand>,
-    /// `setup.requires`, **absent where nothing runs first**.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub setup: Option<ProposedSetup>,
-    /// `auto_merge` and `review_gate`, always both.
+    /// Always `auto_merge`, then `review_gate`.
     pub policy: Vec<ProposedPolicy>,
 }
 
@@ -63,16 +46,14 @@ pub enum Provenance {
         file: String,
         key: String,
     },
-    /// A file said this, and where it was put is a guess — a script placed as
-    /// a Check or a Command, or a command a lockfile's tool conventionally
-    /// takes. `key` is absent where the whole file is the evidence.
+    /// A file said this, and where it was placed is a guess. `key` is absent where the
+    /// whole file is the evidence.
     Convention {
         file: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         key: Option<String>,
     },
-    /// Nothing in a repository corresponds to it: the parser's own value for
-    /// an absent key, **which Write leaves absent**.
+    /// No file corresponds: the parser's value for an absent key, which Write leaves absent.
     Default,
     EditedDuringSetup,
     AddedDuringSetup,
@@ -99,7 +80,7 @@ pub struct ProposedPort {
 pub struct ProposedCheck {
     pub name: String,
     pub run: String,
-    /// Commands this proposal declares, in the order they run.
+    /// Command names, in the order they run.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<String>,
     pub provenance: Provenance,
@@ -120,8 +101,8 @@ pub struct ProposedSetup {
     pub provenance: Provenance,
 }
 
-/// One policy row. `value` is what is in force either way; **`default` as the
-/// provenance is an absent key**, so the file follows the default if it moves.
+/// `value` is in force either way. A `default` row is an absent key, so the file follows
+/// the default if it moves.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProposedPolicy {
     pub key: PolicyKey,
@@ -143,8 +124,7 @@ pub struct EditManifestProposal {
     pub edit: ProposalEdit,
 }
 
-/// **No provenance on any of these**, which is what keeps it a record. A put
-/// naming a line that exists replaces it; one naming nothing adds it.
+/// A put replaces the line it names or adds one. No variant carries provenance.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "edit", rename_all = "snake_case")]
 pub enum ProposalEdit {

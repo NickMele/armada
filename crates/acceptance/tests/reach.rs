@@ -237,13 +237,8 @@ fn pick_ticks_by_evidence_and_marks_a_name_every_strong_sibling_declares() {
 // Proposal
 // ---------------------------------------------------------------------------
 
-/// **Every line of every proposal cites the file it came from, or says it is
-/// convention.** The Proposal step, #823.
-///
-/// A port is `read`, because a file declares it. A script is `convention`
-/// wherever it landed, because nothing proves a script gates code. Policy is
-/// `default`. The Go service Scan could not follow is proposed nothing, and in
-/// particular not the root's `pnpm install`.
+/// **Every line of every proposal cites the file it came from, or says it is convention.**
+/// The Proposal step, #823.
 #[test]
 fn a_proposal_cites_the_file_each_line_came_from() {
     let repository = Held::of(UNSET_UP);
@@ -325,12 +320,8 @@ fn a_proposal_cites_the_file_each_line_came_from() {
     assert!(mailer.checks.is_empty() && mailer.commands.is_empty() && mailer.setup.is_none());
 }
 
-/// **An edit moves the provenance of what it touched and nothing else.**
-/// Iterating a proposal, before anything is written.
-///
-/// The shop is corrected toward the journey's own `e2e` —
-/// [`toward_the_journeys_e2e`] — and every line says afterwards which of it a
-/// person decided.
+/// **An edit moves the provenance of what it touched and nothing else.** Iterating, before
+/// Write.
 #[test]
 fn an_edit_moves_the_provenance_of_what_it_touched_and_nothing_else() {
     let mut shop = proposals(&Held::of(UNSET_UP))

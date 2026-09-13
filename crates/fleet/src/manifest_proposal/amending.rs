@@ -1,14 +1,5 @@
-//! A person's edit to a proposal, and **where each moves a line's provenance**.
-//!
-//! A line Scan found and a person changed reads `edited_during_setup`; one a
-//! person wrote reads `added_during_setup`, and stays that however often it is
-//! changed after. An edit that changes nothing moves nothing, so re-sending a
-//! row does not erase the file it was read from.
-//!
-//! **Nothing about a value is refused here.** A name nothing declares, a
-//! policy word `config` does not read: a proposal is iterated through wrong
-//! states, and Write is what refuses one. What is refused here is an edit that
-//! cannot be applied at all.
+//! A person's edit to a proposal, and where it moves a line's provenance. A value is not
+//! refused here: a proposal passes through wrong states, and Write refuses.
 
 use ipc::{
     Band, PolicyKey, ProposalEdit, ProposedCheck, ProposedCommand, ProposedPort, ProposedSetup,
@@ -22,8 +13,7 @@ use super::{Draft, AUTO_MERGE_DEFAULT, REVIEW_GATE_DEFAULT};
 pub enum NotAmended {
     /// A move or a removal named a line the proposal does not have.
     NoSuchLine { band: Option<Band>, name: String },
-    /// The other registry has no key for what this line carries, so moving it
-    /// would drop that silently.
+    /// Moving would drop a key the other registry has no place for.
     NotMovable { name: String, holds: &'static str },
 }
 
@@ -60,7 +50,7 @@ fn spelled(band: Band) -> &'static str {
     }
 }
 
-/// A touched line's provenance: added stays added, anything else is edited.
+/// Added stays added, because no file ever said it.
 fn touched(was: &Provenance) -> Provenance {
     match was {
         Provenance::AddedDuringSetup => Provenance::AddedDuringSetup,
@@ -69,7 +59,7 @@ fn touched(was: &Provenance) -> Provenance {
 }
 
 impl Draft {
-    /// Apply one edit, moving the provenance of whatever it touched.
+    /// Apply one edit. An edit that changes nothing moves nothing.
     pub fn amend(&mut self, edit: ProposalEdit) -> Result<(), NotAmended> {
         match edit {
             ProposalEdit::Id { id } => {
@@ -183,7 +173,7 @@ impl Draft {
                 .to_string();
                 row.provenance = Provenance::Default;
             }
-            // Writing the default's own word still pins it, which is a change.
+            // Pinning the default's own word writes the key, so it is still an edit.
             Some(value) if row.value != value || row.provenance == Provenance::Default => {
                 row.value = value;
                 row.provenance = Provenance::EditedDuringSetup;
@@ -229,8 +219,8 @@ impl Draft {
     }
 }
 
-/// Replace the line with `put`'s name, or add it. **Provenance is decided
-/// here and never taken from `put`**: an unchanged line keeps its own.
+/// Replace the line with `put`'s name, or add it. Provenance is decided here, never taken
+/// from `put`, so an unchanged line keeps its own.
 fn put_line<T: PartialEq>(
     lines: &mut Vec<T>,
     mut put: T,

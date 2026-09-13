@@ -358,7 +358,7 @@ The step after Scan, for a repository with no `armada.yml` — `docs/journeys/se
 
 **Held in Fleet's memory for the Fleet's life, never stored.** The first read of a workspace builds its proposal and later reads return it with every edit applied; a restart loses the edits and costs one Scan. Served against the checkout Fleet was started in until Locate (#821).
 
-`agent_access` is `No` for `get_repository_scan`'s reason: every line is text from the owner's working tree. **The journey's proposal conversation is in Helm**, which needs this read and `edit_manifest_proposal` scoped to one proposal and not Write — a reach the shared column cannot express, since `Yes` would give every Drone the owner's checkout. That rung is not decided here.
+`agent_access` is `No`, as for every operation derived from the main checkout, Scan included. Helm will need this read and a draft-shaped edit, at *Drafts only*, and never Write.
 """
 
 [operations.edit_manifest_proposal]
@@ -371,7 +371,7 @@ Put a port, a Check or a Command by name (replacing or adding), set `setup.requi
 
 **A value `config` would refuse is not refused here**, because a proposal is iterated through wrong states; Write is what refuses it. Refused, as a 422, is an edit that cannot apply: a workspace Scan does not find (`fleet.no_such_workspace`), a line that is not there, or a move that would drop `requires` or `destructive`, which the other registry has no key for (`fleet.proposal_not_amended`).
 
-`agent_access` is `No`, and `get_manifest_proposals` says what Helm would need instead.
+`agent_access` is `No` until Helm exists. Helm will need this read and a draft-shaped edit, at *Drafts only*, and never Write.
 """
 
 [operations.get_manifest_file]

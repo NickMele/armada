@@ -425,8 +425,7 @@ fn resolved_def(def: &WorkflowDef) -> ResolvedWorkflow {
         .unwrap_or_else(|why| panic!("{} resolves there: {why}", def.path().display()))
 }
 
-/// The storefront's proposals, one per workspace, built from its Scan as a
-/// picker receives it — through `ipc::encode` and back.
+/// The storefront's proposals, built from its Scan as it crosses the wire.
 pub fn proposals(repository: &Held) -> Vec<Draft> {
     let sent = ipc::encode(&scan(CHECKOUT, repository)).expect("a scan that serialises");
     propose(&ipc::decode("a repository scan", sent.as_bytes()).expect("and reads back"))
@@ -461,10 +460,7 @@ pub fn e2e_requiring(requires: &[&str]) -> ProposalEdit {
     }
 }
 
-/// **A person's corrections to the shop's proposal**, toward the journey's own
-/// `e2e`: `migrate` and `seed` written, `e2e` requiring them, `lint` moved to
-/// the Commands, the port given the variable the code reads, `auto_merge`
-/// pinned — and `test` re-sent exactly as proposed.
+/// A person's corrections to the shop, toward the journey's own `e2e`; `test` is re-sent unchanged.
 pub fn toward_the_journeys_e2e() -> Vec<ProposalEdit> {
     let command = |name: &str, run: &str| ProposalEdit::Command {
         name: name.to_string(),

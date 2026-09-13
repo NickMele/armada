@@ -1,6 +1,4 @@
-//! `editing::create` against a real directory: the bytes that land, the file
-//! already there, and a directory that is gone. Write puts a proposal down
-//! through it once #721's writer produces the text.
+//! `editing::create` against a real directory, which is its whole subject.
 
 use crate::editing::{create, NotCreated};
 use crate::tests::tmp::TempDir;
@@ -19,7 +17,7 @@ fn create_puts_the_bytes_down_and_leaves_nothing_beside_them() {
     assert!(!dir.path().join(".armada.yml.saving").exists());
 }
 
-/// **Never written over.** What is there stays there, and comes back to show.
+/// What is there stays there, and comes back to show.
 #[test]
 fn a_file_already_there_is_never_written_over() {
     let dir = TempDir::new();

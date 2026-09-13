@@ -1,9 +1,5 @@
-//! From Scan's findings to a first proposal. **Every line cites the finding it
-//! was built from**; a table below is the convention it applied, and a line a
-//! table produced reads `convention`.
-//!
-//! **Matched on file names, never on a finding's `tool`**, which Scan renders
-//! and nothing may match on.
+//! Scan's findings to a first proposal. A line one of these tables produced reads
+//! `convention`; tables match file names, never a finding's rendered `tool`.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -15,11 +11,10 @@ use ipc::{
 
 use super::{default_policy, Draft};
 
-/// Script names that conventionally gate code. **A guess, and labelled one**:
-/// every other script is proposed as a Command, and a person moves either.
+/// Script names that conventionally gate code. Every other script is proposed as a Command.
 const CHECK_NAMES: &[&str] = &["test", "lint", "typecheck", "type-check", "check", "e2e"];
 
-/// The tool that runs a `package.json` script, by the lockfile that says so.
+/// The tool that runs a `package.json` script, by its lockfile.
 const SCRIPT_RUNNERS: &[(&str, &str)] = &[
     ("pnpm-lock.yaml", "pnpm"),
     ("yarn.lock", "yarn"),
@@ -28,8 +23,7 @@ const SCRIPT_RUNNERS: &[(&str, &str)] = &[
     ("package-lock.json", "npm"),
 ];
 
-/// What a fresh worktree runs before anything else, by lockfile. **Frozen**, so
-/// preparation writes nothing a Drone's diff would carry.
+/// Setup's install, by lockfile. Frozen, so preparation writes nothing into a Drone's diff.
 const INSTALLS: &[(&str, &str)] = &[
     ("pnpm-lock.yaml", "pnpm install --frozen-lockfile"),
     ("yarn.lock", "yarn install --frozen-lockfile"),
@@ -40,9 +34,8 @@ const INSTALLS: &[(&str, &str)] = &[
     ("poetry.lock", "poetry install"),
 ];
 
-/// Which root lockfiles a workspace pattern's file shares with its members. A
-/// member found only by holding a manifest of its own shares none — a Go
-/// service in a `pnpm` repository is not installed by `pnpm`.
+/// Root lockfiles a workspace pattern's file shares with its members. A member found by
+/// its own manifest shares none: a Go service in a `pnpm` repository is not a `pnpm` package.
 const SHARED_BY: &[(&str, &[&str])] = &[
     ("pnpm-workspace.yaml", &["pnpm-lock.yaml"]),
     (
@@ -90,8 +83,7 @@ fn draft(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace, id: Stri
     let taken = |checks: &[ProposedCheck], commands: &[ProposedCommand], name: &str| {
         checks.iter().any(|one| one.name == name) || commands.iter().any(|one| one.name == name)
     };
-    // That `cargo test` works on a bare `Cargo.toml` is convention, which Scan
-    // left for this to say and label.
+    // Scan left `cargo test` on a bare `Cargo.toml` for Proposal to say, as convention.
     if let Some(cargo) = workspace
         .manifests
         .iter()
@@ -177,8 +169,7 @@ fn named(file: &str, name: &str) -> bool {
     file.rsplit('/').next() == Some(name)
 }
 
-/// The workspace's own lockfiles, then the root's it shares by a workspace
-/// pattern — each as the file Scan cited.
+/// The workspace's own lockfiles, then the root's it shares by a workspace pattern.
 fn lockfiles(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace) -> Vec<String> {
     let mut files: Vec<String> = workspace
         .lockfiles
@@ -203,7 +194,7 @@ fn lockfiles(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace) -> V
     files
 }
 
-/// The first of `table`'s entries a lockfile here is named for, with the file.
+/// The first of `table`'s entries a lockfile here is named for, with that file.
 fn found<'a>(
     files: &'a [String],
     table: &[(&str, &'static str)],
@@ -216,9 +207,8 @@ fn found<'a>(
     })
 }
 
-/// **A port is evidence, not a guess**, so every one reads `read`. A detected
-/// variable keeps its file's name; a compose service needs none; a script's
-/// flag gets one derived, uppercase with `_PORT`, which stays editable.
+/// A port is evidence, so every one reads `read`. A variable keeps its file's name, a
+/// compose service needs none, and a script's flag gets `<NAME>_PORT`.
 fn ports(declared: &[DeclaredPort]) -> Vec<ProposedPort> {
     let mut names = BTreeSet::new();
     declared
@@ -262,9 +252,8 @@ fn slug(text: &str) -> String {
         .collect()
 }
 
-/// Each workspace's id: the checkout's name for the root, the directory's for
-/// the rest, **and the whole path where two would collide** — a Job is keyed
-/// to one.
+/// The checkout's name for the root and the directory's otherwise, or the whole path
+/// where two collide, since a Job is keyed to one.
 fn ids(scan: &RepositoryScan) -> Vec<String> {
     let short: Vec<String> = scan
         .workspaces

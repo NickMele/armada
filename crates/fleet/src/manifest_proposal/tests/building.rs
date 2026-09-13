@@ -11,9 +11,7 @@ fn convention(file: &str, key: Option<&str>) -> Provenance {
     }
 }
 
-/// `cargo test` on a bare `Cargo.toml` is convention and cites the manifest; an
-/// alias is a Command citing the config it is written in. No install, because
-/// `cargo` has none to run first.
+/// `cargo test` is convention citing `Cargo.toml`; an alias is a Command citing its config.
 #[test]
 fn a_cargo_package_is_tested_by_convention_and_its_aliases_are_commands() {
     let dir = checkout(&[
@@ -40,8 +38,7 @@ fn a_cargo_package_is_tested_by_convention_and_its_aliases_are_commands() {
     assert!(root.setup.is_none());
 }
 
-/// A tool section proposes its Check, run through the lockfile's runner, and
-/// the lockfile proposes what setup installs.
+/// A tool section proposes its Check through the lockfile's runner, and the lockfile setup.
 #[test]
 fn a_python_project_runs_its_tools_through_its_lockfile() {
     let dir = checkout(&[
@@ -70,8 +67,7 @@ fn a_python_project_runs_its_tools_through_its_lockfile() {
     assert_eq!(root.setup.as_ref().expect("setup").requires, ["install"]);
 }
 
-/// **A port is `read`, never `convention`.** A variable keeps its file's name,
-/// a compose service needs none, and a script's flag gets one derived.
+/// A port is `read`: a variable keeps its name, compose needs none, a flag gets one derived.
 #[test]
 fn ports_keep_a_files_variable_and_a_compose_service_needs_none() {
     let dir = checkout(&[
@@ -120,9 +116,7 @@ fn ports_keep_a_files_variable_and_a_compose_service_needs_none() {
     );
 }
 
-/// A member a workspace pattern names shares the root's lockfile; one found by
-/// holding a manifest of its own shares nothing — a Rust service in a `pnpm`
-/// repository is not installed by `pnpm`.
+/// Only a member the pattern names shares the root's lockfile, so a Rust service gets no `pnpm`.
 #[test]
 fn only_a_member_the_pattern_names_is_installed_by_the_roots_lockfile() {
     let dir = checkout(&[

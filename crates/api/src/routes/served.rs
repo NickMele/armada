@@ -85,9 +85,7 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/repository/scan",
     },
-    // What Scan's findings become, beside it and for its reason. The edit
-    // spells its act in the last segment the way `/manifest/save_file` does,
-    // so the read stays the bare noun.
+    // What Scan's findings become, beside it. The edit spells its act in the last segment.
     Route {
         operation: "get_manifest_proposals",
         method: "GET",

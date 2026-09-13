@@ -1,5 +1,4 @@
-//! A proposal against a real directory: Scan reads it, and whether a file is
-//! there is what `create` is about — `scanning::tests`' reason.
+//! Proposals against a real directory, for `scanning::tests`' reason.
 
 mod amending;
 mod building;

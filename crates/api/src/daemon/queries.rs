@@ -266,11 +266,8 @@ pub trait Queries: Send + Sync + 'static {
         &self,
     ) -> impl Future<Output = Result<ipc::RepositoryScan, Refusal>> + Send;
 
-    /// `get_manifest_proposals` — a possible `armada.yml` per workspace Scan
-    /// finds, every line citing the file it came from or reading `convention`.
-    ///
-    /// **Held between calls**, so a person's edits are in every later answer.
-    /// It writes nothing. `Result` is here to match the surface.
+    /// `get_manifest_proposals` — a proposal per workspace Scan finds, held between calls
+    /// so edits persist. It cannot refuse; `Result` matches the surface.
     fn get_manifest_proposals(
         &self,
     ) -> impl Future<Output = Result<ipc::ManifestProposals, Refusal>> + Send;

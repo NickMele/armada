@@ -47,8 +47,7 @@ fn an_edit_that_changes_nothing_moves_nothing() {
     );
 }
 
-/// Edited where Scan found it, added where a person wrote it — **and added
-/// stays added**, because no file ever said it.
+/// Edited where Scan found it, added where a person wrote it, and added stays added.
 #[test]
 fn a_changed_line_reads_edited_and_a_written_one_added_however_often_it_changes() {
     let dir = a_package();
@@ -134,9 +133,7 @@ fn pin(key: PolicyKey, value: Option<&str>) -> ProposalEdit {
     }
 }
 
-/// The defaults are the parser's own words for an absent key, and **pinning
-/// one — even to the default's own word — is an edit**, because Write will then
-/// put the key down. Clearing it goes back to the default.
+/// Pinning a policy, even to the default's own word, is an edit; clearing it is default again.
 #[test]
 fn a_policy_reads_default_until_pinned_and_default_again_once_cleared() {
     let dir = a_package();
@@ -178,8 +175,7 @@ fn a_policy_reads_default_until_pinned_and_default_again_once_cleared() {
     assert_eq!(rows(&draft)[0], at("never", Provenance::Default));
 }
 
-/// **The two words are the ones `config` reads an absent key as**, so a row
-/// reading `default` says what the parser will do with the key left out.
+/// The default words are what `config` reads an absent key as.
 #[test]
 fn the_default_words_are_what_the_parser_reads_an_absent_key_as() {
     use crate::manifest_proposal::{AUTO_MERGE_DEFAULT, REVIEW_GATE_DEFAULT};

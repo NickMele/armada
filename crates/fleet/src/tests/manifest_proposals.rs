@@ -1,7 +1,4 @@
-//! Setup's proposal operations over the router that ships, answered by a real
-//! Fleet. What a proposal holds is `manifest_proposal`'s own tests; this is the
-//! line between it and the checkout a Fleet serves — `serving`'s
-//! `search_files` reason.
+//! Proposal operations over the shipped router and a real Fleet: that they read the checkout it serves.
 
 use std::sync::Arc;
 
@@ -17,8 +14,7 @@ fn refusal(body: &[u8]) -> WireError {
     ipc::decode("a refusal", body).expect("a WireError")
 }
 
-/// Against `Host::repo_root`, holding an edit between requests, and **writing
-/// nothing**.
+/// Against `Host::repo_root`, holding an edit between requests, and writing nothing.
 #[tokio::test]
 async fn a_fleet_proposes_the_checkout_it_serves_and_holds_an_edit_between_requests() {
     let home = TempDir::new();

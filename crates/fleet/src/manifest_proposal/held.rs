@@ -1,10 +1,5 @@
-//! Fleet's side: the proposals it holds, the two operations over them, and
-//! each refusal's code.
-//!
-//! **A proposal is built the first time its workspace is asked about and kept
-//! after**, so a person's edits survive every later read. A Scan runs on each
-//! read to find a workspace nobody has asked about yet; one already held is not
-//! rebuilt over.
+//! The proposals a Fleet holds, and the operations over them. A proposal is built the
+//! first time its workspace is asked about and kept, so edits survive later reads.
 
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -19,11 +14,10 @@ use crate::scanning::{scan, Checkout};
 
 /// An edit naming a workspace Scan does not find. A 422.
 const NO_SUCH_WORKSPACE: &str = "fleet.no_such_workspace";
-/// An edit that cannot be applied — a line that is not there, a move that would
-/// drop a key. A 422: the request decoded and names something that cannot work.
+/// An edit that cannot apply: no such line, or a move that would drop a key. A 422.
 const PROPOSAL_NOT_AMENDED: &str = "fleet.proposal_not_amended";
 
-/// Every proposal this Fleet is holding, by workspace.
+/// Every proposal this Fleet holds, by workspace.
 #[derive(Default)]
 pub(crate) struct Held(Mutex<BTreeMap<String, Draft>>);
 
@@ -43,7 +37,7 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// `get_manifest_proposals` — one per workspace in the checkout.
+    /// `get_manifest_proposals`. A workspace already held is not rebuilt over.
     pub(crate) fn manifest_proposals(&self) -> ManifestProposals {
         let checkout = self.host().repo_root.clone();
         let found = scan(&checkout, &Checkout::at(&checkout));
@@ -66,8 +60,7 @@ where
         }
     }
 
-    /// `edit_manifest_proposal` — one edit, answered with the proposal after it.
-    /// A workspace nobody has asked about yet is built first, from a Scan.
+    /// `edit_manifest_proposal`. A workspace nobody has asked about is built first.
     pub(crate) fn edit_manifest_proposal(
         &self,
         asked: EditManifestProposal,
