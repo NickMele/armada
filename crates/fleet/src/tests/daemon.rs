@@ -456,6 +456,7 @@ async fn a_shown_step_runs_its_spec_once_and_makes_no_base_checkout() {
             claimed: Claimed("the panel now collapses"),
             shown_by: ShownBy("e2e/panel.spec.ts"),
             not_claimed: NotClaimed(""),
+            review: None,
         },
     )
     .await
@@ -522,6 +523,7 @@ async fn a_captured_step_with_no_harness_skips_the_capture_and_says_so() {
             claimed: Claimed("the panel now collapses"),
             shown_by: ShownBy("e2e/panel.spec.ts"),
             not_claimed: NotClaimed(""),
+            review: None,
         },
     )
     .await

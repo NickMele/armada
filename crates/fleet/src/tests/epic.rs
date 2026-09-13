@@ -115,6 +115,7 @@ fn document(claim: &'static str) -> Call<'static> {
         claimed: Claimed(claim),
         shown_by: ShownBy("the file this part delivered"),
         not_claimed: NotClaimed(""),
+        review: None,
     }
 }
 
@@ -124,6 +125,7 @@ fn note(claim: &'static str) -> Call<'static> {
         claimed: Claimed(claim),
         shown_by: ShownBy("the file this part delivered"),
         not_claimed: NotClaimed(""),
+        review: None,
     }
 }
 

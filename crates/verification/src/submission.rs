@@ -155,6 +155,12 @@ impl Submission {
         Ok(submission)
     }
 
+    /// The same submission, carrying the review Fleet checked against the change.
+    pub fn carrying(mut self, review: Review) -> Submission {
+        self.review = Some(review);
+        self
+    }
+
     /// The review, on review evidence.
     pub fn review(&self) -> Option<&Review> {
         self.review.as_ref()

@@ -45,6 +45,7 @@ fn a_diff_call<'a>() -> Call<'a> {
         claimed: Claimed("The plan is written."),
         shown_by: ShownBy("docs/plan.md"),
         not_claimed: NotClaimed(""),
+        review: None,
     }
 }
 

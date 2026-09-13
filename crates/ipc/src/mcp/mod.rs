@@ -26,6 +26,7 @@ mod dispatch;
 mod permission;
 mod planning;
 mod report;
+mod reviewing;
 mod serving;
 mod tools;
 mod widening;
@@ -40,6 +41,7 @@ pub use dispatch::{DispatchJob, DISPATCH_FIELDS, DISPATCH_TOOL};
 pub use permission::{PermissionAsked, PERMISSION_FIELDS, PERMISSION_TOOL};
 pub use planning::{PlanArgument, PlanCall, ADD_TASK_TOOL, RECORD_PLAN_TOOL, UPDATE_TASK_TOOL};
 pub use report::{CheckExcerpt, CheckRan, CheckReport};
+pub use reviewing::{ReviewArgument, SubmittedReview, REVIEW_FIELDS};
 pub use serving::{ServerReport, SERVER_FIELDS, SERVER_TOOL};
 pub use tools::{
     DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,

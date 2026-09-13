@@ -37,6 +37,7 @@ mod checkouts_apart;
 mod checks;
 mod cloning;
 mod concurrency;
+mod confidence;
 mod conflict_resolution;
 mod converging;
 mod coupling;

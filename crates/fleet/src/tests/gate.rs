@@ -180,6 +180,7 @@ fn diff_call<'a>() -> Call<'a> {
         claimed: Claimed("The loop is a fold."),
         shown_by: ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
         not_claimed: NotClaimed(""),
+        review: None,
     }
 }
 

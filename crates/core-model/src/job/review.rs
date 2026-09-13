@@ -19,6 +19,14 @@ impl Confidence {
             Confidence::NotConfident => "not_confident",
         }
     }
+
+    pub fn from_wire(value: &str) -> Option<Confidence> {
+        match value {
+            "confident" => Some(Confidence::Confident),
+            "not_confident" => Some(Confidence::NotConfident),
+            _ => None,
+        }
+    }
 }
 
 /// Where a finding goes: to the person, to a Drone, or alongside for context.
@@ -35,6 +43,15 @@ impl Bucket {
             Bucket::NeedsYou => "needs_you",
             Bucket::SmallFix => "small_fix",
             Bucket::ForContext => "for_context",
+        }
+    }
+
+    pub fn from_wire(value: &str) -> Option<Bucket> {
+        match value {
+            "needs_you" => Some(Bucket::NeedsYou),
+            "small_fix" => Some(Bucket::SmallFix),
+            "for_context" => Some(Bucket::ForContext),
+            _ => None,
         }
     }
 }
@@ -111,6 +128,15 @@ impl TestChange {
         match self {
             TestChange::Removed { .. } => "removed",
             TestChange::Loosened => "loosened",
+        }
+    }
+
+    /// `replaced_by` is kept only on a removal; a loosened test was not replaced.
+    pub fn from_wire(value: &str, replaced_by: Option<String>) -> Option<TestChange> {
+        match value {
+            "removed" => Some(TestChange::Removed { replaced_by }),
+            "loosened" => Some(TestChange::Loosened),
+            _ => None,
         }
     }
 }

@@ -267,6 +267,13 @@ where
             .map_err(|why| self.refusal(why))?;
         detail.job.tasks = plan.as_ref().map(|plan| plan.counts().into());
         detail.work_plan = plan.as_ref().map(ipc::WorkPlan::from);
+        let reviewed = self
+            .store()
+            .lock()
+            .await
+            .confidence_record(job.id())
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+        detail.confidence = reviewed.as_ref().map(ipc::JobConfidence::of);
         if let Some(stuck) = detail.stuck.as_mut() {
             for refused in &mut stuck.refused {
                 let command = (refused.tool == "Bash").then(|| refused.detail.clone());

@@ -100,6 +100,10 @@ pub struct Forgotten {
     pub plan_changes: usize,
     /// The tasks each whole recording of the plan named, one row each.
     pub plan_tasks: usize,
+    /// Armada's review of each run of a step, one row per review.
+    pub reviews: usize,
+    /// The parts of those reviews, counted together across their tables.
+    pub review_parts: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -144,6 +148,14 @@ impl Forgotten {
             "job_scope_drift" => &mut self.scope_drift,
             "job_work_plan_changes" => &mut self.plan_changes,
             "job_work_plan_tasks" => &mut self.plan_tasks,
+            "job_step_reviews" => &mut self.reviews,
+            "job_step_review_reasons"
+            | "job_step_review_areas"
+            | "job_step_review_area_files"
+            | "job_step_review_proves"
+            | "job_step_review_changed"
+            | "job_step_review_untested"
+            | "job_step_review_findings" => &mut self.review_parts,
             _ => return None,
         })
     }

@@ -386,6 +386,7 @@ fn document() -> Call<'static> {
         claimed: Claimed("The plan names the migration and its rollback."),
         shown_by: ShownBy("`.armada/artifacts/draft.md`, written this step"),
         not_claimed: NotClaimed(""),
+        review: None,
     }
 }
 

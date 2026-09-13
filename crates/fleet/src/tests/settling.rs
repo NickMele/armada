@@ -487,6 +487,7 @@ fn the_inbox_answers_a_repeated_reason_once_and_a_new_submission_again() {
                 claimed: Claimed("the reader stops one line later"),
                 shown_by: ShownBy("src/log.rs"),
                 not_claimed: NotClaimed(""),
+                review: None,
             },
             Timestamp::from_rfc3339("2026-08-28T10:21:28.000Z"),
         )
