@@ -190,6 +190,7 @@ export function SetupFrom({
   onAdded,
   onCloned,
   onWritten,
+  onVerify,
 }: {
   clone?: CloneGoesTo;
   /** Called on every add and every clone Locate sends. */
@@ -197,6 +198,8 @@ export function SetupFrom({
   onCloned?: (url: string, parent: string) => void;
   /** Called with the file and its text on every Write that lands. */
   onWritten?: (file: string, text: string) => void;
+  /** Called with the workspace each Verify press on a sheet sends. */
+  onVerify?: (workspace?: string) => void;
   write?: WriteGoesTo;
   /** Whether the root already has an `armada.yml`, as any Fleet's own repository does. */
   rootSetUp?: boolean;
@@ -361,7 +364,10 @@ export function SetupFrom({
                 setting={setting}
                 now={NOW}
                 sheet={verifiable}
-                onStartVerify={nothingHappens}
+                onStartVerify={(workspace) => {
+                  onVerify?.(workspace);
+                  return nothingHappens();
+                }}
                 onStopRun={nothingHappens}
                 onOpenEdit={() => {
                   setSettingUp(false);

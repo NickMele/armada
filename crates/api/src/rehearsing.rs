@@ -224,15 +224,25 @@ pub(crate) async fn start_checkout_run<D: Commands>(
     }
 }
 
-/// 202: the Verify is underway, its first step out. **No body**: Verify runs
-/// setup and every Check, and there is nothing to choose.
+/// 202: the Verify is underway, its first step out. **The body is optional**:
+/// empty runs the root's Manifest, and `workspace` names one below it.
 pub(crate) async fn start_checkout_verify<D: Commands>(
     State(served): State<Served<D>>,
     Query(scope): Query<InManifest>,
+    body: Bytes,
 ) -> Response {
+    // Empty is the root's file, which every press before workspaces sent.
+    let asked = if body.is_empty() {
+        ipc::StartCheckoutVerify::default()
+    } else {
+        match ipc::decode("a Verify to start", &body) {
+            Ok(asked) => asked,
+            Err(why) => return undecodable(&why.to_string(), served.run_id()),
+        }
+    };
     match served
         .shared()
-        .start_checkout_verify(scope.manifest())
+        .start_checkout_verify(asked, scope.manifest())
         .await
     {
         Ok(verify) => answer(StatusCode::ACCEPTED, &verify, served.run_id()),

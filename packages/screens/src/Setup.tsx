@@ -3,11 +3,11 @@
 //
 // Drawn against the repository the rail picked.
 //
-// # Verify lands on the sheet only for the root's file
+// # Verify lands on the sheet that wrote the file
 //
-// `start_checkout_verify` runs the picked repository's Manifest, at its root. A file written
-// for `apps/web` is not that one, so its sheet says so rather than offering a Verify that
-// would run another file's Checks.
+// A workspace's sheet sends its directory, and Fleet runs that directory's own `armada.yml` there;
+// the root's sends none. The checkout holds one Verify at a time, so each sheet draws only its own
+// file's, and says so while another file's is running.
 
 import { useState } from "react";
 import type { CheckoutRunSheetRead, Outcome, ProposalEdit } from "@armada/protocol";
@@ -22,9 +22,10 @@ export type SetupProps = {
   setting: Setting;
   /** The app's one `now`. */
   now: number;
-  /** What the picked repository's Manifest declares, which is where a Verify is read from. */
+  /** The picked repository's run sheet, which holds the checkout's one Verify, whichever file it runs. */
   sheet: CheckoutRunSheetRead;
-  onStartVerify: () => Promise<Outcome>;
+  /** Absent `workspace` verifies the root's file. */
+  onStartVerify: (workspace?: string) => Promise<Outcome>;
   onStopRun: (runId: string) => Promise<Outcome>;
   /** Go to the Manifest's Edit tab, which edits the picked repository's root file. */
   onOpenEdit?: () => void;
@@ -34,7 +35,8 @@ export type SetupProps = {
 
 export function Setup({ setting, now, sheet, onStartVerify, onStopRun, onOpenEdit, floor }: SetupProps) {
   const [dismissed, setDismissed] = useState<string | null>(null);
-  const [verifyRefused, setVerifyRefused] = useState<string | null>(null);
+  // Keyed by workspace, so a refusal on one sheet is not read on another.
+  const [verifyRefused, setVerifyRefused] = useState<{ dir: string; said: string } | null>(null);
   const { held } = setting;
 
   if (held.state === "failed") {
@@ -53,28 +55,25 @@ export function Setup({ setting, now, sheet, onStartVerify, onStopRun, onOpenEdi
 
   let verify = null;
   if (opened?.written !== undefined) {
-    verify =
-      opened.dir === "." ? (
-        <VerifyPanel
-          {...verifyPanelOf({
-            sheet,
-            now,
-            dismissed,
-            refused: verifyRefused,
-            onVerify: () => {
-              setVerifyRefused(null);
-              void onStartVerify().then((outcome) => setVerifyRefused(outcome.ok ? null : said(outcome)));
-            },
-            onStopRun: (runId) => void onStopRun(runId),
-            onDismiss: setDismissed,
-          })}
-        />
-      ) : (
-        <p className="text-fg-muted">
-          Verify runs this repository's Manifest, at the root of the checkout. This file is not that
-          one, so nothing here would run its Checks.
-        </p>
-      );
+    const { dir } = opened;
+    const workspace = dir === "." ? undefined : dir;
+    verify = (
+      <VerifyPanel
+        {...verifyPanelOf({
+          sheet,
+          now,
+          dismissed,
+          refused: verifyRefused?.dir === dir ? verifyRefused.said : null,
+          ...(workspace === undefined ? {} : { workspace }),
+          onVerify: () => {
+            setVerifyRefused(null);
+            void onStartVerify(workspace).then((outcome) => setVerifyRefused(outcome.ok ? null : { dir, said: said(outcome) }));
+          },
+          onStopRun: (runId) => void onStopRun(runId),
+          onDismiss: setDismissed,
+        })}
+      />
+    );
   }
 
   return (

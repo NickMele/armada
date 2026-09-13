@@ -492,8 +492,9 @@ export type BridgeApi = {
   /**
    * Run setup and every Check once in the main checkout, one after another.
    * **Only ever pressed.** Each step is followed as the checkout's own run.
+   * `workspace` names a directory whose own `armada.yml` runs there; absent is the root's.
    */
-  startCheckoutVerify: () => Promise<Outcome>;
+  startCheckoutVerify: (workspace?: string) => Promise<Outcome>;
 
   /**
    * `armada.yml` as it is on disk, whole and unparsed — the Manifest surface's

@@ -52,6 +52,8 @@ export type VerifyInputs = {
   dismissed: string | null;
   /** Why the last press was refused, or `null`. */
   refused: string | null;
+  /** The workspace whose file this panel verifies. Absent, or `.`, is the root's. */
+  workspace?: string;
   onVerify: () => void;
   onStopRun: (runId: string) => void;
   onDismiss: (verifyId: string) => void;
@@ -64,14 +66,22 @@ export type VerifyInputs = {
  */
 export function verifyPanelOf(inputs: VerifyInputs): VerifyPanelProps {
   const data = inputs.sheet.state === "read" ? inputs.sheet.sheet : undefined;
-  const verify = data?.verify;
+  // The checkout holds one Verify: another file's is not drawn here, and holds the slot until it ends.
+  const held = data?.verify;
+  const verify = held !== undefined && fileOf(held.workspace) === fileOf(inputs.workspace) ? held : undefined;
+  const other = held !== undefined && verify === undefined && held.ended_at === undefined ? held : undefined;
   const underway = verify !== undefined && verify.ended_at === undefined;
   const shown = verify !== undefined && verify.id !== inputs.dismissed ? verify : undefined;
   const out = verify?.steps.find((step) => step.state === "running");
 
   let offer: Pick<VerifyPanelProps, "onVerify" | "unavailable"> = { onVerify: inputs.onVerify };
-  if (data === undefined) offer = { unavailable: "Verify can start once this Manifest has been read." };
+  const failed = inputs.sheet.state === "failed" ? inputs.sheet.outcome : undefined;
+  if (failed?.ok === false && failed.why === "not_set_up")
+    offer = { unavailable: "Verify can start once this repository's own armada.yml, at its root, is written." };
+  else if (data === undefined) offer = { unavailable: "Verify can start once this Manifest has been read." };
   else if (underway) offer = {};
+  else if (other !== undefined)
+    offer = { unavailable: `Verify is running ${fileOf(other.workspace)} in this checkout. This file can be verified once it ends.` };
   else if (data.running !== undefined)
     offer = { unavailable: `\`${data.running.name}\` is running in this checkout. Verify can start once it ends.` };
 
@@ -86,6 +96,11 @@ export function verifyPanelOf(inputs: VerifyInputs): VerifyPanelProps {
     ...(inputs.refused === null ? {} : { refused: inputs.refused }),
     ...(out?.state === "running" ? { onStop: () => inputs.onStopRun(out.run_id) } : {}),
   };
+}
+
+/** The file a Verify runs, as the repository names it. */
+export function fileOf(workspace: string | undefined): string {
+  return workspace === undefined || workspace === "" || workspace === "." ? "armada.yml" : `${workspace}/armada.yml`;
 }
 
 function verifyStepOf(

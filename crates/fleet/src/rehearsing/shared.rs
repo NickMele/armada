@@ -315,6 +315,10 @@ where
     pub(super) fn refused_run(&self, owner: &Owner, why: Unrehearsable) -> Refusal {
         let (code, refusal) = why.spelled();
         let raised = WireError::raised(code, why.to_string(), self.run_id());
+        let raised = match why.faults() {
+            Some(faults) => raised.with_field("faults", faults),
+            None => raised,
+        };
         refusal(match owner {
             Owner::Job(job) => raised.about_job(ipc::JobId::from(job)),
             Owner::Checkout(_) => raised,

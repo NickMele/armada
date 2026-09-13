@@ -127,7 +127,7 @@ async fn two_repositories_verify_at_once_and_each_sheet_answers_its_own() {
     let (fleet, first, second) = two_repositories(&home);
 
     let in_first = Arc::clone(&fleet)
-        .begin_checkout_verify(first.clone())
+        .begin_checkout_verify(first.clone(), None)
         .await
         .expect("the first's Verify is underway");
     assert_eq!(
@@ -146,7 +146,7 @@ async fn two_repositories_verify_at_once_and_each_sheet_answers_its_own() {
     until(&fleet, &second, |sheet| sheet.running.is_none()).await;
 
     let in_second = Arc::clone(&fleet)
-        .begin_checkout_verify(second.clone())
+        .begin_checkout_verify(second.clone(), None)
         .await
         .expect("the second Verifies while the first still is");
     assert_ne!(in_first.id, in_second.id);

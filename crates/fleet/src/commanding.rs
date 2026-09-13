@@ -364,10 +364,11 @@ where
     /// outlive the call — `crate::rehearsing::verifying`.
     async fn start_checkout_verify(
         self: std::sync::Arc<Self>,
+        asked: ipc::StartCheckoutVerify,
         manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutVerify, Refusal> {
         let served = self.served_named(manifest_id.as_ref())?;
-        Fleet::begin_checkout_verify(self, served).await
+        Fleet::begin_checkout_verify(self, served, asked.workspace.as_deref()).await
     }
 
     /// A corrected Manifest, written and nothing more —
