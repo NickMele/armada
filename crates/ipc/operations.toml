@@ -92,6 +92,32 @@ notes = """
 No event. `get_capacity` is computed at every read, so it reflects a saved bound the moment the save answers, and the limits themselves persist as a reading a surface asks for.
 """
 
+[operations.get_preferences]
+kind = "query"
+transport = "HTTP"
+agent_access = "Yes"
+description = "Every preference a person has saved in Bridge, and what is in force for each"
+notes = """
+Kept the way `get_limits` is: Fleet-wide, surviving a relaunch, and read once per connection rather than on a timer — nothing but a save changes it. `store::Preferences` is a row per name and an absent row is the shipped default, so this always answers whole even where nobody has ever saved anything.
+
+**The first preference is `where_things_are_open`**, a boolean defaulting to `false` — whether Job detail's *Where things are* chapter opens collapsed or expanded. Moving the Board's own view and sort onto this table is left for later.
+
+`agent_access` is `Yes` for `get_capacity`'s reason: a preference is cheap to read and a session asking what a person set is asking nothing it could not already see on the screen it is helping with.
+"""
+
+[operations.save_preferences]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Save one preference by name, and answer with every preference now in force"
+notes = """
+**One preference, not the set** — unlike `save_limits`, which saves all three fields of one fixed row in a single request. A preference is a row keyed by name, so saving one leaves the store untouched for every other name, and there is nothing to omit.
+
+**A name outside the closed set is refused by name**, `fleet.unknown_preference`, naming what was sent. `store::Preferences`' own `CHECK` is the set's one definition; nothing here restates it, and Fleet is asked before the refusal is decided rather than the row failing a constraint it never explains.
+
+No event, `save_limits`' reason: the answer already carries what changed, and nothing else reads a preference on a timer.
+"""
+
 [operations.get_call]
 kind = "query"
 transport = "HTTP"

@@ -94,6 +94,9 @@ pub mod mcp;
 /// Where two Jobs claim the same paths. **A fact on the card, never a
 /// verdict** — nothing in it is readable as a refusal.
 mod overlap;
+/// A person's Bridge preferences, kept the way `limits` are kept. **A value
+/// out of the closed set does not save**, `limits`' reason one field over.
+mod preferences;
 mod proposing;
 /// A new cost ceiling for one Job, and which surface asked for it.
 mod raising;
@@ -216,6 +219,7 @@ pub use manifest_proposal::{
     Provenance, StatedCaps, WriteManifestProposal,
 };
 pub use overlap::{ScopeOverlap, SharedPath};
+pub use preferences::{Preferences, SavePreference};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
 pub use raising::{CapRaise, RaisedBy, TurnRaise};
 pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
