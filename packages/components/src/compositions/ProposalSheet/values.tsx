@@ -33,7 +33,7 @@ export function RunsFirst({ entry, ...props }: ProposalSheetProps & { entry: Pro
         says="Ticked Commands run before this Check, in the order ticked. To reorder, untick and tick again."
         options={options}
         picked={requires}
-        disabled={props.busy}
+        busy={props.busy}
         onPicked={(next) => props.onRequires(entry.name, next)}
       />
     </ValuePopover>
@@ -57,7 +57,7 @@ export function Destructive({ entry, ...props }: ProposalSheetProps & { entry: P
         {...(runsIt.length === 0
           ? {}
           : { unavailable: `${runsIt.join(" and ")} ${runsIt.length === 1 ? "runs" : "run"} it first, so it cannot be destructive.` })}
-        disabled={props.busy}
+        busy={props.busy}
         onChange={(next) => props.onDestructive(entry.name, next)}
       >
         Destructive

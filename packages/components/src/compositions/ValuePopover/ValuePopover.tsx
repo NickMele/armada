@@ -56,12 +56,13 @@ export type OrderedPicksProps = {
   options: OrderedPick[];
   /** Names in order. */
   picked: string[];
-  disabled?: boolean;
+  /** An edit is out: presses are ignored, and focus stays where it is. */
+  busy?: boolean;
   onPicked: (picked: string[]) => void;
 };
 
 /** Ticks for which, and a number for in what order. A new tick goes last. */
-export function OrderedPicks({ label, says, options, picked, disabled = false, onPicked }: OrderedPicksProps) {
+export function OrderedPicks({ label, says, options, picked, busy = false, onPicked }: OrderedPicksProps) {
   return (
     <div className="armada-value-popover__picks" role="group" aria-label={label}>
       <p className="armada-value-popover__says">{says}</p>
@@ -73,10 +74,13 @@ export function OrderedPicks({ label, says, options, picked, disabled = false, o
             <li key={option.name} className="armada-value-popover__pick">
               <Checkbox
                 checked={ticked}
-                disabled={disabled || (!ticked && option.unavailable !== undefined)}
-                onChange={() =>
-                  onPicked(ticked ? picked.filter((one) => one !== option.name) : [...picked, option.name])
-                }
+                // Not `disabled` while busy: a disabled control drops focus to the page.
+                disabled={!ticked && option.unavailable !== undefined}
+                aria-disabled={busy || undefined}
+                onChange={() => {
+                  if (busy) return;
+                  onPicked(ticked ? picked.filter((one) => one !== option.name) : [...picked, option.name]);
+                }}
               >
                 <span className="armada-value-popover__name">{option.name}</span>
               </Checkbox>
@@ -102,19 +106,23 @@ export type OneFlagProps = {
   judgement: string;
   /** Why it cannot be switched on here. */
   unavailable?: string;
-  disabled?: boolean;
+  /** An edit is out: presses are ignored, and focus stays where it is. */
+  busy?: boolean;
   onChange: (checked: boolean) => void;
 };
 
 /** The degenerate set: one switch, the sentence naming what it changes, and who decides it. */
-export function OneFlag({ children, checked, description, judgement, unavailable, disabled = false, onChange }: OneFlagProps) {
+export function OneFlag({ children, checked, description, judgement, unavailable, busy = false, onChange }: OneFlagProps) {
   return (
     <div className="armada-value-popover__flag">
       <Switch
         checked={checked}
         description={description}
-        disabled={disabled || (!checked && unavailable !== undefined)}
-        onChange={(event) => onChange(event.target.checked)}
+        disabled={!checked && unavailable !== undefined}
+        aria-disabled={busy || undefined}
+        onChange={(event) => {
+          if (!busy) onChange(event.target.checked);
+        }}
       >
         {children}
       </Switch>

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { MANIFEST_ID, repository } from "../../../fixtures/build/base";
 import { SCRATCH, SetupFrom } from "./Setup";
@@ -106,8 +106,9 @@ export const CorrectRunsFirstAndDestructive: Story = {
     await expect(await within(reset).findByText("edited during setup")).toBeVisible();
     await expect(within(reset).getByRole("button", { name: "Edit reset destructive" })).toHaveTextContent(/^destructive$/);
     // Esc closes the popover and leaves the sheet it opened on.
+    await expect(within(reset).getByRole("switch", { name: /Destructive/ })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
-    await expect(within(reset).queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(within(reset).queryByRole("dialog")).toBeNull());
     await expect(canvas.getByRole("dialog", { name: "Proposal for services/api" })).toBeVisible();
 
     // `test` runs `migrate` first now, so `migrate` is not offered as destructive.
