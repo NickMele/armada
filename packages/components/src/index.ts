@@ -270,3 +270,8 @@ export * from "./compositions/ManifestFile/ManifestFile";
 // panels of their own rather than two halves of one.
 export * from "./compositions/DriftPanel/DriftPanel";
 export * from "./compositions/VerifyPanel/VerifyPanel";
+// Setup — Journey 3: the picker, a line's source, and the port add form both surfaces mount.
+export * from "./compositions/PortAddForm/PortAddForm";
+export * from "./compositions/Provenance/Provenance";
+export * from "./compositions/SetupPicker/SetupPicker";
+export * from "./compositions/ProposalSheet/ProposalSheet";

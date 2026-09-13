@@ -1,0 +1,40 @@
+/* Adding a port: the three fields wrap rather than overflow, and the add sits under them. */
+.armada-port-add {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-port-add__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-port-add__variable {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: calc(var(--space-12) * 8);
+}
+
+.armada-port-add__hint,
+.armada-port-add__warning {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-port-add__hint {
+  color: var(--fg-muted);
+}
+
+/* A warning claims exactly as much as it knows, so it is caution and never a refusal. */
+.armada-port-add__warning {
+  color: var(--notice-caution);
+}

@@ -43,6 +43,12 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
+import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
+import type {
+  ManifestProposalsRead,
+  ProposalAnswer,
+  RepositoryScanRead,
+} from "@armada/screens/src/setup-reads";
 
 /**
  * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and
@@ -509,6 +515,15 @@ export type BridgeApi = {
   editManifest: (body: EditManifest) => Promise<ManifestEditAnswer>;
   /** The costliest and the longest past Job here, for the budget warning. */
   readManifestSpend: () => Promise<ManifestSpendRead>;
+
+  /** Scan: every workspace in the checkout, read-only. No path crosses. */
+  readRepositoryScan: () => Promise<RepositoryScanRead>;
+  /** One proposal per workspace, with every edit Fleet holds for it applied. */
+  readManifestProposals: () => Promise<ManifestProposalsRead>;
+  /** One edit to one proposal, held in Fleet's memory. **Writes nothing.** */
+  editManifestProposal: (body: EditManifestProposal) => Promise<ProposalAnswer>;
+  /** Create one workspace's `armada.yml`. **Never over a file already there**, and stages nothing. */
+  writeManifestProposal: (body: WriteManifestProposal) => Promise<ProposalAnswer>;
 
   /**
    * Every rule a person always-allowed for this repository, oldest first —

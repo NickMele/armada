@@ -350,6 +350,7 @@ pub fn manifest_drift() -> ipc::ManifestDrift {
 /// values are asserted against a real Fleet in `fleet`'s own suite.
 pub fn detail(job: JobSummary) -> JobDetail {
     JobDetail {
+        workflow_source: "repository".to_string(),
         spend: None,
         delivery: None,
         job,
@@ -687,6 +688,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
         id: WorkflowId::carried("01WF"),
         name: "a-workflow".to_string(),
         version: 1,
+        source: "armada".to_string(),
         steps: vec![
             // Gated, and ungated. The pair is the distinction [`detail`]'s rail
             // turns on, so the fake carries both rather than one — and the

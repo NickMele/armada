@@ -238,6 +238,18 @@ pub(crate) fn workflow_summary(
         version: workflow.version(),
         steps: declared(workflow),
         manifest_id: ManifestId::from(manifest_id),
+        source: workflow.source().as_wire().to_string(),
+    }
+}
+
+/// A definition `config`'s catalogue left out, as `list_left_out_workflows` serves it.
+pub fn left_out_workflow(left: &config::LeftOut) -> ipc::LeftOutWorkflow {
+    ipc::LeftOutWorkflow {
+        id: left.id().map(WorkflowId::from),
+        source: left.source().as_wire().to_string(),
+        file: left.path().to_string_lossy().to_string(),
+        said: left.to_string(),
+        instead: left.instead().map(|place| place.as_wire().to_string()),
     }
 }
 

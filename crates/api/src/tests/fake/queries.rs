@@ -545,6 +545,10 @@ impl Queries for FakeDaemon {
         Ok(shapes::workflows())
     }
 
+    async fn list_left_out_workflows(&self) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
+        Ok(Vec::new())
+    }
+
     async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));

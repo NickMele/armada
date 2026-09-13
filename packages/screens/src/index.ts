@@ -69,3 +69,7 @@ export * from "./story";
 export * from "./verdicts";
 export * from "./waiting";
 export * from "./work";
+// Setup — Journey 3: the picker and a proposal over it.
+export * from "./Setup";
+export * from "./setup-held";
+export type * from "./setup-reads";

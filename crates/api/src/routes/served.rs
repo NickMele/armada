@@ -250,6 +250,11 @@ pub const SERVED: &[Route] = &[
         path: "/workflows",
     },
     Route {
+        operation: "list_left_out_workflows",
+        method: "GET",
+        path: "/workflows/left_out",
+    },
+    Route {
         operation: "list_manifests",
         method: "GET",
         path: "/manifests",

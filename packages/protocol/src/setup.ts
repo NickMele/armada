@@ -30,6 +30,21 @@ export type WorkflowSummary = {
    */
   steps: WorkflowStep[];
   manifest_id: string;
+  /** `armada`, `kit` or `repository`. Absent from a Fleet older than the field. */
+  source?: string;
+};
+
+/** `GET /workflows/left_out`: a Kit or carried definition Fleet runs without. `crates/ipc/src/setup.rs`. */
+export type LeftOutWorkflow = {
+  /** Absent where the file did not parse far enough to say. */
+  id?: string;
+  /** `armada` or `kit`. */
+  source: string;
+  file: string;
+  /** Fleet's own sentence. Rendered, never matched on. */
+  said: string;
+  /** Whose definition of the same id runs instead. */
+  instead?: string;
 };
 
 /**

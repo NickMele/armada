@@ -521,6 +521,11 @@ pub trait Queries: Send + Sync + 'static {
     /// that will not be refused.
     fn list_workflows(&self) -> impl Future<Output = Result<Vec<WorkflowSummary>, Refusal>> + Send;
 
+    /// `list_left_out_workflows` — the Kit and carried definitions Fleet runs without, and why.
+    fn list_left_out_workflows(
+        &self,
+    ) -> impl Future<Output = Result<Vec<ipc::LeftOutWorkflow>, Refusal>> + Send;
+
     /// `list_manifests` — the Manifests Fleet holds, and the repository each
     /// was read from. The counterpart to [`Queries::list_workflows`], for the
     /// other id a proposal names.

@@ -111,6 +111,28 @@ pub struct WorkflowSummary {
     /// The `armada.yml` this workflow's Checks resolved against. Holding a
     /// resolved workflow means every Check its steps name was declared there.
     pub manifest_id: ManifestId,
+    /// Where the definition came from: `armada`, `kit` or `repository`. Empty from a Fleet
+    /// older than the field.
+    #[serde(default)]
+    pub source: String,
+}
+
+/// A Kit or carried definition this Fleet runs without, and why. #425: named only in
+/// Fleet's log before, where a person picking a workflow never looks.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LeftOutWorkflow {
+    /// Absent where the file did not parse far enough to say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<WorkflowId>,
+    /// `armada` or `kit`. A repository's own definition is never left out: it refuses.
+    pub source: String,
+    /// The definition's file, as Fleet read it.
+    pub file: String,
+    /// The whole sentence Fleet prints at start, rendered and never matched on.
+    pub said: String,
+    /// Whose definition of the same id runs instead, where one does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instead: Option<String>,
 }
 
 /// One Manifest Fleet holds.

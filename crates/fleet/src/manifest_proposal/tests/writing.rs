@@ -24,6 +24,7 @@ fn write_lands_the_proposals_text_and_the_loader_accepts_it() {
     let dir = a_package();
     let mut draft = draft(&dir, ".");
     let text = draft.text().expect("a proposal that loads");
+    assert!(!draft.answer().present, "nothing is at the path yet");
 
     let saved = draft.write(Instant::carried(AT)).expect("the file lands");
 
@@ -50,6 +51,10 @@ fn a_file_that_appeared_since_the_proposal_is_not_written_over() {
     let now = std::fs::read_to_string(dir.path().join("armada.yml")).expect("reads");
     assert_eq!(now, theirs);
     assert!(draft.answer().written.is_none());
+    assert!(
+        draft.answer().present,
+        "the file already there is said, not offered"
+    );
 }
 
 #[test]

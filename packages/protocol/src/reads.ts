@@ -31,6 +31,7 @@ import type {
   Voice,
   Work,
   WorkflowSummary,
+  LeftOutWorkflow,
   WireError,
   WorktreeReclaimed,
   WorktreesHeld,
@@ -342,6 +343,8 @@ export type Holdings = {
   manifests: ManifestSummary[];
   /** `null` until read: an empty roster and an unread one are not the same. */
   models: ModelChoices | null;
+  /** The Kit and carried workflows Fleet runs without, each with why. #425. */
+  leftOut?: LeftOutWorkflow[];
 };
 
 /** What a command answered. A refusal names itself; it never renders as silence. */

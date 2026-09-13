@@ -25,6 +25,7 @@
 // swapped the surface for a transcript; the turns are the open step's activity
 // log now, so it tracks which Job is open and nothing presses it.
 
+import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
@@ -116,6 +117,11 @@ export const readManifestFile = () => window.armada.readManifestFile();
 export const saveManifestFile = (body: SaveManifestFile) => window.armada.saveManifestFile(body);
 export const editManifest = (body: EditManifest) => window.armada.editManifest(body);
 export const readManifestSpend = () => window.armada.readManifestSpend();
+// Setup: Scan, the proposals, one edit, Write.
+export const readRepositoryScan = () => window.armada.readRepositoryScan();
+export const readManifestProposals = () => window.armada.readManifestProposals();
+export const editManifestProposal = (body: EditManifestProposal) => window.armada.editManifestProposal(body);
+export const writeManifestProposal = (body: WriteManifestProposal) => window.armada.writeManifestProposal(body);
 // A repository-wide always-allow — Fleet's own table since protocol 13.5.
 export const listRepositoryAllowedCommands = () => window.armada.listRepositoryAllowedCommands();
 export const removeRepositoryAllowedCommand = (run: string) =>

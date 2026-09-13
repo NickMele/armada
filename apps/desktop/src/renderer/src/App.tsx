@@ -34,6 +34,7 @@ import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
 import { Manifest, checkoutRunnablesOf, useManifestEditing, useManifestForm } from "@armada/screens";
+import { Setup, useSetup } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
@@ -55,6 +56,10 @@ import {
   saveManifestFile,
   editManifest,
   readManifestSpend,
+  readRepositoryScan,
+  readManifestProposals,
+  editManifestProposal,
+  writeManifestProposal,
   listRepositoryAllowedCommands,
   removeRepositoryAllowedCommand,
   listRuns,
@@ -153,6 +158,8 @@ export function App() {
   // The Check or Command the palette picked, or `null`. **It selects rather
   // than runs**, which is what Journey 9's own table says the palette does.
   const [picked, setPicked] = useState<string | null>(null);
+  // Whether Setup is the Manifest surface's view. Its own flag: the head's views are three.
+  const [settingUp, setSettingUp] = useState(false);
   // The Manifest the rail names, and what a new Job is proposed against.
   // Bridge dispatches into the workspace it is pointed at, so this is one
   // value rather than a field on the form.
@@ -241,6 +248,15 @@ export function App() {
     onReadFile: readManifestFile,
     onEditManifest: editManifest,
     onReadSpend: readManifestSpend,
+  });
+
+  // Setup, held here for the forms' reason: ticks and the open proposal outlive a look away.
+  const setting = useSetup({
+    showing: manifesting && settingUp,
+    onReadScan: readRepositoryScan,
+    onReadProposals: readManifestProposals,
+    onEditProposal: editManifestProposal,
+    onWriteProposal: writeManifestProposal,
   });
 
   useEffect(() => watchUncaught(setUncaught), []);
@@ -364,6 +380,7 @@ export function App() {
     setClearing(surfaceId === SURFACE.worktrees);
     setManifesting(surfaceId === SURFACE.manifest);
     if (surfaceId !== SURFACE.manifest) setPicked(null);
+    if (surfaceId !== SURFACE.manifest) setSettingUp(false);
   }
 
   const scoped = state.holds.manifests.find((held) => held.id === scope);
@@ -400,7 +417,11 @@ export function App() {
         jobs={state.jobs}
         capacity={state.capacity}
         title={head?.title}
-        summary={head?.summary}
+        summary={
+          manifesting && settingUp
+            ? "Set up a Manifest for each workspace in this checkout. Write puts one file down and stops, without staging or committing it."
+            : head?.summary
+        }
         actions={head?.actions}
         // Which row the rail marks. The held worktrees are the one surface
         // other than the Board that draws, so everything else — a Job, the
@@ -605,6 +626,22 @@ export function App() {
                 onStartServer={(name) => startServer(name)}
                 onStopServer={stopServer}
                 onOpenServerLink={openServerLink}
+                settingUp={settingUp}
+                onSettingUp={setSettingUp}
+                setup={
+                  <Setup
+                    setting={setting}
+                    now={now}
+                    sheet={state.checkoutRunSheet}
+                    onStartVerify={startCheckoutVerify}
+                    onStopRun={stopCheckoutRun}
+                    onOpenEdit={() => {
+                      setSettingUp(false);
+                      editing.onView("form");
+                    }}
+                    floor={floor}
+                  />
+                }
               />
             </Boundary>
           ) : composing ? (
@@ -649,6 +686,7 @@ export function App() {
                 byHand={
                   <Composer
                     workflows={state.holds.workflows}
+                    leftOut={state.holds.leftOut}
                     onStage={stageAttachment}
                     onSearchFiles={searchFiles}
                     manifest={scoped}

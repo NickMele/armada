@@ -642,6 +642,11 @@ where
             .collect())
     }
 
+    /// The Kit and carried definitions this Fleet runs without, each with why.
+    async fn list_left_out_workflows(&self) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
+        Ok(self.left_out().to_vec())
+    }
+
     /// The one Manifest this Fleet was started against.
     async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
         Ok(vec![manifest_summary(

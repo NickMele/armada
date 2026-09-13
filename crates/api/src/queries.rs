@@ -428,6 +428,16 @@ pub(crate) async fn list_workflows<D: Queries>(State(served): State<Served<D>>) 
     }
 }
 
+/// What Fleet left out of the workflows above, each with why — #425.
+pub(crate) async fn list_left_out_workflows<D: Queries>(
+    State(served): State<Served<D>>,
+) -> Response {
+    match served.daemon().list_left_out_workflows().await {
+        Ok(left_out) => answer(StatusCode::OK, &left_out, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 pub(crate) async fn list_manifests<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().list_manifests().await {
         Ok(manifests) => answer(StatusCode::OK, &manifests, served.run_id()),

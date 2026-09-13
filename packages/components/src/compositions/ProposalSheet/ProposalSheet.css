@@ -1,0 +1,214 @@
+/* One workspace's proposal. Bands stack; each list declares its tracks once and every row
+   borrows them, so name, value and source align down a band at any width. */
+.armada-proposal-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-proposal-sheet__file,
+.armada-proposal-sheet__mono,
+.armada-proposal-sheet__name {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  overflow-wrap: anywhere;
+}
+
+.armada-proposal-sheet__name {
+  color: var(--fg-default);
+}
+
+.armada-proposal-sheet__landed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-proposal-sheet__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+  min-height: var(--h-row);
+}
+
+.armada-proposal-sheet__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+.armada-proposal-sheet__band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  min-width: 0;
+}
+
+.armada-proposal-sheet__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-proposal-sheet__says,
+.armada-proposal-sheet__said {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-proposal-sheet__said {
+  color: var(--fg-default);
+}
+
+.armada-proposal-sheet__rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A row wraps rather than overflows: name and command first, then source and acts, which
+   fall beneath together when the sheet is too narrow to hold all four on one line. */
+.armada-proposal-sheet__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  min-height: var(--h-row);
+  padding: var(--space-1) 0;
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-proposal-sheet__row > .armada-proposal-sheet__name {
+  flex: 0 0 auto;
+  min-width: calc(var(--space-12) * 2);
+}
+
+.armada-proposal-sheet__row > .armada-proposal-sheet__run,
+.armada-proposal-sheet__row > .armada-proposal-sheet__mono {
+  flex: 1 1 calc(var(--space-12) * 4);
+  min-width: 0;
+}
+
+.armada-proposal-sheet__side {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  column-gap: var(--space-3);
+  min-width: 0;
+  margin-left: auto;
+}
+
+/* The row stays one height while its field is open, and tints while you are in it. */
+.armada-proposal-sheet__row:focus-within {
+  background: var(--bg-hover);
+}
+
+.armada-proposal-sheet__row[data-refused] {
+  background: var(--step-stopped-bg);
+}
+
+.armada-proposal-sheet__fault {
+  flex: 1 0 100%;
+  padding-bottom: var(--space-1);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+.armada-proposal-sheet__run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A value at rest: text with a hairline dashed rule, pressed to become its field. */
+.armada-proposal-sheet__value {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: var(--border-width) dashed var(--border-default);
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.armada-proposal-sheet__value:focus-visible {
+  outline: var(--focus-ring);
+}
+
+.armada-proposal-sheet__acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.armada-proposal-sheet__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.armada-proposal-sheet__policy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-proposal-sheet__foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-proposal-sheet__press {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.armada-proposal-sheet__faults {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.armada-proposal-sheet__disk {
+  max-height: calc(var(--space-12) * 3);
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}

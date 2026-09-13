@@ -57,7 +57,8 @@ import {
 
 import { URGENCIES } from "@armada/components";
 import type { Draft } from "@armada/protocol";
-import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
+import type { LeftOutWorkflow, ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
+import { sourceOf } from "./facts";
 import { previewOf } from "./preview";
 
 /** One staged file, as the composer holds it before `propose()` sends it on. */
@@ -90,6 +91,8 @@ export type ComposerProps = {
   onSearchFiles: (query: string) => Promise<readonly string[]>;
   /** The workflows Fleet holds. **The only ones it will accept.** */
   workflows: readonly WorkflowSummary[];
+  /** The Kit and carried workflows Fleet runs without, each with why — #425. */
+  leftOut?: readonly LeftOutWorkflow[];
   /** The Manifest the rail names. A fact here, not a choice. */
   manifest: ManifestSummary | undefined;
   /** The models, and the configured default the field starts on. */
@@ -101,6 +104,7 @@ export type ComposerProps = {
 
 export function Composer({
   workflows,
+  leftOut = [],
   manifest,
   models,
   disabled,
@@ -289,10 +293,19 @@ export function Composer({
               <option value="" />
               {workflows.map((workflow) => (
                 <option key={workflow.id} value={workflow.id}>
-                  {`${workflow.name} — ${workflow.steps.length} steps`}
+                  {`${workflow.name} — ${workflow.steps.length} steps${sourceOf(workflow.source)}`}
                 </option>
               ))}
             </Select>
+            {/* A definition Fleet left out is named where a workflow is picked, so a person
+                who customised `bug` in Kit is not running Armada's without knowing. */}
+            {leftOut.length === 0 ? null : (
+              <ul aria-label="Workflows left out" className="text-2xs text-fg-muted">
+                {leftOut.map((left) => (
+                  <li key={left.file}>{left.said}</li>
+                ))}
+              </ul>
+            )}
             {/* Read-only, so it is a labelled value rather than a field —
                 the drawing's own treatment. The repository, because
                 `armada.yml` declares no name. */}

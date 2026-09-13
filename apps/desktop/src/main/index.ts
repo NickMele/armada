@@ -18,6 +18,7 @@ import type {
 } from "@armada/protocol";
 import type { StartCheckoutRun, StartRun } from "@armada/protocol";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
+import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
 import { openPullRequest, openRemarkLink } from "./forge";
@@ -585,6 +586,14 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.editManifest, (_event, body: EditManifest) => connection?.editing.edit(body));
   ipcMain.handle(CHANNELS.readManifestSpend, () => connection?.editing.readSpend());
+  ipcMain.handle(CHANNELS.readRepositoryScan, () => connection?.editing.setup.readScan());
+  ipcMain.handle(CHANNELS.readManifestProposals, () => connection?.editing.setup.readProposals());
+  ipcMain.handle(CHANNELS.editManifestProposal, (_event, body: EditManifestProposal) =>
+    connection?.editing.setup.edit(body),
+  );
+  ipcMain.handle(CHANNELS.writeManifestProposal, (_event, body: WriteManifestProposal) =>
+    connection?.editing.setup.write(body),
+  );
   // A repository-wide always-allow — Fleet's own table since protocol 13.5.
   // Neither takes a path or a job id: Fleet names the repository.
   ipcMain.handle(CHANNELS.listRepositoryAllowedCommands, () => connection?.repositoryAllows.list());

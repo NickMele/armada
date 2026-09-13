@@ -68,6 +68,7 @@ impl Draft {
             text,
             refused,
             written: self.written.clone(),
+            present: self.path.is_file(),
         }
     }
 }

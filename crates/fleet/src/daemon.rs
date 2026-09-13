@@ -69,6 +69,7 @@ pub struct Fleet<H, V, W> {
     clock: Arc<dyn Clock>,
     mint: Arc<dyn Mint>,
     workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
+    left_out: Vec<ipc::LeftOutWorkflow>,
     manifest: Manifest,
     host: Host,
     /// The range a Job's port span is claimed from, and the granule its width

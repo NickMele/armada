@@ -69,6 +69,7 @@ pub fn fitted_with(
         clock: Arc::new(Ticking::from_nine()),
         mint: Arc::new(Counted::from_one()),
         workflows: one(two_steps()),
+        left_out: Vec::new(),
         manifest: manifest(),
         host: Host {
             user: String::from("someone"),

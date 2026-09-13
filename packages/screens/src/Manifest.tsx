@@ -48,7 +48,7 @@
 // `setup`, `evidence`, `after_merge` and `base`: no edit reaches them until the
 // writer's own edits for them land, so they are the file view's for now.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ManifestDriftRead, Outcome } from "@armada/protocol";
 import {
   Alert,
@@ -89,6 +89,10 @@ export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
   drift: ManifestDriftRead;
   /** Press Verify. **Only ever from its button** — nothing here calls it on a read. */
   onStartVerify: () => Promise<Outcome>;
+  /** Setup, drawn by the app, and whether it is the view up. Absent leaves the tab out. */
+  setup?: ReactNode;
+  settingUp?: boolean;
+  onSettingUp?: (on: boolean) => void;
 };
 
 /**
@@ -129,11 +133,17 @@ export function Manifest(props: ManifestProps) {
           { id: "run", label: "Checks and Commands" },
           { id: "form", label: "Edit" },
           { id: "file", label: editing.named },
+          ...(props.setup === undefined ? [] : [{ id: "setup", label: "Set up workspaces" }]),
         ]}
-        value={editing.view}
-        onChange={(id) => editing.onView(id === "file" || id === "form" ? id : "run")}
+        value={props.settingUp ? "setup" : editing.view}
+        onChange={(id) => {
+          props.onSettingUp?.(id === "setup");
+          if (id !== "setup") editing.onView(id === "file" || id === "form" ? id : "run");
+        }}
       />
-      {editing.view === "file" ? (
+      {props.settingUp && props.setup !== undefined ? (
+        props.setup
+      ) : editing.view === "file" ? (
         <FileView file={editing.file} />
       ) : editing.view === "form" ? (
         <FormView form={props.form} named={editing.named} onFile={() => editing.onView("file")} />

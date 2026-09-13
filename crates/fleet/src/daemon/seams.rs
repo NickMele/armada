@@ -79,6 +79,10 @@ where
     pub(crate) fn workflows(&self) -> &BTreeMap<WorkflowId, ResolvedWorkflow> {
         &self.workflows
     }
+    /// What `workflows` runs without, for `serving`'s `list_left_out_workflows`.
+    pub(crate) fn left_out(&self) -> &[ipc::LeftOutWorkflow] {
+        &self.left_out
+    }
     pub(crate) fn manifest(&self) -> &Manifest {
         &self.manifest
     }

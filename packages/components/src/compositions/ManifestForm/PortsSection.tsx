@@ -1,6 +1,7 @@
 import { Input } from "../../primitives/Input/Input";
 
-import { AddEntry, Entry, Hinted, replaced, Section } from "./Entries";
+import { PortAddForm } from "../PortAddForm/PortAddForm";
+import { Entry, Hinted, replaced, Section } from "./Entries";
 import type { ManifestFormPort, ManifestFormProps } from "./ManifestForm";
 
 export function PortsSection({ draft, onDraft, problems }: ManifestFormProps) {
@@ -32,10 +33,9 @@ export function PortsSection({ draft, onDraft, problems }: ManifestFormProps) {
           </Hinted>
         </Entry>
       ))}
-      <AddEntry
-        noun="port"
+      <PortAddForm
         taken={draft.ports.map((port) => port.name)}
-        onAdd={(name) => onDraft({ ...draft, ports: [...draft.ports, { name, container: "", env: "" }] })}
+        onAdd={(port) => onDraft({ ...draft, ports: [...draft.ports, port] })}
       />
     </Section>
   );
