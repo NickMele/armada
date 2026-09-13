@@ -90,6 +90,7 @@ pub const MIGRATIONS: &[&str] = &[
     crate::work_plan::V59,
     crate::review_record::V60,
     crate::review_view::V61,
+    crate::preferences::V62,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than

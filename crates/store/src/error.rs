@@ -248,6 +248,11 @@ pub enum WriteError {
         job_id: JobId,
         step_id: StepId,
     },
+    /// A preference save named something outside `preferences`' closed set.
+    /// Named no Job: a preference is Fleet-wide, `limits`' own reason.
+    UnknownPreference {
+        name: String,
+    },
 }
 
 /// Why one Job would not load.
@@ -428,6 +433,8 @@ display!(WriteError, |self, f| match self {
         job_id.as_str(),
         step_id.as_str()
     ),
+    WriteError::UnknownPreference { name } =>
+        write!(f, "`{name}` is not a preference this build reads"),
 });
 
 display!(LoadJobError, |self, f| match self {
