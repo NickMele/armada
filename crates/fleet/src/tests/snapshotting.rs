@@ -36,7 +36,7 @@ fn a_fleet_reading_a_real_manifest(home: &TempDir, text: &str) -> Fixture {
     let manifest =
         Manifest::parse(&path, text).unwrap_or_else(|why| panic!("the fixture manifest: {why}"));
     let mut fittings = fittings(home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = manifest;
+    fittings.starting().manifest = manifest;
     Fleet::assembled(fittings)
 }
 

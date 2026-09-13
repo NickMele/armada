@@ -2,8 +2,8 @@
 //! every served `armada.yml` — the composition root's half of
 //! `fleet::repositories::Locating`.
 //!
-//! **`located` has no side effects**, because Fleet may still refuse what it
-//! read; the watch, the records directory and the agent door wait for
+//! **`located` has no side effects but the log**, because Fleet may still
+//! refuse what it read; the watch, the records directory and the agent door wait for
 //! `serving`, which Fleet calls once it has taken the repository.
 
 use std::collections::BTreeMap;
@@ -87,9 +87,13 @@ impl Locator {
 
 impl Locating for Locator {
     fn located(&self, folder: &Path) -> Result<Located, NotLocated> {
-        let not_one = |why: String| NotLocated::NotARepository {
-            folder: folder.display().to_string(),
-            why,
+        let not_one = |why: String| {
+            // The person's sentence names no library; its codes stay here.
+            eprintln!("{} was not read as a repository: {why}", folder.display());
+            NotLocated::NotARepository {
+                folder: folder.display().to_string(),
+                why,
+            }
         };
         let root = folder
             .canonicalize()

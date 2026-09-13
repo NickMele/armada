@@ -45,7 +45,7 @@ async fn a_form_edit_changes_its_line_on_disk_and_answers_with_the_file_as_writt
     let home = TempDir::new();
     let file = kept_in(&home);
     let mut fittings = crate::tests::daemon::fittings(&home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
+    fittings.starting().manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let opened = fleet
@@ -115,7 +115,7 @@ async fn a_file_that_does_not_load_reads_whole_with_nothing_declared() {
     let home = TempDir::new();
     let file = kept_in(&home);
     let mut fittings = crate::tests::daemon::fittings(&home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
+    fittings.starting().manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let broken = "version: 1\nid: edited\ndrone:\n  poke_limit: soon\n";
@@ -135,7 +135,7 @@ async fn a_form_edit_over_a_file_that_moved_is_refused_and_writes_nothing() {
     let home = TempDir::new();
     let file = kept_in(&home);
     let mut fittings = crate::tests::daemon::fittings(&home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
+    fittings.starting().manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let opened = fleet
@@ -169,7 +169,7 @@ async fn a_form_edit_whose_result_would_not_load_is_refused_with_its_faults() {
     let home = TempDir::new();
     let file = kept_in(&home);
     let mut fittings = crate::tests::daemon::fittings(&home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
+    fittings.starting().manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let refused = fleet
@@ -206,7 +206,7 @@ async fn a_form_edit_naming_what_the_file_does_not_hold_is_refused_by_what_it_na
     let home = TempDir::new();
     let file = kept_in(&home);
     let mut fittings = crate::tests::daemon::fittings(&home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
+    fittings.starting().manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let misnamed = fleet

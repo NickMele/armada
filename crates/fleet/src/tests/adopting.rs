@@ -89,7 +89,7 @@ fn a_fleet(home: &TempDir, harness: FakeHarness) -> Fixture {
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.liveness = Liveness::of(Duration::from_secs(120), 2);
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about an adoption"));
     Fleet::assembled(fittings)
@@ -517,7 +517,7 @@ fn watched(home: &TempDir, harness: FakeHarness, clock: Arc<Held>) -> Fixture {
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.clock = clock;
     fittings.liveness = Liveness::of(QUIET_AFTER, 2);
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about an adoption"));

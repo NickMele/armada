@@ -294,7 +294,7 @@ fn watched_with(
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.clock = clock;
     fittings.liveness = liveness;
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about an ending"));

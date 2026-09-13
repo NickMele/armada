@@ -80,7 +80,7 @@ fn a_piece() -> config::ResolvedWorkflow {
 /// would stop at the first gate for a reason that is not this workflow's.
 fn a_fleet_running_epics(home: &TempDir) -> Fixture {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["docs/plan.md"]));
-    fittings.workflows = [epic(), a_piece()]
+    fittings.starting().workflows = [epic(), a_piece()]
         .into_iter()
         .map(|workflow| (workflow.id().clone(), workflow))
         .collect();

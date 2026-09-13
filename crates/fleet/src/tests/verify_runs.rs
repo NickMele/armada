@@ -63,7 +63,7 @@ fn a_fleet(home: &TempDir, text: &str, events: &api::Broadcaster) -> Arc<Fixture
     let manifest = config::Manifest::parse(Path::new("armada.yml"), text)
         .unwrap_or_else(|why| panic!("the fixture manifest did not parse: {why}"));
     let mut fittings = fittings(home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = manifest;
+    fittings.starting().manifest = manifest;
     fittings.budget = CheckBudget::of(Duration::from_secs(120));
     fittings.events = events.clone();
     let at = home.path();

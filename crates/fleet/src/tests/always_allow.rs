@@ -284,7 +284,7 @@ async fn removing_the_allow_makes_the_next_question_ask_again() {
 async fn a_destructive_command_stays_withheld_even_with_a_row_for_it() {
     let home = TempDir::new();
     let mut fittings = the_fittings(&home, a_drone_that_reached_for("c1"));
-    fittings.manifest = config::Manifest::parse(
+    fittings.starting().manifest = config::Manifest::parse(
         std::path::Path::new("armada.yml"),
         "version: 1\nid: 01FIXTUREMANIFEST\ncommands:\n  publish:\n    run: \"npm publish\"\n    destructive: true\n",
     )

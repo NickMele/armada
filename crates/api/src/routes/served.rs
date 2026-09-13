@@ -741,6 +741,12 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // Fleet's own list, carried whole, so a picker replaces it rather than patching.
+    Route {
+        operation: "repositories.changed",
+        method: "GET",
+        path: "/events",
+    },
     // A person's run ending. It names a Job and moves nothing on it; what the
     // run prints is `observe_run`'s, never this stream's.
     Route {

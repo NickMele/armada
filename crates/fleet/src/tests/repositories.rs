@@ -17,7 +17,7 @@ use crate::tests::daemon::{a_proposal, fitted_with, manifest, one};
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
 
-type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+pub(crate) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 /// The id the second repository's `armada.yml` declares.
 const SECOND: &str = "01SECONDMANIFEST";
@@ -80,7 +80,7 @@ impl Locating for Planted {
 
 /// A second checkout under `home`, whose Manifest declares a Check the fixture's
 /// does not, and whose own `fixture-workflow` gates on every Check it declares.
-fn second_repository(home: &TempDir) -> Located {
+pub(crate) fn second_repository(home: &TempDir) -> Located {
     let root = home.path().join("second");
     std::fs::create_dir_all(&root).expect("a second checkout");
     let text = format!("version: 1\nid: {SECOND}\nchecks:\n  deliver:\n    run: go test ./...\n");
@@ -119,7 +119,7 @@ fn folder_at(home: &TempDir, name: &str, set_up: Option<SetUp>) -> Located {
     }
 }
 
-fn a_fleet_reading(home: &TempDir, planted: &Arc<Planted>) -> Fixture {
+pub(crate) fn a_fleet_reading(home: &TempDir, planted: &Arc<Planted>) -> Fixture {
     let mut fittings = fitted_with(
         home,
         FakeWorkProduct::untouched(),
@@ -129,7 +129,7 @@ fn a_fleet_reading(home: &TempDir, planted: &Arc<Planted>) -> Fixture {
     Fleet::assembled(fittings)
 }
 
-fn served(fleet: &Arc<Fixture>) -> axum::Router {
+pub(crate) fn served(fleet: &Arc<Fixture>) -> axum::Router {
     api::router(api::Served::sharing(
         Arc::clone(fleet),
         RunId::carried("01RUN"),
@@ -137,11 +137,11 @@ fn served(fleet: &Arc<Fixture>) -> axum::Router {
     ))
 }
 
-fn body_of(path: &str) -> String {
+pub(crate) fn body_of(path: &str) -> String {
     format!(r#"{{"path":"{path}"}}"#)
 }
 
-fn code(body: &[u8]) -> String {
+pub(crate) fn code(body: &[u8]) -> String {
     let refused: WireError = ipc::decode("a refusal", body).expect("a WireError");
     refused.code
 }
@@ -372,7 +372,7 @@ async fn two_repositories_main_checkouts_claim_separate_spans() {
         FakeWorkProduct::untouched(),
         FakeHarness::that_listens(),
     );
-    fittings.manifest = declaring(&home.path().to_string_lossy(), FIRST)
+    fittings.starting().manifest = declaring(&home.path().to_string_lossy(), FIRST)
         .manifest()
         .clone();
     fittings.locating = Arc::clone(&planted) as Arc<dyn Locating>;

@@ -24,6 +24,7 @@ use crate::job::{JobForgotten, JobList, JobSummary};
 use crate::proposing::ProposalInFlight;
 use crate::reading::ManifestReading;
 use crate::rehearsal::{CheckoutRunRecord, RunRecord};
+use crate::repositories::RepositoryList;
 use crate::servers::ServerState;
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
@@ -138,6 +139,9 @@ pub enum Event {
     ServerServing(ServerState),
     #[serde(rename = "server.exited")]
     ServerExited(ServerState),
+    // The list `list_repositories` answers, whole, whenever it changes.
+    #[serde(rename = "repositories.changed")]
+    RepositoriesChanged(RepositoryList),
 }
 
 impl Event {

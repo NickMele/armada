@@ -80,8 +80,8 @@ fn a_fleet_rehearsing(home: &TempDir, events: &api::Broadcaster) -> Arc<Fixture>
     let workflow = config::ResolvedWorkflow::resolve(&def, &manifest)
         .unwrap_or_else(|why| panic!("the fixture workflow did not resolve: {why}"));
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(workflow);
-    fittings.manifest = manifest;
+    fittings.starting().workflows = one(workflow);
+    fittings.starting().manifest = manifest;
     fittings.events = events.clone();
     // Past the narrowed `test`'s thirty seconds, so what ends it is Stop.
     fittings.budget = CheckBudget::of(Duration::from_secs(120));

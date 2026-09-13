@@ -69,7 +69,7 @@ fn a_step_whose_check_takes_a_while() -> config::ResolvedWorkflow {
 async fn a_job_answers_while_its_own_gate_is_checking() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(a_step_whose_check_takes_a_while());
+    fittings.starting().workflows = one(a_step_whose_check_takes_a_while());
     let fleet = Fleet::assembled(fittings);
 
     let job = fleet

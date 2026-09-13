@@ -73,7 +73,7 @@ fn two_ungated_steps() -> config::ResolvedWorkflow {
 fn bounded_at_one(home: &TempDir) -> Fixture {
     let mut fittings: Fittings<FakeHarness, FakeVcs, FakeWorkProduct> =
         fittings(home, FakeWorkProduct::changed(&["src/parse.rs"]));
-    fittings.workflows = one(two_ungated_steps());
+    fittings.starting().workflows = one(two_ungated_steps());
     fittings.judge = std::sync::Arc::new(FakeJudge::that_fails("no model is asked here"));
     fittings.concurrency = Concurrency::of(1);
     Fleet::assembled(fittings)

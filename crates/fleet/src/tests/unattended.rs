@@ -40,7 +40,7 @@ use crate::tests::tmp::TempDir;
 /// dispatch is the future being dropped, and never the command's own bound.
 fn a_fleet_requiring(home: &TempDir, run: &str) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.manifest = Manifest::parse(
+    fittings.starting().manifest = Manifest::parse(
         Path::new("armada.yml"),
         &format!(
             "version: 1\nid: 01FIXTUREMANIFEST\ncommands:\n  bootstrap:\n    run: {run}\n\

@@ -108,7 +108,7 @@ fn a_fleet_with(home: &TempDir, harness: FakeHarness) -> Fixture {
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about a redirect"));
     Fleet::assembled(fittings)
 }

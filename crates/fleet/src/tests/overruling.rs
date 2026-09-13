@@ -239,7 +239,7 @@ async fn an_overruled_step_catches_the_branch_up_like_any_other_boundary() {
     // catch-up. The step an override advances to is `summarise`, which is where
     // this fixture would otherwise send the work out — and a commit, a second
     // rebase, a push and a pull request would all land in the same list.
-    fittings.workflows = one(testkit::delivering(judged_then_summarised_steps(), None));
+    fittings.starting().workflows = one(testkit::delivering(judged_then_summarised_steps(), None));
     fittings.judge = Arc::new(a_judge_that_refuses());
     fittings.vcs = FakeVcs::new().delivering(Delivering {
         standing: Standing::Behind { commits: 2 },
@@ -668,7 +668,7 @@ async fn a_job_whose_drone_has_gone_gets_a_fresh_one_at_the_next_step() {
 async fn a_fresh_drone_at_the_next_step_is_told_what_the_overruled_one_produced() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(judged_then_summarised());
+    fittings.starting().workflows = one(judged_then_summarised());
     fittings.judge = Arc::new(a_judge_that_refuses());
     // Echoes its opening brief and exits, which is how the brief becomes
     // something a test can read at all.

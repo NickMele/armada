@@ -27,7 +27,7 @@ use super::workflows::{
 use super::{Counted, Ticking, NEVER_QUIET, UNTRIPPABLE};
 use crate::allowance::{Allowance, Micros};
 use crate::commanding::CommandBudget;
-use crate::daemon::{Fittings, Fleet, Host};
+use crate::daemon::{Fittings, Fleet, Host, StartingIn};
 use crate::dry_run::DryRuns;
 use crate::gate::CheckBudget;
 use crate::headroom::{Bytes, Headroom, Polling, Spare};
@@ -79,16 +79,17 @@ pub fn fitted_over<V>(
         work,
         clock: Arc::new(Ticking::from_nine()),
         mint: Arc::new(Counted::from_one()),
-        workflows: one(two_steps()),
-        left_out: Vec::new(),
-        manifest: manifest(),
+        starting_in: Some(StartingIn {
+            root: root.clone(),
+            // Same value as `root` in this fixture; `crate::tests::records`
+            // plants a distinct one where the seam is the subject.
+            records_root: root.clone(),
+            workflows: one(two_steps()),
+            left_out: Vec::new(),
+            manifest: manifest(),
+        }),
         host: Host {
             user: String::from("someone"),
-            repo_root: root.clone(),
-            // Same value as `repo_root` in this fixture — the fixtures that
-            // exercise the seam between the two on purpose plant their own,
-            // distinct `records_root`; see `crate::tests::records`.
-            records_root: root.clone(),
             path: "/usr/bin:/bin".to_string(),
             home: root,
             mcp_config: "/etc/armada/mcp.json".to_string(),
@@ -219,7 +220,7 @@ pub fn a_fleet_delivering_nothing(
     vcs: FakeVcs,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = one(two_steps_delivering_nothing());
+    fittings.starting().workflows = one(two_steps_delivering_nothing());
     fittings.vcs = vcs;
     Fleet::assembled(fittings)
 }
@@ -234,7 +235,7 @@ pub fn a_fleet_gated_on_a_person(
     vcs: FakeVcs,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = one(two_steps_gated_on_a_person(
+    fittings.starting().workflows = one(two_steps_gated_on_a_person(
         gate_on,
         None,
         Some("summarise"),
@@ -252,7 +253,7 @@ pub fn a_fleet_gated_on_a_manifest_rule(
     key: &str,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = one(two_steps_gated_on_a_manifest_rule(gate_on, key, None));
+    fittings.starting().workflows = one(two_steps_gated_on_a_manifest_rule(gate_on, key, None));
     Fleet::assembled(fittings)
 }
 
@@ -277,11 +278,11 @@ pub fn a_fleet_gated_on_a_manifest_rule_saying(
     // make the case pass for the wrong reason, on a ruling that never reached
     // the gate.
     fittings.judge = Arc::new(FakeJudge::with_no_objection());
-    fittings.workflows = one(match question {
+    fittings.starting().workflows = one(match question {
         None => two_steps_gated_on_a_manifest_rule(gate_on, key, None),
         Some(question) => two_steps_gated_on_a_manifest_rule_judged(gate_on, key, question),
     });
-    fittings.manifest = Manifest::parse(
+    fittings.starting().manifest = Manifest::parse(
         std::path::Path::new("armada.yml"),
         &format!("version: 1\nid: 01FIXTUREMANIFEST\n{says}"),
     )
@@ -300,7 +301,7 @@ pub fn a_fleet_gated_on_a_person_delivering_nothing(
     vcs: FakeVcs,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = one(two_steps_gated_on_a_person(gate_on, None, None));
+    fittings.starting().workflows = one(two_steps_gated_on_a_person(gate_on, None, None));
     fittings.vcs = vcs;
     Fleet::assembled(fittings)
 }
@@ -314,7 +315,7 @@ pub fn a_fleet_whose_manifest_declares_a_base(
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
     fittings.vcs = vcs;
-    fittings.manifest = Manifest::parse(
+    fittings.starting().manifest = Manifest::parse(
         std::path::Path::new("armada.yml"),
         &format!("version: 1\nid: 01FIXTUREMANIFEST\nbase: {base}\n"),
     )
@@ -334,7 +335,7 @@ pub fn a_fleet_holding(
     next: u64,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = one(workflow);
+    fittings.starting().workflows = one(workflow);
     fittings.mint = Arc::new(Counted::from_next(next));
     Fleet::assembled(fittings)
 }
@@ -348,7 +349,7 @@ pub fn a_fleet_holding_all(
     workflows: Vec<config::ResolvedWorkflow>,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = workflows
+    fittings.starting().workflows = workflows
         .into_iter()
         .map(|workflow| (workflow.id().clone(), workflow))
         .collect();
@@ -369,7 +370,7 @@ pub fn a_fleet_judged_by(
     judge: impl Into<Arc<FakeJudge>>,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = one(workflow);
+    fittings.starting().workflows = one(workflow);
     fittings.judge = judge.into();
     Fleet::assembled(fittings)
 }
@@ -386,7 +387,7 @@ pub fn a_fleet_proposing_through(
     proposer: FakeJudge,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = workflows
+    fittings.starting().workflows = workflows
         .into_iter()
         .map(|workflow| (workflow.id().clone(), workflow))
         .collect();
@@ -416,4 +417,13 @@ pub(super) fn a_fleet_whose_drone_leaves(
         work,
         FakeHarness::that_echoes_its_first_turn(),
     ))
+}
+
+impl<H, V, W> Fittings<H, V, W> {
+    /// The repository a fixture starts in, for a case that varies it.
+    pub fn starting(&mut self) -> &mut StartingIn {
+        self.starting_in
+            .as_mut()
+            .expect("a fixture starts in a repository")
+    }
 }

@@ -92,7 +92,7 @@ async fn refused_at_a_price(
             a_drone_priced_at(cost_micros, turns),
         );
     fittings.allowance = SHIPPED;
-    fittings.workflows = one(crate::tests::overruling::judged_then_summarised());
+    fittings.starting().workflows = one(crate::tests::overruling::judged_then_summarised());
     fittings.judge = Arc::new(crate::tests::overruling::a_judge_that_refuses());
     let fleet = Fleet::assembled(fittings);
     let job = approved(&fleet, home, "a change a Judge will refuse").await;

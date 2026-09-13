@@ -118,7 +118,7 @@ pub(super) fn the_fittings(
     harness: FakeHarness,
 ) -> Fittings<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fitted_with(home, FakeWorkProduct::changed(&["src/parse.rs"]), harness);
-    fittings.workflows = one(one_step());
+    fittings.starting().workflows = one(one_step());
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about a command"));
     fittings
 }

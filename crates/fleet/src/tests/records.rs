@@ -26,7 +26,7 @@ type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 /// directories, so nothing about them can agree by coincidence.
 fn a_fleet_with_records_elsewhere(repo: &TempDir, records: &TempDir) -> Fixture {
     let mut fittings = fittings(repo, FakeWorkProduct::changed(&[]));
-    fittings.host.records_root = records.path().to_string_lossy().to_string();
+    fittings.starting().records_root = records.path().to_string_lossy().to_string();
     Fleet::assembled(fittings)
 }
 
@@ -83,8 +83,8 @@ async fn a_running_checks_live_log_lands_under_records_root_and_never_under_repo
     let repo = TempDir::new();
     let records = TempDir::new();
     let mut fittings = fittings(&repo, FakeWorkProduct::changed(&["src/lib.rs"]));
-    fittings.host.records_root = records.path().to_string_lossy().to_string();
-    fittings.workflows = one(workflow("/bin/sleep 0.4"));
+    fittings.starting().records_root = records.path().to_string_lossy().to_string();
+    fittings.starting().workflows = one(workflow("/bin/sleep 0.4"));
     let fleet = Fleet::assembled(fittings);
 
     let job = fleet

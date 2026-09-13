@@ -67,7 +67,7 @@ pub(crate) fn two_at_once(home: &TempDir) -> (Fixture, Arc<Placing>) {
     let peers = Placing::nothing();
     let mut fittings: Fittings<FakeHarness, FakeVcs, FakeWorkProduct> =
         fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(one_scoped_step());
+    fittings.starting().workflows = one(one_scoped_step());
     fittings.concurrency = Concurrency::of(2);
     fittings.peers = Arc::clone(&peers) as Arc<dyn crate::peer::PeerOf>;
     (Fleet::assembled(fittings), peers)
@@ -318,7 +318,7 @@ async fn a_dependent_whose_upstream_failed_does_not_take_the_free_place() {
     let home = TempDir::new();
     let mut fittings: Fittings<FakeHarness, FakeVcs, FakeWorkProduct> =
         fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = a_catalogue()
+    fittings.starting().workflows = a_catalogue()
         .into_iter()
         .map(|workflow| (workflow.id().clone(), workflow))
         .collect();

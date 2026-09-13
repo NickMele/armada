@@ -65,7 +65,7 @@ Process-group semantics differ across platforms, and where that difference belon
 
 ## Repositories
 
-**One Fleet serves many repositories, and one Board lists every one's Jobs.** The repository `armada serve` starts in is the first; a person adds another by folder, or clones one from a URL into a folder they pick, and the rail's project picker switches between their Manifests. The rejected alternative was one Fleet per repository, which would have put a Board, a store and a listener per project in front of a person who wanted one.
+**One Fleet serves many repositories, and one Board lists every one's Jobs.** A person adds each by folder, or clones one from a URL into a folder they pick, and the rail's project picker switches between their Manifests. The rejected alternative was one Fleet per repository, which would have put a Board, a store and a listener per project in front of a person who wanted one.
 
 > **Rule.** A Job belongs to the repository whose Manifest it was created against, found through `owner_manifest_id`.
 > Why: every path a Job writes to — its worktree, its records, its main checkout — is that repository's, and a lookup that fell back to another would work a Job in a tree it never ran in.
@@ -73,9 +73,14 @@ Process-group semantics differ across platforms, and where that difference belon
 > **Rule.** Two served repositories never declare the same Manifest id, and a folder already served is refused.
 > Why: the id is the whole of how a Job names its repository, so a second holder would make that name ambiguous.
 
-**A folder with no `armada.yml` is served, for Scan to read.** It lists as a repository and not as a Manifest, and it gains its Manifest when Write puts one at its root. A folder that is not the root of a git repository is refused.
+**Fleet starts with none.** A fresh install has nothing set up, so `armada serve` starts, binds and serves an empty list, and the person goes to find the first repository. The working directory is not a repository by default; a folder given to `armada serve` is added as `add_repository` would add it, and refused before the bind if it will not read. A route that needs a repository refuses plainly while none is served, and reconciliation and the agent door have nothing to act on. `armada check` and `armada run` are about the repository a person stands in, and still read it from there.
 
-**Each repository keeps its own Manifest, workflows, records, worktrees and checkout runs.** A route acting on one names it — `?manifest_id=` where it has a Manifest, `?repository=` on Scan and its proposals — and an absent name is the repository Fleet started in.
+> **Rule.** Every change to the list is published as `repositories.changed`, carrying the list whole.
+> Why: a repository added in one window, or a clone that lands after its dialog closed, has to reach every open Bridge, and a delta would be a second shape to keep in step with `list_repositories`.
+
+**A folder with no `armada.yml` is served, for Scan to read.** It lists as a repository and not as a Manifest, and it gains its Manifest when Write puts one at its root. A folder that is not the root of a git repository is refused in one sentence naming it once and saying to choose the repository's root or clone it; git's own message goes to Fleet's log.
+
+**Each repository keeps its own Manifest, workflows, records, worktrees and checkout runs.** A route acting on one names it — `?manifest_id=` where it has a Manifest, `?repository=` on Scan and its proposals — and an absent name is the first added that has a Manifest, or for Scan the first added.
 
 **Restart and adding reconcile the same way.** Fleet remembers every repository it serves, serves them again on restart before reconciling, and reconciles each over its own Jobs. A remembered folder that is gone is said and stays remembered; a Job whose repository is not served is left as it stands, and is reconciled when that repository is added.
 

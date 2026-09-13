@@ -27,7 +27,7 @@ fn a_fleet_naming_a_link(
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings =
         crate::tests::daemon::fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = a_catalogue()
+    fittings.starting().workflows = a_catalogue()
         .into_iter()
         .map(|workflow| (workflow.id().clone(), workflow))
         .collect();

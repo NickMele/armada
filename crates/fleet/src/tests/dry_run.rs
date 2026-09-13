@@ -157,7 +157,7 @@ fn a_fleet_over(
         FakeWorkProduct::changed(changed).showing("+    let x = 1;\n"),
         a_quiet_drone(),
     );
-    fittings.workflows = one(workflow);
+    fittings.starting().workflows = one(workflow);
     fittings.clock = clock;
     fittings.liveness = Liveness::of(QUIET_AFTER, 2);
     fittings.norms = StepNorms::of(60, WALL_CLOCK, Duration::from_secs(120));

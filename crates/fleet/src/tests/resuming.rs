@@ -77,7 +77,7 @@ fn a_full_fleet(home: &TempDir) -> Fixture {
         FakeWorkProduct::changed(&["src/parse.rs"]),
         a_drone_that_stays(),
     );
-    fittings.workflows = one(two_steps());
+    fittings.starting().workflows = one(two_steps());
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about this"));
     fittings.concurrency = Concurrency::of(1);
     Fleet::assembled(fittings)

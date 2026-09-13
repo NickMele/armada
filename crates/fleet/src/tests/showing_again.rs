@@ -48,8 +48,8 @@ const HELD_WHILE_ASKED: &str =
 fn a_fleet_showing(home: &TempDir, run: &str) -> Arc<Fixture> {
     let (workflow, armada_yml) = shown_step(run, "shots", None);
     let mut fittings = fittings(home, FakeWorkProduct::untouched());
-    fittings.workflows = one(workflow);
-    fittings.manifest = armada_yml;
+    fittings.starting().workflows = one(workflow);
+    fittings.starting().manifest = armada_yml;
     // A press held on a file is bounded by the Check budget, and the fixture's
     // five seconds would end one on a loaded machine before the test lifts it.
     fittings.budget = CheckBudget::of(Duration::from_secs(600));
@@ -96,8 +96,8 @@ evidence:
         .unwrap_or_else(|refused| panic!("the fixture did not resolve: {refused}"));
 
     let mut fittings = fittings(home, FakeWorkProduct::untouched());
-    fittings.workflows = one(resolved);
-    fittings.manifest = armada_yml;
+    fittings.starting().workflows = one(resolved);
+    fittings.starting().manifest = armada_yml;
     // A press held while `ready` is asked is bounded by the Check budget.
     fittings.budget = CheckBudget::of(Duration::from_secs(600));
     Arc::new(Fleet::assembled(fittings))
@@ -127,8 +127,8 @@ fn a_fleet_showing_two_captured_steps(home: &TempDir) -> Arc<Fixture> {
         .unwrap_or_else(|refused| panic!("the fixture did not resolve: {refused}"));
 
     let mut fittings = fittings(home, FakeWorkProduct::untouched());
-    fittings.workflows = one(resolved);
-    fittings.manifest = armada_yml;
+    fittings.starting().workflows = one(resolved);
+    fittings.starting().manifest = armada_yml;
     fittings.budget = CheckBudget::of(Duration::from_secs(600));
     Arc::new(Fleet::assembled(fittings))
 }

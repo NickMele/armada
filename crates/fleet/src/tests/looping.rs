@@ -58,7 +58,7 @@ fn a_loop_of_two_steps(cap: u32) -> config::ResolvedWorkflow {
 /// A Fleet running [`a_loop_of_two_steps`].
 fn a_fleet_running_a_loop(home: &TempDir, work: FakeWorkProduct, cap: u32) -> Fixture {
     let mut fittings = fittings(home, work);
-    fittings.workflows = one(a_loop_of_two_steps(cap));
+    fittings.starting().workflows = one(a_loop_of_two_steps(cap));
     crate::daemon::Fleet::assembled(fittings)
 }
 
@@ -414,7 +414,7 @@ fn wrote_the_plan(home: &TempDir, handle: &str) {
 async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["docs/plan.md"]));
-    fittings.workflows = one(design_plan());
+    fittings.starting().workflows = one(design_plan());
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let job = fleet

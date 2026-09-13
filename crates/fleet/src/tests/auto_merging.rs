@@ -38,12 +38,12 @@ use crate::tests::tmp::TempDir;
 /// the default — which is the pair the resolution is made of.
 fn a_fleet_whose_policy_answers(home: &TempDir, says: &str) -> Fixture {
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(two_steps_gated_on_a_manifest_rule(
+    fittings.starting().workflows = one(two_steps_gated_on_a_manifest_rule(
         "summarise",
         "auto_merge",
         Some("summarise"),
     ));
-    fittings.manifest = Manifest::parse(
+    fittings.starting().manifest = Manifest::parse(
         std::path::Path::new("armada.yml"),
         &format!("version: 1\nid: 01FIXTUREMANIFEST\n{says}"),
     )
@@ -178,12 +178,12 @@ async fn always_merges_whatever_the_forge_came_to() {
 async fn a_step_that_did_not_ask_for_the_policy_is_not_merged_by_it() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(two_steps_gated_on_a_person(
+    fittings.starting().workflows = one(two_steps_gated_on_a_person(
         "summarise",
         None,
         Some("summarise"),
     ));
-    fittings.manifest = Manifest::parse(
+    fittings.starting().manifest = Manifest::parse(
         std::path::Path::new("armada.yml"),
         "version: 1\nid: 01FIXTUREMANIFEST\nauto_merge: always\n",
     )

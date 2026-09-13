@@ -198,7 +198,7 @@ pub(super) fn a_watched_fleet(
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(workflow);
+    fittings.starting().workflows = one(workflow);
     fittings.judge = judge;
     fittings.norms = norms;
     Fleet::assembled(fittings)

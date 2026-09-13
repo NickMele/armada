@@ -25,6 +25,8 @@ const ALREADY_SERVED: &str = "fleet.repository_served";
 const NOT_REMEMBERED: &str = "fleet.repository_not_remembered";
 /// A `?repository=` naming nothing served. A 422.
 const NO_SUCH_REPOSITORY: &str = "fleet.no_such_repository";
+/// A request that needs a repository, when Fleet serves none yet. A 422.
+const NO_REPOSITORY: &str = "fleet.no_repository";
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -59,11 +61,14 @@ where
             })
     }
 
-    /// The repository a Manifest-scoped request names. Absent is the one
-    /// Fleet was started in, which is every request a Bridge sent before this.
+    /// The repository a Manifest-scoped request names. Absent is the first
+    /// added that has a Manifest, and refused where there is none.
     pub(crate) fn served_named(&self, named: Option<&ipc::ManifestId>) -> Result<Served, Refusal> {
         let Some(named) = named else {
-            return Ok(self.repositories().first());
+            return self
+                .repositories()
+                .first()
+                .ok_or_else(|| self.nothing_served("has a Manifest"));
         };
         self.repositories().serving(named.as_str()).ok_or_else(|| {
             self.refusal(Adrift::NoSuchManifest {
@@ -85,10 +90,11 @@ where
     }
 
     /// The repository Scan and its proposals read, by root. Absent is the
-    /// first, for [`served_named`](Self::served_named)'s reason.
+    /// first added, Manifest or none, and refused where nothing is served.
     pub(crate) fn repository_named(&self, root: Option<&str>) -> Result<Arc<Repository>, Refusal> {
         let Some(root) = root else {
-            return Ok(Arc::clone(self.repositories().first().repository()));
+            let first = self.repositories().every().into_iter().next();
+            return first.ok_or_else(|| self.nothing_served("is served"));
         };
         self.repositories().at(root).ok_or_else(|| {
             Refusal::Unacceptable(WireError::raised(
@@ -127,10 +133,27 @@ where
         }
     }
 
-    /// The repository Fleet was started in, for a test that has only the one.
+    /// The repository a fixture starts in, for a test that has only the one.
     #[cfg(test)]
     pub(crate) fn first(&self) -> Served {
-        self.repositories().first()
+        self.repositories()
+            .first()
+            .expect("a fixture starts in a repository")
+    }
+
+    /// Refused plainly: Fleet serves no repository that `held` yet.
+    fn nothing_served(&self, held: &str) -> Refusal {
+        Refusal::Unacceptable(WireError::raised(
+            NO_REPOSITORY,
+            format!("No repository {held} yet, so add one by folder or clone one from its URL"),
+            self.run_id(),
+        ))
+    }
+
+    /// Say the list changed, whole, so every Bridge's picker reads it again.
+    fn published_repositories(&self) {
+        let list = self.repository_list();
+        self.events().publish(ipc::Event::RepositoriesChanged(list));
     }
 
     /// `list_repositories`.
@@ -186,6 +209,8 @@ where
             .lock()
             .await
             .remember_repository(added.root(), &at);
+        // Before reconciling, which can refuse: the repository is served either way.
+        self.published_repositories();
         if let Some(served) = Served::of(&added) {
             self.locating().serving(served.root());
             self.reconciled_in(&served)
@@ -205,17 +230,37 @@ where
         Ok(summary_of(&added))
     }
 
+    /// Serve at start a folder `armada serve` was given, read before the bind:
+    /// added and remembered as an add is, and reconciled with the rest.
+    pub async fn served_at_start(&self, located: super::Located) -> Result<(), String> {
+        let added = self
+            .repositories()
+            .add(located)
+            .map_err(|why| why.to_string())?;
+        let at = self.now();
+        let remembered = self
+            .store()
+            .lock()
+            .await
+            .remember_repository(added.root(), &at);
+        if Served::of(&added).is_some() {
+            self.locating().serving(added.root());
+        }
+        remembered.map_err(|why| format!("{} will not be remembered: {why}", added.root()))
+    }
+
     /// Serve again every repository the store remembers, **before
-    /// reconciliation**, so their Jobs are reconciled with the first's. The
-    /// first is remembered here too. Answers what would not be served, and why:
-    /// a remembered folder that is gone stays remembered.
+    /// reconciliation**, so their Jobs are reconciled together. What is served
+    /// already is remembered too. Answers what would not be served, and why: a
+    /// remembered folder that is gone stays remembered.
     pub async fn served_again(&self) -> Vec<String> {
-        let first = self.repositories().first();
         let at = self.now();
         let mut store = self.store().lock().await;
         let mut said = Vec::new();
-        if let Err(why) = store.remember_repository(first.root(), &at) {
-            said.push(format!("{} will not be remembered: {why}", first.root()));
+        for held in self.repositories().every() {
+            if let Err(why) = store.remember_repository(held.root(), &at) {
+                said.push(format!("{} will not be remembered: {why}", held.root()));
+            }
         }
         let remembered = match store.remembered_repositories() {
             Ok(roots) => roots,
@@ -259,6 +304,7 @@ where
         if let Some(set_up) = located.set_up {
             if let Ok(served) = self.repositories().set_up(repository.root(), set_up) {
                 self.locating().serving(served.root());
+                self.published_repositories();
             }
         }
     }

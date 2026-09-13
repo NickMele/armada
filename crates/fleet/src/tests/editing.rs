@@ -229,7 +229,7 @@ async fn a_fleet_refuses_a_moved_save_with_the_disk_on_the_refusal_and_admits_an
     let home = TempDir::new();
     let file = manifest_in(&home);
     let mut fittings = crate::tests::daemon::fittings(&home, FakeWorkProduct::changed(&[]));
-    fittings.manifest = Manifest::parse(&file, GOOD).expect("the fixture parses");
+    fittings.starting().manifest = Manifest::parse(&file, GOOD).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let opened = fleet
