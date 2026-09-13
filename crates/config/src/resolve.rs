@@ -30,6 +30,7 @@ use core_model::{
     EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, WorkflowId,
 };
 
+use crate::catalogue::WorkflowSource;
 use crate::error::{Disagreement, ResolveError, UnknownCheck};
 use crate::manifest::{Check, Manifest};
 use crate::workflow::{MechanicalCheck, Step, WorkflowDef};
@@ -47,6 +48,9 @@ pub struct ResolvedWorkflow {
     /// Job does once it has a workflow depends on what requests that workflow
     /// is for — so a record carrying it would store a sentence nobody reads.
     for_requests: Option<String>,
+    /// Which of the three places the definition was read from. Beside the
+    /// frozen copy, for now: a Job's record does not carry it yet.
+    source: WorkflowSource,
     frozen: FrozenWorkflow,
 }
 
@@ -106,6 +110,7 @@ impl ResolvedWorkflow {
             workflow: def.path().to_path_buf(),
             manifest: manifest.path().to_path_buf(),
             for_requests: def.for_requests().map(str::to_string),
+            source: WorkflowSource::Repository,
             frozen: FrozenWorkflow::frozen(
                 def.id().clone(),
                 def.name().to_string(),
@@ -119,6 +124,20 @@ impl ResolvedWorkflow {
     /// record outlives the file at it, and what a Job needs is the declaration.
     pub fn frozen(&self) -> &FrozenWorkflow {
         &self.frozen
+    }
+
+    /// Which of the three places the definition was read from.
+    ///
+    /// **A definition resolved on its own is the repository's**, the only
+    /// source there was before [`crate::Catalogue`]; only the catalogue can
+    /// say otherwise, so nothing outside this crate can call a file Armada's.
+    pub fn source(&self) -> WorkflowSource {
+        self.source
+    }
+
+    pub(crate) fn read_from(mut self, source: WorkflowSource) -> ResolvedWorkflow {
+        self.source = source;
+        self
     }
 
     /// The definition this came from.

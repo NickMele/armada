@@ -3,9 +3,9 @@
 //! Owns scan, propose, select and verify, plus Check and Command definitions.
 //! A Manifest is an `armada.yml` at a workspace root, version-controlled with
 //! the project it configures; the nearest one up the tree owns a path, and the
-//! root owns what no Workspace claims. **There is no Kit**, though this line
-//! said so until `#60`: `settings.toml` resolves most values *Kit → Manifest*,
-//! nothing here parses one, and the tiers are a constant, this Manifest, a step.
+//! root owns what no Workspace claims. **Of Kit, only Workflows are read**:
+//! [`catalogue`](mod@catalogue) merges them between Armada's and a repository's
+//! own (#425). Every other tier is a constant, this Manifest, a step.
 //!
 //! **Everything either schema holds and this crate does not read is an unknown
 //! key, and hard-fails.** [`manifest`](mod@manifest) and
@@ -24,6 +24,7 @@
 //! cache expiry: *when* a Manifest is read again is `armada::watching`'s, and
 //! [`live`](mod@live) says only which keys a re-read may move.
 
+mod catalogue;
 mod error;
 mod judge;
 mod live;
@@ -38,6 +39,7 @@ mod yaml;
 #[cfg(test)]
 mod tests;
 
+pub use catalogue::{carried, Catalogue, CatalogueRefused, WorkflowSource, Written, CARRIED_AT};
 pub use error::{Disagreement, Fault, LoadError, Refusal, ResolveError, UnknownCheck};
 pub use live::{Adopted, Frozen, LiveKey, Moved, Reloads};
 pub use manifest::{
