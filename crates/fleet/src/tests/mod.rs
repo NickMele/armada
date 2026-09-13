@@ -154,3 +154,4 @@ mod underway;
 mod verify_runs;
 mod watching;
 mod widening;
+mod workspace_verify;

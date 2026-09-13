@@ -26,6 +26,8 @@ mod shared;
 mod unrehearsable;
 /// Verify: setup and every Check once, as a sequence of checkout runs.
 mod verifying;
+/// Which file a Verify runs: the root's, or one workspace's below it.
+mod workspace;
 
 use std::sync::Arc;
 use std::time::Duration;

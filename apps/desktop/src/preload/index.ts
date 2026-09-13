@@ -308,7 +308,8 @@ const api: BridgeApi = {
   watchManifestDrift: (want: boolean): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.watchManifestDrift, want),
 
-  startCheckoutVerify: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.startCheckoutVerify),
+  startCheckoutVerify: (workspace?: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.startCheckoutVerify, workspace),
 
   // The Manifest file. **A write into the repository**, and still no path: the
   // renderer hands over text and what it started from, and Fleet decides

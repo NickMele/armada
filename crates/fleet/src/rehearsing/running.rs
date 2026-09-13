@@ -172,7 +172,8 @@ where
     /// Manifest declares no `ports:`.
     async fn ran(&self, plan: &Plan, log: &Path, stopped: watch::Receiver<bool>) -> Outcome {
         let budget = self.budget().duration();
-        let path = plan.tree.path.as_path();
+        let dir = plan.tree.commands_in();
+        let path = dir.as_path();
         // The Job's own claimed span, or the main checkout's — `crate::ports`.
         let (ports, env) = match plan.place.job.as_ref() {
             Some(job) => (self.port_map(job).await, self.port_env(job).await),

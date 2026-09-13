@@ -169,6 +169,7 @@ impl Commands for FakeDaemon {
     }
     async fn start_checkout_verify(
         self: std::sync::Arc<Self>,
+        _asked: ipc::StartCheckoutVerify,
         _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutVerify, Refusal> {
         self.runs_nothing_here()

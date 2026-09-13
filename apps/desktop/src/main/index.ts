@@ -578,7 +578,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.watchManifestDrift, (_event, want: boolean) =>
     connection?.rehearsal.watchManifestDrift(want),
   );
-  ipcMain.handle(CHANNELS.startCheckoutVerify, () => connection?.rehearsal.startCheckoutVerify());
+  ipcMain.handle(CHANNELS.startCheckoutVerify, (_event, workspace: unknown) =>
+    connection?.rehearsal.startCheckoutVerify(typeof workspace === "string" ? workspace : undefined),
+  );
   // The Manifest file, read and saved. Fleet resolves the path and guards the
   // write against a file that moved; nothing here composes either.
   ipcMain.handle(CHANNELS.readManifestFile, () => connection?.editing.readFile());

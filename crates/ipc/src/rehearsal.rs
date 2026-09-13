@@ -396,6 +396,16 @@ pub struct CheckoutRunOpened {
 // and Undo — so nothing here restates a run's shape. What this adds is the
 // order, which step is out, and why a step did not run.
 
+/// `start_checkout_verify`'s body, which may be empty: an empty body is the
+/// root's Manifest, as every press before workspaces sent.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartCheckoutVerify {
+    /// A directory below the repository root whose own `armada.yml` Verify
+    /// runs, in that directory. Absent, empty or `.` is the root's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+}
+
 /// `start_checkout_verify`'s answer, and `CheckoutRunSheet::verify`.
 ///
 /// **A rehearsal of the whole file, never a verdict on it.** No step writes
@@ -410,6 +420,10 @@ pub struct CheckoutVerify {
     /// underway.**
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ended_at: Option<Instant>,
+    /// The workspace whose own `armada.yml` this ran, relative to the
+    /// repository root. **Absent is the root's Manifest.**
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
     /// Setup in `setup.requires` order, then every Check in the order the
     /// Manifest writes them — what Verify runs, and nothing else it declares.
     pub steps: Vec<VerifyStep>,

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { MANIFEST_ID, repository } from "../../../fixtures/build/base";
+import { VERIFY_ENDED } from "../Manifest/Manifest";
 import { SCRATCH, SetupFrom } from "./Setup";
 
 /**
@@ -147,18 +148,46 @@ export const PolicyInWords: Story = {
   },
 };
 
-/** Write, and the sheet that wrote the file says what landed and which file Verify runs. */
+/** Write, and the sheet that wrote a workspace's file offers Verify for that file, sending its workspace. */
 export const Write: Story = {
-  args: { write: "took" },
-  play: async ({ canvasElement }) => {
+  args: { write: "took", sheet: { state: "read", sheet: { setup: [], checks: [], commands: [] } }, onVerify: fn() },
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const list = await canvas.findByRole("region", { name: "Workspaces" });
     await userEvent.click(within(list).getByRole("button", { name: "Open apps/web" }));
     const sheet = await canvas.findByRole("dialog", { name: "Proposal for apps/web" });
     await userEvent.click(within(sheet).getByRole("button", { name: "Write apps/web/armada.yml" }));
     await expect(await within(sheet).findByText(/^Wrote apps\/web\/armada.yml at /)).toBeVisible();
-    await expect(within(sheet).getByText(/This file is not that one/)).toBeVisible();
     await expect(within(sheet).queryByRole("button", { name: /^Edit / })).toBeNull();
+    const verify = within(sheet).getByRole("region", { name: "Verify" });
+    await userEvent.click(within(verify).getByRole("button", { name: "Verify" }));
+    await expect(args.onVerify).toHaveBeenCalledWith("apps/web");
+  },
+};
+
+/** A workspace's Verify lands on the sheet that wrote its file, and not on another workspace's. */
+export const WorkspaceVerifyLands: Story = {
+  name: "A workspace's Verify lands on its sheet",
+  args: {
+    write: "took",
+    sheet: { state: "read", sheet: { setup: [], checks: [], commands: [], verify: { ...VERIFY_ENDED, workspace: "apps/web" } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = await canvas.findByRole("region", { name: "Workspaces" });
+    await userEvent.click(within(list).getByRole("button", { name: "Open apps/web" }));
+    const web = await canvas.findByRole("dialog", { name: "Proposal for apps/web" });
+    await userEvent.click(within(web).getByRole("button", { name: "Write apps/web/armada.yml" }));
+    const verify = await within(web).findByRole("region", { name: "Verify" });
+    await expect(within(verify).getByText(/^Ran 4 of 4\./)).toBeVisible();
+
+    await userEvent.click(within(web).getByRole("button", { name: "Back to the workspaces" }));
+    await userEvent.click(within(list).getByRole("button", { name: "Open services/api" }));
+    const api = await canvas.findByRole("dialog", { name: "Proposal for services/api" });
+    await userEvent.click(within(api).getByRole("button", { name: "Write services/api/armada.yml" }));
+    const theirs = await within(api).findByRole("region", { name: "Verify" });
+    await expect(within(theirs).queryByText(/^Ran 4 of 4\./)).toBeNull();
+    await expect(within(theirs).getByRole("button", { name: "Verify" })).toBeEnabled();
   },
 };
 

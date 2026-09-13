@@ -4,7 +4,7 @@
 use std::fmt;
 
 use api::Refusal;
-use ipc::WireError;
+use ipc::{WireError, WireValue};
 
 /// A run that cannot start, a run that cannot stop, a stop of nothing.
 const CANNOT_RUN_HERE: &str = "fleet.cannot_run_here";
@@ -18,6 +18,10 @@ const WORKTREE_MANIFEST_UNREADABLE: &str = "fleet.worktree_manifest_unreadable";
 const NOTHING_TO_NARROW_TO: &str = "fleet.nothing_to_narrow_to";
 /// An id no run of this Job has.
 const NO_SUCH_RUN: &str = "fleet.no_such_run";
+/// A workspace named by a path that leaves the repository.
+const WORKSPACE_OUTSIDE: &str = "fleet.workspace_outside_repository";
+/// A workspace's own `armada.yml` is not there, or would not load. Carries `faults`.
+const WORKSPACE_MANIFEST_UNREADABLE: &str = "fleet.workspace_manifest_unreadable";
 /// The worktree or the run's own directory would not read or write.
 const RUN_FAULT: &str = "fleet.run_fault";
 
@@ -110,6 +114,15 @@ pub enum Unrehearsable {
     VerifyUnderway,
     /// The Manifest declares no setup and no Checks.
     NothingToVerify,
+    /// A workspace named by a path that leaves the repository.
+    WorkspaceOutside {
+        dir: String,
+    },
+    /// A workspace's own `armada.yml` is missing or would not load.
+    WorkspaceManifest {
+        file: String,
+        refused: ipc::ManifestRefused,
+    },
 }
 
 impl Unrehearsable {
@@ -140,7 +153,24 @@ impl Unrehearsable {
             Unreadable { .. } | NotKept { .. } | DiffUnreadable { .. } => {
                 (RUN_FAULT, Refusal::Fault)
             }
+            WorkspaceOutside { .. } => (WORKSPACE_OUTSIDE, Refusal::Unacceptable),
+            WorkspaceManifest { .. } => (WORKSPACE_MANIFEST_UNREADABLE, Refusal::Unacceptable),
         }
+    }
+
+    /// A workspace file's faults as `[key, fault]` pairs, the shape a refused
+    /// Write carries them in.
+    pub(super) fn faults(&self) -> Option<WireValue> {
+        let Unrehearsable::WorkspaceManifest { refused, .. } = self else {
+            return None;
+        };
+        let pairs = refused.faults.iter().map(|one| {
+            WireValue::List(vec![
+                WireValue::Str(one.key.clone()),
+                WireValue::Str(one.fault.clone()),
+            ])
+        });
+        Some(WireValue::List(pairs.collect()))
     }
 }
 
@@ -228,6 +258,16 @@ impl fmt::Display for Unrehearsable {
             ),
             NothingToVerify => out.write_str(
                 "this Manifest declares no setup and no Checks, so Verify has nothing to run",
+            ),
+            WorkspaceOutside { dir } => write!(
+                out,
+                "`{dir}` is not a directory inside this repository, so it names no workspace to \
+                 Verify. Name one relative to the repository's root, without `..`"
+            ),
+            WorkspaceManifest { file, refused } => write!(
+                out,
+                "{file} cannot be verified, because it would not load: {}",
+                refused.summary
             ),
         }
     }

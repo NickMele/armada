@@ -110,7 +110,7 @@ export const getCheckoutRunDiff = (runId: string) => window.armada.getCheckoutRu
 // pressed, so nothing here starts one on a read.
 export const watchManifestDrift = (want: boolean): void =>
   void window.armada.watchManifestDrift(want);
-export const startCheckoutVerify = () => window.armada.startCheckoutVerify();
+export const startCheckoutVerify = (workspace?: string) => window.armada.startCheckoutVerify(workspace);
 export const pickRepository = (root: string): void => void window.armada.pickRepository(root);
 // Locate: a folder from the OS dialog, and a repository added or cloned. The window picks what it located.
 export const chooseFolder = () => window.armada.chooseFolder();

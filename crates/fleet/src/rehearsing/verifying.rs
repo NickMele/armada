@@ -15,6 +15,7 @@
 //! memory, as a run in flight is.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -28,6 +29,7 @@ use super::entries::{self, Entry};
 use super::owner::Place;
 use super::record::Record;
 use super::unrehearsable::{Unrehearsable, Whose};
+use super::workspace;
 use crate::daemon::Fleet;
 use crate::repositories::Served;
 
@@ -74,6 +76,8 @@ struct Verifying {
     id: String,
     started_at: Instant,
     ended_at: Option<Instant>,
+    /// The workspace whose file this runs. `None` is the root's.
+    workspace: Option<String>,
     steps: Vec<(VerifyGroup, Entry, VerifyStepState)>,
 }
 
@@ -89,6 +93,7 @@ impl Verifies {
             id: one.id.clone(),
             started_at: one.started_at.clone(),
             ended_at: one.ended_at.clone(),
+            workspace: one.workspace.clone(),
             steps: one
                 .steps
                 .iter()
@@ -171,12 +176,15 @@ where
     W::Error: std::error::Error + Send + Sync + 'static,
 {
     /// Begin a Verify in the main checkout, and answer once its first step is
-    /// out.
+    /// out. `asked` names a workspace whose own file runs instead of the root's.
     pub(crate) async fn begin_checkout_verify(
         self: Arc<Self>,
         served: Served,
+        asked: Option<&str>,
     ) -> Result<CheckoutVerify, Refusal> {
         let owner = Place::of_checkout(served.clone()).owner;
+        let workspace = workspace::resolved(served.root(), asked)
+            .map_err(|why| self.refused_run(&owner, why))?;
         let verifies = self.rehearsals().verifies().clone();
         if verifies.underway(&served) {
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
@@ -188,7 +196,10 @@ where
             };
             return Err(self.refused_run(&owner, why));
         }
-        let manifest = served.manifest().clone();
+        let (manifest, dir) = match workspace {
+            Some(one) => (one.manifest, Some(one.dir)),
+            None => (served.manifest().clone(), None),
+        };
         let steps = entries::declared(&manifest).verified();
         if steps.is_empty() {
             return Err(self.refused_run(&owner, Unrehearsable::NothingToVerify));
@@ -200,6 +211,7 @@ where
                 id: id.clone(),
                 started_at: Instant::from(&self.now()),
                 ended_at: None,
+                workspace: dir.clone(),
                 steps: steps
                     .into_iter()
                     .map(|(group, entry)| (group, entry, VerifyStepState::Waiting))
@@ -210,7 +222,8 @@ where
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
         }
         let (out, first) = oneshot::channel();
-        tokio::spawn(Arc::clone(&self).verified(id, out, served.clone()));
+        let within = dir.map(PathBuf::from);
+        tokio::spawn(Arc::clone(&self).verified(id, out, served.clone(), within));
         let _ = first.await;
         verifies.seen(&served).ok_or_else(|| {
             let why = Unrehearsable::NotKept {
@@ -222,7 +235,13 @@ where
 
     /// The steps, one after another. A step's hand-over is answered only once
     /// the step after it is out, or the Verify has ended.
-    async fn verified(self: Arc<Self>, id: String, out: oneshot::Sender<()>, served: Served) {
+    async fn verified(
+        self: Arc<Self>,
+        id: String,
+        out: oneshot::Sender<()>,
+        served: Served,
+        within: Option<PathBuf>,
+    ) {
         let verifies = self.rehearsals().verifies().clone();
         let mut waiting = vec![out];
         let mut at = 0;
@@ -231,9 +250,10 @@ where
                 break String::new();
             };
             let place = Place::of_checkout(served.clone());
-            let Some(tree) = self.tree_at(&place) else {
+            let Some(mut tree) = self.tree_at(&place) else {
                 break String::from("this checkout is not on disk");
             };
+            tree.within.clone_from(&within);
             let (handing, handed) = oneshot::channel();
             let command = entry.run.clone();
             let started = Arc::clone(&self)

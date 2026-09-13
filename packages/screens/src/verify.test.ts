@@ -130,3 +130,38 @@ describe("verify", () => {
     expect(verifyPanelOf(inputs({ ...SHEET, verify: ended }, { dismissed: "v1" })).steps).toBeUndefined();
   });
 });
+
+describe("verify of a workspace's own file", () => {
+  const WEB_ENDED: CheckoutVerify = {
+    id: "w1",
+    started_at: "2026-09-12T14:00:00Z",
+    ended_at: "2026-09-12T14:00:02Z",
+    workspace: "apps/web",
+    steps: [{ group: "checks", name: "test", run: "pnpm test", state: "ran", record: record("test", 0) }],
+  };
+
+  it("draws a Verify on the sheet of the file it ran, and not on another's", () => {
+    const web = verifyPanelOf(inputs({ ...SHEET, verify: WEB_ENDED }, { workspace: "apps/web" }));
+    expect(web.steps?.map((step) => step.name)).toEqual(["test"]);
+    const root = verifyPanelOf(inputs({ ...SHEET, verify: WEB_ENDED }));
+    expect(root.steps).toBeUndefined();
+    expect(root.onVerify).toBeDefined();
+  });
+
+  it("is not offered while another file's Verify holds the checkout, and says which", () => {
+    const panel = verifyPanelOf(inputs({ ...SHEET, verify: UNDERWAY }, { workspace: "apps/web" }));
+    expect(panel.onVerify).toBeUndefined();
+    expect(panel.unavailable).toBe("Verify is running armada.yml in this checkout. This file can be verified once it ends.");
+    expect(panel.steps).toBeUndefined();
+    expect(panel.onStop).toBeUndefined();
+  });
+
+  it("waits on the root's own file where the repository has none", () => {
+    const panel = verifyPanelOf({
+      ...inputs(SHEET, { workspace: "apps/web" }),
+      sheet: { state: "failed", outcome: { ok: false, why: "not_set_up" } },
+    });
+    expect(panel.onVerify).toBeUndefined();
+    expect(panel.unavailable).toMatch(/at its root, is written/);
+  });
+});

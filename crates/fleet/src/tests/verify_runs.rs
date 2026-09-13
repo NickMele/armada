@@ -141,7 +141,7 @@ async fn each_step_runs_once_in_order_one_after_another() {
     let fleet = a_fleet(&home, MANIFEST, &api::Broadcaster::new());
 
     let begun = Arc::clone(&fleet)
-        .begin_checkout_verify(fleet.first())
+        .begin_checkout_verify(fleet.first(), None)
         .await
         .expect("underway");
     assert!(begun.ended_at.is_none());
@@ -218,7 +218,7 @@ async fn a_steps_finish_is_published_after_the_next_step_is_out() {
     });
 
     Arc::clone(&fleet)
-        .begin_checkout_verify(fleet.first())
+        .begin_checkout_verify(fleet.first(), None)
         .await
         .expect("underway");
     let read = tokio::time::timeout(
@@ -262,7 +262,7 @@ async fn a_verify_holds_the_checkout_and_stop_ends_it() {
     let fleet = a_fleet(&home, SLOW, &api::Broadcaster::new());
 
     let begun = Arc::clone(&fleet)
-        .begin_checkout_verify(fleet.first())
+        .begin_checkout_verify(fleet.first(), None)
         .await
         .expect("underway");
     let ipc::VerifyStepState::Running { run_id } = &begun.steps[0].state else {
@@ -282,7 +282,7 @@ async fn a_verify_holds_the_checkout_and_stop_ends_it() {
         .await;
     assert!(matches!(run, Err(api::Refusal::IllegalMove(_))));
     let again = Arc::clone(&fleet)
-        .begin_checkout_verify(fleet.first())
+        .begin_checkout_verify(fleet.first(), None)
         .await;
     assert!(matches!(again, Err(api::Refusal::IllegalMove(_))));
 
@@ -307,7 +307,7 @@ async fn a_failed_setup_leaves_the_checks_not_run() {
     let fleet = a_fleet(&home, SETUP_FAILS, &api::Broadcaster::new());
 
     Arc::clone(&fleet)
-        .begin_checkout_verify(fleet.first())
+        .begin_checkout_verify(fleet.first(), None)
         .await
         .expect("underway");
     let verify = ended(&fleet).await;

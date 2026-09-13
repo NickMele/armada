@@ -40,6 +40,19 @@ pub(crate) struct Tree {
     /// *before* the run. What the run itself changed is the snapshot's answer,
     /// and that is taken the same way in both trees.
     pub(crate) worktree: Option<Worktree>,
+    /// Where commands run, relative to `path`: a workspace's own directory in
+    /// a Verify of its file. The snapshot and Undo stay on `path`.
+    pub(crate) within: Option<PathBuf>,
+}
+
+impl Tree {
+    /// The directory a command runs in.
+    pub(crate) fn commands_in(&self) -> PathBuf {
+        match &self.within {
+            Some(dir) => self.path.join(dir),
+            None => self.path.clone(),
+        }
+    }
 }
 
 /// An owner resolved: what a run of its needs that the owner alone decides.
@@ -105,6 +118,7 @@ where
             return Some(Tree {
                 path: PathBuf::from(place.served.root()),
                 worktree: None,
+                within: None,
             });
         };
         let spec = WorktreeSpec::for_job(place.served.root(), &job.handle()).ok()?;
@@ -118,6 +132,7 @@ where
                 Worktree::at(spec.worktree_path(), spec.branch()),
             )),
             path,
+            within: None,
         })
     }
 

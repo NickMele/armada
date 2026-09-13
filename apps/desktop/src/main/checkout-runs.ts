@@ -30,6 +30,7 @@ import type {
   RunOutput,
   RunOutputRead,
   StartCheckoutRun,
+  StartCheckoutVerify,
 } from "@armada/protocol";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { Picked } from "./picked";
@@ -207,14 +208,16 @@ export class CheckoutRunCommands {
   /**
    * Verify — setup and every Check once, one after another. **Answers once
    * the first step is out**, and follows it; each step after is followed as
-   * the sheet's own `running` moves on `checkout_run.finished`.
+   * the sheet's own `running` moves on `checkout_run.finished`. `workspace`
+   * names a directory whose own `armada.yml` runs; absent is the root's.
    */
-  async startVerify(): Promise<Outcome> {
+  async startVerify(workspace?: string): Promise<Outcome> {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
     const path = this.board.picked.manifest("/manifest/start_verify");
     if (path === null) return NOT_SET_UP;
-    const answer = await ask(port, "POST", path);
+    const body: StartCheckoutVerify | undefined = workspace === undefined ? undefined : { workspace };
+    const answer = await ask(port, "POST", path, body);
     if (answer.ok !== true) return answer.outcome;
     const out = (answer.body as CheckoutVerify).steps.find((step) => step.state === "running");
     if (out?.state === "running") this.board.follow(port, out.run_id);

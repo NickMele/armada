@@ -428,9 +428,9 @@ export class RehearsalConnection {
     if (this.drift.open) void this.drift.again(port);
   }
 
-  /** Verify: setup and every Check once in the checkout, one after another. */
-  startCheckoutVerify(): Promise<Outcome> {
-    return this.checkoutRuns.startVerify();
+  /** Verify: setup and every Check once in the checkout, one after another. Absent `workspace` is the root's file. */
+  startCheckoutVerify(workspace?: string): Promise<Outcome> {
+    return this.checkoutRuns.startVerify(workspace);
   }
 
   /** Start a declared server, for a Job's worktree or the main checkout. */

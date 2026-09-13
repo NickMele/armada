@@ -731,10 +731,15 @@ pub trait Commands: Send + Sync + 'static {
     /// **By `Arc`, for [`Commands::start_run`]'s reason**: the steps outlive
     /// the call.
     ///
+    /// `asked.workspace` names a directory below the root whose own
+    /// `armada.yml` runs, in that directory, instead of the root's.
+    ///
     /// [`Refusal::IllegalMove`] where a run or a Verify is already out in the
-    /// checkout; [`Refusal::Unacceptable`] where there is nothing to run.
+    /// checkout; [`Refusal::Unacceptable`] where there is nothing to run, or
+    /// the workspace leaves the repository or its file will not load.
     fn start_checkout_verify(
         self: std::sync::Arc<Self>,
+        asked: ipc::StartCheckoutVerify,
         manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ipc::CheckoutVerify, Refusal>> + Send;
 

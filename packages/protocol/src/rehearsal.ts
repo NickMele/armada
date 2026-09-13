@@ -370,6 +370,9 @@ export type CheckoutRunDiffRead =
 // Verify — Journey 9, *Verify*: setup and every Check once, in the checkout.
 // ---------------------------------------------------------------------------
 
+/** `POST /manifest/start_verify`'s body, which may be empty: no `workspace` is the root's Manifest. */
+export type StartCheckoutVerify = { workspace?: string };
+
 /**
  * `POST /manifest/start_verify`'s answer, and `CheckoutRunSheet.verify`.
  *
@@ -382,6 +385,8 @@ export type CheckoutVerify = {
   started_at: string;
   /** Absent while it is underway. */
   ended_at?: string;
+  /** The workspace whose own `armada.yml` this ran, relative to the root. Absent is the root's. */
+  workspace?: string;
   /** Setup in `setup.requires` order, then every Check in written order. */
   steps: VerifyStep[];
 };

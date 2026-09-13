@@ -146,6 +146,7 @@ fn a_verify_step_carries_its_state_flat_and_reads_back() {
         id: "01VERIFY".to_string(),
         started_at: at("2026-09-12T10:00:00.000Z"),
         ended_at: None,
+        workspace: Some("apps/web".to_string()),
         steps: vec![
             VerifyStep {
                 group: VerifyGroup::Setup,

@@ -1713,7 +1713,9 @@ description = "Run setup and every Check once in the main checkout, one after an
 notes = """
 **A sequence of ordinary checkout runs, not a record of its own.** Each step is `start_checkout_run`'s run, with its own log, snapshot, diff and Undo, listed by `list_checkout_runs` and followed on `observe_checkout_run`. What Verify adds rides `get_checkout_run_sheet` as `verify`: the order, which step is out, and why a step did not run. It is held in memory, as a run in flight is.
 
-**Setup in `setup.requires` order, then every Check in written order, and nothing else** — no other Command and no server. A Check's own `requires` runs inside that Check's run, as it always does. The body is empty because there is nothing to choose.
+**Setup in `setup.requires` order, then every Check in written order, and nothing else** — no other Command and no server. A Check's own `requires` runs inside that Check's run, as it always does.
+
+**The body is optional and names a workspace.** Empty runs the root's Manifest. `StartCheckoutVerify.workspace` is a directory relative to the repository root: Fleet reads that directory's own `armada.yml` from disk and runs its setup and Checks with that directory as each command's working directory. A path that leaves the repository is refused, and so is a file that is missing or will not load, carrying `faults` as `[key, fault]` pairs. The Verify names the file it ran in `CheckoutVerify.workspace`, absent for the root. **It is still the checkout's one Verify**: a workspace's file sits in the root's tree and build directory, so a root Verify and a workspace Verify never run at once.
 
 **One at a time, because the checkout has one run slot.** The next step takes it as the last gives it back, before that step's `checkout_run.finished` is published, so a reader re-reading the sheet on the event finds the next step already out. While a Verify is underway `start_checkout_run` and `undo_checkout_run` are refused, rather than slipped in between two steps. Stop is `stop_checkout_run` on the step that is out, and the steps after it are not run.
 
