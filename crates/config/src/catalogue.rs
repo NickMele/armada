@@ -5,9 +5,7 @@
 //! repository nobody set up dispatches on the carried set, and one file in
 //! either later place replaces a carried definition by id. #425.
 //!
-//! **Text in, not directories.** Reading a directory is the composition
-//! root's; this is a function over definitions in hand, which is what lets an
-//! acceptance test drive the merge without touching a file.
+//! **Text in, not directories**, so an acceptance test drives it with no file.
 //!
 //! **A repository's own definitions are strict, and the rest are left out.**
 //! The owner's decision: one from Kit or Armada that will not parse, or will not

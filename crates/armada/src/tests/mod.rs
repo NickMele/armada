@@ -14,6 +14,7 @@ mod agent;
 mod clean;
 mod cli;
 mod declared;
+mod kit;
 mod loopback;
 mod mcp;
 mod setup;
