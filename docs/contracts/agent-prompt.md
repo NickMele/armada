@@ -325,6 +325,7 @@ which is an assembled prompt and therefore governed here.
 
 | Turn | Fires when | Wording |
 | --- | --- | --- |
+| **The plan change turn** | A person's `add_task` or `drop_task` reaches a Job with a working Drone | Drafted, not sanctioned |
 | **The poke** | Liveness nudge, bounded by `poke_limit` | Drafted, not sanctioned |
 | **The clarification reprompt** | Evidence arrived but was insufficient | Drafted, not sanctioned |
 | **The force-interrupt directive** | A thrashing verdict | Drafted, not sanctioned |
@@ -411,6 +412,58 @@ restate context the Drone already has without spending tokens twice. And
 each arrives at a moment the Drone believes it is doing something else, so
 it must be unambiguous about whether the current action continues or
 stops.
+
+## The plan change turn
+
+Fires when a person's `add_task` or `drop_task` (#897) reaches a Job with a
+working Drone — mid-step, on a live session. At a step boundary, or with no
+session, nothing is sent: the next brief's THE PLAN is built from the record
+at every spawn and carries the change already, so there is nothing this turn
+would say that the brief has not already said. It never respawns a Drone to
+deliver itself, `redirect_drone`'s own rule.
+
+**Fleet's own sentence, never a person's words** — `redirect_drone` is where
+those travel, and this turn has none of its own for the same reason a Judge's
+refusal reprompt carries `expected` and `produced` rather than a transcript: a
+person's add or drop is a fact about the record, not a message to relay.
+`fleet::PlanChanged` is the one constructor that can build it.
+
+**Stated as settled, not as something to argue with.** A drop is not a
+Drone's to dispute — the same rule `NotPlanned::Refused(StaysDropped)` states
+to a Drone that tries to reopen one — and the wording says so plainly rather
+than leaving a Drone to infer it.
+
+**"Part" and "task", never "step" or "workflow"** — the Drone vocabulary
+section 5's M1 renderings use, since a Drone reasons about the machinery only
+as far as the words it is given let it.
+
+**Its own `Occasion`, `Plan`, so the log shows it was not a redirect** — the
+one property a person's own words and Fleet's own sentence about them must
+not share, since the two mean different things when somebody reads the
+transcript back.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ THE PLAN CHANGED ─────────────────────────────
+│ A person added a task to this Job's plan: T5
+│ Add a regression test for the bound. It is
+│ open, for you or a later part to pick up. This
+│ is not a question. Carry on with the part you
+│ were given.
+└────────────────────────────────────────────────
+```
+
+```
+┌─ THE PLAN CHANGED ─────────────────────────────
+│ A person dropped a task from this Job's plan:
+│ T3 Check the writer's bound. Reason: the
+│ writer's bound was never inclusive. This is
+│ settled, not a question to raise — the task
+│ stays dropped unless a person adds it back.
+│ Carry on with the part you were given.
+└────────────────────────────────────────────────
+```
 
 ## The poke
 
