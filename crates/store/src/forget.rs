@@ -155,7 +155,8 @@ impl Forgotten {
             | "job_step_review_proves"
             | "job_step_review_changed"
             | "job_step_review_untested"
-            | "job_step_review_findings" => &mut self.review_parts,
+            | "job_step_review_findings"
+            | "job_step_review_view" => &mut self.review_parts,
             _ => return None,
         })
     }

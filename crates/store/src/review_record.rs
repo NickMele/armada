@@ -12,6 +12,7 @@ use rusqlite::{Connection, Row};
 use crate::attempt::attempt_now;
 use crate::error::{fault, DatabaseFault, LoadJobError, RowError, WriteError};
 use crate::open::Store;
+use crate::review_view::{self, Owner};
 use crate::row::enum_value;
 
 /// Version 60 — Armada's review of a step, in the parts it is made of.
@@ -113,6 +114,7 @@ const TABLES: &[&str] = &[
     "job_step_review_changed",
     "job_step_review_untested",
     "job_step_review_findings",
+    review_view::TABLE,
 ];
 
 impl Store {
@@ -198,6 +200,7 @@ fn written(
             )
             .map_err(fault("writing a review area's files"))?;
         }
+        review_view::write_view(conn, key, Owner::Area, n, area.view())?;
     }
     for (n, proves) in record.tests.proves.iter().enumerate() {
         conn.execute(
@@ -273,6 +276,7 @@ fn written(
             ],
         )
         .map_err(fault("writing a review's findings"))?;
+        review_view::write_view(conn, key, Owner::Finding, n, finding.view())?;
     }
     Ok(())
 }
@@ -303,6 +307,8 @@ fn latest(conn: &Connection, job_id: &JobId) -> Result<Option<ReviewRecord>, Loa
     )
     .map_err(LoadJobError::Unreadable)?;
     let key: Key<'_> = (job_id.as_str(), step.as_str(), attempt);
+    let area_views = review_view::views(conn, key, Owner::Area)?;
+    let finding_views = review_view::views(conn, key, Owner::Finding)?;
 
     let reasons = rows(
         conn,
@@ -338,7 +344,7 @@ fn latest(conn: &Connection, job_id: &JobId) -> Result<Option<ReviewRecord>, Loa
             .filter(|(area, _)| *area == ordinal)
             .map(|(_, path)| path.as_str())
             .collect();
-        Area::of(&name, &what, &held)
+        Area::of(&name, &what, &held).viewed(review_view::of(&area_views, ordinal))
     })
     .collect();
     let proves = rows(
@@ -410,19 +416,20 @@ fn latest(conn: &Connection, job_id: &JobId) -> Result<Option<ReviewRecord>, Loa
     )?;
     let findings = rows(
         conn,
-        "SELECT bucket, finding, why FROM job_step_review_findings
+        "SELECT ordinal, bucket, finding, why FROM job_step_review_findings
          WHERE job_id = ?1 AND step_id = ?2 AND attempt = ?3 ORDER BY ordinal",
         key,
         |row| {
             Ok((
-                row.get::<_, String>(0)?,
+                row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
             ))
         },
     )?
     .into_iter()
-    .map(|(bucket, finding, why)| {
+    .map(|(ordinal, bucket, finding, why)| {
         let bucket = enum_value(
             Bucket::from_wire,
             "job_step_review_findings",
@@ -430,7 +437,7 @@ fn latest(conn: &Connection, job_id: &JobId) -> Result<Option<ReviewRecord>, Loa
             &bucket,
         )
         .map_err(LoadJobError::Unreadable)?;
-        Ok(Finding::of(bucket, &finding, &why))
+        Ok(Finding::of(bucket, &finding, &why).viewed(review_view::of(&finding_views, ordinal)))
     })
     .collect::<Result<Vec<_>, LoadJobError>>()?;
 

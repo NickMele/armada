@@ -7,18 +7,20 @@ use std::fmt;
 
 use core_model::{
     Area, Bucket, ChangedTest, Confidence, Finding, Proves, TestChange, TestsInChange, Untested,
+    ViewStep,
 };
 use serde_json::{json, Map, Value};
 
 use super::tools::{closed, filled, list, text, NotAnArgument, TOOL};
 
 pub const REVIEW_FIELDS: &[&str] = &["says", "reasons", "areas", "tests", "findings"];
-pub const AREA_FIELDS: &[&str] = &["name", "what", "files"];
+pub const AREA_FIELDS: &[&str] = &["name", "what", "files", "view"];
 pub const TESTS_FIELDS: &[&str] = &["proves", "changed", "untested"];
 pub const PROVES_FIELDS: &[&str] = &["area", "what", "tests"];
 pub const CHANGED_FIELDS: &[&str] = &["name", "change", "replaced_by", "why"];
 pub const UNTESTED_FIELDS: &[&str] = &["code", "why"];
-pub const FINDING_FIELDS: &[&str] = &["bucket", "finding", "why"];
+pub const FINDING_FIELDS: &[&str] = &["bucket", "finding", "why", "view"];
+pub const VIEW_FIELDS: &[&str] = &["file", "hunk", "summary", "tie_to_next"];
 
 /// A review as the Drone wrote it, in `core_model`'s parts. Fleet checks it against the change.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,11 +97,9 @@ pub(super) fn review(
         closed(entry, TOOL, AREA_FIELDS)?;
         let files = list(entry, "files")?;
         let files: Vec<&str> = files.iter().map(String::as_str).collect();
-        areas.push(Area::of(
-            &filled(entry, "name")?,
-            &text(entry, "what")?,
-            &files,
-        ));
+        areas.push(
+            Area::of(&filled(entry, "name")?, &text(entry, "what")?, &files).viewed(view(entry)?),
+        );
     }
     let mut findings = Vec::new();
     for entry in objects(review, "findings")? {
@@ -110,11 +110,10 @@ pub(super) fn review(
                 named: named.clone(),
             })
         })?;
-        findings.push(Finding::of(
-            bucket,
-            &filled(entry, "finding")?,
-            &text(entry, "why")?,
-        ));
+        findings.push(
+            Finding::of(bucket, &filled(entry, "finding")?, &text(entry, "why")?)
+                .viewed(view(entry)?),
+        );
     }
     Ok(Some(SubmittedReview {
         says,
@@ -176,6 +175,24 @@ fn tests(review: &Map<String, Value>) -> Result<TestsInChange, NotAnArgument> {
     })
 }
 
+/// An area's or a finding's View: its steps, each naming a hunk by its header. Absent is none. #904.
+fn view(entry: &Map<String, Value>) -> Result<Vec<ViewStep>, NotAnArgument> {
+    if matches!(entry.get("view"), None | Some(Value::Null)) {
+        return Ok(Vec::new());
+    }
+    let mut steps = Vec::new();
+    for step in objects(entry, "view")? {
+        closed(step, TOOL, VIEW_FIELDS)?;
+        steps.push(ViewStep {
+            file: filled(step, "file")?,
+            hunk: filled(step, "hunk")?,
+            summary: filled(step, "summary")?,
+            tie_to_next: optional(step, "tie_to_next")?,
+        });
+    }
+    Ok(steps)
+}
+
 fn object<'a>(
     value: &'a Value,
     field: &'static str,
@@ -218,6 +235,30 @@ fn optional(
     }
 }
 
+/// The `view` property an area and a finding share: the code in the order one change forces the next.
+fn view_property() -> Value {
+    json!({
+        "type": "array",
+        "description":
+            "The code this is about, as steps in the order one change forces the next. Name each \
+             hunk by its @@ header exactly as git wrote it; Fleet refuses one the diff does not hold.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "file": { "type": "string" },
+                "hunk": { "type": "string" },
+                "summary": { "type": "string", "description": "One sentence." },
+                "tie_to_next": {
+                    "type": "string",
+                    "description": "Why the next step follows from this one. Leave it out on the last.",
+                },
+            },
+            "required": ["file", "hunk", "summary"],
+            "additionalProperties": false,
+        },
+    })
+}
+
 /// The `review` property of `submit_evidence`'s input schema.
 pub(super) fn review_property() -> Value {
     json!({
@@ -242,6 +283,7 @@ pub(super) fn review_property() -> Value {
                         "name": { "type": "string" },
                         "what": { "type": "string" },
                         "files": { "type": "array", "items": { "type": "string" } },
+                        "view": view_property(),
                     },
                     "required": ["name", "what", "files"],
                     "additionalProperties": false,
@@ -303,6 +345,7 @@ pub(super) fn review_property() -> Value {
                         "bucket": { "type": "string", "enum": ["needs_you", "small_fix", "for_context"] },
                         "finding": { "type": "string" },
                         "why": { "type": "string" },
+                        "view": view_property(),
                     },
                     "required": ["bucket", "finding", "why"],
                     "additionalProperties": false,

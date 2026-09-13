@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, fn } from "storybook/test";
 import { ConfidenceSheet } from "./ConfidenceSheet";
 
 /**
@@ -116,5 +116,63 @@ export const NotConfident: Story = {
       ],
       for_context: [],
     },
+  },
+};
+
+/** A finding and an area with a View. Only the rows that have one carry the button. #904. */
+export const WithAView: Story = {
+  args: {
+    onView: fn(),
+    confidence: {
+      says: "confident",
+      reasons: ["One change in behaviour needs your yes before it lands."],
+      areas: [
+        {
+          name: "Admission",
+          what: "CPU no longer holds a Job",
+          files: ["crates/fleet/src/headroom.rs"],
+          view: [
+            {
+              file: "crates/fleet/src/headroom.rs",
+              hunk: "@@ -40,6 +40,4 @@",
+              summary: "Removes CPU as a way to be short of room.",
+            },
+          ],
+        },
+        { name: "Docs", what: "Doctor says why", files: ["docs/concepts/doctor.md"] },
+      ],
+      needs_you: [
+        {
+          finding: "A busy CPU no longer delays a Job",
+          why: "People may rely on the old behaviour",
+          view: [
+            {
+              file: "crates/fleet/src/admitting.rs",
+              hunk: "@@ -212,7 +212,6 @@",
+              summary: "The hold goes.",
+            },
+          ],
+        },
+        { finding: "The status bar says nothing about it", why: "A person would look there first" },
+      ],
+      small_fixes: [],
+      for_context: [],
+    },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: /Shape of the change/ }));
+    const views = canvas.getAllByRole("button", { name: "View" });
+    await expect(views).toHaveLength(2);
+    await userEvent.click(views[1]!);
+    await expect(args.onView).toHaveBeenCalledWith({
+      title: "A busy CPU no longer delays a Job",
+      steps: [
+        {
+          file: "crates/fleet/src/admitting.rs",
+          hunk: "@@ -212,7 +212,6 @@",
+          summary: "The hold goes.",
+        },
+      ],
+    });
   },
 };

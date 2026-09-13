@@ -7,7 +7,9 @@ import type {
   JobConfidence,
   OpenedBecause,
   TestsSection,
+  ViewStepRow,
 } from "@armada/protocol";
+import { Button } from "../../primitives/Button/Button";
 
 /**
  * Armada's review of a change, drawn above the verdict sheet at the gate. #903.
@@ -18,9 +20,19 @@ import type {
  */
 export type ConfidenceSheetProps = {
   confidence: JobConfidence;
+  /** Opens a row's View. #904. Absent leaves every View button out. */
+  onView?: (view: ConfidenceView) => void;
 };
 
-export function ConfidenceSheet({ confidence }: ConfidenceSheetProps) {
+/** What a View button hands over: what the View is of, and its steps. */
+export type ConfidenceView = {
+  title: string;
+  steps: ViewStepRow[];
+};
+
+type OnView = ConfidenceSheetProps["onView"];
+
+export function ConfidenceSheet({ confidence, onView }: ConfidenceSheetProps) {
   const { says, reasons, areas, tests, needs_you, small_fixes, for_context } = confidence;
   return (
     <section className="armada-confidence" aria-label="Armada's review">
@@ -39,7 +51,7 @@ export function ConfidenceSheet({ confidence }: ConfidenceSheetProps) {
       </div>
       {areas.length > 0 && (
         <Fold title="Shape of the change" summary={areaCount(areas)}>
-          <Areas areas={areas} />
+          <Areas areas={areas} onView={onView} />
         </Fold>
       )}
       {tests !== undefined && (
@@ -60,17 +72,17 @@ export function ConfidenceSheet({ confidence }: ConfidenceSheetProps) {
         {needs_you.length === 0 ? (
           <p className="armada-confidence__empty">Nothing needs you.</p>
         ) : (
-          <Findings findings={needs_you} marked />
+          <Findings findings={needs_you} marked onView={onView} />
         )}
       </div>
       {small_fixes.length > 0 && (
         <Fold title="Small fixes for a Drone" summary={findingCount(small_fixes)}>
-          <Findings findings={small_fixes} />
+          <Findings findings={small_fixes} onView={onView} />
         </Fold>
       )}
       {for_context.length > 0 && (
         <Fold title="For context" summary={findingCount(for_context)}>
-          <Findings findings={for_context} />
+          <Findings findings={for_context} onView={onView} />
         </Fold>
       )}
     </section>
@@ -117,7 +129,33 @@ function Fold({
   );
 }
 
-function Areas({ areas }: { areas: readonly AreaRow[] }) {
+/** The View button's cell, and its header, where any row in the table has a View. */
+function viewColumn(rows: readonly { view?: ViewStepRow[] }[], onView: OnView): boolean {
+  return onView !== undefined && rows.some((row) => (row.view?.length ?? 0) > 0);
+}
+
+function ViewCell({
+  title,
+  view,
+  onView,
+}: {
+  title: string;
+  view: ViewStepRow[] | undefined;
+  onView: OnView;
+}) {
+  return (
+    <td className="armada-confidence__act">
+      {onView === undefined || view === undefined || view.length === 0 ? null : (
+        <Button size="sm" onClick={() => onView({ title, steps: view })}>
+          View
+        </Button>
+      )}
+    </td>
+  );
+}
+
+function Areas({ areas, onView }: { areas: readonly AreaRow[]; onView: OnView }) {
+  const viewable = viewColumn(areas, onView);
   return (
     <table className="armada-confidence__table">
       <thead>
@@ -125,6 +163,7 @@ function Areas({ areas }: { areas: readonly AreaRow[] }) {
           <th scope="col">Area</th>
           <th scope="col">What changed</th>
           <th scope="col">Files</th>
+          {viewable && <th scope="col" className="armada-confidence__act" aria-label="View" />}
         </tr>
       </thead>
       <tbody>
@@ -139,6 +178,7 @@ function Areas({ areas }: { areas: readonly AreaRow[] }) {
                 </code>
               ))}
             </td>
+            {viewable && <ViewCell title={area.name} view={area.view} onView={onView} />}
           </tr>
         ))}
       </tbody>
@@ -223,13 +263,23 @@ function Tests({ tests }: { tests: TestsSection }) {
   );
 }
 
-function Findings({ findings, marked }: { findings: readonly FindingRow[]; marked?: boolean }) {
+function Findings({
+  findings,
+  marked,
+  onView,
+}: {
+  findings: readonly FindingRow[];
+  marked?: boolean;
+  onView: OnView;
+}) {
+  const viewable = viewColumn(findings, onView);
   return (
     <table className="armada-confidence__table" {...(marked ? { "data-marked": "" } : {})}>
       <thead>
         <tr>
           <th scope="col">Finding</th>
           <th scope="col">Why it is here</th>
+          {viewable && <th scope="col" className="armada-confidence__act" aria-label="View" />}
         </tr>
       </thead>
       <tbody>
@@ -237,6 +287,9 @@ function Findings({ findings, marked }: { findings: readonly FindingRow[]; marke
           <tr key={row.finding}>
             <td>{withCode(row.finding)}</td>
             <td className="armada-confidence__muted">{withCode(row.why)}</td>
+            {viewable && (
+              <ViewCell title={row.finding.replaceAll("`", "")} view={row.view} onView={onView} />
+            )}
           </tr>
         ))}
       </tbody>

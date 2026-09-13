@@ -40,6 +40,19 @@ pub struct AreaRow {
     pub name: String,
     pub what: String,
     pub files: Vec<String>,
+    /// The area read as a View. Since 13.25, #904; left out where it has none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub view: Vec<ViewStepRow>,
+}
+
+/// One step of a View: a hunk named by its `@@` header, never copied. Since 13.25, #904.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewStepRow {
+    pub file: String,
+    pub hunk: String,
+    pub summary: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tie_to_next: Option<String>,
 }
 
 /// Tests in the change. It opens itself where a test was removed or loosened with no reason.
@@ -89,6 +102,9 @@ pub struct UntestedRow {
 pub struct FindingRow {
     pub finding: String,
     pub why: String,
+    /// The code the finding is about, as a View. Since 13.25, #904; left out where it has none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub view: Vec<ViewStepRow>,
 }
 
 impl JobConfidence {
@@ -106,6 +122,7 @@ impl JobConfidence {
                     name: area.name().to_string(),
                     what: area.what().to_string(),
                     files: area.files().to_vec(),
+                    view: view_rows(area.view()),
                 })
                 .collect(),
             tests: tests_section(record),
@@ -181,6 +198,18 @@ fn in_bucket(record: &core_model::ReviewRecord, bucket: core_model::Bucket) -> V
         .map(|finding| FindingRow {
             finding: finding.finding().to_string(),
             why: finding.why().to_string(),
+            view: view_rows(finding.view()),
+        })
+        .collect()
+}
+
+fn view_rows(view: &[core_model::ViewStep]) -> Vec<ViewStepRow> {
+    view.iter()
+        .map(|step| ViewStepRow {
+            file: step.file.clone(),
+            hunk: step.hunk.clone(),
+            summary: step.summary.clone(),
+            tie_to_next: step.tie_to_next.clone(),
         })
         .collect()
 }

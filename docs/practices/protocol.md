@@ -814,6 +814,12 @@ row, so nothing about the field's shape or presence changed under it.
 
 **Not `review`.** `JobDetail.review` is the text Fleet composes for the pull request, from 10.11. **Absent is a Job with no accepted review**, which is every Job whose steps ask for none.
 
+## Protocol 13.25: the code a review is about, as a View
+
+`ipc::ViewStepRow`, additive on `JobConfidence` as `view` on an area and on a finding (#904): the files it is about, as steps in the order one change forces the next. Each step names its hunk by the patch's `@@` header, with a one-sentence summary and, except on the last, what ties it to the next.
+
+**The hunk is named, never copied.** Bridge finds it in the patch `get_job_diff` serves, so a View cannot show code the branch no longer holds. **Left out where empty**, which is every area and finding the reviewer gave no View.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

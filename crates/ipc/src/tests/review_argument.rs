@@ -56,3 +56,29 @@ fn a_verdict_it_does_not_know_is_refused_by_name() {
         } if named == "probably"
     ));
 }
+
+/// **A View names its code by hunk header**, and a step with no tie to the next reads as the last.
+#[test]
+fn a_view_reads_as_steps_that_name_hunks_by_reference() {
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"submit_evidence",
+            "arguments":{"claimed":"c","shown_by":"s","not_claimed":"","review":{
+              "says":"confident","reasons":["Every Check passed."],
+              "areas":[{"name":"Admission","what":"CPU no longer holds a Job","files":["src/headroom.rs"],
+                        "view":[{"file":"src/headroom.rs","hunk":"@@ -40,6 +40,4 @@","summary":"CPU is no longer a way to be short",
+                                 "tie_to_next":"admitting.rs turned that shortage into a hold"},
+                                {"file":"src/admitting.rs","hunk":"@@ -212,7 +212,6 @@","summary":"The hold goes"}]}],
+              "tests":{"proves":[],"changed":[],"untested":[]},
+              "findings":[{"bucket":"needs_you","finding":"A busy CPU no longer delays a Job","why":"People may rely on it",
+                           "view":[{"file":"src/admitting.rs","hunk":"@@ -212,7 +212,6 @@","summary":"The hold goes"}]}]}}}}"#,
+    );
+    let Incoming::Submit { submission, .. } = called else {
+        panic!("a submission, got {called:?}");
+    };
+    let review = submission.review.expect("the review was read");
+    let view = review.areas[0].view();
+    assert_eq!(view.len(), 2);
+    assert_eq!(view[0].hunk, "@@ -40,6 +40,4 @@");
+    assert_eq!(view[1].tie_to_next, None, "the last step ties to nothing");
+    assert_eq!(review.findings[0].view()[0].file, "src/admitting.rs");
+}

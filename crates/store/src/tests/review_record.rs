@@ -2,7 +2,7 @@
 
 use core_model::{
     Area, Bucket, ChangedTest, Confidence, Finding, Proves, ReviewRecord, TestChange,
-    TestsInChange, Untested,
+    TestsInChange, Untested, ViewStep,
 };
 
 use crate::tests::attempt::{on_its_first_run, step_id};
@@ -30,7 +30,21 @@ fn a_review(confidence: Confidence, reason: &str) -> ReviewRecord {
                     "crates/fleet/src/headroom.rs",
                     "crates/fleet/src/admitting.rs",
                 ],
-            ),
+            )
+            .viewed(vec![
+                ViewStep {
+                    file: "crates/fleet/src/headroom.rs".to_string(),
+                    hunk: "@@ -40,6 +40,4 @@".to_string(),
+                    summary: "CPU is no longer a way to be short".to_string(),
+                    tie_to_next: Some("admitting.rs turned that shortage into a hold".to_string()),
+                },
+                ViewStep {
+                    file: "crates/fleet/src/admitting.rs".to_string(),
+                    hunk: "@@ -212,7 +212,6 @@".to_string(),
+                    summary: "The hold goes".to_string(),
+                    tie_to_next: None,
+                },
+            ]),
             Area::of(
                 "Tests",
                 "The hold's test asserts the opposite",
@@ -59,7 +73,13 @@ fn a_review(confidence: Confidence, reason: &str) -> ReviewRecord {
                 Bucket::ForContext,
                 "The lock order when saving",
                 "The author flagged it",
-            ),
+            )
+            .viewed(vec![ViewStep {
+                file: "crates/fleet/src/admitting.rs".to_string(),
+                hunk: "@@ -212,7 +212,6 @@".to_string(),
+                summary: "The save takes the lock".to_string(),
+                tie_to_next: None,
+            }]),
         ],
         unexplained_tests: vec![removed_without_a_reason()],
     }

@@ -22,7 +22,6 @@ import { GitPullRequest, Minus } from "lucide-react";
 import {
   Button,
   CheckRuns,
-  ConfidenceSheet,
   JudgeQuestion,
   Tooltip,
   VerdictSheet,
@@ -30,6 +29,7 @@ import {
   type VerdictFigure,
   type VerdictSheetProps,
 } from "@armada/components";
+import { ReviewAtGate } from "./confidence";
 import type {
   Diff,
   Evidence,
@@ -538,6 +538,8 @@ export type VerdictSlotAtGateArgs = {
   onSaid: (sentence: string) => void;
   /** Answer the question a judge refusal opened. `answer_judge` is one press. */
   onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
+  /** Opens the Job's whole diff, from a View step. #904. */
+  onOpenDiff?: () => void;
 };
 
 /**
@@ -569,6 +571,7 @@ export function verdictSlotAtGate({
   onOpenPullRequest,
   onSaid,
   onAnswerJudge,
+  onOpenDiff,
 }: VerdictSlotAtGateArgs): ReactNode {
   // A judge question outranks the rest of this slot: the gate is a human
   // boundary either way, but this step is answered before it is reviewed.
@@ -663,7 +666,12 @@ export function verdictSlotAtGate({
   if (confidence === undefined) return sheet;
   return (
     <>
-      <ConfidenceSheet confidence={confidence} />
+      <ReviewAtGate
+        confidence={confidence}
+        diff={recorded.diff}
+        jobId={job.id}
+        {...(onOpenDiff === undefined ? {} : { onOpenDiff })}
+      />
       {sheet}
     </>
   );
