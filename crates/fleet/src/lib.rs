@@ -234,7 +234,7 @@ pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
 pub use commanding::CommandBudget;
 pub use converging::{NoReport, ReportNow, Stage, StepNorms, Tripwire, Wandering, FORCED_REPORT};
-pub use crossing::{Cleared, Crossed, Dispatched, Produced, Reconciling, Redirected};
+pub use crossing::{Cleared, Crossed, Dispatched, Produced, Reconciling, Redirected, ThePlan};
 pub use daemon::{Fittings, Fleet, Host, StartingIn};
 pub use delivery::Delivered;
 pub use detach::Detached;

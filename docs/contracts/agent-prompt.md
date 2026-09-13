@@ -585,7 +585,7 @@ kind — the already-asking call is not recorded as one.
 
 ```
 ┌─ NOT GRANTED ──────────────────────────────────
-│ This task is not granted `npm publish --access
+│ This Job is not granted `npm publish --access
 │ public`. A person decides whether to allow it.
 │ Do not try to get the same result another way.
 └────────────────────────────────────────────────
@@ -605,7 +605,7 @@ kind — the already-asking call is not recorded as one.
 ┌─ REJECTED ─────────────────────────────────────
 │ A person said no to `npm publish --access
 │ public`. Do not run it, or anything that does
-│ the same thing. Carry on without it if the task
+│ the same thing. Carry on without it if the work
 │ allows, or ask a question if it cannot be done
 │ without it.
 └────────────────────────────────────────────────
@@ -615,7 +615,7 @@ kind — the already-asking call is not recorded as one.
 ┌─ WITHHELD ─────────────────────────────────────
 │ `rm -rf .armada/store.db` is declared
 │ destructive in this repository, and an
-│ unattended task never runs it. Do not try to
+│ unattended Job never runs it. Do not try to
 │ get the same result another way.
 └────────────────────────────────────────────────
 ```
@@ -636,7 +636,7 @@ names the command and says what to do next and nothing else.
 ```
 ┌─ TURN ─────────────────────────────────────────
 │ A person allowed `npm publish --access public`
-│ for this task. Run it again now; it will not be
+│ for this Job. Run it again now; it will not be
 │ refused.
 └────────────────────────────────────────────────
 ```
@@ -944,6 +944,58 @@ name is not its command**, and the dry-run offer names the step's Checks
 by name for the reason the offer exists at all: a Drone that cannot tell
 what a call would check can only spend one to find out.
 
+### Bug's plan step — added for `#894`
+
+A plan step declares no `deliverable` — `record_plan` is the recording,
+not a file — so `Delivering` never fires for it. `WHAT THIS PART DELIVERS`
+is the block that fills the gap, on the one step that gets it instead of a
+file path.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ BASELINE ──────────────────────────────────────
+│ [identical to the sample above, on every step of
+│  every Job. Mechanics, never task content.]
+└──────────────────────────────────────────────
+┌─ JOB BRIEF ───────────────────────────────────
+│ Repository: armada
+│
+│ The store's cursor reads one row past the end. Stop
+│ it at the end, and cover the bound with a test.
+└──────────────────────────────────────────────
+┌─ WHERE YOU ARE ────────────────────────────────
+│ This work runs in three parts. You are on part 1.
+│
+│   1. Plan the change      ← you are here
+│   ─────────────────────────────────────────────
+│   ▌ STOP. Submit when part 1 is done, then wait.
+│   ─────────────────────────────────────────────
+│   2. Implement            ✗ not yours — do not do it
+│   3. Hand off             ✗ not yours — do not do it
+│
+│ Parts 2 and 3 happen after you submit, and doing them
+│ yourself does not move the work forward. Leave the
+│ branch in a state they can start from.
+└──────────────────────────────────────────────
+┌─ STEP: Plan the change ──────────────────────────
+│ What you claim should be what the work now does, not
+│ that you finished. An adjacent problem you notice and
+│ leave alone goes under Not claimed.
+└──────────────────────────────────────────────
+┌─ WHAT THIS PART DELIVERS ─────────────────────
+│ This part's product is the Job's plan. Record it
+│ with record_plan: an approach in a paragraph, then
+│ the tasks it breaks into, in the order they will be
+│ done. Recording again replaces the whole plan, so
+│ correct one by recording it again. Recording does
+│ not finish this part — submit_evidence still does.
+└──────────────────────────────────────────────
+```
+
+No `THE PLAN` block: the step recording the plan is never shown the plan
+it is about to replace — `fleet::crossing::ThePlan`'s own rule.
+
 ### Bug, part 2 of 4
 
 ```
@@ -955,8 +1007,8 @@ what a call would check can only spend one to find out.
 │ When you have finished the work described below, you
 │ must report it using the evidence submission tool you
 │ have been given. It is the only way to report. Work
-│ you do not submit is work no one sees, and the task
-│ will not move on.
+│ you do not submit is work no one sees, and nothing
+│ moves on.
 │
 │ Submitting returns "recorded". That is a receipt, not
 │ a verdict — your work is checked after you submit. A
@@ -976,7 +1028,7 @@ what a call would check can only spend one to find out.
 │ registered, and it fails with a message naming neither.
 └──────────────────────────────────────────────
 ┌─ WHERE YOU ARE ────────────────────────────────
-│ This task runs in four parts. You are on part 2.
+│ This work runs in four parts. You are on part 2.
 │
 │   1. Plan the change      ✓ done
 │   2. Implement            ← you are here
@@ -992,10 +1044,7 @@ what a call would check can only spend one to find out.
 │    the job id. worktree.rs, add() — the path is built
 │    at line 40."
 │
-│ It wrote that part's finding to
-│ .armada/artifacts/plan.md, in the worktree you are
-│ in. Read it before you start. What is quoted above
-│ summarises it and does not replace it.
+│ Its work is on the branch you are in.
 │
 │ What part 1 did not claim:
 │   "The sweeper matches on repo name too, and this
@@ -1007,7 +1056,7 @@ what a call would check can only spend one to find out.
 │ of work this part owes.
 │
 │ Parts 3 and 4 happen after you submit, and doing them
-│ yourself does not move this task forward. Leave the
+│ yourself does not move the work forward. Leave the
 │ branch in a state they can start from.
 └──────────────────────────────────────────────
 ┌─ THE PART BEFORE THIS ONE ─────────────────────
@@ -1051,7 +1100,7 @@ than its output.
 │ to what happens when two Jobs start at once.
 └──────────────────────────────────────────────
 ┌─ WHERE YOU ARE ────────────────────────────────
-│ This task runs in three parts. You are on part 2.
+│ This work runs in three parts. You are on part 2.
 │
 │   1. Read the changes     ✓ done
 │   2. Assess               ← you are here

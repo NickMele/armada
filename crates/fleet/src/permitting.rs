@@ -367,12 +367,12 @@ impl Refusing {
             // refusal with something to do about it — `#737`, where the
             // Drone reached for `cargo check` instead of asking.
             Refusing::NotGranted if runs_what_checks_already_run(what) => format!(
-                "This task is not granted `{what}`. Fleet already runs this part's checks \
+                "This Job is not granted `{what}`. Fleet already runs this part's checks \
                  under `run_checks`, and its answer names what failed. Ask for that instead \
                  of running the command yourself."
             ),
             Refusing::NotGranted => format!(
-                "This task is not granted `{what}`. A person decides whether to allow it. \
+                "This Job is not granted `{what}`. A person decides whether to allow it. \
                  Do not try to get the same result another way."
             ),
             Refusing::Asked => format!(
@@ -386,15 +386,15 @@ impl Refusing {
             ),
             Refusing::Rejected { note } => rejected(what, note.as_ref()),
             Refusing::Withheld(Withheld::Destructive { .. }) => format!(
-                "`{what}` is declared destructive in this repository, and an unattended task \
+                "`{what}` is declared destructive in this repository, and an unattended Job \
                  never runs it. Do not try to get the same result another way."
             ),
             Refusing::Withheld(Withheld::Ungrantable { why }) => format!(
-                "`{what}` cannot be granted to a task: {why}. Do not try to get the same \
+                "`{what}` cannot be granted to a Job: {why}. Do not try to get the same \
                  result another way."
             ),
             Refusing::Withheld(Withheld::NotACommand { .. }) => format!(
-                "This task is not granted `{what}`. Do not try to get the same result another \
+                "This Job is not granted `{what}`. Do not try to get the same result another \
                  way."
             ),
         }
@@ -412,7 +412,7 @@ impl Refusing {
 fn rejected(what: &str, note: Option<&Note>) -> String {
     let refusal = format!(
         "A person said no to `{what}`. Do not run it, or anything that does the same thing. \
-         Carry on without it if the task allows, or ask a question if it cannot be done \
+         Carry on without it if the work allows, or ask a question if it cannot be done \
          without it."
     );
     match note {
@@ -449,7 +449,7 @@ impl Permitted {
     pub fn allowed(command: &str, reach: Reach, rule: Option<&str>) -> Permitted {
         Permitted(match reach {
             Reach::Job => format!(
-                "A person allowed `{command}` for this task. Run it again now; it will not be \
+                "A person allowed `{command}` for this Job. Run it again now; it will not be \
                  refused."
             ),
             Reach::Repository => {

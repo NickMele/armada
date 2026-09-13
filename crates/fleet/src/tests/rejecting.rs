@@ -31,7 +31,7 @@ use crate::tests::tmp::TempDir;
 /// text did not move when the note was added to it, and a copy derived from the
 /// same function would move along with it and pin nothing.
 const THE_BARE_REFUSAL: &str = "A person said no to `npm publish`. Do not run it, or anything \
-                                that does the same thing. Carry on without it if the task \
+                                that does the same thing. Carry on without it if the work \
                                 allows, or ask a question if it cannot be done without it.";
 
 /// **The reason a person had at the moment they pressed reject.** It reaches the

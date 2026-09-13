@@ -29,12 +29,12 @@
       "id": "plan",
       "label": "Scope the refactor",
       "evidence": {
-        "submitted": { "type": "facts_note" }
+        "submitted": { "type": "plan" }
       },
       "mechanical_checks": [
         {
-          "type": "artifact_exists",
-          "target": ".armada/artifacts/plan.md"
+          "type": "plan_recorded",
+          "min_tasks": 1
         }
       ],
       "evidence_scope": {
@@ -62,6 +62,7 @@
         "submitted": { "type": "diff" }
       },
       "retry_limit": 2,
+      "follows_plan": true,
       "mechanical_checks": [
         {
           "type": "every_manifest_check"
@@ -90,6 +91,10 @@
             {
               "criterion_id": "test_changes_justified",
               "question": "Given the stated refactor, are the changes to test files justified by it -- or has test scope been narrowed, have assertions been weakened, or have tests been skipped or deleted?"
+            },
+            {
+              "criterion_id": "tasks_match_the_diff",
+              "question": "Does the diff do every task set to done, and does each dropped task's reason hold?"
             }
           ],
           "gaming_check": {

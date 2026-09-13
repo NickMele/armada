@@ -82,6 +82,36 @@ impl Delivering {
     }
 }
 
+/// [`Delivering`]'s counterpart on the step it never fires for: a plan step
+/// declares no `deliverable`, so this fills the gap for spike 6's reason — a
+/// tool's own description does not make a Drone call it. **Drafted**, like
+/// [`Delivering`] and [`Checking`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordingThePlan(String);
+
+impl RecordingThePlan {
+    /// `Some` on the step whose product is the Job's plan — the same switch
+    /// `crate::work_plan::plan_grants` reads to grant the tool at all.
+    pub fn at(step: &ResolvedStep) -> Option<RecordingThePlan> {
+        if !step.records_plan() {
+            return None;
+        }
+        Some(RecordingThePlan(String::from(
+            "WHAT THIS PART DELIVERS\n\nThis part's product is the Job's \
+             plan. Record it with record_plan: an approach in a paragraph, \
+             then the tasks it breaks into, in the order they will be \
+             done. Recording again replaces the whole plan, so correct one \
+             by recording it again. Recording does not finish this part — \
+             submit_evidence still does.",
+        )))
+    }
+
+    /// The block, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
+
 /// What a step tells its Drone when it is captured: that `shown_by` names a
 /// file `evidence.run` runs, not one it only reads.
 ///
@@ -243,7 +273,7 @@ impl Checking {
 /// gets when a step advances underneath it — see [`Declaring::at`] for why the
 /// second one is not optional.
 ///
-/// The consequence is stated plainly and without a threat: a plan that turns
+/// The consequence is stated plainly and without a threat: a scope that turns
 /// out wrong is fixed by declaring again, and work belonging to a later part
 /// does not become this part's by being named.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -282,7 +312,7 @@ impl Declaring {
             block.push_str(
                 " Files you change outside them are compared against what you \
                  declared. If the work turns out to be somewhere else, call the \
-                 tool again — a plan that changed is fine, and a file changed \
+                 tool again — a scope that changed is fine, and a file changed \
                  for the next part is not.",
             );
         }
@@ -360,7 +390,7 @@ impl Redeclaring {
             return None;
         }
         let mut block = String::from(
-            "FILES OUTSIDE WHAT YOU DECLARED\n\nThe plan you declared for this \
+            "FILES OUTSIDE WHAT YOU DECLARED\n\nThe scope you declared for this \
              part does not cover everything that has changed:",
         );
         for path in drifted {
@@ -370,9 +400,9 @@ impl Redeclaring {
         block.push_str(
             "\n\nNothing has failed and you are not being asked to stop. If this \
              part's work is there, call the scope tool again with every path the \
-             work is in. The new call replaces the plan, and that is how a plan \
-             that turned out wrong is corrected. If that work belongs to a later \
-             part, leave it to that part.",
+             work is in. The new call replaces the scope, and that is how a \
+             scope that turned out wrong is corrected. If that work belongs to \
+             a later part, leave it to that part.",
         );
         Some(Redeclaring(block))
     }

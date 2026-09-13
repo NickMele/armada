@@ -113,11 +113,11 @@ impl fmt::Display for NotRun {
         match self {
             NotRun::NothingIsWorking => out.write_str(
                 "no Job is being worked, so there are no checks to run. Stop — \
-                 the task this Drone was started for has already ended",
+                 the Job this Drone was started for has already ended",
             ),
             NotRun::NoSuchStep { step } => write!(
                 out,
-                "the task is standing at step `{}`, which its workflow does not \
+                "the Job is standing at step `{}`, which its workflow does not \
                  name. This is a fault in Fleet and not in the call",
                 step.as_str()
             ),

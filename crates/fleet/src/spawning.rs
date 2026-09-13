@@ -34,7 +34,7 @@ use core_model::{Component, DroneId, Envelope, EscalationTrigger, Job, Level, Mo
 
 use crate::adrift::Adrift;
 use crate::briefing::Opening;
-use crate::crossing::{Overtaken, Redirected};
+use crate::crossing::{Overtaken, Redirected, ThePlan};
 use crate::daemon::Fleet;
 use crate::drone::{self, environment, HostPaths};
 use crate::transcript::{Spine, Taps};
@@ -129,10 +129,19 @@ where
             }
             None => None,
         };
+        // `None` on the step that records the plan, or on a Job with no plan yet.
+        let the_plan = match job.workflow().step(step) {
+            Some(s) if !s.records_plan() => self
+                .plan_of(&job_id)
+                .await?
+                .map(|plan| ThePlan::of(&plan, s.follows_plan())),
+            _ => None,
+        };
         let opening = opening
             .also_carrying(waiting.clone())
             .overtaken_by(overtaken)
-            .sent_back_by(sent_back);
+            .sent_back_by(sent_back)
+            .carrying_the_plan(the_plan);
         let brief = match opening.turn(job, job.workflow(), step, moved.as_ref()) {
             Ok(brief) => brief,
             Err(cause) => {

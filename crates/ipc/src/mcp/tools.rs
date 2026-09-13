@@ -234,7 +234,7 @@ impl core::fmt::Display for NotAnArgument {
                 out,
                 "`{named}` is not a field of `{tool}`, which takes \
                  `only_what_changed` and nothing else. Which checks gate the \
-                 part you are on was settled when this task was approved, and \
+                 part you are on was settled when this Job was approved, and \
                  which files each one reads is Fleet's reading of your \
                  worktree — pass `only_what_changed: true` to have them \
                  narrowed to what you have changed"
@@ -245,7 +245,7 @@ impl core::fmt::Display for NotAnArgument {
                 out,
                 "`{named}` is not a field of `{tool}`, which takes `name` and \
                  nothing else. The server runs on the port the project's \
-                 armada.yml names for it in your task's own range — neither you \
+                 armada.yml names for it in this Job's own range — neither you \
                  nor this call picks one"
             ),
             NotAnArgument::NotAField { named, tool, takes } => write!(
@@ -282,8 +282,8 @@ impl core::fmt::Display for NotAnArgument {
             ),
             NotAnArgument::AskedForNothing => out.write_str(
                 "you asked for no paths. Name the ones the work needs that the \
-                 task's scope does not already cover, or get on with the work \
-                 inside the scope you have",
+                 scope you already declared does not cover, or get on with the \
+                 work inside the scope you have",
             ),
             NotAnArgument::Planning(why) => write!(out, "{why}"),
         }
@@ -562,7 +562,7 @@ fn checks_tool() -> Value {
             "Run the checks that gate the part you are on — the ones your brief \
              names under FINDING OUT WHERE YOU STAND — in your worktree, and get \
              back what each one did and where its output was written. It runs \
-             all of them; which checks they are was settled when this task was \
+             all of them; which checks they are was settled when this Job was \
              approved and there is nothing to choose. Call it when you want to \
              know whether the work holds up, before you submit. It is not a \
              verdict and it advances nothing — the checks are run again when you \
@@ -636,9 +636,9 @@ fn scope_tool() -> Value {
     json!({
         "name": SCOPE_TOOL,
         "description":
-            "Say which paths this part of the task will be in, before you start \
+            "Say which paths this part of the Job will be in, before you start \
              work. Files you change outside them are checked against this, so a \
-             plan that turns out wrong is worth updating by calling again — but \
+             scope that turns out wrong is worth updating by calling again — but \
              work that belongs to a later part does not become this part's by \
              being declared.",
         "inputSchema": {

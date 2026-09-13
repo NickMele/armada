@@ -31,8 +31,8 @@ use core_model::{
 };
 use verification::TheBaseMoved;
 
-use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected, SentBack};
-use crate::terms::{Capturing, Checking, Declaring, Delivering, Splitting};
+use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected, SentBack, ThePlan};
+use crate::terms::{Capturing, Checking, Declaring, Delivering, RecordingThePlan, Splitting};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
 /// never task content**, identical on every step of every Job, which is what
@@ -65,7 +65,7 @@ open a pull request, or run commands this repository has not declared.
 
 When you have finished the work described below, you must report it using the \
 evidence submission tool you have been given. It is the only way to report. \
-Work you do not submit is work no one sees, and the task will not move on.
+Work you do not submit is work no one sees, and nothing moves on.
 
 Submitting returns \"recorded\". That is a receipt, not a verdict — your work \
 is checked after you submit. A later turn comes only where the part is coming \
@@ -179,6 +179,15 @@ impl Opening {
     pub(crate) fn sent_back_by(self, sent_back: Option<SentBack>) -> Opening {
         Opening {
             crossed: self.crossed.and_sent_back(sent_back),
+            ..self
+        }
+    }
+
+    /// The same opening, plus the Job's plan, where the step being opened is
+    /// not the one that records it. Folded in for `sent_back_by`'s reason.
+    pub(crate) fn carrying_the_plan(self, the_plan: Option<ThePlan>) -> Opening {
+        Opening {
+            crossed: self.crossed.and_the_plan(the_plan),
             ..self
         }
     }
@@ -506,8 +515,8 @@ impl Stopped {
             // for the same paths again.
             EscalationTrigger::ScopeRefused => {
                 "An earlier attempt at this part asked to write files outside what this \
-                 task says it changes, and was told they are not part of it. Nothing it \
-                 did was checked. Do this part inside the files the task already names."
+                 Job says it changes, and was told they are not part of it. Nothing it \
+                 did was checked. Do this part inside the files the Job already names."
             }
             // `Thrashing`'s line is true of this too and leaves out the part
             // this attempt can do differently.
@@ -561,6 +570,13 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     let mut blocks = Blocks::opening(BASELINE);
     blocks.headed(&notekeeping(job.id()), ipc::BlockKind::Standing);
     blocks.headed(&job_brief(job), ipc::BlockKind::AboutThisJob);
+    // **Before the rail, and after what the Job is about.** THE PLAN is a
+    // fact about the whole Job, like the brief above it, and the rail below
+    // it is about where this step sits — reading in that order says what the
+    // work is, then how it is meant to go, then where this part is in it.
+    if let Some(the_plan) = crossed.the_plan() {
+        blocks.headed(the_plan.text(), ipc::BlockKind::AboutThisJob);
+    }
     blocks.headed(
         &where_you_are(workflow, at, crossed.produced()),
         ipc::BlockKind::Steps,
@@ -615,6 +631,9 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
         if let Some(delivers) = Delivering::at(step) {
             blocks.headed(delivers.text(), ipc::BlockKind::AboutThisJob);
         }
+        if let Some(records) = RecordingThePlan::at(step) {
+            blocks.headed(records.text(), ipc::BlockKind::AboutThisJob);
+        }
         if let Some(asked) = Declaring::at(step) {
             blocks.headed(asked.text(), ipc::BlockKind::Standing);
         }
@@ -646,17 +665,17 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
 /// read as an instruction to put the step's deliverable in the one directory
 /// the Judge cannot see, and [`Delivering`] names that file instead.
 ///
-/// **"Plan" already means something else here.** [`Declaring`] calls the
-/// declared scope "the plan you declared", and a second meaning in one turn is
-/// the second-vocabulary defect in prose — so this block leads with what a
-/// Drone is actually holding, a file it wrote for itself.
+/// **"Plan" already means something else here.** A Job's own plan is now
+/// the word's one meaning to a Drone — `#894` moved the declared scope off
+/// it — so this block still leads with what a Drone is actually holding, a
+/// file it wrote for itself, rather than reaching for the word at all.
 fn notekeeping(job: &JobId) -> String {
     format!(
-        "FILES YOU WRITE FOR YOURSELF\n\nA checklist, notes you want to keep \
+        "FILES YOU WRITE FOR YOURSELF\n\nNotes you want to keep \
          between turns — anything you write for yourself rather than for the \
-         work goes under .armada/{}/, which is this task's alone. None of it \
-         belongs at the repository root, where a file outlives the task that \
-         wrote it with nothing to say that task is over. Nothing here is \
+         work goes under .armada/{}/, which is this Job's alone. None of it \
+         belongs at the repository root, where a file outlives the Job that \
+         wrote it with nothing to say that Job is over. Nothing here is \
          asking you to write any of it, and a file this part is asked to \
          deliver is not one of them — that one is named where it is asked \
          for, at the path that is read, and it does not go here.",
@@ -717,7 +736,7 @@ fn job_brief(job: &Job) -> String {
 fn where_you_are(workflow: &FrozenWorkflow, at: &StepId, produced: Option<&Produced>) -> String {
     let steps = workflow.steps();
     let position = steps.iter().position(|step| step.id() == at);
-    let mut block = format!("WHERE YOU ARE\n\nThis task runs in {} parts.", steps.len());
+    let mut block = format!("WHERE YOU ARE\n\nThis work runs in {} parts.", steps.len());
     if let Some(index) = position {
         block.push_str(&format!(" You are on part {}.\n", index + 1));
     } else {
@@ -740,7 +759,7 @@ fn where_you_are(workflow: &FrozenWorkflow, at: &StepId, produced: Option<&Produ
     }
     block.push_str(
         "\n\nThe parts after this one happen after you submit, and doing them \
-         yourself does not move this task forward. Leave the branch in a state \
+         yourself does not move the work forward. Leave the branch in a state \
          they can start from.",
     );
     block

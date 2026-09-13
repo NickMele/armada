@@ -57,7 +57,7 @@ Picking one by hand stays available and is the override, not the path. That docu
 
 **Three places, merged by `workflow_id`, the most specific winning**: the set Armada carries, then [Kit](kit.md)'s Workflows at `~/.armada/workflows/`, then the repository's own `.armada/workflows/`. A repository with no workflows of its own dispatches on the carried set, and one file in either later place replaces a carried definition by id. `config::Catalogue` holds the rule. #425.
 
-**The carried set is this repository's eight definitions, compiled in**, and is judged against a repository with tests — Armada's built-in support is for code-with-tests repositories, the owner's decision. None of the eight names a Check: they gate on `every_manifest_check`, `artifact_exists`, `diff_nonempty` and Judge checks, so each resolves against any Manifest, and a repository declaring no Checks runs that gate as nothing. See The plan step, below, for `plan_recorded` — the carried set does not use it yet.
+**The carried set is this repository's eight definitions, compiled in**, and is judged against a repository with tests — Armada's built-in support is for code-with-tests repositories, the owner's decision. None of the eight names a Check: they gate on `every_manifest_check`, `artifact_exists`, `plan_recorded`, `diff_nonempty` and Judge checks, so each resolves against any Manifest, and a repository declaring no Checks runs that gate as nothing. See The plan step, below: Bug, Refactor and Feature use `plan_recorded` on their planning step, and `epic`, `code_review`, `design_plan`, `prototype` and `revert` do not have one yet.
 
 **That is Armada holding an opinion it used to refuse.** An empty `.armada/workflows/` was refused because a repository declares how its own work is done, and a carried set is Armada saying how work is done by default. The trade is accepted, and overriding is one file so that the default does not become the only way.
 
@@ -93,9 +93,10 @@ task with its id, title, state and a dropped task's reason — where
 step: task states are, so the whole payload is handed over rather than a
 scoped slice.
 
-Designed as the Plan milestone, not yet built. #895 wires these fields into
-the loader and the carried workflows; #893 gives a Drone the `record_plan`,
-`add_task` and `update_task` tools that fill them.
+Built as the Plan milestone. #895 wires these fields into the loader;
+#893 gives a Drone the `record_plan`, `add_task` and `update_task` tools
+that fill them; #894 switches Bug, Refactor and Feature onto a plan step and
+puts THE PLAN in every brief after it.
 
 ## Evidence scope object
 

@@ -147,7 +147,7 @@ pub(super) fn record_plan_tool() -> Value {
     json!({
         "name": RECORD_PLAN_TOOL,
         "description":
-            "Record the plan for this task: the approach in a paragraph, and the \
+            "Record the plan for this Job: the approach in a paragraph, and the \
              tasks it breaks into in the order they will be done. Fleet keeps it, \
              and the parts after this one work from it and keep each task's state \
              current. Tasks are named T1, T2 and so on in the order you give them. \
