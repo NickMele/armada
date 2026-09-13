@@ -36,8 +36,8 @@ const CONTEXT = "job_2d90bb — coalesce the session refresh";
  *
  * **This is where the digits are read as a set, and where one of them moved.**
  * `⌘1–⌘5` is bound to Bridge surfaces *in rail order*, so a digit is a place in
- * the rail and nothing else. `Held worktrees` joined at the end and took `⌘5`;
- * Helm, the digit after the last surface, went to `⌘6`. Drawn together, the
+ * the rail and nothing else. Cleanup joined at the end and took `⌘5`; Helm,
+ * the digit after the last surface, went to `⌘6`. Drawn together, the
  * five keys people already know are unmoved and the one that moved is beside
  * the row that pushed it.
  *
@@ -54,9 +54,9 @@ const RAIL: PaletteEntry[] = [
   {
     id: "nav-worktrees",
     section: "navigation",
-    label: "Held worktrees",
+    label: "Cleanup",
     shortcut: "⌘5",
-    aliases: ["disk", "held disk"],
+    aliases: ["held worktrees", "disk", "held disk"],
     icon: HardDrive,
   },
 ];
@@ -263,18 +263,19 @@ export const AnAliasFindsTheLexiconTerm: Story = {
 };
 
 /**
- * **The newest surface goes last, so it is the only digit that is new.** `Held
- * worktrees` joined the rail on 2026-09-03 and took `⌘5`; Helm, which is the
- * digit after the last surface rather than a surface, went from `⌘5` to `⌘6`.
- * Every key anyone had learned still reaches what it reached.
+ * **The newest surface goes last, so it is the only digit that is new.**
+ * Cleanup — Held worktrees, before its rename — joined the rail on 2026-09-03
+ * and took `⌘5`; Helm, which is the digit after the last surface rather than a
+ * surface, went from `⌘5` to `⌘6`. Every key anyone had learned still reaches
+ * what it reached.
  *
  * A published binding moved, and this is where a person finds out: the palette
  * displays the binding beside every entry, so the two rows are read together
  * the next time anybody opens it.
  *
  * The query is "disk", the word on the control that has reached this screen
- * since it shipped. The row reads `Held worktrees`, which is the title of the
- * screen it lands on.
+ * since it shipped, unchanged by the rename. The row reads `Cleanup`, which is
+ * the title of the screen it lands on.
  */
 export const TheNewestSurfaceTookTheLastDigit: Story = {
   args: { ...board, defaultQuery: "disk" },
@@ -290,7 +291,7 @@ export const TheNewestSurfaceTookTheLastDigit: Story = {
    * which fails on the last.
    */
   play: async ({ canvas, userEvent }) => {
-    await expect(canvas.getByRole("option", { name: /Held worktrees/ })).toBeVisible();
+    await expect(canvas.getByRole("option", { name: /Cleanup/ })).toBeVisible();
 
     await userEvent.clear(canvas.getByRole("combobox"));
 
@@ -298,8 +299,8 @@ export const TheNewestSurfaceTookTheLastDigit: Story = {
     await expect(canvas.getByRole("option", { name: /^Job Board/ })).toHaveAccessibleName(
       "Job Board ⌘ 1",
     );
-    await expect(canvas.getByRole("option", { name: /^Held worktrees/ })).toHaveAccessibleName(
-      "Held worktrees ⌘ 5",
+    await expect(canvas.getByRole("option", { name: /^Cleanup/ })).toHaveAccessibleName(
+      "Cleanup ⌘ 5",
     );
     await expect(canvas.getByRole("option", { name: /^Helm/ })).toHaveAccessibleName("Helm ⌘ J");
   },

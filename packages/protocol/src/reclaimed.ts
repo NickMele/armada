@@ -55,3 +55,16 @@ export type ReclaimedBranch = {
   base?: string | null;
   unmerged_commits?: number | null;
 };
+
+/**
+ * The body of `delete_branch`: the tip the person was shown. **A branch that
+ * has moved since is refused with a 409**, so nobody deletes commits they never saw.
+ */
+export type DeleteBranch = { tip: string };
+
+/** The answer to `delete_branch`. The tip is what the commits are recoverable from. */
+export type BranchDeleted = {
+  job_id: string;
+  branch: string;
+  tip: string;
+};

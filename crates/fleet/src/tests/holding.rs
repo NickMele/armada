@@ -351,6 +351,28 @@ async fn a_worktree_failing_two_tests_carries_both_reasons() {
     assert!(!held[0].provably_safe());
 }
 
+/// **The Job `delete_branch` exists for.** Its checkout is gone and its branch
+/// is unmerged, so it is still listed, and says the checkout is not on disk.
+#[tokio::test]
+async fn a_removed_checkout_with_an_unmerged_branch_is_still_listed_off_disk() {
+    let home = TempDir::new();
+    let fleet = a_fleet_sweeping_every_turn(&home);
+    a_repository(&home);
+    let job_id = a_finished_job(&fleet, "gone from disk").await;
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+    a_commit_nobody_has_taken(&home, &handle);
+    Fleet::reclaim_worktree(&fleet, &job_id)
+        .await
+        .expect("reclaimed");
+
+    let held = fleet.worktrees_held().await.expect("the held list");
+
+    assert_eq!(held.len(), 1, "still listed: {held:?}");
+    assert!(!held[0].on_disk, "and the checkout is not there");
+    assert!(matches!(held[0].held.as_slice(), [Held::Unmerged { .. }]));
+}
+
 /// **How long it has sat**, which is the fact the uncommitted reason is read
 /// against — *twenty minutes* and *four days* are different decisions on the
 /// one reason where reclaiming ends something.
@@ -420,6 +442,7 @@ async fn the_held_list_names_the_checkout_the_branch_and_why() {
         one.path
     );
     assert!(one.branch.contains(&handle), "{}", one.branch);
+    assert!(one.on_disk, "the checkout is still there");
     assert!(
         !one.last_moved_at.as_str().is_empty(),
         "how long it has sat crosses with the rest of the row"

@@ -125,6 +125,11 @@ const api: BridgeApi = {
   reclaimWorktree: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.reclaimWorktree, jobId),
 
+  // A force, unlike the reclaim above — Fleet's 409 is the safety net a
+  // stale confirmation needs.
+  deleteBranch: (jobId: string, tip: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.deleteBranch, jobId, tip),
+
   // The per-Job half of `forgetTerminalJobs` above. Real deletion, and there
   // is no undo.
   forgetJob: (jobId: string): Promise<Outcome> =>
@@ -436,9 +441,10 @@ const api: BridgeApi = {
   // What fleet is holding disk for, and the test each one did not pass. The
   // second read here with no job id, and for a different reason: what is being
   // decided is which of a set to give back, which no per-job field could ask.
-  // Read-only — `reclaimWorktree` is the act, one job at a time, and it already
-  // exists above. A piloted job's checkout is not in the answer at all: fleet
-  // drops it, so nothing here can offer a directory a person is standing in.
+  // Read-only — `reclaimWorktree`, `deleteBranch` and `forgetJob` are the
+  // three acts, one job at a time, and they already exist above. A piloted
+  // job's checkout is not in the answer at all: fleet drops it, so nothing
+  // here can offer a directory a person is standing in.
   readHeld: (want: boolean): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readHeld, want),
 

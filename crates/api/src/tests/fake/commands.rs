@@ -375,6 +375,13 @@ impl Commands for FakeDaemon {
     ) -> Result<WorktreeReclaimed, Refusal> {
         self.fake_reclaim_worktree(job_id).await
     }
+    async fn delete_branch(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        asked: ipc::DeleteBranch,
+    ) -> Result<ipc::BranchDeleted, Refusal> {
+        self.fake_delete_branch(job_id, asked).await
+    }
     async fn redirect_drone(
         self: std::sync::Arc<Self>,
         job_id: JobId,

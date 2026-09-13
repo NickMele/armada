@@ -81,6 +81,8 @@ import {
   readDiff,
   readEvidence,
   readRemarks,
+  deleteBranchOne,
+  forgetOne,
   readHeld,
   readReports,
   reclaimOne,
@@ -625,14 +627,12 @@ export function App() {
                 // board rather than from `held` itself.
                 jobs={state.jobs}
                 onWant={readHeld}
-                // The receipt belongs to the press that asked for it, so it is
-                // answered to the surface rather than published: a reclaim
-                // changes no row on the board, and a notice for one person's
-                // gesture would outlive the screen they made it on.
+                // Each receipt is answered to the press that asked for it: a
+                // published notice would outlive the screen it was made on.
                 onReclaim={reclaimOne}
-                // The same `now` every other elapsed figure in the window is
-                // drawn from. Two clocks on one app drift, and this one is read
-                // in days rather than seconds — but it is still the app's.
+                onDeleteBranch={deleteBranchOne}
+                onForget={forgetOne}
+                // The app's one `now`, because two clocks in one window drift.
                 now={now}
                 onCopied={setCopied}
               />

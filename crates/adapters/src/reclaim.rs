@@ -24,8 +24,12 @@
 //!
 //! Each half is answered on its own, so neither hides the other's fault.
 
+mod branch;
+
 use adapter_traits::WorktreeSpec;
 use git2::{BranchType, ErrorCode, Oid, Repository, WorktreeLockStatus, WorktreePruneOptions};
+
+pub use branch::{delete_branch, BranchRefused};
 
 /// Whether a branch holding commits the base cannot reach may be deleted.
 ///
@@ -206,9 +210,15 @@ pub fn standing(
     })
 }
 
+/// Whether the checkout is on disk. One test, so `standing` and `delete_branch`
+/// cannot disagree about it.
+fn on_disk(spec: &WorktreeSpec) -> bool {
+    std::path::Path::new(&spec.worktree_path()).exists()
+}
+
 fn worktree_standing(repo: &Repository, spec: &WorktreeSpec) -> WorktreeStanding {
     let path = spec.worktree_path();
-    if !std::path::Path::new(&path).exists() {
+    if !on_disk(spec) {
         return WorktreeStanding::Absent;
     }
     // Before the status, because a locked worktree is held whatever is in it

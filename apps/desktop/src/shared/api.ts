@@ -162,6 +162,12 @@ export type BridgeApi = {
    */
   reclaimWorktree: (jobId: string) => Promise<Outcome>;
   /**
+   * Delete one terminal Job's branch, sending the tip a person confirmed. **A
+   * force** — Fleet refuses with 409 where the Job is not terminal, the
+   * checkout is still on disk, the branch is gone, or the tip has moved.
+   */
+  deleteBranch: (jobId: string, tip: string) => Promise<Outcome>;
+  /**
    * Delete one terminal Job's whole record. **Real deletion, not a status** —
    * there is no undo, and the Job cannot be opened again. The per-Job half of
    * `forgetTerminalJobs`.

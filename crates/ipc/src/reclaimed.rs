@@ -81,3 +81,19 @@ pub struct ReclaimedBranch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unmerged_commits: Option<u32>,
 }
+
+/// The body of `delete_branch`: the tip the person was shown. **A branch that
+/// has moved since is refused**, so nobody deletes commits they never saw.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeleteBranch {
+    pub tip: String,
+}
+
+/// The answer to `delete_branch`. The tip is what the commits are recoverable
+/// from afterwards.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BranchDeleted {
+    pub job_id: JobId,
+    pub branch: String,
+    pub tip: String,
+}

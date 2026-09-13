@@ -442,7 +442,13 @@ export type JobForgotten = { job_id: string };
 // Fleet runs. Its own file for the reason the two above have one — this file is
 // at the gate's ceiling, and the cut is the seam `crates/ipc/src/reclaimed.rs`
 // already draws.
-export type { ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed } from "./reclaimed";
+export type {
+  BranchDeleted,
+  DeleteBranch,
+  ReclaimedBranch,
+  ReclaimedWorktree,
+  WorktreeReclaimed,
+} from "./reclaimed";
 
 // Every event shape, re-exported so `protocol.ts` stays the one import for the
 // wire vocabulary. They live in `events.ts` because this file reached the 900

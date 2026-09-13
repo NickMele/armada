@@ -2,68 +2,64 @@ import { Folder, GitBranch, GitCommitHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { HeldReason, WorktreeHeld, WorktreeReclaimed } from "@armada/protocol";
+import type { BranchDeleted, HeldReason, WorktreeHeld, WorktreeReclaimed } from "@armada/protocol";
 import { JOB_STATUS } from "../../generated/vocabulary";
 import { Badge } from "../../primitives/Badge/Badge";
 import { Checkbox } from "../../primitives/Checkbox/Checkbox";
 
+/** The three acts a row offers, each its own checkbox and its own boolean. */
+export type RowChoice = {
+  removeCheckout: boolean;
+  deleteBranch: boolean;
+  forget: boolean;
+};
+
 /**
  * One worktree fleet is holding disk for, and the test it did not pass.
  *
- * **Why is the component, not a label on it.** Not-provably-safe is one word
- * for four situations a person answers differently, and each one wants
- * different facts in front of the decision: how many commits and what they are
- * reachable from; which files were written and committed nowhere; what the job
- * is still doing; which job is still waiting on this one. A row that said
- * "cannot be reclaimed automatically" and stopped would be asking somebody to
- * go and find all of that themselves.
+ * **No byte count.** Which commits go and which files exist nowhere but this
+ * directory is the decision; bytes are not.
  *
- * **No byte count, and that is the point of the row.** Bytes are not the
- * decision — which commits go, whether anything else has them, and which files
- * exist nowhere but this directory is. A size beside those facts would be the
- * figure read first and meaning least.
+ * **Reclaiming the checkout is still never a force.** Deleting the branch is,
+ * and it is its own checkbox with its own line in the confirmation.
  *
- * **Nothing that could be lost is left unnamed.** There is no force on this
- * seam, so a branch holding commits the base cannot reach survives the reclaim
- * and the row says so; uncommitted files do not survive it, and the row names
- * them one by one.
- *
- * **A piloted job's checkout never reaches this component**, because fleet does
- * not serve one. There is no arm for it below and there cannot be: a person is
- * at an unrestricted toolset in that directory.
+ * **A piloted job's checkout never reaches this component** — fleet does not
+ * serve one.
  */
 export type HeldWorktreeProps = {
   /** One row of `GET /worktrees`, exactly as fleet answered it. */
   held: WorktreeHeld;
   /**
-   * Chosen to be reclaimed.
+   * What is chosen for this row's three acts.
    *
-   * **Absent draws the row as a record rather than a choice**, which is what a
-   * worktree nothing may act on is: a job still running, or one fleet is about
-   * to take back on its own.
+   * Absent draws the row as a record rather than a choice — a job still
+   * running, or one fleet is about to take back on its own.
    */
-  selected?: boolean;
-  onSelect?: (jobId: string, selected: boolean) => void;
+  choice?: RowChoice;
   /**
-   * What the reclaim did, where this one has already been given back.
+   * Which of the three this row offers right now.
    *
-   * **Both halves, because half of it happening is the ordinary outcome.** A
-   * kept branch is the safe setting working rather than a failure, and a
-   * checkout that would not go is the row staying exactly where it is.
+   * `held.ts`'s `offeredOn`, computed once and handed down — forget is gated
+   * on the other two, so this component only draws what it is told.
    */
+  offered?: RowChoice;
+  onChoose?: (jobId: string, choice: RowChoice) => void;
+  /** What reclaiming did, where the checkout has already been given back. */
   reclaimed?: WorktreeReclaimed;
+  /**
+   * What deleting the branch did, where that act has already been sent.
+   *
+   * Its own receipt for its own act — `reclaimed.branch` says what the safe
+   * reclaim did to the branch, ordinarily nothing; this says what the
+   * explicit, forcing delete did. The two never both apply.
+   */
+  branchDeleted?: BranchDeleted;
   /**
    * How long the checkout has been sitting, as a phrase — `4 days`.
    *
-   * **Formatted by the caller, like every other elapsed figure in this
-   * package.** A component that held a clock would redraw on somebody else's
-   * tick, and the screens own the one `now` every figure on a screen is drawn
-   * from.
-   *
-   * Drawn under `uncommitted` and nowhere else: that is the one reason where
-   * the act ends something, and *twenty minutes* and *four days* are answered
-   * differently there. Absent where the stamp would not parse, which draws the
-   * reason without the age rather than an age measured from zero.
+   * Formatted by the caller, like every other elapsed figure in this package.
+   * Drawn under `uncommitted` and nowhere else, the one reason that ends
+   * something.
    */
   sitting?: string;
   /** A clipboard write is silent, so the surface confirms it. */
@@ -72,28 +68,22 @@ export type HeldWorktreeProps = {
 
 export function HeldWorktree({
   held,
-  selected,
-  onSelect,
+  choice,
+  offered,
+  onChoose,
   reclaimed,
+  branchDeleted,
   sitting,
   onCopied,
 }: HeldWorktreeProps) {
   const badge = badgeOf(held.status);
-  const choosable = selected !== undefined && onSelect !== undefined;
+  const choosable = choice !== undefined && offered !== undefined && onChoose !== undefined;
+  const chosen = choosable && (choice.removeCheckout || choice.deleteBranch || choice.forget);
 
   return (
-    <li className="armada-held" data-selected={selected || undefined}>
+    <li className="armada-held" data-selected={chosen || undefined}>
       <div className="armada-held__head">
-        {choosable ? (
-          <Checkbox
-            checked={selected}
-            onChange={(event) => onSelect(held.job_id, event.currentTarget.checked)}
-          >
-            {held.job_title}
-          </Checkbox>
-        ) : (
-          <span className="armada-held__title">{held.job_title}</span>
-        )}
+        <span className="armada-held__title">{held.job_title}</span>
         {badge === null ? (
           /* A status spelling this build's registry has no row for, which is
              Bridge behind Fleet rather than a bad message. **The wire's own
@@ -117,7 +107,7 @@ export function HeldWorktree({
 
       <div className="armada-held__where">
         <Value glyph={Folder} title={held.path} onCopied={onCopied}>
-          {held.path}
+          {held.on_disk ? held.path : "The checkout is already gone"}
         </Value>
         <Value glyph={GitBranch} title={held.branch} onCopied={onCopied}>
           {held.branch}
@@ -134,8 +124,77 @@ export function HeldWorktree({
         </ul>
       )}
 
-      {reclaimed === undefined ? null : <Receipt reclaimed={reclaimed} />}
+      {!choosable ? null : (
+        <Acts
+          jobId={held.job_id}
+          title={held.job_title}
+          choice={choice}
+          offered={offered}
+          onChoose={onChoose}
+        />
+      )}
+
+      {reclaimed === undefined && branchDeleted === undefined ? null : (
+        <Receipt reclaimed={reclaimed} branchDeleted={branchDeleted} />
+      )}
     </li>
+  );
+}
+
+/** The three checkboxes this row currently offers, each independent of the other two. */
+function Acts({
+  jobId,
+  title,
+  choice,
+  offered,
+  onChoose,
+}: {
+  jobId: string;
+  title: string;
+  choice: RowChoice;
+  offered: RowChoice;
+  onChoose: (jobId: string, choice: RowChoice) => void;
+}) {
+  return (
+    <ul className="armada-held__acts">
+      {!offered.removeCheckout ? null : (
+        <li>
+          <Checkbox
+            checked={choice.removeCheckout}
+            aria-label={`Remove the checkout — ${title}`}
+            onChange={(event) =>
+              onChoose(jobId, { ...choice, removeCheckout: event.currentTarget.checked })
+            }
+          >
+            Remove the checkout
+          </Checkbox>
+        </li>
+      )}
+      {!offered.deleteBranch ? null : (
+        <li>
+          <Checkbox
+            checked={choice.deleteBranch}
+            aria-label={`Delete the branch — ${title}`}
+            onChange={(event) =>
+              onChoose(jobId, { ...choice, deleteBranch: event.currentTarget.checked })
+            }
+          >
+            Delete the branch
+          </Checkbox>
+        </li>
+      )}
+      {!offered.forget ? null : (
+        <li>
+          <Checkbox
+            checked={choice.forget}
+            aria-label={`Forget the job — ${title}`}
+            onChange={(event) => onChoose(jobId, { ...choice, forget: event.currentTarget.checked })}
+          >
+            Forget the job
+          </Checkbox>
+        </li>
+      )}
+    </ul>
   );
 }
 
@@ -233,8 +292,8 @@ function Reason({ reason, sitting }: { reason: HeldReason; sitting?: string }) {
           <span className="armada-held__safe">
             The branch is kept and the commits stay on it.
           </span>{" "}
-          Reclaiming takes the checkout only — there is no force on this seam, so nothing
-          here can delete work nobody has taken.
+          Removing the checkout never touches them. Deleting the branch does, and the tip
+          below is the only way back.
           <span className="armada-held__tip">
             <GitCommitHorizontal size={12} strokeWidth={2} aria-hidden="true" />
             <span className="armada-held__mono">{reason.tip}</span>
@@ -323,23 +382,41 @@ function Held({ title, children }: { title: string; children: ReactNode }) {
  * branch is the ordinary outcome here, not a partial failure, and a single line
  * would have to lie about one of them.
  */
-function Receipt({ reclaimed }: { reclaimed: WorktreeReclaimed }) {
+function Receipt({
+  reclaimed,
+  branchDeleted,
+}: {
+  reclaimed?: WorktreeReclaimed;
+  branchDeleted?: BranchDeleted;
+}) {
   return (
     <dl className="armada-held__receipt">
-      <dt>The checkout</dt>
-      <dd>
-        {reclaimed.worktree.removed
-          ? "Gone from disk."
-          : `Still there — ${reclaimed.worktree.why ?? "no reason was given"}.`}
-      </dd>
-      <dt>The branch</dt>
-      <dd>
-        {reclaimed.branch.deleted
-          ? `Deleted${reclaimed.branch.tip == null ? "" : `, at ${reclaimed.branch.tip}`}.`
-          : reclaimed.branch.unmerged_commits == null
-            ? `Left standing — ${reclaimed.branch.why ?? "no reason was given"}.`
-            : `Kept, with ${counted(reclaimed.branch.unmerged_commits)} still on it. Merge it or delete it by hand once you have taken what you want.`}
-      </dd>
+      {reclaimed === undefined ? null : (
+        <>
+          <dt>The checkout</dt>
+          <dd>
+            {reclaimed.worktree.removed
+              ? "Gone from disk."
+              : `Still there — ${reclaimed.worktree.why ?? "no reason was given"}.`}
+          </dd>
+        </>
+      )}
+      {branchDeleted === undefined && reclaimed === undefined ? null : (
+        <>
+          <dt>The branch</dt>
+          <dd>
+            {branchDeleted !== undefined
+              ? `Deleted, at ${branchDeleted.tip}.`
+              : reclaimed === undefined
+                ? null
+                : reclaimed.branch.deleted
+                  ? `Deleted${reclaimed.branch.tip == null ? "" : `, at ${reclaimed.branch.tip}`}.`
+                  : reclaimed.branch.unmerged_commits == null
+                    ? `Left standing — ${reclaimed.branch.why ?? "no reason was given"}.`
+                    : `Kept, with ${counted(reclaimed.branch.unmerged_commits)} still on it. Merge it or delete it by hand once you have taken what you want.`}
+          </dd>
+        </>
+      )}
     </dl>
   );
 }

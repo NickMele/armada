@@ -127,6 +127,9 @@ pub struct Holding {
     pub last_moved: Timestamp,
     /// The checkout on disk, derived once.
     pub path: String,
+    /// Whether that checkout is still there. A Job whose checkout is gone and
+    /// whose branch is unmerged is still held, and `delete_branch` is its act.
+    pub on_disk: bool,
     /// The branch the Job derived. Named even where it is already gone.
     pub branch: String,
     /// Empty where every test passed.
@@ -312,6 +315,7 @@ where
             status: job.status(),
             last_moved: last_moved(job),
             path: spec.worktree_path(),
+            on_disk: stands.worktree != WorktreeStanding::Absent,
             branch: spec.branch(),
             held,
         })
@@ -424,7 +428,7 @@ fn said_of(worktree: &adapters::WorktreeGone) -> String {
 
 /// What became of the branch. **The tip is carried on every arm that has one**,
 /// because a deleted branch is recoverable from its SHA and from nothing else.
-fn said_of_branch(branch: &adapters::BranchGone) -> String {
+pub(crate) fn said_of_branch(branch: &adapters::BranchGone) -> String {
     use adapters::BranchGone::*;
     match branch {
         Deleted { branch, tip } => format!("deleted {branch} at {tip}"),

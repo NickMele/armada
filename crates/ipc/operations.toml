@@ -1138,6 +1138,36 @@ rather than an act on a Drone, and `agent_access` on a command is the ladder
 rung.
 """
 
+[operations.delete_branch]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Deletes one terminal Job's branch, commits nobody has taken and all, once its checkout is gone"
+notes = """
+**The one act on this seam that destroys unmerged work, and it is a person's.**
+`reclaim_worktree` keeps a branch the base cannot reach, and the sweep never
+deletes one, because Fleet deciding alone must never lose commits. This is not
+Fleet deciding: a person saw the tip on the held list, confirmed, and sent it
+back. That tip is the guard — a branch that moved since is refused, so nobody
+deletes a commit they were never shown. It takes the branch half of
+`adapters::reclaim` with `UnmergedWork::Delete`, the path `armada clean --force`
+takes, and adds no second deletion.
+
+Without it, a Job whose checkout is gone and whose branch is unmerged stays on
+the held list for ever: reclaiming it again changes nothing.
+
+**Refused with a 409**, each naming what to do: the Job is not terminal; the
+checkout is still on disk, so reclaim it first; the branch is already gone; or
+the branch no longer stands at `tip`. A repository that will not open, or git
+refusing the delete, is a 500.
+
+The answer carries the tip, because a deleted branch is recoverable from its SHA
+and nothing else. Nothing is written to the record beyond a line in the Job's
+own log.
+
+Not on the Intervention Ladder, for `reclaim_worktree`'s reason.
+"""
+
 [operations.propose_job]
 kind = "command"
 transport = "HTTP"

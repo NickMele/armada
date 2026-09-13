@@ -13,15 +13,20 @@
 
 import { expect, test } from "vitest";
 import type { JobSummary, WorktreeHeld } from "@armada/protocol";
+import type { RowChoice } from "@armada/components";
 
 import {
+  choiceOf,
+  chosenRows,
   confirmOpening,
   confirmTitle,
   decides,
   divided,
   filesDestroyed,
-  losing,
+  NO_CHOICE,
   namedByHandle,
+  offeredOn,
+  planned,
   sitting,
 } from "./held";
 
@@ -35,8 +40,14 @@ function held(over: Partial<WorktreeHeld> = {}): WorktreeHeld {
     path: "/Users/user/armada/.armada/worktrees/01JOB0001",
     branch: "armada/01JOB0001",
     held: [],
+    on_disk: true,
     ...over,
   };
+}
+
+/** One row, chosen for the acts named — the rest read `false`. */
+function choosing(over: Partial<RowChoice>): RowChoice {
+  return { ...NO_CHOICE, ...over };
 }
 
 const UNMERGED = {
@@ -88,17 +99,16 @@ test("the three groups keep fleet's order inside each of them", () => {
  * it, and the two loose files do not survive at all.
  */
 test("the cost of a reclaim separates what ends from what survives", () => {
-  const cost = losing([
-    held({
-      held: [UNMERGED, { why: "uncommitted", files: ["src/log.rs", "notes.md"] }],
-    }),
-  ]);
+  const row = held({
+    held: [UNMERGED, { why: "uncommitted", files: ["src/log.rs", "notes.md"] }],
+  });
+  const cost = planned([row], { [row.job_id]: choosing({ removeCheckout: true }) });
 
   expect(cost.checkouts).toBe(1);
   expect(filesDestroyed(cost)).toBe(2);
   expect(cost.destroying[0]!.files).toEqual(["src/log.rs", "notes.md"]);
-  // Not a loss, and the confirmation says so in those words: there is no force
-  // on this seam, so the branch is kept and the commits stay reachable.
+  // Not a loss, and the confirmation says so in those words: nothing chose to
+  // delete the branch, so it is kept and the commits stay reachable.
   expect(cost.keeping[0]).toEqual({
     jobId: "01JOB0001",
     title: "Port the settings selectors",
@@ -106,23 +116,61 @@ test("the cost of a reclaim separates what ends from what survives", () => {
     commits: 3,
     tip: "9f1c2ab84d5e",
   });
+  expect(cost.deletingBranches).toEqual([]);
 });
 
 test("an unmerged branch alone costs nothing, and the sentence for that exists", () => {
-  const cost = losing([held({ held: [UNMERGED] })]);
+  const row = held({ held: [UNMERGED] });
+  const cost = planned([row], { [row.job_id]: choosing({ removeCheckout: true }) });
 
   expect(cost.destroying).toEqual([]);
   expect(filesDestroyed(cost)).toBe(0);
   expect(cost.keeping).toHaveLength(1);
 });
 
-test("the confirmation names the act and what survives it, never a byte count", () => {
-  const opening = confirmOpening(losing([held({ held: [UNMERGED] }), held({ job_id: "b" })]));
+/**
+ * **A branch chosen for deletion carries its commit count and its tip**, the
+ * two facts the confirmation names per rule 4 — never folded into `keeping`.
+ */
+test("a branch chosen for deletion is named with its commit count and its tip", () => {
+  const row = held({ held: [UNMERGED] });
+  const cost = planned([row], { [row.job_id]: choosing({ deleteBranch: true }) });
 
-  expect(confirmTitle(1)).toBe("Reclaim this worktree?");
-  expect(confirmTitle(2)).toBe("Reclaim 2 worktrees?");
+  expect(cost.keeping).toEqual([]);
+  expect(cost.deletingBranches).toEqual([
+    {
+      jobId: "01JOB0001",
+      title: "Port the settings selectors",
+      branch: "armada/01JOB0001",
+      commits: 3,
+      tip: "9f1c2ab84d5e",
+    },
+  ]);
+});
+
+test("a record chosen to be forgotten is named on the confirmation", () => {
+  const row = held({ held: [] });
+  const cost = planned([row], { [row.job_id]: choosing({ forget: true }) });
+
+  expect(cost.forgetting).toEqual([{ jobId: "01JOB0001", title: "Port the settings selectors" }]);
+});
+
+test("the confirmation names the act and what survives it, never a byte count", () => {
+  const rowA = held({ held: [UNMERGED] });
+  const rowB = held({ job_id: "b" });
+  const opening = confirmOpening(
+    planned(
+      [rowA, rowB],
+      {
+        [rowA.job_id]: choosing({ removeCheckout: true }),
+        [rowB.job_id]: choosing({ removeCheckout: true }),
+      },
+    ),
+  );
+
+  expect(confirmTitle(1)).toBe("Clean up this row?");
+  expect(confirmTitle(2)).toBe("Clean up 2 rows?");
   expect(opening).toContain("2 checkouts are removed");
-  expect(opening).toContain("stay on the board");
   // Bytes are not the decision, and no arithmetic here produces one.
   expect(opening).not.toMatch(/byte|MB|GB|disk space/i);
 });
@@ -181,9 +229,8 @@ test("an unreadable or future stamp draws no age at all", () => {
 
 /** The confirmation carries the stamp per job, so it can say it row by row. */
 test("what is destroyed carries the stamp it is read against", () => {
-  const cost = losing([
-    held({ held: [{ why: "uncommitted", files: ["src/log.rs"] }] }),
-  ]);
+  const row = held({ held: [{ why: "uncommitted", files: ["src/log.rs"] }] });
+  const cost = planned([row], { [row.job_id]: choosing({ removeCheckout: true }) });
 
   expect(cost.destroying[0]!.lastMovedAt).toBe("2026-08-30T09:14:00Z");
   expect(sitting(cost.destroying[0]!.lastMovedAt, NOW)).toBe("4 days");
@@ -226,4 +273,70 @@ test("every other reason passes through namedByHandle unchanged", () => {
   const row = held({ held: [{ why: "unmerged", base: "main", commits: 1, tip: "abc123" }] });
 
   expect(namedByHandle(row, [job()])).toEqual(row);
+});
+
+/**
+ * **`on_disk` is what removing the checkout is offered on**, never a job's
+ * status or its reasons — a checkout fleet already took back offers nothing
+ * to remove, whatever else the row still carries.
+ */
+test("removing the checkout is offered only while on_disk is true", () => {
+  const onDisk = held({ on_disk: true, held: [UNMERGED] });
+  const gone = held({ on_disk: false, held: [UNMERGED] });
+
+  expect(offeredOn(onDisk, NO_CHOICE).removeCheckout).toBe(true);
+  expect(offeredOn(gone, NO_CHOICE).removeCheckout).toBe(false);
+});
+
+test("deleting the branch is offered only while an unmerged reason is present", () => {
+  const unmerged = held({ held: [UNMERGED] });
+  const clean = held({ held: [] });
+
+  expect(offeredOn(unmerged, NO_CHOICE).deleteBranch).toBe(true);
+  expect(offeredOn(clean, NO_CHOICE).deleteBranch).toBe(false);
+});
+
+/**
+ * **The case rule 2 exists for.** Forgetting a record whose checkout still
+ * stands orphans that disk from this page — `worktrees_held` walks Job
+ * records, not directories — so forget is withheld until the checkout is
+ * gone, and joins the moment removing it is chosen in the same act.
+ */
+test("forgetting the job is withheld until the checkout is gone or chosen", () => {
+  const row = held({ on_disk: true, held: [] });
+
+  expect(offeredOn(row, NO_CHOICE).forget).toBe(false);
+  expect(offeredOn(row, choosing({ removeCheckout: true })).forget).toBe(true);
+});
+
+test("forgetting the job is withheld until an unmerged branch is gone or chosen", () => {
+  const row = held({ on_disk: false, held: [UNMERGED] });
+
+  expect(offeredOn(row, NO_CHOICE).forget).toBe(false);
+  expect(offeredOn(row, choosing({ deleteBranch: true })).forget).toBe(true);
+});
+
+test("forgetting the job is withheld while a branch with no answerable base stands", () => {
+  const row = held({ on_disk: false, held: [{ why: "base_unanswered", detail: "none of main is here" }] });
+
+  expect(offeredOn(row, NO_CHOICE).forget).toBe(false);
+});
+
+test("a row with neither the checkout nor an unmerged branch offers forget outright", () => {
+  const row = held({ on_disk: false, held: [] });
+
+  expect(offeredOn(row, NO_CHOICE).forget).toBe(true);
+});
+
+test("chosenRows keeps a row only where something on it is chosen", () => {
+  const a = held({ job_id: "a" });
+  const b = held({ job_id: "b" });
+
+  const rows = chosenRows([a, b], { a: choosing({ forget: true }) });
+
+  expect(rows.map((row) => row.job_id)).toEqual(["a"]);
+});
+
+test("choiceOf answers NO_CHOICE for a row nothing has touched yet", () => {
+  expect(choiceOf({}, "untouched")).toEqual(NO_CHOICE);
 });

@@ -424,6 +424,24 @@ pub(crate) async fn reclaim_worktree<D: Commands>(
     }
 }
 
+/// Delete the Job's branch, guarded by the tip in the body. 409 where the Job
+/// is not terminal, its checkout still stands, the branch is gone, or the tip
+/// moved.
+pub(crate) async fn delete_branch<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let asked: ipc::DeleteBranch = match ipc::decode("the tip to delete", &body) {
+        Ok(asked) => asked,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.shared().delete_branch(job.id(), asked).await {
+        Ok(deleted) => answer(StatusCode::OK, &deleted, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Mint a replacement for a stopped Job. **Two Jobs come back**, and
 /// the answer is 200 rather than 201 because the act a caller asked for is the
 /// recovery, not the creation — the new Job's id is in the body.

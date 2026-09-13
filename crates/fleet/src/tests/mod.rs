@@ -46,6 +46,7 @@ mod covering;
 mod crossing;
 mod daemon;
 mod declaring;
+mod delete_branch;
 mod delivering;
 mod delivery;
 mod detach;

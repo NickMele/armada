@@ -75,9 +75,9 @@ export const SURFACES: readonly PaletteSurface[] = [
   },
   {
     id: SURFACE.worktrees,
-    label: "Held worktrees",
+    label: "Cleanup",
     shortcut: digitOf(SURFACE.worktrees),
-    aliases: ["disk", "held disk"],
+    aliases: ["held worktrees", "disk", "held disk"],
     icon: HardDrive,
   },
 ];
