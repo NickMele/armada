@@ -1,0 +1,75 @@
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, within } from "storybook/test";
+import { ARMADA, acrossTwo, OverviewListsFrom, STOREFRONT } from "./OverviewLists";
+
+/**
+ * Overview's lists, drawn by the app's own `OverviewLists`: Needs you, Running, Queued and Other,
+ * over the Jobs in scope, as the Board's own rows. #920.
+ */
+const meta = {
+  title: "Screens/Overview lists",
+  component: OverviewListsFrom,
+  parameters: { layout: "padded" },
+} satisfies Meta<typeof OverviewListsFrom>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+/** One Job in every section, and one no tab claims — named beneath the lists, since the row shape
+ * cannot draw a status this build's registry has never heard of. */
+export const EverySection: Story = {
+  name: "Every section",
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Needs you")).toBeVisible();
+    await expect(canvas.getByText("Running")).toBeVisible();
+    await expect(canvas.getByText("Queued")).toBeVisible();
+    await expect(canvas.queryByText("Done")).toBeNull();
+    await expect(canvas.getByText(/not_a_status_the_registry_has/)).toBeVisible();
+  },
+};
+
+/** Nothing in scope: the same null-result reading the Board itself draws. */
+export const NoJobs: Story = {
+  name: "No jobs",
+  args: { jobs: [] },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText("No jobs. Propose one above.")).toBeVisible();
+  },
+};
+
+/** Two repositories served, on All: every row names its own, the Board's own rule. */
+export const OnAllTwoRepositories: Story = {
+  name: "On All, two repositories",
+  args: { jobs: acrossTwo(), repositories: [ARMADA, STOREFRONT] },
+  play: async ({ canvasElement }) => {
+    const values = [...canvasElement.querySelectorAll(".armada-job-row__field-value")].map(
+      (one) => one.textContent ?? "",
+    );
+    await expect(values.some((value) => /^(armada|storefront)$/.test(value))).toBe(true);
+  },
+};
+
+/**
+ * Fleet unreachable: what Bridge holds is what it last received, so a Needs you row from before
+ * the outage stays on screen rather than the lists reading as though nothing needs anyone.
+ */
+export const Disconnected: Story = {
+  name: "Fleet unreachable",
+  args: { disconnected: "Fleet unreachable", stale: true },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText("Needs you")).toBeVisible();
+    await expect(canvasElement.querySelectorAll("[data-job-id]").length).toBeGreaterThan(0);
+  },
+};
+
+/** Fleet unreachable with nothing ever held: the fault Bridge cannot fix, named flatly. */
+export const DisconnectedWithNothingHeld: Story = {
+  name: "Fleet unreachable, nothing held",
+  args: { jobs: [], disconnected: "Fleet unreachable", stale: true },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText("Fleet is not connected, so there is nothing to show."),
+    ).toBeVisible();
+  },
+};
