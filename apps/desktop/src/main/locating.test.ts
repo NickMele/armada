@@ -164,8 +164,10 @@ describe("a clone that lands late", () => {
     await once(server, "listening");
     const port = (server.address() as AddressInfo).port;
 
+    // Bridge opens on All repositories, so the person's pick is made, as the rail makes it.
     const picked = new Picked();
     picked.hold([armada]);
+    picked.pick(armada.root);
     const published: Partial<BridgeState>[] = [];
     const reads = new RepositoryReads({
       picked,
