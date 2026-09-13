@@ -39,6 +39,7 @@ export * from "./reading";
 export * from "./reads";
 export * from "./reclaimed";
 export * from "./rehearsal";
+export * from "./scan";
 export * from "./servers";
 export * from "./remarks";
 export * from "./report";

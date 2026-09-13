@@ -110,6 +110,9 @@ mod report;
 /// What one Job holds on this machine, and what came of asking whether it is
 /// working. **The other axis from `spend`**, which answers the model's cost.
 mod resources;
+/// What Scan found in a repository nobody set up for Armada. **Evidence,
+/// never a proposal** — every finding carries the file it came from.
+mod scan;
 /// A Command that stays running, held by Fleet. **Lifecycle on `/events`,
 /// output on a socket of its own.**
 mod servers;
@@ -201,6 +204,11 @@ pub use remarks::{InlineContext, JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
+};
+pub use scan::{
+    ComposeService, DeclaredPort, EvidenceStrength, MissingName, NotRead, PackageWorkspaces,
+    RepositoryScan, Runnable, ScannedWorkspace, ToolFile, ToolSection, WorkspaceGlob,
+    WorkspaceGlobs,
 };
 pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,
