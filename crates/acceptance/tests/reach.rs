@@ -19,7 +19,6 @@
 //! claim — `docs/practices/acceptance-tests.md`.
 
 //! # Carried, and asserted below
-//!
 //! | What holds | What it does not reach |
 //! |---|---|
 //! | Scan reads every workspace of a repository nobody set up, in one pass — workspace globs, lockfiles, package scripts, compose services, the ports a file declares — each finding naming a file the repository has, what it did not read said beside it, and nothing written, because the tree it is handed has no write | That a checkout on disk reads the same, and that Fleet serves it: both touch a repository, and are `fleet`'s and `api`'s own tests. CI configuration is reported unread and never read, since naming whose it is belongs to `adapters` |

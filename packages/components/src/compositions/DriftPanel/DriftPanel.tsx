@@ -5,19 +5,13 @@ import { Button } from "../../primitives/Button/Button";
  * Drift — whether the repository still has what `armada.yml` names. Journey 9,
  * *Verify*: a free read, run on opening the Manifest surface.
  *
- * **Two verdicts, as words, amber throughout.** `gone` and `current`, never
- * red: a drifted file is behind, not broken, and the dry-run beside this panel
- * is what would prove broken.
+ * **Two verdicts, as words, amber throughout** — `gone` and `current`, never
+ * red: a drifted file is behind, not broken.
  *
- * **It reports and never fixes.** No row carries an act — no Apply, no Accept
- * all — because acting on one means editing the file, where the consequence is
- * stated. Whatever a row names, the Manifest's own `id` included, it offers
- * nothing to press.
- *
- * **Its own panel, never half of Verify's**, and it says what it says nothing
- * about: a clean list must not read as "all of this is still right".
- *
- * **Data in.** No protocol type: a caller reads the wire into rows.
+ * **It reports and never fixes.** No row carries an act, the Manifest's own
+ * `id` included; acting on one is editing the file, where the consequence is
+ * stated. **Its own panel, never half of Verify's**, and it says what it says
+ * nothing about. Data in: a caller reads the wire into rows.
  */
 
 export type DriftPanelRow = {

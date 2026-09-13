@@ -14,11 +14,14 @@ import type {
   CheckoutRunFollowed,
   CheckoutRunList,
   CheckoutRunSheetRead,
+  CheckoutRunUnderway,
+  CheckoutVerify,
   ManifestDriftRead,
   ManifestReading,
   Outcome,
   RunOutputRead,
   SaveManifestFile,
+  VerifyStep,
 } from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
@@ -69,6 +72,73 @@ export const DRIFT_CURRENT: ManifestDriftRead = {
       { section: "checks", name: "bridge_test", key: "run", run: "pnpm bridge-test", drift: { verdict: "current", checked: 1 }, unfollowed: [] },
     ],
   },
+};
+
+/** Drift with `bridge_test` gone: after `run`, a missing script is `gone` rather than unfollowed. */
+export const DRIFT_GONE: ManifestDriftRead = {
+  state: "read",
+  drift: {
+    path: MANIFEST_PATH,
+    checkout: "/Users/user/armada",
+    declarations: [
+      { section: "checks", name: "build", key: "run", run: "cargo build --workspace --locked", drift: { verdict: "current", checked: 1 }, unfollowed: [] },
+      { section: "checks", name: "typecheck", key: "run", run: "pnpm typecheck", drift: { verdict: "current", checked: 1 }, unfollowed: [] },
+      { section: "checks", name: "bridge_test", key: "run", run: "pnpm run bridge-test", drift: { verdict: "gone", missing: ["package.json: scripts.bridge-test"] }, unfollowed: [] },
+    ],
+  },
+};
+
+/** A Verify step that ran, with as much of its record as the panel reads. */
+function ran(group: string, name: string, run: string, exit: number, ms: number): VerifyStep {
+  const record = {
+    id: `crun_${name}`, name, command: run, required: [],
+    started_at: "2026-09-12T14:11:00Z", ended_at: "2026-09-12T14:11:09Z", duration_ms: ms,
+    exit_code: exit, expect_exit_code: 0, ended: `exited ${exit}`, stopped: false,
+    changed: [], undoable: false, log: `runs/crun_${name}/output.log`,
+  };
+  return { group, name, run, state: "ran", record };
+}
+
+/** `build`, out as Verify's third step, and what it has printed. */
+export const BUILD_OUT: CheckoutRunUnderway = {
+  id: "crun_build",
+  name: "build",
+  command: "cargo build --workspace --locked",
+  started_at: "2026-09-12T14:19:18Z",
+};
+export const BUILD_FOLLOWED: CheckoutRunFollowed = {
+  state: "following",
+  runId: BUILD_OUT.id,
+  name: "build",
+  path: ".armada/runs/crun_build/output.log",
+  fromLine: 1,
+  lines: ["   Compiling ipc v0.0.0", "   Compiling api v0.0.0", "   Compiling fleet v0.0.0"],
+};
+
+/** Setup ran, `build` is out, and the rest are not reached yet. */
+export const VERIFY_UNDERWAY: CheckoutVerify = {
+  id: "01VERIFY",
+  started_at: "2026-09-12T14:19:02Z",
+  steps: [
+    ran("setup", "bootstrap", "pnpm install --frozen-lockfile", 0, 8200),
+    ran("setup", "browsers", "pnpm -C packages/components exec playwright install chromium --only-shell", 0, 1400),
+    { group: "checks", name: "build", run: BUILD_OUT.command, state: "running", run_id: BUILD_OUT.id },
+    { group: "checks", name: "test", run: "cargo nextest run --workspace --exclude acceptance", state: "waiting" },
+    { group: "checks", name: "typecheck", run: "pnpm typecheck", state: "waiting" },
+  ],
+};
+
+/** Ended: `typecheck` exited 2 where 0 is expected, and the Check after it still ran. */
+export const VERIFY_ENDED: CheckoutVerify = {
+  id: "01VERIFY",
+  started_at: "2026-09-12T14:11:00Z",
+  ended_at: "2026-09-12T14:12:30Z",
+  steps: [
+    ran("setup", "bootstrap", "pnpm install --frozen-lockfile", 0, 8200),
+    ran("checks", "build", "cargo build --workspace --locked", 0, 41000),
+    ran("checks", "typecheck", "pnpm typecheck", 2, 9400),
+    ran("checks", "format", "cargo fmt --all --check", 0, 1800),
+  ],
 };
 
 /** What a pull brought in while the edit was open. */
