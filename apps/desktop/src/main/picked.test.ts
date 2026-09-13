@@ -86,6 +86,18 @@ describe("the pick", () => {
     expect(picked.manifest("/manifest/start_verify")).toBe("/manifest/start_verify?manifest_id=scratch");
   });
 
+  it("names each repository in the scope by its own Manifest: every one on All, the pick on a pick", () => {
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+    expect(picked.each("/manifest/drift").map(({ path }) => path)).toEqual([
+      "/manifest/drift?manifest_id=armada",
+      "/manifest/drift?manifest_id=store-01",
+      null,
+    ]);
+    picked.pick(SET_UP.root);
+    expect(picked.each("/manifest/drift")).toEqual([{ repository: SET_UP, path: "/manifest/drift?manifest_id=store-01" }]);
+  });
+
   it("reads only the picked repository's `manifest.reread`", () => {
     const picked = pickedAt(SET_UP.root);
     expect(picked.reads("/Users/user/store front/armada.yml")).toBe(true);
@@ -260,7 +272,7 @@ describe("every per-repository call", () => {
           .split("\n")
           .map((line, index) => ({ at: `${file}:${index + 1}`, line }))
           .filter(({ line }) => routes.test(line) && !line.trim().startsWith("*") && !line.trim().startsWith("//"))
-          .filter(({ line }) => !["picked.manifest(", "picked.scan(", "picked.checkout("].some((built) => line.includes(built))),
+          .filter(({ line }) => !["picked.manifest(", "picked.scan(", "picked.checkout(", "picked.each("].some((built) => line.includes(built))),
       )
       .map(({ at }) => at);
     expect(unnamed).toEqual([]);

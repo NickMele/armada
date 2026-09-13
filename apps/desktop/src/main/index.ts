@@ -584,6 +584,8 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.watchManifestDrift, (_event, want: boolean) =>
     connection?.rehearsal.watchManifestDrift(want),
   );
+  // Overview's health and per-repository drift, held open by that surface.
+  ipcMain.handle(CHANNELS.watchOverview, (_event, want: unknown) => connection?.overview.watch(want === true));
   ipcMain.handle(CHANNELS.startCheckoutVerify, (_event, workspace: unknown) =>
     connection?.rehearsal.startCheckoutVerify(typeof workspace === "string" ? workspace : undefined),
   );

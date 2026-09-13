@@ -501,6 +501,11 @@ export type BridgeApi = {
    */
   watchManifestDrift: (want: boolean) => Promise<void>;
   /**
+   * Overview's health and per-repository drift, or `false` to stop. **Reads, and held open by that
+   * surface**: nothing is asked while it is closed.
+   */
+  watchOverview: (want: boolean) => Promise<void>;
+  /**
    * Run setup and every Check once in the main checkout, one after another.
    * **Only ever pressed.** Each step is followed as the checkout's own run.
    * `workspace` names a directory whose own `armada.yml` runs there; absent is the root's.

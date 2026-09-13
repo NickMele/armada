@@ -3,6 +3,7 @@
 
 import type { BridgeState } from "../shared/bridge";
 import type { Holdings, RepositoryList } from "@armada/protocol";
+import type { OverviewReads } from "./overview";
 import type { Picked } from "./picked";
 import type { RehearsalConnection } from "./rehearsal";
 import { Locating } from "./locating";
@@ -13,6 +14,8 @@ export type RepositoryWiring = {
   publish: (change: Partial<BridgeState>) => void;
   holds: () => Holdings;
   rehearsal: RehearsalConnection;
+  /** Overview's reads, whose scope a listing or a pick moves. */
+  overview: OverviewReads;
   port: () => number | null;
 };
 
@@ -47,6 +50,8 @@ export class RepositoryReads {
     const kept = listed === null ? held : { ...held, repositories: listed.repositories };
     this.wiring.publish({ holds: await holdingsOf(port, kept, this.picked), repository: this.picked.picked });
     if (moved || shifted) await Promise.all([this.readManifest(port), this.wiring.rehearsal.onRepositoryMoved(port)]);
+    // On All a repository added moves the scope without moving the pick, so Overview reads on every listing.
+    await this.wiring.overview.again(port);
   }
 
   /** The rail's pick, `null` for All repositories. A root Fleet does not list moves nothing. */

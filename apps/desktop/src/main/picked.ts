@@ -69,6 +69,18 @@ export class Picked {
       : named(path, "manifest_id", repository.manifest.id);
   }
 
+  /**
+   * A Manifest route for every repository a scoped surface reads — the picked one, or each listed on
+   * All — naming each by its own `?manifest_id=`. `null` beside one with no Manifest yet.
+   */
+  each(path: string): { repository: RepositorySummary; path: string | null }[] {
+    const scope = this.repository === null ? this.listed : [this.repository];
+    return scope.map((repository) => ({
+      repository,
+      path: repository.manifest === undefined ? null : named(path, "manifest_id", repository.manifest.id),
+    }));
+  }
+
   /** Scan and its proposals, which name a repository by its root — it may have no Manifest. `null` on All. */
   scan(path: string): string | null {
     const repository = this.repository;

@@ -39,6 +39,7 @@ import type {
 import type { ManifestReading } from "@armada/protocol";
 import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
 import type { CheckoutRunFollowed, CheckoutRunSheetRead, ManifestDriftRead } from "@armada/protocol";
+import type { DriftsRead, HealthRead } from "@armada/screens/src/overview-reads";
 import { spoken } from "@armada/protocol";
 
 
@@ -337,6 +338,16 @@ export type BridgeState = {
    * alone**, and read again when Fleet re-reads the file.
    */
   manifestDrift: ManifestDriftRead;
+  /**
+   * `GET /health` — what Fleet can say of its own health, and what it did not probe. Overview's
+   * Doctor tile. **Held open by that surface alone**, `held`'s terms: Doctor's health is a pull.
+   */
+  health: HealthRead;
+  /**
+   * Drift for every repository in the scope — each served on All, or the one picked — beside
+   * `manifestDrift`, which is the Manifest surface's one. Overview's drift tile, held open by it.
+   */
+  drifts: DriftsRead;
 };
 
 /**
@@ -383,6 +394,8 @@ export const NOTHING_YET: BridgeState = {
   checkoutRunSheet: { state: "none" },
   checkoutRunFollowed: { state: "none" },
   manifestDrift: { state: "none" },
+  health: { state: "none" },
+  drifts: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -451,6 +464,8 @@ export const CHANNELS = {
   // Journey 9's *Verify*, as two channels: drift is a read the surface holds
   // open, and Verify is an act behind its own button.
   watchManifestDrift: "bridge:watch-manifest-drift",
+  // Overview's health and per-repository drift: one read the surface holds open.
+  watchOverview: "bridge:watch-overview",
   startCheckoutVerify: "bridge:start-checkout-verify",
   // The Manifest file — Journey 9's *Editing*. Two entries, a read and a
   // write, and neither takes a path: Fleet names the file.
