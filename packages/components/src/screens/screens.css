@@ -838,6 +838,27 @@
   color: var(--status-completed-failed);
 }
 
+/* The reason field's own line: a hint while nobody has tried to submit it
+   blank, `Input`'s own invalid-message colour once they have. */
+.armada-inside__plan-task-hint {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-inside__plan-task-hint[data-tone="error"] {
+  color: var(--status-completed-failed);
+}
+
+/* The add-task dialog's body, one column at the dialog's own rhythm. A `<p>`
+   carries no margin under this app's reset, so the prose and the two fields
+   would otherwise sit flush against each other. */
+.armada-plan-add-task-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 /* Where things are — the drawing's `.where`. A stack with a hairline gap, so
    the rows read as one block and each still lights its own hover. The label
    column, the value and the act are `WhereRow`'s; what lives here is only what

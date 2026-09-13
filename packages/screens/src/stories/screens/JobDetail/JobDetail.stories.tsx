@@ -190,8 +190,14 @@ export const PlanDropReasonEmpty: Story = {
     const row = found.closest("li");
     if (row === null) throw new Error("the task row was not found");
     await userEvent.click(within(row).getByRole("button", { name: "Drop…" }));
-    await expect(within(row).getByText("A reason is needed.")).toBeVisible();
+    // Pristine: a hint, not an error — nothing has been tried yet.
+    await expect(within(row).getByText("A reason is needed.")).toHaveAttribute("data-tone", "muted");
     await expect(within(row).getByRole("button", { name: "Drop" })).toBeDisabled();
+    // Only a submit tried empty turns it red. Drop itself stays disabled and
+    // unclickable while blank, so the keyboard path is what tries it.
+    await userEvent.click(within(row).getByLabelText("Reason"));
+    await userEvent.keyboard("{Enter}");
+    await expect(within(row).getByText("A reason is needed.")).toHaveAttribute("data-tone", "error");
   },
 };
 
@@ -210,6 +216,22 @@ export const PlanDropRefused: Story = {
       await within(row).findByText("Fleet is not connected. Nothing was sent."),
     ).toBeVisible();
     await expect(within(row).getByLabelText("Reason")).toHaveValue("Already covered elsewhere.");
+  },
+};
+
+/** Nothing is connected, so a real send refuses and the dialog stays open with what was typed. `#897`. */
+export const PlanAddTaskRefused: Story = {
+  name: "Plan, Add task refused",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "Add task" }));
+    const dialog = within(document.body).getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Add a regression test");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add task" }));
+    await expect(
+      await within(dialog).findByText("Fleet is not connected. Nothing was sent."),
+    ).toBeVisible();
+    await expect(within(dialog).getByLabelText("Title")).toHaveValue("Add a regression test");
   },
 };
 

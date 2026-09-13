@@ -77,26 +77,31 @@ function AddTaskControl({
       <Dialog
         open={open}
         tone="neutral"
-        title="Add a task to this job's plan?"
+        title="Add a task to this Job's plan?"
         confirmLabel={ADD_TASK_LABEL}
         confirmDisabled={title.trim() === "" || adding}
         onCancel={close}
         onConfirm={() => void add()}
       >
-        <p>
-          The task joins the end of the plan. Where a drone is working, it is told what was added
-          as a new turn; at a step boundary, the next drone reads it off the plan.
-        </p>
-        {/* No `autoFocus`: the dialog's own contract puts initial focus on
-            Cancel, and a second claim on it here would only lose to it. */}
-        <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
-        <Textarea
-          label="Detail — optional"
-          rows={3}
-          value={detail}
-          onChange={(event) => setDetail(event.target.value)}
-        />
-        {refused === null ? null : <p>{refused}</p>}
+        {/* One column at the dialog's own rhythm — `--space-4`, `.armada-dialog`'s
+            own top-level gap — because a `<p>` carries no margin under this app's
+            reset and would otherwise run straight into the field below it. */}
+        <div className="armada-plan-add-task-body">
+          <p>
+            The task goes at the end of the plan. If a Drone is working on this Job, it&rsquo;s
+            told now; otherwise the next Drone sees it in the plan.
+          </p>
+          {/* No `autoFocus`: the dialog's own contract puts initial focus on
+              Cancel, and a second claim on it here would only lose to it. */}
+          <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
+          <Textarea
+            label="Detail — optional"
+            rows={3}
+            value={detail}
+            onChange={(event) => setDetail(event.target.value)}
+          />
+          {refused === null ? null : <p>{refused}</p>}
+        </div>
       </Dialog>
     </>
   );
@@ -126,17 +131,28 @@ function TaskRow({
   const [reason, setReason] = useState("");
   const [dropping, setDropping] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+  // Whether an empty reason has actually been submitted. **A pristine field
+  // is a hint, never an error** — the other forms here draw the same
+  // distinction, and a red border on a field nobody has touched yet reads as
+  // a mistake that already happened.
+  const [attemptedEmpty, setAttemptedEmpty] = useState(false);
   const canDrop =
     onDropTask !== undefined && (task.state === "open" || task.state === "working");
+  const blank = reason.trim() === "";
 
   function close(): void {
     setOpen(false);
     setReason("");
     setRefused(null);
+    setAttemptedEmpty(false);
   }
 
   async function drop(): Promise<void> {
-    if (reason.trim() === "" || onDropTask === undefined) return;
+    if (blank) {
+      setAttemptedEmpty(true);
+      return;
+    }
+    if (onDropTask === undefined) return;
     setDropping(true);
     setRefused(null);
     try {
@@ -167,13 +183,24 @@ function TaskRow({
               label="Reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              invalid={reason.trim() === ""}
-              message={reason.trim() === "" ? "A reason is needed." : undefined}
+              invalid={attemptedEmpty && blank}
               onKeyDown={(event) => {
                 if (event.key === "Escape") close();
                 if (event.key === "Enter") void drop();
               }}
             />
+            {/* Shown for as long as the field is blank — a hint before a
+                submit is tried empty, an error from that point on. Input's
+                own `message` only ever draws the error half, so this is its
+                own line rather than that prop. */}
+            {blank ? (
+              <span
+                className="armada-inside__plan-task-hint"
+                data-tone={attemptedEmpty ? "error" : "muted"}
+              >
+                A reason is needed.
+              </span>
+            ) : null}
             {refused === null ? null : (
               <span className="armada-inside__plan-task-refused">{refused}</span>
             )}
@@ -191,7 +218,7 @@ function TaskRow({
                 variant="secondary"
                 size="sm"
                 ground="sunken"
-                disabled={dropping || reason.trim() === ""}
+                disabled={dropping || blank}
                 onClick={() => void drop()}
               >
                 {DROP_TASK_LABEL}
