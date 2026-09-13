@@ -27,6 +27,7 @@ the gate asserts about it.
 | Reach | Armada works on a repository I did not write the Manifest for by hand | `crates/acceptance/tests/reach.rs` |
 | Plan | A running Job shows how far through its plan it is | `crates/acceptance/tests/plan.rs` |
 | Trust | Work that passes its Check but is wrong gets caught, and I can see that it was caught rightly, before I take it | `crates/acceptance/tests/trust.rs` |
+| Overview | Everything in flight and everything waiting on me, across my repositories, on one surface — and I can answer it, or ask Helm about it, without leaving | `crates/acceptance/tests/overview.rs` |
 
 The apparatus is `crates/acceptance/tests/bench/`, shared, with a file per
 milestone. Claim and apparatus are separated so that what a milestone claims and

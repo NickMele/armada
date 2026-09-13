@@ -1,0 +1,102 @@
+//! The apparatus Overview's claim is asserted against.
+//!
+//! **Two Manifests, and nothing else the shared bench already gives.**
+//! [`Bench::created`] mints every Job under one hard-coded Manifest, because
+//! M1 never had a second one to place a Job under — Overview's whole claim is
+//! that a person reads two repositories from one list, so this file builds
+//! Jobs directly on `core_model::Job::create_top_level` and drives them with
+//! `core_model::Job::transition`, the same two calls `bench::Bench` wraps, so
+//! that `owner_manifest_id` is a parameter rather than a constant.
+//!
+//! No worktree is made and no gate is run: every status a tile or a Board
+//! section needs — `awaiting_approval`, `queued`, `running`, `completed_success`
+//! — is reachable by an unguarded edge of `domain/job-transitions.toml`, so
+//! nothing here touches a Drone, a Vcs or a Judge.
+
+use core_model::{
+    AcceptanceCriterion, Actor, Facts, Job, JobId, JobNumber, ManifestId, ModelName, NewJob,
+    StepSeed, Target, Timestamp, Title, TopLevelOrigin, Ulid, Urgency,
+};
+
+use super::bug_workflow_as_far_as_m1_expresses_it;
+
+/// A Job at the approval gate, under the Manifest named.
+///
+/// **The one call every case below starts from.** `awaiting_approval` is the
+/// entry status of `Job::create_top_level`, so a Job that is meant to stay
+/// there is simply never transitioned further.
+pub fn created_under(manifest_id: &str, ulid: &str, title: &str) -> Job {
+    let workflow = bug_workflow_as_far_as_m1_expresses_it();
+    let frozen = workflow.frozen();
+    let new = NewJob {
+        id: JobId::carried(Ulid::carried(ulid.to_string())),
+        title: Title::new(title).expect("a title somebody could pick out of a list"),
+        workflow: frozen.clone(),
+        owner_manifest_id: ManifestId::carried(Ulid::carried(manifest_id.to_string())),
+        urgency: Urgency::Normal,
+        atomic: false,
+        model: ModelName::new("a-model").expect("a model name"),
+        acceptance_criteria: Vec::<AcceptanceCriterion>::new(),
+        steps: frozen
+            .steps()
+            .iter()
+            .enumerate()
+            .map(|(ordinal, step)| StepSeed {
+                step_id: step.id().clone(),
+                ordinal: ordinal as u32,
+            })
+            .collect(),
+        dependencies: Vec::new(),
+        gate_manifests: Vec::new(),
+        write_targets: None,
+        subject: None,
+        redispatched_from: None,
+        number: JobNumber::carried(1),
+        proposal_id: None,
+        facts: Facts::new("an Overview fixture, placed rather than worked"),
+        scope_revisions: Vec::new(),
+        attachments: Vec::new(),
+    };
+    Job::create_top_level(new, TopLevelOrigin::Manual, at())
+}
+
+/// One legal move, by the actor `domain/job-transitions.toml` names for it.
+///
+/// **No gate, no ruling** — every edge this file drives is unguarded, so the
+/// machine admits the move on the strength of the edge alone. A workflow whose
+/// entry edges needed a guard would not belong in this bench; `bug`'s do not.
+pub fn moved(job: Job, to: Target, by: Actor) -> Job {
+    job.transition(to, by, at())
+        .expect("an unguarded edge Overview's fixtures rely on")
+        .job
+}
+
+/// A Job approved and admitted, with a Drone on it. `queued -> running` is
+/// [`edge`](core_model) and unguarded — the frozen workflow's steps stay
+/// `not_started`, which is honest: nothing here ever dispatches one.
+pub fn running_under(manifest_id: &str, ulid: &str, title: &str) -> Job {
+    let job = created_under(manifest_id, ulid, title);
+    let job = moved(job, Target::Queued, Actor::Human);
+    moved(job, Target::Running, Actor::Fleet)
+}
+
+/// A Job approved and left for a Drone, never admitted.
+pub fn queued_under(manifest_id: &str, ulid: &str, title: &str) -> Job {
+    let job = created_under(manifest_id, ulid, title);
+    moved(job, Target::Queued, Actor::Human)
+}
+
+/// A Job that is over. `running -> completed_success` is guarded on
+/// [`core_model::Guard::EveryStepAdvanced`] and this fixture never advances a
+/// step, so this reaches `killed` instead — `running -> killed` is unguarded
+/// and terminal, and terminal is the one fact this bench needs from it: proof
+/// that Overview's sections leave a Job like this out of all three, not which
+/// terminal status it stopped at.
+pub fn done_under(manifest_id: &str, ulid: &str, title: &str) -> Job {
+    let job = running_under(manifest_id, ulid, title);
+    moved(job, Target::Killed, Actor::Human)
+}
+
+fn at() -> Timestamp {
+    Timestamp::from_rfc3339("2026-09-13T09:00:00.000Z")
+}
