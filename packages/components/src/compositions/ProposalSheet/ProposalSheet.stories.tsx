@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, within } from "storybook/test";
+import { expect, fn, waitFor, within } from "storybook/test";
 
 import { ProposalSheet, type ProposalSheetProps } from "./ProposalSheet";
 
@@ -87,13 +87,13 @@ export const RunsFirstAndDestructive: Story = {
   play: async ({ args, canvasElement, userEvent }) => {
     const sheet = within(canvasElement);
     const test = within(sheet.getByRole("list", { name: "Checks" })).getByRole("listitem", { name: "test" });
-    await userEvent.click(within(test).getByRole("button", { name: "Edit test runs first" }));
+    await userEvent.click(within(test).getByRole("button", { name: "Add runs first: test" }));
     const first = within(test).getByRole("dialog", { name: "test runs first" });
     // A destructive Command is shown and not offered: the file would not load.
     await expect(within(first).getByRole("checkbox", { name: "reset" })).toBeDisabled();
     await userEvent.click(within(first).getByRole("checkbox", { name: "dev" }));
     await expect(args.onRequires).toHaveBeenCalledWith("test", ["dev"]);
-    await userEvent.click(within(test).getByRole("button", { name: "Edit test runs first" }));
+    await userEvent.click(within(test).getByRole("button", { name: "Add runs first: test" }));
 
     const reset = within(sheet.getByRole("list", { name: "Commands" })).getByRole("listitem", { name: "reset" });
     await userEvent.click(within(reset).getByRole("button", { name: "Edit reset destructive" }));
@@ -103,6 +103,40 @@ export const RunsFirstAndDestructive: Story = {
     await expect(sheet.queryByRole("dialog", { name: /runs first|destructive/ })).toBeNull();
 
     await expect(within(sheet.getByRole("region", { name: "Policy" })).getByRole("radio", { name: "A person merges never" })).toBeChecked();
+  },
+};
+
+/**
+ * A default is not drawn: `lint` runs nothing first and `dev` is not destructive, and neither says so.
+ * Their controls come into sight on hover and on focus, by keyboard. What is set reads as its value.
+ */
+export const DefaultsAndSetValues: Story = {
+  name: "Defaults, and set values",
+  args: { ...BASE, checks: [{ ...BASE.checks[0]!, requires: ["dev"] }, BASE.checks[1]!] },
+  play: async ({ args, canvasElement, userEvent }) => {
+    const sheet = within(canvasElement);
+    const checks = within(sheet.getByRole("list", { name: "Checks" }));
+    const commands = within(sheet.getByRole("list", { name: "Commands" }));
+    await expect(within(checks.getByRole("listitem", { name: "test" })).getByRole("button", { name: "Edit test runs first" })).toHaveTextContent("dev →");
+    await expect(within(commands.getByRole("listitem", { name: "reset" })).getByRole("button", { name: "Edit reset destructive" })).toHaveTextContent("destructive");
+    await expect(sheet.queryByText(/runs nothing first|not destructive/)).toBeNull();
+
+    const lint = within(checks.getByRole("listitem", { name: "lint" }));
+    const offer = lint.getByRole("button", { name: "Add runs first: lint" });
+    await waitFor(() => expect(getComputedStyle(offer).opacity).toBe("0"));
+    lint.getByRole("button", { name: "Edit lint command" }).focus();
+    await userEvent.tab();
+    await expect(offer).toHaveFocus();
+    await waitFor(() => expect(getComputedStyle(offer).opacity).toBe("1"));
+
+    const dev = within(commands.getByRole("listitem", { name: "dev" }));
+    // `test` runs `dev` first, so the offer opens on the reason it cannot be switched on.
+    await userEvent.click(dev.getByRole("button", { name: "Mark destructive: dev" }));
+    await expect(dev.getByRole("switch", { name: /Destructive/ })).toBeDisabled();
+    await expect(dev.getByText("test runs it first, so it cannot be destructive.")).toBeVisible();
+    await expect(args.onDestructive).not.toHaveBeenCalled();
+    await userEvent.keyboard("{Escape}");
+    await expect(dev.queryByRole("dialog")).toBeNull();
   },
 };
 

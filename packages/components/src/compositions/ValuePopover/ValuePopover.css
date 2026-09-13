@@ -22,13 +22,26 @@
   cursor: pointer;
 }
 
-/* Nothing set is a placeholder, not a value, so it is sans and quieter. */
-.armada-value-popover__value[data-empty] {
+/* Nothing set: a control rather than a value. The row that holds it decides when it is in sight. */
+.armada-value-popover__offer {
+  padding: 0;
+  border: 0;
+  border-bottom: var(--border-width) dashed var(--border-subtle);
+  background: none;
   font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
   color: var(--fg-muted);
+  cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
 }
 
-.armada-value-popover__value:focus-visible {
+.armada-value-popover__offer:hover {
+  color: var(--fg-default);
+}
+
+.armada-value-popover__value:focus-visible,
+.armada-value-popover__offer:focus-visible {
   outline: var(--focus-ring);
 }
 

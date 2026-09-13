@@ -116,6 +116,12 @@
   margin-left: auto;
 }
 
+/* A value nothing sets is not drawn: its control is out of sight until the row is hovered or
+   focused. Opacity, so it keeps its tab stop and its room, and the row does not reflow. */
+.armada-proposal-sheet__row:not(:hover):not(:focus-within) .armada-value-popover__offer {
+  opacity: 0;
+}
+
 /* The row stays one height while its field is open, and tints while you are in it. */
 .armada-proposal-sheet__row:focus-within {
   background: var(--bg-hover);
