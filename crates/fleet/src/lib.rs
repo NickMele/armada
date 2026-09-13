@@ -83,6 +83,7 @@ mod files;
 /// A running Check's log, read for `observe_check_output` as it grows.
 mod following;
 pub mod footprint;
+mod freezing;
 mod gate;
 mod group;
 pub mod headroom;

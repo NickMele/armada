@@ -128,10 +128,38 @@ async fn queued_with_step(fleet: &Fixture, job: &JobId, step: &str, state: StepS
             )
             .await
             .expect("the step stops"),
-        StepState::Advanced => fleet
-            .move_step(&record, &StepId::new(step), StepTarget::Advanced)
-            .await
-            .expect("the step advances"),
+        // **What `override_verdict` leaves, walked as it walks it**: the step keeps the
+        // `failed` it stopped on, which is what tells it from a freeze's `passed`.
+        StepState::Advanced => {
+            let why =
+                StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("a step-level trigger");
+            let record = fleet
+                .move_step(&record, &StepId::new(step), StepTarget::Stopped(why))
+                .await
+                .expect("the step stops");
+            let record = fleet
+                .move_job(
+                    &record,
+                    Target::Escalated(EscalationTrigger::GateFailure),
+                    Actor::Fleet,
+                )
+                .await
+                .expect("the Job escalates");
+            let record = fleet
+                .move_step_by(
+                    &record,
+                    &StepId::new(step),
+                    StepTarget::Overridden(why),
+                    Actor::Human,
+                )
+                .await
+                .expect("a person overrules the verdict");
+            fleet
+                .move_job(&record, Target::Queued, Actor::Human)
+                .await
+                .expect("and the Job goes back to the queue");
+            return;
+        }
         _ => record,
     };
     let record = fleet

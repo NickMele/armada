@@ -55,6 +55,8 @@ export type ManifestEdit =
   | { edit: "set_cost_cap_micros_per_job"; cost_cap_micros_per_job: number | null }
   /** `null` defers to what Fleet runs with. */
   | { edit: "set_turn_cap_per_job"; turn_cap_per_job: number | null }
+  /** `false` removes a written `true`; absent already means not frozen. */
+  | { edit: "set_freeze"; freeze: boolean }
   /** `0` removes a written code; absent already means `0`. */
   | { edit: "set_check_expect_exit_code"; name: string; expect_exit_code: number }
   /** `null` removes the key, and Armada infers a base. */
@@ -156,6 +158,8 @@ export type ManifestDeclared = {
   ports: { name: string; port: PortDraft }[];
   auto_merge: PolicyWords;
   review_gate: PolicyWords;
+  /** `freeze`. Absent from a Fleet built before it. */
+  freeze?: boolean;
   /** Absent where the file defers to what Fleet runs with. */
   cost_cap_micros_per_job?: number;
   turn_cap_per_job?: number;

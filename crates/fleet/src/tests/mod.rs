@@ -59,6 +59,7 @@ mod explaining;
 mod following;
 mod footprint;
 mod forget;
+mod freezing;
 mod frozen;
 mod gaming;
 mod gate;

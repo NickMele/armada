@@ -69,6 +69,7 @@ impl FakeDaemon {
             reason: None,
             queued_reason: None,
             budget_hold: None,
+            frozen_by: Vec::new(),
             resumption: None,
             workflow_id: proposal.workflow_id,
             owner_manifest_id: proposal.owner_manifest_id,

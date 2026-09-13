@@ -149,6 +149,16 @@ Both turn one thing into several Jobs, and the difference between them is the ap
 
 A **port span that cannot be re-claimed during a scope revision** is the case with a graceful path and does not escalate: the revision fails rather than the Job, which continues on its pre-revision claim and never leaves `running`.
 
+### Freeze gating (what the repository has said)
+
+**A frozen gating Manifest holds a Job at `queued`, reading `frozen`.** It is asked first, before a dependency, a budget or headroom: while it holds, none of those would start the Job either, and only a person lifts it. `frozen_by` beside the label names which Manifest, and admission and the label ask one predicate, `fleet::freezing`.
+
+**A running Job is held at its next step boundary, not stopped.** The step it is on finishes; once it passes its gate the Drone stands down on the same `running -> queued` edge a dispatching parent takes, and re-admission puts a fresh Drone on the next step when the freeze lifts.
+
+**Nothing lands while it holds.** The delivering step is where the branch goes out, and it is not entered; the `auto_merge` sweep does not merge; a person's merge press is recorded and carried out by the first sweep after the freeze lifts.
+
+**A person's act is never refused for it**, for the reason above: an approval, a restart and an override each land where they always do, and where a step follows, admission holds the Job at `queued`. A freeze on a Convoy already running stays the open question on [Convoy](convoy.md).
+
 ### DAG scheduling
 
 **Fleet schedules by dependency graph in topological order**, on top of the approval and resource gates. **The tiebreak between ready peers reads a Job's `urgency` field**, which is what the concurrency/priority tiebreak setting names.

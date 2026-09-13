@@ -113,6 +113,12 @@ pub struct JobSummary {
     /// and until Sept 2026 only one of them had an act at all.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget_hold: Option<BudgetHold>,
+    /// The gating Manifests that are frozen: on a `queued` Job where
+    /// `queued_reason` is `frozen`, and on an `awaiting_review` Job, whose merge
+    /// and next step both wait for the freeze. Left out when empty. Filled by
+    /// Fleet after [`JobSummary::of`], as `tasks` is.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frozen_by: Vec<ManifestId>,
     /// Which act a person took to put this Job back in the queue.
     ///
     /// **The other axis over `queued`, and the one that says somebody is
@@ -247,6 +253,7 @@ impl JobSummary {
             reason: reason.and_then(Reason::of),
             queued_reason: queued_reason.map(QueuedReason::from),
             budget_hold: budget_hold.map(BudgetHold::from),
+            frozen_by: Vec::new(),
             resumption: resumption.map(Resumption::from),
             workflow_id: job.workflow_id().into(),
             owner_manifest_id: job.owner_manifest_id().into(),

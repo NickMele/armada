@@ -101,6 +101,11 @@ pub(crate) struct Sweep {
     /// write a line every sweep for the life of the daemon; a person can
     /// still press, and a restart tries once more.
     pub(crate) merged_by_policy: std::collections::BTreeSet<String>,
+    /// Pull requests whose merge a freeze is holding, so the Job's log says it once.
+    pub(crate) held_by_freeze: std::collections::BTreeSet<String>,
+    /// Jobs a person pressed merge on while frozen; the sweep merges them once it lifts.
+    /// In memory, so a restart drops the press and the button is pressed again.
+    pub(crate) pressed_while_frozen: std::collections::BTreeSet<JobId>,
     /// What this rotation last read live off each open pull request, keyed by
     /// address. `crate::serving::get_job` is the one reader, and it never
     /// asks the forge itself — see [`ipc::JobDelivery::pull_request_detail`].

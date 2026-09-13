@@ -501,6 +501,20 @@ A Manifest-level toggle to pause/freeze **all** dispatch for this project — du
 
 **Most-restrictive-wins.** Any frozen Manifest in a Job's gate list freezes the whole Job. Why: a freeze means do not touch this project, and the Job would touch it.
 
+**It is `freeze: true`, a top-level flag, and nothing else.** Absent or `false` is not frozen; any other value is refused at the key. There is no note of why: a key nothing reads is refused on principle. The Manifest form sets it through the same writer as every other key, and the file's own read carries it back.
+
+**It is live, and it holds rather than refuses.** A save is adopted on the re-read Fleet already does, with no restart:
+
+| Where the Job is | What a freeze does |
+| --- | --- |
+| Approved, never started | Stays `queued`, reading `frozen`, with `frozen_by` naming the Manifest |
+| Running | Finishes the step it is on. When that step passes its gate the Job goes back to `queued` with the step advanced and the next not entered, and says so in its log |
+| About to deliver | The delivering step is not entered, so nothing is committed, pushed or opened. It is entered, and the branch sent out, when the freeze lifts |
+| At a gate under `auto_merge` | The sweep does not merge, and the Job's log says so once. The first sweep after the freeze lifts merges it |
+| At a person's gate | The approve, restart or override is taken, and where a step follows the Job waits at `queued` as above. A merge press is taken and written in the Job's log, and nothing merges: the sweep after the freeze lifts carries it out. The press is held in memory, so a restart drops it and it is pressed again |
+
+Lifting it admits on the next turn, onto the step after the one that passed. Nothing is re-run and nothing is lost. Both the queued row and the gate's row carry `frozen_by`; only a queued one reads `frozen`, because that label is `queued`'s. A person's act is never refused for it, for [Fleet](fleet.md)'s reason: admission is the only thing that starts a Drone.
+
 That answers dispatch. **A freeze landing on a Convoy already running is still unresolved** — freeze is enforced live at every gated checkpoint, not only at dispatch — see [Convoy](convoy.md), Open questions.
 
 ## Auto-merge and review gate

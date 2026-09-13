@@ -200,7 +200,7 @@ adding/loosening X" — that sentence is the tell. Stop and check whether the
 other side's code has an exhaustive match, a presence assumption, or a name
 lookup anywhere near the thing you're touching.
 
-**The caveat row has exactly one instance, and it is deliberate.**
+**The caveat row has exactly two instances, and both are deliberate.**
 `FleetCapacity.held_by` — which one of the concurrency bound, memory or disk
 is stopping the next Drone — is a `String` on the wire rather than a
 `wire_enum!`, and `crates/ipc/src/capacity.rs` is where that is argued. Fleet is
@@ -208,6 +208,11 @@ the only writer, Bridge looks the value up in the generated vocabulary rather
 than matching on it, and that map already answers `undefined` for a key it does
 not hold. So a fifth reason is a `core-model` variant, a row in
 `enum-verbs.toml` and a codegen run, and it moves neither number here.
+
+**`JobSummary.queued_reason` is the second**, since `frozen` joined it. Bridge
+types it `string` and reads it through the same generated vocabulary, and the
+only Rust readers of a `JobSummary` are this repository's own tests, built at
+the same version — so a new reason is minor while nothing branches on it.
 
 **The condition is what makes it minor, not the type.** The moment something on
 either side branches on this value rather than rendering it, the row above it

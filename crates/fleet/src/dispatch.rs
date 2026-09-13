@@ -241,7 +241,7 @@ where
                 let passed = self.declared_step(&job, step)?.clone();
                 let job = self.move_step(&job, step, StepTarget::Advanced).await?;
                 let next = self.step_after(&job, step)?;
-                // **The step that just dispatched, and children still going.**
+                // **The step that just dispatched, and children still going — or a freeze.**
                 // A Drone put on the next step now would hold the slot its own
                 // children need to finish — at a bound of two, a parent and one
                 // child fill it. So the Job goes back in the queue with this
@@ -252,7 +252,7 @@ where
                 // **Asked about `step` and not about `next`**, which is what
                 // makes it survive the workflow becoming a loop. See the
                 // predicate's own doc in `crate::sub_dispatch`.
-                if self.dispatched_and_waits(&job, step).await? {
+                if self.stands_down_after(&job, step).await? {
                     self.move_job(&job, Target::Queued, Actor::Fleet).await?;
                     self.stood_down(job_id, working).await?;
                     return Ok(());

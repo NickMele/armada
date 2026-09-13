@@ -6,9 +6,9 @@
 //! `container` and `env` under `ports.<name>`, a fourth registry;
 //! `setup.requires`; the three keys [`drone`] reads, the one section here that
 //! is a dial rather than a registry; and the two policies a
-//! `manifest_rule:<key>` gate names, `auto_merge` and `review_gate`. Every
-//! other section the concept page describes is refused: permissions, secrets,
-//! skills, budget, dispatch freeze.
+//! `manifest_rule:<key>` gate names, `auto_merge` and `review_gate`; and
+//! `freeze`, [`freeze`]. Every other section the concept page describes is
+//! refused: permissions, secrets, skills, budget.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A `budget:
 //! 40` nothing consumes reads as a budget that is set, and refusing it keeps
@@ -43,6 +43,7 @@ use core_model::{Covers, ManifestId, Narrowing, PathPattern, RepoPath, ResolvedC
 use serde_yaml_ng::Value;
 
 mod drone;
+mod freeze;
 mod policies;
 
 use crate::error::{Fault, LoadError, Refusal};
@@ -65,6 +66,7 @@ const TOP_LEVEL: &[&str] = &[
     // carries the reasoning and the values.
     "auto_merge",
     "review_gate",
+    "freeze",
 ];
 /// The keys M1 reads inside `checks.<name>`. **`expect_exit_code` is spelled
 /// here as a workflow step spells it**, for the reason `drone:` below gives
@@ -485,6 +487,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         None => drone::Drone::unstated(),
     };
     let (auto_merge, review_gate) = policies::read(&mut top, out);
+    let freeze = freeze::read(&mut top, out);
     // After `checks` for `setup.requires`' reason, one registry along: every
     // entry resolves against it, and a file's order is never something an
     // author has to think about.
@@ -523,6 +526,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
             dials: drone.dials,
             auto_merge,
             review_gate,
+            freeze,
         }),
     })
 }

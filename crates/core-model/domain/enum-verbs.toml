@@ -275,6 +275,14 @@ vocabulary = "Step state"
 in_code = ""
 notes = "Retries spent, and neither retrying nor waiting on a person — folding it into either would make a designed human gate and a dead stop render alike, which is `step-states.toml`'s own `why`. The verb stays `stopped` rather than becoming `retries spent`: the count of attempts is on the row beside it, and a verb that stated a cause would say twice what the badge above already says once. `flag` is reserved to this state alone and to nothing else in Armada. No token, and this row is the one place that is a real loss: the state's whole treatment is a surface, `--step-stopped-bg`, rather than a glyph hue, and a `--status-` stem cannot carry it."
 
+[verbs.queued_reason.frozen]
+verb = "frozen"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Queued reason"
+in_code = ""
+notes = "A Manifest gating the Job says `freeze: true`, so Fleet starts nothing on it: not a Job that has never run, and not the next step of one that has. It reads before every other reason because only a person lifts it, and while it holds nothing else would start the Job either. Which Manifest it is rides beside the label as `frozen_by`. No glyph: minting one is a decision for packages/icons/icons.toml."
+
 [verbs.queued_reason.blocked_by_dependency]
 verb = "blocked"
 icon = "link"

@@ -2,10 +2,10 @@
 //! handle that may change them.
 //!
 //! **Not the whole file, and not even the whole of one section.**
-//! `crates/config/settings.toml` files six of `armada.yml`'s keys as
+//! `crates/config/settings.toml` files seven of `armada.yml`'s keys as
 //! `lifetime = "Live"`: four under `drone:` — `quiet_after_seconds`,
 //! `poke_limit`, `cost_cap_micros_per_job` and `turn_cap_per_job` — and the two
-//! top-level policies, `auto_merge` and `review_gate`. The Checks and Commands
+//! top-level policies, `auto_merge` and `review_gate`, and `freeze`. The Checks and Commands
 //! registries and `drone.exclude_paths` are *Frozen for the Job*; the last sits
 //! in the same `drone:` block as four live ones, which is why [`Frozen`] names a
 //! key there and a section everywhere else. What decides is what was resolved against a
@@ -78,6 +78,8 @@ pub(crate) struct InForce {
     /// reading of a two-reading value.
     pub(crate) auto_merge: AutoMerge,
     pub(crate) review_gate: ReviewGate,
+    /// `freeze`, defaulted for the policies' reason: absent means not frozen.
+    pub(crate) freeze: bool,
 }
 
 /// Where the live keys are kept, shared by every clone of one Manifest.
@@ -136,6 +138,9 @@ pub enum LiveKey {
     /// only two whose value is a word rather than a number.
     AutoMerge,
     ReviewGate,
+    /// Live because a freeze only a restart could lift would stop the Fleet it
+    /// was meant to leave running for every other repository.
+    Freeze,
 }
 
 impl LiveKey {
@@ -153,6 +158,7 @@ impl LiveKey {
             // other.
             LiveKey::AutoMerge => "auto_merge",
             LiveKey::ReviewGate => "review_gate",
+            LiveKey::Freeze => "freeze",
         }
     }
 }
@@ -440,6 +446,13 @@ fn moved(before: InForce, after: InForce) -> Vec<Moved> {
             key: LiveKey::ReviewGate,
             before: Some(before.review_gate.as_written().to_string()),
             after: Some(after.review_gate.as_written().to_string()),
+        });
+    }
+    if before.freeze != after.freeze {
+        changed.push(Moved {
+            key: LiveKey::Freeze,
+            before: Some(before.freeze.to_string()),
+            after: Some(after.freeze.to_string()),
         });
     }
     changed
