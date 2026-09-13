@@ -60,7 +60,7 @@ export type JobDetail = {
   job: JobSummary;
   /** Where the frozen workflow came from, off the Job's record. Absent from an older Fleet. */
   workflow_source?: string;
-  /** The Job's plan whole. Absent is a Job no plan was recorded for. Since 13.20. */
+  /** The Job's plan whole. Absent is a Job no plan was recorded for. Since 13.21. */
   work_plan?: WorkPlan;
   /** What a whole-Job elapsed is measured from. Creation is not a transition. */
   created_at: string;

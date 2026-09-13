@@ -213,7 +213,7 @@ pub struct JobSummary {
     /// plan**, not a plan of none — a row draws no task field for it.
     ///
     /// Filled by Fleet off the store, like [`landed`](JobSummary::landed):
-    /// `core_model::Job` holds no plan. Since 13.19.
+    /// `core_model::Job` holds no plan. Since 13.21.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tasks: Option<crate::TaskCounts>,
 }

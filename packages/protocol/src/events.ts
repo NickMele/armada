@@ -58,7 +58,7 @@ export type Event =
   | ({ kind: "job.forgotten" } & JobForgotten)
   | ({ kind: "job.landed" } & JobLanded)
   | ({ kind: "job.remarks_changed" } & JobRemarksChanged)
-  /** A Job's plan was recorded or a task changed. Since 13.20. */
+  /** A Job's plan was recorded or a task changed. Since 13.21. */
   | ({ kind: "job.plan_changed" } & JobPlanChanged)
   | ({ kind: "proposal.moved" } & ProposalMoved)
   | ({ kind: "manifest.reread" } & ManifestReading)

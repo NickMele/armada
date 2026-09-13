@@ -146,7 +146,7 @@ export type JobSummary = {
    * record of an act.
    */
   reclaimed_at?: string;
-  /** How many plan tasks stand where. Absent is a job with no plan. Since 13.20. */
+  /** How many plan tasks stand where. Absent is a job with no plan. Since 13.21. */
   tasks?: TaskCounts;
 };
 
