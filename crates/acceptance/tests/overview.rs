@@ -32,29 +32,28 @@ use bench::overview::{created_under, done_under, queued_under, running_under};
 // Every Job carries the Manifest it belongs to
 // ---------------------------------------------------------------------------
 
+/// Copied from `domain/job-statuses.toml`'s `who_is_acting`/`mode` columns:
+/// `core_model` exposes neither to read, so the lists below are hand kept —
+/// `every_status_the_registry_names_is_classified_or_excluded_as_terminal`
+/// is what catches them drifting from `JobStatus::ALL`.
+const NEEDS_YOU: &[&str] = &[
+    "awaiting_approval",
+    "awaiting_attestation",
+    "awaiting_repair",
+    "awaiting_review",
+    "escalated",
+];
+const RUNNING: &[&str] = &["running", "piloted"];
+const QUEUED: &[&str] = &["queued"];
+
 /// Overview's three drawn sections — Needs you, Running and Queued — read off
 /// one row, with **Other named as the section this build never populates.**
-///
-/// Copied from `domain/job-statuses.toml`'s own `who_is_acting` and `mode`
-/// columns rather than imported, because importing `packages/screens/src/
-/// needs-you.ts`'s `tabOf` is exactly the reimplementation the milestone step
-/// warns against in the other direction: this proves the wire carries what a
-/// client needs to compute the rule, not that this file computed the rule the
-/// same way twice. `asking` is read first because it is not a status at all —
-/// `board.ts` reads it the same way, ahead of every status-derived rule.
+/// `asking` is read first because it is not a status at all — `board.ts`
+/// reads it the same way, ahead of every status-derived rule.
 fn section_of(row: &JobSummary) -> Option<&'static str> {
     if row.asking {
         return Some("needs-you");
     }
-    const NEEDS_YOU: &[&str] = &[
-        "awaiting_approval",
-        "awaiting_attestation",
-        "awaiting_repair",
-        "awaiting_review",
-        "escalated",
-    ];
-    const RUNNING: &[&str] = &["running", "piloted"];
-    const QUEUED: &[&str] = &["queued"];
     let status = row.status.as_wire();
     if NEEDS_YOU.contains(&status) {
         Some("needs-you")
@@ -64,6 +63,36 @@ fn section_of(row: &JobSummary) -> Option<&'static str> {
         Some("queued")
     } else {
         None
+    }
+}
+
+/// A new status, or a misspelling in one of the three lists above, fails this
+/// rather than passing silently: every non-terminal status in
+/// `core_model::JobStatus::ALL` lands in exactly one of the three, every
+/// terminal one lands in none, and every name the lists carry is a real
+/// status's wire spelling.
+#[test]
+fn every_status_the_registry_names_is_classified_or_excluded_as_terminal() {
+    for status in core_model::JobStatus::ALL {
+        let wire = status.as_wire();
+        let placed = [NEEDS_YOU, RUNNING, QUEUED]
+            .iter()
+            .filter(|list| list.contains(&wire))
+            .count();
+        if status.is_terminal() {
+            assert_eq!(
+                placed, 0,
+                "{wire} is terminal and belongs in none of the three"
+            );
+        } else {
+            assert_eq!(placed, 1, "{wire} must land in exactly one of the three");
+        }
+    }
+    for name in NEEDS_YOU.iter().chain(RUNNING).chain(QUEUED) {
+        assert!(
+            core_model::JobStatus::from_wire(name).is_some(),
+            "{name} is not a status this build's registry carries"
+        );
     }
 }
 
