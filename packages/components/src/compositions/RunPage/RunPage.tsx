@@ -5,6 +5,7 @@ import { FactChip } from "../FactChip/FactChip";
 import { CheckRuns, type CheckRun } from "../CheckRuns/CheckRuns";
 import { ConsoleOutput, type ConsoleOutputProps } from "../ConsoleOutput/ConsoleOutput";
 import { ChangedFiles, type ChangedFile } from "../ChangedFiles/ChangedFiles";
+import { RunDiffSheet, type RunDiffSheetProps } from "../RunDiffSheet/RunDiffSheet";
 
 /**
  * The Manifest surface's runner — Journey 9's *Running one*, in the main
@@ -157,14 +158,30 @@ export type RunPageProps = {
   onOpenLink?: (url: string) => void;
 
   /**
-   * What the last run wrote, and putting it back.
+   * What the last run wrote, reading how, and putting it back.
    *
-   * **No *Open the diff*.** The sheet offers one because a Job has a diff —
-   * its worktree against the branch it was cut from, which `get_diff` serves.
-   * The main checkout has no base to be read against and nothing on the wire
-   * answers for one, so the control is left out rather than drawn dead.
+   * **The diff is the run's, not the checkout's.** The main checkout has no
+   * base, so `get_checkout_run_diff` reads against the snapshot Fleet took just
+   * before the run — never `HEAD`, which would show a person's own uncommitted
+   * work as the run's. That is what makes *Open the diff* answerable here.
    */
-  changed?: { files: ChangedFile[]; onUndo?: () => void };
+  changed?: {
+    files: ChangedFile[];
+    /** Open this run's patch. A read: it changes nothing. */
+    onOpenDiff?: () => void;
+    /** Absent where Fleet cannot honour one, and on a run already undone. */
+    onUndo?: () => void;
+    /**
+     * The run was undone, as a sentence. **The files and the diff stay**: Undo
+     * keeps the snapshot, so what the run did can still be read.
+     */
+    undone?: ReactNode;
+  };
+  /**
+   * The run's patch, on a trailing sheet over this page. Present while it is
+   * open; the page is its containing block.
+   */
+  diff?: Omit<RunDiffSheetProps, "open">;
 };
 
 export function RunPage({
@@ -182,6 +199,7 @@ export function RunPage({
   onStopServer,
   onOpenLink,
   changed,
+  diff,
 }: RunPageProps) {
   const selected =
     groups.flatMap((group) => group.entries).find((entry) => entry.id === selectedId) ?? null;
@@ -193,8 +211,13 @@ export function RunPage({
   // A dialog that outlives what it names is a dialog that confirms the wrong
   // thing. Both are cleared when the selection moves or the changed files are
   // replaced by the next run's.
+  //
+  // **Keyed on the files, not on `changed`.** A caller builds `changed` afresh
+  // on every render, and the app renders every second to move its clock — so
+  // keyed on the object, the Undo dialog closed itself within a second of
+  // opening. The list is the run's own and only moves when the runs are read.
   useEffect(() => setConfirmingRun(null), [selectedId]);
-  useEffect(() => setConfirmingUndo(false), [changed]);
+  useEffect(() => setConfirmingUndo(false), [changed?.files]);
 
   function run(entry: RunPageEntry): void {
     if (entry.destructive === true) {
@@ -289,15 +312,27 @@ export function RunPage({
             {changed === undefined ? null : (
               <div className="armada-run-page__changed">
                 <ChangedFiles files={changed.files} emptyNote="This run changed nothing." />
-                {changed.onUndo === undefined ? null : (
+                {/* Unhued, like everything here: undone is a fact about the
+                    checkout since, not a result. */}
+                {changed.undone === undefined ? null : (
+                  <p className="armada-run-page__undone">{changed.undone}</p>
+                )}
+                {changed.onOpenDiff === undefined && changed.onUndo === undefined ? null : (
                   <div className="armada-run-page__changed-acts">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setConfirmingUndo(true)}
-                    >
-                      Undo this run
-                    </Button>
+                    {changed.onOpenDiff === undefined ? null : (
+                      <Button variant="secondary" size="sm" onClick={changed.onOpenDiff}>
+                        Open the diff
+                      </Button>
+                    )}
+                    {changed.onUndo === undefined ? null : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setConfirmingUndo(true)}
+                      >
+                        Undo this run
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -328,6 +363,8 @@ export function RunPage({
           />
         )}
       </div>
+
+      {diff === undefined ? null : <RunDiffSheet open {...diff} />}
 
       {/* Once, naming the command. It states what happens and where, which is
           the rule every confirmation in Bridge keeps — never "are you sure". */}

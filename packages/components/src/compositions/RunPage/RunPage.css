@@ -11,6 +11,12 @@
   gap: var(--space-4);
   flex: 1 1 auto;
   min-height: 0;
+  /* The containing block for a run's diff, `.armada-screen__detail`'s reason:
+     the layer belongs to the page it was opened from, under the view toggle
+     rather than over the shell's rail. Both columns scroll inside themselves,
+     so hiding the page's own overflow clips nothing. */
+  position: relative;
+  overflow: hidden;
 }
 
 .armada-run-page__rail {
@@ -273,6 +279,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.armada-run-page__undone {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
 }
 
 .armada-run-page__changed-acts {

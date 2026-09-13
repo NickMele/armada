@@ -1,0 +1,60 @@
+/* One checkout run's patch on a trailing sheet — Journey 9, *Open the diff*.
+   The layer and its header are `Sheet` and the patch is `UnifiedDiff`; what
+   lives here is the body's ground and the sentences drawn in place of a patch.
+
+   No rail, unlike `JobDiffSheet.css`: a run has no steps for a rail to name,
+   so the patch takes the whole width. */
+.armada-run-diff-sheet {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  /* It scrolls in both directions — a machine-written line is not re-wrapped
+     to fit a column. The same ground `JobDiffSheet` gives its patch. */
+  overflow: auto;
+  padding: var(--space-3) 0;
+  background: var(--bg-sunken);
+}
+
+/* Reading, a refusal, a snapshot that is gone. Sentences, held off the edge
+   the patch itself runs to. */
+.armada-run-diff-sheet__said {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}
+
+.armada-run-diff-sheet__said > p {
+  margin: 0;
+}
+
+.armada-run-diff-sheet__said > p + p {
+  margin-top: var(--space-2);
+}
+
+/* Undone. **Unhued**: an undone run is not a failure and not a caution — it
+   is a fact about the checkout since, and the words carry it. */
+.armada-run-diff-sheet__undone {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+/* The diff's own two colours, restating the marker in the header's sum. */
+.armada-run-diff-sheet__added {
+  font-family: var(--font-mono);
+  color: var(--diff-add-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-run-diff-sheet__removed {
+  font-family: var(--font-mono);
+  color: var(--diff-del-fg);
+  font-variant-numeric: tabular-nums;
+}

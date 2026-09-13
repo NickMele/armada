@@ -257,6 +257,7 @@ export * from "./compositions/ShownAgain/ShownAgain";
 // moves nothing on the Job — a rehearsal, never a verdict.
 export * from "./compositions/RunSheet/RunSheet";
 export * from "./compositions/RunPage/RunPage";
+export * from "./compositions/RunDiffSheet/RunDiffSheet";
 // A step's work with runs of one tool folded to a line. The rows inside a group
 // are the caller's own log, drawn unfolded everywhere else.
 export * from "./compositions/WorkGroups/WorkGroups";
