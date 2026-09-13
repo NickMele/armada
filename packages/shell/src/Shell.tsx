@@ -35,6 +35,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   JOB_LIFECYCLE,
   plural,
+  Button,
   Select,
   TheShell,
   Tooltip,
@@ -58,6 +59,8 @@ export type ShellProps = {
   /** The picked repository's root: what every per-repository read and act names. */
   scope: string;
   onScope: (root: string) => void;
+  /** Opens Locate. Absent draws no control. */
+  onAddRepository?: () => void;
   /** Every Job, for the rail's count and the bar's two. */
   jobs: readonly JobSummary[];
   /** How full the fleet is. `null` is a Fleet that has not answered yet. */
@@ -88,6 +91,7 @@ export function Shell({
   repositories,
   scope,
   onScope,
+  onAddRepository,
   jobs,
   capacity,
   title,
@@ -127,6 +131,7 @@ export function Shell({
       onSelect={onSurface}
       collapsed={collapsed}
       railHeader={
+        <>
         <Select
           aria-label="Project"
           value={scope}
@@ -142,6 +147,13 @@ export function Shell({
             <optgroup label="Not set up">{repositories.filter((one) => one.manifest === undefined).map(optionOf)}</optgroup>
           ) : null}
         </Select>
+        {/* Under the picker rather than in it: an option that opened a dialog would be a pick that picked nothing. */}
+        {onAddRepository === undefined ? null : (
+          <Button variant="ghost" size="sm" onClick={onAddRepository}>
+            Add a repository
+          </Button>
+        )}
+        </>
       }
       title={title}
       summary={summary}

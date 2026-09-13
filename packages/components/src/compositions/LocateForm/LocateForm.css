@@ -1,0 +1,80 @@
+/* Locate: fields stacked, each with its chooser at the field's baseline, the quieter act last. */
+.armada-locate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-locate__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+/* A field with a message under it keeps its chooser beside the box, not the message. */
+.armada-locate__row:has([aria-invalid]) {
+  align-items: start;
+}
+
+.armada-locate__row:has([aria-invalid]) > .armada-button {
+  margin-top: calc(var(--leading-xs) + var(--space-1));
+}
+
+.armada-locate__lands {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-locate__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-locate__path {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+.armada-locate__pending {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* Inline beside the act: the code chip and the sentence, on the error edge and never a box. */
+.armada-locate__refusal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding-inline-start: var(--space-2);
+  border-inline-start: var(--error-edge) solid var(--error);
+}
+
+.armada-locate__saying {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--error);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.armada-locate__next {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}
+
+.armada-locate__other {
+  display: flex;
+}

@@ -20,6 +20,8 @@ import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
 import { useManifestEditing } from "../../../manifest-file";
 import { useManifestForm } from "../../../manifest-form";
+import { Locate, useLocate } from "../../../Locate";
+import { landsIn, type LocateAnswer } from "../../../locate-reads";
 import { Setup } from "../../../Setup";
 import { useSetup } from "../../../setup-held";
 import type { ProposalAnswer } from "../../../setup-reads";
@@ -130,12 +132,25 @@ const NO_ROOT_FILE: ManifestProposals = {
   proposals: PROPOSALS.proposals.map((one) => (one.dir === "." ? { ...one, present: false } : one)),
 };
 
+/** What a clone comes to in a story: served, refused by git, into a folder already full, or still running. */
+export type CloneGoesTo = "took" | "refused" | "occupied" | "underway";
+
+/** What the OS folder dialog answers in a story. Nothing native opens. */
+export const CHOSEN = "/Users/user/scratch";
+
 export function SetupFrom({
   write = "took",
   sheet = { state: "none" },
   rootSetUp = true,
   repositories,
+  clone = "took",
+  onAdded,
+  onCloned,
 }: {
+  clone?: CloneGoesTo;
+  /** Called on every add and every clone Locate sends. */
+  onAdded?: (path: string) => void;
+  onCloned?: (url: string, parent: string) => void;
   write?: WriteGoesTo;
   /** Whether the root already has an `armada.yml`, as any Fleet's own repository does. */
   rootSetUp?: boolean;
@@ -150,6 +165,37 @@ export function SetupFrom({
   const [listed, setListed] = useState<RepositorySummary[]>(repositories ?? [repository()]);
   const [scope, setScope] = useState(listed[0]!.root);
   const picked = listed.find((one) => one.root === scope)!;
+  // Fleet serving a folder: listed, and answered. Main's pick is `onLocated` below.
+  const served = (root: string): Promise<LocateAnswer> => {
+    const one = { root, records_root: `/records/${root.split("/").pop()}` };
+    setListed((was) => [...was, one]);
+    return Promise.resolve({ state: "located", repository: one });
+  };
+  const locate = useLocate({
+    onChooseFolder: () => Promise.resolve(CHOSEN),
+    onAdd: (path) => {
+      onAdded?.(path);
+      return served(path);
+    },
+    onClone: (url, parent) => {
+      onCloned?.(url, parent);
+      const into = landsIn(url, parent)!;
+      if (clone === "underway") return new Promise(() => {});
+      if (clone === "refused") {
+        const saying = `git refused the clone: fatal: repository '${url}' not found`;
+        return Promise.resolve({ state: "refused", code: "fleet.clone_refused", saying });
+      }
+      if (clone === "occupied") {
+        return Promise.resolve({ state: "refused", code: "fleet.destination_occupied", saying: `${into} already exists and is not empty` });
+      }
+      return served(into);
+    },
+    onLocated: (one) => {
+      held.current = NO_ROOT_FILE;
+      setScope(one.root);
+      setSettingUp(true);
+    },
+  });
   const held = useRef<ManifestProposals>(rootSetUp && picked.manifest !== undefined ? PROPOSALS : NO_ROOT_FILE);
   const [settingUp, setSettingUp] = useState(repositories === undefined || picked.manifest === undefined);
   const answer = (dir: string, change: (one: ManifestProposal) => ManifestProposal): Promise<ProposalAnswer> => {
@@ -223,6 +269,7 @@ export function SetupFrom({
         actions={head?.actions}
         showing={SURFACE.manifest}
         onOpenLimits={noop}
+        onAddRepository={locate.onOpen}
       >
         <div className="armada-screen__mounted">
           <Manifest
@@ -267,6 +314,7 @@ export function SetupFrom({
           />
         </div>
       </Shell>
+      <Locate locating={locate} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import type { BridgeState } from "../shared/bridge";
 import type { Holdings } from "@armada/protocol";
 import type { Picked } from "./picked";
 import type { RehearsalConnection } from "./rehearsal";
+import { Locating } from "./locating";
 import { holdingsOf, manifestReadingOf, repositoriesOf } from "./request";
 
 export type RepositoryWiring = {
@@ -17,11 +18,14 @@ export type RepositoryWiring = {
 
 export class RepositoryReads {
   readonly picked: Picked;
+  /** Locate: a repository added or cloned, then listed and picked here. */
+  readonly locating: Locating;
   private readonly wiring: RepositoryWiring;
 
   constructor(wiring: RepositoryWiring) {
     this.wiring = wiring;
     this.picked = wiring.picked;
+    this.locating = new Locating({ port: wiring.port, list: (port) => this.readHoldings(port), pick: (root) => this.pick(root) });
   }
 
   /**

@@ -28,6 +28,7 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
+import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import type {
   ManifestProposalsRead,
@@ -341,6 +342,13 @@ const api: BridgeApi = {
   // main checkout — the capability the Manifest surface shares, which is why
   // `jobId` was optional here before that surface existed.
   pickRepository: (root: string): Promise<void> => ipcRenderer.invoke(CHANNELS.pickRepository, root),
+
+  // Locate. The folder comes from the OS's own dialog; add and clone name paths and a URL, and
+  // main asks Fleet, lists what it serves and picks the new one.
+  chooseFolder: (): Promise<string | null> => ipcRenderer.invoke(CHANNELS.chooseFolder),
+  addRepository: (path: string): Promise<LocateAnswer> => ipcRenderer.invoke(CHANNELS.addRepository, path),
+  cloneRepository: (url: string, parent: string): Promise<LocateAnswer> =>
+    ipcRenderer.invoke(CHANNELS.cloneRepository, url, parent),
 
   startServer: (name: string, jobId?: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.startServer, name, jobId),

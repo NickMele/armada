@@ -35,6 +35,7 @@ import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
 import { Manifest, checkoutRunnablesOf, useManifestEditing, useManifestForm } from "@armada/screens";
 import { Setup, useSetup } from "@armada/screens";
+import { Locate, useLocate } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
@@ -50,6 +51,9 @@ import {
   observeRun,
   observeCheckoutRun,
   pickRepository,
+  chooseFolder,
+  addRepository,
+  cloneRepository,
   getRunOutput,
   getCheckoutRunOutput,
   getCheckoutRunDiff,
@@ -235,6 +239,16 @@ export function App() {
   // The repository the rail picked. Main holds it, so every read below is taken after main moved.
   const repositories = state.holds.repositories ?? [];
   const repository = state.repository ?? undefined;
+  // Locate, held here so a clone outlives its dialog. Main has picked what it located; it lands on Setup.
+  const locate = useLocate({
+    onChooseFolder: chooseFolder,
+    onAdd: addRepository,
+    onClone: cloneRepository,
+    onLocated: () => {
+      goTo(SURFACE.manifest);
+      setSettingUp(true);
+    },
+  });
   const editing = useManifestEditing({
     repository,
     showing: manifesting,
@@ -339,6 +353,11 @@ export function App() {
     now,
   });
   const guarded = { bridge: state.bridge, onCopied: setCopied };
+  // A rail Fleet listed empty opens Locate by itself. `models` is what says the holdings were read.
+  const emptyRail = live && state.holds.models !== null && repositories.length === 0;
+  useEffect(() => {
+    if (emptyRail) locate.onOpen();
+  }, [emptyRail]);
 
   function close(): void {
     setReturning(openJob);
@@ -419,6 +438,7 @@ export function App() {
         repositories={repositories}
         scope={state.repository ?? ""}
         onScope={pick}
+        onAddRepository={locate.onOpen}
         jobs={state.jobs}
         capacity={state.capacity}
         title={head?.title}
@@ -788,6 +808,8 @@ export function App() {
           )}
         </Dialog>
       )}
+
+      <Locate locating={locate} />
 
       {/* The palette, over everything. It is the one surface present whatever
           else is — which is why it is a sibling of the shell rather than a
