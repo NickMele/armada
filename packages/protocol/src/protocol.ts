@@ -27,6 +27,7 @@
 // too. Type-only both ways, so the cycle is erased before anything runs.
 
 import type { Settled } from "./detail";
+import type { TaskCounts } from "./work-plan";
 
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
 export type JobSummary = {
@@ -145,6 +146,8 @@ export type JobSummary = {
    * record of an act.
    */
   reclaimed_at?: string;
+  /** How many plan tasks stand where. Absent is a job with no plan. Since 13.20. */
+  tasks?: TaskCounts;
 };
 
 /** One Check a step declares. `crates/ipc/src/checks.rs`. */

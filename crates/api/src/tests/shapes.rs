@@ -172,6 +172,7 @@ pub fn job_at(id: &str, spelling: &str) -> JobSummary {
         asking: false,
         landed: None,
         reclaimed_at: None,
+        tasks: None,
     }
 }
 
@@ -410,6 +411,7 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // Absent for the same reason again: the review is composed and kept
         // beside a store's own record, and this daemon holds no store.
         review: None,
+        work_plan: None,
     }
 }
 

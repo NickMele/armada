@@ -56,6 +56,7 @@ mod servers;
 mod summaries;
 mod turns;
 mod version;
+mod work_plan;
 
 use core_model::{
     AdvanceGate, EvidenceType, Facts, FrozenWorkflow, Job, JobId, ManifestId, ModelName, NewJob,

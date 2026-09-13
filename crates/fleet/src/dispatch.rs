@@ -720,14 +720,10 @@ where
     /// those from here either.
     pub(crate) async fn published(&self, job: &Job) -> Result<ipc::JobSummary, Adrift> {
         let reason = self.last_reason(job.id()).await?;
-        Ok(ipc::JobSummary::of(
-            job,
-            reason.as_ref(),
-            None,
-            None,
-            false,
-            None,
-        ))
+        let mut summary = ipc::JobSummary::of(job, reason.as_ref(), None, None, false, None);
+        // A client replaces its row with this one, so the counts ride along.
+        summary.tasks = self.task_counts(job.id()).await?;
+        Ok(summary)
     }
 
     /// Move one step of the frozen workflow, write it to the same log, and

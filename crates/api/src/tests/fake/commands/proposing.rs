@@ -86,6 +86,7 @@ impl FakeDaemon {
             landed: None,
             // Nothing has reclaimed a Job just proposed.
             reclaimed_at: None,
+            tasks: None,
         };
         self.jobs.lock().expect("not poisoned").push(job.clone());
         self.events.publish(Event::JobCreated(JobCreated {

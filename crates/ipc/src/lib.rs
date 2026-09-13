@@ -142,6 +142,9 @@ mod version;
 mod waiting;
 /// The material a reviewing person reads, and what their note carries.
 mod work;
+/// A Job's plan and its tasks. **Not `work`'s `DeclaredPlan`**, which is where a
+/// step said its work would be.
+mod work_plan;
 
 #[cfg(test)]
 mod tests;
@@ -174,7 +177,7 @@ pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
     DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
-    Resumption, Side, StepState, TopLevelOrigin, Urgency,
+    Resumption, Side, StepState, TaskState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
@@ -253,3 +256,4 @@ pub use work::{
     ChangesRequested, DeclaredPlan, JobDiff, JobEvidence, JobFootprint, LineCount, Overruled,
     Submitted, TouchedFile, Work,
 };
+pub use work_plan::{ChangedBy, JobPlanChanged, PlanTask, TaskCounts, WorkPlan};

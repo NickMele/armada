@@ -465,6 +465,8 @@ where
         // time ago has anything to say about.
         let mut summary = ipc::JobSummary::from(&job);
         summary.landed = Some(state);
+        // A client replaces the row with this one, so it keeps its task counts.
+        summary.tasks = self.task_counts(&noticed.job).await?;
         self.publish(ipc::Event::JobLanded(ipc::JobLanded {
             job: summary,
             pull_request: url.clone(),
