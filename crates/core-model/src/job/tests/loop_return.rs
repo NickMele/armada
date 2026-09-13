@@ -456,14 +456,14 @@ fn a_return_naming_a_step_the_job_does_not_have_is_refused() {
 }
 
 /// The mirror of the reason arm: a stored emitter on a move that stores none is
-/// a row this build cannot have written, and a return with none is a pass
-/// nobody's count was charged for.
+/// a row this build cannot have written. On `advanced -> running` its absence
+/// is the retrace, which the pass was already charged for at the return.
 #[test]
 fn a_stored_emitter_belongs_to_the_return_and_to_no_other_move() {
     assert_eq!(
         StepTarget::arriving_at(StepState::Advanced, StepState::Running, None, None),
-        None,
-        "a return with no emitter cannot be attributed"
+        Some(StepTarget::Retraced),
+        "with no emitter it is the walk forward over a step the return went back past"
     );
     assert_eq!(
         StepTarget::arriving_at(
@@ -536,4 +536,110 @@ fn a_step_that_declared_no_cap_permits_no_return() {
         plain.may_hand_back(Spent::FIRST),
         "and the retry budget is untouched by it: the two caps bound different things"
     );
+}
+
+// ------------------------------------------ the walk back over a step between
+
+fn third() -> StepId {
+    StepId::new("verify")
+}
+
+/// Three steps, so a return from the last goes back past one that advanced —
+/// the shape Feature's `review` makes over `tests`.
+fn three_steps() -> Job {
+    let frozen = |name: &str, label: &str| {
+        ResolvedStep::frozen(
+            StepId::new(name),
+            label.into(),
+            Some(EvidenceType::Diff),
+            Vec::new(),
+            AdvanceGate::Auto,
+            Vec::new(),
+            None,
+            0,
+            None,
+        )
+    };
+    let mut seed = draft();
+    seed.workflow = FrozenWorkflow::frozen(
+        WorkflowId::carried(id("01J0000000000000000000WF00")),
+        "feature".into(),
+        1,
+        vec![
+            frozen("repro", "Reproduce"),
+            frozen("fix", "Fix"),
+            frozen("verify", "Verify"),
+        ],
+    );
+    seed.steps.push(StepSeed {
+        step_id: third(),
+        ordinal: 2,
+    });
+    let job = Job::create_top_level(seed, TopLevelOrigin::Manual, at("2026-08-26T09:00:00.000Z"));
+    drive(&job, &[Target::Queued, Target::Running])
+}
+
+/// Every step worked once, `verify` sends the work back to `repro`, and the
+/// redone `repro` passes again — so `fix` is next, and it already advanced.
+fn a_return_redone_short_of_a_step_that_advanced() -> Job {
+    let job = three_steps();
+    let job = step(&job, &first(), StepTarget::Running);
+    let job = step(&job, &first(), StepTarget::Advanced);
+    let job = step(&job, &second(), StepTarget::Running);
+    let job = step(&job, &second(), StepTarget::Advanced);
+    let job = step(&job, &third(), StepTarget::Running);
+    let job = step(&job, &first(), StepTarget::Returned(third()));
+    step(&job, &first(), StepTarget::Advanced)
+}
+
+/// **The walk forward crosses the step between.** Without this the redone
+/// step's advance had nowhere to go: `fix` is `advanced`, a dispatch into it is
+/// a redispatch, and the Job went adrift on the first send-back.
+#[test]
+fn a_step_the_return_went_back_past_is_retraced_on_the_walk_forward() {
+    let job = a_return_redone_short_of_a_step_that_advanced();
+    assert_eq!(job.sent_back_past(&second()), Some(&third()));
+
+    let job = step_at(&job, &second(), StepTarget::Retraced, later());
+    let crossed = job.step(&second()).expect("the row is there");
+    assert_eq!(crossed.state(), StepState::Running);
+    assert_eq!(crossed.entered_at(), &later(), "a new run, so a new clock");
+    assert_eq!(job.current_step_id(), Some(&second()));
+}
+
+/// The narrowing that keeps a retrace from being a redispatch with a new name.
+#[test]
+fn an_advanced_step_with_no_return_open_past_it_is_not_retraced() {
+    let job = three_steps();
+    let job = step(&job, &first(), StepTarget::Running);
+    let job = step(&job, &first(), StepTarget::Advanced);
+    assert_eq!(job.sent_back_past(&first()), None);
+    assert_eq!(
+        job.transition_step(&first(), StepTarget::Retraced, Actor::Fleet, when()),
+        Err(IllegalStepTransition::NothingToRetrace { step_id: first() })
+    );
+}
+
+/// The other half, shared with the return: only a step that advanced is
+/// entered across `advanced -> running`.
+#[test]
+fn a_retrace_onto_a_step_that_has_not_advanced_is_refused() {
+    let job = a_return_redone_short_of_a_step_that_advanced();
+    assert_eq!(
+        job.transition_step(&third(), StepTarget::Retraced, Actor::Fleet, when()),
+        Err(IllegalStepTransition::NotAnAdvancedStep {
+            step_id: third(),
+            from: StepState::Running,
+        })
+    );
+}
+
+/// **It begins a run and charges no pass.** The pass was charged to `verify` at
+/// the return; a retrace naming it would count one loop once per step crossed.
+#[test]
+fn a_retrace_begins_a_run_and_names_no_emitter() {
+    assert!(StepTarget::Retraced.begins_a_run());
+    assert_eq!(StepTarget::Retraced.returned_by(), None);
+    assert_eq!(StepTarget::Retraced.why(), None);
+    assert_eq!(StepTarget::Retraced.state(), StepState::Running);
 }

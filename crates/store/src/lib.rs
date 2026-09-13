@@ -80,6 +80,7 @@ mod repositories;
 mod resolving;
 /// Giving a Job's resources back without giving up its record.
 mod retain;
+mod retrace;
 /// The review Fleet composed at a Job's gate — the one builder's text, kept
 /// beside the Job rather than only in the pull request it may also carry.
 mod review;

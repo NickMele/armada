@@ -749,28 +749,17 @@ where
     /// The target that enters a step, given where that step already stands.
     ///
     /// **One place asks it, because a forward walk cannot tell by looking.**
-    /// Every step of every linear workflow is entered as
-    /// [`StepTarget::Running`]; a step a loop has come round to has not been
-    /// dispatched into, because a return leaves the emitting step where it
-    /// stood, and entering it again is [`StepTarget::Revisited`]. The two walk
-    /// different edges and the machine refuses each in the other's place, so a
-    /// call site choosing by hand is a call site that can be wrong — and the
-    /// three that walk forward would each have had to choose.
-    ///
-    /// **Two states answer `Revisited` and they are the same fact.** A verdict
-    /// is routed back from a step's advance gate, so the emitter is `running`
-    /// where the routing was mechanical and `awaiting_human` where a person at
-    /// the gate asked for it. Reading only the first is what left the loop's
-    /// second pass one move short of the gate that asked for it, one state
-    /// along.
-    ///
-    /// **It never invents a return.** A step that has `advanced` answers
-    /// [`StepTarget::Running`] here and the machine refuses it, which is
-    /// `StepAlreadyAdvanced` and is the redispatch refusal doing its job: a
-    /// return needs the step that routed it, and this cannot see one.
+    /// A linear workflow enters every step as [`StepTarget::Running`]. A step a
+    /// loop has come round to is [`StepTarget::Revisited`]: a return leaves its
+    /// emitter `running`, or `awaiting_human` where a person asked. A step the
+    /// return went back past is [`StepTarget::Retraced`], and only while a
+    /// later step still stands open — `Job::sent_back_past`. The machine
+    /// refuses each in the others' place, so a call site choosing by hand is a
+    /// call site that can be wrong.
     pub(crate) fn entering(&self, job: &Job, step: &StepId) -> StepTarget {
         match job.step(step).map(|row| row.state()) {
             Some(StepState::Running | StepState::AwaitingHuman) => StepTarget::Revisited,
+            Some(StepState::Advanced) if job.sent_back_past(step).is_some() => StepTarget::Retraced,
             _ => StepTarget::Running,
         }
     }
