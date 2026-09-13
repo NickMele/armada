@@ -1,12 +1,11 @@
 //! Plan's claim: **a running Job says how far through its plan it is.** Every
 //! assertion is made against what crossed [`ipc::encode`], as `board.rs`'s are,
-//! and the apparatus is [`bench::plan`]. #893 is what this file carries; the
-//! rest of the claim is a row, in the order a person meets it:
+//! and the apparatus is [`bench::plan`]. #893 and #895 are what this file
+//! carries; the rest of the claim is a row, in the order a person meets it:
 //!
 //! | Step of the claim | Carried by |
 //! |---|---|
 //! | The plan step is asked for a plan; later briefs carry THE PLAN | #894 |
-//! | A workflow declares both steps, and the Judge reads task states | #895 |
 //! | Job detail's Plan region draws the plan | #896 |
 //! | A person adds a fifth task, and the working Drone is told | #897 |
 //! | The Board's row draws "2 of 4" | #898 |
@@ -19,13 +18,17 @@
 #[allow(dead_code)]
 mod bench;
 
+use std::sync::Arc;
+
 use core_model::NotAnUpdate;
 use ipc::mcp::{NotAnArgument, PlanArgument};
 use ipc::{ChangedBy, Event, JobPlanChanged};
+use testkit::FakeJudge;
 
 use bench::board::{detail, received_detail, step_facts};
 use bench::plan::{
-    called, gated_on_the_plan, received_event, received_row, refused, Planned, IMPLEMENT, PLAN,
+    called, gated_on_implement, gated_on_the_plan, received_event, received_row, refused, Planned,
+    IMPLEMENT, PLAN,
 };
 
 const FOUR_TASKS: &str = r#"{"approach":"Stop the reader at the end, then cover the bound",
@@ -80,7 +83,7 @@ async fn the_plan_steps_gate_passes_on_a_recorded_plan_and_says_so_when_there_is
     let mut planned = Planned::created("fix the reader's bound");
     let plan = planned.kept(called("record_plan", FOUR_TASKS), PLAN, 1);
 
-    let passed = gated_on_the_plan(&planned, Some(plan.counts())).await;
+    let passed = gated_on_the_plan(&planned, Some(plan)).await;
     assert!(passed.advanced(), "four tasks recorded is a plan step done");
 
     let stopped = gated_on_the_plan(&planned, None).await;
@@ -204,4 +207,49 @@ fn a_plan_steps_retry_replaces_the_plan_and_a_following_steps_retry_keeps_its_st
     planned.kept(called("update_task", working), IMPLEMENT, 2);
     let tasks = received_row(&planned.row()).tasks.expect("counted");
     assert_eq!((tasks.done, tasks.working, tasks.open), (1, 1, 2));
+}
+
+/// #895's row: **a workflow declares both steps, and the Judge reads task
+/// states.** `bug_workflow_with_a_plan` is read by `config`'s own parser from
+/// `plan`, `plan_recorded` and `follows_plan`; implement names
+/// `plan.evidence` in `reference_docs`, and its brief carries the plan as
+/// Fleet holds it — task ids, states and a dropped one's reason — never the
+/// three lines a Drone submitted about the diff.
+#[tokio::test]
+async fn implements_judge_reads_the_plan_fleet_holds_not_the_drones_words_about_it() {
+    let mut planned = Planned::created("fix the reader's bound");
+    planned.kept(called("record_plan", FOUR_TASKS), PLAN, 1);
+    planned.kept(
+        called("update_task", r#"{"task":"T1","state":"done","reason":""}"#),
+        IMPLEMENT,
+        1,
+    );
+    let plan = planned.kept(
+        called(
+            "update_task",
+            r#"{"task":"T3","state":"dropped","reason":"the writer's bound was never inclusive"}"#,
+        ),
+        IMPLEMENT,
+        1,
+    );
+
+    let judge = Arc::new(FakeJudge::with_no_objection());
+    let ruling = gated_on_implement(&planned, plan, judge.clone()).await;
+    assert!(
+        matches!(ruling, fleet::Ruling::Advanced { .. }),
+        "tasks_match_the_diff had no objection: {ruling:?}"
+    );
+
+    let asked = judge.asked();
+    assert_eq!(asked.len(), 1, "one criterion, one call: {asked:?}");
+    let brief = &asked[0];
+    for expected in [
+        "T1",
+        "done",
+        "T3",
+        "dropped",
+        "the writer's bound was never inclusive",
+    ] {
+        assert!(brief.contains(expected), "{expected} missing from {brief}");
+    }
 }

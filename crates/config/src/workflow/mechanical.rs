@@ -115,8 +115,8 @@ const DIFF_NONEMPTY_KEYS: &[&str] = &["type"];
 const ARTIFACT_EXISTS_KEYS: &[&str] = &["type", "target"];
 const PLAN_RECORDED_KEYS: &[&str] = &["type", "min_tasks"];
 /// The count a step that says nothing about `min_tasks` is held to. **One**,
-/// which is `docs/journeys`'s own reading of a plan too short to be one:
-/// zero is refused rather than defaulted, because a check nothing can fail is
+/// per `#895`: a plan step declares this check to say a plan exists at all,
+/// and zero is refused rather than defaulted — a check nothing can fail is
 /// not the ordinary shape of a default and would read as a typo left in.
 const MIN_TASKS_DEFAULT: NonZeroU32 = NonZeroU32::MIN;
 
@@ -287,8 +287,8 @@ fn check(
             // **Refused here, at the check, and not only at the step.** A
             // `plan_recorded` on a step whose product is not `plan` is an
             // assertion about a record nothing here freezes for that step —
-            // `docs/concepts/plan.md` reads it as Fleet's own record of the
-            // plan, and there is exactly one of those per Job.
+            // `docs/concepts/plan.md` is one Plan per Job, held by the Job
+            // and not by a step.
             if produces != Some(EvidenceType::Plan) {
                 out.push(Refusal::new(
                     table.at("type"),
@@ -304,13 +304,13 @@ fn check(
                 None => Some(MIN_TASKS_DEFAULT),
                 // `positive` already refuses zero, so what survives is never
                 // zero and `NonZeroU32::new` never answers `None` here.
-                Some(value) => {
-                    yaml::positive(&min_tasks_key, value, out).and_then(NonZeroU32::new)
-                }
+                Some(value) => yaml::positive(&min_tasks_key, value, out).and_then(NonZeroU32::new),
             };
             table.close(PLAN_RECORDED_KEYS, out);
             match produces == Some(EvidenceType::Plan) {
-                true => Some(MechanicalCheck::PlanRecorded { min_tasks: min_tasks? }),
+                true => Some(MechanicalCheck::PlanRecorded {
+                    min_tasks: min_tasks?,
+                }),
                 false => None,
             }
         }
