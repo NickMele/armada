@@ -31,13 +31,16 @@ import { useEffect, useState } from "react";
 import type { BridgeState } from "../../shared/bridge";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
 import type {
+  AddTask,
   Artifact,
   Draft,
+  DropTask,
   FileReport,
   Outcome,
   StagedAttachment,
   WorktreeReclaimed,
 } from "@armada/protocol";
+import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type {
   CommandAnswer,
   JudgeAnswer,
@@ -543,6 +546,25 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Add a task to a job's plan. **Not through `act`**, `report`'s reason: what
+   * comes back is the plan the add leaves rather than an `Outcome`, and the
+   * dialog that collected the title is what needs it, to redraw at once and to
+   * stay open on a refusal with what was typed.
+   */
+  async function addTask(jobId: string, add: AddTask): Promise<PlanEditAnswer> {
+    const answer = await window.armada.addTask(jobId, add);
+    setOutcome(answer.ok ? { ok: true } : answer.outcome);
+    return answer;
+  }
+
+  /** Drop a task from a job's plan, with a reason. `addTask`'s own reason. */
+  async function dropTask(jobId: string, drop: DropTask): Promise<PlanEditAnswer> {
+    const answer = await window.armada.dropTask(jobId, drop);
+    setOutcome(answer.ok ? { ok: true } : answer.outcome);
+    return answer;
+  }
+
+  /**
    * Answer the review gate. **Four preload calls, not one with a
    * discriminator** — merging lands the branch and then takes the work,
    * approving takes it and leaves the pull request where it is, requesting
@@ -690,6 +712,8 @@ export function useCommands(sending: Sending) {
     raiseTurns,
     saveLimits,
     report,
+    addTask,
+    dropTask,
     decide,
     refresh,
   };

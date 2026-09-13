@@ -451,6 +451,8 @@ export const CHANNELS = {
   saveLimits: "bridge:save-limits",
   savePreference: "bridge:save-preference",
   fileReport: "bridge:file-report",
+  addTask: "bridge:add-task",
+  dropTask: "bridge:drop-task",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
   followCheckOutput: "bridge:follow-check-output",

@@ -78,6 +78,14 @@ export function said(outcome: Outcome): string {
       return "A decision on that job's work is already in flight. It was not sent twice.";
     case "already_answering":
       return "That answer is already in flight. It was not sent twice.";
+    case "empty_task_title":
+      return "A task needs a title. Nothing was added.";
+    case "empty_task_reason":
+      return "A drop needs a reason. Nothing was sent, and the task stands.";
+    case "already_adding_task":
+      return "That task is already being added. It was not sent twice.";
+    case "already_dropping_task":
+      return "That drop is already in flight. It was not sent twice.";
     case "already_setting":
       return "A change to this job's settings is already in flight. It was not sent twice.";
     case "already_showing":

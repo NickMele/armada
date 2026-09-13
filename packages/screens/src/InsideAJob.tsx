@@ -6,17 +6,14 @@ import type { ReactNode } from "react";
 import { ChevronRight, ChevronUp, Unplug } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import {
-  Clamped,
   JobBrief,
   JobBriefSkeleton,
   JobDetailHeaderActions,
-  StepBar,
   StepTimeline,
   StepTimelineSkeleton,
   RunTree,
   RunTreeSkeleton,
   Skeleton,
-  TaskMark,
   Tooltip,
   WhereRow,
   conceptSaid,
@@ -30,6 +27,9 @@ import {
   type RunTreeStep,
   type TaskMarkState,
 } from "@armada/components";
+
+import type { PlanEditAnswer } from "./plan-edits";
+import { PlanWell } from "./PlanWell";
 
 /**
  * Inside a Job — one arrangement, at every state.
@@ -236,6 +236,28 @@ export type InsideAJobProps = {
    */
   plan?: PlanRegionData;
   /**
+   * Add a task to the Job's plan, from the region's own eyebrow act — `Add
+   * task`, the way Pulse carries `Details`. **Absent draws no act**, the same
+   * condition `plan` itself draws on: a Job whose workflow has no plan step.
+   * `jobId` is bound by the caller, `JobDetail`'s own convention for every act
+   * drawn inside this screen.
+   */
+  onAddTask?: (title: string, detail: string) => Promise<PlanEditAnswer>;
+  /**
+   * Drop a task from the Job's plan, with a reason. Offered only on an `open`
+   * or `working` row — `docs/concepts/plan.md`'s rule that a dropped task
+   * stays dropped for a Drone, and a person's own add is what brings the work
+   * back, as a new task.
+   */
+  onDropTask?: (taskId: string, reason: string) => Promise<PlanEditAnswer>;
+  /**
+   * A sentence the app is telling somebody, already written — `Added`,
+   * `Dropped`. `onCopied`'s own shape: the row that changes is one among
+   * several, so the act that changed it says so once, briefly, the way a
+   * clipboard write does.
+   */
+  onSaid?: (sentence: string) => void;
+  /**
    * Where things are — the worktree, the branch, the Manifest, the workflow,
    * the log, the transcript, the Drone. **A path opens where it lives; an
    * identifier copies.**
@@ -310,6 +332,9 @@ export function InsideAJob({
   onOpenArtifact,
   onOpenChapter,
   plan,
+  onAddTask,
+  onDropTask,
+  onSaid,
   where,
   whereLabel = "Where things are",
   whereAbsent = "Paths unknown",
@@ -359,7 +384,9 @@ export function InsideAJob({
 
           {/* The plan, between the run and Pulse — the Job's own, not the
               step's, so it stays put whichever step is selected. */}
-          {plan === undefined ? null : <PlanWell {...plan} />}
+          {plan === undefined ? null : (
+            <PlanWell {...plan} onAddTask={onAddTask} onDropTask={onDropTask} onSaid={onSaid} />
+          )}
 
           {/* Context for the run, so it reads after it — and before the
               pointers, which is where you go once it says something is wrong. */}
@@ -544,7 +571,7 @@ function StepPanelReading({ label, labelIsAnIdentifier, phases }: StepReading) {
  * would be the `:not(.armada-screen__eyebrow)` child and be styled as the
  * brief itself.
  */
-function Eyebrow({ children, spaced }: { children: ReactNode; spaced?: boolean }) {
+export function Eyebrow({ children, spaced }: { children: ReactNode; spaced?: boolean }) {
   const says = conceptSaid(children);
   const band = (
     <span className="armada-screen__eyebrow" data-spaced={spaced || undefined}>
@@ -570,50 +597,6 @@ function FieldLabel({ children }: { children: ReactNode }) {
     <Tooltip asChild label={says}>
       {label}
     </Tooltip>
-  );
-}
-
-/**
- * The Plan region's well — the task bar, the figure, the approach and one row
- * per task. `StepBar`'s segment grammar, extended to draw tasks rather than
- * steps; `docs/journeys/monitor-active-work.md`, Plan.
- */
-function PlanWell({ approach, tasks }: PlanRegionData) {
-  const notDropped = tasks.filter(
-    (task): task is PlanTaskRow & { state: "open" | "working" | "done" } => task.state !== "dropped",
-  );
-  const done = notDropped.filter((task) => task.state === "done").length;
-
-  return (
-    <>
-      <Eyebrow>Plan</Eyebrow>
-      <div className="armada-inside__plan">
-        <div className="armada-inside__plan-progress">
-          <StepBar
-            tasks={notDropped.map((task) => task.state)}
-            label={`${done} of ${notDropped.length} tasks`}
-          />
-          <span className="armada-inside__plan-figure">
-            {done} of {notDropped.length}
-          </span>
-        </div>
-        <Clamped lines={2}>{approach}</Clamped>
-        <ul className="armada-inside__plan-tasks">
-          {tasks.map((task) => (
-            <li key={task.id} className="armada-inside__plan-task" data-state={task.state}>
-              <TaskMark state={task.state} />
-              <span className="armada-inside__plan-task-id">{task.id}</span>
-              <span className="armada-inside__plan-task-body">
-                <span className="armada-inside__plan-task-title">{task.title}</span>
-                {task.state === "dropped" && task.reason !== undefined ? (
-                  <span className="armada-inside__plan-task-reason">{task.reason}</span>
-                ) : null}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </>
   );
 }
 

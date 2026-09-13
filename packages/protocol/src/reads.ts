@@ -413,6 +413,14 @@ export type Outcome =
   | { ok: false; why: "empty_report" }
   | { ok: false; why: "already_deciding" }
   | { ok: false; why: "already_answering" }
+  /** A task needs a title. Bridge's own, matching the 422 `add_task` would give it. */
+  | { ok: false; why: "empty_task_title" }
+  /** A drop needs a reason. Bridge's own, matching the 422 `drop_task` would give it. */
+  | { ok: false; why: "empty_task_reason" }
+  /** A second add on one job's plan while the first is still in flight. */
+  | { ok: false; why: "already_adding_task" }
+  /** A second drop on one job's plan while the first is still in flight. */
+  | { ok: false; why: "already_dropping_task" }
   /**
    * A second change to one Job's settings — how it meets a blocked command,
    * the model its next step starts on, an allow taken back — while the first

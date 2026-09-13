@@ -8,7 +8,14 @@
 // still owns which regions those are and why they travel as one list.
 
 import type { BridgeState } from "../shared/bridge";
-import type { JobDetail, JobExamined, JobHistory, JobResources, Recorded } from "@armada/protocol";
+import type {
+  JobDetail,
+  JobExamined,
+  JobHistory,
+  JobResources,
+  Recorded,
+  WorkPlan,
+} from "@armada/protocol";
 import type { JournalSocket } from "./journal";
 import type { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
@@ -168,6 +175,23 @@ export class JobFocus {
   /** Re-read the open Job, where the event was about it. */
   refresh(port: number, jobId: string): void {
     void this.takeAgain(port, { because: "job_moved", jobId });
+  }
+
+  /**
+   * A person's own `add_task` or `drop_task` answered with the plan it
+   * leaves. Folded straight into the open Job's own detail where this is it —
+   * no second read, which is what makes the row appear at once rather than on
+   * the trip `job.plan_changed` takes behind it. `#897`.
+   *
+   * A no-op where this Job is not the one open, or where nothing has been
+   * read yet: there is no `detail` to fold into, and the next open reads the
+   * plan whole off `get_job` anyway.
+   */
+  foldPlan(jobId: string, plan: WorkPlan): void {
+    if (this.watched.jobId !== jobId) return;
+    const watched = this.wiring.current().watched;
+    if (watched.state !== "read" || watched.jobId !== jobId) return;
+    this.wiring.publish({ watched: { ...watched, detail: { ...watched.detail, work_plan: plan } } });
   }
 
   /**

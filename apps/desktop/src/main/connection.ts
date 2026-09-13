@@ -31,6 +31,7 @@ import { OverviewReads } from "./overview";
 import { Questions } from "./questions";
 import { RehearsalConnection } from "./rehearsal";
 import { ManifestFileCommands } from "./editing";
+import { PlanEdits } from "./plan-edits";
 import { RepositoryAllowsCommands } from "./repository-allows";
 import { RepositoryReads } from "./repositories";
 import { Picked } from "./picked";
@@ -76,6 +77,8 @@ export class FleetConnection {
   readonly editing: ManifestFileCommands;
   /** Repository-wide always-allows, read and removed — see `repository-allows.ts`. */
   readonly repositoryAllows: RepositoryAllowsCommands;
+  /** A person's own add or drop of a task — see `plan-edits.ts`. */
+  readonly planEdits: PlanEdits;
   /** What Fleet serves and which repository was picked — see `repositories.ts`. */
   readonly repositories: RepositoryReads;
   /** Overview's health and per-repository drift, held while it is open — see `overview.ts`. */
@@ -165,6 +168,7 @@ export class FleetConnection {
       observing: () => this.observing,
       reading: () => this.reading,
     });
+    this.planEdits = new PlanEdits({ port, foldPlan: (jobId, plan) => this.jobFocus.foldPlan(jobId, plan) });
     const [publish, picked] = [(change: Partial<BridgeState>) => this.publish(change), new Picked()];
     this.rehearsal = new RehearsalConnection({ publish, port, picked });
     this.overview = new OverviewReads({ publish, picked, port });

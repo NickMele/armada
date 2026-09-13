@@ -784,6 +784,60 @@
   text-wrap: pretty;
 }
 
+/* `Drop…`, at the row's trailing edge. Quiet at rest, `.armada-wrow__mark`'s
+   own rule: shown on hover and on its own focus only, so the list reads as
+   tasks first and controls second, and a keyboard reader still finds it. #897. */
+.armada-inside__plan-task-drop {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.armada-inside__plan-task:hover .armada-inside__plan-task-drop,
+.armada-inside__plan-task-drop:focus-visible {
+  opacity: 1;
+}
+
+.armada-inside__plan-task-drop:hover {
+  color: var(--fg-default);
+}
+
+.armada-inside__plan-task-drop:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* The reason field, opened in place of the row's trailing act. A column, not
+   a line: `Input`'s own invalid message sits under the field, and the two
+   buttons stay reachable under that without wrapping into the title. */
+.armada-inside__plan-task-drop-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  max-width: 22em;
+}
+
+.armada-inside__plan-task-drop-acts {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.armada-inside__plan-task-refused {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--status-completed-failed);
+}
+
 /* Where things are — the drawing's `.where`. A stack with a hairline gap, so
    the rows read as one block and each still lights its own hover. The label
    column, the value and the act are `WhereRow`'s; what lives here is only what

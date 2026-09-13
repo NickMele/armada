@@ -150,6 +150,8 @@ function OneJob({
   onOpenRemarkLink,
   onCopied,
   onSaid,
+  onAddTask,
+  onDropTask,
   rehearsal,
 }: JobDetailProps) {
   // Which step the panel is showing. **The whole of navigation inside a Job**:
@@ -533,6 +535,10 @@ function OneJob({
     return <Unrenderable job={job} />;
   }
 
+  // Read once: `plan` gates both the region and its own eyebrow act, and a
+  // second call would be a second, possibly different, reading of `whole`.
+  const plan = planOf(whole);
+
   return (
     <InsideAJob
       heading={heading}
@@ -584,7 +590,17 @@ function OneJob({
       // the reason the two are separate props at all.
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
-      plan={planOf(whole)}
+      plan={plan}
+      // `after` is always the end: reordering is not in this milestone, the
+      // owner's own call — `#897`. Absent where there is no plan to add to,
+      // the same condition `plan` itself draws on.
+      onAddTask={
+        plan === undefined
+          ? undefined
+          : (title, detail) => onAddTask(job.id, { title, detail, after: "" })
+      }
+      onDropTask={(taskId, reason) => onDropTask(job.id, { task: taskId, reason })}
+      onSaid={onSaid}
       whereOpen={whereOpen}
       onOpenWhere={onOpenWhere}
       where={workOf(
