@@ -2,19 +2,28 @@
 // repository Fleet serves; this decides what each card says.
 
 import type { DockAnswer, DockQuestion } from "@armada/components";
-import type { JobSummary, JudgeAnswer, RepositorySummary } from "@armada/protocol";
+import type { JobSummary, JudgeAnswer, Outcome, RepositorySummary } from "@armada/protocol";
 import { manifestLabel } from "@armada/shell/src/repository-label";
-import { offeredOf } from "./copy";
+import { offeredOf, said } from "./copy";
 import { span } from "./duration";
-import type { Outstanding } from "./outstanding";
+import { outstandingId, type Outstanding } from "./outstanding";
 
 /** What a person may do from a card. Absent draws the control off. */
 export type DockActs = {
   /** An answer by its wire name — a Drone's label, a `CommandAnswer`, a `JudgeAnswer`. #936. */
   onAnswer?: (question: Outstanding, answer: string) => void;
+  /** True while this card's own answer is in flight. Draws its answers off without the "open the job" note. */
+  answering?: (question: Outstanding) => boolean;
+  /** Why this card's last answer did not take, in Fleet's own words. Cleared by a fresh attempt. */
+  refusalFor?: (question: Outstanding) => string | undefined;
   /** Point Helm at the card's repository and Job. #944. */
   onDiscuss?: (question: Outstanding, job: JobSummary) => void;
 };
+
+/** A card's own refusal, in words — Fleet's for a real refusal, Bridge's own sentence otherwise. */
+export function refusalWords(outcome: Outcome): string {
+  return outcome.ok ? "" : outcome.why === "refused" ? outcome.error.message : said(outcome);
+}
 
 /**
  * The Judge's three answers. **The words `JudgeQuestion` draws on job detail**, retyped because
@@ -70,18 +79,19 @@ export function dockQuestionsOf(
       const job = byId.get(question.job_id);
       if (job === undefined) return [];
       const number = jobNumber(job);
-      const { onAnswer, onDiscuss } = acts;
+      const { onAnswer, answering, refusalFor, onDiscuss } = acts;
       return [
         {
-          id: `${question.job_id}:${question.kind}`,
+          id: outstandingId(question),
           repository: manifestLabel(job.owner_manifest_id, repositories),
           job: number,
           title: job.title,
           waiting: span(askedAt(question), now) ?? undefined,
-          ...said(question),
+          ...askedOf(question),
           ...(onAnswer === undefined
             ? { note: `Open job ${number} to answer.` }
-            : { onAnswer: (answer: string) => onAnswer(question, answer) }),
+            : { onAnswer: (answer: string) => onAnswer(question, answer), answering: answering?.(question) }),
+          refusal: refusalFor?.(question),
           ...(onDiscuss === undefined ? {} : { onDiscuss: () => onDiscuss(question, job) }),
         },
       ];
@@ -89,7 +99,7 @@ export function dockQuestionsOf(
 }
 
 /** What the card says was asked, and the answers its kind offers, in Fleet's order. */
-function said(question: Outstanding): Pick<DockQuestion, "label" | "asked" | "detail" | "answers"> {
+function askedOf(question: Outstanding): Pick<DockQuestion, "label" | "asked" | "detail" | "answers"> {
   switch (question.kind) {
     case "drone":
       return {

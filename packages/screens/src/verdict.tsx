@@ -542,7 +542,7 @@ export type VerdictSlotAtGateArgs = {
   onOpenPullRequest: OpenPullRequest;
   onSaid: (sentence: string) => void;
   /** Answer the question a judge refusal opened. `answer_judge` is one press. */
-  onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
+  onAnswerJudge: (jobId: string, askedAt: string, answer: JudgeAnswer, note?: string) => void;
   /** Opens the Job's whole diff, from a View step. #904. */
   onOpenDiff?: () => void;
   /** Dismisses a finding the review raised, with the reason. #907. */
@@ -601,7 +601,7 @@ export function verdictSlotAtGate({
               ? "Something sent to this job is still on its way to Fleet."
               : undefined
         }
-        onAnswer={(answer, note) => onAnswerJudge(job.id, answer, note)}
+        onAnswer={(answer, note) => onAnswerJudge(job.id, question.asked_at, answer, note)}
       />
     );
   }

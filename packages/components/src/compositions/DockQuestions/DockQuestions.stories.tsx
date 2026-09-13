@@ -102,6 +102,47 @@ export const FromTwoRepositories: Story = {
   },
 };
 
+/** Pressing an answer sends it — the whole of what a card does when Fleet takes it. #936. */
+export const CardAnswered: Story = {
+  args: { questions: [droneQuestion] },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Only running" }));
+    await expect(args.questions[0]?.onAnswer).toHaveBeenCalledWith("Only running");
+  },
+};
+
+/** A window left open across an answer: the card says so, in Fleet's own words, and stays up. #936. */
+export const AlreadyAnswered: Story = {
+  args: {
+    questions: [
+      {
+        ...commandWaiting,
+        refusal:
+          "the question being answered on job 01M21BKW3M0045T2Q8C1ZC7Q1R is not the one outstanding. " +
+          "Read the job again and answer the one it names",
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("alert")).toHaveTextContent(/not the one outstanding/);
+  },
+};
+
+/** A Judge card naming a question this job has since cleared, refused rather than applied to the one open now. #936. */
+export const JudgeSuperseded: Story = {
+  args: {
+    questions: [
+      {
+        ...judgeRefusal,
+        refusal: "the judge question being answered is not the one open now. Read the job again and answer the one it names",
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("alert")).toHaveTextContent(/not the one open now/);
+  },
+};
+
 /** Before answering from the dock is wired: the answers are drawn, off, and the card says where to answer. */
 export const AnswersNotWiredYet: Story = {
   args: {

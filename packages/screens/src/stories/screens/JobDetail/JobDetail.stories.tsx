@@ -508,7 +508,7 @@ export const JudgeQuestionAtGate: Story = {
     await userEvent.click(
       await canvas.findByRole("button", { name: "Disagree, just this step" }),
     );
-    await expect(answerJudge).toHaveBeenCalledWith(JOB_ID, "disagree_once", undefined);
+    await expect(answerJudge).toHaveBeenCalledWith(JOB_ID, "2026-09-10T14:29:40Z", "disagree_once", undefined);
   },
 };
 

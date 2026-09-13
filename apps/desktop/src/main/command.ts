@@ -606,8 +606,8 @@ export class JobCommands {
    * this step, or disagree and stand the criterion down for the repository.
    * One press is the whole answer — `note` is never required.
    */
-  async answerJudge(jobId: string, answer: JudgeAnswer, note?: string): Promise<Outcome> {
-    const body: JudgeAnswered = { answer, note };
+  async answerJudge(jobId: string, askedAt: string, answer: JudgeAnswer, note?: string): Promise<Outcome> {
+    const body: JudgeAnswered = { answer, asked_at: askedAt, note };
     return this.act(jobId, this.answering, "already_answering", (port) =>
       ask(port, "POST", route(jobId, "answer_judge"), body),
     );

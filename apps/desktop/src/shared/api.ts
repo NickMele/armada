@@ -248,7 +248,7 @@ export type BridgeApi = {
    * answer; `note` is never required. Fleet refuses 409 where the job is not
    * holding a question open.
    */
-  answerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => Promise<Outcome>;
+  answerJudge: (jobId: string, askedAt: string, answer: JudgeAnswer, note?: string) => Promise<Outcome>;
   /**
    * Change how one job meets a judge criterion that refuses. **Live**: the
    * next criterion that refuses reads it, and no drone is respawned.

@@ -10,8 +10,9 @@
 //!
 //! **One question at a time.** Only one criterion is ever asked about per
 //! pass over a step — Fleet asks about the first ask-eligible refusal and
-//! records the rest — so `job_id` alone is enough to hold it, and this
-//! type carries no id of its own beyond [`JudgeQuestion::criterion_id`].
+//! records the rest — so `job_id` alone is enough to hold it, and this type
+//! mints no id of its own. [`JudgeQuestion::asked_at`] is what an answer
+//! names back — see [`JudgeAnswered::asked_at`].
 
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +65,15 @@ pub enum JudgeAnswer {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JudgeAnswered {
     pub answer: JudgeAnswer,
+    /// Which question this answers — [`JudgeQuestion::asked_at`], echoed
+    /// back. **The identity, chosen off what the open question already
+    /// stores** rather than minting a new id: `job_id` alone keys the row a
+    /// Job holds, but a person can still be looking at a card for a question
+    /// this Job has since cleared and opened another over, the way a window
+    /// left open across [`crate::ChosenAnswer::question_id`] can. Refused as
+    /// stale where it does not match the one open now, the same shape as
+    /// that seam's `Superseded`.
+    pub asked_at: Instant,
     /// Never required. Rides along for whoever reads the record later; Fleet
     /// asks nothing further of it.
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -95,7 +95,7 @@ export type JobDetailProps = {
   /** Ask what one command does. It decides nothing; absent draws no control. */
   onExplainCommand?: ExplainCommand;
   /** Answer the question a judge refusal opened. One press is the whole answer. */
-  onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
+  onAnswerJudge: (jobId: string, askedAt: string, answer: JudgeAnswer, note?: string) => void;
   /** How this job meets the next such command. Live; nothing restarts. */
   onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void;
   /** How this job meets the next judge criterion that refuses. Live; nothing restarts. */

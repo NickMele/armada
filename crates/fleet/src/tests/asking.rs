@@ -20,6 +20,7 @@ use core_model::{
 use ipc::{Event, JudgeAnswer};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 
+use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::tests::admitted::dispatched;
@@ -65,7 +66,7 @@ fn a_two_step_workflow() -> config::ResolvedWorkflow {
 /// `WhenRefused::AlwaysAsk` is what turns `c1`'s own `on_refusal: refuse` —
 /// every `judged_on` fixture criterion declares that — into a question rather
 /// than the refusal `tests::judging::ruling` already covers.
-pub(super) async fn asking_a_question(home: &TempDir) -> (Fixture, JobId) {
+pub(super) async fn asking_a_question(home: &TempDir) -> (Fixture, JobId, ipc::Instant) {
     let fleet = a_fleet_judged_by(
         home,
         FakeWorkProduct::changed(&["src/log.rs"]).showing("+    let n = n - 1;\n"),
@@ -100,11 +101,12 @@ pub(super) async fn asking_a_question(home: &TempDir) -> (Fixture, JobId) {
         fleet.load(&job_id).await.unwrap().status(),
         JobStatus::AwaitingReview
     );
-    assert!(
-        fleet.judge_question_of(&job_id).await.is_some(),
-        "the question this suite answers has to be genuinely open"
-    );
-    (fleet, job_id)
+    let asked_at = fleet
+        .judge_question_of(&job_id)
+        .await
+        .expect("the question this suite answers has to be genuinely open")
+        .asked_at;
+    (fleet, job_id, asked_at)
 }
 
 /// Find the one event a Bridge dock reacts to: this Job's move to
@@ -205,10 +207,10 @@ async fn the_question_is_stamped_before_the_move_to_awaiting_review_is() {
 #[tokio::test]
 async fn agreeing_escalates_the_job_through_running_and_strands_nothing() {
     let home = TempDir::new();
-    let (fleet, job_id) = asking_a_question(&home).await;
+    let (fleet, job_id, asked_at) = asking_a_question(&home).await;
 
     let answered = fleet
-        .answer_judge(&job_id, JudgeAnswer::Agree, None)
+        .answer_judge(&job_id, JudgeAnswer::Agree, asked_at, None)
         .await
         .expect("agreeing takes the declared route through `running`");
 
@@ -234,10 +236,10 @@ async fn agreeing_escalates_the_job_through_running_and_strands_nothing() {
 #[tokio::test]
 async fn disagreeing_once_advances_and_queues() {
     let home = TempDir::new();
-    let (fleet, job_id) = asking_a_question(&home).await;
+    let (fleet, job_id, asked_at) = asking_a_question(&home).await;
 
     let answered = fleet
-        .answer_judge(&job_id, JudgeAnswer::DisagreeOnce, None)
+        .answer_judge(&job_id, JudgeAnswer::DisagreeOnce, asked_at, None)
         .await
         .expect("disagreeing walks an edge that was already legal");
 
@@ -255,10 +257,10 @@ async fn disagreeing_once_advances_and_queues() {
 #[tokio::test]
 async fn disagreeing_always_advances_and_queues() {
     let home = TempDir::new();
-    let (fleet, job_id) = asking_a_question(&home).await;
+    let (fleet, job_id, asked_at) = asking_a_question(&home).await;
 
     let answered = fleet
-        .answer_judge(&job_id, JudgeAnswer::DisagreeAlways, None)
+        .answer_judge(&job_id, JudgeAnswer::DisagreeAlways, asked_at, None)
         .await
         .expect("disagreeing walks an edge that was already legal");
 
@@ -268,5 +270,26 @@ async fn disagreeing_always_advances_and_queues() {
     assert!(
         fleet.judge_question_of(&job_id).await.is_none(),
         "answered once — nothing left for the screen to keep offering"
+    );
+}
+
+/// An answer naming a question this Job is not holding open is refused
+/// rather than applied to whatever is open now — the same shape as
+/// `crate::questioning::NotAnswered::Superseded`.
+#[tokio::test]
+async fn answering_a_stale_question_is_refused() {
+    let home = TempDir::new();
+    let (fleet, job_id, asked_at) = asking_a_question(&home).await;
+    let stale = ipc::Instant::carried(format!("{}-stale", asked_at.as_str()));
+
+    let refused = fleet
+        .answer_judge(&job_id, JudgeAnswer::Agree, stale, None)
+        .await
+        .expect_err("a mismatched asked_at is refused, not applied");
+
+    assert!(matches!(refused, Adrift::NotAnswerable { .. }), "{refused:?}");
+    assert!(
+        fleet.judge_question_of(&job_id).await.is_some(),
+        "a refused answer leaves the real question open"
     );
 }
