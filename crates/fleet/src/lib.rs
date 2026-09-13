@@ -87,6 +87,7 @@ mod freezing;
 mod gate;
 mod group;
 pub mod headroom;
+pub mod helm;
 /// What Fleet is holding disk for, and the five tests that decide whether it
 /// may give one back without asking anybody.
 pub mod holding;

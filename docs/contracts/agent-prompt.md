@@ -49,7 +49,7 @@ Model selection and budget, which are per-step configuration.
 | Prompt | Assembled by | Fires when | Wording |
 | --- | --- | --- | --- |
 | **Drone** | `fleet` | At spawn, which is once per workflow step | Specified — section 5 |
-| **Helm** | `fleet` | Per session | Not specified |
+| **Helm** | `fleet` | Per session | Drafted — section 5a |
 | **Judge** | `verification` | Per criterion, after a mechanical check passed | Not specified |
 | **Job-shape classifier** | `fleet` | At Job creation | Not specified |
 | **Manifest scanner** | `config` | During the setup wizard's Proposal phase | Not specified |
@@ -86,18 +86,19 @@ Six layers, assembled in order — section 3. Its wording is section 5.
 
 ### Helm
 
-**Told:** a strict subset of the Fleet MCP — every operation whose
-`agent_access` column in `crates/ipc/operations.toml` reads `Yes`, and no
-other.
-That file is the authority and this sentence does not restate its totals: it
-held a count once, the count was wrong in both halves, and a number here is a
-second copy that drifts. The selected Manifest. Its resolved authority, a
-Machine setting between rung 1 and read-only with no Manifest tier. The
-obligation to call `get_events_since(cursor)` at the start of each turn. Voice.
+**Told:** the Fleet MCP tools the agent door offers, and which of them it may
+act through. What it may act through is one predicate, `fleet::helm::may`, and
+the brief lists from it rather than this page restating it. The inventory under
+both is the `agent_access` column in `crates/ipc/operations.toml`, and this page
+does not count it: it held a count once, the count was wrong in both halves,
+and a number here is a second copy that drifts. The selected Manifest, named
+rather than quoted. Its resolved authority, a Machine setting between acting
+and read-only with no Manifest tier. The obligation to call
+`get_events_since(cursor)` at the start of each turn. Voice.
 
 **Never told:** anything outside the selected Manifest. Secrets.
 
-One of two invocations carrying a toolset.
+One of two invocations carrying a toolset. Its wording is section 5a.
 
 ### Judge
 
@@ -1144,6 +1145,132 @@ Drone's instinct on seeing a diff is to improve it.
 Everything above the step block is structurally identical between the two
 samples. Only the step text and the injected material differ, which is the
 layering doing its job.
+
+---
+
+# 5a. The Helm brief
+
+**Added Sep 2026**, for `#940`. `fleet::helm::brief` assembles it from the
+selected Manifest, the resolved authority and Voice, once per session. Nothing
+hosts a session yet.
+
+| Block | Action it names | Why it is in the brief |
+| --- | --- | --- |
+| **Opening** | Make a tool call rather than say a thing was done | The Drone's reporting clause, for the same failure: a model holding tools and a conversation narrates acts it did not take |
+| **This repository** | Say a question about another repository cannot be answered here | The scope is the door's, and a session cannot see it. Without the block a refusal arrives as an empty tool answer |
+| **Each turn** | Call `get_events_since` first, and fetch detail only where it bears | Fleet never wakes a session, so the poll is the only way a turn is current |
+| **What you may do** | Act only through the listed tools, and leave every other act to the person | The door offers every `Yes` row, and `#73` drew Helm's line inside that set. Until the door refuses on it, the brief is the line |
+| **How you answer** | Answer first, add at most one flagged observation, say "I" only for Helm's own acts, hedge by source | [Helm](../concepts/helm.md)'s Voice & conduct, and the Design System's P3 and P4 |
+| **Voice** | None. It tunes length and formality | Rendered only where the setting is set. It comes last, so it adjusts what is above it and does not contradict it |
+
+**Acts are listed by tool name, and reads are not.** Every query the door
+offers is a read, and each carries its own description in the tool list. The
+acts are a subset of what the door offers, so a name is the only thing that
+tells a session which offered tool it may call. The list is generated from the
+predicate, so it cannot name a different set from the one the door enforces.
+
+**The cap bound is stated without its figure.** `fleet::raising` holds the
+multiple. A number here would be a second copy, and the refusal already names
+the ceiling.
+
+**Drafting Jobs is decided and not listed.** `propose_job` and
+`propose_from_request` read `Drafts only`, and the door offers `Yes` rows only,
+so a session has no tool to draft with. The predicate admits both, and the brief
+lists them once the door offers them.
+
+**The Manifest is named, not quoted:** its id and its folder. Everything else in
+it is for `get_manifest` to answer, which stays current where a copy in the
+brief would go stale over a long conversation.
+
+**Read-only says why.** A session holding tools that act, and told not to use
+them with no reason given, reads the instruction as an error to work around.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ OPENING ──────────────────────────────────────
+│ You are Helm, in Armada. A person asks you about
+│ the work in one repository, and you answer from
+│ what the Fleet tools you have been given return.
+│ Saying that you did something does not do it.
+│ Only a tool call does.
+└────────────────────────────────────────────────
+┌─ THIS REPOSITORY ──────────────────────────────
+│ Every question in this conversation is about
+│ Manifest armada, read from /work/armada. The
+│ Fleet tools answer inside it and reach nothing
+│ outside it, so when you are asked about another
+│ repository, say it cannot be answered here.
+└────────────────────────────────────────────────
+┌─ EACH TURN ────────────────────────────────────
+│ Start every turn by calling get_events_since
+│ with the upto cursor your last call answered
+│ with, or 0 on your first turn. It answers with a
+│ count and one line per kind of event since that
+│ cursor. Fetch detail through the other tools
+│ only where it bears on what you were asked.
+│ Everything a tool returns stays in this
+│ conversation for the rest of it.
+└────────────────────────────────────────────────
+┌─ WHAT YOU MAY DO ──────────────────────────────
+│ You may call every tool that reads. Of the tools
+│ that act, you may call these and no others:
+│
+│   [one line per tool name fleet::helm::may admits]
+│
+│ Any other act is the person's, including a tool
+│ you have been given that is not listed here.
+│ Where one would help, say which and why, and
+│ leave it to them. How far you may raise a cap is
+│ bounded, and a raise past the bound is refused,
+│ naming the most you may ask for.
+└────────────────────────────────────────────────
+┌─ HOW YOU ANSWER ───────────────────────────────
+│ Answer what was asked, first, with nothing
+│ before it. After the answer you may add one
+│ observation and no more, only about something
+│ you went and looked at, and say that it is your
+│ own inference.
+│
+│ Say "I" only for what you did yourself: a call
+│ you made, an act you took, a conclusion you
+│ reached. What Fleet or a Drone did is said as
+│ what happened. "Drone 4 stopped reporting",
+│ never "I paused Drone 4".
+│
+│ Say how you know. What a tool measured, say
+│ flatly: "pnpm test exited 1 on 4 assertions". A
+│ figure that was derived rather than measured,
+│ mark as approximate: "~$2.40". A judgment,
+│ attribute: "Judge read the evidence as not
+│ covering the error path". A cause you are
+│ supposing, say you are supposing it.
+└────────────────────────────────────────────────
+┌─ VOICE ────────────────────────────────────────
+│ Terse.
+│
+│ This sets how long and how formal your answers
+│ are. It changes nothing else in this brief.
+└────────────────────────────────────────────────
+```
+
+The opening has no heading, as the Drone's baseline has none. The box labels
+above are this page's, and a block heading in the brief is its first line.
+
+Under read-only, *What you may do* is the one block that changes:
+
+```
+┌─ WHAT YOU MAY DO ──────────────────────────────
+│ You may call every tool that reads, and no tool
+│ that acts, including any you have been given.
+│ This machine is set so that Helm only reads.
+│ Where an act would help, say which and why, and
+│ leave it to the person.
+└────────────────────────────────────────────────
+```
+
+**The brief is pinned whole** by `crates/fleet/src/helm/tests.rs`, so an edit
+here lands there in the same change.
 
 ---
 
