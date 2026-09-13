@@ -18,7 +18,7 @@
 //!
 //! | What holds | What it does not reach |
 //! |---|---|
-//! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That anything wrote it. Scan, Proposal and Write are #39's |
+//! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That anything wrote it. Scan is #822's; Proposal and Write are #823's |
 //! | A proposal saying more than the file can hold is refused, every fault in one pass | That a proposal is ever read back before it is written |
 //! | A definition gating on `every_manifest_check` resolves against that repository's own Checks, and one naming Armada's by name is refused there | That any definition reaches that repository. Carrying one is #425's |
 //! | A Job created against it is held to that repository's Checks, prerequisites and all | That the Job's record says where its definition came from — #425 |
@@ -31,11 +31,11 @@
 //!
 //! | Step | What is not carried | Carried by |
 //! |---|---|---|
-//! | Locate | Pointing Armada at a repository it has not seen, by path or by clone. A Fleet reads the one repository it was started in | #39 |
-//! | Scan | Reading lockfiles, package scripts, CI config and workspace globs across every workspace in one pass, and writing nothing | #39 |
-//! | Pick | Each workspace ticked by how strong its evidence is, and a Check name its siblings declare marked where it is missing | #39 |
-//! | Proposal | Every line cites the file it came from, or says `convention` | #39 |
-//! | Write | One `armada.yml` per workspace, whatever the proposal was iterated to | #39 |
+//! | Locate | Pointing Armada at a repository it has not seen, by path or by clone. A Fleet reads the one repository it was started in | #821 |
+//! | Scan | Reading lockfiles, package scripts, CI config and workspace globs across every workspace in one pass, and writing nothing | #822 |
+//! | Pick | Each workspace ticked by how strong its evidence is, and a Check name its siblings declare marked where it is missing | #822 |
+//! | Proposal | Every line cites the file it came from, or says `convention` | #823 |
+//! | Write | One `armada.yml` per workspace, whatever the proposal was iterated to | #823 |
 //! | Verify | Setup and every Check run once on approval, on the sheet that wrote the file, writing nothing | #719 |
 //! | Fix | The failing Check's command corrected in its row, and only that Check run again | #721 |
 

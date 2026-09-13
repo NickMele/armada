@@ -119,7 +119,7 @@ A sheet over the picker, one workspace at a time, opened from a row and closed b
 
 ### Policy
 
-**A Policy band sits in the proposal with the Kit and Machine values shown and editable** — `auto_merge`, `review_gate`, `budget`, `dispatch_freeze`. Nothing in a repo corresponds to any of them, so every row reads *from Kit* or *from Machine* in sans rather than citing a file: the one band where absent evidence is the normal case.
+**A Policy band sits in the proposal with the Kit and Machine values shown and editable** — `auto_merge` and `review_gate`. Nothing in a repo corresponds to either, so every row reads *from Kit* or *from Machine* in sans rather than citing a file: the one band where absent evidence is the normal case.
 
 **Shown rather than applied silently**, unlike Skills and the allowlist, because these are decisions with consequences at merge time rather than defaults.
 
@@ -131,7 +131,9 @@ A sheet over the picker, one workspace at a time, opened from a row and closed b
 
 **An inherited value is an absent key.** Leaving a row at Kit's value writes nothing and the project keeps following Kit if Kit later changes; writing the same value explicitly pins it. Two identical-looking rows with two different futures, which is why the source column is not decoration.
 
-**Budget is the only row that can be wrong rather than merely different** — a cap below one Job's cost makes the workspace undispatchable. A warning for that is not drawn.
+**The budget caps are stated in one line, not offered as rows** — *Jobs here stop at $5 or your machine's turn cap; change these on the Manifest page.* Nothing is written. A cap is the one policy that can be wrong rather than merely different: below one Job's cost it makes the workspace undispatchable. At Setup no Job has run in this repository, so a control would ask for a guess with nothing to guess from, and a low one fails onboarding silently. The caps are edited on the Manifest surface, where past Jobs' costs exist to set them against — [Run and edit a Manifest](run-and-edit-a-manifest.md).
+
+**A dispatch freeze is not offered here.** It is specified — `manifest-dispatch-freeze` in `crates/config/settings.toml` — and nothing reads it yet, so `armada.yml` refuses the key.
 
 **Inheritance is applied silently and stated once, without controls.** One line names what came from Kit and is not written to this file. A default should be quiet, but a quiet default still has to be findable: a person who later hits an allowlist they never saw needs somewhere to have seen it, and that line is the somewhere. The Manifest surface is where it is changed.
 
@@ -279,7 +281,6 @@ Cheap and worth doing, because each is a file and so each is evidence: a Dockerf
 
 - **The compose refusals beyond an undeclared published port** — two services sharing a container-side port, an entry Armada cannot parse, and a container-side range. They are one class of error but differ in the fix, which is the part that matters, so one shared error row will not do.
 - **A compose override that appends rather than replaces.** Armada handles it in memory, so there may be nothing to show. Worth confirming rather than assuming.
-- **A warning for a budget cap below one Job's cost.**
 
 ## Open questions
 
