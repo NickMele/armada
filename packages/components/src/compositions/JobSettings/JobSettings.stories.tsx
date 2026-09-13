@@ -162,6 +162,27 @@ export const ARepositoryRow: Story = {
 };
 
 /**
+ * **A repository-wide always-allow, read-only.** #836's own case: a person
+ * always-allowed `gh issue view` from Job 7 while filing #834. It covers
+ * every job against this repository, not this one alone, so the row carries
+ * no Remove — that reaches every job at once and belongs to the Manifest
+ * screen instead.
+ */
+export const WithARepositoryAllow: Story = {
+  name: "A repository allow, read-only",
+  args: {
+    costCap: COST,
+    turnCap: TURNS,
+    models: MODELS,
+    model: null,
+    choices: CHOICES,
+    whenBlocked: "ask_me",
+    allowed: [],
+    repositoryAllowed: ["gh issue view"],
+  },
+};
+
+/**
  * **Every control off**, the reading not live or a change already out. The
  * raise buttons go with the rest, and one sentence says why rather than a panel
  * of controls that silently do nothing.

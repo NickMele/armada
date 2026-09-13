@@ -47,9 +47,10 @@ import { Alert, ManifestFile, RunPage, Tabs } from "@armada/components";
 
 import { said } from "./copy";
 import { useManifestRuns, type ManifestSlice } from "./checkout-runs";
+import { useRepositoryAllows, type RepositoryAllowsSlice } from "./manifest-allows";
 import type { ManifestEditing } from "./manifest-file";
 
-export type ManifestProps = ManifestSlice & {
+export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
   /**
    * The entry the command palette picked, or `null`.
    *
@@ -98,7 +99,12 @@ export function Manifest(props: ManifestProps) {
   );
 }
 
-function RunView({ sheet, slot }: ManifestProps & { slot: ReturnType<typeof useManifestRuns> }) {
+function RunView(props: ManifestProps & { slot: ReturnType<typeof useManifestRuns> }) {
+  const { sheet, slot } = props;
+  // Read beside the sheet rather than gated behind it: a repository-wide
+  // allow answers no question the Manifest file does, so a Manifest this
+  // Bridge could not read is no reason to withhold a list that came back.
+  const allows = useRepositoryAllows(props);
   if (sheet.state === "failed") {
     return (
       <Alert tone="escalated" title="This repository's Manifest could not be read">
@@ -113,7 +119,9 @@ function RunView({ sheet, slot }: ManifestProps & { slot: ReturnType<typeof useM
   if (sheet.state !== "read") {
     return <p className="text-fg-muted">Reading this repository's Manifest.</p>;
   }
-  return <RunPage {...slot} />;
+  return (
+    <RunPage {...slot} alwaysAllowed={allows.rows} onRemoveAlwaysAllowed={allows.onRemove} />
+  );
 }
 
 function FileView({ file }: { file: ManifestEditing["file"] }) {

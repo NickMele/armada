@@ -53,6 +53,8 @@ import {
   getCheckoutRunDiff,
   readManifestFile,
   saveManifestFile,
+  listRepositoryAllowedCommands,
+  removeRepositoryAllowedCommand,
   listRuns,
   listCheckoutRuns,
   undoRun,
@@ -574,6 +576,8 @@ export function App() {
                 onListRuns={listCheckoutRuns}
                 onGetRunOutput={getCheckoutRunOutput}
                 onGetRunDiff={getCheckoutRunDiff}
+                onListRepositoryAllowedCommands={listRepositoryAllowedCommands}
+                onRemoveRepositoryAllowedCommand={removeRepositoryAllowedCommand}
                 // The one call this surface shares with a Job's own sheet:
                 // `start_server` has taken an optional Job since it landed,
                 // and no Job means the main checkout.

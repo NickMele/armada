@@ -196,6 +196,7 @@ export function SettingsSheet({
         whenRefusedSaid={saidOf("refused")}
         allowed={whole.allowed_commands ?? []}
         allowedSaid={saidOf("allowed")}
+        repositoryAllowed={(whole.repository_allowed_commands ?? []).map((row) => row.run)}
         disabled={off}
         disabledNote={stale ? NOT_LIVE : acting ? SENDING : undefined}
         onWhenBlocked={(chose) => {

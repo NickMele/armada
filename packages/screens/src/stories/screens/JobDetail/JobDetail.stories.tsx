@@ -116,6 +116,17 @@ function runningWithSettings(): JobFixture {
           by: "human",
         },
       ],
+      // Fleet's own table, since protocol 13.5 — covers every job against
+      // this repository, so the panel draws it read-only. #836's own case:
+      // `gh issue view`, always-allowed from Job 7 while filing #834.
+      repository_allowed_commands: [
+        {
+          run: "gh issue view",
+          reach: "repository",
+          allowed_at: "2026-09-13T09:41:00Z",
+          by: "human",
+        },
+      ],
     }),
   };
 }
@@ -141,6 +152,12 @@ export const JobSettingsOpen: Story = {
     const panel = within(await canvas.findByRole("dialog", { name: "Job settings" }));
     await userEvent.click(panel.getByRole("radio", { name: "Ask me first" }));
     await expect(setWhenBlocked).toHaveBeenCalledWith(JOB_ID, "ask_me");
+
+    // The repository-wide row: read-only, and it carries no Remove — that
+    // reaches every job against this repository, which is the Manifest
+    // screen's act rather than this job's own settings.
+    await expect(panel.getByText("gh issue view")).toBeVisible();
+    await expect(panel.queryByRole("button", { name: "Remove gh issue view" })).toBeNull();
   },
 };
 

@@ -425,6 +425,11 @@ export const CHANNELS = {
   // write, and neither takes a path: Fleet names the file.
   readManifestFile: "bridge:read-manifest-file",
   saveManifestFile: "bridge:save-manifest-file",
+  // A repository-wide always-allow, kept in Fleet's own table since 13.5 —
+  // #836. Two entries, a read and a remove, on `readManifestFile`'s terms:
+  // Fleet names the repository, so neither takes a path or an id.
+  listRepositoryAllowedCommands: "bridge:list-repository-allowed-commands",
+  removeRepositoryAllowedCommand: "bridge:remove-repository-allowed-command",
   startServer: "bridge:start-server",
   stopServer: "bridge:stop-server",
   openServerLink: "bridge:open-server-link",

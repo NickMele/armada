@@ -105,6 +105,35 @@ export const AtRest: Story = {
   args: { ...EDITED, groups: GROUPS, onSelect: fn(), onRun: fn() },
 };
 
+/**
+ * **A repository-wide always-allow, beside the Commands it grew a Job's own
+ * row of.** #836's own case: a person always-allowed `gh issue view` while
+ * filing #834 from Job 7, and it is Fleet's own table now — no drone reads
+ * `armada.yml` for it and no commit sits behind it. Removing it here is the
+ * one place that reaches every job in the repository at once; the Job
+ * settings panel shows the same row read-only.
+ */
+export const WithAnAlwaysAllowedCommand: Story = {
+  args: {
+    ...EDITED,
+    groups: GROUPS,
+    onSelect: fn(),
+    onRun: fn(),
+    alwaysAllowed: [{ run: "gh issue view" }],
+    onRemoveAlwaysAllowed: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByText("gh issue view")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Remove gh issue view" }));
+    await expect(args.onRemoveAlwaysAllowed).toHaveBeenCalledWith("gh issue view");
+  },
+};
+
+/** Read, and this repository has always-allowed nothing yet. */
+export const NothingAlwaysAllowed: Story = {
+  args: { ...EDITED, groups: GROUPS, onSelect: fn(), onRun: fn(), alwaysAllowed: [] },
+};
+
 // Cut mid-build rather than at a result: a run in flight has not finished, and
 // a streamed reading already showing `test result: ok` would say otherwise.
 const RUNNING_ROWS: ConsoleRow[] = [

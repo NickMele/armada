@@ -10,6 +10,7 @@ import { connectedTo, PROTOCOL_VERSION, type Connection } from "@armada/protocol
 import type {
   CheckoutRunDiff,
   CheckoutRunDiffRead,
+  AllowedCommandRow,
   CheckoutRunFollowed,
   CheckoutRunList,
   CheckoutRunSheetRead,
@@ -21,6 +22,7 @@ import type {
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
 import type { ManifestSaveAnswer, ManifestView } from "../../../editing";
+import type { RepositoryAllowedCommandsRead } from "../../../manifest-allows";
 import { useManifestEditing } from "../../../manifest-file";
 import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";
 
@@ -58,6 +60,18 @@ checks:
 export const PULLED_TEXT = MANIFEST_TEXT.replace("base: main", "base: main\n\nauto_merge: never");
 
 /**
+ * A repository-wide always-allow, as `get_repository_allowed_commands`
+ * answers it — #836's own case: `gh issue view`, always-allowed from Job 7
+ * while filing #834.
+ */
+export const GH_ISSUE_VIEW: AllowedCommandRow = {
+  run: "gh issue view",
+  reach: "repository",
+  allowed_at: "2026-09-13T09:41:00Z",
+  by: "person",
+};
+
+/**
  * What a save comes to, played the way Fleet plays it: the write answers,
  * then the watch re-reads and publishes. `refused` is a correction Fleet would
  * not adopt; `moved` is a pull that landed under the edit.
@@ -72,6 +86,7 @@ export function ManifestFrom({
   sheet,
   followed = { state: "none" },
   runs = { runs: [], unreadable: [] },
+  alwaysAllowed = [],
   now = NOW,
   view = "run",
   save = "took",
@@ -81,6 +96,8 @@ export function ManifestFrom({
   followed?: CheckoutRunFollowed;
   /** What `list_checkout_runs` answers — *Earlier runs*, and what Undo acts on. */
   runs?: CheckoutRunList;
+  /** What `get_repository_allowed_commands` answers, oldest first. */
+  alwaysAllowed?: AllowedCommandRow[];
   now?: number;
   /** Which view the surface opens on. */
   view?: ManifestView;
@@ -89,6 +106,17 @@ export function ManifestFrom({
   /** What `get_checkout_run_diff` answers when *Open the diff* is pressed. Absent: not connected. */
   diff?: CheckoutRunDiff;
 }) {
+  // Fleet's own table, faked just far enough to answer both routes: a read
+  // returns what is held, and a remove takes a row out and answers the rest.
+  const [allowed, setAllowed] = useState(alwaysAllowed);
+  const onListRepositoryAllowedCommands = (): Promise<RepositoryAllowedCommandsRead> =>
+    Promise.resolve({ ok: true, commands: { commands: allowed } });
+  const onRemoveRepositoryAllowedCommand = (run: string): Promise<RepositoryAllowedCommandsRead> => {
+    const left = allowed.filter((row) => row.run !== run);
+    setAllowed(left);
+    return Promise.resolve({ ok: true, commands: { commands: left } });
+  };
+
   // A disk and a watch, faked just far enough to be Fleet's: a read answers
   // what is on disk, a save compares against it, and a reading follows.
   const disk = useRef(MANIFEST_TEXT);
@@ -203,6 +231,8 @@ export function ManifestFrom({
                   : { ok: true, diff },
               )
             }
+            onListRepositoryAllowedCommands={onListRepositoryAllowedCommands}
+            onRemoveRepositoryAllowedCommand={onRemoveRepositoryAllowedCommand}
             onStartServer={nothingHappens}
             onStopServer={nothingHappens}
             onOpenServerLink={() => Promise.resolve({ ok: true })}
