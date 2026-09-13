@@ -99,7 +99,11 @@ export const OutOfRange: Story = {
   },
 };
 
-/** Fleet's own refusal, read exactly, where the field's own bound did not catch it. */
+/**
+ * Fleet's own refusal, read exactly, where the field's own bound did not catch
+ * it: a Fleet whose range is narrower than this Bridge's. The field keeps the
+ * value still in force, and the wording is `ipc::Within`'s.
+ */
 export const RefusedByFleet: Story = {
   name: "Refused by Fleet",
   args: {
@@ -111,7 +115,7 @@ export const RefusedByFleet: Story = {
       max: 50,
       unit: "%",
       onSave: fn(),
-      refused: "Memory to keep free has to leave room for at least one drone.",
+      refused: "memory_spare_percent: 45 is outside 0 to 40",
     },
     diskFloorGib: { value: 10, shipped: 10, min: 0, max: 100, unit: "GiB", onSave: fn() },
   },

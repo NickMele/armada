@@ -72,8 +72,8 @@ export function FleetSettings({
       <div className="armada-fleet-settings">
         <div className="armada-fleet-settings__opening">
           <p className="armada-fleet-settings__lead">
-            Every drone Fleet starts, on every job. A change is read the next time a job is ready
-            to start — nothing already running stops, and none of it moves.
+            These apply to every job. A change counts from the next time a job is ready to start,
+            and nothing already running stops.
           </p>
           {disabled && disabledNote !== undefined ? (
             <p className="armada-fleet-settings__means">{disabledNote}</p>
