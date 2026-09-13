@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { sheet } from "../Manifest/Manifest";
 import { endShownIn, pressable, scrollerOf } from "../Manifest/scrolled";
@@ -275,5 +275,27 @@ export const ScrolledToTheEnd: Story = {
     const save = canvas.getByRole("button", { name: "Save" });
     await expect(save).toBeEnabled();
     await expect(pressable(save)).toBe(true);
+  },
+};
+
+/** What the Freeze story's Save sends. A module's spy, cleared by the play that reads it. */
+const sent = fn();
+
+/** The switch turned on and saved: one `set_freeze` goes out, and the page says the repository is frozen. */
+export const FreezeAndSave: Story = {
+  name: "Freeze, and save",
+  args: { ...TheForms.args, onEdits: sent },
+  play: async ({ canvasElement }) => {
+    sent.mockClear();
+    const canvas = within(canvasElement);
+    const freeze = within(await canvas.findByRole("region", { name: "Freeze" }));
+    await expect(freeze.getByRole("switch", { name: /Freeze this repository/ })).not.toBeChecked();
+    await expect(canvas.queryByText("This repository is frozen")).toBeNull();
+    await userEvent.click(freeze.getByRole("switch", { name: /Freeze this repository/ }));
+    await expect(canvas.getByText("Not saved.")).toBeVisible();
+    await saved(canvas);
+    await expect(sent).toHaveBeenCalledWith(expect.objectContaining({ edits: [{ edit: "set_freeze", freeze: true }] }));
+    await expect(await canvas.findByText("This repository is frozen")).toBeVisible();
+    await expect(freeze.getByRole("switch", { name: /Freeze this repository/ })).toBeChecked();
   },
 };

@@ -34,7 +34,8 @@ export type ManifestForming =
   | { state: "failed"; saying: string }
   /** The file does not load, so there is no form to draw; the file view corrects it. */
   | { state: "unloadable"; path: string }
-  | { state: "open"; props: ManifestFormProps };
+  /** `frozen` is what the file declares, not the draft: the page says what is in force. */
+  | { state: "open"; props: ManifestFormProps; frozen: boolean };
 
 type Refused = NonNullable<ManifestFormProps["refused"]>;
 
@@ -190,6 +191,7 @@ export function useManifestForm({
       : `Saved ${saved}.`;
   return {
     state: "open",
+    frozen: declared.freeze === true,
     props: {
       path: held.path,
       ...(declared.id === undefined || declared.version === undefined

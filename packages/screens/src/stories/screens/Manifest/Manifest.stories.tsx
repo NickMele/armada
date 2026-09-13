@@ -454,3 +454,19 @@ export const AVerifyWithAFailure: Story = {
     await expect(verify.getByRole("button", { name: "Verify" })).toBeEnabled();
   },
 };
+
+/** A repository left frozen: the page says so on every view, and the notice leads to the switch that lifts it. */
+export const AFrozenRepository: Story = {
+  name: "A frozen repository",
+  args: { sheet: { state: "read", sheet: sheet() }, frozen: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("This repository is frozen")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Unfreeze on the form" }));
+    await expect(canvas.getByRole("tab", { name: "Edit" })).toHaveAttribute("aria-selected", "true");
+    const freeze = within(await canvas.findByRole("region", { name: "Freeze" }));
+    await expect(freeze.getByRole("switch", { name: /Freeze this repository/ })).toBeChecked();
+    await expect(canvas.getByText("This repository is frozen")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Unfreeze on the form" })).toBeNull();
+  },
+};

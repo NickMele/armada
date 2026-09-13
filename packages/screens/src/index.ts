@@ -25,6 +25,8 @@ export * from "./Redirect";
 export * from "./Report";
 export * from "./Reports";
 export * from "./Row";
+export * from "./Taken";
+export * from "./freeze";
 export * from "./Sheets";
 export * from "./Worktrees";
 export * from "./FleetSettings";

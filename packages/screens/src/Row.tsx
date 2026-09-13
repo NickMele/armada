@@ -85,6 +85,7 @@ import type { WorkflowSummary } from "@armada/protocol";
 import { taskBarSegmentsOf, taskFigureOf } from "./board";
 import { absoluteOf, span } from "./duration";
 import { activityFor } from "./frozen";
+import { freezeLineOf } from "./freeze";
 import { ROW_VERBS, verbOf } from "./keys";
 import { readingOf } from "./reading";
 
@@ -182,6 +183,7 @@ export function Row({
   );
   const workflowValue =
     workflow === undefined ? job.workflow_id : `${workflow.name}, ${steps.length} steps`;
+  const freeze = freezeLineOf(job);
   const elapsedNow = elapsedOf(job, now);
   const createdAt = absoluteOf(job.created_at) ?? undefined;
 
@@ -215,6 +217,14 @@ export function Row({
           <span className="armada-row-step">
             {job.current_step_id === undefined ? "Not started" : job.current_step_id}
           </span>
+          {/* Beside the step and not in the badge, which stays the registry's word. */}
+          {freeze === null ? null : (
+            <span>
+              {` · ${freeze.lead} `}
+              <span className="mono">{freeze.names}</span>
+              {` ${freeze.tail}`}
+            </span>
+          )}
         </>
       ),
     },

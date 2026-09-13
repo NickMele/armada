@@ -38,6 +38,7 @@ import type { JobDetailField } from "@armada/components";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { span } from "./duration";
+import { freezeLineOf } from "./freeze";
 import { leading } from "./reading";
 import { LANDED } from "./Row";
 
@@ -59,6 +60,7 @@ export function factsOf(
 ): JobDetailField[] {
   const address = whole?.delivery?.pull_request;
   return [
+    ...freezeFact(job),
     ...workflowFact(job, workflow, whole?.workflow_source),
     ...branchFact(job),
     ...pullRequestFact(address),
@@ -201,6 +203,12 @@ function landedFact(whole: JobWhole | null, linked: boolean): JobDetailField[] {
   const landed = LANDED[whole?.delivery?.landed ?? ""];
   if (landed === undefined) return [];
   return linked ? [{ label: landed, continues: true }] : [{ label: leading(landed) }];
+}
+
+/** The freeze holding this Job, first: it is why nothing else on the line is moving. */
+function freezeFact(job: JobSummary): JobDetailField[] {
+  const line = freezeLineOf(job);
+  return line === null ? [] : [{ label: line.lead, value: line.names, mono: true, suffix: line.tail }];
 }
 
 /** How long the Job has been alive, from `created_at`. */

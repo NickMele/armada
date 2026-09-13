@@ -197,7 +197,7 @@ export function App() {
   // Two of them end somewhere this file owns, so both are answered to rather
   // than reached for: a redispatch opens its replacement, and a re-read
   // publishes what came back.
-  const commands = useCommands({ onOpen: setOpenJob, onRead: setState });
+  const commands = useCommands({ onOpen: setOpenJob, onRead: setState, jobs: state.jobs });
   // Whether the window is at `--window-floor`, `JobDetail`'s own reading —
   // Fleet settings is the same trailing layer and takes it the same way.
   const floor = useAtFloor();
@@ -501,6 +501,7 @@ export function App() {
             commandFailure={commandFailure}
             outcome={commands.outcome}
             onOutcome={commands.setOutcome}
+            taken={commands.taken}
             located={<LocatedNotice locating={locate} repositories={repositories} />}
           />
 

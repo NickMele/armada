@@ -47,7 +47,9 @@ import type {
   WhenBlocked,
   WhenRefused,
 } from "@armada/protocol";
-import type { Answered, ConfirmableAct } from "@armada/screens";
+import type { JobSummary } from "@armada/protocol";
+import type { Answered, ConfirmableAct, Taken, TakenAct } from "@armada/screens";
+import { takenNotice, takenStands } from "@armada/screens";
 import { proposeRequest } from "./dispatch";
 import type { Proposing } from "./dispatch";
 
@@ -156,6 +158,8 @@ export type Sending = {
   onOpen: (jobId: string) => void;
   /** Where a re-read's answer goes: the one place published state is held. */
   onRead: (state: BridgeState) => void;
+  /** The rows as drawn, so a press taken at a frozen repository can say it waits. */
+  jobs: readonly JobSummary[];
 };
 
 /**
@@ -167,6 +171,16 @@ export type Sending = {
  */
 export function useCommands(sending: Sending) {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // A press a freeze took and holds. Its own state: `outcome` draws refusals, and this is not one.
+  const [taken, setTaken] = useState<Taken | null>(null);
+  const rowOf = (jobId: string) => sending.jobs.find((job) => job.id === jobId);
+  useEffect(() => {
+    if (taken !== null && !takenStands(taken, rowOf(taken.jobId))) setTaken(null);
+  }, [sending.jobs, taken]);
+  function took(jobId: string, act: TakenAct, answer: Outcome): void {
+    if (answer.ok) setTaken({ jobId, act, from: rowOf(jobId)?.status });
+  }
+  const notice = taken === null ? null : takenNotice(taken, rowOf(taken.jobId));
   // Which Job an act is in flight on. **Nothing destructive happens on one
   // press** — the dialog that collects the confirmation is the render's.
   const [acting, setActing] = useState<string | null>(null);
@@ -224,7 +238,9 @@ export function useCommands(sending: Sending) {
   }
 
   async function approve(jobId: string): Promise<void> {
-    setOutcome(await window.armada.approveDispatch(jobId));
+    const answer = await window.armada.approveDispatch(jobId);
+    setOutcome(answer);
+    took(jobId, "approve", answer);
   }
 
   /**
@@ -296,6 +312,7 @@ export function useCommands(sending: Sending) {
                   ? await window.armada.forgetJob(jobId)
                   : await window.armada.killJob(jobId);
       setOutcome(answer);
+      if (act === "restart_step") took(jobId, "restart", answer);
       if (answer.ok && answer.reclaimed !== undefined) setGivenBack([answer.reclaimed]);
       if (answer.ok && answer.jobId !== undefined) sending.onOpen(answer.jobId);
     } finally {
@@ -535,15 +552,16 @@ export function useCommands(sending: Sending) {
   ): Promise<void> {
     setDeciding(jobId);
     try {
-      setOutcome(
+      const answer =
         what === "merge"
           ? await window.armada.mergePullRequest(jobId)
           : what === "approve"
             ? await window.armada.approveReview(jobId)
             : what === "changes"
               ? await window.armada.requestChanges(jobId, note)
-              : await window.armada.rejectWork(jobId),
-      );
+              : await window.armada.rejectWork(jobId);
+      setOutcome(answer);
+      if (what === "merge" || what === "approve") took(jobId, what, answer);
     } finally {
       setDeciding(null);
     }
@@ -613,6 +631,7 @@ export function useCommands(sending: Sending) {
   return {
     outcome,
     setOutcome,
+    taken: notice === null ? null : { ...notice, onDismiss: () => setTaken(null) },
     acting,
     deciding,
     takeUpRemarks,

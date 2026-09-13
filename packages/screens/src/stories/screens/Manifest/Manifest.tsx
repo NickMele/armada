@@ -85,6 +85,7 @@ export const DECLARED: ManifestDeclared = {
     { name: "gate", command: { run: "cargo xtask verify-foundations", destructive: false } },
   ],
   ports: [],
+  freeze: false,
   auto_merge: { written: "never", offered: ["never", "checks-pass", "always"] },
   review_gate: { written: "human_always", offered: ["human_always", "auto_if_judge_passes"] },
   base: "main",
@@ -224,6 +225,8 @@ export function ManifestFrom({
   drift = DRIFT_CURRENT,
   edit = "took",
   spend = NO_SPEND,
+  frozen = false,
+  onEdits,
 }: {
   /** `GET /manifest/drift`. Every line current, unless a story says otherwise. */
   drift?: ManifestDriftRead;
@@ -244,6 +247,10 @@ export function ManifestFrom({
   edit?: EditGoesTo;
   /** What `get_manifest_spend` answers. */
   spend?: ManifestSpend;
+  /** Whether the file opens declaring `freeze: true`. */
+  frozen?: boolean;
+  /** What a Save on the forms sends, for a play to read. */
+  onEdits?: (body: EditManifest) => void;
 }) {
   // Fleet's own table, faked just far enough to answer both routes: a read
   // returns what is held, and a remove takes a row out and answers the rest.
@@ -259,7 +266,7 @@ export function ManifestFrom({
   // A disk and a watch, faked just far enough to be Fleet's: a read answers
   // what is on disk, a save compares against it, and a reading follows.
   const disk = useRef(MANIFEST_TEXT);
-  const declared = useRef(DECLARED);
+  const declared = useRef(frozen ? { ...DECLARED, freeze: true } : DECLARED);
   const [reading, setReading] = useState<ManifestReading | null>(null);
   const readFile = () =>
     Promise.resolve({
@@ -271,6 +278,7 @@ export function ManifestFrom({
     reading,
     onReadFile: readFile,
     onEditManifest: (body: EditManifest): Promise<ManifestEditAnswer> => {
+      onEdits?.(body);
       if (edit === "refused") {
         return Promise.resolve({
           state: "refused",

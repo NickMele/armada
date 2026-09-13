@@ -105,6 +105,18 @@ describe("a draft", () => {
     ]);
   });
 
+  it("sends a freeze only where the switch moved, and false to lift one", () => {
+    const draft = draftOf(DECLARED);
+    expect(draft.freeze).toBe(false);
+    draft.freeze = true;
+    expect(editsOf(DECLARED, draft)).toEqual([{ edit: "set_freeze", freeze: true }]);
+    const frozen = { ...DECLARED, freeze: true };
+    const lifted = draftOf(frozen);
+    expect(editsOf(frozen, lifted)).toEqual([]);
+    lifted.freeze = false;
+    expect(editsOf(frozen, lifted)).toEqual([{ edit: "set_freeze", freeze: false }]);
+  });
+
   it("sends a port, a policy word and both caps in the file's units", () => {
     const draft = draftOf(DECLARED);
     draft.ports[0]!.container = "";

@@ -133,8 +133,32 @@ export function Manifest(props: ManifestProps) {
     return <Alert tone="neutral" title={NOTHING_SERVED.title}>{NOTHING_SERVED.next}</Alert>;
   }
 
+  const onForm = editing.view === "form" && !props.settingUp;
   return (
     <div className="armada-screen__stack">
+      {/* Above every view, so a freeze left on is seen wherever the page opens. */}
+      {props.form.state !== "open" || !props.form.frozen || onlySetup ? null : (
+        <Alert
+          tone="neutral"
+          title="This repository is frozen"
+          action={
+            onForm ? undefined : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  props.onSettingUp?.(false);
+                  editing.onView("form");
+                }}
+              >
+                Unfreeze on the form
+              </Button>
+            )
+          }
+        >
+          Nothing lands here until it is unfrozen. New work and a running Job's next step wait, and nothing merges.
+        </Alert>
+      )}
       {/* Above both views, so the file stays reachable when the run sheet is
           what would not read. */}
       <Tabs

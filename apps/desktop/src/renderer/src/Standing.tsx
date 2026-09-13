@@ -23,7 +23,7 @@ import type { ManifestReading, Outcome, WorktreeReclaimed } from "@armada/protoc
 import type { BridgeIdentity } from "@armada/protocol";
 import type { Failure, Uncaught } from "@armada/shell";
 import { FailureBlock, uncaughtFailure } from "@armada/shell";
-import { reclaimed, said } from "@armada/screens";
+import { reclaimed, said, TakenNotice } from "@armada/screens";
 
 export type StandingProps = {
   /** Fleet, where the one connection is not one. */
@@ -54,6 +54,8 @@ export type StandingProps = {
   commandFailure: Failure | null;
   outcome: Outcome | null;
   onOutcome: (outcome: Outcome | null) => void;
+  /** A press a freeze took and holds, while it holds. */
+  taken: { title: string; body: string; onDismiss: () => void } | null;
   /** A clone that finished after its dialog closed — `LocatedNotice`, held by Locate. */
   located?: ReactNode;
 };
@@ -76,6 +78,7 @@ export function Standing({
   commandFailure,
   outcome,
   onOutcome,
+  taken,
   located,
 }: StandingProps) {
   return (
@@ -150,6 +153,8 @@ export function Standing({
           ))}
         </Alert>
       )}
+
+      {taken === null ? null : <TakenNotice {...taken} />}
 
       {/* A refusal Fleet named carries a `run_id`, its `fields` and its
           `chain`, so it is drawn whole rather than as one line of copy — its
