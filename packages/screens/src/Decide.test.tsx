@@ -373,13 +373,6 @@ test("merge is drawn and disabled while the branch conflicts, and the other thre
 
   await userEvent.click(page.getByRole("button", { name: "Reject the work" }));
 
-  // `#840`: clicking straight into a chained `dialog > button` locator makes
-  // the click itself carry the wait for the dialog to mount — every
-  // actionability check that click retries is a round trip to the browser,
-  // and under load those round trips lose the race against the test's own
-  // timeout before the dialog ever appears. Waiting on the dialog first,
-  // the way "reject still asks, and merging is not what it asks about" above
-  // already does, resolves on the mount rather than on the click.
   await expect.element(page.getByRole("dialog")).toBeVisible();
   await userEvent.click(page.getByRole("dialog").getByRole("button", { name: "Reject the work" }));
   expect(rejected).toEqual([JOB.id]);
