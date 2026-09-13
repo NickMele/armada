@@ -47,6 +47,8 @@ mod reclaimed;
 /// A person's run: the two kinds it streams under, and the record it leaves.
 mod rehearsal;
 mod reports;
+/// A repository to clone, as Bridge spells it.
+mod repositories;
 /// What a reviewing person is handed, and the note they send back.
 mod reviewing;
 mod servers;

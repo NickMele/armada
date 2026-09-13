@@ -1,5 +1,6 @@
-//! The repositories one Fleet serves, and adding one by folder —
-//! `list_repositories` and `add_repository` in `crates/ipc/operations.toml`.
+//! The repositories one Fleet serves, and adding one by folder or by URL —
+//! `list_repositories`, `add_repository` and `clone_repository` in
+//! `crates/ipc/operations.toml`.
 //!
 //! **A repository is listed whether or not it has a Manifest yet.** Setup
 //! starts from a folder nobody wrote an `armada.yml` for, so `manifest` is
@@ -16,6 +17,16 @@ pub struct AddRepository {
     /// Absolute. Fleet resolves it before comparing, so a symlink to a served
     /// repository is refused as that repository.
     pub path: String,
+}
+
+/// A repository to clone, and the folder a person picked to clone it under.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloneRepository {
+    /// What `git clone` takes, read with the credentials git already has.
+    pub url: String,
+    /// Absolute, and already there. The clone lands in a new folder under it,
+    /// named from the URL.
+    pub parent: String,
 }
 
 /// One repository Fleet serves.

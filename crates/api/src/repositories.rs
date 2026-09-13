@@ -4,7 +4,7 @@ use axum::body::Bytes;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Response;
-use ipc::AddRepository;
+use ipc::{AddRepository, CloneRepository};
 
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::{Commands, Queries};
@@ -28,6 +28,21 @@ pub(crate) async fn add_repository<D: Commands>(
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served.daemon().add_repository(asked).await {
+        Ok(added) => answer(StatusCode::CREATED, &added, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// 201: cloned and served when this answers, which may be minutes.
+pub(crate) async fn clone_repository<D: Commands>(
+    State(served): State<Served<D>>,
+    body: Bytes,
+) -> Response {
+    let asked: CloneRepository = match ipc::decode("a repository to clone", &body) {
+        Ok(asked) => asked,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.shared().clone_repository(asked).await {
         Ok(added) => answer(StatusCode::CREATED, &added, served.run_id()),
         Err(refusal) => refused(refusal),
     }

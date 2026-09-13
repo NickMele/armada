@@ -1,5 +1,5 @@
 //! The repositories one Fleet serves: the one it was started in, first, and
-//! every one a person added by folder since.
+//! every one a person added by folder, or cloned from a URL, since.
 //!
 //! **A Job reaches its repository through `owner_manifest_id`**, so two
 //! repositories are never allowed to hold one Manifest id — [`Repositories::add`]
@@ -18,6 +18,9 @@ use config::{Manifest, ResolvedWorkflow};
 use core_model::WorkflowId;
 
 mod adding;
+mod cloning;
+
+pub use cloning::{folder_named_by, CLONE_BUDGET};
 
 /// A repository's `armada.yml` and the workflows resolved against it.
 #[derive(Clone, Debug)]
@@ -229,17 +232,19 @@ impl std::fmt::Display for NotAdded {
     }
 }
 
-/// Every repository one Fleet serves, in the order they were added.
-pub struct Repositories(RwLock<Vec<Arc<Repository>>>);
+/// Every repository one Fleet serves, in the order they were added, and the
+/// folders a clone is writing into.
+pub struct Repositories(RwLock<Vec<Arc<Repository>>>, cloning::Cloning);
 
 impl Repositories {
     /// The repository Fleet was started in, which always has a Manifest.
     pub fn starting_in(root: String, records_root: String, set_up: SetUp) -> Repositories {
-        Repositories(RwLock::new(vec![Repository::of(
-            root,
-            records_root,
-            Some(set_up),
-        )]))
+        let first = Repository::of(root, records_root, Some(set_up));
+        Repositories(RwLock::new(vec![first]), cloning::Cloning::default())
+    }
+
+    fn cloning(&self) -> &cloning::Cloning {
+        &self.1
     }
 
     fn every_held(&self) -> std::sync::RwLockReadGuard<'_, Vec<Arc<Repository>>> {

@@ -248,6 +248,18 @@ impl Commands for FakeDaemon {
         })
     }
 
+    /// Clones nothing: served under `parent`, at the folder a URL of `shop` names.
+    async fn clone_repository(
+        self: std::sync::Arc<Self>,
+        asked: ipc::CloneRepository,
+    ) -> Result<ipc::RepositorySummary, Refusal> {
+        Ok(ipc::RepositorySummary {
+            root: format!("{}/shop", asked.parent),
+            records_root: String::from("/records"),
+            manifest: None,
+        })
+    }
+
     async fn remove_repository_allowed_command(
         &self,
         removing: ipc::RemoveRepositoryAllowedCommand,

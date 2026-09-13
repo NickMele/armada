@@ -30,9 +30,9 @@ use std::sync::Mutex;
 
 use adapter_traits::{
     Base, BaseCheckout, BaseOnTheRemote, BaseSpec, BroughtUpToDate, Change, CommitTime, Committed,
-    Delivery, KeptCurrent, Landing, Mergeable, Merged, NotDelivered, NotMerged, Opened, Pushed,
-    Remark, RepositoryStanding, Review, Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree,
-    WorktreeSpec,
+    Delivery, KeptCurrent, Landing, Mergeable, Merged, NotCloned, NotDelivered, NotMerged, Opened,
+    Pushed, Remark, RepositoryStanding, Review, Standing, UnderReview, Vcs, WhatBecameOfIt,
+    Worktree, WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -832,6 +832,21 @@ impl Vcs for FakeVcs {
     ) -> Result<Committed, Self::CommitError> {
         let paths = paths.iter().map(|path| path.to_string()).collect();
         self.commit(worktree, CommitScope::Paths(paths), message, at)
+    }
+
+    /// Clones nothing; [`FakeVcs::refuse_next`] stands in for git refusing.
+    fn clone_repository(
+        &self,
+        _url: &str,
+        _destination: &str,
+        _within: std::time::Duration,
+    ) -> Result<(), NotCloned> {
+        match self.refuse_next.lock().expect("not poisoned").take() {
+            Some(standing_in_for) => Err(NotCloned::Refused {
+                said: standing_in_for.to_string(),
+            }),
+            None => Ok(()),
+        }
     }
 }
 

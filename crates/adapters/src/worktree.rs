@@ -108,6 +108,15 @@ impl Vcs for GitVcs {
     ) -> Result<Committed, Self::CommitError> {
         crate::commit::commit_paths(worktree, paths, message, at)
     }
+
+    fn clone_repository(
+        &self,
+        url: &str,
+        destination: &str,
+        within: std::time::Duration,
+    ) -> Result<(), adapter_traits::NotCloned> {
+        crate::cloning::clone_repository(url, destination, within)
+    }
 }
 
 /// **The pre-flight v1 learned to write.**

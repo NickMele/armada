@@ -34,6 +34,7 @@ mod capacity;
 mod checking;
 mod checkout_runs;
 mod checks;
+mod cloning;
 mod concurrency;
 mod conflict_resolution;
 mod converging;
