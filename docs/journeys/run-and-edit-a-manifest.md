@@ -144,6 +144,9 @@ Each run writes its log under `./.armada` like every other ad-hoc run here, with
 > **Rule.** Editing shows forms by default — one section each for Checks, Commands, allowlist, budget and freeze — with the raw file behind a toggle.
 > Why: those are the parts of a Manifest with known shapes and enumerated values.
 
+> **Rule.** The budget section edits both caps — dollars and turns per Job — and warns where a cap is below what this repository's past Jobs have cost.
+> Why: a cap below one Job's cost makes the workspace undispatchable, and this is the surface where past Jobs exist to set it against. Setup states the inherited caps and offers no control, because no Job has run there yet.
+
 > **Rule.** The form expresses everything the schema has, so an edit made in the file always round-trips back into the form and nothing can be dropped.
 > Why: the file view is there for people who would rather read the file than the form, not for what the form cannot reach.
 
