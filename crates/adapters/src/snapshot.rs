@@ -25,6 +25,9 @@ pub const PREFIX: &str = "refs/armada/rehearsals/";
 /// one. A bound on a read made every time the run sheet opens.
 const WALKED: usize = 10_000;
 
+/// The message on the commit a settled snapshot names.
+const AFTER: &str = "after a run";
+
 static SCRATCH: AtomicU64 = AtomicU64::new(0);
 
 /// The tree before a run, held until the run ends.
@@ -58,6 +61,9 @@ pub enum SnapshotError {
     },
     /// The name is not one this module wrote.
     NoSuchSnapshot { reference: String },
+    /// The ref still names the tree before a run that has not ended, whose
+    /// parent is HEAD — so a patch from it would be the worktree against HEAD.
+    Unsettled { reference: String },
 }
 
 /// Why [`undo`] put nothing back.
@@ -112,14 +118,7 @@ impl Snapshot {
         let before = repo
             .find_commit(self.before)
             .map_err(|cause| git(worktree, "reading the snapshot back", cause))?;
-        let after = commit_over(
-            &repo,
-            worktree,
-            tree,
-            Some(&before),
-            "after a run",
-            at_seconds,
-        )?;
+        let after = commit_over(&repo, worktree, tree, Some(&before), AFTER, at_seconds)?;
         repo.reference(&self.reference, after, true, "a run's snapshot, settled")
             .map_err(|cause| git(worktree, "keeping the snapshot", cause))?;
         let changed = between(&repo, worktree, &before, after)?;
@@ -128,6 +127,44 @@ impl Snapshot {
             changed,
         })
     }
+}
+
+/// What one run changed, as git renders it: the paths and the patch, from one
+/// reading so the two cannot disagree.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunPatch {
+    pub changed: Vec<ChangedFile>,
+    pub text: String,
+}
+
+/// The tree taken before a run against the tree taken after it.
+///
+/// **Both trees are the snapshot's**, so neither what the worktree held before
+/// the run nor anything edited since is in it. A read: nothing is written.
+pub fn patch(worktree: &Path, reference: &str) -> Result<RunPatch, SnapshotError> {
+    let repo = open(worktree)?;
+    let after = settled_commit(&repo, reference)?;
+    if after.message() != Some(AFTER) {
+        return Err(SnapshotError::Unsettled {
+            reference: reference.to_string(),
+        });
+    }
+    let before = after
+        .parent(0)
+        .map_err(|cause| git(worktree, "reading the snapshot back", cause))?;
+    let diff = diffed(&repo, worktree, &before, after.id())?;
+    let changed = deltas(&diff);
+    // `WorkProduct::patch`'s rendering, so a run's patch and a Job's read alike.
+    let mut text = String::new();
+    diff.print(git2::DiffFormat::Patch, |_, _, line| {
+        if matches!(line.origin(), '+' | '-' | ' ') {
+            text.push(line.origin());
+        }
+        text.push_str(&String::from_utf8_lossy(line.content()));
+        true
+    })
+    .map_err(|cause| git(worktree, "rendering the run's patch", cause))?;
+    Ok(RunPatch { changed, text })
 }
 
 /// Put back what one run changed, from the tree taken before it.
@@ -324,6 +361,15 @@ fn between(
     before: &Commit<'_>,
     after: Oid,
 ) -> Result<Vec<ChangedFile>, SnapshotError> {
+    diffed(repo, worktree, before, after).map(|diff| deltas(&diff))
+}
+
+fn diffed<'r>(
+    repo: &'r Repository,
+    worktree: &Path,
+    before: &Commit<'_>,
+    after: Oid,
+) -> Result<git2::Diff<'r>, SnapshotError> {
     let reading = |cause| git(worktree, "comparing the two trees", cause);
     let old = before.tree().map_err(reading)?;
     let new = repo
@@ -332,11 +378,12 @@ fn between(
         .map_err(reading)?;
     let mut options = DiffOptions::new();
     options.include_typechange(true);
-    let diff = repo
-        .diff_tree_to_tree(Some(&old), Some(&new), Some(&mut options))
-        .map_err(reading)?;
-    Ok(diff
-        .deltas()
+    repo.diff_tree_to_tree(Some(&old), Some(&new), Some(&mut options))
+        .map_err(reading)
+}
+
+fn deltas(diff: &git2::Diff<'_>) -> Vec<ChangedFile> {
+    diff.deltas()
         .filter_map(|delta| {
             let path = delta
                 .new_file()
@@ -347,7 +394,7 @@ fn between(
                 change(delta.status()),
             ))
         })
-        .collect())
+        .collect()
 }
 
 /// What a tree holds at a path, as a value two trees can be compared on.
@@ -412,6 +459,10 @@ impl std::fmt::Display for SnapshotError {
             SnapshotError::NoSuchSnapshot { reference } => {
                 write!(out, "no snapshot is kept under `{reference}`")
             }
+            SnapshotError::Unsettled { reference } => write!(
+                out,
+                "the snapshot under `{reference}` holds no tree after its run yet"
+            ),
         }
     }
 }
@@ -422,7 +473,7 @@ impl std::error::Error for SnapshotError {
             SnapshotError::NotARepository { cause, .. } | SnapshotError::Git { cause, .. } => {
                 Some(cause)
             }
-            SnapshotError::NoSuchSnapshot { .. } => None,
+            SnapshotError::NoSuchSnapshot { .. } | SnapshotError::Unsettled { .. } => None,
         }
     }
 }
