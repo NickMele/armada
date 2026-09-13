@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { NOTHING_YET, type BridgeState } from "../shared/bridge";
 import { CLONE_MS, Locating, locateAnswerOf, resolvedFolder } from "./locating";
+import { OverviewReads } from "./overview";
 import { Picked } from "./picked";
 import type { RehearsalConnection } from "./rehearsal";
 import { RepositoryReads } from "./repositories";
@@ -169,11 +170,13 @@ describe("a clone that lands late", () => {
     picked.hold([armada]);
     picked.pick(armada.root);
     const published: Partial<BridgeState>[] = [];
+    const publish = (change: Partial<BridgeState>) => void published.push(change);
     const reads = new RepositoryReads({
       picked,
-      publish: (change) => void published.push(change),
+      publish,
       holds: () => NOTHING_YET.holds,
       rehearsal: { onRepositoryMoved: async () => {} } as unknown as RehearsalConnection,
+      overview: new OverviewReads({ publish, picked, port: () => port }),
       port: () => port,
     });
     await reads.locating.clone("https://forge.invalid/owner/scratch.git", "/Users/user");
