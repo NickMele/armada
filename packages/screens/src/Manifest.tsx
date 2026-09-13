@@ -37,18 +37,27 @@
 // tree is the path around verification that v1 proved becomes the default
 // path. The transcript is keepable; the judgement is not.
 //
+// # Drift and Verify, as two panels above the runner
+//
+// Journey 9's *Verify* answers two questions: drift, whether the file is still
+// true, read on opening at no cost; and Verify, whether it still works, which
+// runs setup and every Check behind its own button. **Two panels, never one**,
+// and both report without offering a fix. `verify.ts` reads them.
+//
 // # What is not built here, and is this surface's by the journey
 //
-// The forms, and Verify. Neither has a surface yet: a form that could not
-// express the schema and a Verify button that could not run would be two
-// labelled blanks.
+// The forms. A form that could not express the schema would be a labelled
+// blank.
 
-import { Alert, ManifestFile, RunPage, Tabs } from "@armada/components";
+import { useState } from "react";
+import type { ManifestDriftRead, Outcome } from "@armada/protocol";
+import { Alert, DriftPanel, ManifestFile, RunPage, Tabs, VerifyPanel } from "@armada/components";
 
 import { said } from "./copy";
 import { useManifestRuns, type ManifestSlice } from "./checkout-runs";
 import { useRepositoryAllows, type RepositoryAllowsSlice } from "./manifest-allows";
 import type { ManifestEditing } from "./manifest-file";
+import { driftPanelOf, verifyPanelOf } from "./verify";
 
 export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
   /**
@@ -65,6 +74,10 @@ export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
   onSaid: (sentence: string) => void;
   /** The file view, held by the app so an unsaved edit outlives the surface. */
   editing: ManifestEditing;
+  /** `GET /manifest/drift`, held open by the app while this surface shows. */
+  drift: ManifestDriftRead;
+  /** Press Verify. **Only ever from its button** — nothing here calls it on a read. */
+  onStartVerify: () => Promise<Outcome>;
 };
 
 /**
@@ -81,6 +94,20 @@ export function Manifest(props: ManifestProps) {
   // below are branches on what was read rather than on what this holds.
   const slot = useManifestRuns(props);
   const { editing } = props;
+  const [dismissedVerify, setDismissedVerify] = useState<string | null>(null);
+  const [verifyRefused, setVerifyRefused] = useState<string | null>(null);
+  const verify = verifyPanelOf({
+    sheet: props.sheet,
+    now: props.now,
+    dismissed: dismissedVerify,
+    refused: verifyRefused,
+    onVerify: () => {
+      setVerifyRefused(null);
+      void props.onStartVerify().then((outcome) => setVerifyRefused(outcome.ok ? null : said(outcome)));
+    },
+    onStopRun: (runId) => void props.onStopRun(runId),
+    onDismiss: setDismissedVerify,
+  });
 
   return (
     <div className="armada-screen__stack">
@@ -94,17 +121,42 @@ export function Manifest(props: ManifestProps) {
         value={editing.view}
         onChange={(id) => editing.onView(id === "file" ? "file" : "run")}
       />
-      {editing.view === "file" ? <FileView file={editing.file} /> : <RunView {...props} slot={slot} />}
+      {editing.view === "file" ? <FileView file={editing.file} /> : <RunView {...props} slot={slot} verify={verify} />}
     </div>
   );
 }
 
-function RunView(props: ManifestProps & { slot: ReturnType<typeof useManifestRuns> }) {
-  const { sheet, slot } = props;
-  // Read beside the sheet rather than gated behind it: a repository-wide
-  // allow answers no question the Manifest file does, so a Manifest this
-  // Bridge could not read is no reason to withhold a list that came back.
+function RunView({
+  sheet,
+  slot,
+  drift,
+  verify,
+  ...props
+}: ManifestProps & {
+  slot: ReturnType<typeof useManifestRuns>;
+  verify: ReturnType<typeof verifyPanelOf>;
+}) {
+  // Drift and the always-allow list each on their own read, so a sheet that
+  // would not read still leaves both standing.
   const allows = useRepositoryAllows(props);
+  return (
+    <>
+      <DriftPanel {...driftPanelOf(drift)} />
+      <SheetView sheet={sheet} slot={slot} verify={verify} allows={allows} />
+    </>
+  );
+}
+
+function SheetView({
+  sheet,
+  slot,
+  verify,
+  allows,
+}: Pick<ManifestProps, "sheet"> & {
+  slot: ReturnType<typeof useManifestRuns>;
+  verify: ReturnType<typeof verifyPanelOf>;
+  allows: ReturnType<typeof useRepositoryAllows>;
+}) {
   if (sheet.state === "failed") {
     return (
       <Alert tone="escalated" title="This repository's Manifest could not be read">
@@ -120,7 +172,10 @@ function RunView(props: ManifestProps & { slot: ReturnType<typeof useManifestRun
     return <p className="text-fg-muted">Reading this repository's Manifest.</p>;
   }
   return (
-    <RunPage {...slot} alwaysAllowed={allows.rows} onRemoveAlwaysAllowed={allows.onRemove} />
+    <>
+      <VerifyPanel {...verify} />
+      <RunPage {...slot} alwaysAllowed={allows.rows} onRemoveAlwaysAllowed={allows.onRemove} />
+    </>
   );
 }
 

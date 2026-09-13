@@ -1,0 +1,108 @@
+/* Drift — Journey 9's free read on opening the Manifest surface. A panel of
+   its own above the run page, beside Verify's and never inside it. */
+.armada-drift-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.armada-drift-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-3);
+}
+
+.armada-drift-panel__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-drift-panel__says {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* Bounded, so a file with many gone lines scrolls inside the panel rather than
+   pushing the run page below the window. */
+.armada-drift-panel__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: calc(var(--space-12) * 4);
+  overflow-y: auto;
+}
+
+.armada-drift-panel__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-drift-panel__where {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+/* The verdict, as a word in the status colour. **Amber for both, never red**:
+   a drifted file is behind, not broken. `--notice-caution` is the amber the
+   contract already aliases below Job level, so nothing new is minted. */
+.armada-drift-panel__verdict {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--notice-caution);
+}
+
+.armada-drift-panel__run {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.armada-drift-panel__detail {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-drift-panel__named {
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+.armada-drift-panel__fold {
+  display: flex;
+}
+
+.armada-drift-panel__scope {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

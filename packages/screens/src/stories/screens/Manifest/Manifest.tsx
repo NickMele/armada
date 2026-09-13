@@ -14,6 +14,7 @@ import type {
   CheckoutRunFollowed,
   CheckoutRunList,
   CheckoutRunSheetRead,
+  ManifestDriftRead,
   ManifestReading,
   Outcome,
   RunOutputRead,
@@ -56,6 +57,20 @@ checks:
     run: pnpm typecheck
 `;
 
+/** Drift on this repository's own lines, every one still there. */
+export const DRIFT_CURRENT: ManifestDriftRead = {
+  state: "read",
+  drift: {
+    path: MANIFEST_PATH,
+    checkout: "/Users/user/armada",
+    declarations: [
+      { section: "checks", name: "build", key: "run", run: "cargo build --workspace --locked", drift: { verdict: "current", checked: 1 }, unfollowed: [] },
+      { section: "checks", name: "typecheck", key: "run", run: "pnpm typecheck", drift: { verdict: "current", checked: 1 }, unfollowed: [] },
+      { section: "checks", name: "bridge_test", key: "run", run: "pnpm bridge-test", drift: { verdict: "current", checked: 1 }, unfollowed: [] },
+    ],
+  },
+};
+
 /** What a pull brought in while the edit was open. */
 export const PULLED_TEXT = MANIFEST_TEXT.replace("base: main", "base: main\n\nauto_merge: never");
 
@@ -91,7 +106,10 @@ export function ManifestFrom({
   view = "run",
   save = "took",
   diff,
+  drift = DRIFT_CURRENT,
 }: {
+  /** `GET /manifest/drift`. Every line current, unless a story says otherwise. */
+  drift?: ManifestDriftRead;
   sheet: CheckoutRunSheetRead;
   followed?: CheckoutRunFollowed;
   /** What `list_checkout_runs` answers — *Earlier runs*, and what Undo acts on. */
@@ -200,6 +218,8 @@ export function ManifestFrom({
             onSaid={noop}
             onObserveRun={noop}
             onStartRun={nothingHappens}
+            drift={drift}
+            onStartVerify={nothingHappens}
             onStopRun={nothingHappens}
             onUndoRun={nothingHappens}
             onListRuns={() => Promise.resolve({ ok: true, runs })}

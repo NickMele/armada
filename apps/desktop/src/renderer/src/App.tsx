@@ -76,6 +76,7 @@ import {
   stageAttachment,
   startRun,
   startCheckoutRun,
+  startCheckoutVerify,
   startServer,
   stopRun,
   stopCheckoutRun,
@@ -84,6 +85,7 @@ import {
   useWatching,
   watchRunSheet,
   watchCheckoutRunSheet,
+  watchManifestDrift,
 } from "./commands";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
@@ -214,6 +216,12 @@ export function App() {
   useEffect(() => {
     watchCheckoutRunSheet(manifesting || palette.open);
   }, [manifesting, palette.open]);
+
+  // Drift is the surface's own free read on opening, and the palette lists
+  // nothing off it. Verify is not here: it is only ever pressed.
+  useEffect(() => {
+    watchManifestDrift(manifesting);
+  }, [manifesting]);
 
   // The Manifest file and an edit of it. **Held here rather than by the
   // screen**, which unmounts whenever the rail moves: an unsaved correction the
@@ -571,6 +579,8 @@ export function App() {
                 editing={editing}
                 onObserveRun={observeCheckoutRun}
                 onStartRun={startCheckoutRun}
+                drift={state.manifestDrift}
+                onStartVerify={startCheckoutVerify}
                 onStopRun={stopCheckoutRun}
                 onUndoRun={undoCheckoutRun}
                 onListRuns={listCheckoutRuns}

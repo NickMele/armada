@@ -212,6 +212,12 @@ export type CheckoutRunSheet = {
   running?: CheckoutRunUnderway;
   /** The Commands declaring `serve`, each with the checkout's instance. */
   servers?: ServerEntry[];
+  /**
+   * The latest Verify, underway or ended and not yet replaced. **Absent where
+   * none has run since Fleet started**: it is held in memory, and each step's
+   * own record is a run like any other.
+   */
+  verify?: CheckoutVerify;
 };
 
 /**
@@ -359,3 +365,33 @@ export type CheckoutRunListRead =
 export type CheckoutRunDiffRead =
   | { ok: true; diff: CheckoutRunDiff }
   | { ok: false; outcome: Outcome };
+
+// ---------------------------------------------------------------------------
+// Verify — Journey 9, *Verify*: setup and every Check once, in the checkout.
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /manifest/start_verify`'s answer, and `CheckoutRunSheet.verify`.
+ *
+ * **A sequence of ordinary checkout runs**, so nothing here restates a run:
+ * a step that ran carries its record. A rehearsal of the whole file, never a
+ * verdict on it — no state below maps onto a status colour.
+ */
+export type CheckoutVerify = {
+  id: string;
+  started_at: string;
+  /** Absent while it is underway. */
+  ended_at?: string;
+  /** Setup in `setup.requires` order, then every Check in written order. */
+  steps: VerifyStep[];
+};
+
+/** One step. `group` is `setup` or `checks`, and is rendered as its label. */
+export type VerifyStep = { group: string; name: string; run: string } & VerifyStepState;
+
+/** Where one step has got to. `not_run` says why in a sentence. */
+export type VerifyStepState =
+  | { state: "waiting" }
+  | { state: "running"; run_id: string }
+  | { state: "ran"; record: CheckoutRunRecord }
+  | { state: "not_run"; why: string };

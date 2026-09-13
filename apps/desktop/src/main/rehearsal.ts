@@ -29,7 +29,7 @@ import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
 import { ask, route, serversOf } from "./request";
-import { CheckoutRunCommands, CheckoutRunSocket, CheckoutSheetReader } from "./checkout-runs";
+import { CheckoutRunCommands, CheckoutRunSocket, CheckoutSheetReader, DriftReader } from "./checkout-runs";
 import { JobReader } from "./reader";
 import { HOST } from "./runtime-file";
 import { ServerCommands } from "./servers";
@@ -248,6 +248,8 @@ export class RehearsalConnection {
   private readonly checkoutSheet: CheckoutSheetReader;
   private readonly checkoutFollow: CheckoutRunSocket;
   private readonly checkoutRuns: CheckoutRunCommands;
+  /** Drift, the Manifest surface's free read on opening. */
+  private readonly drift: DriftReader;
 
   constructor(wiring: { publish: (change: Partial<BridgeState>) => void; port: () => number | null }) {
     this.publish = wiring.publish;
@@ -275,6 +277,7 @@ export class RehearsalConnection {
       follow: (port, runId) => this.checkoutFollow.open(port, runId),
       refreshSheet: (port) => this.checkoutSheet.again(port),
     });
+    this.drift = new DriftReader((manifestDrift) => this.publish({ manifestDrift }));
   }
 
   close(): void {
@@ -282,6 +285,7 @@ export class RehearsalConnection {
     this.follow.close();
     this.checkoutSheet.close();
     this.checkoutFollow.close();
+    this.drift.close();
   }
 
   /** Every server Fleet holds. Read once per connection; `server.*` on
@@ -391,6 +395,21 @@ export class RehearsalConnection {
   /** One checkout run's patch, against the snapshot it took. A read. */
   getCheckoutRunDiff(runId: string): Promise<CheckoutRunDiffRead> {
     return this.checkoutRuns.getRunDiff(runId);
+  }
+
+  /** Drift, or `false` to stop. Held open by the Manifest surface alone. */
+  async watchManifestDrift(want: boolean): Promise<void> {
+    await this.drift.want(this.port(), want);
+  }
+
+  /** Fleet re-read `armada.yml`, so what it names may have moved. */
+  onManifestReread(port: number): void {
+    if (this.drift.open) void this.drift.again(port);
+  }
+
+  /** Verify: setup and every Check once in the checkout, one after another. */
+  startCheckoutVerify(): Promise<Outcome> {
+    return this.checkoutRuns.startVerify();
   }
 
   /** Start a declared server, for a Job's worktree or the main checkout. */

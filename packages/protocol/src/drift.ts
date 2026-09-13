@@ -15,6 +15,8 @@
 // The header rules in `protocol.ts` hold here: these are hand-written, they
 // drift the day a field moves, and every closed set is left as `string`.
 
+import type { Outcome } from "./reads";
+
 /**
  * What the repository still has of what one Manifest names.
  *
@@ -144,3 +146,14 @@ export type DriftGone = {
    */
   missing: string[];
 };
+
+/**
+ * `GET /manifest/drift`, in `reads.ts`'s four states. Bridge-only, not on the
+ * wire — `CheckoutRunSheetRead`'s shape, for its reason: there is no id to
+ * check an answer against.
+ */
+export type ManifestDriftRead =
+  | { state: "none" }
+  | { state: "reading" }
+  | { state: "read"; drift: ManifestDrift }
+  | { state: "failed"; outcome: Outcome };

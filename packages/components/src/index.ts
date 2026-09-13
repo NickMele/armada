@@ -265,3 +265,7 @@ export * from "./compositions/WorkGroups/WorkGroups";
 // each attempt, with the earlier ones folded. Replaces the strip and the story.
 export * from "./compositions/StepTimeline/StepTimeline";
 export * from "./compositions/ManifestFile/ManifestFile";
+// Drift and Verify on the Manifest surface — Journey 9's *Verify*, as two
+// panels of their own rather than two halves of one.
+export * from "./compositions/DriftPanel/DriftPanel";
+export * from "./compositions/VerifyPanel/VerifyPanel";

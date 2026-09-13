@@ -7,7 +7,7 @@ import type {
   ServerEntry,
 } from "@armada/protocol";
 import { expect, userEvent, within } from "storybook/test";
-import { GH_ISSUE_VIEW, ManifestFrom, MANIFEST_TEXT, NOW, PULLED_TEXT } from "./Manifest";
+import { DRIFT_CURRENT, GH_ISSUE_VIEW, ManifestFrom, MANIFEST_TEXT, NOW, PULLED_TEXT } from "./Manifest";
 
 /**
  * Bridge's Manifest surface, at `⌘4` — Journey 9's *Running one*, with no Job
@@ -455,5 +455,126 @@ export const ASaveOverAFileThatMoved: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Save" }));
     await expect(await canvas.findByRole("textbox", { name: "On disk now" })).toHaveValue(PULLED_TEXT);
     await expect(canvas.getByRole("textbox", { name: "Your edit" })).toHaveValue(`${MANIFEST_TEXT}# a note\n`);
+  },
+};
+
+/**
+ * **A Check whose script the repository no longer has**, found by opening the
+ * surface: `bridge_test` names a `package.json` script that is gone. `gone`, in
+ * amber, naming what is missing — and nothing on the row to press.
+ */
+export const DriftWithAGoneLine: Story = {
+  name: "Drift with a gone line",
+  args: {
+    sheet: { state: "read", sheet: sheet() },
+    drift: {
+      state: "read",
+      drift: {
+        ...(DRIFT_CURRENT.state === "read" ? DRIFT_CURRENT.drift : { path: "", checkout: "" }),
+        declarations: [
+          ...(DRIFT_CURRENT.state === "read" ? DRIFT_CURRENT.drift.declarations.slice(0, 2) : []),
+          {
+            section: "checks",
+            name: "bridge_test",
+            key: "run",
+            run: "pnpm bridge-test",
+            drift: { verdict: "gone", missing: ["package.json: scripts.bridge-test"] },
+            unfollowed: [],
+          },
+        ],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const drift = within(within(canvasElement).getByRole("region", { name: "Drift" }));
+    await expect(drift.getByText("gone")).toBeVisible();
+    await expect(drift.getByText("package.json: scripts.bridge-test")).toBeVisible();
+    await expect(drift.getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Show the 2 lines still current",
+    ]);
+  },
+};
+
+/** The run `build` is, as Verify's third step. */
+const BUILD_OUT = {
+  id: "crun_51aa",
+  name: "build",
+  command: "cargo build --workspace --locked",
+  started_at: "2026-09-12T14:19:18Z",
+};
+
+/**
+ * **A Verify underway.** Setup ran, `build` is out as the checkout's one run —
+ * so its output streams in the page below, as any run's does — and the rest
+ * are not reached yet. No second Verify can start, and nothing is hued.
+ */
+export const AVerifyUnderway: Story = {
+  name: "A Verify underway",
+  args: {
+    sheet: {
+      state: "read",
+      sheet: sheet({
+        running: BUILD_OUT,
+        verify: {
+          id: "01VERIFY",
+          started_at: "2026-09-12T14:19:02Z",
+          steps: [
+            { group: "setup", name: "bootstrap", run: "pnpm install --frozen-lockfile", state: "ran", record: { ...EARLIER, id: "crun_50a1", name: "bootstrap", command: "pnpm install --frozen-lockfile", exit_code: 0, duration_ms: 8200 } },
+            { group: "setup", name: "browsers", run: "pnpm -C packages/components exec playwright install chromium --only-shell", state: "ran", record: { ...EARLIER, id: "crun_50b2", name: "browsers", exit_code: 0, duration_ms: 1400 } },
+            { group: "checks", name: "build", run: "cargo build --workspace --locked", state: "running", run_id: BUILD_OUT.id },
+            { group: "checks", name: "test", run: "cargo nextest run --workspace --exclude acceptance", state: "waiting" },
+            { group: "checks", name: "typecheck", run: "pnpm typecheck", state: "waiting" },
+          ],
+        },
+      }),
+    },
+    followed: {
+      state: "following",
+      runId: BUILD_OUT.id,
+      name: "build",
+      path: ".armada/runs/crun_51aa/output.log",
+      fromLine: 1,
+      lines: ["   Compiling ipc v0.0.0", "   Compiling api v0.0.0", "   Compiling fleet v0.0.0"],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const verify = within(within(canvasElement).getByRole("region", { name: "Verify" }));
+    await expect(verify.getByRole("button", { name: "Verify" })).toBeDisabled();
+    await expect(verify.getByText(/running now/)).toBeVisible();
+    await expect(verify.getByRole("button", { name: "Stop" })).toBeVisible();
+  },
+};
+
+/**
+ * **A Verify that ended with a failure.** `typecheck` exited 2 where 0 is
+ * expected: a fact in a chip beside the code, the Checks after it still ran,
+ * and nothing is kept as a fail.
+ */
+export const AVerifyWithAFailure: Story = {
+  name: "A Verify with a failure",
+  args: {
+    sheet: {
+      state: "read",
+      sheet: sheet({
+        verify: {
+          id: "01VERIFY",
+          started_at: "2026-09-12T14:11:00Z",
+          ended_at: "2026-09-12T14:12:30Z",
+          steps: [
+            { group: "setup", name: "bootstrap", run: "pnpm install --frozen-lockfile", state: "ran", record: { ...EARLIER, id: "crun_2d01", name: "bootstrap", exit_code: 0, duration_ms: 8200 } },
+            { group: "checks", name: "build", run: "cargo build --workspace --locked", state: "ran", record: { ...EARLIER, id: "crun_2e11", name: "build", exit_code: 0, duration_ms: 41000 } },
+            { group: "checks", name: "typecheck", run: "pnpm typecheck", state: "ran", record: EARLIER },
+            { group: "checks", name: "format", run: "cargo fmt --all --check", state: "ran", record: { ...EARLIER, id: "crun_2f40", name: "format", exit_code: 0, duration_ms: 1800 } },
+          ],
+        },
+      }),
+    },
+    runs: { runs: [EARLIER], unreadable: [] },
+  },
+  play: async ({ canvasElement }) => {
+    const verify = within(within(canvasElement).getByRole("region", { name: "Verify" }));
+    await expect(verify.getByText("exit 2 (expects 0)")).toBeVisible();
+    await expect(verify.getByText(/Ran 4 of 4\. 1 ended with a code other than the one it expects\./)).toBeVisible();
+    await expect(verify.getByRole("button", { name: "Verify" })).toBeEnabled();
   },
 };
