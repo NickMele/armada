@@ -28,7 +28,7 @@ export function health(over: Record<string, [string, string]> = {}): HealthRead 
     const changed = over[probe.module];
     return changed === undefined ? probe : { ...probe, outcome: changed[0], detail: changed[1] };
   });
-  const not_probed = [{ owner: "adapters", because: "Git, Docker, Claude and Keychain are Doctor's, which is not built" }];
+  const not_probed = [{ owner: "adapters", because: "Its probes are Doctor's, which is not built" }];
   return { state: "read", health: { probes, not_probed } };
 }
 

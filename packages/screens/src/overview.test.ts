@@ -53,8 +53,8 @@ describe("the Doctor tile", () => {
   });
 
   it("draws a word it does not know as itself, with no hue", () => {
-    const reading = doctorReading({ state: "read", health: health(["Docker", "skipped"]) });
-    expect(reading).toMatchObject({ value: "skipped", detail: "Docker: skipped" });
+    const reading = doctorReading({ state: "read", health: health(["Kit", "skipped"]) });
+    expect(reading).toMatchObject({ value: "skipped", detail: "Kit: skipped" });
     expect(reading.tone).toBeUndefined();
   });
 
