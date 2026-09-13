@@ -160,6 +160,30 @@
   margin-inline-start: calc(-1 * var(--space-2));
 }
 
+/* The picker replaces its own toggle button, so it always takes the row's
+   full width — the buttons beside it in the flex-wrap answers row settle
+   above or below it rather than squeezing against it. */
+.armada-refusals__rule-answer {
+  display: block;
+  flex: 1 0 100%;
+  min-width: 0;
+}
+
+/* The rule this answer would write, cut at each word, and the controls that
+   confirm or drop it. Indented to nothing extra: the row it opens under is
+   already pulled back to the command's edge. */
+.armada-refusals__picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-refusals__picker-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 /* Why every row's answers are off, said once under the list. The note's values:
    both are a fact about the list rather than a finding in it. */
 .armada-refusals__off {

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { useId, useState } from "react";
 
 import { Button } from "../../primitives/Button/Button";
+import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
 
 /** One answer a person may give about one refused command. */
 export type RefusedAnswer = {
@@ -8,6 +10,14 @@ export type RefusedAnswer = {
   answer: string;
   /** The words on the control. */
   label: string;
+  /**
+   * The rules this answer may write, shortest first — Fleet's candidates, cut
+   * at each word. **Never computed here**, per `chains`. Where present, the
+   * press opens a picker instead of sending; absent or empty sends as pressed.
+   */
+  rules?: readonly string[];
+  /** Which of `rules` is picked before anyone touches the picker. */
+  suggestedRule?: string;
 };
 
 /**
@@ -132,10 +142,11 @@ export type RefusalsProps = {
    */
   again?: ReactNode;
   /**
-   * A row's answer was pressed, with that row's call and the answer's own
-   * name. **The caller sends it**; this draws the controls and says which.
+   * A row's answer was pressed, with that row's call, the answer's own name,
+   * and the rule picked where the answer offered one. **The caller sends it**;
+   * this draws the controls and says which.
    */
-  onAnswer?: (call: string, answer: string) => void;
+  onAnswer?: (call: string, answer: string, rule?: string) => void;
   /** Every row's answers are off — one already out, or nothing live to send over. */
   disabled?: boolean;
   /**
@@ -187,6 +198,13 @@ export function Refusals({
   disabled = false,
   disabledNote,
 }: RefusalsProps) {
+  // Which row's answer is mid-pick, and what it is pointed at right now. An
+  // answer with no rules never sets this — it sends on the press, as it always
+  // has.
+  const [picking, setPicking] = useState<{ call: string; answer: string; rule: string } | null>(
+    null,
+  );
+  const group = useId();
   if (refused.length === 0) return null;
   return (
     <div className="armada-refusals">
@@ -225,17 +243,84 @@ export function Refusals({
                 role="group"
                 aria-label={`Answers for ${one.detail === "" ? one.tool : one.detail}`}
               >
-                {answers.map((offered) => (
-                  <Button
-                    key={offered.answer}
-                    variant="ghost"
-                    size="sm"
-                    disabled={disabled}
-                    onClick={() => onAnswer?.(call, offered.answer)}
-                  >
-                    {offered.label}
-                  </Button>
-                ))}
+                {answers.map((offered) => {
+                  const rules = offered.rules ?? [];
+                  const isPicking =
+                    picking !== null && picking.call === call && picking.answer === offered.answer;
+                  if (rules.length === 0) {
+                    return (
+                      <Button
+                        key={offered.answer}
+                        variant="ghost"
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() => onAnswer?.(call, offered.answer)}
+                      >
+                        {offered.label}
+                      </Button>
+                    );
+                  }
+                  if (!isPicking) {
+                    return (
+                      <Button
+                        key={offered.answer}
+                        variant="ghost"
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() =>
+                          setPicking({
+                            call,
+                            answer: offered.answer,
+                            rule: offered.suggestedRule ?? rules[0] ?? "",
+                          })
+                        }
+                      >
+                        {offered.label}
+                      </Button>
+                    );
+                  }
+                  return (
+                    <span key={offered.answer} className="armada-refusals__rule-answer">
+                      <div className="armada-refusals__picker">
+                        <RadioGroup label="The rule this writes">
+                          {rules.map((candidate) => (
+                            <Radio
+                              key={candidate}
+                              name={`${group}-${call}-${offered.answer}`}
+                              value={candidate}
+                              checked={picking.rule === candidate}
+                              disabled={disabled}
+                              onChange={() => setPicking({ ...picking, rule: candidate })}
+                            >
+                              <span className="mono">{candidate}</span>
+                            </Radio>
+                          ))}
+                        </RadioGroup>
+                        <div className="armada-refusals__picker-actions">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={disabled}
+                            onClick={() => {
+                              onAnswer?.(call, offered.answer, picking.rule);
+                              setPicking(null);
+                            }}
+                          >
+                            {offered.label}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={disabled}
+                            onClick={() => setPicking(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </span>
+                  );
+                })}
               </div>
             )}
           </li>

@@ -314,6 +314,53 @@ export const AnswersOnTheRow: Story = {
 };
 
 /**
+ * **Always allow opens a picker rather than writing the whole command.** Job
+ * 7's own case: `gh issue view` covers the next issue too, and the four other
+ * cuts are what Fleet offered beside it, shortest first.
+ */
+export const AlwaysAllowPicksARule: Story = {
+  args: {
+    said: SAID,
+    refused: [
+      {
+        tool: "Bash",
+        detail: "gh issue view 792 --repo NickMele/armada 2>&1 | head -100",
+        call: "call_gh_1",
+        answers: [
+          { answer: "allow_for_job", label: "Allow for this job" },
+          {
+            answer: "always_allow",
+            label: "Always allow in this repository",
+            rules: ["gh", "gh issue", "gh issue view", "gh issue view 792 --repo NickMele/armada"],
+            suggestedRule: "gh issue view",
+          },
+          { answer: "reject", label: "Reject" },
+        ],
+      },
+    ],
+    onAnswer: fn(),
+  },
+  /**
+   * **The press opens the picker rather than sending, and replaces its own
+   * button.** Fleet's suggestion is pre-selected, and the confirm that
+   * replaces the toggle sends the rule that was picked, never the whole
+   * command.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    const group = canvas.getByRole("group", {
+      name: "Answers for gh issue view 792 --repo NickMele/armada 2>&1 | head -100",
+    });
+    await userEvent.click(within(group).getByRole("button", { name: "Always allow in this repository" }));
+
+    await expect(canvas.getByRole("radio", { name: "gh issue view" })).toBeChecked();
+
+    await userEvent.click(canvas.getByRole("radio", { name: "gh issue" }));
+    await userEvent.click(within(group).getByRole("button", { name: "Always allow in this repository" }));
+    await expect(args.onAnswer).toHaveBeenCalledWith("call_gh_1", "always_allow", "gh issue");
+  },
+};
+
+/**
  * An answer already out. **Every row's controls are off and the list says
  * why**, because a disabled control with no sentence beside it reads as an app
  * that is broken rather than one that is busy.
