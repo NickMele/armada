@@ -29,7 +29,7 @@ import {
   type VerdictFigure,
   type VerdictSheetProps,
 } from "@armada/components";
-import { ReviewAtGate } from "./confidence";
+import { ReviewedGate, type PendingChanges } from "./confidence";
 import type {
   Diff,
   Evidence,
@@ -616,7 +616,7 @@ export function verdictSlotAtGate({
     ) : (
       "The run tree on the left is where each step's own evidence is. This reads the Job."
     );
-  const sheet = (
+  const sheetWith = (pending?: PendingChanges) => (
     <VerdictSheet
       {...verdictOf({
         job,
@@ -657,23 +657,22 @@ export function verdictSlotAtGate({
           onReject={onReject}
           onTakeUpRemarks={onTakeUpRemarks}
           onOpenRemarkLink={onOpenRemarkLink}
+          {...(pending ?? {})}
         />
       }
     />
   );
   // Armada's review comes first, above the record it is about. #903.
   const confidence = whole?.confidence;
-  if (confidence === undefined) return sheet;
+  if (confidence === undefined) return sheetWith();
   return (
-    <>
-      <ReviewAtGate
-        confidence={confidence}
-        diff={recorded.diff}
-        jobId={job.id}
-        {...(onOpenDiff === undefined ? {} : { onOpenDiff })}
-      />
-      {sheet}
-    </>
+    <ReviewedGate
+      confidence={confidence}
+      diff={recorded.diff}
+      jobId={job.id}
+      {...(onOpenDiff === undefined ? {} : { onOpenDiff })}
+      sheet={sheetWith}
+    />
   );
 }
 

@@ -151,7 +151,7 @@ const CONFIDENCE: JobConfidence = {
       why: "A test taken out or weakened is the reviewer's to explain",
     },
   ],
-  small_fixes: [],
+  small_fixes: [{ finding: "`selectors.ts` still exports a helper nothing calls", why: "In scope. Delete it with the split." }],
   for_context: [{ finding: "The consumers still import the old path", why: "The next step checks them" }],
 };
 

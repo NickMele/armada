@@ -85,3 +85,26 @@ export const AChain: Story = {
     await expect(canvas.getByRole("button", { name: "Fold all" })).toBeVisible();
   },
 };
+
+/** A note written under the chain goes onto What should change, and the field clears. #907. */
+export const ANoteForTheDrone: Story = {
+  args: {
+    open: true,
+    title: "A busy CPU no longer delays a Job",
+    steps: STEPS,
+    onAddNote: fn(),
+    onClose: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const add = canvas.getByRole("button", { name: "Add to What should change" });
+    await expect(add).toBeDisabled();
+    const field = canvas.getByLabelText("Note for the drone");
+    await userEvent.type(field, "Say in the status bar that CPU never holds a Job.");
+    await userEvent.click(add);
+    await expect(args.onAddNote).toHaveBeenCalledWith(
+      "Say in the status bar that CPU never holds a Job.",
+    );
+    await expect(field).toHaveValue("");
+    await expect(canvas.getByRole("status")).toHaveTextContent("1 note added to What should change.");
+  },
+};

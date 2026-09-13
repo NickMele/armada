@@ -50,8 +50,10 @@ import {
   ReviewComments,
   ReviewDecision,
   UnifiedDiff,
+  type DecisionChange,
   type UnifiedDiffProps,
 } from "@armada/components";
+import { noteWithChanges } from "./changes";
 
 import type { Diff, Evidence, Remarks } from "@armada/protocol";
 import type { JobSummary } from "@armada/protocol";
@@ -127,6 +129,9 @@ export type DecideProps = {
    * URL.
    */
   onOpenRemarkLink: (jobId: string, remarkId: string) => void;
+  /** What should change, listed by the review and View. Sent with the note. #907. */
+  changes?: DecisionChange[];
+  onRemoveChange?: (id: string) => void;
 };
 
 /**
@@ -160,6 +165,8 @@ export function Decide({
   onReject,
   onTakeUpRemarks,
   onOpenRemarkLink,
+  changes = [],
+  onRemoveChange,
 }: DecideProps) {
   // The reviewer's own words, held here: it is a draft until it is sent, and
   // nothing outside this region knows or cares that one is being written.
@@ -167,7 +174,7 @@ export function Decide({
   // Which answer is being confirmed, and never two flags. Both dialogs are
   // modal and only one act is in flight at a time, so a union says that in the
   // type rather than leaving a state where both layers are up.
-  const [asking, setAsking] = useState<"merge" | "reject" | null>(null);
+  const [asking, setAsking] = useState<"merge" | "reject" | "approve" | null>(null);
 
   useEffect(() => {
     onNeedMaterial(job.id);
@@ -222,12 +229,32 @@ export function Decide({
                 "yourself skips them.",
               ...(conflicted ? { mergeBlockedReason: "Resolve the conflicts first." } : {}),
             })}
-        onApprove={() => onApprove(job.id)}
-        onRequestChanges={() => onRequestChanges(job.id, note)}
+        changes={changes}
+        {...(onRemoveChange === undefined ? {} : { onRemoveChange })}
+        // A listed change approving would drop is asked about first. #907.
+        onApprove={() => (changes.length > 0 ? setAsking("approve") : onApprove(job.id))}
+        onRequestChanges={() => onRequestChanges(job.id, noteWithChanges(changes, note))}
         onReject={() => setAsking("reject")}
         disabled={off}
         {...(why === undefined ? {} : { disabledNote: why })}
       />
+
+      <Dialog
+        open={asking === "approve"}
+        tone="neutral"
+        title="Approve without the listed changes"
+        confirmLabel="Approve and drop them"
+        cancelLabel="Keep them"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null);
+          onApprove(job.id);
+        }}
+      >
+        {`${changes.length === 1 ? "1 change is" : `${changes.length} changes are`} listed under What ` +
+          "should change, and approving does not send them. Keep them, and press Request changes " +
+          "to send them to the drone."}
+      </Dialog>
 
       {/* The one act here that writes outside a worktree Fleet made.
           **Neutral, not destructive**: nothing ends and nothing is destroyed,
