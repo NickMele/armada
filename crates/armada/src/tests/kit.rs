@@ -65,9 +65,39 @@ fn a_kit_definition_that_does_not_fit_is_left_out_and_named() {
         "{said:?}"
     );
     assert!(
-        said.iter()
-            .any(|line| line.starts_with("workflow `bug` from Kit") && line.contains("build")),
-        "{said:?}"
+        said.iter().any(
+            |line| line.starts_with("Kit's `bug` was left out, because ")
+                && line.contains("build")
+                && line.ends_with("; Armada's `bug` is used instead")
+        ),
+        "a person who customised `bug` is told they are not running it: {said:?}"
+    );
+}
+
+/// **Two Kit files naming one id are both left out, both named, and Armada's
+/// fills in** — one bad Kit never stops Fleet for every repository. The
+/// repository's own duplicates stay refused; `setup.rs` holds that.
+#[test]
+fn two_kit_files_naming_one_id_are_left_out_and_armadas_fills_in() {
+    let dir = a_repository();
+    let kit = TempDir::new();
+    kit.write(&format!("{KIT_WORKFLOWS}/mine.yml"), &a_workflow("bug"));
+    kit.write(
+        &format!("{KIT_WORKFLOWS}/also-mine.yml"),
+        &a_workflow("bug"),
+    );
+
+    let setup = Setup::at(dir.path(), kit.path(), &roster()).expect("starts anyway");
+    assert_eq!(bug(&setup).source(), WorkflowSource::Armada);
+    let said: Vec<String> = setup.left_out().iter().map(ToString::to_string).collect();
+    let [line] = said.as_slice() else {
+        panic!("one sentence naming both: {said:?}");
+    };
+    assert!(
+        line.contains("mine.yml")
+            && line.contains("also-mine.yml")
+            && line.ends_with("; Armada's `bug` is used instead"),
+        "{line}"
     );
 }
 

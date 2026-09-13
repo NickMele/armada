@@ -97,23 +97,48 @@ fn an_id_only_one_place_declares_is_held_from_that_place() {
     );
 }
 
-/// Two files in one place naming one id is refused, naming both — the rule a
-/// repository's own directory always had, now asked per place.
+/// Two of the repository's own files naming one id is refused, naming both:
+/// the repository declared them, and a catalogue that picked would be choosing
+/// on behalf of whoever wrote the second.
 #[test]
-fn one_id_twice_in_one_place_is_refused_naming_both() {
+fn one_id_twice_in_the_repository_is_refused_naming_both() {
     let refused = Catalogue::of(
         [
-            kit("first.yml", one_step("shared", "One", None)),
-            kit("second.yml", one_step("shared", "Two", None)),
+            repository("first.yml", one_step("shared", "One", None)),
+            repository("second.yml", one_step("shared", "Two", None)),
         ],
         &roster(),
     )
-    .expect_err("two Kit files agree on an id");
+    .expect_err("two of the repository's files agree on an id");
     let CatalogueRefused::DuplicateWorkflowId { id, first, second } = refused else {
         panic!("a duplicate, not {refused:?}");
     };
     assert_eq!(id, "shared");
     assert!(first.ends_with("first.yml") && second.ends_with("second.yml"));
+}
+
+/// **Two Kit files naming one id are both left out, and named together**, and
+/// what the next place down holds for the id runs instead.
+#[test]
+fn one_id_twice_in_kit_leaves_both_out_and_the_next_place_answers() {
+    let held = resolved(vec![
+        kit("first.yml", one_step("bug", "One", None)),
+        kit("second.yml", one_step("bug", "Two", None)),
+        repository("hotfix.yml", one_step("hotfix", "Hot", None)),
+    ]);
+    assert!(!held.workflows().keys().any(|id| id.as_str() == "bug"));
+    let [left] = held.left_out() else {
+        panic!("one sentence for the pair: {:?}", held.left_out());
+    };
+    assert!(matches!(left.why(), WhyLeftOut::Duplicated { also } if also.len() == 1));
+    let said = left.to_string();
+    assert!(
+        said.starts_with("Kit's `bug` was left out, because ")
+            && said.contains("first.yml")
+            && said.contains("second.yml")
+            && said.ends_with("; no `bug` runs here"),
+        "{said}"
+    );
 }
 
 /// **The repository's own is strict; Kit's is left out and named**, and the
@@ -161,7 +186,7 @@ fn a_kit_definition_naming_an_undeclared_check_is_left_out_and_named() {
     assert!(matches!(left.why(), WhyLeftOut::Unresolved(_)));
     let said = left.to_string();
     assert!(
-        said.contains("workflow `bug` from Kit") && said.contains("build"),
+        said.starts_with("Kit's `bug` was left out, because ") && said.contains("build"),
         "{said}"
     );
 }

@@ -30,7 +30,7 @@ Resources, budget, timing, interface and notification routing are **not** here �
 
 **A folder a person can see and sync**, apart from the store, the runtime file and [Machine](machine.md)'s settings: Kit travels and the Machine does not. Everything else this page lists arrives in the same home under #41, and nothing else is read from it yet.
 
-**A Kit definition that does not fit a repository is left out there, and named.** One that will not parse, or names a Check that repository does not declare, is set aside: Fleet starts anyway, says at start which definition was left out and why, and Armada's definition answers for that id if it carries one. The owner's decision. One the repository replaces is never resolved against it. A repository's own definitions stay strict, because the repository declared them.
+**A Kit definition that does not fit a repository is left out there, and named.** One that will not parse, names a Check that repository does not declare, or shares its id with another Kit file, is set aside — two sharing an id are both left out, and named together. Fleet starts anyway and says at start which definition was left out, why, and whose runs instead: *Kit's `bug` was left out, because …; Armada's `bug` is used instead.* One bad Kit file never stops Fleet for every repository. The owner's decision. One the repository replaces is never resolved against it. A repository's own definitions stay strict, because the repository declared them.
 
 ## Navigation — two functional groups
 

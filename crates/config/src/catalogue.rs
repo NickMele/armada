@@ -126,7 +126,7 @@ pub fn carried() -> Vec<Written> {
         .collect()
 }
 
-/// Every definition in hand, grouped by id, and the ones set aside unparsed.
+/// Every definition in hand, grouped by id, and the ones already set aside.
 #[derive(Debug)]
 pub struct Catalogue {
     held: BTreeMap<WorkflowId, Vec<(WorkflowDef, WorkflowSource)>>,
@@ -137,15 +137,15 @@ impl Catalogue {
     /// Parse every definition, keeping each beside the others for its id.
     ///
     /// **The order they arrive in decides nothing**, and the source decides
-    /// everything. Two definitions sharing an id *and* a place are refused,
-    /// naming both: a catalogue that picked would be choosing on behalf of
-    /// whoever wrote the second file. Across places, it is an override.
+    /// everything. Two definitions sharing an id *and* a place are a fault in
+    /// that place: refused, naming both, in the repository, which declared
+    /// them; left out, naming both, anywhere else. Across places, it is an
+    /// override.
     pub fn of(
         written: impl IntoIterator<Item = Written>,
         roster: &Roster,
     ) -> Result<Catalogue, CatalogueRefused> {
-        let mut held: BTreeMap<WorkflowId, Vec<(WorkflowDef, WorkflowSource)>> = BTreeMap::new();
-        let mut seen: BTreeMap<(WorkflowSource, WorkflowId), PathBuf> = BTreeMap::new();
+        let mut placed: BTreeMap<(WorkflowSource, WorkflowId), Vec<WorkflowDef>> = BTreeMap::new();
         let mut left_out = Vec::new();
         for one in written {
             let def = match WorkflowDef::parse(&one.path, &one.text, roster) {
@@ -154,27 +154,40 @@ impl Catalogue {
                     return Err(CatalogueRefused::Refused(why))
                 }
                 Err(why) => {
-                    left_out.push(LeftOut {
-                        id: None,
-                        source: one.source,
-                        path: one.path,
-                        why: WhyLeftOut::Unparsed(why),
-                    });
+                    left_out.push(LeftOut::of(
+                        None,
+                        one.source,
+                        one.path,
+                        WhyLeftOut::Unparsed(why),
+                    ));
                     continue;
                 }
             };
-            let key = (one.source, def.id().clone());
-            if let Some(first) = seen.get(&key) {
+            let same = placed.entry((one.source, def.id().clone())).or_default();
+            if let (WorkflowSource::Repository, Some(first)) = (one.source, same.first()) {
                 return Err(CatalogueRefused::DuplicateWorkflowId {
                     id: def.id().as_str().to_string(),
-                    first: first.clone(),
+                    first: first.path().to_path_buf(),
                     second: one.path,
                 });
             }
-            seen.insert(key, one.path);
-            held.entry(def.id().clone())
-                .or_default()
-                .push((def, one.source));
+            same.push(def);
+        }
+
+        let mut held: BTreeMap<WorkflowId, Vec<(WorkflowDef, WorkflowSource)>> = BTreeMap::new();
+        for ((source, id), mut defs) in placed {
+            if defs.len() > 1 {
+                let also = defs
+                    .drain(1..)
+                    .map(|def| def.path().to_path_buf())
+                    .collect();
+                let first = defs.remove(0).path().to_path_buf();
+                let why = WhyLeftOut::Duplicated { also };
+                left_out.push(LeftOut::of(Some(id), source, first, why));
+                continue;
+            }
+            let def = defs.remove(0);
+            held.entry(id).or_default().push((def, source));
         }
         Ok(Catalogue { held, left_out })
     }
@@ -186,7 +199,7 @@ impl Catalogue {
     /// it always has: the repository declared it, and a Fleet quietly running
     /// Armada's in its place would be running something nobody there chose.
     pub fn resolve(self, manifest: &Manifest) -> Result<ResolvedCatalogue, ResolveError> {
-        let mut workflows = BTreeMap::new();
+        let mut workflows: BTreeMap<WorkflowId, ResolvedWorkflow> = BTreeMap::new();
         let mut left_out = self.left_out;
         for (id, mut candidates) in self.held {
             candidates.sort_by(|a, b| b.1.cmp(&a.1));
@@ -197,14 +210,23 @@ impl Catalogue {
                         break;
                     }
                     Err(why) if source == WorkflowSource::Repository => return Err(why),
-                    Err(why) => left_out.push(LeftOut {
-                        id: Some(id.clone()),
+                    Err(why) => left_out.push(LeftOut::of(
+                        Some(id.clone()),
                         source,
-                        path: def.path().to_path_buf(),
-                        why: WhyLeftOut::Unresolved(why),
-                    }),
+                        def.path().to_path_buf(),
+                        WhyLeftOut::Unresolved(why),
+                    )),
                 }
             }
+        }
+        // Which place answers for each left-out id, so the sentence can say
+        // whose definition a person is running instead of their own.
+        for left in &mut left_out {
+            left.instead = left
+                .id
+                .as_ref()
+                .and_then(|id| workflows.get(id))
+                .map(ResolvedWorkflow::source);
         }
         Ok(ResolvedCatalogue {
             workflows,
@@ -246,6 +268,8 @@ pub struct LeftOut {
     source: WorkflowSource,
     path: PathBuf,
     why: WhyLeftOut,
+    /// The place whose definition of the same id runs instead, if any does.
+    instead: Option<WorkflowSource>,
 }
 
 /// Why a definition was left out.
@@ -256,9 +280,27 @@ pub enum WhyLeftOut {
     /// It parses, and names what this repository does not declare, or says
     /// something else about what it does.
     Unresolved(ResolveError),
+    /// Another file in the same place declares the same id, and nothing picks
+    /// between them. `also` is every file after the first.
+    Duplicated { also: Vec<PathBuf> },
 }
 
 impl LeftOut {
+    fn of(
+        id: Option<WorkflowId>,
+        source: WorkflowSource,
+        path: PathBuf,
+        why: WhyLeftOut,
+    ) -> LeftOut {
+        LeftOut {
+            id,
+            source,
+            path,
+            why,
+            instead: None,
+        }
+    }
+
     pub fn id(&self) -> Option<&WorkflowId> {
         self.id.as_ref()
     }
@@ -274,20 +316,63 @@ impl LeftOut {
     pub fn why(&self) -> &WhyLeftOut {
         &self.why
     }
+
+    /// Whose definition of this id runs instead. `None` where none does, or
+    /// where the file never said which id it was.
+    pub fn instead(&self) -> Option<WorkflowSource> {
+        self.instead
+    }
+}
+
+/// A place as the owner of a definition: *Kit's `bug`*.
+fn whose(source: WorkflowSource) -> &'static str {
+    match source {
+        WorkflowSource::Armada => "Armada's",
+        WorkflowSource::Kit => "Kit's",
+        WorkflowSource::Repository => "the repository's",
+    }
 }
 
 impl fmt::Display for LeftOut {
-    /// What Fleet prints at start: which definition, from where, and why.
+    /// What Fleet prints at start: whose definition, why, and what runs instead
+    /// — so a person who customised `bug` knows they are not running their own.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let whose = whose(self.source);
         match &self.id {
-            Some(id) => write!(f, "workflow `{}` {}", id.as_str(), self.source)?,
-            None => write!(f, "a definition {}", self.source)?,
+            Some(id) => write!(f, "{whose} `{}` was left out, because ", id.as_str())?,
+            None => write!(f, "a definition {} was left out, because ", self.source)?,
         }
-        write!(f, " is left out, at {} — ", self.path.display())?;
         match &self.why {
-            WhyLeftOut::Unparsed(why) => write!(f, "{why}"),
-            WhyLeftOut::Unresolved(why) => write!(f, "{why}"),
+            WhyLeftOut::Unparsed(why) => write!(f, "{why}")?,
+            WhyLeftOut::Unresolved(why) => write!(f, "{why}")?,
+            WhyLeftOut::Duplicated { also } => {
+                write!(f, "{}", self.path.display())?;
+                for path in also {
+                    write!(f, " and {}", path.display())?;
+                }
+                write!(f, " all declare it")?;
+            }
         }
+        match (&self.id, self.instead) {
+            (Some(id), Some(instead)) => {
+                write!(
+                    f,
+                    "; {} `{}` is used instead",
+                    whose_capital(instead),
+                    id.as_str()
+                )
+            }
+            (Some(id), None) => write!(f, "; no `{}` runs here", id.as_str()),
+            (None, _) => Ok(()),
+        }
+    }
+}
+
+/// [`whose`], at the start of a clause.
+fn whose_capital(source: WorkflowSource) -> &'static str {
+    match source {
+        WorkflowSource::Repository => "The repository's",
+        other => whose(other),
     }
 }
 
@@ -296,7 +381,7 @@ impl fmt::Display for LeftOut {
 pub enum CatalogueRefused {
     /// One of the repository's own definitions will not parse.
     Refused(LoadError),
-    /// Two definitions in one place name the same `workflow_id`.
+    /// Two of the repository's own definitions name the same `workflow_id`.
     DuplicateWorkflowId {
         id: String,
         first: PathBuf,

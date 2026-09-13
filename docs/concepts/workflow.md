@@ -61,7 +61,7 @@ Picking one by hand stays available and is the override, not the path. That docu
 
 **That is Armada holding an opinion it used to refuse.** An empty `.armada/workflows/` was refused because a repository declares how its own work is done, and a carried set is Armada saying how work is done by default. The trade is accepted, and overriding is one file so that the default does not become the only way.
 
-**A definition from Kit or Armada that does not fit is left out, not refused.** One that will not parse, or will not resolve against the repository, is set aside and named when Fleet starts, and the next place down answers for its id. A repository's own stays strict.
+**A definition from Kit or Armada that does not fit is left out, not refused.** One that will not parse, will not resolve against the repository, or shares its id with another file in the same place, is set aside and named when Fleet starts, and the next place down answers for its id — the sentence says whose. A repository's own stays strict, duplicate ids included.
 
 **A Job says which place its workflow came from.** The frozen workflow carries `source` — `armada`, `kit` or `repository` — beside its steps, so the answer outlives the files. Fleet also says it for every workflow when it starts. No surface in Bridge shows it yet.
 
