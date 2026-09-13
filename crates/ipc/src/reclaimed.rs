@@ -51,6 +51,7 @@ pub struct ReclaimedWorktree {
     pub removed: bool,
     /// Why it is still there, where it is. A person's lock message, or what
     /// git said. Absent where it went.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
 }
 
@@ -64,14 +65,19 @@ pub struct ReclaimedBranch {
     /// The commit it pointed at. **A deleted branch is recoverable from its
     /// SHA and from nothing else**, which is why it is answered rather than
     /// logged. Absent where there was no branch, or no commit under it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tip: Option<String>,
     /// Why it is still standing, where it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
     /// The branch it was compared against, where it was kept for holding
     /// commits that one cannot reach.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
     /// How many of its commits the base cannot reach. **Set only on the safe
     /// keep** — this is what tells a branch deliberately left alone from a
-    /// branch that would not delete.
+    /// branch that would not delete. Bridge tells the two apart by whether
+    /// the field is there, so an empty one is left out rather than sent `null`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unmerged_commits: Option<u32>,
 }
