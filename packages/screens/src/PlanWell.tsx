@@ -77,7 +77,7 @@ function AddTaskControl({
       <Dialog
         open={open}
         tone="neutral"
-        title="Add a task to this Job's plan?"
+        title="Add a task to this job's plan?"
         confirmLabel={ADD_TASK_LABEL}
         confirmDisabled={title.trim() === "" || adding}
         onCancel={close}
@@ -88,8 +88,8 @@ function AddTaskControl({
             reset and would otherwise run straight into the field below it. */}
         <div className="armada-plan-add-task-body">
           <p>
-            The task goes at the end of the plan. If a Drone is working on this Job, it&rsquo;s
-            told now; otherwise the next Drone sees it in the plan.
+            The task goes at the end of the plan. If a drone is working on this job, it&rsquo;s
+            told now; otherwise the next drone sees it in the plan.
           </p>
           {/* No `autoFocus`: the dialog's own contract puts initial focus on
               Cancel, and a second claim on it here would only lose to it. */}

@@ -74,37 +74,39 @@ export function RedirectControl({
           onRedirect(jobId, sent);
         }}
       >
-        <p>
-          The instruction is sent to the drone as a new turn. The job stays at the same step, with
-          the same session — nothing is spawned and nothing already done is thrown away.
-        </p>
-        {/* Said before the press, because the wait is the surprising half: a job
-            that does not move on the send would otherwise read as a redirect
-            that never arrived. What it did is on the job afterwards —
-            `recovery.ts` on a job that stopped, `steering.ts` on one that did
-            not. */}
-        {drone === "holding" ? (
-          <p>
-            Where a step stopped, the job runs again straight away. Where it escalated without
-            stopping one, it stays escalated until the drone takes a turn — sending is not evidence
-            that it read anything.
-          </p>
-        ) : (
-          <p>
-            This job is running and stays running: nothing on screen moves when the instruction
-            lands, and sending is not evidence that the drone read anything. It buys no time
-            either — the step's clocks and its ceilings go on from where they are. Where it shows
-            up is the step's activity log, as a turn a person asked for.
-          </p>
-        )}
-        {/* No `autoFocus`: the dialog's own contract puts initial focus on
-            Cancel, and a second claim on it here would only lose to it. */}
-        <Textarea
-          label="Instruction"
-          rows={4}
-          value={instruction}
-          onChange={(event) => setInstruction(event.target.value)}
-        />
+        {/* One column, at the dialog's own top-level rhythm. Body and field
+            are one `children` here rather than the `field` slot Overrule and
+            the raise dialogs use, so nothing above pinned them apart —
+            without this the explanation ran straight into the field under
+            it, unseparated, because a `<p>` carries no margin under this
+            app's reset. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          {/* Said before the press, because the wait is the surprising half: a
+              job that does not move on the send would otherwise read as a
+              redirect that never arrived. Which half is true is the one fact
+              that changes the decision to send, so it is what survives here —
+              everything else that used to be said is machinery a person does
+              not need to decide. */}
+          {drone === "holding" ? (
+            <p>
+              A stopped drone starts again right away. An escalated one waits until it takes your
+              instruction up.
+            </p>
+          ) : (
+            <p>
+              The working drone gets your instruction now. Nothing restarts, and its limits keep
+              counting.
+            </p>
+          )}
+          {/* No `autoFocus`: the dialog's own contract puts initial focus on
+              Cancel, and a second claim on it here would only lose to it. */}
+          <Textarea
+            label="Instruction"
+            rows={4}
+            value={instruction}
+            onChange={(event) => setInstruction(event.target.value)}
+          />
+        </div>
       </Dialog>
     </>
   );

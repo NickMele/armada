@@ -59,18 +59,18 @@ import type { FileReport, JobDetail as JobWhole, Report } from "@armada/protocol
 export const CLAIMS: { value: string; label: string; note: string }[] = [
   {
     value: "wrongly_refused",
-    label: "The judge refused work that was right",
-    note: "The verdict is on the record and this does not lift it — overruling is the act that does.",
+    label: "The Judge refused work that was right",
+    note: "This doesn't lift the verdict.",
   },
   {
     value: "wrongly_passed",
     label: "Something wrong got through",
-    note: "Nothing in armada surfaces this on its own, which is why saying it is the whole of the record.",
+    note: "Armada won't catch this on its own.",
   },
   {
     value: "armada_misbehaved",
     label: "Armada itself did the wrong thing",
-    note: "No verdict is in question — the machinery did something other than what it said it did.",
+    note: "No verdict is in question.",
   },
 ];
 
@@ -278,66 +278,75 @@ export function ReportControl({
           close();
         }}
       >
-        {filed === null ? (
-          <>
-            {/* What this is, before what it asks for. The record is already
-                written down; the sentence is the part that is not. */}
-            <p>
-              Everything armada knows about this job is attached for you — every move it made,
-              what each gate said, what the drone claimed, and what it changed. What it does not
-              have is why you think it was wrong.
-            </p>
-            <RadioGroup label="What was wrong">
-              {CLAIMS.map((option) => (
-                <Radio
-                  key={option.value}
-                  name="report-claim"
-                  value={option.value}
-                  checked={claim === option.value}
-                  onChange={() => setClaim(option.value)}
-                >
-                  {option.label}
-                </Radio>
-              ))}
-            </RadioGroup>
-            <p>{CLAIMS.find((option) => option.value === claim)?.note}</p>
-            {scoped ? (
-              <Select
-                label="What it is about, if it is not the whole job"
-                value={verdict}
-                onChange={(event) => setVerdict(event.target.value)}
-              >
-                <option value={WHOLE_JOB}>The whole job</option>
-                {verdicts.map((one) => (
-                  <option key={keyOf(one)} value={keyOf(one)}>
-                    {one.label}
-                  </option>
+        {/* One column, at the dialog's own top-level rhythm — `Redirect.tsx`'s
+            fix for the same cause. The body draws its field in `children`
+            rather than the `field` slot Overrule and the raise dialogs use,
+            so nothing above pinned it apart from the explanation over it.
+            The wrapper sits outside the ternary rather than inside each
+            branch: a fragment carries no DOM node of its own, so either
+            branch's children land as this div's direct children either
+            way. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          {filed === null ? (
+            <>
+              {/* What this is, before what it asks for. The record is already
+                  written down; the sentence is the part that is not. */}
+              <p>
+                Everything Armada knows about this job is already attached. What's missing is why you
+                think it was wrong.
+              </p>
+              <RadioGroup label="What was wrong">
+                {CLAIMS.map((option) => (
+                  <Radio
+                    key={option.value}
+                    name="report-claim"
+                    value={option.value}
+                    checked={claim === option.value}
+                    onChange={() => setClaim(option.value)}
+                  >
+                    {option.label}
+                  </Radio>
                 ))}
-              </Select>
-            ) : null}
-            {/* No `autoFocus`: the dialog's own contract puts initial focus on
-                Cancel, and a second claim on it would only lose to it. */}
-            <Textarea
-              label="What you know went wrong"
-              rows={5}
-              value={said}
-              onChange={(event) => setSaid(event.target.value)}
-            />
-            {refused === null ? null : <p>{refused}</p>}
-          </>
-        ) : (
-          <>
-            {/* What was filed, and what was not done with it. Said plainly:
-                a control that claimed to have opened an issue would be lying
-                about the one step still left to a person. */}
-            <p>
-              The report is on this machine and outlives the job — cleaning the job up leaves it
-              whole. <strong>Armada does not open anything in the tracker</strong>; copying puts the
-              issue below on your clipboard.
-            </p>
-            <Textarea label="The issue" rows={12} readOnly value={issueOf(filed)} />
-          </>
-        )}
+              </RadioGroup>
+              <p>{CLAIMS.find((option) => option.value === claim)?.note}</p>
+              {scoped ? (
+                <Select
+                  label="What it is about, if it is not the whole job"
+                  value={verdict}
+                  onChange={(event) => setVerdict(event.target.value)}
+                >
+                  <option value={WHOLE_JOB}>The whole job</option>
+                  {verdicts.map((one) => (
+                    <option key={keyOf(one)} value={keyOf(one)}>
+                      {one.label}
+                    </option>
+                  ))}
+                </Select>
+              ) : null}
+              {/* No `autoFocus`: the dialog's own contract puts initial focus on
+                  Cancel, and a second claim on it would only lose to it. */}
+              <Textarea
+                label="What you know went wrong"
+                rows={5}
+                value={said}
+                onChange={(event) => setSaid(event.target.value)}
+              />
+              {refused === null ? null : <p>{refused}</p>}
+            </>
+          ) : (
+            <>
+              {/* What was filed, and what was not done with it. Said plainly:
+                  a control that claimed to have opened an issue would be lying
+                  about the one step still left to a person. */}
+              <p>
+                The report is on this machine and outlives the job — cleaning the job up leaves it
+                whole. <strong>Armada does not open anything in the tracker</strong>; copying puts the
+                issue below on your clipboard.
+              </p>
+              <Textarea label="The issue" rows={12} readOnly value={issueOf(filed)} />
+            </>
+          )}
+        </div>
       </Dialog>
     </>
   );
