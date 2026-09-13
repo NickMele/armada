@@ -41,7 +41,7 @@ overwritten.
 | Who | May do |
 | --- | --- |
 | The step whose product is the plan | Record it whole, while its step runs. A retry of that step replaces the plan |
-| A step declaring `follows_plan: true` | Add a task, and move one to `working`, `done` or `dropped` with a reason |
+| A step declaring `follows_plan: true` | Add a task, and move one to `working`, `done` or `dropped` with a reason. A `done` task may move back; a `dropped` one stays dropped |
 | A person | Add a task, or drop one with a reason, from Bridge, while the Job runs |
 | Any other step | Read the plan. Change nothing |
 
