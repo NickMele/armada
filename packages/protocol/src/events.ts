@@ -49,6 +49,8 @@ export type Event =
   | ({ kind: "job.files_changed" } & JobFilesChanged)
   | ({ kind: "job.judging" } & JobJudging)
   | ({ kind: "job.checking" } & JobChecking)
+  /** A Drone handed in its report, before the gate starts. Since 13.3. */
+  | ({ kind: "evidence.submitted" } & EvidenceSubmitted)
   | ({ kind: "job.asking" } & JobAsking)
   | ({ kind: "job.command_waiting" } & JobCommandWaiting)
   | ({ kind: "job.forgotten" } & JobForgotten)
@@ -257,6 +259,30 @@ export type JobChecking = {
   step_id: string;
   /** The step's Checks as they stand, or absent because the ruling is written. */
   checking?: ChecksUnderway;
+  actor: string;
+  at: string;
+};
+
+/**
+ * A Drone handed in its report. **The gate has not started.**
+ * `crates/ipc/src/event.rs`. Since 13.3.
+ *
+ * The moment between the Drone submitting and `job.checking` that nothing else
+ * carried — a surface inferred it from the Drone's process exiting and then the
+ * Checks beginning, and neither is the same fact. `#813`.
+ *
+ * **A pointer, never a payload.** What was claimed, what shows it and what it
+ * left alone are on `GET /jobs/:job_id/evidence`, fetched by whoever opens the
+ * Job. One message per submission, and a step's second is refused while its
+ * first waits for the gate.
+ */
+export type EvidenceSubmitted = {
+  job_id: string;
+  /** The step the submission is against, off the working slot. */
+  step_id: string;
+  /** What the frozen step asked the work product to be. Fleet's word, not the Drone's. */
+  evidence_type: string;
+  /** Always `drone`. */
   actor: string;
   at: string;
 };

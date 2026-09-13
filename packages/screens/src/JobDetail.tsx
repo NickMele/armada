@@ -217,7 +217,15 @@ function OneJob({
   // the contextual tier reaches are values here rather than queries later** —
   // the run, the story and the strip — which is what lets `detail-keys` open a
   // step, a chapter or a stage by name. #271.
-  const run = whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? []);
+  // The moment this Job's Drone handed in, where one arrived and it is this
+  // Job's. A moment held for another Job would draw a submission under a step
+  // that has not made one — `mine.ts`'s rule for every other read here. `#813`.
+  const handed =
+    recorded.handed.state === "heard" && recorded.handed.jobId === job.id
+      ? recorded.handed.moment
+      : undefined;
+  const run =
+    whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? [], handed);
   // The strip's rows carry the three records a person reads because a verdict
   // went against them, and each opens. The Job id and the toast are the panel's,
   // so they are handed down rather than reached for; `phases.tsx` says why.

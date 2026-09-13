@@ -173,6 +173,24 @@ export class ReviewMaterial {
   }
 
   /**
+   * `evidence.submitted` arrived for this Job (`#813`): ask again, so a person
+   * with its claims on screen sees the new one without reopening the Job.
+   *
+   * **{@link remarksChanged}'s shape, and its no-op.** A Job this reader holds
+   * no id for has nobody to refresh — nothing has read its claims — and the
+   * event names every Job on the stream. `again`, not `want`, for the same
+   * reason there: `want` republishes a transient `reading` and blanks the block
+   * somebody is looking at.
+   *
+   * This is the one event that takes this read again. The two occasions in
+   * `takeAgain` are a person pressing Refresh and a reconnection repairing a
+   * failed read, and neither knows a submission landed.
+   */
+  async evidenceSubmitted(port: number, jobId: string): Promise<void> {
+    if (this.claims.jobId === jobId) await this.claims.again(port);
+  }
+
+  /**
    * All three again, for whichever is open. The bar's Refresh reaches this.
    *
    * **The conversation is in it, and it is the one that costs a process.** A

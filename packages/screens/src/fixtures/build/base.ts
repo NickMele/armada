@@ -549,7 +549,7 @@ export function stuck(over: Partial<Stuck> & { recourse: string[]; worktree_on_d
 
 /** The default folded reads — every read `JobDetail.recorded` needs, empty. */
 export function foldedReads(over: Partial<FoldedReads> = {}): FoldedReads {
-  return { footprint: NO_FOOTPRINT, evidence: NO_EVIDENCE, diff: NO_DIFF, remarks: NO_REMARKS, ...over };
+  return { footprint: NO_FOOTPRINT, handed: { state: "none" }, evidence: NO_EVIDENCE, diff: NO_DIFF, remarks: NO_REMARKS, ...over };
 }
 
 /** `now`, fixed a few minutes after the narrative's latest timestamp. */

@@ -407,6 +407,28 @@ export class FleetConnection {
       });
       return;
     }
+    if (event.kind === "evidence.submitted") {
+      // **The moment, held; the submission, fetched.** Fleet publishes this the
+      // instant the Evidence call lands, and it carries no part of what was
+      // submitted — `GET /jobs/:job_id/evidence` is that read, and `review.ts`
+      // says why it is asked for rather than pushed. `#813`.
+      //
+      // Only the open Job's, `job.files_changed`'s terms: nothing on the
+      // Board's row moves when a Drone hands in. The step's rail draws it until
+      // `job.checking` arrives with the gate's own reading, which is the window
+      // that used to say nothing at all.
+      //
+      // The claims are taken again where somebody is already holding them — a
+      // step sent back and submitted a second time is the case, and there the
+      // panel is open on the Job it just changed.
+      const mine = this.watched.jobId === event.job_id;
+      this.publish({
+        connection,
+        ...(mine ? { handed: { state: "heard" as const, jobId: event.job_id, moment: event } } : {}),
+      });
+      void this.material.evidenceSubmitted(fleet.port, event.job_id);
+      return;
+    }
     if (event.kind === "job.judging" || event.kind === "job.checking") {
       // `job.checking` is the same answer one tier along: `StepDetail.checking`
       // is re-read, and a running Check's elapsed time is counted, not re-read.
@@ -616,6 +638,13 @@ export class FleetConnection {
     const footprint = this.current.footprint;
     if (footprint.state === "read" && footprint.jobId !== jobId) {
       this.publish({ footprint: { state: "none" } });
+    }
+    // And the moment a Drone handed in, for the same reason one line up: it is
+    // one Job's, and carried into the next would say a step submitted that has
+    // not. `#813`.
+    const handed = this.current.handed;
+    if (handed.state === "heard" && handed.jobId !== jobId) {
+      this.publish({ handed: { state: "none" } });
     }
     await this.watched.want(this.connected()?.port ?? null, jobId);
   }

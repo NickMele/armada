@@ -450,6 +450,7 @@ export type {
   DroneExited,
   DroneSpawned,
   Event,
+  EvidenceSubmitted,
   JobAsking,
   JobCreated,
   JobFilesChanged,

@@ -48,6 +48,7 @@ function asAnotherJob(fixture: JobFixture, id: string): JobFixture {
     ...(fixture.history === undefined ? {} : { history: stamped(fixture.history, id) }),
     recorded: {
       footprint: stamped(fixture.recorded.footprint, id),
+      handed: fixture.recorded.handed,
       evidence: stamped(fixture.recorded.evidence, id),
       diff: stamped(fixture.recorded.diff, id),
       remarks: stamped(fixture.recorded.remarks, id),

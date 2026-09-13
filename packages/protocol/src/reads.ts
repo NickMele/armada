@@ -12,6 +12,7 @@ import type {
   CallArguments,
   CheckOutput,
   CommandExplained,
+  EvidenceSubmitted,
   JobDetail,
   JobExamined,
   JobFilesChanged,
@@ -74,6 +75,18 @@ export type HeldWorktrees =
 export type Footprint =
   | { state: "none" }
   | { state: "read"; jobId: string; reading: JobFilesChanged };
+
+/**
+ * The last `evidence.submitted` for the open Job — the moment its Drone handed
+ * in, before the gate started. `#813`.
+ *
+ * `Footprint`'s two states and for its reason: nothing is fetched, so there is
+ * no reading and no failed read. What the Drone claimed is not here and never
+ * travels on the stream; `Evidence` is that read, and it is asked for.
+ */
+export type Handed =
+  | { state: "none" }
+  | { state: "heard"; jobId: string; moment: EvidenceSubmitted };
 
 /**
  * One read of one route under one Job, in the four states every such read has.

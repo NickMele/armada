@@ -16,6 +16,7 @@ import type {
   Evidence,
   Examination,
   Footprint,
+  Handed,
   Holds,
   HeldWorktrees,
   History,
@@ -199,6 +200,15 @@ export type BridgeState = {
    */
   footprint: Footprint;
   /**
+   * The moment the open Job's Drone handed in, before the gate started.
+   *
+   * **Only the open Job's, `footprint`'s terms** — `evidence.submitted` is
+   * published for every Job on the one stream, and a submission on a Job
+   * nobody has open moves nothing on the Board. What was submitted is
+   * `evidence`, which is fetched; this is only that it happened. `#813`.
+   */
+  handed: Handed;
+  /**
    * One Job's transition history, where a surface asked for one.
    *
    * **Read when it is asked for, not on every open.** It is its own operation
@@ -333,6 +343,7 @@ export const NOTHING_YET: BridgeState = {
   journalled: { state: "none" },
   followed: { state: "none" },
   footprint: { state: "none" },
+  handed: { state: "none" },
   history: { state: "none" },
   evidence: { state: "none" },
   diff: { state: "none" },

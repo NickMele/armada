@@ -23,6 +23,7 @@ import type {
   Evidence,
   Examination,
   Footprint,
+  Handed,
   Holds,
   JobDetail as JobWhole,
   JobLog,
@@ -41,6 +42,12 @@ import type {
  */
 export type FoldedReads = {
   footprint: Footprint;
+  /**
+   * The moment the Job's Drone handed in, before the gate started. Pushed, not
+   * fetched — `footprint`'s terms — and it says only that a submission landed.
+   * What was in it is `evidence`, which is asked for. `#813`.
+   */
+  handed: Handed;
   evidence: Evidence;
   diff: Diff;
   /**
