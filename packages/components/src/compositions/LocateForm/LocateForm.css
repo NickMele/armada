@@ -59,6 +59,11 @@
   border-inline-start: var(--error-edge) solid var(--error);
 }
 
+.armada-locate__said {
+  max-height: calc(var(--leading-sm) * 6);
+  align-self: stretch;
+}
+
 .armada-locate__saying {
   margin: 0;
   font-size: var(--text-sm);

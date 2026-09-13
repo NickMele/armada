@@ -149,9 +149,12 @@ export function Shell({
         </Select>
         {/* Under the picker rather than in it: an option that opened a dialog would be a pick that picked nothing. */}
         {onAddRepository === undefined ? null : (
-          <Button variant="ghost" size="sm" onClick={onAddRepository}>
-            Add a repository
-          </Button>
+          // A block around it, so the rail's column does not stretch it and centre its label.
+          <div>
+            <Button variant="ghost" size="sm" onClick={onAddRepository}>
+              Add a repository
+            </Button>
+          </div>
         )}
         </>
       }

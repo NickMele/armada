@@ -1,6 +1,7 @@
 import { Button } from "../../primitives/Button/Button";
 import { Dialog } from "../../primitives/Dialog/Dialog";
 import { Input } from "../../primitives/Input/Input";
+import { ScrollArea } from "../../primitives/ScrollArea/ScrollArea";
 import { ErrorCode } from "../../errors/ErrorCode/ErrorCode";
 
 /**
@@ -63,15 +64,21 @@ export function LocateForm(props: LocateFormProps) {
           {refusal === undefined ? null : (
             <div className="armada-locate__refusal" role="alert">
               {refusal.code === undefined ? null : <ErrorCode kind="fault" code={refusal.code} />}
-              <p className="armada-locate__saying">{refusal.saying}</p>
+              {/* Git's own words can run to pages; they scroll so the controls stay on screen. */}
+              <ScrollArea className="armada-locate__said">
+                <p className="armada-locate__saying">{refusal.saying}</p>
+              </ScrollArea>
               {refusal.next === undefined ? null : <p className="armada-locate__next">{refusal.next}</p>}
             </div>
           )}
-          <div className="armada-locate__other">
-            <Button variant="ghost" size="sm" disabled={sending} onClick={() => onMode(cloning ? "folder" : "clone")}>
-              {cloning ? "Add a folder on disk" : "Clone from a URL"}
-            </Button>
-          </div>
+          {/* Gone while sending rather than disabled: the other act means nothing until this one answers. */}
+          {sending ? null : (
+            <div className="armada-locate__other">
+              <Button variant="ghost" size="sm" onClick={() => onMode(cloning ? "folder" : "clone")}>
+                {cloning ? "Add a folder on disk" : "Clone from a URL"}
+              </Button>
+            </div>
+          )}
         </div>
       }
     >
