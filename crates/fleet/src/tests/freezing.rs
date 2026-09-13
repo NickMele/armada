@@ -11,17 +11,23 @@ use adapter_traits::{Landing, Rendering, UnderReview, WhatPeopleSaid, WhatTheFor
 
 use api::Queries;
 use config::{Manifest, Reloads};
-use core_model::{Job, JobId, JobStatus, StepState, StepVerdict};
+use core_model::{
+    Facts, GateManifest, GateOutcome, Job, JobId, JobNumber, JobStatus, ManifestId, ModelName,
+    NewJob, NotRunReason, StepId, StepSeed, StepState, StepVerdict, Timestamp, Title,
+    TopLevelOrigin, Ulid, Urgency,
+};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::freezing::frozen_among;
 use crate::noticing::Noticing;
+use crate::repositories::{Located, SetUp};
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_proposal, diff_evidence, fittings, one, two_steps_gated_on_a_manifest_rule,
     two_steps_gated_on_a_person, worktree_directory,
 };
+use crate::tests::gate::workflow;
 use crate::tests::merging::{at_the_gate_having_delivered, PULL_REQUEST};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -369,4 +375,95 @@ fn one_frozen_manifest_of_two_freezes_the_job_and_is_the_one_named() {
         "whichever order they gate in"
     );
     assert!(named(vec![&open, &open]).is_empty());
+}
+
+/// The second gating Manifest is frozen and the owner open, so admission holds the Job and
+/// names the second; the Job is built directly because nothing on `main` fills
+/// `gate_manifests` until Convoy (#49).
+#[tokio::test]
+async fn a_frozen_second_gating_manifest_holds_admission_and_is_the_one_named() {
+    let home = TempDir::new();
+    let at = Frozen::over(&home, "", None);
+
+    let second = Manifest::parse(
+        std::path::Path::new("second/armada.yml"),
+        "version: 1\nid: 01SECONDMANIFEST\nfreeze: true\n",
+    )
+    .expect("the second manifest parses");
+    at.fleet
+        .repositories()
+        .add(Located {
+            root: home.path().join("second").to_string_lossy().to_string(),
+            records_root: home
+                .path()
+                .join("second-records")
+                .to_string_lossy()
+                .to_string(),
+            set_up: Some(SetUp::of(second, Default::default())),
+        })
+        .expect("the second is served");
+
+    let created_at = Timestamp::from_rfc3339("2026-09-13T09:00:00.000Z");
+    let job = Job::create_top_level(
+        NewJob {
+            id: JobId::carried(Ulid::carried("01TESTTWOGATEMANIFESTS0001")),
+            title: Title::new("a change gated by two Manifests").expect("a title"),
+            workflow: workflow("/usr/bin/true").frozen().clone(),
+            owner_manifest_id: ManifestId::carried(Ulid::carried("01FIXTUREMANIFEST")),
+            urgency: Urgency::Normal,
+            atomic: false,
+            model: ModelName::new("the-configured-model").expect("a model name"),
+            acceptance_criteria: Vec::new(),
+            steps: vec![
+                StepSeed {
+                    step_id: StepId::new("implement"),
+                    ordinal: 0,
+                },
+                StepSeed {
+                    step_id: StepId::new("summarise"),
+                    ordinal: 1,
+                },
+            ],
+            dependencies: Vec::new(),
+            gate_manifests: vec![GateManifest {
+                manifest_id: ManifestId::carried(Ulid::carried("01SECONDMANIFEST")),
+                outcome: GateOutcome::DidNotRun(NotRunReason::Frozen),
+            }],
+            write_targets: None,
+            subject: None,
+            redispatched_from: None,
+            proposal_id: None,
+            number: JobNumber::carried(1),
+            facts: Facts::empty(),
+            scope_revisions: Vec::new(),
+            attachments: Vec::new(),
+        },
+        TopLevelOrigin::Manual,
+        created_at.clone(),
+    );
+
+    at.fleet
+        .store()
+        .lock()
+        .await
+        .insert_job(&job, &created_at)
+        .expect("the Job is recorded");
+    at.fleet
+        .approve(job.id())
+        .await
+        .expect("a person's approval is never refused for a freeze");
+
+    let admitted = at.fleet.admit_next().await.expect("admission runs");
+    assert!(
+        admitted.is_empty(),
+        "the second gate holds it although the owner is open"
+    );
+
+    let row = at.row(job.id()).await;
+    assert_eq!(row.queued_reason.map(|why| why.as_wire()), Some("frozen"));
+    assert_eq!(
+        row.frozen_by,
+        vec![ipc::ManifestId::carried("01SECONDMANIFEST")],
+        "the frozen gate is named, not the open owner"
+    );
 }
