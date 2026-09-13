@@ -322,6 +322,19 @@ export class RehearsalConnection {
     if (this.checkoutSheet.open) void this.checkoutSheet.again(port);
   }
 
+  /**
+   * A server moved. **Both sheets draw it off their own `servers[].instance`**, not the list above,
+   * so the one holding it is read again — `onCheckoutRunFinished`'s terms. Fleet picks which
+   * instance a sheet shows, live or last ended, and a second copy of that rule here would drift.
+   */
+  onServerMoved(row: ServerState, port: number): void {
+    if (row.job_id === undefined) {
+      if (this.checkoutSheet.open) void this.checkoutSheet.again(port);
+    } else if (this.sheet.jobId === row.job_id) {
+      void this.sheet.again(port);
+    }
+  }
+
   /** One `server.*` event, folded into the list it replaces a row in or joins. */
   onServerEvent(current: readonly ServerState[], row: ServerState): ServerState[] {
     return current.some((one) => one.id === row.id)

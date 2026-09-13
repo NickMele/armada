@@ -124,7 +124,13 @@ export type RunPageServerStatus =
       links: RunPageServerLink[];
       startedByDrone?: boolean;
     }
-  | { phase: "exited"; exitCode: number };
+  | {
+      phase: "exited";
+      /** Absent where it ended on a signal, which is every stop somebody pressed. */
+      exitCode?: number;
+      /** Somebody stopped it. `false` or absent: it stopped on its own. */
+      stopped?: boolean;
+    };
 
 export type RunPageProps = {
   /** When `armada.yml` was last changed by a commit, as a sentence. */
@@ -604,7 +610,8 @@ function RunPageServer({
   if (status.phase === "exited") {
     return (
       <p className="armada-run-page__server-status">
-        Stopped on its own. <FactChip>{`exit ${status.exitCode}`}</FactChip>
+        {status.stopped === true ? "Stopped." : "Stopped on its own."}
+        {status.exitCode === undefined ? null : <> <FactChip>{`exit ${status.exitCode}`}</FactChip></>}
       </p>
     );
   }

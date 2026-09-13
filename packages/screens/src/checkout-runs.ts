@@ -141,7 +141,7 @@ export function checkoutServerStatusOf(
 function statusOf(instance: ServerState | undefined, now: number): RunPageServerStatus | undefined {
   if (instance === undefined) return undefined;
   if (instance.phase === "starting") return { phase: "starting" };
-  if (instance.phase === "exited") return { phase: "exited", exitCode: instance.exit_code ?? 0 };
+  if (instance.phase === "exited") return exitedOf(instance);
   return {
     phase: "serving",
     address: instance.ports[0] === undefined ? instance.serve : `localhost:${instance.ports[0].port}`,
@@ -335,11 +335,7 @@ export function useManifestRuns(
   // the output of the one still printing, is the panel claiming a result that
   // has not happened.
   const about =
-    dismissed || runningNow !== undefined
-      ? undefined
-      : viewing === null
-        ? runs[0]
-        : runs.find((record) => record.id === viewing.runId);
+    dismissed || runningNow !== undefined ? undefined : checkoutResultRunOf(runs, shown, viewing?.runId);
 
   return {
     ...(data?.manifest_edited_at === undefined
@@ -454,6 +450,30 @@ export function runningEntryOf(
   return groups
     .flatMap((group) => group.entries)
     .find((entry) => !isServerEntry(entry.id) && nameOf(entry.id) === runningName)?.id;
+}
+
+/**
+ * Which finished run the result line is about: one opened from *Earlier runs*, else the selected
+ * entry's newest. **A server has none** — it is not a run, and `gate`'s result under it read as the server's.
+ */
+export function checkoutResultRunOf(
+  runs: readonly CheckoutRunRecord[],
+  shown: string | null,
+  viewing: string | undefined,
+): CheckoutRunRecord | undefined {
+  if (viewing !== undefined) return runs.find((record) => record.id === viewing);
+  if (shown === null) return runs[0];
+  if (isServerEntry(shown)) return undefined;
+  return runs.find((record) => record.name === nameOf(shown));
+}
+
+/** An ended server. A stop somebody pressed is not "on its own", and no code is not `exit 0`. */
+export function exitedOf(instance: ServerState): RunPageServerStatus {
+  return {
+    phase: "exited",
+    stopped: instance.stopped,
+    ...(instance.exit_code === undefined ? {} : { exitCode: instance.exit_code }),
+  };
 }
 
 /** The result line for a finished run. Unhued: a rehearsal is not a verdict. */

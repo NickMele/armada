@@ -118,8 +118,10 @@ export type RunSheetServerStatus =
     }
   | {
       phase: "exited";
-      /** A server that exits on its own has failed, whatever the code. */
-      exitCode: number;
+      /** A server that exits on its own has failed, whatever the code. Absent: it ended on a signal. */
+      exitCode?: number;
+      /** Somebody stopped it. `false` or absent: it stopped on its own. */
+      stopped?: boolean;
     };
 
 export type RunSheetProps = {
@@ -469,7 +471,8 @@ function RunSheetServer({
   if (status.phase === "exited") {
     return (
       <p className="armada-run-sheet__server-status">
-        Stopped on its own. <FactChip>{`exit ${status.exitCode}`}</FactChip>
+        {status.stopped === true ? "Stopped." : "Stopped on its own."}
+        {status.exitCode === undefined ? null : <> <FactChip>{`exit ${status.exitCode}`}</FactChip></>}
       </p>
     );
   }
