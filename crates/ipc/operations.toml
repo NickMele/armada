@@ -341,7 +341,7 @@ The first thing Setup does, and a read of the repository rather than of `armada.
 
 Evidence, never a proposal. Every finding carries its file because every line of the proposal built on it (#823) must cite one, and nothing here says which script gates code. What was not read is said beside it, on drift's rule: a tool this read has never heard of reads as not followed, never as clean.
 
-It writes nothing and runs nothing, and the first is a fact about the type: Fleet hands it a tree that reads a file and lists a directory, with no write on it. Served against the checkout Fleet was started in until Locate (#821) names another.
+It writes nothing and runs nothing, and the first is a fact about the type: Fleet hands it a tree that reads a file and lists a directory, with no write on it. Served against the repository `?repository=` names — a root `list_repositories` answers with — and the one Fleet was started in where it names none.
 
 `agent_access` is `No` on the checkout-run operations' terms, the reads among them included: the main checkout is the tree a Drone is confined out of, and Scan reads that same tree, uncommitted edits and all. The column is one set shared by Helm and every Drone, so `Yes` would let any agent read the owner's working tree through Fleet. Proposal's agent help needs another way to this answer, and that is #823's to settle.
 """
@@ -429,7 +429,7 @@ transport = "HTTP"
 agent_access = "No"
 description = "Paths under the checkout narrowed against typed text, for the @ mention popup"
 notes = """
-The read behind Bridge's `@` mention — a person typing a request or a brief narrows this as they type, and picking a result inserts the path rather than making them recall or paste it by hand. No manifest_id, matching get_manifest_reading: a Fleet serves one repository, and a request is written before any Job, and therefore any worktree, exists to read one from instead.
+The read behind Bridge's `@` mention — a person typing a request or a brief narrows this as they type, and picking a result inserts the path rather than making them recall or paste it by hand. `?manifest_id=` names the checkout, the one Fleet was started in where absent: a request is written before any Job, and therefore any worktree, exists to read one from instead.
 
 It reads the checkout at rest, not a Job's worktree — crates/fleet/src/files.rs walks host().repo_root. Capped and not exhaustive, and the walk stops as soon as it has enough rather than reading the whole tree first and cutting the list after. .git, node_modules and target are excluded by name; nothing here is .gitignore-aware, and that is a real gap rather than a decision — the bound and the ignore rules both need a repository sized in the design workspace before either is settled properly, and this ships the excludes that make an uninformed walk usable in the meantime.
 
@@ -500,7 +500,31 @@ Added because nothing joined a Job's `owner_manifest_id` to a Manifest. A propos
 
 There is no name here because `armada.yml` declares none — `version`, `id`, `checks` and `commands` are the whole schema `crates/config` reads, and every other key is refused. The repository directory is carried instead, which is a fact rather than an invention. What a Manifest should be called is a schema decision and is open.
 
-One Manifest at M1, and the row is still a list: Reach scopes the Board per Manifest, and a query that answered with one would have to be replaced rather than extended.
+Every Manifest Fleet serves, the one it was started in first: one Fleet serves many repositories and the rail's project picker switches between them. A repository added with no `armada.yml` is not here until one loads — `list_repositories` lists it.
+"""
+
+[operations.list_repositories]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "Every repository Fleet serves, the one it was started in first, each with its Manifest where one has loaded"
+notes = """
+Beside `list_manifests` rather than instead of it: Setup starts from a folder nobody wrote an `armada.yml` for, and that repository has a root and records before it has a Manifest. The root is what `?repository=` names on Scan and its proposals.
+
+`agent_access` is `No` for `get_repository_scan`'s reason: a root is the owner's checkout on disk.
+"""
+
+[operations.add_repository]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Serve one more repository, from a folder a person chose"
+notes = """
+Locate, by folder — `docs/journeys/set-up-a-project-manifest.md`, *Getting in*. The body is `path`, absolute. Answers 201 with the repository as `list_repositories` lists it.
+
+Refused with a 422 where the folder is not the root of a git repository (`fleet.not_a_repository`) or its `armada.yml` or workflows will not load (`fleet.repository_refused`), and a 409 where the folder, or the Manifest id its `armada.yml` declares, is already served (`fleet.repository_served`) — a Job names its repository by that id alone. A folder with no `armada.yml` is served, for Scan to read.
+
+The store's Jobs for a repository added again are reconciled as a restart reconciles them. Clone from a URL is not this operation.
 """
 
 [operations.list_models]
