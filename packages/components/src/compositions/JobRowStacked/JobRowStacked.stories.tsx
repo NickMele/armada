@@ -74,6 +74,7 @@ export const NeedsApproval: Story = {
     statusLabel: "Needs approval",
     headline: "Coalesce concurrent token refreshes",
     jobId: "job_7c31",
+    handle: "7-coalesce-token-refreshes",
     tracks: GATE_TRACKS,
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
@@ -108,6 +109,7 @@ export const Queued: Story = {
     statusLabel: "Queued",
     headline: "Retire the legacy poke path",
     jobId: "job_8b42",
+    handle: "6-retire-the-legacy-poke-path",
     tracks: GATE_TRACKS,
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
@@ -147,6 +149,7 @@ export const QueuedAfterARestart: Story = {
     statusLabel: "Waiting on resources",
     headline: "Retire the legacy poke path, restarted",
     jobId: "job_8b42",
+    handle: "6-retire-the-legacy-poke-path",
     tracks: GATE_TRACKS,
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
@@ -176,6 +179,7 @@ export const Running: Story = {
     statusLabel: "Running",
     headline: "Split the settings reducer",
     jobId: "job_2d90bb",
+    handle: "12-split-the-settings-reducer",
     fields: [
       { value: "fix/settings-split", mono: true, icon: GitBranch, copyValue: "fix/settings-split" },
       { value: <StepBar total={4} current={2} activity="running" label="Step 2 of 4" /> },
@@ -252,6 +256,7 @@ export const EscalatedStalled: Story = {
     statusLabel: "Stalled",
     headline: "Job 12 stalled at step 3",
     jobId: "job_12",
+    handle: "12-fix-auth-session-race",
     fields: [
       { value: "auth/session.rs", mono: true, icon: GitBranch, copyValue: "auth/session.rs" },
       { value: <StepBar total={5} current={3} activity="stopped" label="Step 3 of 5" /> },
@@ -291,6 +296,7 @@ export const Failed: Story = {
     statusLabel: "Failed",
     headline: "Cache the manifest read",
     jobId: "job_91ab",
+    handle: "14-cache-the-manifest-read",
     fields: [
       { value: "feat/manifest-cache", mono: true, icon: GitBranch, copyValue: "feat/manifest-cache" },
       { value: <StepBar total={4} current={3} activity="failed" label="Step 3 of 4" /> },
@@ -315,6 +321,7 @@ export const Killed: Story = {
     statusLabel: "Killed",
     headline: "Rename the session token field",
     jobId: "job_5e88",
+    handle: "18-rename-session-token",
     fields: [
       { value: "feat/session-rename", mono: true, icon: GitBranch, copyValue: "feat/session-rename" },
       { value: <StepBar total={4} current={2} activity="killed" label="Step 2 of 4" /> },
@@ -335,6 +342,7 @@ export const Done: Story = {
     statusLabel: "Done",
     headline: "Add a retry ceiling to the poke loop",
     jobId: "job_4f10",
+    handle: "21-retry-ceiling-on-poke-loop",
     fields: [
       { value: "fix/poke-ceiling", mono: true, icon: GitBranch, copyValue: "fix/poke-ceiling" },
       { value: <StepBar total={4} current={5} activity="advanced" label="All 4 of 4 steps advanced" /> },
@@ -381,6 +389,7 @@ export const AtTheWidthFloor: StoryObj = {
         statusLabel="Running"
         headline="Split the settings reducer so the selectors can be tested alone"
         jobId="job_2d90bb"
+        handle="12-split-the-settings-reducer-selectors"
         fields={[
           { value: "fix/settings-split-selectors", mono: true, icon: GitBranch, copyValue: "fix/settings-split-selectors" },
           { value: <StepBar total={4} current={2} activity="running" label="Step 2 of 4" /> },
@@ -410,6 +419,7 @@ export const Convoy: Story = {
   args: {
     ...Running.args,
     headline: "Retire the poke path across the fleet",
+    handle: "16-retire-poke-path-fleet",
     fields: [
       { value: "crates/fleet +2", mono: true, icon: Folder },
       { value: <StepBar total={4} current={2} activity="running" label="Step 2 of 4" /> },
@@ -453,6 +463,7 @@ export const SubDispatchedWaitingOnResources: Story = {
     statusLabel: "Waiting on resources",
     headline: "Precompute embeddings for the batch import step",
     jobId: "job_9f21",
+    handle: "23-precompute-embeddings-batch-import",
     dimmed: true,
     tracks: GATE_TRACKS,
     fields: [
@@ -495,6 +506,7 @@ export const TheLongestVerbAtTheWidthFloor: StoryObj = {
         statusLabel="A required command did not succeed"
         headline="Reconcile orphaned drones on Fleet start"
         jobId="job_31c7"
+        handle="31-reconcile-orphaned-drones-fleet-start"
         fields={[
           { value: "fix/orphan-reconcile", mono: true, icon: GitBranch, copyValue: "fix/orphan-reconcile" },
           { value: <StepBar total={5} current={3} activity="failed" label="Step 4 of 5" /> },

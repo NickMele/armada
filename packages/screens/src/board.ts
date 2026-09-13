@@ -148,10 +148,16 @@ export function tabSuspended(query: string): boolean {
  * Whether a job answers a text match.
  *
  * **What a person types is what they can see, plus the ids they quote.** The
- * title, the job id, the branch and the step it is on are all on the row; the
- * workflow's name is on the row as the workflow field, and its id is what a
- * person pastes out of a log. Nothing here searches a field the row does not
- * carry — a match a person cannot see the reason for reads as a bug.
+ * title, the handle, the job id, the branch and the step it is on are all on
+ * or under the row; the workflow's name is on the row as the workflow field,
+ * and its id is what a person pastes out of a log. Nothing here searches a
+ * field the row does not carry — a match a person cannot see the reason for
+ * reads as a bug.
+ *
+ * **The handle first, and the id kept beside it.** A row shows the handle
+ * now, so "7" or "7-fix" is what a person actually types back — but the id
+ * still names every request, and a value copied before this change still
+ * finds its row.
  */
 export function matches(
   job: JobSummary,
@@ -161,7 +167,15 @@ export function matches(
   const needle = query.trim().toLowerCase();
   if (needle === "") return true;
   const workflow = workflows.find((held) => held.id === job.workflow_id);
-  return [job.title, job.id, job.branch, job.current_step_id, job.workflow_id, workflow?.name]
+  return [
+    job.title,
+    job.handle,
+    job.id,
+    job.branch,
+    job.current_step_id,
+    job.workflow_id,
+    workflow?.name,
+  ]
     .filter((field): field is string => field !== undefined)
     .some((field) => field.toLowerCase().includes(needle));
 }

@@ -6,7 +6,7 @@
 // price — `docs/practices/react.md` is explicit — and every case below is a
 // sentence somebody reads immediately before destroying something.
 
-import type { HeldReason, WorktreeHeld } from "@armada/protocol";
+import type { HeldReason, JobSummary, WorktreeHeld } from "@armada/protocol";
 import { provablySafe, reclaimable } from "@armada/protocol";
 import { instant } from "./duration";
 
@@ -39,6 +39,26 @@ export function divided(worktrees: readonly WorktreeHeld[]): Divided {
     else waiting.push(held);
   }
   return { deciding, waiting, automatic };
+}
+
+/**
+ * A `depended_on` reason, with its `by` read against the handle a person
+ * would recognise rather than the id fleet named it by.
+ *
+ * **The handle where Bridge holds one, the id otherwise.** The job that is
+ * still holding this worktree open is, ordinarily, still on the board — but a
+ * lineage fold or a sweep between the two reads can leave it named and gone,
+ * and the id is still a fact worth showing rather than nothing.
+ */
+export function namedByHandle(held: WorktreeHeld, jobs: readonly JobSummary[]): WorktreeHeld {
+  return {
+    ...held,
+    held: held.held.map((reason) =>
+      reason.why === "depended_on"
+        ? { ...reason, by: reason.by.map((jobId) => jobs.find((job) => job.id === jobId)?.handle ?? jobId) }
+        : reason,
+    ),
+  };
 }
 
 /**

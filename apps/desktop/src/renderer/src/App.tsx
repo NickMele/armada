@@ -587,6 +587,10 @@ export function App() {
             <Boundary region="the held worktrees" {...guarded}>
               <Worktrees
                 held={state.held}
+                // Read for the handle a `depended_on` reason names its
+                // blocker by — the only fact this screen borrows from the
+                // board rather than from `held` itself.
+                jobs={state.jobs}
                 onWant={readHeld}
                 // The receipt belongs to the press that asked for it, so it is
                 // answered to the surface rather than published: a reclaim
@@ -800,7 +804,7 @@ export function App() {
         // surface draws from — Journey 9's own table. Empty until that read
         // has answered, which is what the effect above holds open.
         runnables={checkoutRunnablesOf(state.checkoutRunSheet)}
-        jobs={state.jobs.map((job) => ({ id: job.id, label: `${job.id} — ${job.title}` }))}
+        jobs={state.jobs.map((job) => ({ id: job.id, label: `${job.handle} — ${job.title}` }))}
         // Fleet settings is the section's first row. It carries no value,
         // because choosing it opens the sheet rather than stating a field.
         settings={[{ id: "fleet_settings", label: "Fleet settings" }]}

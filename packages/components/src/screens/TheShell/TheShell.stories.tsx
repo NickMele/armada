@@ -162,6 +162,7 @@ export const OneRowInATallWindow: Story = {
               statusLabel="went quiet"
               headline="Preserve job metadata during resource cleanup"
               jobId="01M21BKVPW002DC0ATD1X9T0VF"
+              handle="9-preserve-job-metadata-cleanup"
               fields={[
                 { label: "Workflow", value: "feature, 4 steps" },
                 { label: "Progress", value: "scope" },

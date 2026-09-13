@@ -238,6 +238,7 @@ export function Row({
       statusLabel={reading.verb}
       headline={headline}
       jobId={job.id}
+      handle={job.handle}
       fields={facts}
       // **Every running row, and the row applies the ceiling.** Two Jobs run
       // at once now, so this alone would breathe twice on one board — which

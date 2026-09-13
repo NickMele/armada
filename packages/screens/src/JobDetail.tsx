@@ -650,7 +650,7 @@ function OneJob({
             // draw — `Look now` came with it, because it acts on this reading
             // and not on the five lines that open it.
             holds={{
-              jobId: job.id,
+              jobId: job.handle,
               reading: holding,
               note: whyNoReading(resources),
               age: holding === null ? undefined : (span(holding.read_at, now) ?? undefined),
