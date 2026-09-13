@@ -16,6 +16,8 @@
 //! so what those cases hold is the opposite property: a field the tool does not
 //! take is refused rather than ignored.
 
+/// An empty optional field leaves no key rather than a `null`.
+mod absent;
 mod capacity;
 /// A refused command, and the answers a person has for it.
 mod commanding;

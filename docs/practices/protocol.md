@@ -186,6 +186,12 @@ safe strategy, and that's a major bump — the lifeboat, not a banner.
 | Change a field's type (including widening, e.g. `u32` → `u64`) | **Major** | "Widening" is a Rust-only intuition; on the wire it's a different JSON shape and a different TS type, and the old side's deserializer doesn't know it's "compatible" |
 | Remove anything | **Major** | The obvious case, included for completeness |
 
+**An optional field is left out when it is empty, never sent as `null`.**
+Bridge types it `field?: T` and compares against `undefined`, which `null`
+passes. Every `Option` on a DTO Fleet writes carries `skip_serializing_if`, or
+`deserialize_with = "stated"` where `null` is a value a person chose.
+`xtask/src/rules_protocol/nulls.rs` is the rule.
+
 The three people get wrong most often: widening an enum "because it's just
 adding cases," making a field `Option<T>` "to be safe," and renaming a variant
 "for clarity." All three feel non-breaking from inside the change and are not.

@@ -437,6 +437,7 @@ pub struct CallArguments {
     /// `None` is an old row again — not an argument of no length. A surface
     /// holding `whole: false` and `length: None` has what there is and no way
     /// to say how much is missing, and says that rather than inventing a size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub length: Option<usize>,
 }
 
