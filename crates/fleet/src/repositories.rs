@@ -230,6 +230,9 @@ pub enum NotAdded {
     ManifestServed { id: String, by: String },
     /// Nothing is served at this root.
     NotServed { root: String },
+    /// The root is not an absolute path. Keys beside a root's own, such as a
+    /// workspace's port span, rely on every served root being absolute.
+    RelativeRoot { root: String },
 }
 
 impl std::fmt::Display for NotAdded {
@@ -237,6 +240,10 @@ impl std::fmt::Display for NotAdded {
         match self {
             NotAdded::AlreadyServed { root } => write!(out, "{root} is already served"),
             NotAdded::NotServed { root } => write!(out, "nothing is served at {root}"),
+            NotAdded::RelativeRoot { root } => write!(
+                out,
+                "{root} is a relative path, and a repository is served at the absolute path of its root"
+            ),
             NotAdded::ManifestServed { id, by } => write!(
                 out,
                 "{by} already declares Manifest id `{id}`, and a Job names its repository by that \
@@ -273,6 +280,9 @@ impl Repositories {
     /// Serve one more. Checked and added under one lock, so two adds of one
     /// folder cannot both pass.
     pub fn add(&self, located: Located) -> Result<Arc<Repository>, NotAdded> {
+        if !std::path::Path::new(&located.root).is_absolute() {
+            return Err(NotAdded::RelativeRoot { root: located.root });
+        }
         let mut every = self.0.write().unwrap_or_else(PoisonError::into_inner);
         if every.iter().any(|one| one.root == located.root) {
             return Err(NotAdded::AlreadyServed { root: located.root });

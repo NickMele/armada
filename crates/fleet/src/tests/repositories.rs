@@ -474,3 +474,22 @@ async fn a_folder_with_no_manifest_is_scanned_and_set_up_once_one_loads() {
         "and it is watched once it has one"
     );
 }
+
+/// **A relative root is refused, in words, and nothing is served.**
+#[test]
+fn a_relative_root_is_refused_and_nothing_is_served() {
+    let repositories = crate::repositories::Repositories::none();
+    let why = repositories
+        .add(Located {
+            root: String::from("repos/one"),
+            records_root: String::from("/records/repos/one"),
+            set_up: None,
+        })
+        .err()
+        .expect("a relative root is refused");
+    assert!(
+        why.to_string().starts_with("repos/one is a relative path"),
+        "{why}"
+    );
+    assert!(repositories.served().is_empty());
+}
