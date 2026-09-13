@@ -316,6 +316,12 @@ test("forgetting the job is withheld until an unmerged branch is gone or chosen"
   expect(offeredOn(row, choosing({ deleteBranch: true })).forget).toBe(true);
 });
 
+test("forgetting the job is withheld while a branch with no answerable base stands", () => {
+  const row = held({ on_disk: false, held: [{ why: "base_unanswered", detail: "none of main is here" }] });
+
+  expect(offeredOn(row, NO_CHOICE).forget).toBe(false);
+});
+
 test("a row with neither the checkout nor an unmerged branch offers forget outright", () => {
   const row = held({ on_disk: false, held: [] });
 

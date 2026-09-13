@@ -44,7 +44,10 @@ export function offeredOn(held: WorktreeHeld, choice: RowChoice): RowChoice {
   const deleteBranch = unmergedOf(held) !== null;
   const checkoutSettled = !removeCheckout || choice.removeCheckout;
   const branchSettled = !deleteBranch || choice.deleteBranch;
-  return { removeCheckout, deleteBranch, forget: checkoutSettled && branchSettled };
+  // A branch whose base nothing could name still stands and offers no delete,
+  // so forgetting its record would orphan it the same way.
+  const unanswered = held.held.some((reason) => reason.why === "base_unanswered");
+  return { removeCheckout, deleteBranch, forget: checkoutSettled && branchSettled && !unanswered };
 }
 
 /** Rows carrying at least one chosen act, in fleet's own order. */

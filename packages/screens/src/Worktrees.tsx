@@ -209,6 +209,8 @@ export function Worktrees({
         const outcome = await onReclaim(row.job_id);
         if (outcome.ok) {
           if (outcome.reclaimed !== undefined) gaveBack[row.job_id] = outcome.reclaimed;
+          // A locked checkout answers ok and stays on disk; its receipt says why.
+          if (outcome.reclaimed?.worktree.removed === false) checkoutOk = false;
         } else {
           checkoutOk = false;
           failed.push({ jobId: row.job_id, title: row.job_title, act: "checkout", outcome });
