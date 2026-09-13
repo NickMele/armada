@@ -82,6 +82,22 @@ function boardOn(port: number): Board {
   };
 }
 
+/** A listener that answers a fixed body and records what arrived — `fleetRecording`'s shape, for a case whose answer is not a Job. */
+async function fleetAnswering(body: unknown, into: Asked[]): Promise<number> {
+  const server = createServer((request: IncomingMessage, response) => {
+    let text = "";
+    request.on("data", (chunk) => (text += String(chunk)));
+    request.on("end", () => {
+      into.push({ path: request.url ?? "", body: text });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(body));
+    });
+  });
+  listening = server;
+  await new Promise<void>((up) => server.listen(0, "127.0.0.1", up));
+  return (server.address() as AddressInfo).port;
+}
+
 /**
  * **The promise the whole change rests on.** Restarting with nothing to say is
  * exactly the request it was, so a fleet built before #396 answers it and a
@@ -353,6 +369,37 @@ it("refuses a save with nothing connected, rather than throwing", async () => {
   const commands = new JobCommands({ ...boardOn(0), port: () => null });
 
   const answer = await commands.saveLimits({ concurrency: 4 });
+
+  expect(answer).toEqual({ ok: false, why: "not_connected" });
+});
+
+/** `#927`: a preference save names the one it is about, and publishes what
+ *  Fleet answers with — `Preferring.save`'s own publish, not a re-read. */
+it("saves one preference by name and publishes what Fleet answers with", async () => {
+  const asked: Asked[] = [];
+  const published: unknown[] = [];
+  const port = await fleetAnswering({ where_things_are_open: true }, asked);
+  const commands = new JobCommands({
+    ...boardOn(port),
+    publish: (change) => published.push(change),
+  });
+
+  const answer = await commands.savePreference({ name: "where_things_are_open", value: true });
+
+  expect(answer.ok).toBe(true);
+  expect(asked[0]?.path).toBe("/preferences/save");
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({
+    name: "where_things_are_open",
+    value: true,
+  });
+  expect(published).toEqual([{ preferences: { where_things_are_open: true } }]);
+});
+
+/** `saveLimits`' own case, one preference over. */
+it("refuses a preference save with nothing connected, rather than throwing", async () => {
+  const commands = new JobCommands({ ...boardOn(0), port: () => null });
+
+  const answer = await commands.savePreference({ name: "where_things_are_open", value: true });
 
   expect(answer).toEqual({ ok: false, why: "not_connected" });
 });
