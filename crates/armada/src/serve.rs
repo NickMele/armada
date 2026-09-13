@@ -505,6 +505,10 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // the Fleet that started it and may still be working. What is gone is
     // `interrupted`; what is still there is adopted, and the Job carries on
     // with a Drone nothing can speak to.
+    // The repositories added before this start, served again so their Jobs are reconciled too.
+    for why in fleet.served_again().await {
+        eprintln!("  a remembered repository is not served: {why}");
+    }
     let reconciled = fleet.reconcile().await?;
     println!(
         "reconciled: {} interrupted, {} adopted, {} repaired, {} unreadable, {} mended{}",

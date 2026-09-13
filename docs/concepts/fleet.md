@@ -77,9 +77,9 @@ Process-group semantics differ across platforms, and where that difference belon
 
 **Each repository keeps its own Manifest, workflows, records, worktrees and checkout runs.** A route acting on one names it — `?manifest_id=` where it has a Manifest, `?repository=` on Scan and its proposals — and an absent name is the repository Fleet started in.
 
-**Restart and adding reconcile the same way.** A restart reconciles each repository Fleet serves over its own Jobs; a Job whose repository is not served is left as it stands, and is reconciled when that repository is added.
+**Restart and adding reconcile the same way.** Fleet remembers every repository it serves, serves them again on restart before reconciling, and reconciles each over its own Jobs. A remembered folder that is gone is said and stays remembered; a Job whose repository is not served is left as it stands, and is reconciled when that repository is added.
 
-**What stays Fleet-wide:** the concurrency cap and headroom, the store, the listener, one Verify at a time, and the main checkout's port span.
+**What stays Fleet-wide:** the concurrency cap and headroom, the store, the listener, and one Verify at a time.
 
 ## Scheduling and gating
 
@@ -279,7 +279,7 @@ Fleet asks about **one** pull request per sweep and rotates, because the turn in
 
 ## Ports
 
-A Job claims a contiguous span of ports for the life of its worktree. The main checkout claims one too, held while Fleet runs; the proof run after a merge and any server started with no Job draw from it. Fleet's own listener claims a single port the same way, out of the same range.
+A Job claims a contiguous span of ports for the life of its worktree. Each repository's main checkout claims one too, held while Fleet runs; the proof run after a merge and any server started with no Job draw from it. Fleet's own listener claims a single port the same way, out of the same range.
 
 ### The range
 

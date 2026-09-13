@@ -21,6 +21,8 @@ const NOT_A_REPOSITORY: &str = "fleet.not_a_repository";
 const REPOSITORY_REFUSED: &str = "fleet.repository_refused";
 /// A folder or a Manifest id already served. A 409.
 const ALREADY_SERVED: &str = "fleet.repository_served";
+/// A repository served and not written down, so a restart forgets it. A 500.
+const NOT_REMEMBERED: &str = "fleet.repository_not_remembered";
 /// A `?repository=` naming nothing served. A 422.
 const NO_SUCH_REPOSITORY: &str = "fleet.no_such_repository";
 
@@ -177,13 +179,68 @@ where
             .repositories()
             .add(located)
             .map_err(|why| self.not_added(why))?;
+        // Served already; a store that will not write only loses it at restart.
+        let at = self.now();
+        let remembered = self
+            .store()
+            .lock()
+            .await
+            .remember_repository(added.root(), &at);
         if let Some(served) = Served::of(&added) {
             self.locating().serving(served.root());
             self.reconciled_in(&served)
                 .await
                 .map_err(|why| self.refusal(why))?;
         }
+        remembered.map_err(|why| {
+            Refusal::Fault(WireError::raised(
+                NOT_REMEMBERED,
+                format!(
+                    "{} is served, and will not be served after a restart: {why}",
+                    added.root()
+                ),
+                self.run_id(),
+            ))
+        })?;
         Ok(summary_of(&added))
+    }
+
+    /// Serve again every repository the store remembers, **before
+    /// reconciliation**, so their Jobs are reconciled with the first's. The
+    /// first is remembered here too. Answers what would not be served, and why:
+    /// a remembered folder that is gone stays remembered.
+    pub async fn served_again(&self) -> Vec<String> {
+        let first = self.repositories().first();
+        let at = self.now();
+        let mut store = self.store().lock().await;
+        let mut said = Vec::new();
+        if let Err(why) = store.remember_repository(first.root(), &at) {
+            said.push(format!("{} will not be remembered: {why}", first.root()));
+        }
+        let remembered = match store.remembered_repositories() {
+            Ok(roots) => roots,
+            Err(why) => return [said, vec![why.to_string()]].concat(),
+        };
+        drop(store);
+        for root in remembered {
+            if self.repositories().at(&root).is_some() {
+                continue;
+            }
+            let located = self.locating().located(std::path::Path::new(&root));
+            match located.map_err(|why| why.to_string()).and_then(|located| {
+                self.repositories()
+                    .add(located)
+                    .map_err(|why| why.to_string())
+            }) {
+                Ok(added) => {
+                    if Served::of(&added).is_some() {
+                        self.locating().serving(added.root());
+                    }
+                }
+                Err(why) => said.push(why),
+            }
+        }
+        said
     }
 
     /// Give a repository served without a Manifest the one Write just put at

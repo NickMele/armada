@@ -151,7 +151,7 @@ fn the_listener_port_never_overlaps_a_span_already_claimed() {
     let mut store = a_store(&dir, "three.db");
     store
         .claim_port_span(&PortClaim {
-            claimant: PortClaimant::MainCheckout,
+            claimant: PortClaimant::MainCheckout(String::from("/repos/one")),
             base: 41_100,
             width: 8,
             claimed_at: now(),

@@ -113,11 +113,10 @@ CREATE UNIQUE INDEX port_claims_fleet_listener ON port_claims (fleet_listener) W
 pub enum PortClaimant {
     /// A Job's worktree, for the whole of the worktree's lifetime.
     Job(JobId),
-    /// The main checkout, held for as long as Fleet runs. What the proof run
-    /// after a merge draws its ports from, and what a server started from the
-    /// Manifest surface with no Job runs in and draws its ports from —
-    /// neither has a worktree of its own to claim against.
-    MainCheckout,
+    /// A repository's main checkout, by its root, held for as long as Fleet
+    /// runs. What the proof run after a merge and a server started with no Job
+    /// draw their ports from — neither has a worktree to claim against.
+    MainCheckout(String),
     /// Fleet's own listener — the one port Bridge connects to, published in
     /// the runtime file. Claimed at startup before the bind and released when
     /// Fleet stops, so two Fleets on one machine never bind the same number.
@@ -154,7 +153,7 @@ impl Store {
     pub fn claim_port_span(&mut self, claim: &PortClaim) -> Result<(), WriteError> {
         let (job_id, main_checkout, fleet_listener) = match &claim.claimant {
             PortClaimant::Job(job_id) => (Some(job_id.as_str()), None, None),
-            PortClaimant::MainCheckout => (None, Some(1_i64), None),
+            PortClaimant::MainCheckout(root) => (None, Some(root.as_str()), None),
             PortClaimant::FleetListener => (None, None, Some(1_i64)),
         };
         self.conn
@@ -194,9 +193,9 @@ impl Store {
                 "DELETE FROM port_claims WHERE job_id = ?1",
                 (job_id.as_str(),),
             ),
-            PortClaimant::MainCheckout => self.conn.execute(
-                "DELETE FROM port_claims WHERE main_checkout IS NOT NULL",
-                (),
+            PortClaimant::MainCheckout(root) => self.conn.execute(
+                "DELETE FROM port_claims WHERE main_checkout = ?1",
+                (root.as_str(),),
             ),
             PortClaimant::FleetListener => self.conn.execute(
                 "DELETE FROM port_claims WHERE fleet_listener IS NOT NULL",
@@ -231,18 +230,21 @@ impl Store {
         found.transpose().map_err(LoadJobError::Unreadable)
     }
 
-    /// The span claimed for the main checkout, if one has been.
+    /// The span claimed for this repository's main checkout, if one has been.
     ///
     /// **Not a [`LoadJobError`]** — there is no Job to name if the read fails,
     /// so a database fault here is [`LoadAllError::Database`], the same
     /// reading [`every_port_claim`](Store::every_port_claim) gives one.
-    pub fn port_span_for_main_checkout(&self) -> Result<Option<PortClaim>, LoadAllError> {
+    pub fn port_span_for_main_checkout(
+        &self,
+        root: &str,
+    ) -> Result<Option<PortClaim>, LoadAllError> {
         let found = self
             .conn
             .query_row(
                 "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
-                 FROM port_claims WHERE main_checkout IS NOT NULL",
-                (),
+                 FROM port_claims WHERE main_checkout = ?1",
+                (root,),
                 |row| Ok(read_claim(row)),
             )
             .map(Some)
@@ -337,7 +339,7 @@ impl Store {
 /// refused to hold.
 fn read_claim(row: &rusqlite::Row<'_>) -> Result<PortClaim, RowError> {
     let job_id: Option<String> = row.get("job_id").map_err(column(TABLE, "job_id"))?;
-    let main_checkout: Option<i64> = row
+    let main_checkout: Option<String> = row
         .get("main_checkout")
         .map_err(column(TABLE, "main_checkout"))?;
     let fleet_listener: Option<i64> = row
@@ -345,7 +347,7 @@ fn read_claim(row: &rusqlite::Row<'_>) -> Result<PortClaim, RowError> {
         .map_err(column(TABLE, "fleet_listener"))?;
     let claimant = match (job_id, main_checkout, fleet_listener) {
         (Some(job_id), None, None) => PortClaimant::Job(JobId::carried(Ulid::carried(job_id))),
-        (None, Some(_), None) => PortClaimant::MainCheckout,
+        (None, Some(root), None) => PortClaimant::MainCheckout(root),
         (None, None, Some(_)) => PortClaimant::FleetListener,
         _ => {
             return Err(RowError::MalformedColumn {

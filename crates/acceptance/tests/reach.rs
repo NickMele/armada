@@ -67,11 +67,11 @@ use ipc::{
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    as_sent, carried_there, catalogued, ci_run, convention, every_line, fault_keys, folder, Held,
+    as_sent, carried_there, catalogued, ci_run, convention, every_line, fault_keys, folder,
     held_there, held_to, loads, manifest_ids, one_step, proposal_at, proposals, provenance_of,
     read_from, received, resolved_there, started_in_the_storefront, storefront,
     toward_the_journeys_e2e, workspace, written, A_MILESTONE, CARRYABLE, CI_RUNS, EPIC, EPIC_AT,
-    KEPT, MAILER, MAILER_AT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP, WRITTEN,
+    KEPT, MAILER, MAILER_AT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, WRITTEN,
 };
 use bench::{states, Bench};
 

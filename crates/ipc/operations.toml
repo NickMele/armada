@@ -524,7 +524,7 @@ Locate, by folder — `docs/journeys/set-up-a-project-manifest.md`, *Getting in*
 
 Refused with a 422 where the folder is not the root of a git repository (`fleet.not_a_repository`) or its `armada.yml` or workflows will not load (`fleet.repository_refused`), and a 409 where the folder, or the Manifest id its `armada.yml` declares, is already served (`fleet.repository_served`) — a Job names its repository by that id alone. A folder with no `armada.yml` is served, for Scan to read.
 
-The store's Jobs for a repository added again are reconciled as a restart reconciles them. Clone from a URL is not this operation.
+Fleet remembers the repository and serves it again after a restart. The store's Jobs for a repository added again are reconciled as a restart reconciles them. Clone from a URL is not this operation.
 """
 
 [operations.list_models]

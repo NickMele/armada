@@ -814,7 +814,7 @@ fn a_store_at_version_forty_four_migrates_forward_to_port_claims() {
     // V45's own table, reachable and correct once the migration that adds it
     // has actually run.
     let claim = PortClaim {
-        claimant: PortClaimant::MainCheckout,
+        claimant: PortClaimant::MainCheckout(String::from("/repos/one")),
         base: 41_000,
         width: 8,
         claimed_at: created_at(),
@@ -822,7 +822,7 @@ fn a_store_at_version_forty_four_migrates_forward_to_port_claims() {
     store.claim_port_span(&claim).expect("port_claims exists");
     assert_eq!(
         store
-            .port_span_for_main_checkout()
+            .port_span_for_main_checkout("/repos/one")
             .expect("the read succeeds"),
         Some(claim)
     );

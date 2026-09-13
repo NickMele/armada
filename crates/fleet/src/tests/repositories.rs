@@ -286,21 +286,19 @@ async fn a_job_in_each_repository_is_held_to_its_own_checks() {
     assert!(String::from_utf8_lossy(&body).contains("no one Job"));
 }
 
-/// **A restart reconciles every repository it serves**, and a Job whose
-/// repository is not served yet is left as it stands until it is added.
+/// **A restart serves again what was added, and reconciles both.** A
+/// remembered folder that is gone is said, and stays remembered.
 #[tokio::test]
-async fn a_restart_reconciles_both_repositories() {
+async fn a_restart_serves_again_what_was_added_and_reconciles_both() {
     let home = TempDir::new();
     let folder = second_repository(&home).root;
     let (first, second) = {
         let planted = Arc::new(Planted::nothing().with(&folder, second_repository(&home)));
         let fleet = a_fleet_reading(&home, &planted);
-        fleet
-            .added_repository(AddRepository {
-                path: folder.clone(),
-            })
-            .await
-            .expect("served");
+        let asked = AddRepository {
+            path: folder.clone(),
+        };
+        fleet.added_repository(asked).await.expect("served");
         (
             running(&fleet, a_proposal("mid-flight in the first")).await,
             running(&fleet, in_the_second("mid-flight in the second")).await,
@@ -309,24 +307,76 @@ async fn a_restart_reconciles_both_repositories() {
 
     let planted = Arc::new(Planted::nothing().with(&folder, second_repository(&home)));
     let restarted = a_fleet_reading(&home, &planted);
+    assert!(restarted.served_again().await.is_empty());
+    assert_eq!(planted.served(), [folder.clone()], "and watched again");
     let reconciled = restarted.reconcile().await.expect("reconciled");
-    assert_eq!(reconciled.interrupted, vec![first.clone()]);
-    assert_eq!(
-        restarted.load(&second).await.expect("there").status(),
-        JobStatus::Running
-    );
-
-    let repositories = restarted.repositories();
-    repositories.add(second_repository(&home)).expect("added");
-    let served = repositories.serving(SECOND).expect("served");
-    let added = restarted.reconciled_in(&served).await.expect("reconciled");
-    assert_eq!(added.interrupted, vec![second.clone()]);
+    assert_eq!(reconciled.interrupted, vec![first.clone(), second.clone()]);
     for job in [&first, &second] {
-        assert_eq!(
-            restarted.load(job).await.expect("there").status(),
-            JobStatus::Escalated
-        );
+        let status = restarted.load(job).await.expect("there").status();
+        assert_eq!(status, JobStatus::Escalated);
     }
+
+    let gone = a_fleet_reading(&home, &Arc::new(Planted::nothing()));
+    assert_eq!(
+        gone.served_again().await.len(),
+        1,
+        "a folder that is gone is said"
+    );
+    let again = a_fleet_reading(&home, &planted);
+    assert!(
+        again.served_again().await.is_empty(),
+        "and still remembered"
+    );
+}
+
+/// **Each repository's main checkout claims its own span**, so two servers
+/// with no Job never share a port.
+#[tokio::test]
+async fn two_repositories_main_checkouts_claim_separate_spans() {
+    let home = TempDir::new();
+    let ports = "version: 1\nid: {id}\nports:\n  web: {}\n";
+    let declaring = |root: &str, id: &str| {
+        let text = ports.replace("{id}", id);
+        let at = Path::new(root).join("armada.yml");
+        SetUp::of(
+            config::Manifest::parse(&at, &text).expect("loads"),
+            BTreeMap::new(),
+        )
+    };
+    let other = folder_at(&home, "other", None);
+    let set_up = declaring(&other.root, SECOND);
+    let planted = Arc::new(Planted::nothing());
+    let mut fittings = fitted_with(
+        &home,
+        FakeWorkProduct::untouched(),
+        FakeHarness::that_listens(),
+    );
+    fittings.manifest = declaring(&home.path().to_string_lossy(), FIRST)
+        .manifest()
+        .clone();
+    fittings.locating = Arc::clone(&planted) as Arc<dyn Locating>;
+    let fleet = Fleet::assembled(fittings);
+    fleet
+        .repositories()
+        .add(Located {
+            set_up: Some(set_up),
+            ..other
+        })
+        .expect("added");
+
+    let first = fleet.main_checkout_ports(&fleet.first()).await;
+    let second = fleet.repositories().serving(SECOND).expect("served");
+    let second = fleet.main_checkout_ports(&second).await;
+    assert!(first.get("web").is_some() && second.get("web").is_some());
+    assert_ne!(first.get("web"), second.get("web"));
+    fleet.released_main_checkout_ports().await;
+    assert!(fleet
+        .store()
+        .lock()
+        .await
+        .every_port_claim()
+        .expect("read")
+        .is_empty());
 }
 
 /// **A folder with no `armada.yml` is served for Scan**, lists as a repository

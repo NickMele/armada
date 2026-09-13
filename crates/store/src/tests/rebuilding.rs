@@ -80,11 +80,11 @@ fn a_store_at_version_forty_nine_keeps_every_claim_through_the_rebuild() {
         .expect("the read succeeds")
         .expect("the Job's claim survived the rebuild");
     assert_eq!((carried.base, carried.width), (41_000, 8));
-    let main = store
-        .port_span_for_main_checkout()
-        .expect("the read succeeds")
-        .expect("the main checkout's claim survived the rebuild");
-    assert_eq!((main.base, main.width), (41_008, 8));
+    // V57 then releases the main checkout's claim, which named no repository.
+    let every = store.every_port_claim().expect("read");
+    assert!(every
+        .iter()
+        .all(|claim| !matches!(claim.claimant, PortClaimant::MainCheckout(_))));
 
     // And the third claimant the rebuild exists for, which the old `CHECK`
     // could not have held.
@@ -96,5 +96,5 @@ fn a_store_at_version_forty_nine_keeps_every_claim_through_the_rebuild() {
             claimed_at: created_at(),
         })
         .expect("Fleet's own listener can claim once the rebuild has run");
-    assert_eq!(store.every_port_claim().expect("read").len(), 3);
+    assert_eq!(store.every_port_claim().expect("read").len(), 2);
 }

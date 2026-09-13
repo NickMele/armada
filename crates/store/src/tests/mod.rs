@@ -35,6 +35,7 @@ mod proving;
 mod rebuilding;
 mod reconstruct;
 mod report;
+mod repositories;
 mod resolving;
 mod retain;
 mod review;

@@ -538,7 +538,7 @@ where
         &self,
         served: &crate::repositories::Served,
     ) -> BTreeMap<String, u16> {
-        if let Some(claim) = self.main_checkout_claim().await {
+        if let Some(claim) = self.main_checkout_claim(served).await {
             return port_map(served.manifest(), &claim);
         }
         // First need: nothing to escalate and nobody to tell if this
@@ -546,9 +546,12 @@ where
         // with an unresolved `${port.NAME}` is diagnosable from its own log,
         // and there is no Job here to carry a `not_configurable`.
         let _ = self
-            .try_claim(PortClaimant::MainCheckout, served.manifest())
+            .try_claim(
+                PortClaimant::MainCheckout(served.root().to_string()),
+                served.manifest(),
+            )
             .await;
-        match self.main_checkout_claim().await {
+        match self.main_checkout_claim(served).await {
             Some(claim) => port_map(served.manifest(), &claim),
             None => BTreeMap::new(),
         }
@@ -569,11 +572,11 @@ where
         env_vars(&names, &ports)
     }
 
-    async fn main_checkout_claim(&self) -> Option<PortClaim> {
+    async fn main_checkout_claim(&self, served: &crate::repositories::Served) -> Option<PortClaim> {
         self.store()
             .lock()
             .await
-            .port_span_for_main_checkout()
+            .port_span_for_main_checkout(served.root())
             .ok()
             .flatten()
     }
@@ -590,14 +593,21 @@ where
     /// so the composition root calls this directly once the turn loop has
     /// drained. See `armada::serve`.
     pub async fn released_main_checkout_ports(&self) {
-        let _ = self
-            .store()
-            .lock()
-            .await
-            .release_port_span(&PortClaimant::MainCheckout);
+        for claim in self.main_checkout_claims().await {
+            let _ = self.store().lock().await.release_port_span(&claim.claimant);
+        }
     }
 
-    /// At boot, confirm a main-checkout claim a crashed Fleet left behind is
+    /// Every repository's main-checkout claim, one per root.
+    async fn main_checkout_claims(&self) -> Vec<PortClaim> {
+        let every = self.store().lock().await.every_port_claim();
+        let every = every.unwrap_or_default().into_iter();
+        every
+            .filter(|claim| matches!(claim.claimant, PortClaimant::MainCheckout(_)))
+            .collect()
+    }
+
+    /// At boot, confirm each main-checkout claim a crashed Fleet left behind is
     /// still good before this process reuses it. **The bind-and-connect
     /// probe rule applies here exactly as it does to a fresh claim** — a row
     /// on disk says nothing about whether the ports it names are still free,
@@ -605,13 +615,11 @@ where
     /// fails the probe is released rather than reused, so the next call to
     /// [`main_checkout_ports`](Fleet::main_checkout_ports) claims a fresh one.
     pub(crate) async fn reconciled_main_checkout_ports(&self) {
-        let Some(claim) = self.main_checkout_claim().await else {
-            return;
-        };
-        let top = claim.base.saturating_add(claim.width.saturating_sub(1));
-        let still_free = (claim.base..=top).all(|port| BindConnectProbe.free(port));
-        if !still_free {
-            self.released_main_checkout_ports().await;
+        for claim in self.main_checkout_claims().await {
+            let top = claim.base.saturating_add(claim.width.saturating_sub(1));
+            if !(claim.base..=top).all(|port| BindConnectProbe.free(port)) {
+                let _ = self.store().lock().await.release_port_span(&claim.claimant);
+            }
         }
     }
 }
