@@ -29,6 +29,9 @@ pub mod focus;
 /// Landing's own apparatus: the workflow that names a delivering step, and the
 /// run that reaches the gate on it. See its own header.
 pub mod landing;
+/// Overview's own apparatus: Jobs placed directly under a chosen Manifest,
+/// bypassing `Bench::created`'s one hard-coded id. See its own header.
+pub mod overview;
 /// Plan's own apparatus: a workflow with a plan step, built frozen until #895.
 /// See its own header.
 pub mod plan;
