@@ -320,6 +320,7 @@ pub struct CitedAt {
     /// the change removed, or about the file as a whole — the file is still
     /// somewhere to go, and a number pointing into the pre-image would send a
     /// reader to whatever now sits at it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<u32>,
 }
 
