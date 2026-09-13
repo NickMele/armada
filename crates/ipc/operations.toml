@@ -51,7 +51,7 @@ transport = "HTTP"
 agent_access = "Yes"
 description = "How many Drones Fleet may run, how many it is running, and which one thing is holding the next one back"
 notes = """
-Fleet-wide, and the answer no per-Job field could give. `get_job`'s `queued_reason` says why *that row* has not started and folds the concurrency bound, CPU, memory and disk into one label — `waiting_on_resources` is the only thing `job-statuses.toml` grants a `queued` Job short of anything. So a person saw that their Job was held and never what was holding it.
+Fleet-wide, and the answer no per-Job field could give. `get_job`'s `queued_reason` says why *that row* has not started and folds the concurrency bound, memory and disk into one label — `waiting_on_resources` is the only thing `job-statuses.toml` grants a `queued` Job short of anything. So a person saw that their Job was held and never what was holding it.
 
 `occupied` is the roster's own count, which is what admission measures the bound against, and never a count of `running` rows. A Job that escalated on a refusal keeps its Drone alive and idle so a redirect costs no respawn, and it keeps its place in the roster while its status is `escalated`. A status-derived count would read "1 of 2" while Fleet admits nothing.
 

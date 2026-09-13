@@ -129,7 +129,9 @@ where
         }
     }
 
-    /// CPU, memory and disk against the thresholds admission itself uses.
+    /// CPU, memory and disk, with memory and disk held against the thresholds
+    /// admission itself uses. **CPU is printed and never the reason** — nothing
+    /// admits or refuses on it.
     ///
     /// **The cached reading, never a fresh one.** A probe that took three
     /// processes on every call would make a health page cost more than the

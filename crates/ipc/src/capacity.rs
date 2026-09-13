@@ -2,9 +2,9 @@
 //! the next one back.
 //!
 //! **Fleet-wide, and not a Job's field.** `JobSummary::queued_reason` says why
-//! *this row* has not started and folds four different situations into
+//! *this row* has not started and folds three different situations into
 //! `waiting_on_resources`, which is the one label `job-statuses.toml` grants a
-//! `queued` Job. This says which of the four it is, once, for the whole Fleet —
+//! `queued` Job. This says which of the three it is, once, for the whole Fleet —
 //! so a Board row keeps the label it had and a status bar can say what nobody
 //! could ask before.
 

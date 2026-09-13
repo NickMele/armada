@@ -137,15 +137,10 @@ fn a_machine_with_room_is_short_of_nothing() {
 }
 
 /// Each resource on its own, so a passing suite cannot be one signal doing the
-/// work of three.
+/// work of two.
 #[test]
 fn each_resource_holds_a_job_back_on_its_own() {
     let no_disk = Reading::of(InUse::percent(10), InUse::percent(20), Bytes::gibibytes(9));
-    let no_cpu = Reading::of(
-        InUse::percent(90),
-        InUse::percent(20),
-        Bytes::gibibytes(500),
-    );
     let no_memory = Reading::of(
         InUse::percent(10),
         InUse::percent(95),
@@ -153,8 +148,20 @@ fn each_resource_holds_a_job_back_on_its_own() {
     );
 
     assert_eq!(SHIPPED.short_of(&no_disk), Some(Short::Disk));
-    assert_eq!(SHIPPED.short_of(&no_cpu), Some(Short::Cpu));
     assert_eq!(SHIPPED.short_of(&no_memory), Some(Short::Memory));
+}
+
+/// **CPU never refuses**, however far past its cores the machine is. The
+/// operating system schedules CPU; a Fleet that yielded to it was the only
+/// thing on a machine loaded to 27 on 10 cores that did.
+#[test]
+fn a_saturated_cpu_is_short_of_nothing() {
+    let saturated = Reading::of(
+        InUse::percent(270),
+        InUse::percent(20),
+        Bytes::gibibytes(500),
+    );
+    assert_eq!(SHIPPED.short_of(&saturated), None);
 }
 
 /// Exactly at the threshold is enough. The refusal is short *of* it, not at it,
@@ -302,24 +309,26 @@ async fn the_job_starts_when_the_machine_frees() {
     assert_eq!(fleet.working_on().await, vec![job]);
 }
 
-/// CPU holds a Job back the same way disk does, so the poll is not one signal
-/// wearing three names.
+/// **A saturated CPU with memory and disk to spare admits**, and the Board and
+/// the capacity payload both say nothing is holding it.
 #[tokio::test]
-async fn a_loaded_machine_holds_a_job_back_too() {
+async fn a_machine_whose_cpu_is_saturated_still_admits() {
     let home = TempDir::new();
     let plant = Plant::showing(Reading::of(
-        InUse::percent(97),
+        InUse::percent(270),
         InUse::percent(20),
         Bytes::gibibytes(500),
     ));
     let fleet = watching(&home, &plant, Polling::every(Duration::ZERO));
+    assert_eq!(
+        fleet.get_capacity().await.expect("capacity reads").held_by,
+        None,
+        "nothing holds the next Drone back before one is asked for"
+    );
     let job = approved(&fleet, &home, "a change onto a busy machine").await;
 
-    assert!(fleet.working_on().await.is_empty());
-    assert_eq!(
-        board(&fleet, &job).await.1,
-        Some("waiting_on_resources".to_string())
-    );
+    assert_eq!(fleet.working_on().await, vec![job.clone()]);
+    assert_eq!(board(&fleet, &job).await, ("running".to_string(), None));
 }
 
 /// **A machine that cannot be read admits.** A reading that fails must not hold

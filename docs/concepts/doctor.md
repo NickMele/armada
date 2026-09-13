@@ -94,7 +94,7 @@ Each row states what its probe reads and where the boundaries sit.
 | Docker | Is the daemon reachable | Reachable | **Never warns** | Not reachable |
 | SQLite | `armada.db` opens, schema version matches, WAL is writable | Opens and writes | Schema behind, migration pending | Locked, corrupt, or the volume is full |
 | Keychain | The macOS Keychain is unlocked and Armada's brokered scope readable | Unlocked, readable | **Never warns** | Locked or access denied — secret brokering fails |
-| System stats | CPU and memory headroom against the Machine threshold | Above threshold | Below threshold — Drones queue rather than spawn | Insufficient to run anything |
+| System stats | CPU in use, and memory and disk headroom against the thresholds admission holds. CPU is reported and never the reason nothing is admitted | Above threshold | Below threshold — Drones queue rather than spawn | Insufficient to run anything |
 | Claude | CLI present, authenticated, quota against the Machine floor | Authenticated, quota above the floor | Quota below the reserved floor — dispatch gated | Not authenticated, or CLI absent |
 | Manifest | Every known `armada.yml` parses, schema current, no drift | All parse, all schemas current | Some parse and some do not, or some have drifted | None parse, or none found |
 | Kit | `kit.yml` present, parses, schema version current | Parses, schema current | Parses, schema behind, migration pending | Missing or unparseable |

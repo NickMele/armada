@@ -201,8 +201,8 @@ other side's code has an exhaustive match, a presence assumption, or a name
 lookup anywhere near the thing you're touching.
 
 **The caveat row has exactly one instance, and it is deliberate.**
-`FleetCapacity.held_by` — which one of the concurrency bound, CPU, memory or
-disk is stopping the next Drone — is a `String` on the wire rather than a
+`FleetCapacity.held_by` — which one of the concurrency bound, memory or disk
+is stopping the next Drone — is a `String` on the wire rather than a
 `wire_enum!`, and `crates/ipc/src/capacity.rs` is where that is argued. Fleet is
 the only writer, Bridge looks the value up in the generated vocabulary rather
 than matching on it, and that map already answers `undefined` for a key it does

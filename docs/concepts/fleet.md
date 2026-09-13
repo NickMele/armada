@@ -96,19 +96,19 @@ Both turn one thing into several Jobs, and the difference between them is the ap
 
 ### Concurrency gating (resources)
 
-**Fleet reads CPU, memory and disk headroom before spawning each Drone.** If capacity is unavailable the Job queues and shows "waiting" on the [Job Board](job-board.md). This determines resource eligibility only; the approval gate above determines whether a Drone starts at all.
+**Fleet reads memory and disk headroom before spawning each Drone.** It reads CPU too, for Doctor, and never holds a Job back for it: the operating system schedules CPU, and on 12 Sep 2026 other agents loading the machine to 27 on 10 cores left Fleet the only thing on it that yielded. The concurrency cap, the memory share and the disk floor are changed from Bridge while Fleet runs, persist across restarts, and apply at the next admission turn; nothing already running is stopped. If capacity is unavailable the Job queues and shows "waiting" on the [Job Board](job-board.md). This determines resource eligibility only; the approval gate above determines whether a Drone starts at all.
 
 **It is the same predicate the concurrency cap is asked through**, so a Board cannot say a Job is blocked while Fleet is starting it, and the reason is recomputed at every read rather than stored — headroom frees on its own, so a written-down reason is wrong from the moment it is written.
 
-**Disk is the third signal and it earns its place from a measured failure**, not from symmetry with the other two: a volume filled during a parallel agent run and agents died at zero bytes free holding uncommitted work, with no warning of any kind. It is also the one held against an absolute floor rather than a share, because what a Job costs in disk — a worktree plus a build — is a number of gigabytes rather than a fraction of whatever volume it landed on, which is why it is a settings row of its own rather than sharing the CPU and memory threshold.
+**Disk earns its place from a measured failure**, not from symmetry with memory: a volume filled during a parallel agent run and agents died at zero bytes free holding uncommitted work, with no warning of any kind. It is also the one held against an absolute floor rather than a share, because what a Job costs in disk — a worktree plus a build — is a number of gigabytes rather than a fraction of whatever volume it landed on, which is why it is a settings row of its own rather than sharing the memory threshold.
 
-**Quota is not a fourth.** The agent's rate-limit event carries a window and a status and no quantity, so there is no number to hold a Job back against. See the spike on what a Job costs.
+**Quota is not a third.** The agent's rate-limit event carries a window and a status and no quantity, so there is no number to hold a Job back against. See the spike on what a Job costs.
 
 **A machine that cannot be read admits.** A failed reading holds nothing back: a Fleet that queues every Job for ever because a command did not answer is a Fleet that looks dead, and the concurrency cap is still the cap.
 
 **A person's act is never refused for a machine.** An approval, a restart, an override and a request for changes all leave the Job at `queued` whatever the machine holds; admission is the only thing that starts a Drone, so a Job a person just re-queued waits exactly as any other queued Job does.
 
-**Which of the four reasons is holding a Job does not reach anybody yet.** The Board has one label for all of them, and nothing else reads the answer.
+**Which of the three reasons is holding a Job is fleet-wide, not per row.** The Board has one label for all of them; `get_capacity` says which one it is — the cap, memory or disk.
 
 **That poll only covers Jobs that have not started.** A Job that exhausts CPU or memory while already running has nowhere to queue back to and escalates as `resource_exhausted`.
 
@@ -364,7 +364,7 @@ Where it renders is open — see Open questions — and the Doctor precedent arg
 
 Each piece of Fleet's behavior lives where it is specified:
 
-- CPU/memory resource gating before spawning a Drone — Scheduling and gating, above
+- Memory and disk resource gating before spawning a Drone — Scheduling and gating, above
 - Owns every `Job.status` and `Job.workflow_status` transition — [Job](job.md), Ownership Split
 - Evidence verification (Mechanical Check → Judge Check) — [Drone](drone.md), [Workflow](workflow.md)
 - DAG scheduling and cross-workspace work — [Job Board](job-board.md), [Manifest](manifest.md), Cross-Workspace Jobs, [Convoy](convoy.md)
