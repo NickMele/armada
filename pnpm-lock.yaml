@@ -209,6 +209,9 @@ importers:
       storybook:
         specifier: ^10.5.0
         version: 10.5.10(@types/react@19.2.18)(react@19.2.8)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
       typescript:
         specifier: ^5.9.0
         version: 5.9.3

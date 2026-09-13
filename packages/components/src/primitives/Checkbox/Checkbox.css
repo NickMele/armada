@@ -26,11 +26,15 @@
 }
 
 .armada-checkbox__input {
+  /* Transparent over the box rather than clipped, so a press lands on the
+     real input — a clipped one leaves the box and label to take it. */
   position: absolute;
+  z-index: 1;
   width: var(--space-4);
   height: var(--space-4);
   margin: 0;
-  clip-path: inset(50%);
+  opacity: 0;
+  cursor: pointer;
 }
 
 .armada-checkbox__box {

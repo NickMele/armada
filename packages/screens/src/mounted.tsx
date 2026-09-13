@@ -7,18 +7,15 @@
 // frame built from primitives, and the reason these tests are here rather than
 // there is that it is not this package's screens.
 //
-// The stylesheet is deliberately not loaded, bar the one rule below. What these
-// tests read is the accessibility tree, and a screen's appearance is the
-// components package's to prove, story by story.
+// **The app's stylesheet is loaded, in Storybook's order.** `#840`: unstyled, a
+// tooltip bubble flowed inline and moved the next button out from under a click.
 
+import "@armada/tokens/tokens.css";
+import "tailwindcss/preflight.css";
+import "@armada/tokens/base.css";
+import "@armada/components/src/index.css";
 import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-
-// `#840`: unstyled, a tooltip bubble flows inline, so one closing as the pointer
-// leaves its button moves the next button out from under a slow click.
-const bubblesFloat = document.createElement("style");
-bubblesFloat.textContent = ".armada-tooltip__bubble { position: absolute; }";
-document.head.append(bubblesFloat);
 
 let held: { root: Root; host: HTMLElement } | null = null;
 

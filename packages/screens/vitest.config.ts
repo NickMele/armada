@@ -48,6 +48,8 @@ export default defineConfig({
             headless: true,
             provider: playwright({}),
             instances: [{ browser: "chromium" }],
+            // A desktop window, now that the app's stylesheet lays these out.
+            viewport: { width: 1440, height: 900 },
           },
         },
       },
