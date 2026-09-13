@@ -39,6 +39,8 @@ mod mcp;
 mod permission;
 /// The one DTO on this seam a peer *writes*, and what it refuses.
 mod proposals;
+/// A given-back worktree, and the absent halves Bridge reads as absent.
+mod reclaimed;
 /// A person's run: the two kinds it streams under, and the record it leaves.
 mod rehearsal;
 mod reports;
