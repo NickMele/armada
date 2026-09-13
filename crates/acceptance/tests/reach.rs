@@ -14,6 +14,10 @@
 //! the code, and deletes the step's row — in the same pull request. A row is
 //! never moved by weakening what it would assert to fit what exists.
 
+//! **Over 500 lines, and still one file.** A milestone is one test, so every
+//! step's assertion lands here; splitting it would move the count, not the
+//! claim — `docs/practices/acceptance-tests.md`.
+
 //! # Carried, and asserted below
 //!
 //! | What holds | What it does not reach |
