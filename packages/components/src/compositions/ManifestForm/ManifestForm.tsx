@@ -1,17 +1,22 @@
 import { Alert } from "../../primitives/Alert/Alert";
 import { Button } from "../../primitives/Button/Button";
+import { AfterMergeSection } from "./AfterMergeSection";
+import { BaseSection } from "./BaseSection";
 import { BudgetSection } from "./BudgetSection";
 import { ChecksSection } from "./ChecksSection";
 import { CommandsSection } from "./CommandsSection";
+import { DroneSection } from "./DroneSection";
+import { EvidenceSection } from "./EvidenceSection";
 import { PolicySection } from "./PolicySection";
 import { PortsSection } from "./PortsSection";
+import { SetupSection } from "./SetupSection";
 
 /**
  * The Manifest as forms — Journey 9's *Editing*, the default editing view, with
  * the file behind the toggle named by its path.
  *
- * One section each for what a form edit can reach: Checks, Commands, ports,
- * policy and budget. **Save writes the file and stops** — no staging, no commit
+ * One section for each part of the schema, so the file view is never where a
+ * key has to be reached. **Save writes the file and stops** — no staging, no commit
  * — and a removal takes the entry and the comment directly above it.
  */
 
@@ -27,6 +32,8 @@ export type ManifestFormNarrow = {
 export type ManifestFormCheck = {
   name: string;
   run: string;
+  /** Empty is 0. */
+  expectExitCode: string;
   /** Command names, in the order the file names them. */
   requires: string[];
   /** One path pattern a line. Empty runs the Check on every change. */
@@ -46,6 +53,16 @@ export type ManifestFormCommand = {
 
 export type ManifestFormPort = { name: string; container: string; env: string };
 
+/** `evidence:`, as typed. */
+export type ManifestFormEvidence = {
+  serve: string;
+  ready: string;
+  run: string;
+  frames: string;
+  /** One path a line. */
+  never: string;
+};
+
 /** Everything the form holds, as typed. */
 export type ManifestFormDraft = {
   checks: ManifestFormCheck[];
@@ -56,6 +73,19 @@ export type ManifestFormDraft = {
   /** Dollars. Empty defers to what Fleet runs with. */
   costCap: string;
   turnCap: string;
+  /** Empty: Armada infers one. */
+  base: string;
+  /** `null` where the file declares none. */
+  evidence: ManifestFormEvidence | null;
+  /** Check names, in the order they run after a merge. */
+  afterMerge: string[];
+  /** Command names, in the order setup runs them. */
+  setup: string[];
+  /** Seconds. This and the two below are empty where the file defers to Fleet. */
+  quietAfter: string;
+  pokeLimit: string;
+  /** One path a line. */
+  excludePaths: string;
 };
 
 export type ManifestFormProps = {
@@ -70,6 +100,8 @@ export type ManifestFormProps = {
   problems: Record<string, string>;
   /** Where a cap is below what a past Job here cost. */
   budgetWarnings: string[];
+  /** `id` and `version`, shown and never edited. Absent where Fleet did not say. */
+  identity?: { id: string; version: number };
   /** Whether the draft would send any edit. Save is offered only then. */
   changed: boolean;
   saving?: boolean;
@@ -84,7 +116,7 @@ export type ManifestFormProps = {
 };
 
 export function ManifestForm(props: ManifestFormProps) {
-  const { path, changed, saving = false, onSave, onDiscard, receipt, refused, moved, problems } = props;
+  const { path, identity, changed, saving = false, onSave, onDiscard, receipt, refused, moved, problems } = props;
   const blocked = Object.keys(problems).length > 0;
   return (
     <div className="armada-manifest-form">
@@ -138,11 +170,34 @@ export function ManifestForm(props: ManifestFormProps) {
       )}
       </div>
 
+      {identity === undefined ? null : (
+        <section className="armada-manifest-form__identity" aria-label="This Manifest">
+          <dl className="armada-manifest-form__facts">
+            <div>
+              <dt>Id</dt>
+              <dd className="armada-manifest-form__key">{identity.id}</dd>
+            </div>
+            <div>
+              <dt>Version</dt>
+              <dd className="armada-manifest-form__key">{identity.version}</dd>
+            </div>
+          </dl>
+          <p className="armada-manifest-form__hint">
+            Past Jobs here are recorded against this id, so it is not changed from a form.
+          </p>
+        </section>
+      )}
+
       <ChecksSection {...props} />
       <CommandsSection {...props} />
+      <SetupSection {...props} />
       <PortsSection {...props} />
+      <EvidenceSection {...props} />
+      <AfterMergeSection {...props} />
+      <BaseSection {...props} />
       <PolicySection {...props} />
       <BudgetSection {...props} />
+      <DroneSection {...props} />
     </div>
   );
 }

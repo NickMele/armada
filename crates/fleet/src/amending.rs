@@ -19,14 +19,14 @@ use std::io;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::Refusal;
 use config::{
-    amend, CheckEdit, CommandEdit, Edit, NewCheck, NewCommand, NewLink, NewNarrowing, NewPort,
-    NotAmended, PortEdit,
+    amend, CheckEdit, CommandEdit, Edit, EvidenceEdit, NewCheck, NewCommand, NewEvidence, NewLink,
+    NewNarrowing, NewPort, NotAmended, PortEdit,
 };
 use core_model::{AutoMerge, Covers, ReviewGate};
 use ipc::{
-    CheckDraft, CommandDraft, EditManifest, Instant, LinkDraft, ManifestDeclared, ManifestEdit,
-    ManifestEdited, NamedCheck, NamedCommand, NamedPort, NarrowingDraft, PolicyWords, PortDraft,
-    WireError, WireValue,
+    CheckDraft, CommandDraft, EditManifest, EvidenceDraft, Instant, LinkDraft, ManifestDeclared,
+    ManifestEdit, ManifestEdited, NamedCheck, NamedCommand, NamedPort, NarrowingDraft, PolicyWords,
+    PortDraft, WireError, WireValue,
 };
 
 use crate::adrift::Adrift;
@@ -82,8 +82,9 @@ where
             .edits
             .into_iter()
             .map(edit)
-            .collect::<Result<Vec<Edit>, Unknown>>()
-            .map_err(|unknown| self.unknown_word(unknown))?;
+            .collect::<Result<Vec<Vec<Edit>>, Unknown>>()
+            .map_err(|unknown| self.unknown_word(unknown))?
+            .concat();
         let amended = amend(file, &asked.read, &edits).map_err(|why| self.not_amended(why))?;
         save(file, &asked.read, amended.text()).map_err(|why| {
             self.refusal(match why {
@@ -154,20 +155,53 @@ struct Unknown {
 
 /// The wire's edit as `config`'s. **Closed on both sides**, so an edit the form
 /// can send is an edit the writer knows.
-fn edit(wire: ManifestEdit) -> Result<Edit, Unknown> {
+fn edit(wire: ManifestEdit) -> Result<Vec<Edit>, Unknown> {
     let check = |name, edit| Edit::Check { name, edit };
     let command = |name, edit| Edit::Command { name, edit };
     let port = |name, edit| Edit::Port { name, edit };
-    Ok(match wire {
-        ManifestEdit::AddCheck { name, check: new } => check(
+    Ok(vec![match wire {
+        // A Check is declared without its exit code, which is then set on it.
+        ManifestEdit::AddCheck { name, check: new } => {
+            let code = new.expect_exit_code;
+            let added = check(
+                name.clone(),
+                CheckEdit::Add(NewCheck {
+                    run: new.run,
+                    requires: new.requires,
+                    when: new.when,
+                    narrow: new.narrow.map(narrowing),
+                }),
+            );
+            return Ok(match code {
+                0 => vec![added],
+                code => vec![added, check(name, CheckEdit::ExpectExitCode(code))],
+            });
+        }
+        ManifestEdit::SetCheckExpectExitCode {
             name,
-            CheckEdit::Add(NewCheck {
-                run: new.run,
-                requires: new.requires,
-                when: new.when,
-                narrow: new.narrow.map(narrowing),
-            }),
-        ),
+            expect_exit_code,
+        } => check(name, CheckEdit::ExpectExitCode(expect_exit_code)),
+        ManifestEdit::SetBase { base } => Edit::Base(base),
+        ManifestEdit::AddEvidence { evidence } => Edit::Evidence(EvidenceEdit::Add(NewEvidence {
+            serve: evidence.serve,
+            ready: evidence.ready,
+            run: evidence.run,
+            frames: evidence.frames,
+            never: evidence.never,
+        })),
+        ManifestEdit::RemoveEvidence => Edit::Evidence(EvidenceEdit::Remove),
+        ManifestEdit::SetEvidenceServe { serve } => Edit::Evidence(EvidenceEdit::Serve(serve)),
+        ManifestEdit::SetEvidenceReady { ready } => Edit::Evidence(EvidenceEdit::Ready(ready)),
+        ManifestEdit::SetEvidenceRun { run } => Edit::Evidence(EvidenceEdit::Run(run)),
+        ManifestEdit::SetEvidenceFrames { frames } => Edit::Evidence(EvidenceEdit::Frames(frames)),
+        ManifestEdit::SetEvidenceNever { never } => Edit::Evidence(EvidenceEdit::Never(never)),
+        ManifestEdit::SetAfterMergeChecks { checks } => Edit::AfterMergeChecks(checks),
+        ManifestEdit::SetSetupRequires { requires } => Edit::SetupRequires(requires),
+        ManifestEdit::SetQuietAfterSeconds {
+            quiet_after_seconds,
+        } => Edit::QuietAfterSeconds(quiet_after_seconds),
+        ManifestEdit::SetPokeLimit { poke_limit } => Edit::PokeLimit(poke_limit),
+        ManifestEdit::SetExcludePaths { exclude_paths } => Edit::ExcludePaths(exclude_paths),
         ManifestEdit::RemoveCheck { name } => check(name, CheckEdit::Remove),
         ManifestEdit::SetCheckRun { name, run } => check(name, CheckEdit::Run(run)),
         ManifestEdit::SetCheckRequires { name, requires } => {
@@ -236,7 +270,7 @@ fn edit(wire: ManifestEdit) -> Result<Edit, Unknown> {
         ManifestEdit::SetTurnCapPerJob { turn_cap_per_job } => {
             Edit::TurnCapPerJob(turn_cap_per_job)
         }
-    })
+    }])
 }
 
 fn narrowing(wire: NarrowingDraft) -> NewNarrowing {
@@ -277,6 +311,7 @@ pub(crate) fn declared_in(manifest: &config::Manifest) -> ManifestDeclared {
                 name: name.clone(),
                 check: CheckDraft {
                     run: check.run().to_string(),
+                    expect_exit_code: check.expect_exit_code(),
                     requires: check
                         .requires()
                         .iter()
@@ -347,6 +382,8 @@ pub(crate) fn declared_in(manifest: &config::Manifest) -> ManifestDeclared {
         })
         .collect();
     ManifestDeclared {
+        id: Some(manifest.id().as_str().to_string()),
+        version: Some(manifest.version()),
         checks,
         commands,
         ports,
@@ -366,5 +403,30 @@ pub(crate) fn declared_in(manifest: &config::Manifest) -> ManifestDeclared {
         },
         cost_cap_micros_per_job: manifest.cost_cap_micros(),
         turn_cap_per_job: manifest.turn_cap(),
+        base: manifest.base().map(str::to_string),
+        evidence: manifest.harness().map(|harness| EvidenceDraft {
+            serve: harness.serve().map(str::to_string),
+            ready: harness.ready().map(str::to_string),
+            run: harness.run().to_string(),
+            frames: harness.frames().as_str().to_string(),
+            never: harness.never().to_vec(),
+        }),
+        after_merge_checks: manifest
+            .proved_after_a_merge()
+            .iter()
+            .map(|check| check.label().to_string())
+            .collect(),
+        setup_requires: manifest
+            .prepared_by()
+            .iter()
+            .map(|preparation| preparation.name().to_string())
+            .collect(),
+        quiet_after_seconds: manifest.quiet_after_seconds(),
+        poke_limit: manifest.poke_limit(),
+        exclude_paths: manifest
+            .exclude_paths()
+            .iter()
+            .map(|path| path.as_str().to_string())
+            .collect(),
     }
 }

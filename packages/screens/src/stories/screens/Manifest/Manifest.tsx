@@ -20,7 +20,6 @@ import type {
   EditManifest,
   ManifestDeclared,
   ManifestDriftRead,
-  ManifestEdit,
   ManifestSpend,
   ManifestReading,
   Outcome,
@@ -36,6 +35,7 @@ import type { ManifestEditAnswer, ManifestSaveAnswer, ManifestView } from "../..
 import type { RepositoryAllowedCommandsRead } from "../../../manifest-allows";
 import { useManifestEditing } from "../../../manifest-file";
 import { useManifestForm } from "../../../manifest-form";
+import { appliedTo } from "../ManifestForms/applied";
 import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";
 
 /** The moment every elapsed figure on this page is read at, so it never moves. */
@@ -73,6 +73,8 @@ checks:
  * Commands, as `GET /manifest/file` carries them beside the text.
  */
 export const DECLARED: ManifestDeclared = {
+  id: "armada",
+  version: 1,
   checks: [
     { name: "build", check: { run: "cargo build --workspace --locked" } },
     { name: "typecheck", check: { run: "pnpm typecheck", requires: ["bootstrap"] } },
@@ -85,50 +87,20 @@ export const DECLARED: ManifestDeclared = {
   ports: [],
   auto_merge: { written: "never", offered: ["never", "checks-pass", "always"] },
   review_gate: { written: "human_always", offered: ["human_always", "auto_if_judge_passes"] },
+  base: "main",
+  evidence: {
+    serve: "pnpm -C packages/components exec storybook dev -p ${port.storybook} --no-open --ci",
+    ready: "curl -sf http://localhost:${port.storybook}",
+    run: "pnpm -C packages/components exec playwright test {}",
+    frames: ".armada/frames",
+    never: ["/__notes"],
+  },
+  setup_requires: ["bootstrap"],
+  poke_limit: 3,
 };
 
 /** No Job has spent anything here, so the budget section warns about nothing. */
 const NO_SPEND: ManifestSpend = { jobs: 0, most_cost_micros: 0, most_turns: 0 };
-
-/**
- * A form's edits, applied as far as a story presses them. Fleet's writer
- * places every edit; this fake only has to agree about the ones a play test sends.
- */
-function appliedTo(declared: ManifestDeclared, edits: readonly ManifestEdit[]): ManifestDeclared {
-  let next = declared;
-  for (const edit of edits) {
-    switch (edit.edit) {
-      case "add_check":
-        next = { ...next, checks: [...next.checks, { name: edit.name, check: edit.check }] };
-        break;
-      case "remove_check":
-        next = { ...next, checks: next.checks.filter((one) => one.name !== edit.name) };
-        break;
-      case "set_check_run":
-        next = {
-          ...next,
-          checks: next.checks.map((one) =>
-            one.name === edit.name ? { ...one, check: { ...one.check, run: edit.run } } : one,
-          ),
-        };
-        break;
-      case "add_command":
-        next = { ...next, commands: [...next.commands, { name: edit.name, command: edit.command }] };
-        break;
-      case "remove_command":
-        next = { ...next, commands: next.commands.filter((one) => one.name !== edit.name) };
-        break;
-      case "set_cost_cap_micros_per_job": {
-        const { cost_cap_micros_per_job: _dropped, ...rest } = next;
-        next = edit.cost_cap_micros_per_job === null ? rest : { ...rest, cost_cap_micros_per_job: edit.cost_cap_micros_per_job };
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  return next;
-}
 
 /** What pressing Save on the forms comes to: written, or refused for a result that would not load. */
 export type EditGoesTo = "took" | "refused";

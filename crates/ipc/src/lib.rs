@@ -146,8 +146,9 @@ mod tests;
 
 pub use alerts::{Alert, AlertList};
 pub use amending::{
-    CheckDraft, CommandDraft, EditManifest, LinkDraft, ManifestDeclared, ManifestEdit,
-    ManifestEdited, NamedCheck, NamedCommand, NamedPort, NarrowingDraft, PolicyWords, PortDraft,
+    CheckDraft, CommandDraft, EditManifest, EvidenceDraft, LinkDraft, ManifestDeclared,
+    ManifestEdit, ManifestEdited, NamedCheck, NamedCommand, NamedPort, NarrowingDraft, PolicyWords,
+    PortDraft,
 };
 pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, WhenRefused};
 pub use attempt::{Move, StepAttempt};

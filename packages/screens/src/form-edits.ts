@@ -9,11 +9,13 @@ import type {
   ManifestFormCheck,
   ManifestFormCommand,
   ManifestFormDraft,
+  ManifestFormEvidence,
   ManifestFormNarrow,
 } from "@armada/components";
 import type {
   CheckDraft,
   CommandDraft,
+  EvidenceDraft,
   LinkDraft,
   ManifestDeclared,
   ManifestEdit,
@@ -33,6 +35,7 @@ export function draftOf(declared: ManifestDeclared): ManifestFormDraft {
     checks: declared.checks.map(({ name, check }) => ({
       name,
       run: check.run,
+      expectExitCode: numberText(check.expect_exit_code === 0 ? undefined : check.expect_exit_code),
       requires: check.requires ?? [],
       when: linesOf(check.when),
       narrow:
@@ -65,7 +68,23 @@ export function draftOf(declared: ManifestDeclared): ManifestFormDraft {
       declared.cost_cap_micros_per_job === undefined
         ? ""
         : String(declared.cost_cap_micros_per_job / MICROS),
-    turnCap: declared.turn_cap_per_job === undefined ? "" : String(declared.turn_cap_per_job),
+    turnCap: numberText(declared.turn_cap_per_job),
+    base: declared.base ?? "",
+    evidence:
+      declared.evidence === undefined
+        ? null
+        : {
+            serve: declared.evidence.serve ?? "",
+            ready: declared.evidence.ready ?? "",
+            run: declared.evidence.run,
+            frames: declared.evidence.frames,
+            never: linesOf(declared.evidence.never),
+          },
+    afterMerge: declared.after_merge_checks ?? [],
+    setup: declared.setup_requires ?? [],
+    quietAfter: numberText(declared.quiet_after_seconds),
+    pokeLimit: numberText(declared.poke_limit),
+    excludePaths: linesOf(declared.exclude_paths),
   };
 }
 
@@ -93,6 +112,10 @@ export function editsOf(declared: ManifestDeclared, draft: ManifestFormDraft): M
       continue;
     }
     if (next.run !== was.run) sets.push({ edit: "set_check_run", name, run: next.run });
+    const code = next.expect_exit_code ?? 0;
+    if (code !== (was.expect_exit_code ?? 0)) {
+      sets.push({ edit: "set_check_expect_exit_code", name, expect_exit_code: code });
+    }
     const requires = next.requires ?? [];
     if (!same(requires, was.requires ?? [])) sets.push({ edit: "set_check_requires", name, requires });
     const when = next.when ?? [];
@@ -154,6 +177,41 @@ export function editsOf(declared: ManifestDeclared, draft: ManifestFormDraft): M
     if (env !== (was.env ?? null)) sets.push({ edit: "set_port_env", name, env });
   }
 
+  const base = textOf(draft.base);
+  if (base !== (declared.base ?? null)) sets.push({ edit: "set_base", base });
+  const was = declared.evidence;
+  const evidence = draft.evidence === null ? null : evidenceOf(draft.evidence);
+  if (evidence === null) {
+    if (was !== undefined) removes.push({ edit: "remove_evidence" });
+  } else if (was === undefined) {
+    adds.push({ edit: "add_evidence", evidence });
+  } else {
+    const serve = evidence.serve ?? null;
+    if (serve !== (was.serve ?? null)) sets.push({ edit: "set_evidence_serve", serve });
+    const ready = evidence.ready ?? null;
+    if (ready !== (was.ready ?? null)) sets.push({ edit: "set_evidence_ready", ready });
+    if (evidence.run !== was.run) sets.push({ edit: "set_evidence_run", run: evidence.run });
+    if (evidence.frames !== was.frames) sets.push({ edit: "set_evidence_frames", frames: evidence.frames });
+    const never = evidence.never ?? [];
+    if (!same(never, was.never ?? [])) sets.push({ edit: "set_evidence_never", never });
+  }
+  if (!same(draft.afterMerge, declared.after_merge_checks ?? [])) {
+    sets.push({ edit: "set_after_merge_checks", checks: draft.afterMerge });
+  }
+  if (!same(draft.setup, declared.setup_requires ?? [])) {
+    sets.push({ edit: "set_setup_requires", requires: draft.setup });
+  }
+  const quiet = wholeOf(draft.quietAfter);
+  if (quiet !== (declared.quiet_after_seconds ?? null)) {
+    sets.push({ edit: "set_quiet_after_seconds", quiet_after_seconds: quiet });
+  }
+  const pokes = wholeOf(draft.pokeLimit);
+  if (pokes !== (declared.poke_limit ?? null)) sets.push({ edit: "set_poke_limit", poke_limit: pokes });
+  const excluded = listOf(draft.excludePaths);
+  if (!same(excluded, declared.exclude_paths ?? [])) {
+    sets.push({ edit: "set_exclude_paths", exclude_paths: excluded });
+  }
+
   if (draft.autoMerge !== declared.auto_merge.written) {
     sets.push({ edit: "set_auto_merge", auto_merge: draft.autoMerge });
   }
@@ -181,6 +239,9 @@ export function problemsOf(draft: ManifestFormDraft): Record<string, string> {
   const problems: Record<string, string> = {};
   for (const check of draft.checks) {
     if (check.run.trim() === "") problems[`checks.${check.name}.run`] = "A Check needs a command.";
+    if (check.expectExitCode.trim() !== "" && integerOf(check.expectExitCode) === null) {
+      problems[`checks.${check.name}.expect_exit_code`] = "An exit code is a whole number.";
+    }
     const narrow = check.narrow;
     if (narrow !== null && (narrow.run.trim() === "" || narrow.each.trim() === "")) {
       problems[`checks.${check.name}.narrow`] = "Narrowing needs its command and what each path becomes.";
@@ -199,6 +260,22 @@ export function problemsOf(draft: ManifestFormDraft): Record<string, string> {
     if (port.container.trim() !== "" && (container === null || container < 1 || container > 65_535)) {
       problems[`ports.${port.name}.container`] = "A container port is a whole number from 1 to 65535.";
     }
+  }
+  const evidence = draft.evidence;
+  if (evidence !== null) {
+    if (!evidence.run.includes("{}")) problems["evidence.run"] = "Nowhere for the spec's path to go yet.";
+    if (evidence.frames.trim() === "") problems["evidence.frames"] = "Frames need a directory to land in.";
+    if ((evidence.serve.trim() === "") !== (evidence.ready.trim() === "")) {
+      problems["evidence.ready"] = "Serves and Ready when go together, or neither is set.";
+    }
+  }
+  const quiet = wholeOf(draft.quietAfter);
+  if (draft.quietAfter.trim() !== "" && (quiet === null || quiet < 1 || quiet > MOST_A_CAP_HOLDS)) {
+    problems["drone.quiet_after_seconds"] = "A silence threshold is a whole number of seconds, 1 or more.";
+  }
+  const pokes = wholeOf(draft.pokeLimit);
+  if (draft.pokeLimit.trim() !== "" && (pokes === null || pokes > MOST_A_CAP_HOLDS)) {
+    problems["drone.poke_limit"] = "A poke limit is a whole number, 0 or more.";
   }
   const cost = microsOf(draft.costCap);
   if (draft.costCap.trim() !== "" && (cost === null || cost > MOST_A_CAP_HOLDS)) {
@@ -238,8 +315,10 @@ export function budgetWarningsOf(draft: ManifestFormDraft, spend: ManifestSpend 
 function checkOf(row: ManifestFormCheck): CheckDraft {
   const when = listOf(row.when);
   const requires = row.requires.filter((name) => name.trim() !== "");
+  const code = integerOf(row.expectExitCode) ?? 0;
   return {
     run: row.run.trim(),
+    ...(code === 0 ? {} : { expect_exit_code: code }),
     ...(requires.length === 0 ? {} : { requires }),
     ...(when.length === 0 ? {} : { when }),
     ...(row.narrow === null ? {} : { narrow: narrowingOf(row.narrow) }),
@@ -278,6 +357,19 @@ function commandOf(row: ManifestFormCommand): CommandDraft {
   };
 }
 
+function evidenceOf(row: ManifestFormEvidence): EvidenceDraft {
+  const serve = textOf(row.serve);
+  const ready = textOf(row.ready);
+  const never = listOf(row.never);
+  return {
+    ...(serve === null ? {} : { serve }),
+    ...(ready === null ? {} : { ready }),
+    run: row.run.trim(),
+    frames: row.frames.trim(),
+    ...(never.length === 0 ? {} : { never }),
+  };
+}
+
 function narrowKey(narrow: NarrowingDraft | undefined): string {
   if (narrow === undefined) return "";
   return JSON.stringify([narrow.run, narrow.each, narrow.from ?? [], narrow.under ?? null, narrow.except ?? []]);
@@ -306,6 +398,16 @@ function listOf(typed: string): string[] {
 function textOf(typed: string): string | null {
   const trimmed = typed.trim();
   return trimmed === "" ? null : trimmed;
+}
+
+function numberText(value: number | undefined): string {
+  return value === undefined ? "" : String(value);
+}
+
+/** A whole number that may be negative, as an exit code is. */
+function integerOf(typed: string): number | null {
+  const trimmed = typed.trim();
+  return /^-?\d+$/.test(trimmed) ? Number(trimmed) : null;
 }
 
 /** A whole number of zero or more, `null` where empty, `NaN`-free. */

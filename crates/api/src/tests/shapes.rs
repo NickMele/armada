@@ -237,10 +237,13 @@ pub fn manifest_declared() -> ipc::ManifestDeclared {
         offered: offered.iter().map(|word| word.to_string()).collect(),
     };
     ipc::ManifestDeclared {
+        id: None,
+        version: None,
         checks: vec![ipc::NamedCheck {
             name: "lint".to_string(),
             check: ipc::CheckDraft {
                 run: "pnpm -r lint".to_string(),
+                expect_exit_code: 0,
                 requires: Vec::new(),
                 when: Vec::new(),
                 narrow: None,
@@ -252,6 +255,13 @@ pub fn manifest_declared() -> ipc::ManifestDeclared {
         review_gate: words("human_always", &["human_always", "auto_if_judge_passes"]),
         cost_cap_micros_per_job: None,
         turn_cap_per_job: None,
+        base: None,
+        evidence: None,
+        after_merge_checks: Vec::new(),
+        setup_requires: Vec::new(),
+        quiet_after_seconds: None,
+        poke_limit: None,
+        exclude_paths: Vec::new(),
     }
 }
 

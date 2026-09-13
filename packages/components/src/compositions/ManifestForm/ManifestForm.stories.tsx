@@ -26,11 +26,12 @@ const DRAFT: ManifestFormDraft = {
     {
       name: "build",
       run: "cargo build --workspace --locked",
+      expectExitCode: "",
       requires: [],
       when: "",
       narrow: { run: "cargo build --locked", each: "-p {}", from: "", under: "crates", except: "" },
     },
-    { name: "bridge_test", run: "pnpm bridge-test", requires: ["bootstrap"], when: "packages/**\napps/**", narrow: null },
+    { name: "bridge_test", run: "pnpm bridge-test", expectExitCode: "", requires: ["bootstrap"], when: "packages/**\napps/**", narrow: null },
   ],
   commands: [
     { name: "bootstrap", run: "pnpm install --frozen-lockfile", destructive: false, serve: "", ready: "", links: [] },
@@ -48,10 +49,24 @@ const DRAFT: ManifestFormDraft = {
   reviewGate: "human_always",
   costCap: "5",
   turnCap: "300",
+  base: "main",
+  evidence: {
+    serve: "pnpm -C packages/components storybook --port ${port.storybook}",
+    ready: "curl -sf http://localhost:${port.storybook}",
+    run: "pnpm -C packages/components exec playwright test {}",
+    frames: ".armada/frames",
+    never: "/__notes",
+  },
+  afterMerge: ["build"],
+  setup: ["bootstrap"],
+  quietAfter: "300",
+  pokeLimit: "",
+  excludePaths: "",
 };
 
 const BASE = {
   path: "/Users/user/armada/armada.yml",
+  identity: { id: "armada", version: 1 },
   draft: DRAFT,
   onDraft: noop,
   autoMergeWords: ["never", "checks-pass", "always"],
