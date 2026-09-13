@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+#
+# Move the running Fleet — and Bridge, once it needs to — onto whatever is in
+# this working tree. Two callers: an agent, through Bash, after a merge that
+# touches Fleet or Bridge; and Bridge itself, from its own "restart on latest
+# build" act. Never on an allow list — `.claude/skills/restart-fleet/SKILL.md`
+# says why, and says what to tell the owner before running this.
+#
+# **launchd is the parent, and that is the whole design.** `scripts/dev` starts
+# Fleet as this script's own child, which works until the shell that started it
+# ends. An agent's session ends. So Fleet here is never spawned directly — this
+# script only ever talks to launchd, which is the one thing left holding it
+# once the caller is gone. `docs/concepts/fleet.md`, Daemon lifecycle and
+# Restarting Fleet, is the design; this is the first thing that builds it.
+#
+# **Everything here is derived from `$HOME`, deliberately**, so a test against
+# a `scripts/dev-fleet` scratch home can never reach the owner's plist, runtime
+# file or launchd job. `ARMADA_FLEET_LABEL` overrides the label for the same
+# reason, for the one thing `$HOME` cannot separate: launchd's `gui/$UID`
+# domain is one namespace per machine user, not per home directory, so two
+# Fleets tested under two scratch homes would still collide on `com.armada.fleet`
+# without it.
+
+set -euo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$root"
+
+home="${HOME:?HOME must be set}"
+support="$home/Library/Application Support/Armada"
+runtime="$support/fleet.json"
+
+label="${ARMADA_FLEET_LABEL:-com.armada.fleet}"
+plist="$support/$label.plist"
+domain="gui/$(id -u)"
+service="$domain/$label"
+
+bridge_label="$label.bridge"
+bridge_plist="$support/$bridge_label.plist"
+bridge_service="$domain/$bridge_label"
+
+say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+fail() {
+  echo "restart: $*" >&2
+  exit 1
+}
+
+# cargo's own default install root, so a `$HOME` overridden for testing does
+# not also relocate where `armada` gets installed — that is shared machine
+# tooling, not Fleet's per-home state, and installing it from this working
+# tree is the same harmless refresh a plain `cargo install` always is.
+cargo_home="${CARGO_HOME:-$home/.cargo}"
+armada_bin="$cargo_home/bin/armada"
+
+# 1. Refuse while a Drone is working.
+#
+# **Read off the roster, never off the Jobs.** `crates/ipc/src/drones.rs`:
+# an escalated Job keeps its Drone alive and idle, so a status count would
+# either miss it or, read the other way, refuse a restart nothing is using.
+# What refuses is a Drone whose Job is `running` — `docs/concepts/fleet.md`'s
+# own reading of `job-statuses.toml`, where `running` is the one status a live
+# Drone process stands for.
+old_pid=""
+old_port=""
+if [[ -f "$runtime" ]]; then
+  old_pid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pid"])' "$runtime" 2>/dev/null || true)
+  old_port=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["port"])' "$runtime" 2>/dev/null || true)
+fi
+
+if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+  say "Fleet is running (pid $old_pid, port $old_port) — checking for a working Drone"
+  result=$(python3 - "$old_port" <<'PY'
+import json, sys, urllib.error, urllib.request
+
+port = sys.argv[1]
+
+
+def get(path):
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as r:
+        return json.load(r)
+
+
+try:
+    for d in get("/drones")["drones"]:
+        job = get(f"/jobs/{d['job_id']}")["job"]
+        if job["status"] == "running":
+            print(f"REFUSE:{d['handle']}")
+            break
+    else:
+        print("OK")
+except (urllib.error.URLError, OSError, ValueError) as e:
+    print(f"ERROR:{e}")
+PY
+  )
+  case "$result" in
+    OK)
+      say "No Drone is working"
+      ;;
+    REFUSE:*)
+      fail "refusing — ${result#REFUSE:}'s Drone is working"
+      ;;
+    ERROR:*)
+      fail "fleet.json names a live pid but the API on port $old_port did not answer: ${result#ERROR:}"
+      ;;
+    *)
+      fail "could not read what $old_port answered: $result"
+      ;;
+  esac
+fi
+
+# 2. Rebuild.
+say "Installing armada from $root"
+cargo install --path crates/armada --debug --locked
+
+bridge_marker="$root/apps/desktop/out/main/index.js"
+bridge_rebuilt=false
+if [[ ! -f "$bridge_marker" ]]; then
+  bridge_rebuilt=true
+elif [[ -n "$(find "$root/apps" "$root/packages" -type f -newer "$bridge_marker" \
+    -not -path '*/node_modules/*' -print 2>/dev/null | head -n 1)" ]]; then
+  bridge_rebuilt=true
+fi
+
+if $bridge_rebuilt; then
+  say "Building Bridge — apps/ or packages/ moved since its last build"
+  pnpm --filter @armada/desktop build
+else
+  say "Bridge is unchanged since its last build"
+fi
+
+# 3. Restart Fleet under launchd.
+#
+# **Two Fleets is stopping a stray one by the pid the runtime file names, never
+# by name.** `scripts/dev` reasons about the same incident (Storybook, ports
+# 6006-6009) in `.claude/skills/armada-local/SKILL.md`. A Fleet already running
+# under *our own* launchd job is left alone here — `kickstart -k` below is what
+# moves it, and stopping it first would only race launchd's own restart.
+mkdir -p "$support"
+already_ours=false
+if launchctl print "$service" >/dev/null 2>&1; then
+  loaded_pid=$(launchctl print "$service" 2>/dev/null | awk -F'= ' '/^[[:space:]]*pid = /{print $2}')
+  if [[ -n "$old_pid" && "$loaded_pid" == "$old_pid" ]]; then
+    already_ours=true
+  fi
+fi
+
+if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null && ! $already_ours; then
+  say "Stopping the Fleet in $old_pid — not ours to kickstart"
+  kill -TERM "$old_pid"
+  for _ in $(seq 40); do
+    kill -0 "$old_pid" 2>/dev/null || break
+    sleep 0.25
+  done
+fi
+
+python3 - "$plist" "$label" "$armada_bin" "$root" "$home" "$PATH" <<'PY'
+import plistlib, sys
+
+path, label, armada_bin, root, home, path_env = sys.argv[1:7]
+plistlib.dump(
+    {
+        "Label": label,
+        "ProgramArguments": [armada_bin, "serve", root],
+        # `KeepAlive={SuccessfulExit:false}` and `ThrottleInterval` 2:
+        # docs/concepts/fleet.md, Daemon lifecycle. `RunAtLoad` is left false —
+        # that doc's own finding is that it is a lie in the presence of
+        # `KeepAlive`, which starts the job the moment it is bootstrapped.
+        "KeepAlive": {"SuccessfulExit": False},
+        "ThrottleInterval": 2,
+        "RunAtLoad": False,
+        "StandardOutPath": f"{home}/Library/Logs/Armada/{label}.log",
+        "StandardErrorPath": f"{home}/Library/Logs/Armada/{label}.log",
+        "EnvironmentVariables": {"HOME": home, "PATH": path_env},
+    },
+    open(path, "wb"),
+)
+PY
+chmod 644 "$plist"
+mkdir -p "$home/Library/Logs/Armada"
+
+if ! launchctl print "$service" >/dev/null 2>&1; then
+  say "Bootstrapping $service"
+  launchctl bootstrap "$domain" "$plist"
+fi
+say "Kickstarting $service onto the new build"
+launchctl kickstart -k "$service"
+
+for _ in $(seq 80); do
+  [[ -f "$runtime" ]] && break
+  sleep 0.25
+done
+[[ -f "$runtime" ]] || fail "the runtime file never came back — read $home/Library/Logs/Armada/$label.log"
+
+new_pid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pid"])' "$runtime")
+new_port=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["port"])' "$runtime")
+protocol=$(python3 -c 'import json,sys; v=json.load(open(sys.argv[1]))["protocol_version"]; print(str(v["major"]) + "." + str(v["minor"]))' "$runtime")
+
+# 4. Reopen Bridge, only if it was rebuilt. Otherwise it reconnects on its own
+#    — apps/desktop/src/main/socket.ts.
+bridge_reopened=false
+if $bridge_rebuilt; then
+  pnpm_bin=$(command -v pnpm) || fail "pnpm is not on PATH — cannot reopen Bridge"
+  python3 - "$bridge_plist" "$bridge_label" "$pnpm_bin" "$root" "$home" "$PATH" <<'PY'
+import plistlib, sys
+
+path, label, pnpm_bin, root, home, path_env = sys.argv[1:7]
+plistlib.dump(
+    {
+        "Label": label,
+        "ProgramArguments": [pnpm_bin, "--filter", "@armada/desktop", "start"],
+        "WorkingDirectory": root,
+        "RunAtLoad": True,
+        "ProcessType": "Interactive",
+        "StandardOutPath": f"{home}/Library/Logs/Armada/{label}.log",
+        "StandardErrorPath": f"{home}/Library/Logs/Armada/{label}.log",
+        "EnvironmentVariables": {"HOME": home, "PATH": path_env},
+    },
+    open(path, "wb"),
+)
+PY
+  chmod 644 "$bridge_plist"
+  if ! launchctl print "$bridge_service" >/dev/null 2>&1; then
+    launchctl bootstrap "$domain" "$bridge_plist"
+  fi
+  say "Reopening Bridge"
+  launchctl kickstart -k "$bridge_service"
+  bridge_reopened=true
+fi
+
+say "Done"
+echo "Fleet: pid ${old_pid:-none} -> $new_pid, port $new_port, protocol $protocol"
+echo "Bridge reopened: $bridge_reopened"

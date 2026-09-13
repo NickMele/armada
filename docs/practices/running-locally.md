@@ -111,6 +111,47 @@ A terminal gone quiet after `stopping: letting the turn in flight finish` is
 working. The runtime file is removed on the way out; a SIGKILL leaves it behind
 and the next start replaces it, saying so.
 
+## Restarting onto a new build
+
+**`scripts/restart` moves the running Fleet — and Bridge, once it needs to —
+onto whatever is in the working tree**, without the owner leaving Bridge for a
+terminal. Two callers: an agent, through Bash, after a merge that touches
+Fleet or Bridge; and Bridge itself, through `#810`'s act.
+
+**It refuses while a Drone is working**, naming the Job. Read off the live
+roster and each Drone's Job rather than a status count — an escalated Job
+keeps its Drone alive and idle, and a count derived from statuses would either
+miss that Drone or refuse a restart nothing is using. A queued Job, a Job at a
+human gate, or one a person is piloting holds no process the restart would
+interrupt, so none of those refuse it.
+
+**It runs Fleet under a launchd job it bootstraps on first use**, the design
+`docs/concepts/fleet.md` (Daemon lifecycle, Restarting Fleet) specifies: the
+plist lives beside the runtime file, outside `~/Library/LaunchAgents` so it is
+never loaded at login, `KeepAlive={SuccessfulExit:false}` and
+`ThrottleInterval` 2 so a crash is a restart and not a page. `launchctl
+kickstart -k` is what moves an already-running Fleet onto the fresh build —
+never a second `armada serve`, which is the "two Fleets" failure `armada-local`
+already warns about, this time from a script rather than a name.
+
+**It rebuilds Bridge only where `apps/` or `packages/` moved since its last
+build**, and reopens it only then — otherwise Bridge reconnects to the new
+Fleet on its own (`apps/desktop/src/main/socket.ts`). Reopening is a second,
+separate launchd job for the same reason Fleet's is one: the window has to
+outlive the session that asked for it.
+
+**Never on an allow list.** `.claude/skills/restart-fleet/SKILL.md` is when an
+agent reaches for it and what to tell the owner first — the confirmation is
+Claude Code's own permission prompt, not a flag this script reads.
+
+**`ARMADA_FLEET_LABEL` is for testing only.** `scripts/restart` derives its
+plist, its runtime file and its launchd label from `$HOME`, so a Fleet started
+under `scripts/dev-fleet`'s scratch home cannot reach the owner's. The label
+needs its own override because launchd's `gui/$UID` domain is one namespace
+per machine account, not per home directory — two scratch Fleets left on the
+default label would still collide with each other and, unset, with the
+owner's own `com.armada.fleet`.
+
 ## A Fleet of your own
 
 **`scripts/dev-fleet <scratch-dir>` starts a Fleet that cannot touch yours.** It
