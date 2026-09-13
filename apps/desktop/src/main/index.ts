@@ -726,6 +726,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.resolvePullRequestConflict, (_event, jobId: string) =>
     connection?.commands.resolvePullRequestConflict(jobId),
   );
+  ipcMain.handle(CHANNELS.rerunFailedChecks, (_event, jobId: string) =>
+    connection?.commands.rerunFailedChecks(jobId),
+  );
+  ipcMain.handle(CHANNELS.investigateFailedChecks, (_event, jobId: string) =>
+    connection?.commands.investigateFailedChecks(jobId),
+  );
   ipcMain.handle(CHANNELS.requestChanges, (_event, jobId: string, note: string) =>
     connection?.commands.requestChanges(jobId, note),
   );

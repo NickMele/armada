@@ -859,6 +859,16 @@ export class JobCommands {
     return this.settleWork(jobId, "resolve_pull_request_conflict");
   }
 
+  /** Ask the forge to start the pull request's failed CI runs again. #905. */
+  async rerunFailedChecks(jobId: string): Promise<Outcome> {
+    return this.settleWork(jobId, "rerun_failed_checks");
+  }
+
+  /** Send the branch back for a Drone to find out why CI failed. #905. */
+  async investigateFailedChecks(jobId: string): Promise<Outcome> {
+    return this.settleWork(jobId, "investigate_failed_checks");
+  }
+
   /** Send it back. **`running` again**, same step, same Drone. Blank refused. */
   async requestChanges(jobId: string, note: string): Promise<Outcome> {
     if (note.trim() === "") return { ok: false, why: "empty_note" };

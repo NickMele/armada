@@ -593,6 +593,16 @@ export type PullRequestDetail = {
    * under it.
    */
   currency?: Currency;
+  /** What the forge's own CI came to, as the sweep last read it. Since 13.34, #905. */
+  checks?: PullRequestChecks;
+};
+
+/** The forge's own CI on a pull request. Never totalled with Armada's Checks. Since 13.34, #905. */
+export type PullRequestChecks = {
+  kind: "nothing_ran" | "all_passed" | "still_waiting" | "some_failed" | "unreadable";
+  checks: number;
+  finished?: number;
+  failed?: string[];
 };
 
 /** One reviewer's verdict on a pull request. Since protocol 10.2. */

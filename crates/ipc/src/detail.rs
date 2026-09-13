@@ -794,6 +794,25 @@ pub struct PullRequestDetail {
     /// into moves under it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub currency: Option<Currency>,
+    /// What the forge's own CI came to on this pull request, as the sweep last read it.
+    /// **Since 13.34**, #905. Absent where the sweep has not read it yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checks: Option<PullRequestChecks>,
+}
+
+/// The forge's own CI on a pull request. Not Armada's Checks, and never totalled with them. #905.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PullRequestChecks {
+    /// `nothing_ran`, `all_passed`, `still_waiting`, `some_failed` or `unreadable`.
+    pub kind: String,
+    /// How many checks ran against it.
+    pub checks: usize,
+    /// How many have finished, where the forge said. Absent where it did not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finished: Option<usize>,
+    /// What the forge calls each check that did not pass.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failed: Vec<String>,
 }
 
 /// What the last attempt to keep a pull request's branch current against a

@@ -223,6 +223,14 @@ impl Delivery for GitVcs {
         crate::pull_request_diff::read(in_repo, pull_request)
     }
 
+    fn rerun_failed(
+        &self,
+        in_repo: &str,
+        pull_request: &str,
+    ) -> Result<adapter_traits::Rerun, adapter_traits::NotRerun> {
+        crate::rerunning::rerun_failed(in_repo, pull_request)
+    }
+
     fn kept_current(&self, in_repo: &str, handle: &str, base: &str) -> KeptCurrent {
         crate::keeping_current::kept_current(in_repo, handle, base)
     }

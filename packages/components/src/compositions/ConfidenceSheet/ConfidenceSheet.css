@@ -196,3 +196,31 @@
   text-align: right;
   overflow-wrap: normal;
 }
+
+/* The Pull request CI row: the line, and what a person can do about it. #905. */
+.armada-confidence__ci {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.armada-confidence__said {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+[data-ci="some_failed"].armada-confidence__said {
+  color: var(--verdict-not-met);
+}
+
+.armada-confidence__failed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

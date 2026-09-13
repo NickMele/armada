@@ -297,7 +297,7 @@ where
     /// beneath the slot lock, and taking the roster while holding one is the
     /// lock order reversed — see [`completed`](Fleet::completed), which says the
     /// same thing.
-    async fn route_back(
+    pub(crate) async fn route_back(
         &self,
         job: &Job,
         gate: &StepId,

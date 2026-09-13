@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ConfidenceSheet,
   ViewSheet,
+  type ConfidenceCi,
   type ConfidenceView,
   type DecisionChange,
 } from "@armada/components";
@@ -19,6 +20,8 @@ export type ReviewAtGateProps = {
   onAddNote?: (view: string, note: string) => void;
   /** Dismisses a finding with the reason written in its View. #907. */
   onDismissFinding?: (finding: string, reason: string) => void;
+  /** The pull request's CI, and what a person can do about it. #905. */
+  ci?: ConfidenceCi;
 };
 
 /** Armada's review at the gate, and the View a row of it opens. #903, #904. */
@@ -29,11 +32,16 @@ export function ReviewAtGate({
   onOpenDiff,
   onAddNote,
   onDismissFinding,
+  ci,
 }: ReviewAtGateProps) {
   const [viewing, setViewing] = useState<ConfidenceView | null>(null);
   return (
     <>
-      <ConfidenceSheet confidence={confidence} onView={setViewing} />
+      <ConfidenceSheet
+        confidence={confidence}
+        onView={setViewing}
+        {...(ci === undefined ? {} : { ci })}
+      />
       {viewing === null ? null : (
         <ViewSheet
           open

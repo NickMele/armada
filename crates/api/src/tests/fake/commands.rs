@@ -91,6 +91,12 @@ impl Commands for FakeDaemon {
     async fn resolve_pull_request_conflict(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.fake_resolve_pull_request_conflict(job_id).await
     }
+    async fn rerun_failed_checks(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
+    async fn investigate_failed_checks(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
     async fn request_changes(
         self: std::sync::Arc<Self>,
         job_id: JobId,

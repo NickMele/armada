@@ -84,6 +84,8 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onApprove: noop,
     onMergePullRequest: noop,
     onResolvePullRequestConflict: noop,
+    onRerunFailedChecks: noop,
+    onInvestigateFailedChecks: noop,
     onApproveReview: noop,
     onRequestChanges: noop,
     onReject: noop,

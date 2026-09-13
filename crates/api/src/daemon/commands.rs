@@ -345,6 +345,20 @@ pub trait Commands: Send + Sync + 'static {
         job_id: JobId,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `rerun_failed_checks` — ask the forge to start the pull request's failed CI runs again.
+    /// #905. A write to the forge, only from a press; nothing is posted and the Job does not move.
+    fn rerun_failed_checks(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `investigate_failed_checks` — send the branch back for a Drone to find out why the
+    /// pull request's CI failed. #905. Refused off the gate and where nothing failed.
+    fn investigate_failed_checks(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
     /// `request_changes` — the work is not right yet, and here is what to fix.
     ///
     /// **It keeps everything**: the worktree, the branch and every step so far.

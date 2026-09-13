@@ -475,6 +475,12 @@ const api: BridgeApi = {
   resolvePullRequestConflict: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.resolvePullRequestConflict, jobId),
 
+  rerunFailedChecks: (jobId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.rerunFailedChecks, jobId),
+
+  investigateFailedChecks: (jobId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.investigateFailedChecks, jobId),
+
   requestChanges: (jobId: string, note: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.requestChanges, jobId, note),
 

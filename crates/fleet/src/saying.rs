@@ -139,6 +139,21 @@ impl fmt::Display for Adrift {
                 "{} opened no pull request, so approving it is the act",
                 job.as_str()
             ),
+            Adrift::NothingToRerun { job } => write!(
+                out,
+                "{} has no open pull request, so there is no failed run to start again",
+                job.as_str()
+            ),
+            Adrift::RerunRefused { job, said } => write!(
+                out,
+                "the forge did not start {}'s failed runs again: {said}",
+                job.as_str()
+            ),
+            Adrift::NothingToInvestigate { job } => write!(
+                out,
+                "no check failed on {}'s pull request when Fleet last read it, so there is nothing to investigate",
+                job.as_str()
+            ),
             Adrift::NothingToResolve { job } => write!(
                 out,
                 "{} has no open pull request to resolve a conflict against",
@@ -620,6 +635,9 @@ impl Adrift {
             | Adrift::NotDelivered { job, .. }
             | Adrift::NothingToMerge { job }
             | Adrift::NothingToResolve { job }
+            | Adrift::NothingToRerun { job }
+            | Adrift::RerunRefused { job, .. }
+            | Adrift::NothingToInvestigate { job }
             | Adrift::NoStepToRedo { job }
             | Adrift::UnpushedDelivery { job, .. }
             | Adrift::NotMerged { job, .. }
@@ -803,6 +821,9 @@ impl Error for Adrift {
             // The two a merge makes. `NotMerged` is not an `Error` either.
             | Adrift::NothingToMerge { .. }
             | Adrift::NotMerged { .. }
+            | Adrift::NothingToRerun { .. }
+            | Adrift::RerunRefused { .. }
+            | Adrift::NothingToInvestigate { .. }
             // The two a conflict resolution makes, on the same ground.
             | Adrift::NothingToResolve { .. }
             | Adrift::NoStepToRedo { .. }

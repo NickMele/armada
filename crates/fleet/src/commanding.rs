@@ -159,6 +159,23 @@ where
         self.summarised(&job).await
     }
 
+    /// The pull request's failed CI runs, started again. #905. **Not [`budgeted`]**, for
+    /// [`Commands::merge_pull_request`]'s reason: the forge write inside is over a network.
+    async fn rerun_failed_checks(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::rerun_failed_checks(self, &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// The branch, sent back for a Drone to find out why CI failed. #905.
+    async fn investigate_failed_checks(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::investigate_failed_checks(self, &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
     /// The work goes back with a note, to the Drone that is standing at the
     /// gate.
     ///

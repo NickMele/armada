@@ -886,6 +886,10 @@ cannot work.
 
 `JobDetail.review_model_override` and `JobDetail.review_step`, additive, and the command `set_review_model`, which takes `set_model`'s body (#903). A person chooses the model the step that writes Armada's review runs on, and on that step it beats `model_override`. `review_step` is that step's label, **absent on a workflow with no review step**, which is where Bridge draws no review model at all.
 
+## Protocol 13.34: a pull request's CI, and what a person does about it
+
+`PullRequestDetail.checks`, additive: what the forge's own CI came to on the pull request, as the sweep last read it, with the names of the checks that failed (#905). Two commands take no body: `rerun_failed_checks` asks the forge to start the failed runs again, and `investigate_failed_checks` sends the Job back to the step before the one that delivers with the failed checks as the next Drone's note. **Neither posts anything on the pull request.**
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

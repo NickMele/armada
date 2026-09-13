@@ -198,6 +198,10 @@ export type JobDetailProps = {
   onMergePullRequest: (jobId: string) => void;
   /** Send the branch back for a Drone that can edit files. `#663`. */
   onResolvePullRequestConflict: (jobId: string) => void;
+  /** Start the pull request's failed CI runs again. #905. */
+  onRerunFailedChecks: (jobId: string) => void;
+  /** Send the branch back for a Drone to find out why CI failed. #905. */
+  onInvestigateFailedChecks: (jobId: string) => void;
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;

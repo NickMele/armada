@@ -162,6 +162,14 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             "/jobs/:job_id/resolve_pull_request_conflict",
             post(resolve_pull_request_conflict::<D>),
         )
+        .route(
+            "/jobs/:job_id/rerun_failed_checks",
+            post(crate::commands::rerun_failed_checks::<D>),
+        )
+        .route(
+            "/jobs/:job_id/investigate_failed_checks",
+            post(crate::commands::investigate_failed_checks::<D>),
+        )
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))
         .route("/jobs/:job_id/reject", post(reject_job::<D>))
         .route("/jobs/:job_id/take_up_remarks", post(take_up_remarks::<D>))

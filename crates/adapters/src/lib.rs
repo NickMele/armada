@@ -57,6 +57,7 @@ mod landing;
 mod mcp;
 mod pull_request_diff;
 mod reclaim;
+mod rerunning;
 /// A worktree before a person's run, and putting back what the run changed.
 pub mod snapshot;
 mod transcript;
