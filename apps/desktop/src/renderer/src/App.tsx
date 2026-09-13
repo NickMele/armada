@@ -33,7 +33,7 @@ import { FleetSettingsSheet } from "@armada/screens";
 import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
-import { Manifest, checkoutRunnablesOf, useManifestEditing } from "@armada/screens";
+import { Manifest, checkoutRunnablesOf, useManifestEditing, useManifestForm } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
@@ -53,6 +53,8 @@ import {
   getCheckoutRunDiff,
   readManifestFile,
   saveManifestFile,
+  editManifest,
+  readManifestSpend,
   listRepositoryAllowedCommands,
   removeRepositoryAllowedCommand,
   listRuns,
@@ -231,6 +233,14 @@ export function App() {
     reading: state.manifestReading,
     onReadFile: readManifestFile,
     onSaveFile: saveManifestFile,
+  });
+  // The forms beside it, held here for the same reason.
+  const form = useManifestForm({
+    showing: manifesting,
+    reading: state.manifestReading,
+    onReadFile: readManifestFile,
+    onEditManifest: editManifest,
+    onReadSpend: readManifestSpend,
   });
 
   useEffect(() => watchUncaught(setUncaught), []);
@@ -577,6 +587,7 @@ export function App() {
                 now={now}
                 onSaid={setTelling}
                 editing={editing}
+                form={form}
                 onObserveRun={observeCheckoutRun}
                 onStartRun={startCheckoutRun}
                 drift={state.manifestDrift}

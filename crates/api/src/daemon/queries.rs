@@ -159,6 +159,12 @@ pub trait Queries: Send + Sync + 'static {
     /// `settings.budget-quota-floor-for-interactive-use`.
     fn get_usage(&self) -> impl Future<Output = Result<FleetUsage, Refusal>> + Send;
 
+    /// `get_manifest_spend` — the costliest and the longest Job against the
+    /// Manifest this Fleet serves, for the budget form's warning.
+    fn get_manifest_spend(
+        &self,
+    ) -> impl Future<Output = Result<ipc::ManifestSpend, Refusal>> + Send;
+
     /// `get_manifest` — one Manifest as Fleet resolved it.
     ///
     /// [`Refusal::NoSuchJob`] is not the refusal here: a Manifest this Fleet

@@ -19,8 +19,13 @@ import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@armada/protocol";
 import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
-import type { SaveManifestFile } from "@armada/protocol";
-import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
+import type { EditManifest, SaveManifestFile } from "@armada/protocol";
+import type {
+  ManifestEditAnswer,
+  ManifestFileRead,
+  ManifestSaveAnswer,
+  ManifestSpendRead,
+} from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
 import type { CommandAnswer, JudgeAnswer, SaveLimits, WhenBlocked, WhenRefused } from "@armada/protocol";
@@ -305,6 +310,10 @@ const api: BridgeApi = {
 
   saveManifestFile: (body: SaveManifestFile): Promise<ManifestSaveAnswer> =>
     ipcRenderer.invoke(CHANNELS.saveManifestFile, body),
+  // Edits by key, and past Jobs' spend. Still no path: Fleet names the file.
+  editManifest: (body: EditManifest): Promise<ManifestEditAnswer> =>
+    ipcRenderer.invoke(CHANNELS.editManifest, body),
+  readManifestSpend: (): Promise<ManifestSpendRead> => ipcRenderer.invoke(CHANNELS.readManifestSpend),
 
   // A repository-wide always-allow — Fleet's own table since protocol 13.5.
   // Neither takes a path or a job id: Fleet names the repository.

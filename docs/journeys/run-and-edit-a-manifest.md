@@ -141,7 +141,7 @@ Each run writes its log under `./.armada` like every other ad-hoc run here, with
 
 ## Editing
 
-> **Rule.** Editing shows forms by default — one section each for Checks, Commands, allowlist, budget and freeze — with the raw file behind a toggle.
+> **Rule.** Editing shows forms by default — one section each for Checks, Commands, budget and freeze — with the raw file behind a toggle. Always-allows are Fleet's own table, listed on the run view, and not a section of the file.
 > Why: those are the parts of a Manifest with known shapes and enumerated values.
 
 > **Rule.** The budget section edits both caps — dollars and turns per Job — and warns where a cap is below what this repository's past Jobs have cost.

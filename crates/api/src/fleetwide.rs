@@ -73,6 +73,14 @@ pub(crate) async fn get_usage<D: Queries>(State(served): State<Served<D>>) -> Re
     }
 }
 
+/// What this Manifest's past Jobs have cost, at most.
+pub(crate) async fn get_manifest_spend<D: Queries>(State(served): State<Served<D>>) -> Response {
+    match served.daemon().get_manifest_spend().await {
+        Ok(spend) => answer(StatusCode::OK, &spend, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// One Manifest as Fleet resolved it.
 pub(crate) async fn get_manifest<D: Queries>(
     State(served): State<Served<D>>,

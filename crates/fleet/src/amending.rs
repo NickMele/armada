@@ -22,10 +22,11 @@ use config::{
     amend, CheckEdit, CommandEdit, Edit, NewCheck, NewCommand, NewLink, NewNarrowing, NewPort,
     NotAmended, PortEdit,
 };
-use core_model::{AutoMerge, ReviewGate};
+use core_model::{AutoMerge, Covers, ReviewGate};
 use ipc::{
-    EditManifest, Instant, LinkDraft, ManifestEdit, ManifestEdited, NarrowingDraft, WireError,
-    WireValue,
+    CheckDraft, CommandDraft, EditManifest, Instant, LinkDraft, ManifestDeclared, ManifestEdit,
+    ManifestEdited, NamedCheck, NamedCommand, NamedPort, NarrowingDraft, PolicyWords, PortDraft,
+    WireError, WireValue,
 };
 
 use crate::adrift::Adrift;
@@ -104,6 +105,7 @@ where
             path,
             at: Instant::from(&self.now()),
             text: amended.text().to_string(),
+            declared: Some(declared_in(amended.manifest())),
         })
     }
 
@@ -251,5 +253,118 @@ fn link(wire: LinkDraft) -> NewLink {
     NewLink {
         url: wire.url,
         name: wire.name,
+    }
+}
+
+/// What a Manifest declares, in the drafts a form sends back — so a key the
+/// form reads is a key it can write, and nothing it draws is a second spelling.
+pub(crate) fn declared_in(manifest: &config::Manifest) -> ManifestDeclared {
+    let patterns = |covers: Option<&Covers>| {
+        covers.map_or_else(Vec::new, |covers| {
+            covers
+                .patterns()
+                .iter()
+                .map(|pattern| pattern.as_str().to_string())
+                .collect()
+        })
+    };
+    let checks = manifest
+        .checks_as_written()
+        .iter()
+        .filter_map(|name| {
+            let check = manifest.check(name)?;
+            Some(NamedCheck {
+                name: name.clone(),
+                check: CheckDraft {
+                    run: check.run().to_string(),
+                    requires: check
+                        .requires()
+                        .iter()
+                        .map(|required| required.name().to_string())
+                        .collect(),
+                    when: patterns(check.when()),
+                    narrow: check.narrow().map(|narrow| NarrowingDraft {
+                        run: narrow.run().to_string(),
+                        each: narrow.each().to_string(),
+                        from: patterns(narrow.from()),
+                        under: narrow.under().map(str::to_string),
+                        except: narrow.except().to_vec(),
+                    }),
+                },
+            })
+        })
+        .collect();
+    let mut commands: Vec<NamedCommand> = manifest
+        .command_names()
+        .into_iter()
+        .filter_map(|name| {
+            let command = manifest.command(&name)?;
+            Some(NamedCommand {
+                command: CommandDraft {
+                    run: Some(command.run().to_string()),
+                    destructive: command.is_destructive(),
+                    serve: None,
+                    ready: None,
+                    links: Vec::new(),
+                },
+                name,
+            })
+        })
+        .collect();
+    commands.extend(manifest.server_names().into_iter().filter_map(|name| {
+        let server = manifest.server(&name)?;
+        Some(NamedCommand {
+            command: CommandDraft {
+                run: server.run().map(str::to_string),
+                destructive: server.is_destructive(),
+                serve: Some(server.serve().to_string()),
+                ready: server.ready().map(str::to_string),
+                links: server
+                    .links()
+                    .iter()
+                    .map(|link| LinkDraft {
+                        url: link.url().to_string(),
+                        name: link.name().map(str::to_string),
+                    })
+                    .collect(),
+            },
+            name,
+        })
+    }));
+    commands.sort_by(|one, other| one.name.cmp(&other.name));
+    let ports = manifest
+        .port_names()
+        .into_iter()
+        .filter_map(|name| {
+            let port = manifest.port(&name)?;
+            Some(NamedPort {
+                port: PortDraft {
+                    container: port.container(),
+                    env: port.env().map(str::to_string),
+                },
+                name,
+            })
+        })
+        .collect();
+    ManifestDeclared {
+        checks,
+        commands,
+        ports,
+        auto_merge: PolicyWords {
+            written: manifest.auto_merge().as_written().to_string(),
+            offered: AutoMerge::ALL
+                .iter()
+                .map(|word| word.as_written().to_string())
+                .collect(),
+        },
+        review_gate: PolicyWords {
+            written: manifest.review_gate().as_written().to_string(),
+            offered: ReviewGate::ALL
+                .iter()
+                .map(|word| word.as_written().to_string())
+                .collect(),
+        },
+        cost_cap_micros_per_job: manifest.cost_cap_micros(),
+        turn_cap_per_job: manifest.turn_cap(),
     }
 }

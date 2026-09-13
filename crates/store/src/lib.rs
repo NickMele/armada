@@ -119,4 +119,4 @@ pub use retain::Retained;
 pub use review::Review;
 pub use showing::KeptFrame;
 pub use shown_again::{ShownAgain, SpecNamed};
-pub use spend::{DroneSpend, Spend};
+pub use spend::{DroneSpend, PastSpend, Spend};

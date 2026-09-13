@@ -17,7 +17,11 @@ import type {
   CheckoutRunSheetRead,
   CheckoutRunUnderway,
   CheckoutVerify,
+  EditManifest,
+  ManifestDeclared,
   ManifestDriftRead,
+  ManifestEdit,
+  ManifestSpend,
   ManifestReading,
   Outcome,
   RunEntry,
@@ -28,9 +32,10 @@ import type {
 } from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
-import type { ManifestSaveAnswer, ManifestView } from "../../../editing";
+import type { ManifestEditAnswer, ManifestSaveAnswer, ManifestView } from "../../../editing";
 import type { RepositoryAllowedCommandsRead } from "../../../manifest-allows";
 import { useManifestEditing } from "../../../manifest-file";
+import { useManifestForm } from "../../../manifest-form";
 import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";
 
 /** The moment every elapsed figure on this page is read at, so it never moves. */
@@ -62,6 +67,71 @@ checks:
   typecheck:
     run: pnpm typecheck
 `;
+
+/**
+ * What the forms draw from: this repository's own Checks and a few of its
+ * Commands, as `GET /manifest/file` carries them beside the text.
+ */
+export const DECLARED: ManifestDeclared = {
+  checks: [
+    { name: "build", check: { run: "cargo build --workspace --locked" } },
+    { name: "typecheck", check: { run: "pnpm typecheck", requires: ["bootstrap"] } },
+  ],
+  commands: [
+    { name: "bootstrap", command: { run: "pnpm install --frozen-lockfile", destructive: false } },
+    { name: "fmt", command: { run: "cargo fmt --all", destructive: false } },
+    { name: "gate", command: { run: "cargo xtask verify-foundations", destructive: false } },
+  ],
+  ports: [],
+  auto_merge: { written: "never", offered: ["never", "checks-pass", "always"] },
+  review_gate: { written: "human_always", offered: ["human_always", "auto_if_judge_passes"] },
+};
+
+/** No Job has spent anything here, so the budget section warns about nothing. */
+const NO_SPEND: ManifestSpend = { jobs: 0, most_cost_micros: 0, most_turns: 0 };
+
+/**
+ * A form's edits, applied as far as a story presses them. Fleet's writer
+ * places every edit; this fake only has to agree about the ones a play test sends.
+ */
+function appliedTo(declared: ManifestDeclared, edits: readonly ManifestEdit[]): ManifestDeclared {
+  let next = declared;
+  for (const edit of edits) {
+    switch (edit.edit) {
+      case "add_check":
+        next = { ...next, checks: [...next.checks, { name: edit.name, check: edit.check }] };
+        break;
+      case "remove_check":
+        next = { ...next, checks: next.checks.filter((one) => one.name !== edit.name) };
+        break;
+      case "set_check_run":
+        next = {
+          ...next,
+          checks: next.checks.map((one) =>
+            one.name === edit.name ? { ...one, check: { ...one.check, run: edit.run } } : one,
+          ),
+        };
+        break;
+      case "add_command":
+        next = { ...next, commands: [...next.commands, { name: edit.name, command: edit.command }] };
+        break;
+      case "remove_command":
+        next = { ...next, commands: next.commands.filter((one) => one.name !== edit.name) };
+        break;
+      case "set_cost_cap_micros_per_job": {
+        const { cost_cap_micros_per_job: _dropped, ...rest } = next;
+        next = edit.cost_cap_micros_per_job === null ? rest : { ...rest, cost_cap_micros_per_job: edit.cost_cap_micros_per_job };
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return next;
+}
+
+/** What pressing Save on the forms comes to: written, or refused for a result that would not load. */
+export type EditGoesTo = "took" | "refused";
 
 /** Drift on this repository's own lines, every one still there. */
 export const DRIFT_CURRENT: ManifestDriftRead = {
@@ -180,6 +250,8 @@ export function ManifestFrom({
   save = "took",
   diff,
   drift = DRIFT_CURRENT,
+  edit = "took",
+  spend = NO_SPEND,
 }: {
   /** `GET /manifest/drift`. Every line current, unless a story says otherwise. */
   drift?: ManifestDriftRead;
@@ -196,6 +268,10 @@ export function ManifestFrom({
   save?: SaveGoesTo;
   /** What `get_checkout_run_diff` answers when *Open the diff* is pressed. Absent: not connected. */
   diff?: CheckoutRunDiff;
+  /** What pressing Save on the forms comes to. */
+  edit?: EditGoesTo;
+  /** What `get_manifest_spend` answers. */
+  spend?: ManifestSpend;
 }) {
   // Fleet's own table, faked just far enough to answer both routes: a read
   // returns what is held, and a remove takes a row out and answers the rest.
@@ -211,13 +287,38 @@ export function ManifestFrom({
   // A disk and a watch, faked just far enough to be Fleet's: a read answers
   // what is on disk, a save compares against it, and a reading follows.
   const disk = useRef(MANIFEST_TEXT);
+  const declared = useRef(DECLARED);
   const [reading, setReading] = useState<ManifestReading | null>(null);
+  const readFile = () =>
+    Promise.resolve({
+      ok: true as const,
+      file: { path: MANIFEST_PATH, text: disk.current, declared: declared.current },
+    });
+  const form = useManifestForm({
+    showing: true,
+    reading,
+    onReadFile: readFile,
+    onEditManifest: (body: EditManifest): Promise<ManifestEditAnswer> => {
+      if (edit === "refused") {
+        return Promise.resolve({
+          state: "refused",
+          saying: "armada.yml would not load after these edits: 1 fault",
+          faults: [{ key: "checks.typecheck.requires", fault: "names bootstrap, which no Command declares" }],
+        });
+      }
+      declared.current = appliedTo(declared.current, body.edits);
+      return Promise.resolve({
+        state: "edited",
+        edited: { path: MANIFEST_PATH, at: WROTE_AT, text: disk.current, declared: declared.current },
+      });
+    },
+    onReadSpend: () => Promise.resolve({ ok: true, spend }),
+  });
   const editing = useManifestEditing({
     showing: true,
     reading,
     initialView: view,
-    onReadFile: () =>
-      Promise.resolve({ ok: true, file: { path: MANIFEST_PATH, text: disk.current } }),
+    onReadFile: readFile,
     onSaveFile: (body: SaveManifestFile): Promise<ManifestSaveAnswer> => {
       if (save === "moved") {
         disk.current = PULLED_TEXT;
@@ -288,6 +389,7 @@ export function ManifestFrom({
             picked={null}
             now={now}
             editing={editing}
+            form={form}
             onSaid={noop}
             onObserveRun={noop}
             onStartRun={nothingHappens}

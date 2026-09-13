@@ -102,4 +102,44 @@ export type ManifestEdited = {
   path: string;
   at: string;
   text: string;
+  /** What `text` loads as. Absent from an older Fleet; the form reads the file again. */
+  declared?: ManifestDeclared;
+};
+
+/**
+ * What a form draws: every key an edit can reach, as the file declares it, in
+ * the drafts an edit sends — so a value read is a value sent.
+ */
+export type ManifestDeclared = {
+  /** In the order the file writes them. */
+  checks: { name: string; check: CheckDraft }[];
+  /** Commands and servers together, sorted. `serve` tells them apart. */
+  commands: { name: string; command: CommandDraft }[];
+  /** Sorted. */
+  ports: { name: string; port: PortDraft }[];
+  auto_merge: PolicyWords;
+  review_gate: PolicyWords;
+  /** Absent where the file defers to what Fleet runs with. */
+  cost_cap_micros_per_job?: number;
+  turn_cap_per_job?: number;
+};
+
+/** A policy's value and every word it takes — the registry is Fleet's. */
+export type PolicyWords = {
+  /** In force: the default where the file says nothing. */
+  written: string;
+  offered: string[];
+};
+
+/**
+ * `GET /manifest/spend` — the costliest and the longest Job against this
+ * Manifest, each summed across its Drones. A cap is set per Job, so the
+ * highest is what one below it would have stopped.
+ */
+export type ManifestSpend = {
+  /** Jobs that have spent anything. Zero leaves nothing to warn against. */
+  jobs: number;
+  /** A floor where a Drone named no price. */
+  most_cost_micros: number;
+  most_turns: number;
 };

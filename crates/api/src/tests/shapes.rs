@@ -225,6 +225,33 @@ pub fn manifest_file() -> ipc::ManifestFile {
     ipc::ManifestFile {
         path: "armada.yml".to_string(),
         text: "version: 1\nid: fake\ndrone:\n  poke_limit: soon\n".to_string(),
+        // Refused for `poke_limit`, so it does not load and the forms have nothing.
+        declared: None,
+    }
+}
+
+/// One Check, and both policies at their defaults, for an edit's answer.
+pub fn manifest_declared() -> ipc::ManifestDeclared {
+    let words = |written: &str, offered: &[&str]| ipc::PolicyWords {
+        written: written.to_string(),
+        offered: offered.iter().map(|word| word.to_string()).collect(),
+    };
+    ipc::ManifestDeclared {
+        checks: vec![ipc::NamedCheck {
+            name: "lint".to_string(),
+            check: ipc::CheckDraft {
+                run: "pnpm -r lint".to_string(),
+                requires: Vec::new(),
+                when: Vec::new(),
+                narrow: None,
+            },
+        }],
+        commands: Vec::new(),
+        ports: Vec::new(),
+        auto_merge: words("never", &["never", "checks-pass", "always"]),
+        review_gate: words("human_always", &["human_always", "auto_if_judge_passes"]),
+        cost_cap_micros_per_job: None,
+        turn_cap_per_job: None,
     }
 }
 

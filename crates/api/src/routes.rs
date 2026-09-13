@@ -38,7 +38,8 @@ use crate::commands::{
 use crate::daemon::Daemon;
 use crate::editing::{get_manifest_file, save_manifest_file};
 use crate::fleetwide::{
-    get_drone, get_events_since, get_health, get_manifest, get_usage, list_drones,
+    get_drone, get_events_since, get_health, get_manifest, get_manifest_spend, get_usage,
+    list_drones,
 };
 use crate::limiting::{get_limits, save_limits};
 use crate::queries::{
@@ -97,6 +98,7 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/activity", get(get_activity_feed::<D>))
         .route("/manifest/reading", get(get_manifest_reading::<D>))
         .route("/manifest/drift", get(get_manifest_drift::<D>))
+        .route("/manifest/spend", get(get_manifest_spend::<D>))
         .route(
             "/repository/scan",
             get(crate::queries::get_repository_scan::<D>),

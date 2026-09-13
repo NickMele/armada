@@ -342,3 +342,45 @@ impl Store {
             })
     }
 }
+
+/// What one Manifest's Jobs have cost, at most — the Manifest surface's budget
+/// warning. **Zero Jobs is zero of everything**, and nothing to warn against.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PastSpend {
+    /// Jobs with at least one Drone recorded.
+    pub jobs: u64,
+    /// The costliest Job's priced Drones, added up.
+    pub most_cost_micros: u64,
+    /// The most turns one Job took.
+    pub most_turns: u64,
+}
+
+impl Store {
+    /// The costliest and the longest Job against this Manifest, each summed
+    /// across its Drones. One query, rather than [`Store::spend_for`] per Job.
+    pub fn past_spend_for(
+        &self,
+        manifest_id: &core_model::ManifestId,
+    ) -> Result<PastSpend, LoadJobError> {
+        self.conn
+            .query_row(
+                "SELECT COUNT(*), COALESCE(MAX(cost), 0), COALESCE(MAX(turns), 0) FROM ( \
+                 SELECT COALESCE(SUM(spend.cost_micros), 0) AS cost, SUM(spend.turns) AS turns \
+                 FROM job_drone_spend AS spend JOIN jobs ON jobs.job_id = spend.job_id \
+                 WHERE jobs.owner_manifest_id = ?1 GROUP BY spend.job_id)",
+                (manifest_id.as_str(),),
+                |row| {
+                    Ok(PastSpend {
+                        jobs: row.get::<_, i64>(0)? as u64,
+                        most_cost_micros: row.get::<_, i64>(1)? as u64,
+                        most_turns: row.get::<_, i64>(2)? as u64,
+                    })
+                },
+            )
+            .map_err(|why| {
+                LoadJobError::Unreadable(RowError::Database(fault(
+                    "reading what a Manifest's Jobs spent",
+                )(why)))
+            })
+    }
+}

@@ -34,8 +34,13 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { BridgeState, Summons } from "./bridge";
-import type { SaveManifestFile } from "@armada/protocol";
-import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
+import type { EditManifest, SaveManifestFile } from "@armada/protocol";
+import type {
+  ManifestEditAnswer,
+  ManifestFileRead,
+  ManifestSaveAnswer,
+  ManifestSpendRead,
+} from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
 
@@ -496,6 +501,14 @@ export type BridgeApi = {
    * no commit. What Fleet made of it follows as `manifest.reread`.
    */
   saveManifestFile: (body: SaveManifestFile) => Promise<ManifestSaveAnswer>;
+  /**
+   * A form's edits, by key, **only where the file is still what the form was
+   * drawn from**. Fleet splices each key, keeps every comment, and refuses a
+   * result that would not load. Writes and stops.
+   */
+  editManifest: (body: EditManifest) => Promise<ManifestEditAnswer>;
+  /** The costliest and the longest past Job here, for the budget warning. */
+  readManifestSpend: () => Promise<ManifestSpendRead>;
 
   /**
    * Every rule a person always-allowed for this repository, oldest first —

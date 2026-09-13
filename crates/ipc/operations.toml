@@ -399,6 +399,8 @@ The half a person acts with, where `get_manifest_reading` is the half that repor
 
 **Whole, and not windowed.** `get_check_output` serves a tail and says so because half a log is still a log; a partial Manifest handed to an editor would be saved back over the rest. A Manifest is a few kilobytes.
 
+**`declared` is what the text loads as**, in the drafts `edit_manifest` takes, so the forms draw from the same reading an edit is compared against. Absent where the text does not load, and the file still reads.
+
 `agent_access` is `No`, on the seven checkout-run operations' terms: the main checkout is the tree a Drone is confined out of, and the reader this exists for is a person who opened the file view. What an agent needs about this repository's configuration is `get_manifest`, which is resolved, `Yes`, and carries no comments to rewrite.
 """
 
@@ -1702,6 +1704,19 @@ notes = """
 **A file that moved under the edit is refused exactly as a save is.** `EditManifest.read` is required and whole, for `save_manifest_file`'s reasons. Fleet reads the disk before placing anything, so edits are never applied to text the form did not show, and writes through the same beside-and-rename `save`, which compares again at the write.
 
 `agent_access` is `No`, for `save_manifest_file`'s reason: this writes the tracked file that decides what every Job is gated on, in the checkout a Drone is confined out of. A change to what Checks mean is a person's.
+"""
+
+[operations.get_manifest_spend]
+kind = "query"
+transport = "HTTP"
+agent_access = "Yes"
+description = "The costliest and the longest Job against this Manifest, for the budget form's warning"
+notes = """
+**A cap below one Job's cost makes the workspace undispatchable**, and the Manifest surface is where past Jobs exist to set a cap against — Journey 9, *Editing*. So the answer is the highest per-Job cost and the highest per-Job turn count, each summed across that Job's Drones, and how many Jobs have spent anything. The highest and not a total, because a cap is set per Job.
+
+Under `/manifest` for `get_manifest_drift`'s reason: a Fleet serves one repository, so nothing names it. A cost is a floor where a Drone named no price, as `get_usage` says of its own sum.
+
+`agent_access` is `Yes` for `get_usage`'s reason: reading what was spent decides nothing, and it is three numbers.
 """
 
 # Servers: a Command with `serve`, held by Fleet — `docs/concepts/fleet.md`,

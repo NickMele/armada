@@ -57,7 +57,7 @@ export type HeadProps = {
    * is here only because the page's own rows never say what surface they
    * belong to.
    */
-  manifest: false | "run" | "file";
+  manifest: false | "run" | "form" | "file";
   /** A live connection. What stops a new Job being proposed into nothing. */
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
@@ -112,7 +112,7 @@ export function headOf({
       // further — the file is tracked, and Armada committing on a person's
       // behalf is the surprise Journey 9 rules out.
       summary:
-        manifest === "file"
+        manifest !== "run"
           ? "Edit this repository's Manifest. Save writes the file to disk and stops, without staging or committing it."
           : "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict.",
       // No action. The rail is how a person leaves a rail destination.

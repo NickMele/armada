@@ -12,7 +12,7 @@
 //! root, and zero is a Job that starts nothing.
 
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
-use crate::{DroneSpend, Spend, Store, WriteError};
+use crate::{DroneSpend, PastSpend, Spend, Store, WriteError};
 
 fn a_job(store: &mut Store, id: &str) {
     let job = top_level(id);
@@ -404,4 +404,72 @@ fn a_drone_that_reported_a_cost_of_nothing_is_not_an_unpriced_one() {
     assert_eq!(read.cost_micros, 0);
     assert_eq!(read.drones, 1);
     assert_eq!(read.unpriced, 0, "it named a price, and the price was none");
+}
+
+/// **A Manifest's past spend is its costliest Job and its longest one**, each
+/// summed across that Job's Drones. A Job against another Manifest is not one
+/// of them, and a Job with no Drones recorded is not counted.
+#[test]
+fn a_manifests_past_spend_is_its_costliest_and_its_longest_job() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01SPEND00000000000000011");
+    a_job(&mut store, "01SPEND00000000000000012");
+    a_job(&mut store, "01SPEND00000000000000014");
+    let mut theirs = crate::tests::full_new_job("01SPEND00000000000000013");
+    theirs.owner_manifest_id =
+        core_model::ManifestId::carried(crate::tests::ulid("01SOMEOTHERMANIFEST"));
+    let theirs = core_model::Job::create_top_level(
+        theirs,
+        core_model::TopLevelOrigin::HelmDrafted,
+        created_at(),
+    );
+    store
+        .insert_job(&theirs, &created_at())
+        .expect("the other Manifest's job is stored");
+
+    let record = |store: &mut Store, job: &str, one: &str, spend: DroneSpend| {
+        store
+            .record_drone_spend(&job_id(job), &drone(one), &spend)
+            .expect("the spend is recorded");
+    };
+    record(
+        &mut store,
+        "01SPEND00000000000000011",
+        "01DRONEA",
+        spent(300_000, 4, 1),
+    );
+    record(
+        &mut store,
+        "01SPEND00000000000000011",
+        "01DRONEB",
+        spent(200_000, 3, 1),
+    );
+    record(
+        &mut store,
+        "01SPEND00000000000000012",
+        "01DRONEC",
+        spent(400_000, 20, 1),
+    );
+    record(
+        &mut store,
+        "01SPEND00000000000000013",
+        "01DRONED",
+        spent(9_000_000, 99, 1),
+    );
+
+    let past = store
+        .past_spend_for(&core_model::ManifestId::carried(crate::tests::ulid(
+            "01OWNERMANIFEST",
+        )))
+        .expect("the past spend is read");
+    assert_eq!(
+        past,
+        PastSpend {
+            jobs: 2,
+            most_cost_micros: 500_000,
+            most_turns: 20,
+        },
+        "the costliest job is the one of two drones; the longest is the other"
+    );
 }

@@ -219,6 +219,7 @@
 /* A step as one timeline, the phases in order and an attempt per section. */
 @import "./compositions/StepTimeline/StepTimeline.css";
 @import "./compositions/ManifestFile/ManifestFile.css";
+@import "./compositions/ManifestForm/ManifestForm.css";
 
 /* One checkout run's patch, opened from the Manifest surface — Journey 9. */
 @import "./compositions/RunDiffSheet/RunDiffSheet.css";

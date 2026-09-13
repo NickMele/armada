@@ -1,0 +1,174 @@
+/* The Manifest as forms — Journey 9's *Editing*. One panel per section, each
+   entry a group inside it, and every row wrapping rather than overflowing. */
+.armada-manifest-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+/* Sticky, so Save and what it came to are in reach from the last section. */
+.armada-manifest-form__top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  background: var(--bg-base);
+}
+
+.armada-manifest-form__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-manifest-form__path,
+.armada-manifest-form__name,
+.armada-manifest-form__key {
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+.armada-manifest-form__path,
+.armada-manifest-form__name {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* The slack goes here, so the two buttons stay at the row's end at any width. */
+.armada-manifest-form__receipt {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-manifest-form__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  min-width: 0;
+}
+
+.armada-manifest-form__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-manifest-form__says,
+.armada-manifest-form__said,
+.armada-manifest-form__label,
+.armada-manifest-form__problem {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-manifest-form__says,
+.armada-manifest-form__label {
+  color: var(--fg-muted);
+}
+
+.armada-manifest-form__problem {
+  color: var(--status-completed-failed);
+}
+
+.armada-manifest-form__entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.armada-manifest-form__entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-manifest-form__nested {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-left: var(--space-4);
+  border-left: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+.armada-manifest-form__choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-4);
+  row-gap: var(--space-2);
+}
+
+.armada-manifest-form__label {
+  flex-basis: 100%;
+}
+
+.armada-manifest-form__add,
+.armada-manifest-form__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-manifest-form__add > :first-child,
+.armada-manifest-form__link > :not(:last-child) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.armada-manifest-form__faults {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-manifest-form__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.armada-manifest-form__hinted {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-manifest-form__hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}

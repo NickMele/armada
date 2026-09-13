@@ -12,9 +12,11 @@
 // thing that let a `git checkout` be overwritten without anybody seeing it.
 
 import type {
+  ManifestEdited,
   ManifestFile,
   ManifestReading,
   ManifestSaved,
+  ManifestSpend,
   Outcome,
   SaveManifestFile,
 } from "@armada/protocol";
@@ -36,13 +38,27 @@ export type ManifestSaveAnswer =
   | { state: "failed"; outcome: Outcome };
 
 /**
- * Which of the surface's views is showing.
+ * `POST /manifest/edit`, read into the app.
  *
- * **A union with room in it.** Journey 9 puts forms in front of the file, and
- * #721 is where they are built; that view is a third member here, and the
- * toggle named by the path goes on switching to `file`.
+ * **`refused` is Fleet naming what it would not write** — a result that would
+ * not load, a name the file does not hold, a shape the writer does not edit —
+ * and `faults` is empty for the last two, whose sentence says it all.
  */
-export type ManifestView = "run" | "file";
+export type ManifestEditAnswer =
+  | { state: "edited"; edited: ManifestEdited }
+  /** What is on disk now, or `null` where the file is no longer there. */
+  | { state: "moved"; onDisk: string | null }
+  | { state: "refused"; saying: string; faults: { key: string; fault: string }[] }
+  | { state: "failed"; outcome: Outcome };
+
+/** `GET /manifest/spend`, read into the app. */
+export type ManifestSpendRead = { ok: true; spend: ManifestSpend } | { ok: false; outcome: Outcome };
+
+/**
+ * Which of the surface's views is showing: running, the forms, or the file.
+ * The toggle named by the path goes on switching to `file`.
+ */
+export type ManifestView = "run" | "form" | "file";
 
 /** What the file view is holding. */
 export type HeldFile =
