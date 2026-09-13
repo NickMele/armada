@@ -49,7 +49,7 @@ pub struct WorktreeHeld {
     /// value here that is worth copying.
     pub path: String,
     /// Whether the checkout is still there. False exactly when
-    /// `adapters::standing` reads it absent. Since 13.28.
+    /// `adapters::standing` reads it absent. Since 13.29.
     pub on_disk: bool,
     /// The branch the Job derived. Named even where it is already gone: it is
     /// what the commits are recoverable from.
