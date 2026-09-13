@@ -221,6 +221,27 @@ pub fn one(
     held
 }
 
+/// A plan step and a step that follows it, through the parser — `#895`'s own
+/// shape, which `crate::tests::plan_tools` could not stand a Drone on before
+/// `config` could read `plan`, `plan_recorded` and `follows_plan`.
+pub fn plan_and_implement() -> config::ResolvedWorkflow {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture-plan.yml"),
+        "version: 1\nworkflow_id: fixture-plan\nname: fixture\nstructure: linear\n\
+         steps:\n  - id: plan\n    label: \"Plan the change\"\n    \
+         evidence: {submitted: {type: plan}}\n    mechanical_checks:\n      \
+         - { type: plan_recorded, min_tasks: 1 }\n    delivers: false\n    \
+         advance_gate: auto\n  - id: implement\n    label: \"Implement\"\n    \
+         follows_plan: true\n    evidence: {submitted: {type: diff}}\n    \
+         mechanical_checks:\n      - { type: diff_nonempty }\n    delivers: true\n    \
+         advance_gate: auto\n",
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture plan workflow did not parse: {refused}"));
+    config::ResolvedWorkflow::resolve(&def, &manifest())
+        .unwrap_or_else(|refused| panic!("the fixture plan workflow did not resolve: {refused}"))
+}
+
 /// A one-step workflow with its own `workflow_id`, gated on nothing but the
 /// evidence arriving — for a case that needs two workflows Fleet can tell
 /// apart by id, and cannot tell apart by step id, since each step is named

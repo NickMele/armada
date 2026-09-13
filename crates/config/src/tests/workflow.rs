@@ -8,6 +8,7 @@
 //! of this milestone step: a definition met with a Manifest.
 
 mod mechanical;
+mod plan;
 mod resolving;
 mod step;
 

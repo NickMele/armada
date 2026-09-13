@@ -152,11 +152,13 @@ parent = "submitted"
 purpose = "What the step produces as its work product. Determines what the Judge is handed."
 open_questions = ["Does the Judge see the Drone's transcript, or only task text, diff and deterministic facts?"]
 notes = """
-The legal values: `diff`, `failing_test`, `facts_note`, `test_suite_run`, `bundle`, `document`. A step may declare none — Bug's `merge` produces nothing a Judge reads. A step with no gate advances once evidence of its declared type arrives, so on a gateless step this field is the entire advance condition.
+The legal values: `diff`, `failing_test`, `facts_note`, `test_suite_run`, `bundle`, `document`, `plan`. A step may declare none — Bug's `merge` produces nothing a Judge reads. A step with no gate advances once evidence of its declared type arrives, so on a gateless step this field is the entire advance condition.
 
 What the Judge receives for each value, and what `context_paths` is for in each case, is the per-type table on Workflow under Evidence Scope Object. Code Review is the exception that table cannot fold in — there the diff is the input and the review is the work product.
 
 **`shown` was a value here and is not one now.** Every value in this set is a claim a Drone hands in and the gate measures; `shown` was never a claim by anybody — it meant *Fleet, run the repository's harness* — which is why it could not sit beside `diff`. `captured` is where that instruction lives. `#777`.
+
+**`plan` joined the set with `#895`.** It is Fleet's own record — an approach and a list of tasks, recorded through the `record_plan` tool rather than written to a file — and the step that declares it is the one `plan_recorded` and `follows_plan` both point at. `crate::WorkPlan`.
 
 Whether the field earns its place at all is still a person's question, open at `[evidence-mcp-submission-schema]`, which also defers the typed payloads for `bundle`, `document` and `review_findings`.
 """
@@ -191,6 +193,19 @@ Applied after `context_paths` resolves, so it wins over anything the Drone decla
 What is left in the shipped definitions is `node_modules/` and `target/` — generated output, which decides nothing about what is checked or judged, and which a Judge asked about would refuse on its own. Those two words are now also the compiled-in default, so a step dropping them keeps them.
 """
 why = "A denylist that resolved first could be widened by a later declaration. Splitting it in two came later, and for the opposite reason: one list that refused everything the same way left a Drone blocked by a guess with no route but to fail its step."
+
+[fields.follows_plan]
+type = "bool"
+concern = "Gating"
+parent = "steps[]"
+purpose = "Whether this step works the Job's plan. Optional, and absent means it does not."
+notes = """
+**The one thing that grants `add_task` and `update_task`.** A step declaring it is handed the two tools that keep the plan current — `crate::WorkPlan` is the record they change — beside whatever the step already asks a Drone for. `#895`.
+
+**Legal only on a step strictly after the one whose product is `plan`.** On the plan step itself, on a step before it, or in a workflow declaring no plan step at all, it is a step asked to work a plan that does not exist yet from where it stands — refused at load, one rule covering all three, because each is exactly the same missing fact: no earlier step recorded one.
+
+**False on every step written before the key existed.** A workflow with no plan step grants neither tool to anybody, which is what every step did before this key could be written at all.
+"""
 
 [fields.for_requests]
 type = "string"
@@ -339,6 +354,18 @@ notes = """
 **A step declares at most one.** Two would make "the document this step produced" a choice nothing records, so the second is refused where it is written.
 
 This is what makes a step's product a file rather than a claim about one. A step whose output a later step reads used to hand it three prose strings, two of which nothing routes on — which inverts the rule that a Drone cannot be trusted to manage its own state. Nothing about it involves git: the file is reclaimed with the worktree, and one that landed in the default branch would satisfy the next Job's check with no Drone having written anything.
+"""
+
+[[fields.mechanical_checks.types]]
+type = "plan_recorded"
+asserts = "The Job's plan holds at least `min_tasks` tasks not dropped. Carries `min_tasks`, default 1"
+used_by = []
+notes = """
+**Legal only on the step whose product is `plan`, and required there.** The check reads Fleet's own record — never the Drone's word about it — so it has nothing to read on any other step; a step naming `plan` and declaring none of these is refused the other way, for the reason `delivers` is required rather than defaulted: neither absence is safe. `#895`.
+
+**`min_tasks` defaults to 1 and refuses 0.** A step that says nothing is held to the plan existing at all; a stated zero asked for a check nothing could ever fail, which is not the shape a default takes — so it is refused rather than carried.
+
+**A task's state never gates a submission.** This check counts tasks not dropped; it does not look at what state they are in. Whether a `done` task's diff actually does it is `tasks_match_the_diff`, a Judge question and not this one — `docs/concepts/plan.md`'s own distinction, decided with the owner on 13 Sep 2026.
 """
 
 [[fields.mechanical_checks.types]]
@@ -524,7 +551,7 @@ No sample carries one yet.
 [fields."steps[]"]
 type = "array[step]"
 concern = "Structure"
-sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence", "advance_gate", "delivers", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit"]
+sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence", "advance_gate", "delivers", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit", "follows_plan"]
 purpose = "The ordered set of steps. Everything nested under this row is a field of a step, not of the WorkflowDef."
 notes = """
 Ordered, and loop-capable: `structure: "loop"` means a step returns to an earlier one by `verdict_routing`, not that the array is unordered.

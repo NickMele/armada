@@ -36,7 +36,7 @@ use checks_runner::Output;
 use core_model::{
     Actor, AdvanceGate, CriterionId, DeclaredPaths, EscalationTrigger, IllegalTransition, Job,
     Judgment, ResolvedCheck, ResolvedStep, StepCheck, StepEvidence, StepId, StepLevelTrigger,
-    Target, Timestamp, Transitioned, WhenRefused,
+    Target, Timestamp, Transitioned, WhenRefused, WorkPlan,
 };
 use verification::{
     decide, out_of_bounds, Accepted, Answered, Baseline, CheckFailed, Delivered, InScope, Lifted,
@@ -105,7 +105,7 @@ pub use crate::ruling::Ruling;
 /// | `ports`, `port_env` | The Job's claimed span, resolved to a name-to-port map and to the environment it sets. **Handed in for `lifted`'s reason** — this function is given a step and not a Job, and only a caller holding one can ask the store for its claim. `crate::ports` |
 /// | `refusal_policy` | This Job's `WhenRefused` setting, off the store. **Handed in for `lifted`'s reason** — a step cannot ask the store for a Job-level setting, and a setting read here for itself would be a second reader of the value `crate::asking::answer_judge` writes |
 /// | `tolerated` | Every criterion this repository has stood down with "always disagree", off the store. **Handed in and read once per pass**, so a criterion answered before this Job existed is never asked about again without a second query per criterion |
-/// | `plan` | How many tasks the Job's plan holds in each state, off the store, or `None` where none was recorded. **Read by `plan_recorded` and nothing else** — a task's state never gates a submission |
+/// | `plan` | The Job's plan as its history stands, off the store, or `None` where none was recorded. `plan_recorded` reads its counts; a step whose own product is `plan`, and a later step naming `<step_id>.evidence` for it, are handed the same record rendered as text — **a task's state never gates a submission**, which is `plan_recorded`'s own rule and not this one's to relax |
 #[allow(clippy::too_many_arguments)]
 pub async fn rule_on<W>(
     at: AtStep<'_>,
@@ -125,7 +125,7 @@ pub async fn rule_on<W>(
     port_env: &[(String, String)],
     refusal_policy: WhenRefused,
     tolerated: &[CriterionId],
-    plan: Option<core_model::TaskCounts>,
+    plan: Option<&WorkPlan>,
 ) -> Ruling
 where
     W: WorkProduct,
@@ -219,7 +219,7 @@ where
         announcing,
         ports,
         port_env,
-        plan,
+        plan.map(WorkPlan::counts),
     )
     .await
     {
@@ -353,7 +353,18 @@ where
                     }
                 }
             };
-            let delivered = match step.deliverable().zip(read.as_deref()) {
+            // **A plan step delivers no file, and is handed the plan
+            // instead.** `step.deliverable()` answers `None` on it — its
+            // mechanical check is `plan_recorded`, never `artifact_exists` —
+            // so without this a step whose product is `plan` would reach its
+            // Judge with only the three lines a Drone submitted about it,
+            // never the approach and the tasks Fleet actually holds. `#895`.
+            let plan_text = plan.filter(|_| step.records_plan()).map(WorkPlan::rendered);
+            let target_and_bytes = match step.deliverable().zip(read.as_deref()) {
+                Some(found) => Some(found),
+                None => plan_text.as_deref().map(|text| ("the Job's plan", text)),
+            };
+            let delivered = match target_and_bytes {
                 None => None,
                 Some((target, bytes)) => match Delivered::read(target, bytes) {
                     Ok(delivered) => {

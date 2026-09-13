@@ -120,6 +120,16 @@ where
             .await
             .step_evidence(job_id)
             .map_err(Adrift::Reading)?;
+        // Read here too, ahead of `plan` below: `crate::work_plan::with_the_plan`
+        // is what a plan-producing step's own baseline reads instead of the
+        // Drone's submitted row, so the two calls must share one reading.
+        let plan = self
+            .store()
+            .lock()
+            .await
+            .work_plan(job_id)
+            .map_err(Adrift::Reading)?;
+        let recorded = crate::work_plan::with_the_plan(recorded, job.workflow(), plan.as_ref());
         // The Drone's run, read before the resume below adds one. See this
         // function's own note on why it is read here.
         let attempt = self
@@ -156,13 +166,6 @@ where
             .await
             .tolerated_criteria()
             .unwrap_or_default();
-        let plan = self
-            .store()
-            .lock()
-            .await
-            .work_plan(job_id)
-            .map_err(Adrift::Reading)?
-            .map(|plan| plan.counts());
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             Request::of(&job),
@@ -184,7 +187,7 @@ where
             &port_env,
             refusal_policy,
             &tolerated,
-            plan,
+            plan.as_ref(),
         )
         .await;
 

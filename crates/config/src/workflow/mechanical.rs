@@ -12,7 +12,12 @@
 //! answered against `armada.yml` one layer up, where the Checks exist. So this
 //! file gained a type and no lookup.
 
-use core_model::{ARTIFACT_EXISTS, DIFF_NONEMPTY, EVERY_MANIFEST_CHECK, MANIFEST_CHECK};
+use std::num::NonZeroU32;
+
+use core_model::{
+    EvidenceType, ARTIFACT_EXISTS, DIFF_NONEMPTY, EVERY_MANIFEST_CHECK, MANIFEST_CHECK,
+    PLAN_RECORDED,
+};
 use serde_yaml_ng::Value;
 
 use crate::error::{BadTarget, Fault, Refusal};
@@ -78,6 +83,11 @@ pub enum MechanicalCheck {
     DiffNonempty,
     /// The step wrote the file named by `target`.
     ArtifactExists { target: String },
+    /// The Job's plan holds at least `min_tasks` tasks not dropped. Legal only
+    /// on the step whose product is `plan` — [`checks`] refuses it elsewhere,
+    /// and the step whose product is `plan` and declares none of these is
+    /// refused the other way, in `super::step`.
+    PlanRecorded { min_tasks: NonZeroU32 },
 }
 
 const CHECK_TYPE_LEGAL: &[&str] = &[
@@ -85,6 +95,7 @@ const CHECK_TYPE_LEGAL: &[&str] = &[
     EVERY_MANIFEST_CHECK,
     DIFF_NONEMPTY,
     ARTIFACT_EXISTS,
+    PLAN_RECORDED,
     "test_run",
     "pr_merged",
 ];
@@ -93,6 +104,7 @@ const CHECK_TYPE_M1: &[&str] = &[
     EVERY_MANIFEST_CHECK,
     DIFF_NONEMPTY,
     ARTIFACT_EXISTS,
+    PLAN_RECORDED,
 ];
 const MANIFEST_CHECK_KEYS: &[&str] = &["type", "check", "expect_exit_code"];
 /// **`type` and nothing else**, which is the whole of the spelling: the set is
@@ -101,12 +113,26 @@ const MANIFEST_CHECK_KEYS: &[&str] = &["type", "check", "expect_exit_code"];
 const EVERY_MANIFEST_CHECK_KEYS: &[&str] = &["type"];
 const DIFF_NONEMPTY_KEYS: &[&str] = &["type"];
 const ARTIFACT_EXISTS_KEYS: &[&str] = &["type", "target"];
+const PLAN_RECORDED_KEYS: &[&str] = &["type", "min_tasks"];
+/// The count a step that says nothing about `min_tasks` is held to. **One**,
+/// per `#895`: a plan step declares this check to say a plan exists at all,
+/// and zero is refused rather than defaulted — a check nothing can fail is
+/// not the ordinary shape of a default and would read as a typo left in.
+const MIN_TASKS_DEFAULT: NonZeroU32 = NonZeroU32::MIN;
 
 /// Every mechanical check a step declares, in file order.
 ///
 /// An absent key and `mechanical_checks: []` are the same empty list, which is
 /// what a gateless step wrote either way.
-pub(crate) fn checks(table: &mut Table<'_>, out: &mut Vec<Refusal>) -> Vec<MechanicalCheck> {
+///
+/// `produces` is the step's own `evidence.submitted.type`, read before this is
+/// called — it is what tells `plan_recorded` from every other check whose
+/// step must be the one that records a plan.
+pub(crate) fn checks(
+    table: &mut Table<'_>,
+    produces: Option<EvidenceType>,
+    out: &mut Vec<Refusal>,
+) -> Vec<MechanicalCheck> {
     table
         .optional("mechanical_checks")
         .and_then(|value| yaml::list(&table.at("mechanical_checks"), value, out))
@@ -124,7 +150,7 @@ pub(crate) fn checks(table: &mut Table<'_>, out: &mut Vec<Refusal>) -> Vec<Mecha
             let mut named_at: Option<usize> = None;
             let mut checks = Vec::with_capacity(items.len());
             for (n, (at, item)) in items.iter().enumerate() {
-                let Some(check) = check(at, item, out) else {
+                let Some(check) = check(at, item, produces, out) else {
                     continue;
                 };
                 if let MechanicalCheck::ArtifactExists { target } = &check {
@@ -209,7 +235,12 @@ fn artifact_target(at: &str, target: String, out: &mut Vec<Refusal>) -> Option<S
     }
 }
 
-fn check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<MechanicalCheck> {
+fn check(
+    at: &str,
+    value: &Value,
+    produces: Option<EvidenceType>,
+    out: &mut Vec<Refusal>,
+) -> Option<MechanicalCheck> {
     let mut table = Table::open(at, value, out)?;
     let kind = table
         .required("type", out)
@@ -251,6 +282,37 @@ fn check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<MechanicalCh
                 .and_then(|target| artifact_target(&target_key, target, out));
             table.close(ARTIFACT_EXISTS_KEYS, out);
             Some(MechanicalCheck::ArtifactExists { target: target? })
+        }
+        PLAN_RECORDED => {
+            // **Refused here, at the check, and not only at the step.** A
+            // `plan_recorded` on a step whose product is not `plan` is an
+            // assertion about a record nothing here freezes for that step —
+            // `docs/concepts/plan.md` is one Plan per Job, held by the Job
+            // and not by a step.
+            if produces != Some(EvidenceType::Plan) {
+                out.push(Refusal::new(
+                    table.at("type"),
+                    Fault::PlanRecordedNotOnAPlanStep,
+                ));
+            }
+            let min_tasks_key = table.at("min_tasks");
+            // **Absent is one, and zero is refused rather than carried.** A
+            // step that says nothing about the count is held to the plan
+            // existing at all; a step that writes `min_tasks: 0` asked for a
+            // check nothing can fail, which is not the shape a default takes.
+            let min_tasks = match table.optional("min_tasks") {
+                None => Some(MIN_TASKS_DEFAULT),
+                // `positive` already refuses zero, so what survives is never
+                // zero and `NonZeroU32::new` never answers `None` here.
+                Some(value) => yaml::positive(&min_tasks_key, value, out).and_then(NonZeroU32::new),
+            };
+            table.close(PLAN_RECORDED_KEYS, out);
+            match produces == Some(EvidenceType::Plan) {
+                true => Some(MechanicalCheck::PlanRecorded {
+                    min_tasks: min_tasks?,
+                }),
+                false => None,
+            }
         }
         other => {
             let fault = if CHECK_TYPE_LEGAL.contains(&other) {

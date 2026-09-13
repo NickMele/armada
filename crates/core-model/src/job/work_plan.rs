@@ -15,6 +15,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
+use core::fmt::Write as _;
 use core::num::NonZeroU32;
 
 use crate::envelope::Timestamp;
@@ -434,5 +435,34 @@ impl WorkPlan {
             }
         }
         counts
+    }
+
+    /// The plan as it stands, in words: the approach, then each task with its
+    /// id, title, state and — for a dropped one — the reason.
+    ///
+    /// **Fleet's own reading of its own record, and never the Drone's.**
+    /// `record_plan`, `add_task` and `update_task` are the only three calls a
+    /// plan can be built from, so what this renders is what Fleet kept, not an
+    /// account of a turn. `#895` is where a step's Judge is handed this — its
+    /// own, where its product is a plan, and a later step's through
+    /// `reference_docs`.
+    pub fn rendered(&self) -> String {
+        let mut out = String::new();
+        let _ = writeln!(out, "Approach: {}", self.approach.as_str());
+        let _ = writeln!(out);
+        let _ = write!(out, "Tasks:");
+        for task in &self.tasks {
+            let _ = write!(
+                out,
+                "\n  {} [{}] {}",
+                task.id(),
+                task.state().as_wire(),
+                task.title()
+            );
+            if let Some(reason) = task.reason() {
+                let _ = write!(out, " — dropped: {reason}");
+            }
+        }
+        out
     }
 }

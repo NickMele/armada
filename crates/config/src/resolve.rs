@@ -194,6 +194,14 @@ fn resolve_step(
                     target: target.clone(),
                 })
             }
+            // Nothing to resolve, for `ArtifactExists`'s reason: the count is
+            // the definition's own and there is no Manifest to check it
+            // against.
+            MechanicalCheck::PlanRecorded { min_tasks } => {
+                checks.push(ResolvedCheck::PlanRecorded {
+                    min_tasks: *min_tasks,
+                })
+            }
             // **The set is read once, here, and the Job freezes what it
             // found.** A step that says *every Check* is answered against the
             // Manifest in hand and becomes an ordinary list of resolved
@@ -311,6 +319,10 @@ fn resolve_step(
     )
     .quiet_after(step.quiet_after_seconds())
     .poking(step.poke_limit())
+    // Read straight off the step: `super::workflow` already refused a
+    // `follows_plan` with no plan step before it, so there is nothing left
+    // to decide here.
+    .following_plan(step.follows_plan())
 }
 
 /// What a step's work stays out of where nothing above it said.

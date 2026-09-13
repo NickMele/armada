@@ -2,22 +2,23 @@
 //! follows it, a Drone's tool call read the way `/mcp` reads it, the history a
 //! store would append, and the gate run on the plan step. It asserts nothing.
 //!
-//! **The workflow is built frozen**, because `config` cannot parse `plan`,
-//! `plan_recorded` or `follows_plan` until #895. **Every call is kept as
+//! **Through `config`'s own parser**, as #895 makes possible: `plan`,
+//! `plan_recorded` and `follows_plan` are read off YAML the way a real
+//! `.armada/workflows/` file would be, and `ResolvedWorkflow::resolve` is
+//! what checks it against a Manifest — a workflow built by hand would prove
+//! nothing about either parser. **Every call is kept as
 //! `fleet::work_plan::permitted` would allow it** — that predicate is
 //! `pub(crate)`, so `fleet`'s own tests assert it.
 
 use std::collections::BTreeMap;
-use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{Environment, Footprint, Model, Vcs, Worktree, WorktreeSpec};
 use core_model::{
-    AdvanceGate, Attempt, EvidenceType, Facts, FrozenWorkflow, Job, JobId, JobNumber, ManifestId,
-    ModelName, NewJob, PlanAuthor, PlanEntry, PlanRefused, ResolvedCheck, ResolvedStep, StepId,
-    StepSeed, TaskCounts, Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WhenRefused, WorkPlan,
-    WorkflowId,
+    Attempt, DeclaredPaths, EvidenceType, Facts, FrozenWorkflow, Job, JobId, JobNumber, ManifestId,
+    ModelName, NewJob, PlanAuthor, PlanEntry, PlanRefused, RepoPath, StepEvidence, StepId,
+    StepSeed, Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WhenRefused, WorkPlan,
 };
 use fleet::{
     rule_on, Asked, AtStep, CheckBudget, JudgeBudget, Judging, Keeping, Marking, Policies, Ruling,
@@ -33,52 +34,63 @@ use super::{criteria, REPO_ROOT};
 pub const PLAN: &str = "plan";
 pub const IMPLEMENT: &str = "implement";
 
-/// Bug's shape once #895 switches it: a plan step gated on `plan_recorded`, an
-/// implement step that follows the plan, and a handoff that does neither.
+/// The shape #894 puts on Bug's own `.armada/workflows/bug.json`: a plan
+/// step gated on `plan_recorded`, an implement step that follows the plan
+/// and is judged against it, and a handoff that does neither.
+///
+/// `implement` names `plan.evidence` in `reference_docs`, which is what
+/// [`gated_on_implement`] exercises: the plan step's own product reaching a
+/// later step's Judge brief with task states, not the Drone's words about it.
 pub fn bug_workflow_with_a_plan() -> FrozenWorkflow {
-    let plan_recorded = ResolvedCheck::PlanRecorded {
-        min_tasks: NonZeroU32::MIN,
-    };
-    FrozenWorkflow::frozen(
-        WorkflowId::carried(Ulid::carried("01BUGWITHAPLAN")),
-        "bug".to_string(),
-        1,
-        vec![
-            step(
-                PLAN,
-                "Plan the change",
-                Some(EvidenceType::Plan),
-                vec![plan_recorded],
-            ),
-            step(
-                IMPLEMENT,
-                "Implement",
-                Some(EvidenceType::Diff),
-                vec![ResolvedCheck::DiffNonempty],
-            )
-            .following_plan(true),
-            step("handoff", "Hand off", None, Vec::new()).delivering(true),
-        ],
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture-bug-with-a-plan.yml"),
+        r#"
+version: 1
+workflow_id: bug-with-a-plan
+name: bug
+structure: linear
+steps:
+  - id: plan
+    label: "Plan the change"
+    evidence: {submitted: {type: plan}}
+    mechanical_checks:
+      - { type: plan_recorded, min_tasks: 1 }
+    delivers: false
+    advance_gate: auto
+  - id: implement
+    label: "Implement"
+    follows_plan: true
+    evidence: {submitted: {type: diff}}
+    mechanical_checks:
+      - { type: diff_nonempty }
+    evidence_scope:
+      context_source: drone_declared
+      reference_docs:
+        - plan.evidence
+    judge_checks:
+      - criteria:
+          - criterion_id: tasks_match_the_diff
+            question: "Does the diff do every task set to done, and does each dropped task's reason hold?"
+            on_refusal: refuse
+    delivers: false
+    advance_gate: auto_if_judge_passes
+  - id: handoff
+    label: "Hand off"
+    delivers: true
+    advance_gate: auto
+"#,
+        &config::Roster::offering_nothing(),
     )
-}
-
-fn step(
-    id: &str,
-    label: &str,
-    made: Option<EvidenceType>,
-    checks: Vec<ResolvedCheck>,
-) -> ResolvedStep {
-    ResolvedStep::frozen(
-        StepId::new(id),
-        label.to_string(),
-        made,
-        checks,
-        AdvanceGate::Auto,
-        Vec::new(),
-        None,
-        0,
-        None,
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    let armada_yml = config::Manifest::parse(
+        std::path::Path::new("fixture-armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\n",
     )
+    .expect("the fixture manifest parses");
+    config::ResolvedWorkflow::resolve(&def, &armada_yml)
+        .unwrap_or_else(|refused| panic!("the fixture workflow did not resolve: {refused}"))
+        .frozen()
+        .clone()
 }
 
 fn at(second: usize) -> Timestamp {
@@ -219,8 +231,22 @@ pub fn refused(tool: &str, arguments: &str) -> (NotAnArgument, String) {
     (why, sent)
 }
 
-/// The plan step's gate, handed the counts `fleet::settling` reads off the store.
-pub async fn gated_on_the_plan(planned: &Planned, plan: Option<TaskCounts>) -> Ruling {
+/// A Judge that should never be asked, for a step whose gate carries no
+/// `judge_checks` — every case but [`gated_on_implement`].
+fn no_judge() -> Judging {
+    Judging {
+        client: Arc::new(FakeJudge::that_fails("a Judge that should never be asked")),
+        budget: JudgeBudget::of(Duration::from_secs(20)),
+        default_model: Model::named("the-cheap-model").expect("a model name"),
+        environment: Environment::nothing(),
+        marking: Marking::detached(),
+        asked: Asked::nowhere(),
+    }
+}
+
+/// The plan step's gate, handed the plan `fleet::settling` would read off the
+/// store.
+pub async fn gated_on_the_plan(planned: &Planned, plan: Option<WorkPlan>) -> Ruling {
     let at = AtStep::named(
         planned.job.workflow(),
         &StepId::new(PLAN),
@@ -234,14 +260,6 @@ pub async fn gated_on_the_plan(planned: &Planned, plan: Option<TaskCounts>) -> R
         NotClaimed(""),
     )
     .expect("a well-formed submission");
-    let judging = Judging {
-        client: Arc::new(FakeJudge::that_fails("a Judge that should never be asked")),
-        budget: JudgeBudget::of(Duration::from_secs(20)),
-        default_model: Model::named("the-cheap-model").expect("a model name"),
-        environment: Environment::nothing(),
-        marking: Marking::detached(),
-        asked: Asked::nowhere(),
-    };
     rule_on(
         at,
         Request::of(&planned.job),
@@ -252,6 +270,67 @@ pub async fn gated_on_the_plan(planned: &Planned, plan: Option<TaskCounts>) -> R
         &[],
         &FakeWorkProduct::untouched(),
         CheckBudget::of(Duration::from_secs(5)),
+        &no_judge(),
+        &Keeping::of(REPO_ROOT, &planned.job.handle()),
+        Policies::unstated(),
+        &fleet::Announcing::nowhere(),
+        &BTreeMap::new(),
+        &[],
+        WhenRefused::default(),
+        &[],
+        plan.as_ref(),
+    )
+    .await
+}
+
+/// Implement's gate, handed the recorded evidence a later step's
+/// `reference_docs` reaches through `AtStep::baseline` — the plan step's row
+/// replaced by the plan as it stands, exactly as `fleet::work_plan::with_the_plan`
+/// replaces it before a real gate runs. `judge` is what answers
+/// `tasks_match_the_diff`; its own `.asked()` is what a test reads the brief
+/// back from.
+pub async fn gated_on_implement(
+    planned: &Planned,
+    plan: WorkPlan,
+    judge: Arc<FakeJudge>,
+) -> Ruling {
+    let at = AtStep::named(
+        planned.job.workflow(),
+        &StepId::new(IMPLEMENT),
+        &planned.worktree,
+    )
+    .expect("the implement step");
+    let submitted = Submission::submitted(
+        EvidenceType::Diff,
+        Claimed("Two tasks are done and one is dropped."),
+        ShownBy("the diff"),
+        NotClaimed(""),
+    )
+    .expect("a well-formed submission");
+    let recorded = vec![(
+        StepId::new(PLAN),
+        StepEvidence {
+            evidence_type: EvidenceType::Plan,
+            claimed: plan.rendered(),
+            shown_by: String::from("Fleet's own record of the plan"),
+            not_claimed: String::new(),
+        },
+    )];
+    let judging = Judging {
+        client: judge,
+        ..no_judge()
+    };
+    let declared = DeclaredPaths::of(vec![RepoPath::new("src/log.rs")]);
+    rule_on(
+        at,
+        Request::of(&planned.job),
+        &submitted,
+        Some(&declared),
+        &Lifted::of(&planned.job),
+        Some(&Footprint::nothing()),
+        &recorded,
+        &FakeWorkProduct::changed(&["src/log.rs"]),
+        CheckBudget::of(Duration::from_secs(5)),
         &judging,
         &Keeping::of(REPO_ROOT, &planned.job.handle()),
         Policies::unstated(),
@@ -260,7 +339,7 @@ pub async fn gated_on_the_plan(planned: &Planned, plan: Option<TaskCounts>) -> R
         &[],
         WhenRefused::default(),
         &[],
-        plan,
+        None,
     )
     .await
 }
