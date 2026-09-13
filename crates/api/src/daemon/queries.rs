@@ -245,6 +245,16 @@ pub trait Queries: Send + Sync + 'static {
     /// `Result` is here to match the surface.
     fn get_manifest_drift(&self) -> impl Future<Output = Result<ManifestDrift, Refusal>> + Send;
 
+    /// `get_repository_scan` — every workspace in the checkout, what each
+    /// one's files declare, and the file each finding came from.
+    ///
+    /// **It reads no Manifest**, because it is for a repository that has none.
+    /// It writes nothing and runs nothing. It cannot refuse: what would not
+    /// read is said in the answer. `Result` is here to match the surface.
+    fn get_repository_scan(
+        &self,
+    ) -> impl Future<Output = Result<ipc::RepositoryScan, Refusal>> + Send;
+
     /// `get_job` — one Job in full: its steps and where each got to, the
     /// criteria it is held to, the branch its worktree is on, and the brief it
     /// was given.

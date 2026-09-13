@@ -94,6 +94,10 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/activity", get(get_activity_feed::<D>))
         .route("/manifest/reading", get(get_manifest_reading::<D>))
         .route("/manifest/drift", get(get_manifest_drift::<D>))
+        .route(
+            "/repository/scan",
+            get(crate::queries::get_repository_scan::<D>),
+        )
         .route("/manifest/file", get(get_manifest_file::<D>))
         .route("/manifest/save_file", post(save_manifest_file::<D>))
         .route("/manifest/files", get(search_files::<D>))
