@@ -39,6 +39,7 @@ import { JOB_ID, spend, watchedRead } from "../../../fixtures/build/base";
 import { WAITING_CALL } from "../../../fixtures/build/running";
 import { recorded } from "../../../fixtures/recorded";
 import { JobDetailFrom } from "./JobDetail";
+import { PLAN_PARTWAY, PLAN_WITH_A_DROPPED_TASK, withPlan } from "./plan-fixtures";
 
 /**
  * Job detail in every state a Job can be in, drawn by the app's own screen from
@@ -95,6 +96,120 @@ export const HeaderActionsOpen: Story = {
 
 /** Midway through Fix, before its Check has run. */
 export const Running: Story = { name: "Running", render: drawing(running) };
+
+/** The Plan region, partway done — one segment past, one working, one open. */
+export const PlanPartwayDone: Story = {
+  name: "Plan, partway done",
+  // `whereOpen` defaults to `false` in `propsFor` — Fleet's own preference,
+  // closed until it says otherwise, `#927`.
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Plan")).toBeVisible();
+    await expect(canvas.getByText("1 of 3")).toBeVisible();
+    await expect(canvas.getByText("T1")).toBeVisible();
+    await expect(canvas.getByText("Re-point the reducer's own import at it")).toBeVisible();
+    const where = canvas.getByRole("button", { expanded: false, name: /Where things are/i });
+    await expect(within(where).getByText("fix/settings-split-selectors")).toBeVisible();
+  },
+};
+
+/** The same moment, `whereOpen` set directly — the preference's own terms. */
+export const PlanPartwayDoneWhereOpen: Story = {
+  name: "Plan, partway done, Where things are open",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} on={{ whereOpen: true }} />,
+};
+
+/** A dropped task stays on the list, struck through, with its reason. */
+export const PlanWithADroppedTask: Story = {
+  name: "Plan, with a dropped task",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_WITH_A_DROPPED_TASK)} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("The existing integration test already exercises this path.")).toBeVisible();
+    await expect(canvas.getByText("1 of 3")).toBeVisible();
+    // Already dropped, so dropping it again is not offered — #897.
+    const found = await canvas.findByText("Add a unit test that does not construct the store");
+    const droppedRow = found.closest("li");
+    if (droppedRow === null) throw new Error("the dropped row was not found");
+    await expect(within(droppedRow).queryByRole("button", { name: "Drop…" })).toBeNull();
+  },
+};
+
+/** A workflow with no plan step draws no Plan region. */
+export const NoPlan: Story = {
+  name: "No plan on the workflow",
+  render: () => <JobDetailFrom fixture={running()} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText("Plan")).toBeNull();
+  },
+};
+
+/** Before the first Drone turn, nothing is recorded yet — same absence. */
+export const BeforeThePlanStepHasRecordedOne: Story = {
+  name: "Before the plan step has recorded one",
+  render: () => <JobDetailFrom fixture={preparing()} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText("Plan")).toBeNull();
+  },
+};
+
+/** The eyebrow act, open — a one-line title and an optional detail. `#897`. */
+export const PlanAddTaskOpen: Story = {
+  name: "Plan, Add task open",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "Add task" }));
+    const dialog = within(document.body).getByRole("dialog");
+    await expect(within(dialog).getByLabelText("Title")).toBeVisible();
+    await expect(within(dialog).getByLabelText("Detail — optional")).toBeVisible();
+    await expect(within(dialog).getByRole("button", { name: "Add task" })).toBeDisabled();
+  },
+};
+
+/** `Drop…` is offered only on `open` or `working`, never `done`. `#897`. */
+export const PlanDropOnRow: Story = {
+  name: "Plan, Drop… on a row",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  play: async ({ canvas }) => {
+    const found = await canvas.findByText("Add a unit test that does not construct the store");
+    const row = found.closest("li");
+    if (row === null) throw new Error("the task row was not found");
+    await expect(within(row).getByRole("button", { name: "Drop…" })).toBeInTheDocument();
+    const done = await canvas.findByText("Extract selectColumnOrder into its own module");
+    const doneRow = done.closest("li");
+    if (doneRow === null) throw new Error("the done row was not found");
+    await expect(within(doneRow).queryByRole("button", { name: "Drop…" })).toBeNull();
+  },
+};
+
+/** An empty reason cannot be sent, and the field says why. `#897`. */
+export const PlanDropReasonEmpty: Story = {
+  name: "Plan, Drop reason empty",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  play: async ({ canvas, userEvent }) => {
+    const found = await canvas.findByText("Add a unit test that does not construct the store");
+    const row = found.closest("li");
+    if (row === null) throw new Error("the task row was not found");
+    await userEvent.click(within(row).getByRole("button", { name: "Drop…" }));
+    await expect(within(row).getByText("A reason is needed.")).toBeVisible();
+    await expect(within(row).getByRole("button", { name: "Drop" })).toBeDisabled();
+  },
+};
+
+/** Nothing is connected, so a send refuses and the dialog stays open with what was typed. `#897`. */
+export const PlanAddTaskRefused: Story = {
+  name: "Plan, Add task refused",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "Add task" }));
+    const dialog = within(document.body).getByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Add a regression test");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add task" }));
+    await expect(
+      await within(dialog).findByText("Fleet is not connected. Nothing was sent."),
+    ).toBeVisible();
+    await expect(within(dialog).getByLabelText("Title")).toHaveValue("Add a regression test");
+  },
+};
 
 /** What the panel's choice sends. A module's spy, cleared by the play that reads it. */
 const setWhenBlocked = fn();
