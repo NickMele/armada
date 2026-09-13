@@ -407,6 +407,16 @@ export function useCommands(sending: Sending) {
     }
   }
 
+  /** The review step's model, on `setModel`'s terms. #903. */
+  async function setReviewModel(jobId: string, model: string | null): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.setReviewModel(jobId, model));
+    } finally {
+      setActing(null);
+    }
+  }
+
   /**
    * Take back a command allowed for this job. On `setWhenBlocked`'s terms — it
    * ends nothing, and the command can be allowed again from the next refusal.
@@ -625,6 +635,7 @@ export function useCommands(sending: Sending) {
     setWhenRefused,
     setWhenBlocked,
     setModel,
+    setReviewModel,
     removeAllowedCommand,
     overrule,
     rerun,

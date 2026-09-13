@@ -239,6 +239,10 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             post(crate::commands::set_model::<D>),
         )
         .route(
+            "/jobs/:job_id/set_review_model",
+            post(crate::commands::set_review_model::<D>),
+        )
+        .route(
             "/jobs/:job_id/remove_allowed_command",
             post(crate::commands::remove_allowed_command::<D>),
         )

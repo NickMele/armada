@@ -637,6 +637,11 @@ pub const SERVED: &[Route] = &[
         path: "/jobs/:job_id/set_model",
     },
     Route {
+        operation: "set_review_model",
+        method: "POST",
+        path: "/jobs/:job_id/set_review_model",
+    },
+    Route {
         operation: "remove_allowed_command",
         method: "POST",
         path: "/jobs/:job_id/remove_allowed_command",

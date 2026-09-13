@@ -236,6 +236,10 @@ export type JobDetail = {
    * when it was chosen keeps its own. `set_model` moves it.
    */
   model_override?: string;
+  /** The model a person chose for this Job's review step. Since 13.32, #903. Absent is no choice. */
+  review_model_override?: string;
+  /** The label of the step that writes Armada's review. Since 13.32, #903. Absent where the workflow has none. */
+  review_step?: string;
   /**
    * The review Fleet composed at this job's gate — the same text a pull
    * request carries, where this job has one. Since protocol 10.11.

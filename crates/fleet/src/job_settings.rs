@@ -66,6 +66,61 @@ where
         Ok(())
     }
 
+    /// Choose the model this Job's review step is spawned as, or clear the choice with
+    /// `None`. #903. **On the review step it beats the Job's own chosen model**; every
+    /// other step ignores it. Refused on a name `list_models` does not offer, as `set_model` is.
+    pub async fn set_review_model(
+        &self,
+        job: &JobId,
+        model: Option<&str>,
+    ) -> Result<(), NotPermitted> {
+        if let Some(named) = model {
+            let offered = &self.models().models;
+            if !offered.iter().any(|one| one == named) {
+                return Err(NotPermitted::NoSuchModel {
+                    named: named.to_string(),
+                    offered: offered.clone(),
+                });
+            }
+        }
+        self.store()
+            .lock()
+            .await
+            .set_review_model_override(job, model)
+            .map_err(|cause| NotPermitted::NotChanged {
+                cause: cause.to_string(),
+            })?;
+        match model {
+            Some(named) => {
+                self.noted_setting(
+                    job,
+                    "a person chose the model this job's review step runs as",
+                    &[("model", named.to_string())],
+                )
+                .await
+            }
+            None => {
+                self.noted_setting(
+                    job,
+                    "a person cleared the model chosen for this job's review step",
+                    &[],
+                )
+                .await
+            }
+        }
+        Ok(())
+    }
+
+    /// The model a person chose for this Job's review step, for `get_job` and the spawn.
+    pub async fn review_model_override_of(&self, job: &JobId) -> Option<String> {
+        self.store()
+            .lock()
+            .await
+            .review_model_override(job)
+            .ok()
+            .flatten()
+    }
+
     /// Take back a command a person allowed this Job. **Read by the next
     /// permission question**, so nothing respawns, and that question answers
     /// by the Job's setting again.

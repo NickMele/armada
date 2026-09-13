@@ -616,6 +616,22 @@ pub(crate) async fn set_model<D: Commands>(
     }
 }
 
+/// Choose the model this Job's review step spawns on, or clear the choice. #903.
+pub(crate) async fn set_review_model<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let choice: ipc::SetModel = match ipc::decode("a review model choice", &body) {
+        Ok(choice) => choice,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.shared().set_review_model(job.id(), choice).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Take back a command a person allowed for this Job. **The Job comes back
 /// unchanged**: the next reach for the command is asked about again.
 pub(crate) async fn remove_allowed_command<D: Commands>(

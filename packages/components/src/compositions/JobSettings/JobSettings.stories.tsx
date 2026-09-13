@@ -162,6 +162,37 @@ export const ARepositoryRow: Story = {
 };
 
 /**
+ * **A Job whose workflow writes Armada's review.** A second model for that one step, below
+ * the Job's own. #903. The first option hands the choice back as `null`.
+ */
+export const AReviewStep: Story = {
+  name: "A review step",
+  args: {
+    costCap: COST,
+    turnCap: TURNS,
+    models: MODELS,
+    model: "sonnet",
+    reviewStep: "Review the change",
+    reviewModel: "opus",
+    onReviewModel: fn(),
+    choices: CHOICES,
+    whenBlocked: "ask_me",
+    allowed: [],
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByText(/Only Review the change, the step that writes/)).toBeVisible();
+    await userEvent.selectOptions(canvas.getByLabelText("Model for the review"), "haiku");
+    await expect(args.onReviewModel).toHaveBeenCalledWith("haiku");
+    await userEvent.selectOptions(
+      canvas.getByLabelText("Model for the review"),
+      "The same as the other steps",
+    );
+    await expect(args.onReviewModel).toHaveBeenCalledWith(null);
+    await expect(args.onModel).not.toHaveBeenCalled();
+  },
+};
+
+/**
  * **A repository-wide always-allow, read-only.** #836's own case: a person
  * always-allowed `gh issue view` from Job 7 while filing #834. It covers
  * every job against this repository, not this one alone, so the row carries

@@ -426,6 +426,7 @@ export const CHANNELS = {
   answerJudge: "bridge:answer-judge",
   setWhenRefused: "bridge:set-when-refused",
   setModel: "bridge:set-model",
+  setReviewModel: "bridge:set-review-model",
   removeAllowedCommand: "bridge:remove-allowed-command",
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",

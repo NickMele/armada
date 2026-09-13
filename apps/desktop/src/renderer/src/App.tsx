@@ -564,6 +564,7 @@ export function App() {
                   void commands.setWhenRefused(jobId, whenRefused)
                 }
                 onSetModel={(jobId, model) => void commands.setModel(jobId, model)}
+                onSetReviewModel={(jobId, model) => void commands.setReviewModel(jobId, model)}
                 onRemoveAllowedCommand={(jobId, run) =>
                   void commands.removeAllowedCommand(jobId, run)
                 }

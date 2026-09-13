@@ -634,6 +634,14 @@ export class JobCommands {
     );
   }
 
+  /** Choose the model this job's review step starts on, or `null` to clear it. #903. */
+  async setReviewModel(jobId: string, model: string | null): Promise<Outcome> {
+    const body: SetModel = { model };
+    return this.act(jobId, this.setting, "already_setting", (port) =>
+      ask(port, "POST", route(jobId, "set_review_model"), body),
+    );
+  }
+
   /**
    * Take back a command a person allowed for this job. The next reach for it
    * is answered by the job's `when_blocked` again, and a line already in

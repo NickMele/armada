@@ -655,6 +655,16 @@ pub trait Commands: Send + Sync + 'static {
         choice: ipc::SetModel,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `set_review_model` — the model this Job's review step spawns on, chosen by a person,
+    /// or cleared. #903. On the review step it beats `set_model`'s choice.
+    ///
+    /// [`Refusal::IllegalMove`] on a model this Fleet does not offer.
+    fn set_review_model(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        choice: ipc::SetModel,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
     /// `remove_allowed_command` — take back a command a person allowed for
     /// this Job. The next reach for it is answered by the Job's setting again;
     /// one already written into armada.yml stays there.

@@ -359,10 +359,20 @@ where
         brief: Prompt,
     ) -> Result<DroneSpawnConfig, SpawnConfigRefused> {
         let ports = self.port_env(job).await;
-        let chosen = self
-            .model_override_of(job.id())
-            .await
-            .and_then(|named| ModelName::new(&named).ok());
+        // On the step that writes Armada's review, a person's review model beats their Job model. #903.
+        let reviews = job
+            .workflow()
+            .step(step)
+            .is_some_and(|s| s.evidence_type() == Some(core_model::EvidenceType::Review));
+        let review_choice = match reviews {
+            true => self.review_model_override_of(job.id()).await,
+            false => None,
+        };
+        let chosen = match review_choice {
+            Some(named) => Some(named),
+            None => self.model_override_of(job.id()).await,
+        }
+        .and_then(|named| ModelName::new(&named).ok());
         Ok(DroneSpawnConfig::spawn_in(
             worktree,
             Model::named(job.model_spawned_at(step, chosen.as_ref()).as_str())?,

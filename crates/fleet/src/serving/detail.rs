@@ -259,6 +259,13 @@ where
             .map(ipc::AllowedCommandRow::from)
             .collect();
         detail.model_override = self.model_override_of(job.id()).await;
+        detail.review_model_override = self.review_model_override_of(job.id()).await;
+        detail.review_step = job
+            .workflow()
+            .steps()
+            .iter()
+            .find(|s| s.evidence_type() == Some(core_model::EvidenceType::Review))
+            .map(|s| s.label().to_string());
         detail.job.frozen_by = queued.frozen_by.iter().map(ipc::ManifestId::from).collect();
         // The row nested here is built inside `JobDetail::of`, so its counts are
         // filled from the same reading as the plan beside it.

@@ -42,6 +42,13 @@ export type JobSettingsProps = {
   model: string | null;
   /** The line under the model once a change took. */
   modelSaid?: ReactNode;
+  /** The label of the step that writes Armada's review. Absent where the workflow has none, and the row is not drawn. #903. */
+  reviewStep?: string;
+  /** The model chosen for the review step, or `null` for the model the other steps run on. */
+  reviewModel?: string | null;
+  /** The line under the review model once a change took. */
+  reviewModelSaid?: ReactNode;
+  onReviewModel?: (model: string | null) => void;
   /** The three answers to a command the drone was not given, in the order to offer them. */
   choices: readonly JobSettingsChoice[];
   whenBlocked: WhenBlocked;
@@ -115,6 +122,10 @@ export function JobSettings({
   models,
   model,
   modelSaid,
+  reviewStep,
+  reviewModel = null,
+  reviewModelSaid,
+  onReviewModel,
   choices,
   whenBlocked,
   whenBlockedSaid,
@@ -137,6 +148,8 @@ export function JobSettings({
   // one in force, so it stays an option rather than the select falling back to
   // a first entry that says something untrue.
   const offered = model === null || models.includes(model) ? models : [model, ...models];
+  const reviewOffered =
+    reviewModel === null || models.includes(reviewModel) ? models : [reviewModel, ...models];
   const runsAll = whenBlocked === "allow_all";
 
   return (
@@ -227,6 +240,29 @@ export function JobSettings({
             </p>
             <Said>{modelSaid}</Said>
           </div>
+          {reviewStep === undefined || onReviewModel === undefined ? null : (
+            <div className="armada-job-settings__field">
+              <Select
+                label="Model for the review"
+                value={reviewModel ?? WORKFLOWS_CHOICE}
+                disabled={disabled}
+                onChange={(event) =>
+                  onReviewModel(event.target.value === WORKFLOWS_CHOICE ? null : event.target.value)
+                }
+              >
+                <option value={WORKFLOWS_CHOICE}>The same as the other steps</option>
+                {reviewOffered.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </Select>
+              <p className="armada-job-settings__means">
+                Only {reviewStep}, the step that writes Armada's review, starts on this one.
+              </p>
+              <Said>{reviewModelSaid}</Said>
+            </div>
+          )}
         </section>
 
         <section className="armada-job-settings__section" aria-labelledby={`${group}-commands`}>

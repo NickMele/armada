@@ -447,6 +447,13 @@ impl Commands for FakeDaemon {
     ) -> Result<JobSummary, Refusal> {
         self.unmoved(&job_id)
     }
+    async fn set_review_model(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        _choice: ipc::SetModel,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
     async fn remove_allowed_command(
         self: std::sync::Arc<Self>,
         job_id: JobId,

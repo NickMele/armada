@@ -130,6 +130,7 @@ function OneJob({
   onSetWhenBlocked,
   onSetWhenRefused,
   onSetModel,
+  onSetReviewModel,
   onRemoveAllowedCommand,
   models,
   onOverrule,
@@ -676,7 +677,7 @@ function OneJob({
             }}
             // Every setting a person can change on this Job, and what each sends.
             settings={{
-              models, stale, acting, onSetWhenBlocked, onSetWhenRefused, onSetModel,
+              models, stale, acting, onSetWhenBlocked, onSetWhenRefused, onSetModel, onSetReviewModel,
               onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
             }}
             run={runHook.slot}

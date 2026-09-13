@@ -457,6 +457,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.setModel, (_event, jobId: string, model: string | null) =>
     connection?.commands.setModel(jobId, model),
   );
+  ipcMain.handle(CHANNELS.setReviewModel, (_event, jobId: string, model: string | null) =>
+    connection?.commands.setReviewModel(jobId, model),
+  );
   ipcMain.handle(CHANNELS.removeAllowedCommand, (_event, jobId: string, run: string) =>
     connection?.commands.removeAllowedCommand(jobId, run),
   );
