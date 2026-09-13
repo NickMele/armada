@@ -16,6 +16,7 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { StartCheckoutRun, StartRun } from "@armada/protocol";
+import type { SaveManifestFile } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
 import { openPullRequest, openRemarkLink } from "./forge";
@@ -553,6 +554,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.listCheckoutRuns, () => connection?.rehearsal.listCheckoutRuns());
   ipcMain.handle(CHANNELS.getCheckoutRunOutput, (_event, runId: string) =>
     connection?.rehearsal.getCheckoutRunOutput(runId),
+  );
+  // The Manifest file, read and saved. Fleet resolves the path and guards the
+  // write against a file that moved; nothing here composes either.
+  ipcMain.handle(CHANNELS.readManifestFile, () => connection?.editing.readFile());
+  ipcMain.handle(CHANNELS.saveManifestFile, (_event, body: SaveManifestFile) =>
+    connection?.editing.saveFile(body),
   );
   // A declared server, for this Job's worktree or the main checkout where no
   // Job is named. `servers` on the published state is what keeps a *Serving*

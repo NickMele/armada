@@ -33,6 +33,8 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { BridgeState, Summons } from "./bridge";
+import type { SaveManifestFile } from "@armada/protocol";
+import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
 
 /**
  * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and
@@ -446,6 +448,20 @@ export type BridgeApi = {
   listCheckoutRuns: () => Promise<CheckoutRunListRead>;
   /** One checkout run's log, read back as a window that says it is one. */
   getCheckoutRunOutput: (runId: string) => Promise<RunOutputRead>;
+
+  /**
+   * `armada.yml` as it is on disk, whole and unparsed — the Manifest surface's
+   * file view. **No path crosses**: Fleet serves one repository and names the
+   * file itself, so the renderer cannot aim this at anything else.
+   */
+  readManifestFile: () => Promise<ManifestFileRead>;
+  /**
+   * Put a corrected Manifest on disk, **only where it is still what the edit
+   * started from** — `read` is that text, and Fleet refuses a save over a file
+   * that moved, handing back what is there now. Writes and stops: no staging,
+   * no commit. What Fleet made of it follows as `manifest.reread`.
+   */
+  saveManifestFile: (body: SaveManifestFile) => Promise<ManifestSaveAnswer>;
 
   /** Start a declared server — this Job's worktree, or the main checkout with
    * no Job. `server.serving`/`server.exited` follow as events. */

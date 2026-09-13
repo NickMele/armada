@@ -19,6 +19,8 @@ import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@armada/protocol";
 import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
+import type { SaveManifestFile } from "@armada/protocol";
+import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
 import type { CommandAnswer, JudgeAnswer, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
@@ -275,6 +277,14 @@ const api: BridgeApi = {
 
   getCheckoutRunOutput: (runId: string): Promise<RunOutputRead> =>
     ipcRenderer.invoke(CHANNELS.getCheckoutRunOutput, runId),
+
+  // The Manifest file. **A write into the repository**, and still no path: the
+  // renderer hands over text and what it started from, and Fleet decides
+  // where it lands and whether the disk still matches.
+  readManifestFile: (): Promise<ManifestFileRead> => ipcRenderer.invoke(CHANNELS.readManifestFile),
+
+  saveManifestFile: (body: SaveManifestFile): Promise<ManifestSaveAnswer> =>
+    ipcRenderer.invoke(CHANNELS.saveManifestFile, body),
 
   // Start a declared server, for this Job's worktree or, with no Job, the
   // main checkout — the capability the Manifest surface shares, which is why

@@ -39,6 +39,7 @@ import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
 import { HeldReader } from "./holding";
 import { RehearsalConnection } from "./rehearsal";
+import { ManifestFileCommands } from "./editing";
 import { ReportsReader } from "./reports";
 import {
   ask,
@@ -114,6 +115,8 @@ export class FleetConnection {
   /** Journey 9's run sheet and the servers it starts — see `rehearsal.ts`.
    * One field for both, `commands`' reason: they are one feature. */
   readonly rehearsal: RehearsalConnection;
+  /** The Manifest file, read and saved — see `editing.ts`. */
+  readonly editing: ManifestFileCommands;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
   /**
@@ -211,6 +214,7 @@ export class FleetConnection {
       publish: (change) => this.publish(change),
       port: () => this.connected()?.port ?? null,
     });
+    this.editing = new ManifestFileCommands(() => this.connected()?.port ?? null);
     this.commands = new JobCommands({
       port: () => this.connected()?.port ?? null,
       fold: (job) => this.fold(job),

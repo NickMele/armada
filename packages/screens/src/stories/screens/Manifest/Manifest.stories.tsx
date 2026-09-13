@@ -5,7 +5,8 @@ import type {
   RunEntry,
   ServerEntry,
 } from "@armada/protocol";
-import { ManifestFrom, NOW } from "./Manifest";
+import { expect, userEvent, within } from "storybook/test";
+import { ManifestFrom, MANIFEST_TEXT, NOW, PULLED_TEXT } from "./Manifest";
 
 /**
  * Bridge's Manifest surface, at `⌘4` — Journey 9's *Running one*, with no Job
@@ -211,5 +212,58 @@ export const TheManifestWouldNotRead: Story = {
         },
       },
     },
+  },
+};
+
+/**
+ * The file, behind the toggle named by its path — Journey 9's *Editing*.
+ * **Never named by its format**: the lexicon bans calling a Manifest one.
+ */
+export const TheFile: Story = {
+  name: "The file",
+  args: { sheet: { state: "read", sheet: sheet() }, view: "file" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("tab", { name: "armada.yml" })).toHaveAttribute("aria-selected", "true");
+    await expect(await canvas.findByRole("textbox", { name: /armada\.yml$/ })).toHaveValue(MANIFEST_TEXT);
+    // Nothing typed, so nothing to save.
+    await expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled();
+  },
+};
+
+/**
+ * A correction Fleet would not adopt. The save lands, the watch re-reads, and
+ * the refusal is drawn above the file it is about — why, then that the values
+ * in force are unchanged, then every key.
+ */
+export const ARefusedSave: Story = {
+  name: "A refused save",
+  args: { sheet: { state: "read", sheet: sheet() }, view: "file", save: "refused" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const file = await canvas.findByRole("textbox", { name: /armada\.yml$/ });
+    await userEvent.clear(file);
+    await userEvent.type(file, MANIFEST_TEXT.replace("poke_limit: 3", "poke_limit: five"));
+    await userEvent.click(canvas.getByRole("button", { name: "Save" }));
+    await expect(await canvas.findByText("Manifest refused")).toBeVisible();
+    await expect(canvas.getByText("drone.poke_limit")).toBeVisible();
+    await expect(canvas.getByText(/The values in force are unchanged/)).toBeVisible();
+  },
+};
+
+/**
+ * A pull landed while the edit was open. Fleet refused the save rather than
+ * take the pull with it, and both texts are drawn so neither is lost.
+ */
+export const ASaveOverAFileThatMoved: Story = {
+  name: "A save over a file that moved",
+  args: { sheet: { state: "read", sheet: sheet() }, view: "file", save: "moved" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const file = await canvas.findByRole("textbox", { name: /armada\.yml$/ });
+    await userEvent.type(file, "# a note\n");
+    await userEvent.click(canvas.getByRole("button", { name: "Save" }));
+    await expect(await canvas.findByRole("textbox", { name: "On disk now" })).toHaveValue(PULLED_TEXT);
+    await expect(canvas.getByRole("textbox", { name: "Your edit" })).toHaveValue(`${MANIFEST_TEXT}# a note\n`);
   },
 };
