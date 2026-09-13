@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { SetupFrom } from "./Setup";
+import { repository } from "../../../fixtures/build/base";
+import { SCRATCH, SetupFrom } from "./Setup";
 
 /**
  * Setup on the Manifest surface — Journey 3 — over a storefront nobody set up: the picker,
@@ -152,5 +153,46 @@ export const AlreadyThere: Story = {
     await expect(within(sheet).queryByRole("button", { name: /^Write / })).toBeNull();
     await userEvent.click(within(sheet).getByRole("button", { name: "Back to the workspaces" }));
     await expect(within(within(list).getByRole("listitem", { name: "apps/web" })).getByText("already set up")).toBeVisible();
+  },
+};
+
+/** The rail's picker over one Fleet's own repository and a folder added by path nobody set up. */
+const TWO: Story["args"] = { repositories: [repository(), SCRATCH], sheet: { state: "read", sheet: { setup: [], checks: [], commands: [] } } };
+
+/** Both listed, the one not set up grouped as such, and the Fleet's own picked. */
+export const BothListed: Story = {
+  name: "A set-up and a not-set-up repository",
+  args: TWO,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const picker = canvas.getByRole("combobox", { name: "Project" });
+    await expect(within(picker).getByRole("option", { name: "armada" })).toBeInTheDocument();
+    const notSetUp = within(picker).getByRole("group", { name: "Not set up" });
+    await expect(within(notSetUp).getByRole("option", { name: "scratch" })).toBeInTheDocument();
+    await expect(within(notSetUp).queryByRole("option", { name: "armada" })).toBeNull();
+    await expect(picker).toHaveValue("/Users/user/armada");
+    await expect(canvas.queryByRole("region", { name: "Workspaces" })).toBeNull();
+  },
+};
+
+/** Pick the folder nobody set up: Setup alone opens for it, Write puts its root file down, and Verify is there. */
+export const PickNotSetUp: Story = {
+  name: "Pick one not set up, write it, verify",
+  args: TWO,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const picker = canvas.getByRole("combobox", { name: "Project" });
+    await userEvent.selectOptions(picker, SCRATCH.root);
+    const list = await canvas.findByRole("region", { name: "Workspaces" });
+    await expect(canvas.queryByRole("tab", { name: "Edit" })).toBeNull();
+    await userEvent.click(within(list).getByRole("button", { name: "Open ." }));
+    const sheet = await canvas.findByRole("dialog", { name: "Proposal for ." });
+    await userEvent.click(within(sheet).getByRole("button", { name: "Write armada.yml" }));
+    const verify = await within(sheet).findByRole("region", { name: "Verify" });
+    await expect(within(verify).getByRole("button", { name: "Verify" })).toBeEnabled();
+    await expect(within(picker).queryByRole("group", { name: "Not set up" })).toBeNull();
+    await expect(within(picker).getByRole("option", { name: "scratch" })).toBeInTheDocument();
+    await expect(picker).toHaveValue(SCRATCH.root);
+    await expect(canvas.getByRole("tab", { name: "Edit" })).toBeVisible();
   },
 };
