@@ -9,8 +9,8 @@ use std::fmt;
 
 use adapter_traits::{AgentHarness, Delivery, Grant, Vcs, WorkProduct};
 use core_model::{
-    Actor, EvidenceType, FrozenWorkflow, JobId, PlanChange, PlanRefused, ResolvedStep, StepEvidence,
-    StepId, WorkPlan,
+    Actor, EvidenceType, FrozenWorkflow, JobId, PlanChange, PlanRefused, ResolvedStep,
+    StepEvidence, StepId, WorkPlan,
 };
 use ipc::mcp::NotRecorded;
 use store::{PlanHand, PlanNotKept};

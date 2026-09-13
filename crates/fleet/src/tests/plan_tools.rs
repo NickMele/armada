@@ -1,8 +1,9 @@
 //! Which step may change the plan, and what a Drone on any other step is told.
 //!
-//! **The permitted path stops at the predicate.** A Drone cannot stand on a
-//! plan step in this suite until `config` reads `plan` and `follows_plan`
-//! (#895); the store half of a kept change is `store`'s own test.
+//! **The permitted path stops at the predicate.** The store half of a kept
+//! change is `store`'s own test. A dispatched Drone standing on a real,
+//! parsed plan step is [`a_dispatched_drone_may_record_the_plan_its_step_asks_for`]
+//! — blocked until `config` could read `plan` and `follows_plan`, `#895`.
 
 use adapter_traits::Grant;
 use core_model::{
@@ -10,10 +11,16 @@ use core_model::{
     ResolvedStep, StepId, TaskId, TaskUpdate, Timestamp, Ulid, WorkPlan,
 };
 use testkit::FakeWorkProduct;
+use verification::{Claimed, NotClaimed, ShownBy};
 
+use crate::daemon::Fleet;
+use crate::evidence::Call;
 use crate::tests::admitted::dispatched;
-use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
+use crate::tests::daemon::{
+    a_fleet, a_proposal, a_proposal_for, fittings, one, plan_and_implement, worktree_directory,
+};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 use crate::work_plan::{permitted, plan_grants, receipt_word, NotPlanned};
 
 fn a_step(id: &str, evidence: Option<EvidenceType>, follows: bool) -> ResolvedStep {
@@ -154,4 +161,82 @@ async fn a_call_with_nothing_working_is_refused() {
         fleet.change_plan(&nobody, &a_recording()).await,
         Err(NotPlanned::NothingIsWorking)
     ));
+}
+
+/// A real workflow, read by `config` from `plan`, `plan_recorded` and
+/// `follows_plan`, resolved and frozen onto a Job. A Drone dispatched onto
+/// its plan step may record; `plan_recorded` gates the advance on a plan
+/// with at least one task; and the following step's Drone may add and
+/// update — none of which this suite could stand up before `#895`.
+#[tokio::test]
+async fn a_dispatched_drone_may_record_the_plan_its_step_asks_for() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.starting().workflows = one(plan_and_implement());
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal_for("fix the reader's bound", "fixture-plan"))
+        .await
+        .expect("a Job at the approval gate");
+    let job_id = job.id().clone();
+    worktree_directory(&home, &job);
+    let running = dispatched(&fleet, &job_id).await.expect("it dispatches");
+    assert_eq!(
+        running.current_step_id().map(StepId::as_str),
+        Some("plan"),
+        "the parsed workflow's first step"
+    );
+
+    let loaded = fleet.load(&job_id).await.expect("reads");
+    let plan = loaded
+        .workflow()
+        .step(&StepId::new("plan"))
+        .expect("the plan step resolved");
+    assert!(plan.records_plan());
+    assert_eq!(plan_grants(plan), [Grant::RecordThePlan]);
+    let implement = loaded
+        .workflow()
+        .step(&StepId::new("implement"))
+        .expect("the implement step resolved");
+    assert!(implement.follows_plan());
+    assert_eq!(plan_grants(implement), [Grant::WorkThePlan]);
+
+    fleet
+        .change_plan(&job_id, &a_recording())
+        .await
+        .expect("the plan step's own product is a plan");
+
+    submitted_by_the_one(
+        &fleet,
+        Call {
+            evidence_type: EvidenceType::Plan,
+            claimed: Claimed("The fix is planned as one task."),
+            shown_by: ShownBy("the plan recorded with record_plan"),
+            not_claimed: NotClaimed(""),
+        },
+    )
+    .await
+    .expect("the plan step asked for a plan");
+    let turned = fleet.turn().await.expect("the gate runs");
+    assert!(
+        matches!(turned.ruled(), Some(crate::gate::Ruling::Advanced { .. })),
+        "one recorded task clears plan_recorded's default min_tasks: {:?}",
+        turned.ruled()
+    );
+    assert_eq!(
+        fleet
+            .load(&job_id)
+            .await
+            .expect("reads")
+            .current_step_id()
+            .map(StepId::as_str),
+        Some("implement")
+    );
+
+    let plan = fleet
+        .change_plan(&job_id, &an_update())
+        .await
+        .expect("implement follows the plan");
+    assert_eq!(plan.tasks()[0].state(), core_model::TaskState::Done);
 }

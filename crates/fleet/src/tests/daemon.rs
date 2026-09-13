@@ -53,9 +53,10 @@ pub use handed_in::{
     worktree_directory_named,
 };
 pub use workflows::{
-    manifest, one, shown_step, shown_step_with_no_harness, two_steps_both_gated_on_a_diff,
-    two_steps_gated_on_a_manifest_rule, two_steps_gated_on_a_person, workflow_named,
-    workflow_named_gated_on_diff, NEVER_QUIET, UNTRIPPABLE,
+    manifest, one, plan_and_implement, shown_step, shown_step_with_no_harness,
+    two_steps_both_gated_on_a_diff, two_steps_gated_on_a_manifest_rule,
+    two_steps_gated_on_a_person, workflow_named, workflow_named_gated_on_diff, NEVER_QUIET,
+    UNTRIPPABLE,
 };
 
 use fleets::a_fleet_whose_drone_leaves;

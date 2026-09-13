@@ -359,9 +359,7 @@ where
             // so without this a step whose product is `plan` would reach its
             // Judge with only the three lines a Drone submitted about it,
             // never the approach and the tasks Fleet actually holds. `#895`.
-            let plan_text = plan
-                .filter(|_| step.records_plan())
-                .map(WorkPlan::rendered);
+            let plan_text = plan.filter(|_| step.records_plan()).map(WorkPlan::rendered);
             let target_and_bytes = match step.deliverable().zip(read.as_deref()) {
                 Some(found) => Some(found),
                 None => plan_text.as_deref().map(|text| ("the Job's plan", text)),
