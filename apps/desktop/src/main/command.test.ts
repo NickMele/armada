@@ -171,7 +171,7 @@ it("drops a blank note rather than sending an empty one", async () => {
 });
 
 /**
- * **The rule rides with an always-allow**, since protocol 13.1. What is
+ * **The rule rides with an always-allow**, since protocol 13.3. What is
  * declared is the rule a person picked off the offer's own candidates, never
  * the whole command.
  */

@@ -446,11 +446,11 @@ pub struct Refusal {
     pub withheld: Option<String>,
     /// Candidate Always-allow rules for this command, shortest first. Empty
     /// where [`offers`](Refusal::offers) does not carry
-    /// [`CommandAnswer::AlwaysAllow`]. **Since 13.1.**
+    /// [`CommandAnswer::AlwaysAllow`]. **Since 13.3.**
     #[serde(default)]
     pub rules: Vec<String>,
     /// The rule pre-selected for a person, always one of
-    /// [`rules`](Refusal::rules) where it is `Some`. **Since 13.1.**
+    /// [`rules`](Refusal::rules) where it is `Some`. **Since 13.3.**
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggested_rule: Option<String>,
 }

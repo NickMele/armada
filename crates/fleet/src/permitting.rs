@@ -89,7 +89,7 @@ pub struct Waiting {
 /// person allowing for the job only ever allows the command they ran, so the
 /// second field is `None` there by construction; an always-allow may name one
 /// of [`always_allow_rules`]'s candidates instead, and `None` there keeps the
-/// pre-13.1 meaning — the whole command.
+/// pre-13.3 meaning — the whole command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Answered {
     /// Allowed, this far, and — for [`Reach::Repository`] — the rule a person
