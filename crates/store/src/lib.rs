@@ -39,6 +39,8 @@ mod fold;
 mod footprint;
 mod forget;
 mod gaming;
+/// The session each Helm conversation resumes, one row per conversation.
+mod helm_sessions;
 /// Where a verdict's own question was kept, and the column that points at it.
 mod judged;
 /// The Fleet limits a person saved, one row or none.

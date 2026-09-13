@@ -22,6 +22,7 @@ mod drift;
 mod footprint;
 mod forget;
 mod gaming;
+mod helm_sessions;
 mod iteration;
 mod limits;
 mod manifest_allowed;
