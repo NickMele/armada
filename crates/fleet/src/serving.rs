@@ -710,9 +710,12 @@ where
             .collect())
     }
 
-    /// The Kit and carried definitions this Fleet runs without, each with why.
-    async fn list_left_out_workflows(&self) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
-        Ok(self.left_out().to_vec())
+    /// The Kit and carried definitions one repository runs without, each with why.
+    async fn list_left_out_workflows(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
+        Ok(self.served_named(manifest_id.as_ref())?.left_out().to_vec())
     }
 
     /// Every Manifest this Fleet serves, the one it was started in first.

@@ -24,6 +24,8 @@ mod adding;
 pub struct SetUp {
     manifest: Manifest,
     workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
+    /// The Kit and carried definitions that would not resolve here.
+    left_out: Vec<ipc::LeftOutWorkflow>,
 }
 
 impl SetUp {
@@ -33,7 +35,13 @@ impl SetUp {
         SetUp {
             manifest,
             workflows,
+            left_out: Vec::new(),
         }
+    }
+
+    /// What this repository's catalogue left out, as the wire carries it.
+    pub fn leaving_out(self, left_out: Vec<ipc::LeftOutWorkflow>) -> SetUp {
+        SetUp { left_out, ..self }
     }
 
     pub fn manifest(&self) -> &Manifest {
@@ -179,6 +187,10 @@ impl Served {
 
     pub fn workflows(&self) -> &BTreeMap<WorkflowId, ResolvedWorkflow> {
         self.set_up().workflows()
+    }
+
+    pub fn left_out(&self) -> &[ipc::LeftOutWorkflow] {
+        &self.set_up().left_out
     }
 
     pub fn repository(&self) -> &Arc<Repository> {

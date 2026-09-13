@@ -67,11 +67,12 @@ use ipc::{
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    as_sent, carried_there, catalogued, ci_run, convention, every_line, fault_keys, folder,
-    held_there, held_to, loads, manifest_ids, one_step, proposal_at, proposals, provenance_of,
-    read_from, received, resolved_there, started_in_the_storefront, storefront,
-    toward_the_journeys_e2e, workspace, written, A_MILESTONE, CARRYABLE, CI_RUNS, EPIC, EPIC_AT,
-    KEPT, MAILER, MAILER_AT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, WRITTEN,
+    as_sent, carried_there, catalogued, ci_run, cited, convention, declared_ports, every_line,
+    fault_keys, folder, held_there, held_to, loads, manifest_ids, one_step, proposal_at, proposals,
+    provenance_of, read_from, received, resolved_there, runnable, started_in_the_storefront,
+    storefront, strengths, toward_the_journeys_e2e, workspace, written, A_MILESTONE, CARRYABLE,
+    CI_RUNS, EPIC, EPIC_AT, KEPT, MAILER, MAILER_AT, MANIFEST_AT, NAMING_ARMADAS_CHECKS,
+    OVERREACHING, WRITTEN,
 };
 use bench::{states, Bench};
 
@@ -126,17 +127,7 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
     );
 
     for one in &scan.workspaces {
-        let cited = one
-            .manifests
-            .iter()
-            .chain(&one.lockfiles)
-            .map(|found| &found.file)
-            .chain(one.runnables.iter().map(|found| &found.file))
-            .chain(one.tools.iter().map(|found| &found.file))
-            .chain(one.services.iter().map(|found| &found.file))
-            .chain(one.ports.iter().map(|found| &found.file))
-            .chain(one.not_read.iter().map(|found| &found.file));
-        for file in cited {
+        for file in cited(one) {
             assert!(
                 repository.has(file),
                 "{} cites {file}, which is not there",
@@ -153,11 +144,7 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
             entry: "apps/*".to_string()
         }]
     );
-    let e2e = shop
-        .runnables
-        .iter()
-        .find(|one| one.name == "e2e")
-        .expect("e2e");
+    let e2e = runnable(shop, "e2e");
     assert_eq!(
         (e2e.file.as_str(), e2e.key.as_str(), e2e.run.as_str()),
         ("apps/shop/package.json", "scripts.e2e", "playwright test")
@@ -174,14 +161,8 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
         "a shared lockfile is the root's, not copied"
     );
 
-    let ports: Vec<(&str, &str, u16)> = scan
-        .workspaces
-        .iter()
-        .flat_map(|one| &one.ports)
-        .map(|port| (port.file.as_str(), port.key.as_str(), port.container))
-        .collect();
     assert_eq!(
-        ports,
+        declared_ports(&scan),
         [
             ("compose.yaml", "services.db.ports[0]", 5432),
             ("apps/shop/package.json", "scripts.dev", 3000)
@@ -211,13 +192,8 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
 #[test]
 fn pick_ticks_by_evidence_and_marks_a_name_every_strong_sibling_declares() {
     let scan = received(&storefront());
-    let strengths: Vec<(&str, EvidenceStrength)> = scan
-        .workspaces
-        .iter()
-        .map(|one| (one.dir.as_str(), one.evidence))
-        .collect();
     assert_eq!(
-        strengths,
+        strengths(&scan),
         [
             (".", EvidenceStrength::Strong),
             ("apps/admin", EvidenceStrength::Strong),

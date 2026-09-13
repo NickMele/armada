@@ -576,7 +576,10 @@ impl Queries for FakeDaemon {
         Ok(shapes::workflows())
     }
 
-    async fn list_left_out_workflows(&self) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
+    async fn list_left_out_workflows(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<Vec<ipc::LeftOutWorkflow>, Refusal> {
         Ok(Vec::new())
     }
 

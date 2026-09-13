@@ -96,7 +96,15 @@ fn second_repository(home: &TempDir) -> Located {
     )
     .expect("the second workflow parses");
     let workflow = config::ResolvedWorkflow::resolve(&def, &manifest).expect("and resolves there");
-    folder_at(home, "second", Some(SetUp::of(manifest, one(workflow))))
+    let left = ipc::LeftOutWorkflow {
+        id: None,
+        source: String::from("kit"),
+        file: String::from("/kit/workflows/broken.yml"),
+        said: String::from("a Kit definition that does not resolve here"),
+        instead: None,
+    };
+    let set_up = SetUp::of(manifest, one(workflow)).leaving_out(vec![left]);
+    folder_at(home, "second", Some(set_up))
 }
 
 fn folder_at(home: &TempDir, name: &str, set_up: Option<SetUp>) -> Located {
@@ -188,6 +196,19 @@ async fn a_fleet_adds_a_second_repository_by_folder_and_lists_both_manifests() {
     let listed: Vec<ManifestSummary> = ipc::decode("manifests", &body).expect("manifests");
     let ids: Vec<&str> = listed.iter().map(|one| one.id.as_str()).collect();
     assert_eq!(ids, [FIRST, SECOND]);
+
+    let (_, body) = call(
+        &app,
+        "GET",
+        &format!("/workflows/left_out?manifest_id={SECOND}"),
+        "",
+    )
+    .await;
+    let left_out: Vec<ipc::LeftOutWorkflow> = ipc::decode("left out", &body).expect("a list");
+    assert_eq!(left_out.len(), 1, "the second repository's own list");
+    let (_, body) = call(&app, "GET", "/workflows/left_out", "").await;
+    let left_out: Vec<ipc::LeftOutWorkflow> = ipc::decode("left out", &body).expect("a list");
+    assert!(left_out.is_empty(), "and not the first's");
 
     let (_, body) = call(&app, "GET", "/repositories", "").await;
     let listed: RepositoryList = ipc::decode("repositories", &body).expect("repositories");

@@ -104,12 +104,17 @@ impl Locating for Locator {
         }
         let set_up = match Setup::at(&root, &self.kit, &self.roster) {
             Ok(setup) => {
+                let left_out = setup
+                    .left_out()
+                    .iter()
+                    .map(fleet::left_out_workflow)
+                    .collect();
                 let (manifest, workflows, reloads) = setup.into_parts();
                 self.pending
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
                     .insert(root_text.clone(), reloads);
-                Some(SetUp::of(manifest, workflows))
+                Some(SetUp::of(manifest, workflows).leaving_out(left_out))
             }
             Err(SetupRefused::NoManifest { .. }) => None,
             Err(why) => {

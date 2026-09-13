@@ -116,7 +116,8 @@ pub struct Fittings<H, V, W> {
     /// and a name this map does not hold is refused at creation instead of
     /// written onto the record unverified.
     pub workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
-    /// The Kit and carried definitions left out of `workflows`, as the wire carries them.
+    /// The Kit and carried definitions left out of `workflows`, as the wire carries them —
+    /// the first repository's, since each resolves its own.
     pub left_out: Vec<ipc::LeftOutWorkflow>,
     /// The `armada.yml` that workflow resolved against. Held because a Drone's
     /// toolbelt is built from the commands it declares.
@@ -263,10 +264,10 @@ where
             repositories: Arc::new(crate::repositories::Repositories::starting_in(
                 fittings.host.repo_root,
                 fittings.host.records_root,
-                crate::repositories::SetUp::of(fittings.manifest, fittings.workflows),
+                crate::repositories::SetUp::of(fittings.manifest, fittings.workflows)
+                    .leaving_out(fittings.left_out),
             )),
             locating: fittings.locating,
-            left_out: fittings.left_out,
             host: Local {
                 path: fittings.host.path,
                 home: fittings.host.home,

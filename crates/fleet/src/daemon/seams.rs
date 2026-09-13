@@ -73,10 +73,6 @@ where
     pub(crate) fn repositories(&self) -> &Arc<crate::repositories::Repositories> {
         &self.repositories
     }
-    /// What the workflows run without, for `serving`'s `list_left_out_workflows`.
-    pub(crate) fn left_out(&self) -> &[ipc::LeftOutWorkflow] {
-        &self.left_out
-    }
     pub(crate) fn locating(&self) -> &Arc<dyn crate::repositories::Locating> {
         &self.locating
     }

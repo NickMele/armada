@@ -588,6 +588,8 @@ notes = """
 
 **A route of its own, not a field on `list_workflows`**, whose answer is a list: wrapping it in an object is a major bump. A repository's own definition is never here, because one that does not fit refuses Fleet's start instead.
 
+**Per repository**, named by `?manifest_id=` and the one Fleet started in where absent: whether a Kit or carried definition resolves depends on that repository's own Checks.
+
 `said` is the sentence Fleet prints, rendered and never matched on. `file` is absolute, on `ManifestSummary.path`'s ground: two processes on one machine agreeing where a file is.
 
 `agent_access` is `Yes` on `list_workflows`' terms: a Helm about to propose `bug` should be able to see that the `bug` it would get is not Kit's.

@@ -72,7 +72,6 @@ pub struct Fleet<H, V, W> {
     repositories: Arc<crate::repositories::Repositories>,
     /// Reading a folder a person adds. The composition root's.
     locating: Arc<dyn crate::repositories::Locating>,
-    left_out: Vec<ipc::LeftOutWorkflow>,
     host: Local,
     /// The range a Job's port span is claimed from, and the granule its width
     /// rounds up to. See [`crate::ports`].
