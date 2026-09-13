@@ -29,6 +29,7 @@ import { jobFailure } from "@armada/shell";
 import { headOf } from "@armada/shell";
 import { Composer } from "@armada/screens";
 import { DispatchJob } from "@armada/screens";
+import { FleetSettingsSheet } from "@armada/screens";
 import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
@@ -85,6 +86,7 @@ import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
 import { SURFACE, SURFACES, useSurfaceKeys } from "@armada/shell";
+import { useAtFloor } from "@armada/shell";
 import { watchUncaught } from "@armada/shell";
 import type { Uncaught } from "@armada/shell";
 
@@ -131,6 +133,11 @@ export function App() {
   // the Board would put a control nobody can act on beside rows that exist to
   // be acted on.
   const [clearing, setClearing] = useState(false);
+  // Whether Fleet settings is open. **Not a rail surface and not the Board with
+  // something over it**: the three limits are Fleet's own, not one Job's or one
+  // screen's, so this is a window-fixed sheet that opens over whatever is on
+  // screen rather than replacing it.
+  const [fleetSettingsOpen, setFleetSettingsOpen] = useState(false);
   // Whether the Manifest surface is open — Journey 9's *Running one*. **Its
   // own view, and it needs no Job to draw**: it is read off the file Fleet
   // already holds, which is what lets a person run this project's lint with
@@ -174,6 +181,9 @@ export function App() {
   // than reached for: a redispatch opens its replacement, and a re-read
   // publishes what came back.
   const commands = useCommands({ onOpen: setOpenJob, onRead: setState });
+  // Whether the window is at `--window-floor`, `JobDetail`'s own reading —
+  // Fleet settings is the same trailing layer and takes it the same way.
+  const floor = useAtFloor();
 
   // The open Job, read out of the list rather than copied beside it. A Job that
   // leaves the list — superseded, or gone from a resync — closes its own detail
@@ -349,6 +359,7 @@ export function App() {
     onReadReports: () => setAuditing(true),
     onCloseWorktrees: () => setClearing(false),
     onReadWorktrees: () => setClearing(true),
+    onOpenLimits: () => setFleetSettingsOpen(true),
     // Which Manifest view is up, so the head describes the one on screen.
     manifest: manifesting ? editing.view : false,
     onRefresh: () => void commands.refresh(),
@@ -377,6 +388,7 @@ export function App() {
           clearing ? SURFACE.worktrees : manifesting ? SURFACE.manifest : SURFACE.board
         }
         onSurface={goTo}
+        onOpenLimits={() => setFleetSettingsOpen(true)}
       >
         {/* Real CSS, not utilities: nothing Tailwind spells emits a rule in
             this app, so the class that bounds this box lives in the app's own
@@ -750,6 +762,18 @@ export function App() {
           }
         }}
       />
+
+      {/* Fleet-wide, and window-fixed rather than scoped to a screen — it opens
+          from the status bar and the rail both, over whatever else is up. */}
+      {fleetSettingsOpen ? (
+        <FleetSettingsSheet
+          limits={state.limits}
+          live={live}
+          floor={floor}
+          onClose={() => setFleetSettingsOpen(false)}
+          onSave={commands.saveLimits}
+        />
+      ) : null}
 
       <CopiedToast copied={copied} />
       <SaidToast said={telling} />

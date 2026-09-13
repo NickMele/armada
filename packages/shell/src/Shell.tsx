@@ -69,6 +69,10 @@ export type ShellProps = {
   actions?: ReactNode;
   /** Which surface is up, by its id in `surfaces.ts`. The rail marks it. */
   showing: string;
+  /** Opens Fleet settings. The status bar's own held reason is one click from
+   *  the control that would clear it, where the reason is one Fleet settings
+   *  answers for. */
+  onOpenLimits: () => void;
   /** Selecting a rail row goes to that surface, from wherever you are. The
    *  rail is the one thing present on every view, so it is where a person
    *  looks to get back — Escape and Cancel both work and neither is what they
@@ -91,6 +95,7 @@ export function Shell({
   actions,
   showing,
   onSurface,
+  onOpenLimits,
   children,
 }: ShellProps) {
   const collapsed = useNarrow();
@@ -138,7 +143,7 @@ export function Shell({
       title={title}
       summary={summary}
       actions={actions}
-      status={statusOf(connection, statement, jobs, capacity)}
+      status={statusOf(connection, statement, jobs, capacity, onOpenLimits)}
     >
       {children}
     </TheShell>
@@ -157,6 +162,7 @@ function statusOf(
   statement: Statement,
   jobs: readonly JobSummary[],
   capacity: FleetCapacity | null,
+  onOpenLimits: () => void,
 ): StatusBarProps {
   const detailParts: ReactNode[] = [];
   if (statement.detail !== "") detailParts.push(statement.detail);
@@ -167,11 +173,15 @@ function statusOf(
     fleetLabel: statement.headline,
     detail: detailParts.length === 0 ? undefined : interleave(detailParts, " · "),
     advice: statement.next ?? undefined,
-    items: [plural(jobs.length), ...held(jobs, capacity)],
+    items: [plural(jobs.length), ...held(jobs, capacity, onOpenLimits)],
     escalations: jobs.filter((job) => job.status === "escalated").length,
     approvals: jobs.filter((job) => job.status === "awaiting_approval").length,
   };
 }
+
+/** The admission holds Fleet settings answers for. `cpu` has no control: the
+ *  owner cut it, on the ruling that macOS schedules CPU rather than Fleet. */
+const SETTABLE_HOLD = new Set(["concurrency_bound", "memory", "disk"]);
 
 /** `parts` with `separator` between each, as one array `detail` can render. */
 function interleave(parts: readonly ReactNode[], separator: string): ReactNode[] {
@@ -224,21 +234,35 @@ function drones(capacity: FleetCapacity | null): ReactNode {
  * **Carries a tooltip where the registry has one.** The verb alone names which
  * of the four is short; `ADMISSION_HOLD[hold]?.hint` says why, and is absent
  * for a wire spelling this build has never heard of.
+ *
+ * **One click from the control that would clear it**, for the three of the
+ * four Fleet settings answers for.
  */
-function held(jobs: readonly JobSummary[], capacity: FleetCapacity | null): ReactNode[] {
+function held(
+  jobs: readonly JobSummary[],
+  capacity: FleetCapacity | null,
+  onOpenLimits: () => void,
+): ReactNode[] {
   const hold = capacity?.held_by;
   if (hold === undefined) return [];
   if (!jobs.some((job) => job.status === "queued")) return [];
   const rendering = ADMISSION_HOLD[hold];
   const verb = rendering?.verb ?? hold;
+  const content = SETTABLE_HOLD.has(hold) ? (
+    <button type="button" className="armada-status-bar__link" onClick={onOpenLimits}>
+      {verb}
+    </button>
+  ) : (
+    verb
+  );
   if (rendering?.hint) {
     return [
       <Tooltip key="held" label={rendering.hint}>
-        {verb}
+        {content}
       </Tooltip>,
     ];
   }
-  return [verb];
+  return [content];
 }
 
 /**
