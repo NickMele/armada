@@ -102,6 +102,13 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/manifest/save_file",
     },
+    // A form's edits to the same file, as edits: keys and values, never text.
+    // Beside the save and for its reason, with the act in the last segment.
+    Route {
+        operation: "edit_manifest",
+        method: "POST",
+        path: "/manifest/edit",
+    },
     // The `@` mention popup's read. `?q=` rather than a path segment: the
     // query is a person's typed text, empty the instant they type `@` and
     // before anything follows it, and a path segment cannot carry that. A

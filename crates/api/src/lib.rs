@@ -24,6 +24,8 @@
 //! neither seam above: a Drone's Evidence tool, deliberately absent from
 //! [`SERVED`]. See `mcp`.
 
+/// A form's edits to `armada.yml`, as edits rather than as a file.
+mod amending;
 mod answers;
 /// The four reads that narrow the Board rather than drawing it.
 mod attention;

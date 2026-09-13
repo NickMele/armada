@@ -27,6 +27,9 @@
 /// What is waiting on a person, in two buckets. **Derived from the Jobs Fleet
 /// holds, never stored** — which is why nothing publishes `alert.raised`.
 mod alerts;
+/// A form's edits to `armada.yml`, as edits — the half of Journey 9's *Editing*
+/// that changes only the lines it touches.
+mod amending;
 /// How many times a step was worked, and what each run came to. **The record
 /// held it and nothing served it** — see the module.
 mod asking;
@@ -140,6 +143,10 @@ mod work;
 mod tests;
 
 pub use alerts::{Alert, AlertList};
+pub use amending::{
+    CheckDraft, CommandDraft, EditManifest, LinkDraft, ManifestEdit, ManifestEdited,
+    NarrowingDraft, PortDraft,
+};
 pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, WhenRefused};
 pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};

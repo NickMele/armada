@@ -1605,6 +1605,21 @@ Fleet compares against **the disk at the moment of the save**, never against its
 `agent_access` is `No`, and more plainly than on the seven checkout-run operations it follows: those run in the main checkout, which is the tree a Drone is confined out of, and this writes a tracked file in it — the one that decides what every Job is gated on. A change to what Checks mean is a person's, made where the consequence is stated.
 """
 
+[operations.edit_manifest]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Apply a form's edits to armada.yml, changing only the lines they name, and write the result"
+notes = """
+**A form changes only the lines it touches.** The owner's decision on #721: every untouched line of `armada.yml` stays byte for byte, and removing a Check, a Command or a port takes the comment block directly above it — Journey 9, *Editing*. This repository's own file is two thirds comment, so a form that sent a re-serialised file through `save_manifest_file` would delete most of a tracked file on its first save. So edits cross as edits — a closed set of variants, keys and values, never text and never a dotted path a form could aim anywhere — and Fleet splices each into the file at the bytes its key occupies. `config::amend` is the writer; `ManifestEdited.text` is the file as written, which is the next edit's `read`.
+
+**What a form produces always loads, and that is the opposite of `save_manifest_file`.** A person typing in the file view gets it wrong on the way and has work in progress to put down; a form has no half-typed state. So the result goes through `Manifest::parse` before anything is written, and a result that would not load is a 422 under `fleet.manifest_edit_refused` carrying `faults` as `[key, fault]` pairs, with nothing written. An edit naming a Check, Command or port the file does not declare, or adding one it does, is `fleet.manifest_edit_misnamed`; a key written in a shape the writer does not edit — a value across lines, a tag — is `fleet.manifest_edit_unplaceable`, and the file view is the recourse. All three carry what they were about.
+
+**A file that moved under the edit is refused exactly as a save is.** `EditManifest.read` is required and whole, for `save_manifest_file`'s reasons. Fleet reads the disk before placing anything, so edits are never applied to text the form did not show, and writes through the same beside-and-rename `save`, which compares again at the write.
+
+`agent_access` is `No`, for `save_manifest_file`'s reason: this writes the tracked file that decides what every Job is gated on, in the checkout a Drone is confined out of. A change to what Checks mean is a person's.
+"""
+
 # Servers: a Command with `serve`, held by Fleet — `docs/concepts/fleet.md`,
 # *Servers*. `observe_server` is with the sockets and the three `server.*`
 # kinds with the events.

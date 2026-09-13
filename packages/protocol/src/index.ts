@@ -12,6 +12,7 @@
 // glyph is decided there and rendered here.
 
 export * from "./acts";
+export * from "./amending";
 export * from "./artifacts";
 export * from "./asking";
 export * from "./attempt";

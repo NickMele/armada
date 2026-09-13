@@ -740,6 +740,20 @@ pub trait Commands: Send + Sync + 'static {
         save: SaveManifestFile,
     ) -> impl Future<Output = Result<ManifestSaved, Refusal>> + Send;
 
+    /// `edit_manifest` — apply a form's edits to `armada.yml`, **changing only
+    /// the lines they name**, and write the result.
+    ///
+    /// **What a form produces always loads**, unlike a save: the result is
+    /// parsed before anything is written. [`Refusal::Unacceptable`] where it
+    /// would not load, with every fault; where an edit names what the file
+    /// does not hold; and where the file is written in a shape a form does not
+    /// edit. [`Refusal::IllegalMove`] where the file moved under the edit, as
+    /// for a save.
+    fn edit_manifest(
+        &self,
+        edit: ipc::EditManifest,
+    ) -> impl Future<Output = Result<ipc::ManifestEdited, Refusal>> + Send;
+
     /// `start_server` — start a server the Manifest declares, in a Job's
     /// worktree on its span or in the main checkout on its own, **or answer
     /// with the instance already up**: one per Job per server.

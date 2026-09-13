@@ -152,6 +152,9 @@ Each run writes its log under `./.armada` like every other ad-hoc run here, with
 
 The schema and the form move together — a field added to one is a field added to the other. The file stays reachable because hiding that a committed file is a file would hide what lands in the repo, not because the form falls short.
 
+> **Rule.** A form changes only the lines it touches. Removing a Check, a Command or a port takes that entry's lines and the comment block directly above it — the section's own too, where it was the last — and every other byte of the file stays as it was.
+> Why: a comment written directly against an entry describes it, and left behind it would describe something the file no longer holds; a comment set off by a blank line may be about the section or a neighbour, so it stays.
+
 > **Rule.** The toggle is never labelled with the file's format; it is named by its path.
 > Why: the lexicon bans naming a Manifest by its format — it is a Manifest, never "the yaml."
 

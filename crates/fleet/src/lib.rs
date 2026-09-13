@@ -27,6 +27,9 @@ pub mod admitting;
 pub mod adopting;
 pub mod adrift;
 pub mod allowance;
+/// A form's edits to `armada.yml`, placed a key at a time and written through
+/// `editing::save`.
+mod amending;
 pub mod asked;
 pub mod asking;
 pub mod at_step;
