@@ -44,7 +44,7 @@ import {
   HeldWorktree,
 } from "@armada/components";
 
-import type { HeldWorktrees, Outcome, WorktreeHeld, WorktreeReclaimed } from "@armada/protocol";
+import type { HeldWorktrees, JobSummary, Outcome, WorktreeHeld, WorktreeReclaimed } from "@armada/protocol";
 import { said } from "./copy";
 import {
   confirmOpening,
@@ -52,6 +52,7 @@ import {
   divided,
   filesDestroyed,
   losing,
+  namedByHandle,
   NOTHING_IS_LOST,
   sitting,
 } from "./held";
@@ -67,6 +68,16 @@ export type WorktreesProps = {
   onWant: (want: boolean) => void;
   /** `GET /worktrees`, as main published it. */
   held: HeldWorktrees;
+  /**
+   * The board's own Jobs, read for their handles.
+   *
+   * **Only for naming a `depended_on` reason.** Every other read on this
+   * screen comes off `held` alone; this is the one place a row on this
+   * surface names a *different* job, so it is the one place this screen
+   * reaches into the board's own list. Defaults to none, which falls back to
+   * the id — a screen with no board read yet still has something to show.
+   */
+  jobs?: readonly JobSummary[];
   /**
    * Give one worktree back, and answer with what the two halves did.
    *
@@ -98,7 +109,7 @@ export type WorktreesProps = {
  * hundreds of held worktrees, that is a fleet not sweeping rather than a list
  * needing windowing.
  */
-export function Worktrees({ onWant, held, onReclaim, now, onCopied }: WorktreesProps) {
+export function Worktrees({ onWant, held, jobs = [], onReclaim, now, onCopied }: WorktreesProps) {
   useEffect(() => {
     onWant(true);
     return () => onWant(false);
@@ -189,7 +200,7 @@ export function Worktrees({ onWant, held, onReclaim, now, onCopied }: WorktreesP
               {groups.deciding.map((one) => (
                 <HeldWorktree
                   key={one.job_id}
-                  held={one}
+                  held={namedByHandle(one, jobs)}
                   selected={chosen.includes(one.job_id)}
                   onSelect={choose}
                   reclaimed={receipts[one.job_id]}
@@ -226,7 +237,7 @@ export function Worktrees({ onWant, held, onReclaim, now, onCopied }: WorktreesP
               {groups.waiting.map((one) => (
                 <HeldWorktree
                   key={one.job_id}
-                  held={one}
+                  held={namedByHandle(one, jobs)}
                   sitting={sitting(one.last_moved_at, now) ?? undefined}
                   onCopied={onCopied}
                 />

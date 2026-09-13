@@ -66,6 +66,7 @@ export const SixStates: Story = {
         statusLabel="Needs approval"
         headline="Coalesce concurrent token refreshes"
         jobId="job_7c31"
+        handle="7-coalesce-token-refreshes"
         fields={[
           { value: WORKFLOW },
           { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
@@ -89,6 +90,7 @@ export const SixStates: Story = {
         statusLabel="Waiting on resources"
         headline="Retire the legacy poke path"
         jobId="job_8b42"
+        handle="6-retire-the-legacy-poke-path"
         fields={[
           { value: WORKFLOW },
           { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
@@ -109,6 +111,7 @@ export const SixStates: Story = {
         statusLabel="Running"
         headline="Split the settings reducer"
         jobId="job_2d90bb"
+        handle="12-split-the-settings-reducer"
         pulsing
         fields={[
           { value: "fix/settings-split", mono: true, icon: GitBranch, copyValue: "fix/settings-split" },
@@ -126,6 +129,7 @@ export const SixStates: Story = {
         statusLabel="Failed"
         headline="Cache the manifest read"
         jobId="job_91ab"
+        handle="14-cache-the-manifest-read"
         fields={[
           { value: "feat/manifest-cache", mono: true, icon: GitBranch, copyValue: "feat/manifest-cache" },
           { value: <StepBar total={4} current={3} activity="failed" label="Step 3 of 4" /> },
@@ -142,6 +146,7 @@ export const SixStates: Story = {
         statusLabel="Done"
         headline="Add a retry ceiling to the poke loop"
         jobId="job_4f10"
+        handle="21-retry-ceiling-on-poke-loop"
         fields={[
           { value: "fix/poke-ceiling", mono: true, icon: GitBranch, copyValue: "fix/poke-ceiling" },
           { value: <StepBar total={4} current={5} activity="advanced" label="All 4 of 4 steps advanced" /> },
@@ -158,6 +163,7 @@ export const SixStates: Story = {
         statusLabel="Killed"
         headline="Rename the session token field"
         jobId="job_5e88"
+        handle="18-rename-session-token"
         fields={[
           { value: "feat/session-rename", mono: true, icon: GitBranch, copyValue: "feat/session-rename" },
           { value: <StepBar total={4} current={2} activity="killed" label="Step 2 of 4" /> },
@@ -318,6 +324,7 @@ export const TwoRunning: Story = {
         statusLabel="Running"
         headline="Split the settings reducer"
         jobId="job_2d90bb"
+        handle="12-split-the-settings-reducer"
         pulsing
         onOpen={() => {}}
         fields={[
@@ -336,6 +343,7 @@ export const TwoRunning: Story = {
         statusLabel="Running"
         headline="Coalesce concurrent token refreshes"
         jobId="job_7c31"
+        handle="7-coalesce-token-refreshes"
         pulsing
         onOpen={() => {}}
         fields={[
@@ -354,6 +362,7 @@ export const TwoRunning: Story = {
         statusLabel="Waiting on resources"
         headline="Retire the legacy poke path"
         jobId="job_8b42"
+        handle="6-retire-the-legacy-poke-path"
         onOpen={() => {}}
         fields={[
           { value: WORKFLOW },

@@ -166,7 +166,7 @@ export function DetailSheet({
         open
         floor={floor}
         step={ofAttempt === undefined ? step.label : `${step.label} · attempt ${ofAttempt}`}
-        jobId={job.id}
+        jobId={job.handle}
         total={rows.length}
         // **A closed run's log is not live**, and the hold strip has nothing to
         // jump to: both of those describe a tail, and this run has no tail.
@@ -240,7 +240,7 @@ function DiffSheet({
     <JobDiffSheet
       open
       floor={floor}
-      branch={job.branch ?? job.id}
+      branch={job.branch ?? job.handle}
       files={files}
       // **Which silence this is**, where the reading can say. #381.
       whyNoReading={gaveBackTheWorktree(diff, job.id, whole) ? WORKTREE_GIVEN_BACK : undefined}

@@ -102,8 +102,14 @@ export type JobRowStackedProps = {
    * "Job 12 stalled at step 3", or the Job's own title.
    */
   headline: ReactNode;
-  /** The job id, in mono, set back. Copies on click. */
+  /**
+   * The Job's id. **Identity only, never drawn** — it is what `data-job-id`
+   * carries for a roving list's focus and navigation to key on, not a fact a
+   * person reads. `handle` is what a person sees.
+   */
   jobId?: string;
+  /** The handle, in mono, set back beside the headline. Copies on click. */
+  handle?: string;
   /**
    * The field run. One track per field, shared down the list so it reads down
    * as well as across.
@@ -223,6 +229,7 @@ export function JobRowStacked({
   statusLabel,
   headline,
   jobId,
+  handle,
   fields,
   tracks,
   view,
@@ -284,11 +291,11 @@ export function JobRowStacked({
       <div className="armada-job-row__body">
         <div className="armada-job-row__headline">
           <span className="armada-job-row__title">{headline}</span>
-          {jobId ? (
+          {handle ? (
             <Copyable
               className="armada-job-row__id"
-              value={jobId}
-              copyValue={jobId}
+              value={handle}
+              copyValue={handle}
               onCopied={onCopied}
             />
           ) : null}

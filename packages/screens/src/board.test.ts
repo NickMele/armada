@@ -170,6 +170,17 @@ describe("the search", () => {
     }
   });
 
+  it("matches what the row draws now — the handle, whole or by its number", () => {
+    // The row shows `12-a-job`, not the id beside it: a person who was told
+    // "check job 12" types the number, or the whole handle, and neither is on
+    // the row's old field.
+    const row = job({ id: "01M130Y1380016YK5S0JXBXDQ5", handle: "12-a-job" });
+    expect(matches(row, "12", workflows)).toBe(true);
+    expect(matches(row, "12-a-job", workflows)).toBe(true);
+    // A value copied off the row before this change still finds it.
+    expect(matches(row, "01M130Y", workflows)).toBe(true);
+  });
+
   it("matches the workflow by the name a person reads, not only by its id", () => {
     const named: readonly WorkflowSummary[] = [
       { id: "wf_01", name: "Fix a bug", version: 1, steps: [], manifest_id: "armada" },

@@ -12,7 +12,7 @@
 // both rather than to average them into one warning.
 
 import { expect, test } from "vitest";
-import type { WorktreeHeld } from "@armada/protocol";
+import type { JobSummary, WorktreeHeld } from "@armada/protocol";
 
 import {
   confirmOpening,
@@ -21,6 +21,7 @@ import {
   divided,
   filesDestroyed,
   losing,
+  namedByHandle,
   sitting,
 } from "./held";
 
@@ -186,4 +187,43 @@ test("what is destroyed carries the stamp it is read against", () => {
 
   expect(cost.destroying[0]!.lastMovedAt).toBe("2026-08-30T09:14:00Z");
   expect(sitting(cost.destroying[0]!.lastMovedAt, NOW)).toBe("4 days");
+});
+
+function job(over: Partial<JobSummary> = {}): JobSummary {
+  return {
+    id: "01BLOCKER00000000000000000",
+    handle: "9-fix-the-retry-ceiling",
+    title: "Fix the retry ceiling",
+    status: "running",
+    workflow_id: "bug",
+    owner_manifest_id: "01M1CNPKTV0018H2M1CXDNBK06",
+    origin: "dispatched",
+    urgency: "normal",
+    atomic: false,
+    model: "sonnet",
+    created_at: "2026-08-30T09:00:00Z",
+    ...over,
+  };
+}
+
+test("a depended_on reason names its blocker by handle, not by id", () => {
+  const row = held({ held: [{ why: "depended_on", by: ["01BLOCKER00000000000000000"] }] });
+
+  const named = namedByHandle(row, [job()]);
+
+  expect(named.held).toEqual([{ why: "depended_on", by: ["9-fix-the-retry-ceiling"] }]);
+});
+
+test("a blocker no longer on the board keeps its id, rather than showing nothing", () => {
+  const row = held({ held: [{ why: "depended_on", by: ["01GONE00000000000000000000"] }] });
+
+  const named = namedByHandle(row, [job()]);
+
+  expect(named.held).toEqual([{ why: "depended_on", by: ["01GONE00000000000000000000"] }]);
+});
+
+test("every other reason passes through namedByHandle unchanged", () => {
+  const row = held({ held: [{ why: "unmerged", base: "main", commits: 1, tip: "abc123" }] });
+
+  expect(namedByHandle(row, [job()])).toEqual(row);
 });
