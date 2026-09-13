@@ -74,23 +74,46 @@
 }
 
 .armada-proposal-sheet__rows {
-  display: grid;
-  grid-template-columns:
-    max-content minmax(calc(var(--space-12) * 5), 1fr) minmax(min-content, max-content)
-    minmax(min-content, max-content);
+  display: flex;
+  flex-direction: column;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* A row wraps rather than overflows: name and command first, then source and acts, which
+   fall beneath together when the sheet is too narrow to hold all four on one line. */
 .armada-proposal-sheet__row {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   column-gap: var(--space-3);
+  row-gap: var(--space-1);
   min-height: var(--h-row);
+  padding: var(--space-1) 0;
   border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-proposal-sheet__row > .armada-proposal-sheet__name {
+  flex: 0 0 auto;
+  min-width: calc(var(--space-12) * 2);
+}
+
+.armada-proposal-sheet__row > .armada-proposal-sheet__run,
+.armada-proposal-sheet__row > .armada-proposal-sheet__mono {
+  flex: 1 1 calc(var(--space-12) * 4);
+  min-width: 0;
+}
+
+.armada-proposal-sheet__side {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  column-gap: var(--space-3);
+  min-width: 0;
+  margin-left: auto;
 }
 
 /* The row stays one height while its field is open, and tints while you are in it. */
@@ -103,7 +126,7 @@
 }
 
 .armada-proposal-sheet__fault {
-  grid-column: 2 / -1;
+  flex: 1 0 100%;
   padding-bottom: var(--space-1);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);

@@ -338,8 +338,11 @@ function Row({
     <li className="armada-proposal-sheet__row" aria-label={name} data-refused={faults.length > 0 || undefined}>
       <span className="armada-proposal-sheet__name">{name}</span>
       {children}
-      <Provenance {...cited} />
-      <span className="armada-proposal-sheet__acts">{acts}</span>
+      {/* Source and acts travel together, and drop beneath when the sheet is narrow. */}
+      <span className="armada-proposal-sheet__side">
+        <Provenance {...cited} />
+        <span className="armada-proposal-sheet__acts">{acts}</span>
+      </span>
       {faults.length === 0 ? null : (
         <span className="armada-proposal-sheet__fault">{faults.map((one) => one.fault).join(" ")}</span>
       )}
