@@ -1,0 +1,82 @@
+/* Fleet settings — the three admission limits, on the trailing sheet Job
+   settings already draws from. The layer, its header and the body's padding
+   are `Sheet`'s; what lives here is how the rows inside it are spaced. */
+
+.armada-fleet-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.armada-fleet-settings__opening {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-fleet-settings__lead {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* One limit: its label, what it does, the field and the way back to shipped. */
+.armada-fleet-settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-fleet-settings__field:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.armada-fleet-settings__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-fleet-settings__means {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The field takes the slack, so Save holds the trailing edge at any width. */
+.armada-fleet-settings__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.armada-fleet-settings__ships {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* That a change took, and when it applies. Neutral: a setting that took is
+   not a Job state, and status hue is never chosen. */
+.armada-fleet-settings__said {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}

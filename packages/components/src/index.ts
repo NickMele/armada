@@ -248,6 +248,7 @@ export * from "./compositions/JobHoldsSheet/JobHoldsSheet";
 // Every setting a person can change on a running Job, on the same layer, and
 // the header's way into it.
 export * from "./compositions/JobSettings/JobSettings";
+export * from "./compositions/FleetSettings/FleetSettings";
 
 // Asking a Job to show its work again, and every set a press kept beside the
 // step's own frames. Each set is an unchanged `FramesShown`.
