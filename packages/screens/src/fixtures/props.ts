@@ -87,6 +87,7 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onRequestChanges: noop,
     onReject: noop,
     onTakeUpRemarks: noop,
+    onDismissFinding: noop,
     observed: fixture.observed,
     journalled: fixture.journalled,
     resources: fixture.resources,

@@ -117,6 +117,17 @@ impl fmt::Display for Adrift {
                 already.len(),
                 job.as_str()
             ),
+            Adrift::NoDismissalReason { job } => write!(
+                out,
+                "a finding on {}'s review was dismissed with no reason, so it was not \
+                 dismissed. Say why it is wrong",
+                job.as_str()
+            ),
+            Adrift::FindingNotInReview { job, finding } => write!(
+                out,
+                "{}'s latest review did not raise \"{finding}\", so there is nothing to dismiss",
+                job.as_str()
+            ),
             Adrift::RemarksFileUnwritable { job, cause } => write!(
                 out,
                 "the comments picked off {}'s pull request could not be written into its \
@@ -593,6 +604,8 @@ impl Adrift {
             | Adrift::NoRemarksChosen { job }
             | Adrift::RemarksGone { job, .. }
             | Adrift::RemarksAlreadyTakenUp { job, .. }
+            | Adrift::NoDismissalReason { job }
+            | Adrift::FindingNotInReview { job, .. }
             | Adrift::RemarksFileUnwritable { job, .. }
             | Adrift::NoSuchStep { job, .. }
             | Adrift::NotReaped { job, .. }
@@ -775,6 +788,8 @@ impl Error for Adrift {
             | Adrift::NoRemarksChosen { .. }
             | Adrift::RemarksGone { .. }
             | Adrift::RemarksAlreadyTakenUp { .. }
+            | Adrift::NoDismissalReason { .. }
+            | Adrift::FindingNotInReview { .. }
             | Adrift::NothingToPropose
             | Adrift::NoReadingWorktree(_)
             | Adrift::NoWorkflowFits { .. }

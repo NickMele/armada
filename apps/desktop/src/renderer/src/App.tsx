@@ -582,6 +582,7 @@ export function App() {
                 onRequestChanges={(jobId, note) => void commands.decide(jobId, "changes", note)}
                 onReject={(jobId) => void commands.decide(jobId, "reject")}
                 onTakeUpRemarks={(jobId, remarks) => void commands.takeUpRemarks(jobId, remarks)}
+                onDismissFinding={(jobId, finding, reason) => void commands.dismissFinding(jobId, finding, reason)}
                 onOpenRemarkLink={(jobId, remarkId) => void openRemarkLink(jobId, remarkId)}
                 onCopied={setCopied}
                 onSaid={setTelling}

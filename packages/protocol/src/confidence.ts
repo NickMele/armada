@@ -15,6 +15,8 @@ export type JobConfidence = {
   needs_you: FindingRow[];
   small_fixes: FindingRow[];
   for_context: FindingRow[];
+  /** Findings a person dismissed, taken off the three lists above. Since 13.29, #907. */
+  dismissed?: DismissedRow[];
 };
 
 export type AreaRow = {
@@ -72,4 +74,10 @@ export type FindingRow = {
   why: string;
   /** The code the finding is about, as a View. Since 13.25, #904; absent where it has none. */
   view?: ViewStepRow[];
+};
+
+/** A finding a person dismissed from the review, and why. Since 13.29, #907. */
+export type DismissedRow = {
+  finding: string;
+  reason: string;
 };

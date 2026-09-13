@@ -33,6 +33,9 @@ pub struct JobConfidence {
     pub needs_you: Vec<FindingRow>,
     pub small_fixes: Vec<FindingRow>,
     pub for_context: Vec<FindingRow>,
+    /// Findings a person dismissed, taken out of the three lists above. Since 13.29, #907.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dismissed: Vec<DismissedRow>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +110,22 @@ pub struct FindingRow {
     pub view: Vec<ViewStepRow>,
 }
 
+/// A finding a person dismissed from the review, and why. Since 13.29, #907.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DismissedRow {
+    pub finding: String,
+    pub reason: String,
+}
+
+/// `dismiss_finding`'s body: the finding, in the words the review served it in, and why
+/// it is wrong. Since 13.29, #907. **A blank reason is refused by Fleet**, a 422, because
+/// the reason is what the next review pass is handed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FindingDismissed {
+    pub finding: String,
+    pub reason: String,
+}
+
 impl JobConfidence {
     pub fn of(record: &core_model::ReviewRecord) -> JobConfidence {
         JobConfidence {
@@ -129,7 +148,24 @@ impl JobConfidence {
             needs_you: in_bucket(record, core_model::Bucket::NeedsYou),
             small_fixes: in_bucket(record, core_model::Bucket::SmallFix),
             for_context: in_bucket(record, core_model::Bucket::ForContext),
+            dismissed: Vec::new(),
         }
+    }
+
+    /// The same review, with what a person dismissed taken off the lists and named apart.
+    pub fn without(mut self, dismissed: &[core_model::Dismissal]) -> JobConfidence {
+        let kept = |row: &FindingRow| !dismissed.iter().any(|gone| gone.finding == row.finding);
+        self.needs_you.retain(kept);
+        self.small_fixes.retain(kept);
+        self.for_context.retain(kept);
+        self.dismissed = dismissed
+            .iter()
+            .map(|gone| DismissedRow {
+                finding: gone.finding.clone(),
+                reason: gone.reason.clone(),
+            })
+            .collect();
+        self
     }
 }
 

@@ -48,7 +48,7 @@ import { Limits } from "./limits";
 import { Preferring } from "./preferences";
 import { Reporting } from "./reporting";
 import { proposeFromRequest as propose } from "./proposing";
-import { decide, takeUp, type Decision } from "./review";
+import { decide, dismiss, takeUp, type Decision } from "./review";
 
 /**
  * What an act needs of the connection, and nothing more.
@@ -875,6 +875,11 @@ export class JobCommands {
     return this.act(jobId, this.deciding, "already_deciding", (port) =>
       takeUp(port, jobId, remarks),
     );
+  }
+
+  async dismissFinding(jobId: string, finding: string, reason: string): Promise<Outcome> {
+    if (reason.trim() === "") return { ok: false, why: "empty_note" };
+    return this.act(jobId, this.deciding, "already_deciding", (p) => dismiss(p, jobId, finding, reason));
   }
 
   /**

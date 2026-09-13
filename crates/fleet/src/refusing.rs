@@ -134,6 +134,10 @@ const REMARKS_GONE: &str = "fleet.remarks_gone";
 /// is a note nothing has collected yet and this is one already delivered, and a
 /// client telling a person what to do next has to tell them apart.
 const REMARKS_ALREADY_TAKEN_UP: &str = "fleet.remarks_already_taken_up";
+/// A finding dismissed with no reason. A 422, like a blank note. #907.
+const NO_DISMISSAL_REASON: &str = "fleet.no_dismissal_reason";
+/// A finding dismissed that the Job's latest review did not raise. A 409. #907.
+const FINDING_NOT_IN_REVIEW: &str = "fleet.finding_not_in_review";
 /// A merge asked for on a Job whose record holds no pull request. A 409 like
 /// the status conflicts above: nothing was ever opened, so the act a person
 /// wants is an approval and the message says so.
@@ -441,6 +445,15 @@ where
                 WireError::raised(REMARKS_ALREADY_TAKEN_UP, said, self.run_id())
                     .about_job(ipc::JobId::from(job))
                     .with_field("remarks", WireValue::Str(already.join(", "))),
+            ),
+            Adrift::NoDismissalReason { job } => Refusal::Unacceptable(
+                WireError::raised(NO_DISMISSAL_REASON, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::FindingNotInReview { job, finding } => Refusal::IllegalMove(
+                WireError::raised(FINDING_NOT_IN_REVIEW, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("finding", WireValue::Str(finding.clone())),
             ),
             // Nothing was ever opened, so there is no forge answer to name.
             Adrift::NothingToMerge { job } => Refusal::IllegalMove(

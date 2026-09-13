@@ -28,12 +28,15 @@ export type ConfidenceSheetProps = {
 export type ConfidenceView = {
   title: string;
   steps: ViewStepRow[];
+  /** The finding's own words, where the View is of a finding rather than an area. #907. */
+  finding?: string;
 };
 
 type OnView = ConfidenceSheetProps["onView"];
 
 export function ConfidenceSheet({ confidence, onView }: ConfidenceSheetProps) {
   const { says, reasons, areas, tests, needs_you, small_fixes, for_context } = confidence;
+  const dismissed = confidence.dismissed ?? [];
   return (
     <section className="armada-confidence" aria-label="Armada's review">
       <div className="armada-confidence__block">
@@ -83,6 +86,29 @@ export function ConfidenceSheet({ confidence, onView }: ConfidenceSheetProps) {
       {for_context.length > 0 && (
         <Fold title="For context" summary={findingCount(for_context)}>
           <Findings findings={for_context} onView={onView} />
+        </Fold>
+      )}
+      {dismissed.length > 0 && (
+        <Fold
+          title="Dismissed"
+          summary={dismissed.length === 1 ? "1 finding" : `${dismissed.length} findings`}
+        >
+          <table className="armada-confidence__table" aria-label="Dismissed findings">
+            <thead>
+              <tr>
+                <th scope="col">Finding</th>
+                <th scope="col">Why it was dismissed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dismissed.map((row) => (
+                <tr key={row.finding}>
+                  <td>{withCode(row.finding)}</td>
+                  <td className="armada-confidence__muted">{withCode(row.reason)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Fold>
       )}
     </section>
@@ -138,15 +164,18 @@ function ViewCell({
   title,
   view,
   onView,
+  finding,
 }: {
   title: string;
   view: ViewStepRow[] | undefined;
   onView: OnView;
+  /** The finding's own words, so a dismissal names what the review served. #907. */
+  finding?: string;
 }) {
   return (
     <td className="armada-confidence__act">
       {onView === undefined || view === undefined || view.length === 0 ? null : (
-        <Button size="sm" onClick={() => onView({ title, steps: view })}>
+        <Button size="sm" onClick={() => onView({ title, steps: view, ...(finding === undefined ? {} : { finding }) })}>
           View
         </Button>
       )}
@@ -288,7 +317,12 @@ function Findings({
             <td>{withCode(row.finding)}</td>
             <td className="armada-confidence__muted">{withCode(row.why)}</td>
             {viewable && (
-              <ViewCell title={row.finding.replaceAll("`", "")} view={row.view} onView={onView} />
+              <ViewCell
+                title={row.finding.replaceAll("`", "")}
+                finding={row.finding}
+                view={row.view}
+                onView={onView}
+              />
             )}
           </tr>
         ))}

@@ -20,10 +20,10 @@ use std::future::Future;
 use crate::daemon::Refusal;
 use ipc::{
     AnswerCommand, CapRaise, ChangesRequested, CheckoutRunRecord, CheckoutRunUnderway,
-    ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId, JobSummary, JudgeAnswered,
-    ManifestSaved, NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report,
-    RestartRequested, RunRecord, RunUnderway, SaveManifestFile, SetWhenBlocked, SetWhenRefused,
-    StartCheckoutRun, StartRun, TurnRaise, WorktreeReclaimed,
+    ChosenAnswer, FileReport, FindingDismissed, JobExamined, JobForgotten, JobId, JobSummary,
+    JudgeAnswered, ManifestSaved, NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp,
+    Report, RestartRequested, RunRecord, RunUnderway, SaveManifestFile, SetWhenBlocked,
+    SetWhenRefused, StartCheckoutRun, StartRun, TurnRaise, WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -380,6 +380,17 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         job_id: JobId,
         picked: RemarksTakenUp,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `dismiss_finding` — a person dismisses a finding the review raised, and says why. #907.
+    ///
+    /// **It moves nothing.** The finding leaves the review a person reads, the reason stays on
+    /// the record, and the next review pass is handed both. Refused on a blank reason, and on
+    /// a finding the Job's latest review did not raise.
+    fn dismiss_finding(
+        &self,
+        job_id: JobId,
+        dismissed: FindingDismissed,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `override_verdict` — the Judge refused, a person disagrees, and the step

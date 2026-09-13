@@ -29,7 +29,7 @@ import {
   type VerdictFigure,
   type VerdictSheetProps,
 } from "@armada/components";
-import { ReviewAtGate } from "./confidence";
+import { ReviewedGate, type PendingChanges } from "./confidence";
 import type {
   Diff,
   Evidence,
@@ -540,6 +540,8 @@ export type VerdictSlotAtGateArgs = {
   onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
   /** Opens the Job's whole diff, from a View step. #904. */
   onOpenDiff?: () => void;
+  /** Dismisses a finding the review raised, with the reason. #907. */
+  onDismissFinding?: (jobId: string, finding: string, reason: string) => void;
 };
 
 /**
@@ -572,6 +574,7 @@ export function verdictSlotAtGate({
   onSaid,
   onAnswerJudge,
   onOpenDiff,
+  onDismissFinding,
 }: VerdictSlotAtGateArgs): ReactNode {
   // A judge question outranks the rest of this slot: the gate is a human
   // boundary either way, but this step is answered before it is reviewed.
@@ -616,7 +619,7 @@ export function verdictSlotAtGate({
     ) : (
       "The run tree on the left is where each step's own evidence is. This reads the Job."
     );
-  const sheet = (
+  const sheetWith = (pending?: PendingChanges) => (
     <VerdictSheet
       {...verdictOf({
         job,
@@ -657,23 +660,28 @@ export function verdictSlotAtGate({
           onReject={onReject}
           onTakeUpRemarks={onTakeUpRemarks}
           onOpenRemarkLink={onOpenRemarkLink}
+          {...(pending ?? {})}
         />
       }
     />
   );
   // Armada's review comes first, above the record it is about. #903.
   const confidence = whole?.confidence;
-  if (confidence === undefined) return sheet;
+  if (confidence === undefined) return sheetWith();
   return (
-    <>
-      <ReviewAtGate
-        confidence={confidence}
-        diff={recorded.diff}
-        jobId={job.id}
-        {...(onOpenDiff === undefined ? {} : { onOpenDiff })}
-      />
-      {sheet}
-    </>
+    <ReviewedGate
+      confidence={confidence}
+      diff={recorded.diff}
+      jobId={job.id}
+      {...(onOpenDiff === undefined ? {} : { onOpenDiff })}
+      {...(onDismissFinding === undefined
+        ? {}
+        : {
+            onDismissFinding: (finding: string, reason: string) =>
+              onDismissFinding(job.id, finding, reason),
+          })}
+      sheet={sheetWith}
+    />
   );
 }
 

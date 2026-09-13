@@ -90,7 +90,7 @@ pub use policy::{AutoMerge, ReviewGate};
 pub use prerequisite::Prerequisite;
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use review::{
-    Area, Bucket, ChangedTest, Confidence, Finding, Proves, ReviewRecord, TestChange,
+    Area, Bucket, ChangedTest, Confidence, Dismissal, Finding, Proves, ReviewRecord, TestChange,
     TestsInChange, Untested, ViewStep,
 };
 pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};

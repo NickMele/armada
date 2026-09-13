@@ -43,6 +43,7 @@ pub struct Crossed {
     overtaken: Option<Overtaken>,
     sent_back: Option<SentBack>,
     the_plan: Option<ThePlan>,
+    dismissed: Option<Dismissed>,
 }
 
 impl Crossed {
@@ -107,6 +108,15 @@ impl Crossed {
 
     pub(crate) fn the_plan(&self) -> Option<&ThePlan> {
         self.the_plan.as_ref()
+    }
+
+    /// What a person dismissed from an earlier review, where the step being opened is a review. #907.
+    pub(crate) fn and_dismissed(self, dismissed: Option<Dismissed>) -> Crossed {
+        Crossed { dismissed, ..self }
+    }
+
+    pub(crate) fn dismissed(&self) -> Option<&Dismissed> {
+        self.dismissed.as_ref()
     }
 
     /// The Jobs this Job dispatched, and where each of them got to.
@@ -663,6 +673,36 @@ impl SentBack {
                 "\n\nAddress what it found: it is why this part is being worked again.",
             ),
         });
+        block
+    }
+}
+
+/// The findings a person dismissed from an earlier review of this Job, and why. #907.
+///
+/// **Handed to a review step only**, so a pass does not raise again what a person ruled
+/// out. **Drafted wording**: `docs/contracts/agent-prompt.md` has no copy for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Dismissed(Vec<core_model::Dismissal>);
+
+impl Dismissed {
+    /// `None` where nothing was dismissed, so no block is drawn.
+    pub fn of(dismissals: Vec<core_model::Dismissal>) -> Option<Dismissed> {
+        (!dismissals.is_empty()).then_some(Dismissed(dismissals))
+    }
+
+    /// The block, as it reaches a Drone.
+    pub(crate) fn text(&self) -> String {
+        let mut block = String::from(
+            "WHAT A PERSON RULED OUT\n\nA person read an earlier review of this change and \
+             dismissed these findings. Do not raise them again. If the change has moved so \
+             that one is true again, raise it and say what moved.\n",
+        );
+        for gone in &self.0 {
+            block.push_str(&format!(
+                "\n  \"{}\"\n  Why it was dismissed: {}\n",
+                gone.finding, gone.reason
+            ));
+        }
         block
     }
 }

@@ -192,6 +192,24 @@ pub(crate) async fn take_up_remarks<D: Commands>(
     }
 }
 
+/// A person dismisses a finding the review raised, and says why. #907.
+///
+/// 422 on a blank reason. 409 on a finding the Job's latest review did not raise.
+pub(crate) async fn dismiss_finding<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let dismissed: ipc::FindingDismissed = match ipc::decode("a dismissed finding", &body) {
+        Ok(dismissed) => dismissed,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().dismiss_finding(job.id(), dismissed).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// A verdict on the work, and the Job is over. **Terminal**, which is what
 /// separates it from `request_changes` — and it is not `kill_job`, which clears
 /// the Board and carries no verdict at all.

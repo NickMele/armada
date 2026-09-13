@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { Sheet } from "../../primitives/Sheet/Sheet";
+import { Textarea } from "../../primitives/Textarea/Textarea";
 import type { DiffLine } from "../UnifiedDiff/UnifiedDiff";
 
 /**
@@ -10,6 +11,7 @@ import type { DiffLine } from "../UnifiedDiff/UnifiedDiff";
  *
  * **Every step starts folded to its summary**, so the story reads before the code.
  * Opening one shows its hunk, what ties it to the next step, and the whole file.
+ * A note written under the chain goes onto What should change. #907.
  */
 export type ViewSheetStep = {
   file: string;
@@ -27,6 +29,10 @@ export type ViewSheetProps = {
   steps: ViewSheetStep[];
   /** Opens the file's whole diff. Absent leaves the control out. */
   onOpenFile?: (file: string) => void;
+  /** Adds a note for the Drone to What should change. Absent leaves the note out. */
+  onAddNote?: (note: string) => void;
+  /** Dismisses the finding this View is of, with the note as the reason. Absent on an area. #907. */
+  onDismiss?: (reason: string) => void;
   /** The window is at `--window-floor`. */
   floor?: boolean;
   onClose?: () => void;
@@ -37,10 +43,14 @@ export function ViewSheet({
   title,
   steps,
   onOpenFile,
+  onAddNote,
+  onDismiss,
   floor = false,
   onClose,
 }: ViewSheetProps) {
   const [opened, setOpened] = useState<ReadonlySet<number>>(() => new Set());
+  const [draft, setDraft] = useState("");
+  const [added, setAdded] = useState(0);
   const allOpen = steps.length > 0 && opened.size === steps.length;
   function toggle(at: number) {
     setOpened((was) => {
@@ -121,6 +131,48 @@ export function ViewSheet({
           );
         })}
       </ol>
+      {onAddNote === undefined ? null : (
+        <div className="armada-view__note">
+          <Textarea
+            label="Note for the drone"
+            rows={3}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <Button
+            size="sm"
+            disabled={draft.trim() === ""}
+            onClick={() => {
+              onAddNote(draft.trim());
+              setDraft("");
+              setAdded((was) => was + 1);
+            }}
+          >
+            Add to What should change
+          </Button>
+          {onDismiss === undefined ? null : (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={draft.trim() === ""}
+                onClick={() => onDismiss(draft.trim())}
+              >
+                Dismiss this finding
+              </Button>
+              <p className="armada-view__tie">
+                Dismissing takes the finding out of the review, keeps your note as the reason, and
+                tells the next review pass not to raise it again.
+              </p>
+            </>
+          )}
+          {added === 0 ? null : (
+            <p className="armada-view__tie" role="status">
+              {added === 1 ? "1 note added" : `${added} notes added`} to What should change.
+            </p>
+          )}
+        </div>
+      )}
     </Sheet>
   );
 }

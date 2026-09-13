@@ -272,3 +272,10 @@ pub struct ReviewRecord {
     pub findings: Vec<Finding>,
     pub unexplained_tests: Vec<ChangedTest>,
 }
+
+/// A finding a person dismissed from a review, and their reason. #907.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Dismissal {
+    pub finding: String,
+    pub reason: String,
+}

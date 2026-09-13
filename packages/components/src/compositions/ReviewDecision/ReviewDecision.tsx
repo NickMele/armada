@@ -64,6 +64,10 @@ export type ReviewDecisionProps = {
   /** The reviewer's own words. Controlled — the caller holds the draft. */
   note: string;
   onNote: (note: string) => void;
+  /** What should change, listed above the note. **The list is the note**: the caller sends both as one. #907. */
+  changes?: DecisionChange[];
+  /** Take one change off the list. Absent leaves the list as it stands. */
+  onRemoveChange?: (id: string) => void;
   /**
    * Ask to merge the pull request and take the work. **The caller confirms**,
    * because this writes into a repository Fleet did not make and Bridge cannot
@@ -115,9 +119,18 @@ export type ReviewDecisionProps = {
   rejectLabel?: string;
 };
 
+/** One thing that should change, and where it came from: `Small fix`, or a View. #907. */
+export type DecisionChange = {
+  id: string;
+  from: string;
+  text: string;
+};
+
 export function ReviewDecision({
   note,
   onNote,
+  changes = [],
+  onRemoveChange,
   onMerge,
   mergeBlockedReason,
   onApprove,
@@ -135,7 +148,8 @@ export function ReviewDecision({
   requestChangesLabel = "Request changes",
   rejectLabel = "Reject the work",
 }: ReviewDecisionProps) {
-  const blank = note.trim() === "";
+  const listed = changes.length > 0;
+  const blank = note.trim() === "" && !listed;
   // Presence and never a flag: the caller has the pull request or it has not,
   // and a boolean beside a handler would let a surface offer an act with
   // nothing behind it.
@@ -143,10 +157,37 @@ export function ReviewDecision({
 
   return (
     <div className="armada-decision">
+      {listed ? (
+        <div className="armada-decision__changes">
+          <span className="armada-decision__label">
+            {noteLabel} <span className="armada-decision__count">{changes.length}</span>
+          </span>
+          <ul className="armada-decision__list" aria-label={noteLabel}>
+            {changes.map((change) => (
+              <li key={change.id} className="armada-decision__change">
+                <span className="armada-decision__from">{change.from}</span>
+                <span className="armada-decision__text">{change.text}</span>
+                {onRemoveChange === undefined ? null : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={disabled}
+                    aria-label={`Remove ${change.text}`}
+                    onClick={() => onRemoveChange(change.id)}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* First, and always open. The reply is half of the loop this surface is,
           and a field behind a control is a second surface. */}
       <Textarea
-        label={noteLabel}
+        label={listed ? "Anything else the drone should know" : noteLabel}
         rows={4}
         value={note}
         disabled={disabled}

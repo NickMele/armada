@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { ReviewDecision } from "./ReviewDecision";
 
 /**
@@ -49,6 +50,37 @@ export const ANoteWritten: Story = {
       "The gate change is right, but AdvanceGate::HumanAlways is handled in gate.rs and not in " +
       "config's loader, so a workflow declaring it is still refused at load. Add the arm there " +
       "and a test that loads one.",
+  },
+};
+
+/** What should change, listed from the review and View. A listed change is not a blank note. #907. */
+export const ChangesListed: Story = {
+  args: {
+    note: "",
+    onRemoveChange: fn(),
+    onRequestChanges: fn(),
+    changes: [
+      {
+        id: "small-fix-0",
+        from: "Small fix",
+        text: "The store module is over 500 lines: move the migration into its own file.",
+      },
+      {
+        id: "view-0",
+        from: "From View: A busy CPU no longer delays a Job",
+        text: "Keep the CPU reading in Doctor, and say in the status bar that CPU never holds a Job.",
+      },
+    ],
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const send = canvas.getByRole("button", { name: "Request changes" });
+    await expect(send).toBeEnabled();
+    await userEvent.click(send);
+    await expect(args.onRequestChanges).toHaveBeenCalled();
+
+    await userEvent.click(canvas.getByRole("button", { name: /^Remove The store module/ }));
+    await expect(args.onRemoveChange).toHaveBeenCalledWith("small-fix-0");
+    await expect(canvas.getByLabelText("Anything else the drone should know")).toBeVisible();
   },
 };
 

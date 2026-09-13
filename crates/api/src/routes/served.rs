@@ -357,6 +357,12 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/take_up_remarks",
     },
+    // A person ruling on the review, not on the Job: it moves nothing, so it is not a sixth answer. #907.
+    Route {
+        operation: "dismiss_finding",
+        method: "POST",
+        path: "/jobs/:job_id/dismiss_finding",
+    },
     // The fourth answer, and the only route on this table that writes into a
     // repository Fleet did not make. Its own route for the reason the three
     // above have three: it does something different to the world, and one route

@@ -557,6 +557,16 @@ export function useCommands(sending: Sending) {
     }
   }
 
+  /** Dismiss a finding the review raised, with the reason. #907. */
+  async function dismissFinding(jobId: string, finding: string, reason: string): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(await window.armada.dismissFinding(jobId, finding, reason));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
   /**
    * Send the branch back for a Drone that can edit files to bring it current
    * with main. `#663`. Under the same one-in-flight guard as `decide`, for
@@ -594,6 +604,7 @@ export function useCommands(sending: Sending) {
     acting,
     deciding,
     takeUpRemarks,
+    dismissFinding,
     resolvePullRequestConflict,
     givenBack,
     setGivenBack,

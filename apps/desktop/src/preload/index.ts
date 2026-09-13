@@ -466,6 +466,9 @@ const api: BridgeApi = {
   takeUpRemarks: (jobId: string, remarks: string[]): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.takeUpRemarks, jobId, remarks),
 
+  dismissFinding: (jobId: string, finding: string, reason: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.dismissFinding, jobId, finding, reason),
+
   // The one entry that reaches outside the app, and the narrowest it can be:
   // a Job id and one of three words. **No path crosses here.** Main derives
   // the path from the Job and the repository its Manifest was read from, so

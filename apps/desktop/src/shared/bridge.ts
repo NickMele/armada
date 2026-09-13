@@ -492,6 +492,7 @@ export const CHANNELS = {
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
   takeUpRemarks: "bridge:take-up-remarks",
+  dismissFinding: "bridge:dismiss-finding",
   openArtifact: "bridge:open-artifact",
   openPullRequest: "bridge:open-pull-request",
   openRemarkLink: "bridge:open-remark-link",
