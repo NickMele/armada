@@ -169,8 +169,8 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.explainCommand, jobId, callId),
   setWhenBlocked: (jobId: string, whenBlocked: WhenBlocked): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.setWhenBlocked, jobId, whenBlocked),
-  answerJudge: (jobId: string, answer: JudgeAnswer, note?: string): Promise<Outcome> =>
-    ipcRenderer.invoke(CHANNELS.answerJudge, jobId, answer, note),
+  answerJudge: (jobId: string, askedAt: string, answer: JudgeAnswer, note?: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.answerJudge, jobId, askedAt, answer, note),
   setWhenRefused: (jobId: string, whenRefused: WhenRefused): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.setWhenRefused, jobId, whenRefused),
   // The other two settings on one job. `null` crosses as `null`, which is the

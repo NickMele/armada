@@ -50,8 +50,12 @@ export type DockQuestion = {
   answers: readonly DockAnswer[];
   /** Send one answer, by its `id`. **Absent draws the answers off**, and `note` says why. */
   onAnswer?: (answer: string) => void;
+  /** True while this card's own answer is on its way to Fleet. Draws the answers off, no `note`. */
+  answering?: boolean;
   /** Why the answers are off, where `onAnswer` is absent. */
   note?: ReactNode;
+  /** Why this card's last answer did not take. Present beside live answers, not only where they are off. */
+  refusal?: ReactNode;
   /** Point Helm at this card's repository and Job. The picker does not move. Absent draws it off. */
   onDiscuss?: () => void;
 };
@@ -81,7 +85,9 @@ function QuestionCard({
   waiting,
   answers,
   onAnswer,
+  answering,
   note,
+  refusal,
   onDiscuss,
 }: DockQuestion) {
   const where = `${repository}, job ${job}`;
@@ -105,7 +111,7 @@ function QuestionCard({
             <Button
               variant="secondary"
               size="sm"
-              disabled={onAnswer === undefined}
+              disabled={onAnswer === undefined || answering === true}
               onClick={() => onAnswer?.(answer.id)}
             >
               {answer.label}
@@ -125,6 +131,11 @@ function QuestionCard({
           {note}
         </p>
       ) : null}
+      {refusal === undefined ? null : (
+        <p className="armada-dock-question__detail" role="alert">
+          {refusal}
+        </p>
+      )}
       <div>
         <Button variant="ghost" size="sm" disabled={onDiscuss === undefined} onClick={onDiscuss}>
           Discuss with Helm

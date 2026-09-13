@@ -38,7 +38,7 @@ async fn a_wedged_review_is_moved_to_escalated_at_boot() {
     let trigger =
         StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("gate_failure is step-level");
 
-    let (wedging, job_id) = asking_a_question(&home).await;
+    let (wedging, job_id, _asked_at) = asking_a_question(&home).await;
     let job = wedging.load(&job_id).await.unwrap();
     let handle = job.handle();
     wedging
@@ -84,7 +84,7 @@ async fn a_job_genuinely_awaiting_review_is_left_alone() {
     let home = TempDir::new();
     let step = StepId::new(IMPLEMENT);
 
-    let (asking, job_id) = asking_a_question(&home).await;
+    let (asking, job_id, _asked_at) = asking_a_question(&home).await;
     let held = asking.load(&job_id).await.unwrap();
     assert_eq!(held.step(&step).unwrap().state(), StepState::AwaitingHuman);
     drop(asking);

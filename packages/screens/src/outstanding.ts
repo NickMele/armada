@@ -11,3 +11,8 @@ export type Outstanding =
   | { kind: "drone"; job_id: string; asking: QuestionInFlight }
   | { kind: "command"; job_id: string; waiting: CommandInFlight }
   | { kind: "judge"; job_id: string; question: JudgeQuestion };
+
+/** Unique across the list: a Job can hold a question and a command at once. #936's wiring keys on it too. */
+export function outstandingId(question: Outstanding): string {
+  return `${question.job_id}:${question.kind}`;
+}

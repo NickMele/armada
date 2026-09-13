@@ -42,10 +42,15 @@ export type JudgeQuestion = {
 export type JudgeAnswer = "agree" | "disagree_once" | "disagree_always";
 
 /**
- * The body of `answer_judge`. Since protocol 11.1. `note` is never required.
+ * The body of `answer_judge`. Since protocol 11.1; `asked_at` since 13.35,
+ * optional so the field is additive. `asked_at` is `JudgeQuestion.asked_at`,
+ * echoed back — the identity a stale answer is refused by. This Bridge
+ * always sends it; a peer built before 13.35 sends none, and Fleet trusts
+ * whatever is open, as it always did. `note` is never required.
  */
 export type JudgeAnswered = {
   answer: JudgeAnswer;
+  asked_at?: string;
   note?: string;
 };
 

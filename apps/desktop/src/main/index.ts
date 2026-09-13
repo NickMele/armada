@@ -445,8 +445,8 @@ void app.whenReady().then(() => {
   // disagree always.
   ipcMain.handle(
     CHANNELS.answerJudge,
-    (_event, jobId: string, answer: JudgeAnswer, note?: string) =>
-      connection?.commands.answerJudge(jobId, answer, note),
+    (_event, jobId: string, askedAt: string, answer: JudgeAnswer, note?: string) =>
+      connection?.commands.answerJudge(jobId, askedAt, answer, note),
   );
   // How the job meets the next such refusal. Moves nothing on the job.
   ipcMain.handle(CHANNELS.setWhenRefused, (_event, jobId: string, whenRefused: WhenRefused) =>

@@ -351,10 +351,12 @@ export function useCommands(sending: Sending) {
    * one of a closed set the drone itself offered, and it stops the drone
    * waiting rather than ending anything.
    */
-  async function answer(jobId: string, questionId: string, chose: string): Promise<void> {
+  async function answer(jobId: string, questionId: string, chose: string): Promise<Outcome> {
     setActing(jobId);
     try {
-      setOutcome(await window.armada.answerQuestion(jobId, questionId, chose));
+      const answered = await window.armada.answerQuestion(jobId, questionId, chose);
+      setOutcome(answered);
+      return answered;
     } finally {
       setActing(null);
     }
@@ -371,10 +373,12 @@ export function useCommands(sending: Sending) {
     chose: CommandAnswer,
     note?: string,
     rule?: string,
-  ): Promise<void> {
+  ): Promise<Outcome> {
     setActing(jobId);
     try {
-      setOutcome(await window.armada.answerCommand(jobId, call, chose, note, rule));
+      const answered = await window.armada.answerCommand(jobId, call, chose, note, rule);
+      setOutcome(answered);
+      return answered;
     } finally {
       setActing(null);
     }
@@ -400,10 +404,17 @@ export function useCommands(sending: Sending) {
    * `answerCommand`'s reason: the answer is one of the closed set this design
    * offers, and none of them ends anything from the renderer's own view.
    */
-  async function answerJudge(jobId: string, answer: JudgeAnswer, note?: string): Promise<void> {
+  async function answerJudge(
+    jobId: string,
+    askedAt: string,
+    answer: JudgeAnswer,
+    note?: string,
+  ): Promise<Outcome> {
     setActing(jobId);
     try {
-      setOutcome(await window.armada.answerJudge(jobId, answer, note));
+      const answered = await window.armada.answerJudge(jobId, askedAt, answer, note);
+      setOutcome(answered);
+      return answered;
     } finally {
       setActing(null);
     }
