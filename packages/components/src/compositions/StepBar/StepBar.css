@@ -38,7 +38,10 @@
   background: var(--border-default);
 }
 
-/* Past: a finished step, in its own hue, the same as in a rail. */
+/* Past: a finished step, in its own hue, the same as in a rail. A `done`
+   task takes the same weight everywhere — on the Board this row's own
+   Progress bar colours an advanced step green, and a neutral task segment
+   beside it would disagree with the field it sits next to. */
 .armada-step-bar__segment[data-state="past"] {
   background: var(--step-advanced);
 }

@@ -27,6 +27,7 @@ import { useCheckOutputs, useFollowing } from "./outputs";
 const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames } from "./frames";
 import { openArtifact } from "./opening";
+import { planOf } from "./plan";
 import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
 import { named } from "./run-labels";
 import { useAtFloor } from "@armada/shell";
@@ -78,12 +79,19 @@ import type { JobDetailProps } from "./detail-props";
  * the open state of one reading, and none of it is the next Job's — so the
  * reset is the key, rather than an effect per piece that lands a frame late and
  * a piece nobody wrote one for.
+ *
+ * **Where things are is the one exception**, and it is not held here at all:
+ * `whereOpen` is Fleet's own preference, handed in and saved by the caller —
+ * this package stays free of Electron. That is what survives a Job switch
+ * and a relaunch alike, on its own.
  */
 export function JobDetail(props: JobDetailProps) {
   return <OneJob key={props.job.id} {...props} />;
 }
 
 function OneJob({
+  whereOpen,
+  onOpenWhere,
   onReadDiff,
   onOpenArtifact,
   onOpenPullRequest,
@@ -569,6 +577,9 @@ function OneJob({
       // the reason the two are separate props at all.
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
+      plan={planOf(whole)}
+      whereOpen={whereOpen}
+      onOpenWhere={onOpenWhere}
       where={workOf(
         onOpenArtifact,
         job,

@@ -58,6 +58,30 @@ export const TwoRepositories: Story = {
   },
 };
 
+/**
+ * `#898`. Job 2's plan is partway done, job 4's is complete but for a dropped
+ * task, and every other row carries no plan at all — the task field is drawn
+ * only where `JobSummary.tasks` is present.
+ */
+export const TaskBars: Story = {
+  name: "Task bars — partway, complete, and none",
+  args: {
+    jobs: boardJobs().map((job, at) => {
+      if (at === 1) return { ...job, tasks: { done: 1, working: 1, open: 1, dropped: 0 } };
+      if (at === 3) return { ...job, tasks: { done: 3, working: 0, open: 0, dropped: 1 } };
+      return job;
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    // Scoped to the row's own figure, not the bar's tooltip echoing the same
+    // text — `getAllByText` does not know one is hidden.
+    const figures = [...canvasElement.querySelectorAll(".armada-row-step")]
+      .map((el) => el.textContent ?? "")
+      .filter((text) => /^\d+ of \d+ tasks$/.test(text));
+    await expect(figures.length).toBe(2);
+  },
+};
+
 /** Fleet holds no Jobs for this repository. */
 export const Empty: Story = { name: "Empty", args: { jobs: [] } };
 

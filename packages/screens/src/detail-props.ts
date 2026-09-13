@@ -258,4 +258,12 @@ export type JobDetailProps = {
    */
   onSaid: (sentence: string) => void;
   rehearsal: RunSheetSlice; // The run sheet, Journey 9 — bundled, `recorded`'s precedent
+  /**
+   * Whether Where things are is open — Fleet's own preference,
+   * `BridgeState.preferences.where_things_are_open`, `#927`. This package
+   * stays free of Electron, so the caller reads and saves it; until
+   * preferences arrive, the caller's own default is closed.
+   */
+  whereOpen: boolean;
+  onOpenWhere: (open: boolean) => void;
 };

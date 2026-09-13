@@ -101,6 +101,7 @@ import {
   watchCheckoutRunSheet,
   watchManifestDrift,
 } from "./commands";
+import { useWhereOpen } from "./where-open";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
@@ -201,6 +202,9 @@ export function App() {
   // Whether the window is at `--window-floor`, `JobDetail`'s own reading —
   // Fleet settings is the same trailing layer and takes it the same way.
   const floor = useAtFloor();
+  // Where things are' own open choice — held locally so a press moves it at
+  // once, `#927`'s round trip off the critical path of a toggle.
+  const [whereOpen, pressWhereOpen] = useWhereOpen(state.preferences.where_things_are_open);
 
   // The open Job, read out of the list rather than copied beside it. A Job that
   // leaves the list — superseded, or gone from a resync — closes its own detail
@@ -581,6 +585,8 @@ export function App() {
                 onOpenRemarkLink={(jobId, remarkId) => void openRemarkLink(jobId, remarkId)}
                 onCopied={setCopied}
                 onSaid={setTelling}
+                whereOpen={whereOpen}
+                onOpenWhere={pressWhereOpen}
                 // The run sheet — Journey 9 — and the servers it starts.
                 rehearsal={{
                   runSheet: state.runSheet,

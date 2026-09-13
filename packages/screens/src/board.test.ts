@@ -13,7 +13,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BOARD_COLUMNS,
   BOARD_TABS,
+  columnsFor,
   DEFAULT_SORT,
   emptiedBy,
   FIRST_TAB,
@@ -26,6 +28,9 @@ import {
   sorted,
   tabOf,
   tabSuspended,
+  taskBarSegmentsOf,
+  taskFigureOf,
+  TASKS_COLUMN,
 } from "./board";
 import type { BoardTab } from "./board";
 
@@ -315,5 +320,28 @@ describe("the All tab's sections", () => {
 
   it("keeps a job no tab claims, under a label of its own", () => {
     expect(sectionOf(job({ status: "not_a_status_the_registry_has" }))).toBe("other");
+  });
+});
+
+describe("a Board row's tasks", () => {
+  it("names the Tasks column only where some row has a plan", () => {
+    expect(columnsFor([job()])).toEqual(BOARD_COLUMNS);
+    expect(columnsFor([job({ tasks: { done: 1, working: 1, open: 1, dropped: 0 } })])).toEqual([
+      ...BOARD_COLUMNS,
+      TASKS_COLUMN,
+    ]);
+  });
+
+  it("draws done segments first, then the one working, then what is open", () => {
+    expect(taskBarSegmentsOf({ done: 2, working: 1, open: 1, dropped: 1 })).toEqual([
+      "done",
+      "done",
+      "working",
+      "open",
+    ]);
+  });
+
+  it("counts done over tasks not dropped", () => {
+    expect(taskFigureOf({ done: 1, working: 1, open: 1, dropped: 1 })).toBe("1 of 3");
   });
 });

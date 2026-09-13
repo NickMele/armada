@@ -73,3 +73,24 @@ export const RunningNeverPulses: StoryObj = {
     </div>
   ),
 };
+
+/**
+ * A task bar, `#896` and `#898`. Done segments keep `--step-advanced` on
+ * both the Board and job detail — the Board's own Progress bar colours an
+ * advanced step green, and a neutral task segment beside it would disagree
+ * with the field it sits next to.
+ */
+export const Tasks: Story = {
+  args: {
+    tasks: ["done", "done", "working", "open", "open"],
+    label: "2 of 5 tasks",
+  },
+};
+
+/** Every task done: no segment is working, so none takes `--step-running`. */
+export const TasksAllDone: Story = {
+  args: {
+    tasks: ["done", "done", "done"],
+    label: "3 of 3 tasks",
+  },
+};

@@ -77,8 +77,9 @@
 // strip is still a breakdown of what is on screen — and a tab that empties
 // under a search renders no count rather than a `0`.
 
-import type { JobSummary } from "@armada/protocol";
+import type { JobSummary, TaskCounts } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
+import type { TaskBarSegment } from "@armada/components";
 import { needsYou, oldest, tabOf } from "./needs-you";
 import type { BoardTab } from "./needs-you";
 
@@ -217,6 +218,37 @@ export const BOARD_SORTS: readonly { id: BoardSort; label: string }[] = [
  * track for a value that never arrives, which reads as one that failed to load.
  */
 export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time"];
+
+/**
+ * The fourth, drawn only where at least one row on the board has a plan.
+ * `#898`. **Trailing, always** — appended after the three fixed columns, so
+ * a row without a plan leaves the cell after it blank instead of shifting
+ * the columns behind it.
+ */
+export const TASKS_COLUMN = "Tasks";
+
+/** The Board's columns for what it holds. */
+export function columnsFor(jobs: readonly JobSummary[]): string[] {
+  return jobs.some((job) => job.tasks !== undefined) ? [...BOARD_COLUMNS, TASKS_COLUMN] : BOARD_COLUMNS;
+}
+
+/**
+ * A Job's tasks as the bar draws them — done segments first, then the one
+ * working, then what is left open. `TaskCounts` carries no order of its own;
+ * this is the order the bar reads them in.
+ */
+export function taskBarSegmentsOf(counts: TaskCounts): TaskBarSegment[] {
+  return [
+    ...Array.from({ length: counts.done }, (): TaskBarSegment => "done"),
+    ...Array.from({ length: counts.working }, (): TaskBarSegment => "working"),
+    ...Array.from({ length: counts.open }, (): TaskBarSegment => "open"),
+  ];
+}
+
+/** The figure beside the bar — done over tasks not dropped. */
+export function taskFigureOf(counts: TaskCounts): string {
+  return `${counts.done} of ${counts.done + counts.working + counts.open}`;
+}
 
 /**
  * The Board's default order, recorded as `job_board.default_sort`.

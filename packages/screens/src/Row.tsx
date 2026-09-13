@@ -82,6 +82,7 @@ import { Layers } from "lucide-react";
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
+import { taskBarSegmentsOf, taskFigureOf } from "./board";
 import { absoluteOf, span } from "./duration";
 import { activityFor } from "./frozen";
 import { ROW_VERBS, verbOf } from "./keys";
@@ -182,9 +183,10 @@ export function Row({
   const createdAt = absoluteOf(job.created_at) ?? undefined;
 
   // **The row's facts, in the order `BOARD_COLUMNS` names them, and both views
-  // read them.** Three, and exactly three: a column with no header is a cell
-  // nobody can read, and a header with no cell is a track reserved for nothing.
-  // No Repository fact: the Board lists the picked repository's Jobs alone.
+  // read them.** Three, and a fourth only where `columnsFor` names Tasks: a
+  // column with no header is a cell nobody can read, and a header with no
+  // cell is a track reserved for nothing. No Repository fact: the Board lists
+  // the picked repository's Jobs alone.
   //
   // **One track per fact, not per value.** Progress holds the bar and the step
   // together because a column called Progress answering in two places would
@@ -220,6 +222,22 @@ export function Row({
       mono: true,
       quiet: elapsedNow === undefined,
     },
+    // Trailing always, `#898`: a Job without a plan leaves this cell blank
+    // rather than shifting every column behind it, and `columnsFor` only
+    // names the column at all where some row on the board has one.
+    ...(job.tasks === undefined
+      ? []
+      : [
+          {
+            label: "Tasks",
+            value: (
+              <>
+                <StepBar tasks={taskBarSegmentsOf(job.tasks)} label={`${taskFigureOf(job.tasks)} tasks`} />
+                <span className="armada-row-step">{taskFigureOf(job.tasks)} tasks</span>
+              </>
+            ),
+          },
+        ]),
   ];
 
   // **`landed` leaves the row with the old field run.** It said whether a Job's

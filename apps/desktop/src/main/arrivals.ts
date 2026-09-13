@@ -288,6 +288,19 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     host.refresh(fleet.port, event.job_id);
     return;
   }
+  if (event.kind === "job.plan_changed") {
+    // **The row's own terms, `job.asking`'s shape.** The counts ride on the
+    // event and patch the row directly; the plan itself does not, so the open
+    // Job's detail is re-read for `work_plan` — `work-plan.ts` says why.
+    host.publish({
+      connection,
+      jobs: host.current().jobs.map((job) =>
+        job.id === event.job_id ? { ...job, tasks: event.tasks } : job,
+      ),
+    });
+    host.refresh(fleet.port, event.job_id);
+    return;
+  }
   if (event.kind === "proposal.moved") {
     // **This window's own, matched on the token it sent.** Fleet publishes
     // every proposal on one stream and two windows may be dispatching at

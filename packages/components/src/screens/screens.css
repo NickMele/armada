@@ -707,6 +707,83 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The Plan region's well — the same surface Pulse and Where things are draw
+   on, `--surface-well`. `#896`. */
+.armada-inside__plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-well);
+}
+
+.armada-inside__plan-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The figure beside the bar — done over tasks not dropped, plain text: the
+   bar is what a reader glances at, and this is what they read to be sure. */
+.armada-inside__plan-figure {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-inside__plan-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-inside__plan-task {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* `T1`, `T2` — stable and machine-derived, so mono. */
+.armada-inside__plan-task-id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+}
+
+.armada-inside__plan-task-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.armada-inside__plan-task-title {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+/* Struck through, `docs/concepts/plan.md`: a dropped task stays on the list
+   rather than disappearing from it. */
+.armada-inside__plan-task[data-state="dropped"] .armada-inside__plan-task-title {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.armada-inside__plan-task-reason {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
 /* Where things are — the drawing's `.where`. A stack with a hairline gap, so
    the rows read as one block and each still lights its own hover. The label
    column, the value and the act are `WhereRow`'s; what lives here is only what
@@ -723,6 +800,58 @@
   padding: var(--space-2) var(--space-1);
   border-radius: var(--radius-md);
   background: var(--surface-well);
+}
+
+/* Where things are' own head, closed by default. A plain button reset, on
+   `armada-inside__pulse-head`'s own layout. */
+.armada-inside__where-toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.armada-inside__where-toggle:hover .armada-inside__where-branch {
+  color: var(--fg-default);
+}
+
+.armada-inside__where-toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.armada-inside__where-head-text {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The label never wraps — the branch is what gives way, onto an ellipsis. */
+.armada-inside__where-head-text > .armada-screen__eyebrow {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The branch, shown in the collapsed header's own place. */
+.armada-inside__where-branch {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-inside__where-fold {
+  flex: none;
+  color: var(--fg-subtle);
 }
 
 /* Why a path did not open, under the row it was pressed on. A failed open is

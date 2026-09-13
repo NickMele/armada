@@ -33,7 +33,9 @@ import { mount, unmount } from "./mounted";
 afterEach(unmount);
 
 test("pressing Run… opens the sheet instead of selecting the click event", async () => {
-  mount(<JobDetail {...propsFor(running())} />);
+  // Where things are opens on Fleet's own preference, `#927` — set directly
+  // rather than pressed, since the press only asks Fleet to save it.
+  mount(<JobDetail {...propsFor(running())} whereOpen={true} />);
 
   const run = page.getByRole("button", { name: "Run…" });
   await expect.element(run).toBeVisible();

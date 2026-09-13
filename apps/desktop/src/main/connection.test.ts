@@ -391,6 +391,42 @@ it("puts a Drone's question on the Board row, and takes it off again", async () 
   await published.until((state) => state.jobs[0]?.asking === false);
 });
 
+it("puts a plan's task counts on the Board row, and re-reads the open Job", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
+  await published.until((state) => state.connection.state === "connected");
+  await connection.watchJob(A_JOB);
+  await published.until((state) => state.watched.state === "read");
+
+  stream.send(
+    JSON.stringify({
+      message: "event",
+      cursor: 2,
+      event: {
+        kind: "job.plan_changed",
+        job_id: A_JOB,
+        tasks: { done: 1, working: 1, open: 1, dropped: 0 },
+        actor: "step",
+        at: "2026-09-13T19:09:59.615Z",
+      },
+    }),
+  );
+  await published.until((state) => state.jobs[0]?.tasks?.done === 1);
+  expect(published.latest().jobs[0]?.tasks).toEqual({ done: 1, working: 1, open: 1, dropped: 0 });
+  await published.until(() => fleet.read(SCREEN.detail) === 2);
+});
+
 it("brings back every region of the open Job when Fleet comes back", async () => {
   const fleet = await serving();
   const home = await runtimeFile(fleet.port);

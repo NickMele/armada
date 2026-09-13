@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
-import type { ServerState } from "@armada/protocol";
+import type { ServerState, WorkPlan } from "@armada/protocol";
 import type { JobFixture } from "../../../fixtures/fixture";
 import { propsFor } from "../../../fixtures/props";
 import {
@@ -92,6 +92,95 @@ export const HeaderActionsOpen: Story = {
 
 /** Midway through Fix, before its Check has run. */
 export const Running: Story = { name: "Running", render: drawing(running) };
+
+const PLAN_APPROACH =
+  "Split the selectors module out of the reducer so the memoised selector can " +
+  "be tested without constructing the whole store. Extract selectColumnOrder " +
+  "first, then re-point the reducer's own import at it.";
+
+const PLAN_PARTWAY: WorkPlan = {
+  approach: PLAN_APPROACH,
+  recorded_by: { by: "step", step_id: "fix", attempt: 1 },
+  recorded_at: "2026-09-10T14:16:07Z",
+  tasks: [
+    { id: "T1", title: "Extract selectColumnOrder into its own module", state: "done" },
+    { id: "T2", title: "Re-point the reducer's own import at it", state: "working" },
+    { id: "T3", title: "Add a unit test that does not construct the store", state: "open" },
+  ],
+};
+
+const PLAN_WITH_A_DROPPED_TASK: WorkPlan = {
+  ...PLAN_PARTWAY,
+  tasks: [
+    ...PLAN_PARTWAY.tasks.slice(0, 2),
+    {
+      id: "T3",
+      title: "Add a unit test that does not construct the store",
+      state: "dropped",
+      reason: "The existing integration test already exercises this path.",
+    },
+    { id: "T4", title: "Update the settings package's README", state: "open" },
+  ],
+};
+
+/** `running()`, with a `work_plan` merged onto its detail. `#896`. */
+function withPlan(work_plan: WorkPlan): JobFixture {
+  const fixture = running();
+  if (fixture.watched.state !== "read") return fixture;
+  return { ...fixture, watched: watchedRead({ ...fixture.watched.detail, work_plan }) };
+}
+
+/** The Plan region, partway done — one segment past, one working, one open. */
+export const PlanPartwayDone: Story = {
+  name: "Plan, partway done",
+  // `whereOpen` defaults to `false` in `propsFor` — Fleet's own preference,
+  // closed until it says otherwise, `#927`.
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Plan")).toBeVisible();
+    await expect(canvas.getByText("1 of 3")).toBeVisible();
+    await expect(canvas.getByText("T1")).toBeVisible();
+    await expect(canvas.getByText("Re-point the reducer's own import at it")).toBeVisible();
+    // Where things are opens collapsed, showing the branch on its own line.
+    const where = canvas.getByRole("button", { expanded: false, name: /Where things are/i });
+    await expect(within(where).getByText("fix/settings-split-selectors")).toBeVisible();
+  },
+};
+
+/** The same moment, open — `whereOpen` set directly, the preference's own terms. */
+export const PlanPartwayDoneWhereOpen: Story = {
+  name: "Plan, partway done, Where things are open",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} on={{ whereOpen: true }} />,
+};
+
+/** A dropped task stays on the list, struck through, with its reason. */
+export const PlanWithADroppedTask: Story = {
+  name: "Plan, with a dropped task",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_WITH_A_DROPPED_TASK)} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("The existing integration test already exercises this path.")).toBeVisible();
+    // The dropped task is not counted: 1 done over 3 not dropped.
+    await expect(canvas.getByText("1 of 3")).toBeVisible();
+  },
+};
+
+/** A workflow with no plan step draws no Plan region. */
+export const NoPlan: Story = {
+  name: "No plan on the workflow",
+  render: drawing(running),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText("Plan")).toBeNull();
+  },
+};
+
+/** Before the first Drone turn, nothing is recorded yet — same absence. */
+export const BeforeThePlanStepHasRecordedOne: Story = {
+  name: "Before the plan step has recorded one",
+  render: drawing(preparing),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText("Plan")).toBeNull();
+  },
+};
 
 /** What the panel's choice sends. A module's spy, cleared by the play that reads it. */
 const setWhenBlocked = fn();
@@ -495,7 +584,9 @@ export const FleetUnreachable: Story = { name: "Fleet unreachable", render: draw
  */
 export const StillReading: Story = {
   name: "Still reading",
-  render: drawing(reading),
+  // Open, so its rows draw against what the Board already held — `whereOpen`
+  // is Fleet's own preference and a story sets it directly, `#927`.
+  render: () => <JobDetailFrom fixture={reading()} on={{ whereOpen: true }} />,
   play: async ({ canvas }) => {
     const run = canvas.getByRole("status", { name: "Reading the run" });
     await expect(within(run).getByText("Reproduction")).toBeVisible();
@@ -756,10 +847,13 @@ export const RunStreaming: Story = {
 
 export const ServingRow: Story = {
   name: "Serving row, link opens the system browser",
+  // Open, so the Serving row it holds is drawn — `whereOpen` is Fleet's own
+  // preference and a story sets it directly, `#927`.
   render: () => (
     <JobDetailFrom
       fixture={running()}
       on={{
+        whereOpen: true,
         rehearsal: {
           ...propsFor(running()).rehearsal,
           servers: { servers: [SERVING] },

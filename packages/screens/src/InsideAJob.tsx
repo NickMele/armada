@@ -3,17 +3,20 @@
 // both load.
 
 import type { ReactNode } from "react";
-import { Unplug } from "lucide-react";
+import { ChevronRight, ChevronUp, Unplug } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import {
+  Clamped,
   JobBrief,
   JobBriefSkeleton,
   JobDetailHeaderActions,
+  StepBar,
   StepTimeline,
   StepTimelineSkeleton,
   RunTree,
   RunTreeSkeleton,
   Skeleton,
+  TaskMark,
   Tooltip,
   WhereRow,
   conceptSaid,
@@ -25,6 +28,7 @@ import {
   type StepTimelineAttempt,
   type RunTreeSkeletonProps,
   type RunTreeStep,
+  type TaskMarkState,
 } from "@armada/components";
 
 /**
@@ -131,6 +135,26 @@ export type StepNotice = {
   children?: ReactNode;
 };
 
+/** One task, as the Plan region draws it. `docs/concepts/plan.md`. */
+export type PlanTaskRow = {
+  id: string;
+  title: string;
+  state: TaskMarkState;
+  /** Present on a dropped task, and on nothing else. */
+  reason?: string;
+};
+
+/**
+ * The Job's plan, as the rail draws it between The run and Pulse. Absent
+ * draws nothing — a Job whose workflow has no plan step, or one that has not
+ * reached it yet.
+ */
+export type PlanRegionData = {
+  approach: string;
+  /** Every task, dropped included, in plan order. */
+  tasks: readonly PlanTaskRow[];
+};
+
 /** The panel while its step is read: what is already known of the step. */
 export type StepReading = {
   /** The step's name off the workflow. Absent draws a bar in its place. */
@@ -207,6 +231,11 @@ export type InsideAJobProps = {
   /** Told when a fact in the tree names a chapter: select that step, on it. */
   onOpenChapter?: (stepId: string, chapterId: string) => void;
   /**
+   * The Job's plan, between The run and Pulse — shown whichever step is
+   * selected, because the plan belongs to the Job and not to the step.
+   */
+  plan?: PlanRegionData;
+  /**
    * Where things are — the worktree, the branch, the Manifest, the workflow,
    * the log, the transcript, the Drone. **A path opens where it lives; an
    * identifier copies.**
@@ -215,6 +244,14 @@ export type InsideAJobProps = {
   whereLabel?: ReactNode;
   /** Why nothing can be named there, where nothing can. */
   whereAbsent?: string;
+  /**
+   * Whether Where things are is open. **Closed by default**, held by the
+   * caller so it survives a live redraw — `detail-keys.ts` is where Bridge
+   * already remembers this kind of choice. Absent draws it always open, which
+   * is what a story with nothing to control wants.
+   */
+  whereOpen?: boolean;
+  onOpenWhere?: (open: boolean) => void;
   /**
    * Everything the Job left behind, folded — its moves, its Drone's turns, what
    * it touched, what it changed, what it claimed.
@@ -272,9 +309,12 @@ export function InsideAJob({
   onOpenStep,
   onOpenArtifact,
   onOpenChapter,
+  plan,
   where,
   whereLabel = "Where things are",
   whereAbsent = "Paths unknown",
+  whereOpen,
+  onOpenWhere,
   brief,
   briefAbsent = "No brief",
   briefLoading = false,
@@ -317,6 +357,10 @@ export function InsideAJob({
             />
           )}
 
+          {/* The plan, between the run and Pulse — the Job's own, not the
+              step's, so it stays put whichever step is selected. */}
+          {plan === undefined ? null : <PlanWell {...plan} />}
+
           {/* Context for the run, so it reads after it — and before the
               pointers, which is where you go once it says something is wrong. */}
           {machine === undefined ? null : (
@@ -329,14 +373,21 @@ export function InsideAJob({
             </>
           )}
 
-          <Eyebrow spaced>{whereLabel}</Eyebrow>
-          {where === undefined || where.length === 0 ? (
-            <p className="armada-inside__absent" role="note">
-              {unreachable ?? whereAbsent}
-            </p>
-          ) : (
-            <WhereRegion rows={where} onCopied={onCopied} />
-          )}
+          <WhereHead
+            label={whereLabel}
+            open={whereOpen ?? true}
+            onOpen={onOpenWhere}
+            branch={where?.find((row) => row.iconLabel === "Branch")?.value}
+          />
+          {(whereOpen ?? true) ? (
+            where === undefined || where.length === 0 ? (
+              <p className="armada-inside__absent" role="note">
+                {unreachable ?? whereAbsent}
+              </p>
+            ) : (
+              <WhereRegion rows={where} onCopied={onCopied} />
+            )
+          ) : null}
         </div>
 
         {/* The rule between the columns. Its own track, not a border on
@@ -519,6 +570,96 @@ function FieldLabel({ children }: { children: ReactNode }) {
     <Tooltip asChild label={says}>
       {label}
     </Tooltip>
+  );
+}
+
+/**
+ * The Plan region's well — the task bar, the figure, the approach and one row
+ * per task. `StepBar`'s segment grammar, extended to draw tasks rather than
+ * steps; `docs/journeys/monitor-active-work.md`, Plan.
+ */
+function PlanWell({ approach, tasks }: PlanRegionData) {
+  const notDropped = tasks.filter(
+    (task): task is PlanTaskRow & { state: "open" | "working" | "done" } => task.state !== "dropped",
+  );
+  const done = notDropped.filter((task) => task.state === "done").length;
+
+  return (
+    <>
+      <Eyebrow>Plan</Eyebrow>
+      <div className="armada-inside__plan">
+        <div className="armada-inside__plan-progress">
+          <StepBar
+            tasks={notDropped.map((task) => task.state)}
+            label={`${done} of ${notDropped.length} tasks`}
+          />
+          <span className="armada-inside__plan-figure">
+            {done} of {notDropped.length}
+          </span>
+        </div>
+        <Clamped lines={2}>{approach}</Clamped>
+        <ul className="armada-inside__plan-tasks">
+          {tasks.map((task) => (
+            <li key={task.id} className="armada-inside__plan-task" data-state={task.state}>
+              <TaskMark state={task.state} />
+              <span className="armada-inside__plan-task-id">{task.id}</span>
+              <span className="armada-inside__plan-task-body">
+                <span className="armada-inside__plan-task-title">{task.title}</span>
+                {task.state === "dropped" && task.reason !== undefined ? (
+                  <span className="armada-inside__plan-task-reason">{task.reason}</span>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Where things are' own head — closed to one line by default, showing the
+ * branch. `onOpen` absent draws a label rather than a control, `Eyebrow`'s
+ * own rule for a region with nothing to toggle.
+ */
+function WhereHead({
+  label,
+  open,
+  onOpen,
+  branch,
+}: {
+  label: ReactNode;
+  open: boolean;
+  onOpen?: (open: boolean) => void;
+  branch?: string;
+}) {
+  const text = (
+    <span className="armada-inside__where-head-text">
+      <Eyebrow>{label}</Eyebrow>
+      {open || branch === undefined ? null : (
+        <span className="armada-inside__where-branch">{branch}</span>
+      )}
+    </span>
+  );
+  if (onOpen === undefined) {
+    return <div className="armada-inside__pulse-head">{text}</div>;
+  }
+  return (
+    <button
+      type="button"
+      className="armada-inside__pulse-head armada-inside__where-toggle"
+      aria-expanded={open}
+      onClick={() => onOpen(!open)}
+    >
+      {text}
+      {/* `Chapter`'s own pair: closed points at more to see, open points at
+          closing it again — no rotated glyph, `docs/contracts/iconography.md`. */}
+      {open ? (
+        <ChevronUp size={12} strokeWidth={2} className="armada-inside__where-fold" aria-hidden />
+      ) : (
+        <ChevronRight size={12} strokeWidth={2} className="armada-inside__where-fold" aria-hidden />
+      )}
+    </button>
   );
 }
 
