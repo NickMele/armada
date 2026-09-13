@@ -1,9 +1,9 @@
 //! A proposal against a real directory: Scan reads it, and whether a file is
-//! there is half of what Write is about — `scanning::tests`' reason.
+//! there is what `create` is about — `scanning::tests`' reason.
 
 mod amending;
 mod building;
-mod writing;
+mod creating;
 
 use ipc::ManifestProposal;
 
@@ -37,11 +37,4 @@ fn draft(dir: &TempDir, workspace: &str) -> Draft {
 
 fn answered(dir: &TempDir, workspace: &str) -> ManifestProposal {
     draft(dir, workspace).answer()
-}
-
-/// The Manifest a proposal's text loads as, or the refusal, spelled.
-fn loaded(proposal: &ManifestProposal) -> config::Manifest {
-    let at = std::path::Path::new("/repo").join(&proposal.file);
-    config::Manifest::parse(&at, &proposal.text)
-        .unwrap_or_else(|why| panic!("{} loads: {why}\n{}", proposal.file, proposal.text))
 }

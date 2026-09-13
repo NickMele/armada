@@ -4,7 +4,7 @@
 use core_model::{AutoMerge, ReviewGate};
 use ipc::{Band, PolicyKey, ProposalEdit, Provenance};
 
-use super::{checkout, draft, loaded};
+use super::{checkout, draft};
 use crate::manifest_proposal::amending::NotAmended;
 use crate::tests::tmp::TempDir;
 
@@ -74,7 +74,8 @@ fn a_changed_line_reads_edited_and_a_written_one_added_however_often_it_changes(
     };
     assert_eq!(provenance("test"), &Provenance::EditedDuringSetup);
     assert_eq!(provenance("typecheck"), &Provenance::AddedDuringSetup);
-    assert_eq!(loaded(&answer).checks_as_written(), ["test", "typecheck"]);
+    let names: Vec<&str> = answer.checks.iter().map(|one| one.name.as_str()).collect();
+    assert_eq!(names, ["test", "typecheck"], "added at the end of its band");
 }
 
 #[test]
@@ -126,20 +127,6 @@ fn a_move_is_an_edit_and_is_refused_where_it_would_drop_a_key() {
     ));
 }
 
-/// **A value the parser refuses is applied, and said where it is.** Iterating
-/// passes through wrong states, and a refusal per edit would hide the rest.
-#[test]
-fn a_value_the_parser_refuses_is_applied_and_refused_at_its_key() {
-    let dir = a_package();
-    let mut draft = draft(&dir, ".");
-    draft
-        .amend(check("test", "pnpm run test", &["build", "nothing"]))
-        .expect("applies");
-    let refused = draft.answer().refused.expect("config refuses it");
-    let keys: Vec<&str> = refused.faults.iter().map(|one| one.key.as_str()).collect();
-    assert_eq!(keys, ["checks.test.requires[1]"]);
-}
-
 fn pin(key: PolicyKey, value: Option<&str>) -> ProposalEdit {
     ProposalEdit::Policy {
         key,
@@ -147,28 +134,29 @@ fn pin(key: PolicyKey, value: Option<&str>) -> ProposalEdit {
     }
 }
 
-/// The defaults are the parser's own, and **an inherited value writes no key**
-/// — pinning the same word does, which is why the two read differently.
+/// The defaults are the parser's own words for an absent key, and **pinning
+/// one — even to the default's own word — is an edit**, because Write will then
+/// put the key down. Clearing it goes back to the default.
 #[test]
-fn a_policy_left_at_its_default_writes_nothing_and_pinning_it_writes_the_key() {
+fn a_policy_reads_default_until_pinned_and_default_again_once_cleared() {
     let dir = a_package();
     let mut draft = draft(&dir, ".");
-    let answer = draft.answer();
-    assert!(!answer.text.contains("auto_merge") && !answer.text.contains("review_gate"));
-    assert!(answer
-        .policy
-        .iter()
-        .all(|row| row.provenance == Provenance::Default));
-    let manifest = loaded(&answer);
+    let rows = |draft: &crate::manifest_proposal::Draft| {
+        draft
+            .answer()
+            .policy
+            .into_iter()
+            .map(|row| (row.value, row.provenance))
+            .collect::<Vec<_>>()
+    };
+    let at = |value: &str, provenance| (value.to_string(), provenance);
     assert_eq!(
-        (manifest.auto_merge(), manifest.review_gate()),
-        (AutoMerge::Never, ReviewGate::HumanAlways)
+        rows(&draft),
+        [
+            at("never", Provenance::Default),
+            at("human_always", Provenance::Default)
+        ]
     );
-    assert_eq!(
-        answer.policy[0].value, "never",
-        "the word the parser reads an absent key as"
-    );
-    assert_eq!(answer.policy[1].value, "human_always");
 
     draft
         .amend(pin(PolicyKey::ReviewGate, Some("human_always")))
@@ -176,83 +164,37 @@ fn a_policy_left_at_its_default_writes_nothing_and_pinning_it_writes_the_key() {
     draft
         .amend(pin(PolicyKey::AutoMerge, Some("checks-pass")))
         .expect("applies");
-    let answer = draft.answer();
-    assert!(answer
-        .policy
-        .iter()
-        .all(|row| row.provenance == Provenance::EditedDuringSetup));
-    assert_eq!(loaded(&answer).auto_merge(), AutoMerge::ChecksPass);
-    assert!(answer.text.contains("review_gate: human_always"));
+    assert_eq!(
+        rows(&draft),
+        [
+            at("checks-pass", Provenance::EditedDuringSetup),
+            at("human_always", Provenance::EditedDuringSetup)
+        ]
+    );
 
     draft
         .amend(pin(PolicyKey::AutoMerge, None))
         .expect("applies");
-    let answer = draft.answer();
-    assert_eq!(answer.policy[0].provenance, Provenance::Default);
-    assert!(!answer.text.contains("auto_merge"));
+    assert_eq!(rows(&draft)[0], at("never", Provenance::Default));
 }
 
-/// **Every value reads back as itself.** The text is built by hand, so each of
-/// these would change meaning or refuse to parse if it were left bare.
+/// **The two words are the ones `config` reads an absent key as**, so a row
+/// reading `default` says what the parser will do with the key left out.
 #[test]
-fn awkward_values_read_back_through_the_parser_as_themselves() {
-    let dir = a_package();
-    let mut draft = draft(&dir, ".");
-    let port = ProposalEdit::Port {
-        name: "web".to_string(),
-        container: Some(3000),
-        env: None,
-    };
-    draft.amend(port).expect("applies");
-    let runs = [
-        "yes",
-        "3000",
-        "1.5",
-        "2026-09-12",
-        "null",
-        "~",
-        "a: b",
-        "echo # not a comment",
-        "#hash",
-        "'single'",
-        "\"double\"",
-        "back\\slash",
-        "tab\there",
-        "@scope/tool run",
-        "-dash",
-        "trailing:",
-        "  leading",
-        "ünïcödé",
-        "pnpm next dev -p ${port.web}",
-        "[flow]",
-        "{brace}",
-        "*star",
-        "&anchor",
-        "!tag",
-        "%percent",
-        "|pipe",
-        ">fold",
-        "`tick`",
-    ];
-    for (n, run) in runs.iter().enumerate() {
-        draft
-            .amend(check(&format!("c{n}"), run, &[]))
-            .expect("applies");
-    }
-    draft.amend(check("test:e2e", "on", &[])).expect("applies");
-    let answer = draft.answer();
-    assert!(
-        answer.refused.is_none(),
-        "{:?}\n{}",
-        answer.refused,
-        answer.text
+fn the_default_words_are_what_the_parser_reads_an_absent_key_as() {
+    use crate::manifest_proposal::{AUTO_MERGE_DEFAULT, REVIEW_GATE_DEFAULT};
+    let at = std::path::Path::new("/repo/armada.yml");
+    let absent = config::Manifest::parse(at, "version: 1\nid: x\n").expect("loads");
+    let spelled = format!(
+        "version: 1\nid: x\nauto_merge: {AUTO_MERGE_DEFAULT}\nreview_gate: {REVIEW_GATE_DEFAULT}\n"
     );
-    let manifest = loaded(&answer);
-    for (n, run) in runs.iter().enumerate() {
-        assert_eq!(
-            manifest.check(&format!("c{n}")).expect("declared").run(),
-            *run
-        );
-    }
-    assert_eq!(manifest.check("test:e2e").expect("declared").run(), "on");
+    let pinned = config::Manifest::parse(at, &spelled).expect("loads");
+    assert_eq!(
+        (absent.auto_merge(), absent.review_gate()),
+        (AutoMerge::Never, ReviewGate::HumanAlways)
+    );
+    assert_eq!(
+        (pinned.auto_merge(), pinned.review_gate()),
+        (absent.auto_merge(), absent.review_gate())
+    );
 }

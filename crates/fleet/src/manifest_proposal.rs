@@ -1,29 +1,30 @@
-//! A possible `armada.yml` per workspace, from what Scan read, iterated and
-//! then written — the *Proposal* and *Write* steps of the Setup journey.
+//! A possible `armada.yml` per workspace, from what Scan read, iterated before
+//! anything is written — the *Proposal* step of the Setup journey.
 //!
 //! **Not [`crate::proposing`]**, which proposes Jobs. Nothing here makes a Job,
-//! calls a model or reaches the gate; it turns files into a file.
+//! calls a model or reaches the gate; it turns files into the lines of a file.
 //!
 //! **Every line carries where it came from**, and only this module moves it:
 //! [`building`] cites the file, [`amending`] moves a line a person touched to
 //! *edited* or *added*. No edit on the wire names a provenance.
+//!
+//! **No text is produced here.** `config`'s writer (#721) is the one writer of
+//! `armada.yml`; Write expresses a proposal as edits to an empty text through
+//! it and puts the result down through `crate::editing::create`.
 //!
 //! **Held in Fleet's memory for the Fleet's life, and never written down.** A
 //! proposal is a draft nobody has committed to; a store row would outlive the
 //! Scan it was built from, and a restart costs one more Scan. Where a proposal
 //! lives between edits was left open by the journey — [`held`] is the choice.
 
-use std::path::PathBuf;
-
 use ipc::{
-    ManifestProposal, ManifestSaved, PolicyKey, ProposedCheck, ProposedCommand, ProposedId,
-    ProposedPolicy, ProposedPort, ProposedSetup, Provenance, RepositoryScan,
+    ManifestProposal, PolicyKey, ProposedCheck, ProposedCommand, ProposedId, ProposedPolicy,
+    ProposedPort, ProposedSetup, Provenance, RepositoryScan,
 };
 
 mod amending;
 mod building;
 mod held;
-mod rendering;
 
 #[cfg(test)]
 mod tests;
@@ -42,15 +43,12 @@ pub const REVIEW_GATE_DEFAULT: &str = "human_always";
 pub struct Draft {
     dir: String,
     file: String,
-    /// Where Write would put it. What `config` cites a fault against, too.
-    path: PathBuf,
     id: ProposedId,
     ports: Vec<ProposedPort>,
     checks: Vec<ProposedCheck>,
     commands: Vec<ProposedCommand>,
     setup: Option<ProposedSetup>,
     policy: Vec<ProposedPolicy>,
-    written: Option<ManifestSaved>,
 }
 
 /// A proposal for every workspace in `scan`, in its order. **Reads nothing**:
@@ -64,10 +62,8 @@ impl Draft {
         &self.dir
     }
 
-    /// The proposal as a surface draws it: the lines, the file they make, and
-    /// what `config` would refuse in it.
+    /// The proposal as a surface draws it: every line, with where it came from.
     pub fn answer(&self) -> ManifestProposal {
-        let text = rendering::text(self);
         ManifestProposal {
             dir: self.dir.clone(),
             file: self.file.clone(),
@@ -77,9 +73,6 @@ impl Draft {
             commands: self.commands.clone(),
             setup: self.setup.clone(),
             policy: self.policy.clone(),
-            refused: rendering::refused(&self.path, &text),
-            text,
-            written: self.written.clone(),
         }
     }
 }

@@ -1,7 +1,7 @@
-//! Setup's three operations over the router that ships, answered by a real
-//! Fleet. What a proposal holds and what Write does to a file are
-//! `manifest_proposal`'s own tests; this is the line between them and the
-//! checkout a Fleet serves — `serving`'s `search_files` reason.
+//! Setup's proposal operations over the router that ships, answered by a real
+//! Fleet. What a proposal holds is `manifest_proposal`'s own tests; this is the
+//! line between it and the checkout a Fleet serves — `serving`'s
+//! `search_files` reason.
 
 use std::sync::Arc;
 
@@ -17,11 +17,10 @@ fn refusal(body: &[u8]) -> WireError {
     ipc::decode("a refusal", body).expect("a WireError")
 }
 
-/// **The three operations, over the router that ships, from a real Fleet** —
-/// against `Host::repo_root`, the checkout it serves, holding the edit between
-/// requests.
+/// Against `Host::repo_root`, holding an edit between requests, and **writing
+/// nothing**.
 #[tokio::test]
-async fn a_fleet_proposes_holds_an_edit_and_writes_the_checkout_it_serves() {
+async fn a_fleet_proposes_the_checkout_it_serves_and_holds_an_edit_between_requests() {
     let home = TempDir::new();
     let package = r#"{"scripts":{"test":"vitest run"}}"#;
     std::fs::write(home.path().join("package.json"), package).expect("a package");
@@ -37,6 +36,8 @@ async fn a_fleet_proposes_holds_an_edit_and_writes_the_checkout_it_serves() {
         r#"{"dir":".","edit":{"edit":"command","name":"fmt","run":"pnpm prettier --write ."}}"#;
     let (status, body) = call(&app, "POST", "/repository/edit_proposal", edit).await;
     assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let edited: ManifestProposal = ipc::decode("the proposal", &body).expect("a proposal");
+    assert!(edited.commands.iter().any(|one| one.name == "fmt"));
 
     let (status, body) = call(&app, "GET", "/repository/proposals", "").await;
     assert_eq!(status, StatusCode::OK);
@@ -50,24 +51,18 @@ async fn a_fleet_proposes_holds_an_edit_and_writes_the_checkout_it_serves() {
         .expect("the edit is held between requests");
     assert_eq!(fmt.provenance, Provenance::AddedDuringSetup);
 
-    let write = r#"{"dir":"."}"#;
-    let (status, body) = call(&app, "POST", "/repository/write_proposal", write).await;
-    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
-    let written: ManifestProposal = ipc::decode("the proposal", &body).expect("a proposal");
-    assert!(written.written.is_some());
-    let file = home.path().join("armada.yml");
-    assert_eq!(
-        std::fs::read_to_string(&file).expect("on disk"),
-        written.text
-    );
-    config::Manifest::load(&file).unwrap_or_else(|why| panic!("loads: {why}"));
-
-    let (status, body) = call(&app, "POST", "/repository/write_proposal", write).await;
-    assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(refusal(&body).code, "fleet.proposal_written");
-
-    let nowhere = r#"{"dir":"nowhere"}"#;
-    let (status, body) = call(&app, "POST", "/repository/write_proposal", nowhere).await;
+    let nowhere = r#"{"dir":"nowhere","edit":{"edit":"id","id":"x"}}"#;
+    let (status, body) = call(&app, "POST", "/repository/edit_proposal", nowhere).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(refusal(&body).code, "fleet.no_such_workspace");
+
+    let absent = r#"{"dir":".","edit":{"edit":"move","name":"nothing"}}"#;
+    let (status, body) = call(&app, "POST", "/repository/edit_proposal", absent).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(refusal(&body).code, "fleet.proposal_not_amended");
+
+    assert!(
+        !home.path().join("armada.yml").exists(),
+        "a proposal writes nothing"
+    );
 }

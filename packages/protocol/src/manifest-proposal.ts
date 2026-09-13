@@ -1,19 +1,19 @@
-// A possible `armada.yml` per workspace, built from Scan, and the edits and
-// Write that finish it. `crates/ipc/src/manifest_proposal.rs`.
+// A possible `armada.yml` per workspace, built from Scan, and the edits that
+// iterate it. `crates/ipc/src/manifest_proposal.rs`.
 //
 // **Every line says where it came from, and nothing here sets that.** An edit
 // carries no provenance; Fleet moves a touched line to `edited_during_setup` or
 // `added_during_setup`. A port a file declares is `read`; every script is
 // `convention`, because which registry it landed in is a guess.
 //
+// **Lines, not text.** The file a proposal becomes arrives with Write, written
+// by `config`'s one writer of `armada.yml`.
+//
 // **Not the Job proposer's.** `proposing.ts` is a Job on its way to the gate;
 // this is a file on its way to disk.
 //
 // The header rules in `protocol.ts` hold here: hand-written, and every closed
 // set is left as `string`.
-
-import type { ManifestSaved } from "./editing";
-import type { ManifestRefused } from "./reading";
 
 /** `GET /repository/proposals`. */
 export type ManifestProposals = {
@@ -27,9 +27,9 @@ export type ManifestProposals = {
 export type StatedCaps = { cost_micros: number; turns: number };
 
 export type ManifestProposal = {
-  /** The workspace, `.` for the root — what an edit and a Write name. */
+  /** The workspace, `.` for the root — what an edit names. */
   dir: string;
-  /** Where Write puts the file, relative to the checkout. */
+  /** Where the file would be, relative to the checkout. */
   file: string;
   /** The header, not a row. */
   id: ProposedId;
@@ -41,12 +41,6 @@ export type ManifestProposal = {
   setup?: ProposedSetup;
   /** `auto_merge` and `review_gate`, always both. */
   policy: ProposedPolicy[];
-  /** The file Write would put down, exactly. */
-  text: string;
-  /** What Armada refuses in `text`, key by key. Absent where it loads. */
-  refused?: ManifestRefused;
-  /** Absent until Write lands it; after that it takes no edits. */
-  written?: ManifestSaved;
 };
 
 /**
@@ -85,7 +79,7 @@ export type ProposedCommand = {
 
 export type ProposedSetup = { requires: string[]; provenance: Provenance };
 
-/** `key` is `auto_merge` or `review_gate`. A `default` row writes no key. */
+/** `key` is `auto_merge` or `review_gate`. A `default` row is an absent key. */
 export type ProposedPolicy = { key: string; value: string; provenance: Provenance };
 
 /** `POST /repository/edit_proposal`. */
@@ -104,6 +98,3 @@ export type ProposalEdit =
   | { edit: "policy"; key: string; value?: string }
   | { edit: "move"; name: string }
   | { edit: "remove"; band: string; name: string };
-
-/** `POST /repository/write_proposal`. */
-export type WriteManifestProposal = { dir: string };

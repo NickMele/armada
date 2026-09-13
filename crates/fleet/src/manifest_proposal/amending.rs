@@ -6,9 +6,9 @@
 //! row does not erase the file it was read from.
 //!
 //! **Nothing about a value is refused here.** A name nothing declares, a
-//! policy word `config` does not read: each is on the proposal's `refused`,
-//! where a person correcting it can see all of them at once. What is refused is
-//! an edit that cannot be applied at all.
+//! policy word `config` does not read: a proposal is iterated through wrong
+//! states, and Write is what refuses one. What is refused here is an edit that
+//! cannot be applied at all.
 
 use ipc::{
     Band, PolicyKey, ProposalEdit, ProposedCheck, ProposedCommand, ProposedPort, ProposedSetup,
@@ -20,8 +20,6 @@ use super::{Draft, AUTO_MERGE_DEFAULT, REVIEW_GATE_DEFAULT};
 /// Why an edit was not applied.
 #[derive(Debug, PartialEq, Eq)]
 pub enum NotAmended {
-    /// Write already landed it, so the file is what to change now.
-    Written { file: String },
     /// A move or a removal named a line the proposal does not have.
     NoSuchLine { band: Option<Band>, name: String },
     /// The other registry has no key for what this line carries, so moving it
@@ -32,11 +30,6 @@ pub enum NotAmended {
 impl std::fmt::Display for NotAmended {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NotAmended::Written { file } => write!(
-                out,
-                "{file} was written from this proposal, so it takes no more edits. Change the \
-                 file itself"
-            ),
             NotAmended::NoSuchLine {
                 band: Some(band),
                 name,
@@ -78,11 +71,6 @@ fn touched(was: &Provenance) -> Provenance {
 impl Draft {
     /// Apply one edit, moving the provenance of whatever it touched.
     pub fn amend(&mut self, edit: ProposalEdit) -> Result<(), NotAmended> {
-        if self.written.is_some() {
-            return Err(NotAmended::Written {
-                file: self.file.clone(),
-            });
-        }
         match edit {
             ProposalEdit::Id { id } => {
                 if self.id.value != id {

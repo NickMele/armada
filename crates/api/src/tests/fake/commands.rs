@@ -199,12 +199,6 @@ impl Commands for FakeDaemon {
     ) -> Result<ipc::ManifestProposal, Refusal> {
         Err(self.no_such_workspace(&asked.dir))
     }
-    async fn write_manifest_proposal(
-        &self,
-        asked: ipc::WriteManifestProposal,
-    ) -> Result<ipc::ManifestProposal, Refusal> {
-        Err(self.no_such_workspace(&asked.dir))
-    }
 
     /// Each field the save names replaces the fake's value. What a save does to
     /// admission is `fleet::limits`' and tested there.

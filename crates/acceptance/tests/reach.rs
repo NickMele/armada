@@ -9,7 +9,7 @@
 //! is not this one — its files before anybody set it up, a Manifest and a
 //! workflow definition — held as text and read through what Fleet reads with.
 //!
-//! **Green is not the milestone; the two tables below it are.** A Reach pull
+//! **Green is not the milestone; the tables below it are.** A Reach pull
 //! request that builds a step adds that step's assertion to this file, beside
 //! the code, and deletes the step's row — in the same pull request. A row is
 //! never moved by weakening what it would assert to fit what exists.
@@ -18,16 +18,22 @@
 //! step's assertion lands here; splitting it would move the count, not the
 //! claim — `docs/practices/acceptance-tests.md`.
 
-//! # Carried, and asserted below
+//! # Carried: setting it up
+//!
 //! | What holds | What it does not reach |
 //! |---|---|
 //! | Scan reads every workspace of a repository nobody set up, in one pass — workspace globs, lockfiles, package scripts, compose services, the ports a file declares — each finding naming a file the repository has, what it did not read said beside it, and nothing written, because the tree it is handed has no write | That a checkout on disk reads the same, and that Fleet serves it: both touch a repository, and are `fleet`'s and `api`'s own tests. CI configuration is reported unread and never read, since naming whose it is belongs to `adapters` |
 //! | Each workspace carries how strong its evidence is, and a name every strong sibling declares is marked where one lacks it — the root never a sibling | That a picker ticks by it or draws the grid — #824. The mark is over the batch ticked by default; a batch a person re-ticks is the screen's to recompute |
-//! | **Proposal.** Scan's findings become one proposal per workspace: a port cites the file declaring it, every script reads `convention` whichever registry it landed in, policy reads `default` and writes no key, and each proposal's text loads | That Fleet serves one and holds it between reads — `fleet::manifest_proposal`'s own test, over a real checkout. That a sheet draws it — #824 |
-//! | An edit moves the provenance of the line it touched and no other, a line a person wrote reads added however often it changes, and what the proposal arrives at loads — or is refused at the keys the parser names, before Write is asked | That Helm edits one: the routes are `agent_access = "No"`, and the reach Helm needs is not decided |
-//! | **Write, as far as a hermetic test reaches**: the text Write puts down is the proposal's, it is refused while the parser refuses it, and Fleet serves it | That the file lands, that `Manifest::load` accepts it, and that a file already at the path is never written over: each touches a disk, and is `fleet::manifest_proposal`'s test against a real directory |
-//! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That Setup wrote this one. What Setup proposes for the storefront is asserted above it and is not this file; a person's edits are the difference |
-//! | A proposal saying more than the file can hold is refused, every fault in one pass | That a sheet shows each fault on its row — #824 |
+//! | **Proposal.** Scan's findings become one proposal per workspace: a port cites the file declaring it, every script reads `convention` whichever registry it landed in, and policy reads `default` | That Fleet serves one and holds it between reads — `fleet::manifest_proposal`'s own test, over a real checkout. That a sheet draws it — #824. What a proposal would write — Write, below |
+//! | An edit moves the provenance of the line it touched and no other, a line a person wrote reads added however often it changes, and a move corrects a guess | That Helm edits one: the routes are `agent_access = "No"`, and the reach Helm needs is not decided |
+//! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That anything wrote it. Scan and Proposal write nothing, and Write is not carried |
+//! | A proposal saying more than the file can hold is refused, every fault in one pass | That a proposal is ever read back before it is written |
+//! | Running one Manifest entry in the checkout, and reading and saving the file, are operations Fleet serves | Verify and Fix. One entry is not setup and every Check once, and a saved file is not a row corrected in place |
+
+//! # Carried: working there
+//!
+//! | What holds | What it does not reach |
+//! |---|---|
 //! | A definition gating on `every_manifest_check` resolves against that repository's own Checks, and one naming Armada's by name is refused there | That a definition written for another repository names only what this one declares. The carried set does; `config`'s `tests/carried.rs` holds it to three other shapes |
 //! | A Job created against it is held to that repository's Checks, prerequisites and all | That any of them runs. A Manifest Check is a process, and the gate is `bug_job.rs`'s claim |
 //! | **Dispatch.** With no workflows of its own, all eight Armada carries resolve there, and a Job on the carried `bug` is created and dispatched | That a Fleet started there serves them. `Setup::at` reads directories, and `armada`'s own tests read them |
@@ -46,6 +52,8 @@
 //! | Step | What is not carried | Carried by |
 //! |---|---|---|
 //! | Locate | Pointing Armada at a repository it has not seen, by path or by clone. A Fleet reads the one repository it was started in | #821 |
+//! | Write | One `armada.yml` per workspace, whatever the proposal was iterated to — put down by `config`'s one writer of the file, and refused where the parser refuses it or a file appeared | #823, on #721's writer |
+//! | Verify | Setup and every Check run once on approval, on the sheet that wrote the file, writing nothing | #719 |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the six.
@@ -59,7 +67,7 @@ use config::{
     CheckEdit, Edit, Fault, NotAmended, ResolveError, ResolvedCheck, ResolvedWorkflow,
     WorkflowSource,
 };
-use core_model::{AutoMerge, JobStatus, StepState, WorkflowId};
+use core_model::{JobStatus, StepState, WorkflowId};
 use fleet::scanning::scan;
 use fleet::{Brief, Proposal};
 use ipc::{
@@ -69,10 +77,9 @@ use ipc::{
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    as_sent, carried_there, catalogued, convention, e2e_requiring, loads, one_step, proposals,
-    read_from, resolved_there, toward_the_journeys_e2e, written, Held, A_MILESTONE, CARRYABLE,
-    CHECKOUT, EPIC, EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP,
-    WRITTEN,
+    as_sent, carried_there, catalogued, convention, loads, one_step, proposals, read_from,
+    resolved_there, toward_the_journeys_e2e, written, Held, A_MILESTONE, CARRYABLE, CHECKOUT, EPIC,
+    EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP, WRITTEN,
 };
 use bench::{states, Bench};
 
@@ -227,18 +234,18 @@ fn pick_ticks_by_evidence_and_marks_a_name_every_strong_sibling_declares() {
 }
 
 // ---------------------------------------------------------------------------
-// Proposal and Write
+// Proposal
 // ---------------------------------------------------------------------------
 
 /// **Every line of every proposal cites the file it came from, or says it is
-/// convention — and what each would write loads.** The Proposal step, #823.
+/// convention.** The Proposal step, #823.
 ///
 /// A port is `read`, because a file declares it. A script is `convention`
 /// wherever it landed, because nothing proves a script gates code. Policy is
-/// `default` and writes no key. The Go service Scan could not follow is
-/// proposed nothing, and in particular not the root's `pnpm install`.
+/// `default`. The Go service Scan could not follow is proposed nothing, and in
+/// particular not the root's `pnpm install`.
 #[test]
-fn a_proposal_cites_the_file_each_line_came_from_and_what_it_writes_loads() {
+fn a_proposal_cites_the_file_each_line_came_from() {
     let repository = Held::of(UNSET_UP);
     let proposals: Vec<_> = proposals(&repository).iter().map(as_sent).collect();
     let scanned: Vec<String> = received(&repository)
@@ -250,13 +257,6 @@ fn a_proposal_cites_the_file_each_line_came_from_and_what_it_writes_loads() {
     assert_eq!(dirs, scanned, "one per workspace Scan found");
 
     for one in &proposals {
-        assert!(
-            one.refused.is_none(),
-            "{} is refused: {:?}",
-            one.dir,
-            one.refused
-        );
-        assert_eq!(loads(one).id().as_str(), one.id.value);
         assert_eq!(one.id.provenance, convention(&one.dir, None));
         let cites = |provenance: &Provenance, guessed: bool| match (provenance, guessed) {
             (Provenance::Read { file, .. }, false)
@@ -283,7 +283,6 @@ fn a_proposal_cites_the_file_each_line_came_from_and_what_it_writes_loads() {
             .policy
             .iter()
             .all(|row| row.provenance == Provenance::Default));
-        assert!(!one.text.contains("auto_merge") && !one.text.contains("review_gate"));
     }
 
     let at = |dir: &str| {
@@ -326,15 +325,14 @@ fn a_proposal_cites_the_file_each_line_came_from_and_what_it_writes_loads() {
     assert!(mailer.checks.is_empty() && mailer.commands.is_empty() && mailer.setup.is_none());
 }
 
-/// **An edit moves the provenance of what it touched and nothing else, and
-/// what the proposal arrives at is what loads** — or is refused at the keys the
-/// parser names, before Write is asked. Iterating, and Write as far as a
-/// hermetic test reaches.
+/// **An edit moves the provenance of what it touched and nothing else.**
+/// Iterating a proposal, before anything is written.
 ///
 /// The shop is corrected toward the journey's own `e2e` —
-/// [`toward_the_journeys_e2e`] — and then given a Check before a Check.
+/// [`toward_the_journeys_e2e`] — and every line says afterwards which of it a
+/// person decided.
 #[test]
-fn an_edit_moves_only_what_it_touched_and_write_refuses_what_the_parser_refuses() {
+fn an_edit_moves_the_provenance_of_what_it_touched_and_nothing_else() {
     let mut shop = proposals(&Held::of(UNSET_UP))
         .into_iter()
         .find(|draft| draft.dir() == "apps/shop")
@@ -370,41 +368,30 @@ fn an_edit_moves_only_what_it_touched_and_write_refuses_what_the_parser_refuses(
         "re-sent unchanged, or untouched by a port edit: still cited"
     );
     assert_eq!(sent.ports[0].provenance, Provenance::EditedDuringSetup);
+    assert_eq!(sent.ports[0].env.as_deref(), Some("PORT"));
 
-    assert!(sent.refused.is_none(), "{:?}", sent.refused);
-    let manifest = loads(&sent);
-    assert_eq!(manifest.checks_as_written(), ["e2e", "test"]);
-    let e2e = manifest.check("e2e").expect("declared");
-    let requires: Vec<&str> = e2e.requires().iter().map(|one| one.name()).collect();
-    assert_eq!(requires, ["migrate", "seed"]);
+    let e2e = sent
+        .checks
+        .iter()
+        .find(|one| one.name == "e2e")
+        .expect("e2e");
     assert_eq!(
-        manifest.command_names(),
-        ["dev", "install", "lint", "migrate", "seed"]
+        e2e.requires,
+        ["migrate", "seed"],
+        "Commands by name, in the order they run"
     );
-    assert_eq!(manifest.port("dev").expect("declared").env(), Some("PORT"));
-    assert_eq!(manifest.auto_merge(), AutoMerge::ChecksPass);
-
-    shop.amend(e2e_requiring(&["test"]))
-        .expect("applied, and refused where it is");
-    let refused = as_sent(&shop)
-        .refused
-        .expect("the parser refuses a Check before a Check");
-    let keys: Vec<&str> = refused.faults.iter().map(|one| one.key.as_str()).collect();
+    let checks: Vec<&str> = sent.checks.iter().map(|one| one.name.as_str()).collect();
+    assert_eq!(checks, ["e2e", "test"]);
     assert_eq!(
-        keys,
-        ["checks.e2e.requires[0]"],
-        "what Write refuses, at the line it is on"
+        (sent.policy[0].value.as_str(), &sent.policy[0].provenance),
+        ("checks-pass", &Provenance::EditedDuringSetup)
     );
 
-    let acts = [
-        "get_manifest_proposals",
-        "edit_manifest_proposal",
-        "write_manifest_proposal",
-    ];
+    let acts = ["get_manifest_proposals", "edit_manifest_proposal"];
     let served = |act: &&str| api::SERVED.iter().any(|route| route.operation == *act);
     assert!(
         acts.iter().all(served),
-        "Proposal, its edits and Write are served"
+        "a proposal and its edits are served"
     );
 }
 

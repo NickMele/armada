@@ -2,7 +2,7 @@
 
 use ipc::{ProposedPort, Provenance};
 
-use super::{answered, checkout, drafts, loaded};
+use super::{answered, checkout, drafts};
 
 fn convention(file: &str, key: Option<&str>) -> Provenance {
     Provenance::Convention {
@@ -38,8 +38,6 @@ fn a_cargo_package_is_tested_by_convention_and_its_aliases_are_commands() {
         convention(".cargo/config.toml", Some("alias.xtask"))
     );
     assert!(root.setup.is_none());
-    assert!(root.refused.is_none(), "{:?}", root.refused);
-    loaded(&root);
 }
 
 /// A tool section proposes its Check, run through the lockfile's runner, and
@@ -70,7 +68,6 @@ fn a_python_project_runs_its_tools_through_its_lockfile() {
     assert_eq!(root.commands[0].run, "uv sync --frozen");
     assert_eq!(root.commands[0].provenance, convention("uv.lock", None));
     assert_eq!(root.setup.as_ref().expect("setup").requires, ["install"]);
-    loaded(&root);
 }
 
 /// **A port is `read`, never `convention`.** A variable keeps its file's name,
@@ -121,7 +118,6 @@ fn ports_keep_a_files_variable_and_a_compose_service_needs_none() {
             ),
         ]
     );
-    loaded(&root);
 }
 
 /// A member a workspace pattern names shares the root's lockfile; one found by
@@ -159,9 +155,6 @@ fn only_a_member_the_pattern_names_is_installed_by_the_roots_lockfile() {
     let api = answered(&dir, "services/api");
     assert!(api.commands.is_empty(), "{:?}", api.commands);
     assert!(api.setup.is_none());
-    for one in drafts(&dir) {
-        loaded(&one.answer());
-    }
 }
 
 /// Two workspaces with one directory name would key two Manifests to one id.

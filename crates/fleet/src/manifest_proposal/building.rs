@@ -66,16 +66,11 @@ pub(super) fn drafts(scan: &RepositoryScan) -> Vec<Draft> {
     scan.workspaces
         .iter()
         .zip(ids)
-        .map(|(workspace, id)| draft(scan, root, workspace, id))
+        .map(|(workspace, id)| draft(root, workspace, id))
         .collect()
 }
 
-fn draft(
-    scan: &RepositoryScan,
-    root: Option<&ScannedWorkspace>,
-    workspace: &ScannedWorkspace,
-    id: String,
-) -> Draft {
+fn draft(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace, id: String) -> Draft {
     let lockfiles = lockfiles(root, workspace);
     let mut checks: Vec<ProposedCheck> = Vec::new();
     let mut commands: Vec<ProposedCommand> = Vec::new();
@@ -130,20 +125,13 @@ fn draft(
         }
     }
 
-    let (file, path) = match workspace.dir.as_str() {
-        "." => (
-            "armada.yml".to_string(),
-            Path::new(&scan.checkout).join("armada.yml"),
-        ),
-        dir => (
-            format!("{dir}/armada.yml"),
-            Path::new(&scan.checkout).join(dir).join("armada.yml"),
-        ),
+    let file = match workspace.dir.as_str() {
+        "." => "armada.yml".to_string(),
+        dir => format!("{dir}/armada.yml"),
     };
     Draft {
         dir: workspace.dir.clone(),
         file,
-        path,
         id: ProposedId {
             value: id,
             provenance: convention(&workspace.dir, None),
@@ -153,7 +141,6 @@ fn draft(
         commands,
         setup,
         policy: default_policy(),
-        written: None,
     }
 }
 

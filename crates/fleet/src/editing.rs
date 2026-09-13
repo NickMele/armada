@@ -77,6 +77,9 @@ pub(crate) fn save(file: &Path, read: &str, text: &str) -> Result<(), NotSaved> 
 }
 
 /// Why a create did not happen.
+// Write's, which puts down the text #721's writer produces. Tested on its own
+// until Write calls it.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) enum NotCreated {
     /// Something is at the path already — **what it holds where it reads**.
@@ -95,6 +98,7 @@ pub(crate) enum NotCreated {
 /// meantime, so a check in front of it would be the race `save` accepts. A link
 /// refuses an existing name in the same call that makes it, so there is no
 /// window here at all, and the staged bytes are whole before the name exists.
+#[allow(dead_code)]
 pub(crate) fn create(file: &Path, text: &str) -> Result<(), NotCreated> {
     let staged = beside(file);
     let linked = fs::write(&staged, text).and_then(|()| fs::hard_link(&staged, file));

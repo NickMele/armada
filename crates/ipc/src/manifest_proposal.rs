@@ -1,5 +1,5 @@
 //! A possible `armada.yml` per workspace, built from what Scan read — the
-//! *Proposal* and *Write* steps of the Setup journey.
+//! *Proposal* step of the Setup journey.
 //!
 //! **Every line says where it came from, and a person cannot say otherwise.**
 //! [`Provenance`] is on each line and on no edit: an edit moves it to
@@ -10,13 +10,13 @@
 //! port line is `read`. Nothing proves a script gates code, so every script
 //! line is `convention`, whichever registry it landed in.
 //!
+//! **Lines, not text.** The file a proposal becomes is written by `config`'s
+//! one writer of `armada.yml`, and arrives with Write.
+//!
 //! **Not the Job proposer's.** [`ProposeJob`](crate::ProposeJob) is a Job on its
 //! way to the gate; this is a file on its way to disk, and no Job exists.
 
 use serde::{Deserialize, Serialize};
-
-use crate::editing::ManifestSaved;
-use crate::reading::ManifestRefused;
 
 /// `get_manifest_proposals`: one proposal per workspace Scan found.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,9 +40,9 @@ pub struct StatedCaps {
 /// A possible `armada.yml` for one workspace, as far as it has been iterated.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestProposal {
-    /// The workspace, `.` for the root — what an edit and a Write name.
+    /// The workspace, `.` for the root — what an edit names.
     pub dir: String,
-    /// Where Write puts the file, relative to the checkout.
+    /// Where the file would be, relative to the checkout.
     pub file: String,
     /// The header, not a row: what every Job here is keyed to once written.
     pub id: ProposedId,
@@ -57,16 +57,6 @@ pub struct ManifestProposal {
     pub setup: Option<ProposedSetup>,
     /// `auto_merge` and `review_gate`, always both.
     pub policy: Vec<ProposedPolicy>,
-    /// The file Write would put down, exactly.
-    pub text: String,
-    /// What `config` refuses in [`text`](Self::text), key by key, **absent
-    /// where it loads**. Write refuses while this is present.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub refused: Option<ManifestRefused>,
-    /// **Absent until Write lands it.** After that the file is the thing to
-    /// edit, and the proposal takes no more edits.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub written: Option<ManifestSaved>,
 }
 
 /// Where a line came from.
@@ -87,7 +77,7 @@ pub enum Provenance {
         key: Option<String>,
     },
     /// Nothing in a repository corresponds to it: the parser's own value for
-    /// an absent key, which writes nothing.
+    /// an absent key, **which Write leaves absent**.
     Default,
     EditedDuringSetup,
     AddedDuringSetup,
@@ -189,7 +179,7 @@ pub enum ProposalEdit {
     Setup {
         requires: Vec<String>,
     },
-    /// Absent `value` goes back to the default, and writes nothing.
+    /// Absent `value` goes back to the default.
     Policy {
         key: PolicyKey,
         #[serde(default)]
@@ -211,11 +201,4 @@ pub enum Band {
     Ports,
     Checks,
     Commands,
-}
-
-/// `write_manifest_proposal`: put one workspace's proposal on disk, as it
-/// stands.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WriteManifestProposal {
-    pub dir: String,
 }

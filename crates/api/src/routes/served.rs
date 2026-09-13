@@ -85,8 +85,8 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/repository/scan",
     },
-    // What Scan's findings become, beside it and for its reason. The two acts
-    // spell themselves in the last segment the way `/manifest/save_file` does,
+    // What Scan's findings become, beside it and for its reason. The edit
+    // spells its act in the last segment the way `/manifest/save_file` does,
     // so the read stays the bare noun.
     Route {
         operation: "get_manifest_proposals",
@@ -97,13 +97,6 @@ pub const SERVED: &[Route] = &[
         operation: "edit_manifest_proposal",
         method: "POST",
         path: "/repository/edit_proposal",
-    },
-    // The second route on this table that puts a file in the main checkout,
-    // and the only one that makes one where there was none.
-    Route {
-        operation: "write_manifest_proposal",
-        method: "POST",
-        path: "/repository/write_proposal",
     },
     // The file itself, where the two rows above are readings of it. Singular
     // and beside them for their reason, and never `/manifests/:id/file`: a

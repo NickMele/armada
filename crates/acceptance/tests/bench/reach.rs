@@ -438,13 +438,6 @@ pub fn as_sent(draft: &Draft) -> ManifestProposal {
     ipc::decode("a manifest proposal", sent.as_bytes()).expect("and reads back")
 }
 
-/// The text a proposal would write, loaded where Write would put it.
-pub fn loads(proposal: &ManifestProposal) -> Manifest {
-    let at = Path::new(CHECKOUT).join(&proposal.file);
-    Manifest::parse(&at, &proposal.text)
-        .unwrap_or_else(|why| panic!("{} loads: {why}\n{}", proposal.file, proposal.text))
-}
-
 pub fn convention(file: &str, key: Option<&str>) -> Provenance {
     Provenance::Convention {
         file: file.to_string(),
