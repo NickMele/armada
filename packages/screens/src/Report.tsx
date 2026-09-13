@@ -65,12 +65,12 @@ export const CLAIMS: { value: string; label: string; note: string }[] = [
   {
     value: "wrongly_passed",
     label: "Something wrong got through",
-    note: "Nothing in Armada surfaces this on its own, which is why saying it is the whole of the record.",
+    note: "Armada won't catch this on its own.",
   },
   {
     value: "armada_misbehaved",
     label: "Armada itself did the wrong thing",
-    note: "No verdict is in question — the machinery did something other than what it said it did.",
+    note: "No verdict is in question.",
   },
 ];
 
