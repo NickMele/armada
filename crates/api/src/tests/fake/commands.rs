@@ -188,7 +188,7 @@ impl Commands for FakeDaemon {
             path: "armada.yml".to_string(),
             at: ipc::Instant::carried("2026-09-12T09:00:00.000Z"),
             text: format!("{}# {} edits\n", edit.read, edit.edits.len()),
-            declared: crate::tests::shapes::manifest_declared(),
+            declared: Some(crate::tests::shapes::manifest_declared()),
         })
     }
 

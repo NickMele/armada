@@ -105,7 +105,7 @@ where
             path,
             at: Instant::from(&self.now()),
             text: amended.text().to_string(),
-            declared: declared_in(amended.manifest()),
+            declared: Some(declared_in(amended.manifest())),
         })
     }
 

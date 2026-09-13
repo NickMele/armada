@@ -36,9 +36,10 @@ export type ManifestForming =
 
 type Refused = NonNullable<ManifestFormProps["refused"]>;
 
-type Held =
+export type Held =
   | { state: "none" }
-  | { state: "reading" }
+  /** `saved` rides a read that follows a save, so its receipt is not lost. */
+  | { state: "reading"; saved?: string }
   | { state: "failed"; saying: string }
   | { state: "unloadable"; path: string }
   | {
@@ -60,6 +61,7 @@ type Held =
  * disk moving under it is Fleet's to refuse at Save, where it can be said.
  */
 export function formAnswered(held: Held, answer: ManifestFileRead): Held {
+  const saved = held.state === "open" || held.state === "reading" ? held.saved : undefined;
   if (!answer.ok) {
     return held.state === "open" ? held : { state: "failed", saying: unlandedSaying(answer.outcome) };
   }
@@ -69,7 +71,6 @@ export function formAnswered(held: Held, answer: ManifestFileRead): Held {
   }
   const { path, text, declared } = answer.file;
   if (declared === undefined) return { state: "unloadable", path };
-  const saved = held.state === "open" ? held.saved : undefined;
   return {
     state: "open",
     path,
@@ -87,6 +88,8 @@ export function editAnswered(held: Held, answer: ManifestEditAnswer): Held {
   switch (answer.state) {
     case "edited": {
       const { edited } = answer;
+      // An older Fleet does not say what it wrote, so the form reads the file again.
+      if (edited.declared === undefined) return { state: "reading", saved: clockOf(edited.at) };
       return {
         state: "open",
         path: edited.path,
@@ -157,6 +160,9 @@ export function useManifestForm({
     void onEditManifest(sent).then((answer) => {
       out.current = false;
       setHeld((prev) => editAnswered(prev, answer));
+      if (answer.state === "edited" && answer.edited.declared === undefined) {
+        void onReadFile().then((read) => setHeld((prev) => formAnswered(prev, read)));
+      }
     });
   }
 

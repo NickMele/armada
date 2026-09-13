@@ -102,8 +102,8 @@ export type ManifestEdited = {
   path: string;
   at: string;
   text: string;
-  /** What `text` loads as, so the form redraws from the file it wrote. */
-  declared: ManifestDeclared;
+  /** What `text` loads as. Absent from an older Fleet; the form reads the file again. */
+  declared?: ManifestDeclared;
 };
 
 /**

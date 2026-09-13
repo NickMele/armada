@@ -202,7 +202,9 @@ pub struct ManifestEdited {
     /// The whole file as written — the next edit's `read`.
     pub text: String,
     /// What that text loads as, so the form redraws from the file it wrote.
-    pub declared: ManifestDeclared,
+    /// Absent from an older Fleet; Bridge then reads the file again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared: Option<ManifestDeclared>,
 }
 
 /// What a form draws: every key an edit can reach, **as the file declares it**.

@@ -90,7 +90,12 @@ async fn a_form_edit_changes_its_line_on_disk_and_answers_with_the_file_as_writt
         .iter()
         .any(|word| word == "checks-pass"));
     assert_eq!(
-        drawn(&edited.declared),
+        drawn(
+            edited
+                .declared
+                .as_ref()
+                .expect("what a form wrote always loads")
+        ),
         [
             ("lint".to_string(), "pnpm -r lint".to_string()),
             ("test".to_string(), "pnpm vitest run".to_string())
