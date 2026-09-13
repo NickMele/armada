@@ -54,6 +54,9 @@ export function appliedTo(declared: ManifestDeclared, edits: readonly ManifestEd
       case "set_review_gate":
         next = { ...next, review_gate: { ...next.review_gate, written: edit.review_gate ?? "human_always" } };
         break;
+      case "set_freeze":
+        next = { ...next, freeze: edit.freeze };
+        break;
       case "set_base":
         next = keyed(next, "base", edit.base);
         break;

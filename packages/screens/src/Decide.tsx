@@ -69,6 +69,7 @@ import {
   whyNoRemarks,
 } from "./review";
 import { hostLabel } from "./facts";
+import { frozenBy, named } from "./freeze";
 
 /**
  * Ask main for one Job's evidence and one Job's diff, or drop both.
@@ -213,6 +214,7 @@ export function Decide({
   // the fallback only keeps the dialog's props typed while it cannot open.
   const host = pullRequest === undefined ? undefined : hostLabel(pullRequest);
   const merge = confirmMerge(pullRequest ?? "");
+  const frozen = frozenBy(job);
 
   return (
     <>
@@ -224,9 +226,11 @@ export function Decide({
           : {
               onMerge: () => setAsking("merge"),
               mergeNote:
-                `Merges the pull request on ${host}, then takes the work. Armada runs the ` +
-                `repository's after-merge checks against what landed; merging it on ${host} ` +
-                "yourself skips them.",
+                frozen.length > 0
+                  ? `${named(frozen)} is frozen, so the merge is taken now and carried out when the freeze lifts.`
+                  : `Merges the pull request on ${host}, then takes the work. Armada runs the ` +
+                    `repository's after-merge checks against what landed; merging it on ${host} ` +
+                    "yourself skips them.",
               ...(conflicted ? { mergeBlockedReason: "Resolve the conflicts first." } : {}),
             })}
         changes={changes}

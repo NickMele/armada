@@ -45,6 +45,7 @@ const DRAFT: ManifestFormDraft = {
     },
   ],
   ports: [{ name: "storybook", container: "", env: "STORYBOOK_PORT" }],
+  freeze: false,
   autoMerge: "never",
   reviewGate: "human_always",
   costCap: "5",
@@ -115,5 +116,15 @@ export const BelowAPastJob: Story = {
     budgetWarnings: [
       "The costliest of this repository's 41 past Jobs cost ~$7.12, more than this cap. A Job like it would stop before it finished.",
     ],
+  },
+};
+
+/** Frozen: the switch reads what the file declares, and turning it off is one change to save. */
+export const Frozen: Story = {
+  name: "Frozen",
+  args: { ...BASE, draft: { ...DRAFT, freeze: true } },
+  play: async ({ canvasElement }) => {
+    const freeze = within(within(canvasElement).getByRole("region", { name: "Freeze" }));
+    await expect(freeze.getByRole("switch", { name: /Freeze this repository/ })).toBeChecked();
   },
 };

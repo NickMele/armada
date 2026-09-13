@@ -62,6 +62,7 @@ export function draftOf(declared: ManifestDeclared): ManifestFormDraft {
       container: port.container === undefined ? "" : String(port.container),
       env: port.env ?? "",
     })),
+    freeze: declared.freeze === true,
     autoMerge: declared.auto_merge.written,
     reviewGate: declared.review_gate.written,
     costCap:
@@ -212,6 +213,7 @@ export function editsOf(declared: ManifestDeclared, draft: ManifestFormDraft): M
     sets.push({ edit: "set_exclude_paths", exclude_paths: excluded });
   }
 
+  if (draft.freeze !== (declared.freeze === true)) sets.push({ edit: "set_freeze", freeze: draft.freeze });
   if (draft.autoMerge !== declared.auto_merge.written) {
     sets.push({ edit: "set_auto_merge", auto_merge: draft.autoMerge });
   }

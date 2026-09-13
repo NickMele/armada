@@ -143,3 +143,35 @@ export const FleetNotRunning: Story = {
     },
   },
 };
+
+/** The row a freeze holds, in both arrangements. */
+function frozenRow(canvasElement: HTMLElement, handle: string): string {
+  const row = Array.from(canvasElement.querySelectorAll<HTMLElement>("[data-job-id]")).find((one) =>
+    one.textContent?.includes(handle),
+  );
+  return row?.textContent ?? "";
+}
+
+/**
+ * `armada` frozen. The queued row reads frozen and names it; the row at review keeps its own
+ * status and says nothing lands. Neither badge is invented: `frozen` is the registry's word.
+ */
+export const AFrozenRepository: Story = {
+  name: "A frozen repository",
+  args: {
+    jobs: boardJobs().map((job) =>
+      job.status === "queued"
+        ? { ...job, queued_reason: "frozen", frozen_by: ["armada"] }
+        : job.status === "awaiting_review"
+          ? { ...job, frozen_by: ["armada"] }
+          : job,
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    for (const view of ["Cards", "Table"]) {
+      if (view === "Table") await userEvent.click(within(canvasElement).getByRole("button", { name: "Table" }));
+      await expect(frozenRow(canvasElement, "retire-the-legacy-poke-path")).toMatch(/frozen.*waits for armada/i);
+      await expect(frozenRow(canvasElement, "split-the-settings-reducer")).toContain("lands after armada unfreezes");
+    }
+  },
+};

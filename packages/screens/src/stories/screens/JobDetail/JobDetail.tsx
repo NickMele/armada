@@ -7,6 +7,8 @@
 // produces, so they could not show a bug in it, and one shipped that way. This
 // renders the same component from the same inputs.
 
+import type { ReactNode } from "react";
+
 import { JobDetail, type JobDetailProps } from "../../../JobDetail";
 import type { JobFixture } from "../../../fixtures/fixture";
 import { propsFor } from "../../../fixtures/props";
@@ -23,6 +25,7 @@ export function JobDetailFrom({
   fixture,
   width,
   on,
+  above,
 }: {
   fixture: JobFixture;
   /**
@@ -38,6 +41,8 @@ export function JobDetailFrom({
    * window's own width, like a sheet's compact header, stays wide.
    */
   width?: string;
+  /** What the app draws above the screen in the same mount — a standing notice. */
+  above?: ReactNode;
 }) {
   return (
     <div
@@ -50,6 +55,7 @@ export function JobDetailFrom({
       }}
     >
       <div className="armada-screen__mounted">
+        {above}
         <JobDetail {...propsFor(fixture)} {...on} />
       </div>
     </div>

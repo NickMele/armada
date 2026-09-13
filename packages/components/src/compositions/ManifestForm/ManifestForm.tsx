@@ -7,6 +7,7 @@ import { ChecksSection } from "./ChecksSection";
 import { CommandsSection } from "./CommandsSection";
 import { DroneSection } from "./DroneSection";
 import { EvidenceSection } from "./EvidenceSection";
+import { FreezeSection } from "./FreezeSection";
 import { PolicySection } from "./PolicySection";
 import { PortsSection } from "./PortsSection";
 import { SetupSection } from "./SetupSection";
@@ -68,6 +69,8 @@ export type ManifestFormDraft = {
   checks: ManifestFormCheck[];
   commands: ManifestFormCommand[];
   ports: ManifestFormPort[];
+  /** `freeze: true`. */
+  freeze: boolean;
   autoMerge: string;
   reviewGate: string;
   /** Dollars. Empty defers to what Fleet runs with. */
@@ -188,6 +191,7 @@ export function ManifestForm(props: ManifestFormProps) {
         </section>
       )}
 
+      <FreezeSection {...props} />
       <ChecksSection {...props} />
       <CommandsSection {...props} />
       <SetupSection {...props} />
