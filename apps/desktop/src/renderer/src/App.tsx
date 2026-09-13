@@ -469,8 +469,8 @@ export function App() {
                 onAnswer={(jobId, questionId, chose) =>
                   void commands.answer(jobId, questionId, chose)
                 }
-                onAnswerCommand={(jobId, call, chose, note) =>
-                  void commands.answerCommand(jobId, call, chose, note)
+                onAnswerCommand={(jobId, call, chose, note, rule) =>
+                  void commands.answerCommand(jobId, call, chose, note, rule)
                 }
                 // A read beside the act it informs. It moves nothing, so it
                 // goes straight through rather than under `acting`.

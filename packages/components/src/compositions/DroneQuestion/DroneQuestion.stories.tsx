@@ -177,6 +177,41 @@ export const ACommandItWasNotGiven: Story = {
 };
 
 /**
+ * **Always allow picks a rule rather than writing the whole command.** Job
+ * 7's own case: the four cuts are what Fleet offered, shortest first, with the
+ * program and its subcommand pre-selected.
+ */
+export const AlwaysAllowPicksARule: Story = {
+  args: {
+    question: (
+      <>
+        The drone wants to run{" "}
+        <span className="mono">gh issue view 792 --repo NickMele/armada 2&gt;&amp;1 | head -100</span>
+      </>
+    ),
+    options: [
+      COMMAND_ANSWERS[0]!,
+      {
+        ...COMMAND_ANSWERS[1]!,
+        rules: ["gh", "gh issue", "gh issue view", "gh issue view 792 --repo NickMele/armada"],
+        suggestedRule: "gh issue view",
+      },
+      COMMAND_ANSWERS[2]!,
+    ],
+    waiting: "2m",
+    onAnswer: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("radio", { name: "Always allow in this repository" }));
+    await expect(canvas.getByRole("radio", { name: "gh issue view" })).toBeChecked();
+
+    await userEvent.click(canvas.getByRole("radio", { name: "gh" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Send this answer" }));
+    await expect(args.onAnswer).toHaveBeenCalledWith("Always allow in this repository", undefined, "gh");
+  },
+};
+
+/**
  * A refusal carrying its reason.
  *
  * **The field is under the one answer that reads it**, and an allow never grows

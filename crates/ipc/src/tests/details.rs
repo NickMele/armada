@@ -335,6 +335,8 @@ fn blocked() -> Stuck {
             because: String::new(),
             offers: Vec::new(),
             withheld: None,
+            rules: Vec::new(),
+            suggested_rule: None,
         }],
         refusals: 1,
         undecided: None,
@@ -534,6 +536,8 @@ fn the_setting_and_the_waiting_command_are_absent_until_fleet_fills_them() {
             crate::CommandAnswer::AllowForJob,
             crate::CommandAnswer::Reject,
         ],
+        rules: vec!["touch".to_string(), "touch x".to_string()],
+        suggested_rule: Some("touch x".to_string()),
     });
     let json = encode(&detail).expect("a detail is plain data");
     assert!(json.contains("\"when_blocked\":\"ask_me\""), "{json}");

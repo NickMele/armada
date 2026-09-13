@@ -404,11 +404,18 @@ void app.whenReady().then(() => {
     connection?.commands.answerQuestion(jobId, questionId, chose),
   );
   // A command the drone was not given, answered where it waits or where it was
-  // refused. The note rides with a reject and nothing else reads it.
+  // refused. The note rides with a reject, and the rule with an always-allow —
+  // nothing else reads either.
   ipcMain.handle(
     CHANNELS.answerCommand,
-    (_event, jobId: string, call: string, answer: CommandAnswer, note?: string) =>
-      connection?.commands.answerCommand(jobId, call, answer, note),
+    (
+      _event,
+      jobId: string,
+      call: string,
+      answer: CommandAnswer,
+      note?: string,
+      rule?: string,
+    ) => connection?.commands.answerCommand(jobId, call, answer, note, rule),
   );
   // What that command does, read for the person deciding. It moves nothing and
   // decides nothing — the answers above stay live while it is out.

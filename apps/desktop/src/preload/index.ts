@@ -119,14 +119,16 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.answerQuestion, jobId, questionId, chose),
   // The answer is one of the three Fleet offered for this call. The note is a
   // person's own words, read only on a reject, and `undefined` crosses as
-  // `undefined` — a bare refusal sends no prose at all.
+  // `undefined` — a bare refusal sends no prose at all. The rule is one of
+  // that call's own candidates, read only on an always-allow.
   answerCommand: (
     jobId: string,
     call: string,
     answer: CommandAnswer,
     note?: string,
+    rule?: string,
   ): Promise<Outcome> =>
-    ipcRenderer.invoke(CHANNELS.answerCommand, jobId, call, answer, note),
+    ipcRenderer.invoke(CHANNELS.answerCommand, jobId, call, answer, note, rule),
   // What that command does. A read, and the one capability here that answers a
   // question about a call rather than deciding it.
   explainCommand: (jobId: string, callId: string): Promise<CommandExplainedRead> =>

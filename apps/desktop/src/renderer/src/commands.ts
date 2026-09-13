@@ -318,10 +318,11 @@ export function useCommands(sending: Sending) {
     call: string,
     chose: CommandAnswer,
     note?: string,
+    rule?: string,
   ): Promise<void> {
     setActing(jobId);
     try {
-      setOutcome(await window.armada.answerCommand(jobId, call, chose, note));
+      setOutcome(await window.armada.answerCommand(jobId, call, chose, note, rule));
     } finally {
       setActing(null);
     }

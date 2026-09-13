@@ -79,8 +79,18 @@ export type JobDetailProps = {
    * Allow or reject a command the drone was not given, by its call id. The
    * same call answers a command a drone is waiting on and a refused row on a
    * stopped job. Straight through, for `onAnswer`'s reason.
+   *
+   * **`rule` rides only with `always_allow`**, and only where the command
+   * offered one to pick from — one of `CommandInFlight.rules` or
+   * `Refusal.rules`.
    */
-  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer, note?: string) => void;
+  onAnswerCommand: (
+    jobId: string,
+    call: string,
+    answer: CommandAnswer,
+    note?: string,
+    rule?: string,
+  ) => void;
   /** Ask what one command does. It decides nothing; absent draws no control. */
   onExplainCommand?: ExplainCommand;
   /** Answer the question a judge refusal opened. One press is the whole answer. */

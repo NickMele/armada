@@ -524,12 +524,20 @@ export class JobCommands {
     call: string,
     answer: CommandAnswer,
     note?: string,
+    rule?: string,
   ): Promise<Outcome> {
     // Nothing rather than an empty string. A bare refusal is the body every
     // fleet before 11.5 took, and `{"note":""}` is a person's words nobody
     // wrote — `restart_step`'s rule, on the seam that established it.
     const said = note?.trim() ?? "";
-    const body: AnswerCommand = { call, answer, ...(said === "" ? {} : { note: said }) };
+    const body: AnswerCommand = {
+      call,
+      answer,
+      ...(said === "" ? {} : { note: said }),
+      // Only always_allow reads it, and only the caller's own picker sends
+      // one — Fleet 409s a name outside that command's own candidates.
+      ...(rule === undefined ? {} : { rule }),
+    };
     return this.act(jobId, this.answering, "already_answering", (port) =>
       ask(port, "POST", route(jobId, "answer_command"), body),
     );

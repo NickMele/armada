@@ -72,6 +72,17 @@ export type CommandInFlight = {
   length?: number;
   /** What a person may answer, in the order to draw them. */
   offers: CommandAnswer[];
+  /**
+   * Candidate Always-allow rules for this command, shortest first — the
+   * leading cuts of it, stopping short of anything that chains. Empty where
+   * `offers` does not carry `always_allow`. Since protocol 13.4.
+   */
+  rules: string[];
+  /**
+   * The rule pre-selected for a person, always one of `rules` where present.
+   * Since protocol 13.4.
+   */
+  suggested_rule?: string;
 };
 
 /**
@@ -97,6 +108,13 @@ export type AnswerCommand = {
    * every fleet before 11.5 sent.
    */
   note?: string;
+  /**
+   * The rule a person picked off `CommandInFlight.rules` or `Refusal.rules`.
+   * **Only `always_allow` reads it.** A name outside that command's own
+   * candidates is a 409. Absent is the whole command, which is what every
+   * fleet before 13.4 always declared. Since protocol 13.4.
+   */
+  rule?: string;
 };
 
 /**

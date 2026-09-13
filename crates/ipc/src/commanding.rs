@@ -105,6 +105,16 @@ pub struct CommandInFlight {
     /// What a person may answer, in the order a surface draws them. An answer
     /// that is not here is refused.
     pub offers: Vec<CommandAnswer>,
+    /// Candidate Always-allow rules for this command, shortest first — the
+    /// leading cuts of it, stopping short of anything that chains. Empty where
+    /// [`offers`](CommandInFlight::offers) does not carry
+    /// [`CommandAnswer::AlwaysAllow`]. **Since 13.4.**
+    #[serde(default)]
+    pub rules: Vec<String>,
+    /// The rule pre-selected for a person, always one of
+    /// [`rules`](CommandInFlight::rules) where it is `Some`. **Since 13.4.**
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggested_rule: Option<String>,
 }
 
 /// A person's answer to one refused command. The request half of
@@ -135,6 +145,14 @@ pub struct AnswerCommand {
     /// the bare refusal, which is what every Fleet before 11.5 sent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The rule a person picked off [`CommandInFlight::rules`] or
+    /// [`Refusal::rules`](crate::Refusal::rules). **Only Always allow reads
+    /// it** — naming one on any other answer would ask Fleet to declare a rule
+    /// on a command that was never always-allowed. A name outside that
+    /// command's own candidates is a 409. Absent is the whole command, which
+    /// is what every Fleet before 13.4 always declared. **Since 13.4.**
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<String>,
 }
 
 /// The request half of `set_when_blocked`. **A live setting on one Job**: the

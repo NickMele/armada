@@ -186,12 +186,16 @@ export type BridgeApi = {
    * on a job stopped at `blocked_by_policy` moves the job on. Fleet refuses 409
    * where the call names nothing waiting or refused, and where the answer was
    * not offered.
+   *
+   * **`rule` rides only with `always_allow`**, one of that command's own
+   * candidates — a name outside them is a 409 too.
    */
   answerCommand: (
     jobId: string,
     call: string,
     answer: CommandAnswer,
     note?: string,
+    rule?: string,
   ) => Promise<Outcome>;
   /**
    * What one command does, in a cheap model's words, for the person deciding

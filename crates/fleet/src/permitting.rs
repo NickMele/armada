@@ -84,22 +84,38 @@ pub struct Waiting {
 /// note is only ever read on a reject — an allow needs no reason, and a Drone
 /// told why it was allowed learns nothing it can act on — so the case where one
 /// could be carried and dropped is not representable rather than checked for.
+///
+/// **The rule rides the reach, and only reach matters for what it means.** A
+/// person allowing for the job only ever allows the command they ran, so the
+/// second field is `None` there by construction; an always-allow may name one
+/// of [`always_allow_rules`]'s candidates instead, and `None` there keeps the
+/// pre-13.4 meaning — the whole command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Answered {
-    /// Allowed, this far.
-    Allowed(Reach),
+    /// Allowed, this far, and — for [`Reach::Repository`] — the rule a person
+    /// chose, where they named one.
+    Allowed(Reach, Option<String>),
     /// Rejected, with the person's words where they wrote any.
     Rejected(Option<Note>),
 }
 
 impl Answered {
-    /// A person's answer, read off the wire's three offers and the note beside
-    /// them. **A note sent with an allow is dropped here**, at the one place
-    /// that decides which of the two an answer is.
+    /// [`Answered::naming`], with no rule — every answer but Always allow, and
+    /// an Always allow read off a Fleet from before `#834` that never sent one.
     pub fn of(answer: CommandAnswer, note: Option<&str>) -> Answered {
+        Answered::naming(answer, note, None)
+    }
+
+    /// A person's answer, read off the wire's three offers, the note and the
+    /// rule beside them. **A note sent with an allow, or a rule sent with
+    /// anything but Always allow, is dropped here** — the one place that
+    /// decides which of the three an answer is.
+    pub fn naming(answer: CommandAnswer, note: Option<&str>, rule: Option<&str>) -> Answered {
         match answer {
-            CommandAnswer::AllowForJob => Answered::Allowed(Reach::Job),
-            CommandAnswer::AlwaysAllow => Answered::Allowed(Reach::Repository),
+            CommandAnswer::AllowForJob => Answered::Allowed(Reach::Job, None),
+            CommandAnswer::AlwaysAllow => {
+                Answered::Allowed(Reach::Repository, rule.map(str::to_string))
+            }
             CommandAnswer::Reject => Answered::Rejected(note.and_then(Note::saying)),
         }
     }
@@ -109,8 +125,8 @@ impl Answered {
     /// than carried**, so the two cannot come to disagree.
     pub fn answer(&self) -> CommandAnswer {
         match self {
-            Answered::Allowed(Reach::Job) => CommandAnswer::AllowForJob,
-            Answered::Allowed(Reach::Repository) => CommandAnswer::AlwaysAllow,
+            Answered::Allowed(Reach::Job, _) => CommandAnswer::AllowForJob,
+            Answered::Allowed(Reach::Repository, _) => CommandAnswer::AlwaysAllow,
             Answered::Rejected(_) => CommandAnswer::Reject,
         }
     }
@@ -246,6 +262,62 @@ fn chains(arguments: &str) -> bool {
     arguments.contains(['&', '|', ';', '<', '>', '`', '\n', '\r']) || arguments.contains("$(")
 }
 
+/// Candidate Always-allow rules for `command`, shortest first, and which one
+/// is pre-selected — offered so a person picks the rule rather than typing it,
+/// per `#834`.
+///
+/// **The candidates are the leading runs of whitespace-separated words**,
+/// stopping before the first word [`chains`] would refuse as an argument:
+/// `covers` never lets a chained word ride on an allow, so no candidate ever
+/// could either. **Empty where `command` is empty or begins with such a
+/// word** — there is nothing here safe to always-allow.
+///
+/// **The suggestion is always one of the candidates.** It stops growing at the
+/// first word that does not look like a program or a subcommand — a flag, a
+/// number, a path, anything [`looks_like_a_subcommand`] refuses — which is
+/// usually the first argument proper. `cargo test -p foo` suggests `cargo
+/// test`; `gh issue view 792 --repo X` suggests `gh issue view`.
+pub fn always_allow_rules(command: &str) -> (Vec<String>, Option<String>) {
+    let command = command.trim();
+    let mut rules = Vec::new();
+    let mut suggested = None;
+    let mut still_a_subcommand = true;
+    let mut word_start = None;
+    for (at, ch) in command.char_indices().chain([(command.len(), ' ')]) {
+        match (word_start, ch.is_whitespace()) {
+            (None, false) => word_start = Some(at),
+            (Some(start), true) => {
+                let word = &command[start..at];
+                if chains(word) {
+                    break;
+                }
+                rules.push(command[..at].to_string());
+                still_a_subcommand = still_a_subcommand && looks_like_a_subcommand(word);
+                if still_a_subcommand {
+                    suggested = rules.last().cloned();
+                }
+                word_start = None;
+            }
+            _ => {}
+        }
+    }
+    (rules, suggested)
+}
+
+/// Whether `word` could name a program or a subcommand rather than an
+/// argument: lowercase, digits, `-`, `_` or `.`, never leading with `-`, never
+/// only digits, and never carrying `/` or `=` — the shapes a flag, a number, a
+/// path and a `key=value` pair take and a subcommand does not.
+fn looks_like_a_subcommand(word: &str) -> bool {
+    !word.is_empty()
+        && !word.starts_with('-')
+        && !word.contains(['/', '='])
+        && !word.chars().all(|c| c.is_ascii_digit())
+        && word
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '-' | '_' | '.'))
+}
+
 /// Why the permission tool said no, for the words the Drone reads inside the
 /// call it made.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -367,17 +439,26 @@ fn rejected(what: &str, note: Option<&Note>) -> String {
 pub struct Permitted(String);
 
 impl Permitted {
-    pub fn allowed(command: &str, reach: Reach) -> Permitted {
+    /// `rule` is read only where `reach` is [`Reach::Repository`], and is what
+    /// was declared in `armada.yml` — the whole command, where a person named
+    /// no rule of its own. **Named apart from `command`** because the two can
+    /// now differ: what is declared may be a cut of what the Drone ran, and a
+    /// Drone told only the cut would have nothing telling it to run the
+    /// command it actually reached for.
+    pub fn allowed(command: &str, reach: Reach, rule: Option<&str>) -> Permitted {
         Permitted(match reach {
             Reach::Job => format!(
                 "A person allowed `{command}` for this task. Run it again now; it will not be \
                  refused."
             ),
-            Reach::Repository => format!(
-                "A person allowed `{command}` in this repository. It is declared in armada.yml \
-                 on your branch, in a commit of its own; leave that change as it is. Run the \
-                 command again now; it will not be refused."
-            ),
+            Reach::Repository => {
+                let declared = rule.unwrap_or(command);
+                format!(
+                    "A person allowed `{declared}` in this repository. It is declared in \
+                     armada.yml on your branch, in a commit of its own; leave that change as it \
+                     is. Run `{command}` again now; it will not be refused."
+                )
+            }
         })
     }
 
@@ -394,7 +475,7 @@ impl Permitted {
 mod tests {
     use core_model::{Actor, AllowedCommand, Reach, Timestamp, WhenBlocked};
 
-    use super::{covers, first, First, Refusing, Withheld};
+    use super::{always_allow_rules, covers, first, First, Refusing, Withheld};
 
     /// **`#737`'s other half.** "A person decides" told a Drone that reached
     /// for `cargo check` nothing it could act on; naming the tool that runs
@@ -591,5 +672,73 @@ mod tests {
                 why: "it would push".to_string()
             })
         );
+    }
+
+    /// **`#834`'s own example.** The pipe and the redirect are both in the one
+    /// word `2>&1`, so the candidates run out there and never reach `| head
+    /// -100` at all — and the suggestion stops two words earlier, at the first
+    /// argument that is not a subcommand.
+    #[test]
+    fn the_gh_issue_example_stops_before_the_redirect_and_suggests_three_words() {
+        let (rules, suggested) =
+            always_allow_rules("gh issue view 792 --repo NickMele/armada 2>&1 | head -100");
+        assert_eq!(
+            rules,
+            vec![
+                "gh",
+                "gh issue",
+                "gh issue view",
+                "gh issue view 792",
+                "gh issue view 792 --repo",
+                "gh issue view 792 --repo NickMele/armada",
+            ]
+        );
+        assert_eq!(suggested.as_deref(), Some("gh issue view"));
+    }
+
+    /// A command with no operator at all offers every cut of itself, down to
+    /// the whole thing, and suggests as far as the flag.
+    #[test]
+    fn a_command_with_no_operator_offers_every_cut() {
+        let (rules, suggested) = always_allow_rules("npm publish --access public");
+        assert_eq!(
+            rules,
+            vec![
+                "npm",
+                "npm publish",
+                "npm publish --access",
+                "npm publish --access public"
+            ]
+        );
+        assert_eq!(suggested.as_deref(), Some("npm publish"));
+    }
+
+    /// A command whose very first word chains offers nothing — there is no
+    /// cut of it that stops short of the operator.
+    #[test]
+    fn a_command_starting_with_an_operator_bearing_word_offers_nothing() {
+        let (rules, suggested) = always_allow_rules("$(evil) rm -rf .");
+        assert!(rules.is_empty(), "{rules:?}");
+        assert_eq!(suggested, None);
+    }
+
+    /// `-p` is a flag, so the suggestion stops there and `foo` never grows it
+    /// further — matching the issue's own second example.
+    #[test]
+    fn cargo_test_suggests_up_to_the_subcommand_and_no_further() {
+        let (rules, suggested) = always_allow_rules("cargo test -p foo");
+        assert_eq!(
+            rules,
+            vec!["cargo", "cargo test", "cargo test -p", "cargo test -p foo"]
+        );
+        assert_eq!(suggested.as_deref(), Some("cargo test"));
+    }
+
+    /// Empty is a command nothing can be always-allowed from.
+    #[test]
+    fn an_empty_command_offers_nothing() {
+        let (rules, suggested) = always_allow_rules("   ");
+        assert!(rules.is_empty(), "{rules:?}");
+        assert_eq!(suggested, None);
     }
 }

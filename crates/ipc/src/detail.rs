@@ -444,6 +444,15 @@ pub struct Refusal {
     /// a push. **Since 10.7.** Absent where it can be.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub withheld: Option<String>,
+    /// Candidate Always-allow rules for this command, shortest first. Empty
+    /// where [`offers`](Refusal::offers) does not carry
+    /// [`CommandAnswer::AlwaysAllow`]. **Since 13.4.**
+    #[serde(default)]
+    pub rules: Vec<String>,
+    /// The rule pre-selected for a person, always one of
+    /// [`rules`](Refusal::rules) where it is `Some`. **Since 13.4.**
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggested_rule: Option<String>,
 }
 
 impl From<&core_model::Refusal> for Refusal {
@@ -455,11 +464,14 @@ impl From<&core_model::Refusal> for Refusal {
             truncated: refusal.truncated,
             length: refusal.length,
             because: refusal.because.clone(),
-            // Fleet fills both after the classification: whether a command may
-            // be allowed is the Manifest's and the policy's answer, and a
-            // transcript row knows neither.
+            // Fleet fills all four after the classification: whether a command
+            // may be allowed, and what it may be allowed as, are the
+            // Manifest's and the policy's answer, and a transcript row knows
+            // neither.
             offers: Vec::new(),
             withheld: None,
+            rules: Vec::new(),
+            suggested_rule: None,
         }
     }
 }

@@ -123,10 +123,12 @@ const LATE_ANSWER =
  */
 export type Answering = {
   /**
-   * The answer, and the words typed with it where there are any. **Only a
-   * reject reads them**, which is Fleet's rule rather than this screen's.
+   * The answer, the words typed with it where there are any, and the rule
+   * picked where `always_allow` offered one. **Only a reject reads the words,
+   * and only an always-allow reads the rule** — Fleet's rule rather than this
+   * screen's.
    */
-  send: (call: string, answer: CommandAnswer, note?: string) => void;
+  send: (call: string, answer: CommandAnswer, note?: string, rule?: string) => void;
   /** What is shown is not live, so nothing may be sent against it. */
   stale: boolean;
   /** An act on this job is already out. */
@@ -137,10 +139,16 @@ export function answeringOf(
   jobId: string,
   stale: boolean,
   acting: boolean,
-  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer, note?: string) => void,
+  onAnswerCommand: (
+    jobId: string,
+    call: string,
+    answer: CommandAnswer,
+    note?: string,
+    rule?: string,
+  ) => void,
 ): Answering {
   return {
-    send: (call, answer, note) => onAnswerCommand(jobId, call, answer, note),
+    send: (call, answer, note, rule) => onAnswerCommand(jobId, call, answer, note, rule),
     stale,
     acting,
   };
@@ -216,7 +224,7 @@ function CommandWaiting({
   explain?: ExplainOne;
 }): ReactNode {
   const [reading, setReading] = useState<Explaining>({ state: "ready" });
-  const offered = offeredOf(waiting.offers);
+  const offered = offeredOf(waiting.offers, { rules: waiting.rules, suggestedRule: waiting.suggested_rule });
   const cut = shownOf(waiting);
 
   function ask(): void {
@@ -253,12 +261,14 @@ function CommandWaiting({
           {cut === undefined ? null : <span className="block">{cut.size}</span>}
         </>
       }
-      options={offered.map(({ offer, label, means }) => ({
+      options={offered.map(({ offer, label, means, rules, suggestedRule }) => ({
         label,
         consequence: means,
         // Which answer reads words is Fleet's rule, so it is read off the
         // wire's own spelling and never off the words on the control.
         ...(offer === "reject" ? { noteLabel: REFUSAL_NOTE, noteSays: REFUSAL_NOTE_SAYS } : {}),
+        ...(rules === undefined ? {} : { rules }),
+        ...(suggestedRule === undefined ? {} : { suggestedRule }),
       }))}
       waiting={span(waiting.asked_at, now) ?? undefined}
       disabled={answering.stale || answering.acting}
@@ -267,9 +277,9 @@ function CommandWaiting({
       answersLabel="Your answers"
       explain={explain === undefined ? undefined : reading}
       onExplain={ask}
-      onAnswer={(label, note) => {
+      onAnswer={(label, note, rule) => {
         const chose = offered.find((one) => one.label === label);
-        if (chose !== undefined) answering.send(waiting.call, chose.offer, note);
+        if (chose !== undefined) answering.send(waiting.call, chose.offer, note, rule);
       }}
     />
   );
@@ -479,9 +489,9 @@ export function noticeOf(
           <Refusals
             {...refused}
             again={undefined}
-            onAnswer={(call, name) => {
+            onAnswer={(call, name, rule) => {
               const chose = answerNamed(name);
-              if (chose !== undefined) answering?.send(call, chose);
+              if (chose !== undefined) answering?.send(call, chose, undefined, rule);
             }}
             disabled={answering === undefined || answering.stale || answering.acting}
             disabledNote={

@@ -33,13 +33,15 @@ export type DroneQuestionProps = {
   /** How long it has been waiting, already rendered. `12m`, `2h`. */
   waiting?: string;
   /**
-   * Send the label, and the words typed under it where that answer takes any.
+   * Send the label, the words typed under it where that answer takes any, and
+   * the rule picked where it offers one.
    *
-   * **An answer carrying no words calls this with one argument**, as it did
-   * before a note existed — not with an explicit `undefined`. A caller that
-   * offers no note cannot tell the two versions apart.
+   * **An answer carrying neither calls this with one argument**, as it did
+   * before a note existed — not with an explicit `undefined`. An answer that
+   * picks a rule and reads no note sends `undefined` in the note's place, since
+   * a rule with nothing before it is not the note version either.
    */
-  onAnswer: (label: string, note?: string) => void;
+  onAnswer: (label: string, note?: string, rule?: string) => void;
   /**
    * An answer already in flight, or nothing live to send it over. The caller's
    * sentence says which — a disabled control with no reason looks broken.
@@ -98,6 +100,14 @@ export type DroneAnswer = {
   noteLabel?: string;
   /** What becomes of those words, under the field. Absent draws nothing. */
   noteSays?: ReactNode;
+  /**
+   * The rules this answer may write, shortest first — Fleet's candidates, cut
+   * at each word. **Never computed here**, per `chains`. Absent or empty draws
+   * no picker.
+   */
+  rules?: readonly string[];
+  /** Which of `rules` is picked before anyone touches the control. */
+  suggestedRule?: string;
 };
 
 /**
@@ -145,15 +155,27 @@ export function DroneQuestion({
   // Kept when the choice moves off the answer that reads it: a person who typed
   // a reason and then pressed the wrong radio has not withdrawn the reason.
   const [note, setNote] = useState("");
+  // Kept for the same reason `note` is. `undefined` until touched, so the
+  // suggestion still wins on first render.
+  const [rule, setRule] = useState<string | undefined>(undefined);
   // One radio group per box. A drone's question and a command it is waiting
   // on can be open at once, and two boxes sharing a name are one group to the
   // browser: picking in one would clear the other.
   const group = useId();
 
   const picked = options.find((option) => option.label === chosen);
+  const rules = picked?.rules ?? [];
+  const activeRule = rule ?? picked?.suggestedRule;
 
   function send() {
     if (chosen === null) return;
+    // An answer that picks a rule sends it in the note's place — the two never
+    // coexist, since only Always allow offers rules and only Reject reads a
+    // note.
+    if (rules.length > 0) {
+      onAnswer(chosen, undefined, activeRule);
+      return;
+    }
     // An answer that reads no words is sent as it was before one could be
     // typed — one argument, and no empty string standing in for silence.
     if (picked?.noteLabel === undefined) {
@@ -252,6 +274,27 @@ export function DroneQuestion({
                 {option.noteSays === undefined ? null : (
                   <p className="armada-question__means">{option.noteSays}</p>
                 )}
+              </div>
+            ) : null}
+            {/* The rule this answer would write, cut at each word. Drawn only
+                while this answer is chosen, beside the field a reject reads —
+                the two never coexist on one answer. */}
+            {option.rules !== undefined && option.rules.length > 0 && chosen === option.label ? (
+              <div className="armada-question__note">
+                <RadioGroup label="The rule this writes">
+                  {option.rules.map((candidate) => (
+                    <Radio
+                      key={candidate}
+                      name={`${group}-rule`}
+                      value={candidate}
+                      checked={activeRule === candidate}
+                      disabled={disabled}
+                      onChange={() => setRule(candidate)}
+                    >
+                      <span className="mono">{candidate}</span>
+                    </Radio>
+                  ))}
+                </RadioGroup>
               </div>
             ) : null}
           </div>

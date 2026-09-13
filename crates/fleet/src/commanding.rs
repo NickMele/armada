@@ -652,17 +652,23 @@ where
     /// A person's answer to a command a Drone was refused or is waiting on.
     /// The refusals are `crate::permitting::NotPermitted`'s.
     ///
-    /// **The note is read here and nowhere below**, by the one constructor that
-    /// decides which of the three answers this is: `crate::permitting::Answered`
-    /// has no field for a note on an allow, so a note sent with one is dropped
-    /// at this line rather than carried down and ignored later. An empty or
-    /// blank note is the same request as none — `Note::saying`.
+    /// **The note and the rule are both read here and nowhere below**, by the
+    /// one constructor that decides which of the three answers this is:
+    /// `crate::permitting::Answered` has no field for a note on an allow or a
+    /// rule on anything but Always allow, so either sent where it does not
+    /// belong is dropped at this line rather than carried down and ignored
+    /// later. An empty or blank note is the same request as none —
+    /// `Note::saying`.
     async fn answer_command(
         self: Arc<Self>,
         job_id: JobId,
         answer: ipc::AnswerCommand,
     ) -> Result<JobSummary, Refusal> {
-        let answered = crate::permitting::Answered::of(answer.answer, answer.note.as_deref());
+        let answered = crate::permitting::Answered::naming(
+            answer.answer,
+            answer.note.as_deref(),
+            answer.rule.as_deref(),
+        );
         let job = budgeted_for(self.command_budget(), job_id.clone(), {
             let fleet = Arc::clone(&self);
             async move {
