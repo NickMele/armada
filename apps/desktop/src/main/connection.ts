@@ -14,7 +14,7 @@
 // over. Only addresses moved off the file the gate measures.
 
 import { identifying, NOTHING_YET } from "../shared/bridge";
-import type { BridgeState } from "../shared/bridge";
+import type { BridgeState, PickedView } from "../shared/bridge";
 import type { Connection, JobSummary } from "@armada/protocol";
 import type { CallRead, CheckOutputRead, FrameRead } from "@armada/protocol";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
@@ -34,7 +34,7 @@ import { ManifestFileCommands } from "./editing";
 import { PlanEdits } from "./plan-edits";
 import { RepositoryAllowsCommands } from "./repository-allows";
 import { RepositoryReads } from "./repositories";
-import { Picked } from "./picked";
+import { Picked, PickedByWindow } from "./picked";
 import { ReportsReader } from "./reports";
 import { ReviewMaterial } from "./review";
 import { startingIdentity } from "./runtime-file";
@@ -46,6 +46,11 @@ export type Clock = () => number;
 export type Wiring = {
   home: string | undefined;
   publish: (state: BridgeState) => void;
+  /** One window's own `repository` and `manifestReading` — `main/index.ts` overlays it onto what
+   * that window alone receives, `repositories.ts`'s `PickedView`. */
+  publishToWindow: (windowId: number, change: Partial<PickedView>) => void;
+  /** Every window open right now — `main/index.ts`'s own `BrowserWindow.getAllWindows()`. */
+  windowIds: () => readonly number[];
   now: Clock;
 };
 
@@ -73,13 +78,20 @@ export class FleetConnection {
   /** Journey 9's run sheet and the servers it starts — see `rehearsal.ts`.
    * One field for both, `commands`' reason: they are one feature. */
   readonly rehearsal: RehearsalConnection;
-  /** The Manifest file, read and saved — see `editing.ts`. */
-  readonly editing: ManifestFileCommands;
-  /** Repository-wide always-allows, read and removed — see `repository-allows.ts`. */
-  readonly repositoryAllows: RepositoryAllowsCommands;
+  /**
+   * The Manifest file and repository-wide always-allows, one of each per window — see
+   * `editing.ts` and `repository-allows.ts`. **Constructed on first ask, off that window's own
+   * `Picked`** — `RepositoryReads.pickedByWindow` — so two windows on two repositories never
+   * share one route builder. Neither class holds mutable state of its own, which is what makes
+   * one instance per window cheap rather than a second place for each to drift.
+   */
+  private readonly windowFacades = new Map<
+    number,
+    { editing: ManifestFileCommands; repositoryAllows: RepositoryAllowsCommands }
+  >();
   /** A person's own add or drop of a task — see `plan-edits.ts`. */
   readonly planEdits: PlanEdits;
-  /** What Fleet serves and which repository was picked — see `repositories.ts`. */
+  /** What Fleet serves and which repository each window picked — see `repositories.ts`. */
   readonly repositories: RepositoryReads;
   /** Overview's health and per-repository drift, held while it is open — see `overview.ts`. */
   readonly overview: OverviewReads;
@@ -173,9 +185,17 @@ export class FleetConnection {
     this.rehearsal = new RehearsalConnection({ publish, port, picked });
     this.overview = new OverviewReads({ publish, picked, port });
     const [holds, overview] = [() => this.current.holds, this.overview];
-    this.repositories = new RepositoryReads({ picked, publish, holds, rehearsal: this.rehearsal, overview, port });
-    this.editing = new ManifestFileCommands(port, picked, (at) => this.repositories.readHoldings(at));
-    this.repositoryAllows = new RepositoryAllowsCommands(port, picked);
+    this.repositories = new RepositoryReads({
+      picked,
+      pickedByWindow: new PickedByWindow(),
+      publish,
+      publishToWindow: wiring.publishToWindow,
+      windowIds: wiring.windowIds,
+      holds,
+      rehearsal: this.rehearsal,
+      overview,
+      port,
+    });
     this.commands = new JobCommands({
       port,
       picked,
@@ -231,6 +251,36 @@ export class FleetConnection {
       refresh: (port, jobId) => this.jobFocus.refresh(port, jobId),
       takeAgain: (port, again) => this.jobFocus.takeAgain(port, again),
     };
+  }
+
+  /** This window's own Manifest file commands — see `windowFacades`. */
+  editingFor(windowId: number): ManifestFileCommands {
+    return this.facadesFor(windowId).editing;
+  }
+
+  /** This window's own repository-wide always-allows — see `windowFacades`. */
+  repositoryAllowsFor(windowId: number): RepositoryAllowsCommands {
+    return this.facadesFor(windowId).repositoryAllows;
+  }
+
+  private facadesFor(windowId: number): { editing: ManifestFileCommands; repositoryAllows: RepositoryAllowsCommands } {
+    let found = this.windowFacades.get(windowId);
+    if (found === undefined) {
+      const picked = this.repositories.pickedByWindow.of(windowId);
+      const port = (): number | null => this.connected()?.port ?? null;
+      found = {
+        editing: new ManifestFileCommands(port, picked, (at) => this.repositories.readHoldings(at)),
+        repositoryAllows: new RepositoryAllowsCommands(port, picked),
+      };
+      this.windowFacades.set(windowId, found);
+    }
+    return found;
+  }
+
+  /** The window closed. Its own pick and its Manifest and always-allow commands go with it. */
+  dropWindow(windowId: number): void {
+    this.windowFacades.delete(windowId);
+    this.repositories.pickedByWindow.drop(windowId);
   }
 
   /**

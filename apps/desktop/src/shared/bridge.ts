@@ -84,6 +84,19 @@ export function identifying(state: BridgeState): BridgeState {
  */
 export type Summons = { jobId: string | null };
 
+/**
+ * What one window's own pick decides: the root and the Manifest reading under it.
+ *
+ * **Every window keeps its own** — `main/picked.ts`'s `PickedByWindow` holds one `Picked`
+ * per window, and `main/index.ts` overlays this shape onto the shared state each window
+ * receives, so a pick made in one window never moves what another window reads back. A
+ * fresh window's is `{ repository: null, manifestReading: null }`, which is All.
+ */
+export type PickedView = {
+  repository: string | null;
+  manifestReading: ManifestReading | null;
+};
+
 /** Everything the renderer draws, published by main and never assembled twice. */
 export type BridgeState = {
   connection: Connection;
@@ -127,9 +140,10 @@ export type BridgeState = {
    *
    * **The second piece of state here that is not about a Job**, beside
    * `proposing` and for a related reason: a Manifest is Fleet's own, so there
-   * is no row it belongs to. Unlike `proposing` it is not this window's — every
-   * window watching this Fleet holds the same reading, because every one of
-   * them is running against the same configuration.
+   * is no row it belongs to.
+   *
+   * **This window's own**, like `repository` below — `PickedView`. Two windows
+   * on two repositories each hold their own repository's reading.
    *
    * **Read on connect as well as folded from `manifest.reread`.** A refusal is
    * a standing condition, not an instant: the file and the values in force go
@@ -170,9 +184,12 @@ export type BridgeState = {
    */
   holds: Holdings;
   /**
-   * The root of the repository the rail picked, which every per-repository read and act names.
-   * `null` is no one repository: All repositories, where Bridge opens, or a Fleet that lists
-   * none. Main holds the pick — `main/picked.ts`.
+   * The root of the repository this window's own rail picked, which every per-repository read
+   * and act this window sends names. `null` is no one repository: All repositories, where a
+   * window opens, or a Fleet that lists none.
+   *
+   * **This window's own** — `PickedView`, `main/picked.ts`'s `PickedByWindow`. Two windows may
+   * each have a different one; picking in one never moves the other's.
    */
   repository: string | null;
   /**

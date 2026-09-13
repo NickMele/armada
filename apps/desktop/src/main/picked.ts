@@ -124,3 +124,32 @@ export class Picked {
 function named(path: string, key: string, value: string): string {
   return `${path}${path.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
 }
+
+/**
+ * One `Picked` per window — each Bridge window keeps its own rail pick apart from every
+ * other's. `main/index.ts` mints one the first time a window's pick is touched and drops it
+ * when the window closes; nothing else constructs a `Picked` for a real window.
+ */
+export class PickedByWindow {
+  private readonly windows = new Map<number, Picked>();
+
+  /** This window's own pick, minted on first ask. A fresh window opens on All. */
+  of(windowId: number): Picked {
+    let picked = this.windows.get(windowId);
+    if (picked === undefined) {
+      picked = new Picked();
+      this.windows.set(windowId, picked);
+    }
+    return picked;
+  }
+
+  /** The window closed. Its pick goes with it. */
+  drop(windowId: number): void {
+    this.windows.delete(windowId);
+  }
+
+  /** Every window that has a pick of its own, for a listing that moves all of them at once. */
+  all(): readonly (readonly [number, Picked])[] {
+    return [...this.windows.entries()];
+  }
+}

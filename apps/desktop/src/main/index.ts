@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import tokens from "@armada/tokens/tokens.json";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
-import type { BridgeState, Summons } from "../shared/bridge";
+import type { BridgeState, PickedView, Summons } from "../shared/bridge";
 import type { Draft, StagedAttachment } from "@armada/protocol";
 import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
@@ -161,6 +161,12 @@ function createWindow(): BrowserWindow {
   window.on("minimize", tellVisibility);
   window.on("restore", tellVisibility);
   window.on("closed", tellVisibility);
+  // This window's own pick and its Manifest and always-allow commands go with it — nothing else
+  // reclaims them, `agent-worktrees`' reason repeated for a window rather than a worktree.
+  window.on("closed", () => {
+    pickedViews.delete(window.id);
+    connection?.dropWindow(window.id);
+  });
 
   // **This window goes nowhere.** It loads one file and stays on it for the
   // life of the process, so every navigation and every new window is refused
@@ -214,17 +220,48 @@ const remarksPoll = new RemarksPoll({
   again: (port, jobId) => connection?.material.remarksChanged(port, jobId) ?? Promise.resolve(),
 });
 
-/** Every window sees the same state, because there is one connection behind it. */
+/**
+ * Every window's own `repository` and `manifestReading` — `shared/bridge.ts`'s `PickedView` —
+ * kept apart from `published` and from every other window's. **This, not `published`, is what
+ * makes a pick per window**: everything else here still reaches every window identically.
+ */
+const pickedViews = new Map<number, PickedView>();
+
+function viewFor(windowId: number): PickedView {
+  return pickedViews.get(windowId) ?? { repository: null, manifestReading: null };
+}
+
+/** Every window sees the same state, save its own pick — `pickedViews`, overlaid here. */
 function publish(state: BridgeState): void {
   published = state;
   for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) window.webContents.send(CHANNELS.changed, state);
+    if (!window.isDestroyed()) window.webContents.send(CHANNELS.changed, { ...state, ...viewFor(window.id) });
   }
   // **Here rather than on chosen events**, because what decides a notification
   // is the needs-you set changing and this is the one funnel every change to
   // the list passes through. `readAt` is what tells a publish that carries a
   // reading from one that carries only a connection state.
   attention.read(state.jobs, state.readAt);
+}
+
+/** One window's own pick moved. Told to that window alone — nothing else here reaches the rest. */
+function publishToWindow(windowId: number, change: Partial<PickedView>): void {
+  const view = { ...viewFor(windowId), ...change };
+  pickedViews.set(windowId, view);
+  const window = BrowserWindow.getAllWindows().find((one) => one.id === windowId);
+  if (window !== undefined && !window.isDestroyed()) {
+    window.webContents.send(CHANNELS.changed, { ...published, ...view });
+  }
+}
+
+/** Every window open right now — `connection.ts`'s `Wiring.windowIds`. */
+function windowIds(): readonly number[] {
+  return BrowserWindow.getAllWindows().map((window) => window.id);
+}
+
+/** The window an IPC call arrived from, or `0` where Electron cannot say — never a real window's id. */
+function windowIdOf(event: Electron.IpcMainInvokeEvent): number {
+  return BrowserWindow.fromWebContents(event.sender)?.id ?? 0;
 }
 
 /**
@@ -305,6 +342,8 @@ void app.whenReady().then(() => {
   connection = new FleetConnection({
     home: process.env["HOME"],
     publish,
+    publishToWindow,
+    windowIds,
     now: () => Date.now(),
   });
 
@@ -321,7 +360,8 @@ void app.whenReady().then(() => {
     // announce readiness.
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window !== null) hand(window);
-    return state;
+    // This window's own pick, overlaid — a reload is a fresh reader, not a reset of it.
+    return state === undefined ? state : { ...state, ...viewFor(windowIdOf(event)) };
   });
   // Every act on a Job is reached through `commands` — see `command.ts`, which
   // holds them because they are HTTP and the connection is a socket.
@@ -614,25 +654,30 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.startCheckoutVerify, (_event, workspace: unknown) =>
     connection?.rehearsal.startCheckoutVerify(typeof workspace === "string" ? workspace : undefined),
   );
-  // The Manifest file, read and saved. Fleet resolves the path and guards the
-  // write against a file that moved; nothing here composes either.
-  ipcMain.handle(CHANNELS.readManifestFile, () => connection?.editing.readFile());
-  ipcMain.handle(CHANNELS.saveManifestFile, (_event, body: SaveManifestFile) =>
-    connection?.editing.saveFile(body),
+  // The Manifest file, read and saved, and Setup below it — each window's own, `connection.ts`'s
+  // `editingFor`: Fleet resolves the path and guards the write against a file that moved; nothing
+  // here composes either.
+  ipcMain.handle(CHANNELS.readManifestFile, (event) => connection?.editingFor(windowIdOf(event)).readFile());
+  ipcMain.handle(CHANNELS.saveManifestFile, (event, body: SaveManifestFile) =>
+    connection?.editingFor(windowIdOf(event)).saveFile(body),
   );
-  ipcMain.handle(CHANNELS.editManifest, (_event, body: EditManifest) => connection?.editing.edit(body));
-  ipcMain.handle(CHANNELS.readManifestSpend, () => connection?.editing.readSpend());
-  ipcMain.handle(CHANNELS.readRepositoryScan, () => connection?.editing.setup.readScan());
-  ipcMain.handle(CHANNELS.readManifestProposals, () => connection?.editing.setup.readProposals());
-  ipcMain.handle(CHANNELS.editManifestProposal, (_event, body: EditManifestProposal) =>
-    connection?.editing.setup.edit(body),
+  ipcMain.handle(CHANNELS.editManifest, (event, body: EditManifest) =>
+    connection?.editingFor(windowIdOf(event)).edit(body),
   );
-  ipcMain.handle(CHANNELS.writeManifestProposal, (_event, body: WriteManifestProposal) =>
-    connection?.editing.setup.write(body),
+  ipcMain.handle(CHANNELS.readManifestSpend, (event) => connection?.editingFor(windowIdOf(event)).readSpend());
+  ipcMain.handle(CHANNELS.readRepositoryScan, (event) => connection?.editingFor(windowIdOf(event)).setup.readScan());
+  ipcMain.handle(CHANNELS.readManifestProposals, (event) =>
+    connection?.editingFor(windowIdOf(event)).setup.readProposals(),
+  );
+  ipcMain.handle(CHANNELS.editManifestProposal, (event, body: EditManifestProposal) =>
+    connection?.editingFor(windowIdOf(event)).setup.edit(body),
+  );
+  ipcMain.handle(CHANNELS.writeManifestProposal, (event, body: WriteManifestProposal) =>
+    connection?.editingFor(windowIdOf(event)).setup.write(body),
   );
   // `null` is All repositories. Anything but a string or `null` is dropped here; a root Fleet does not list, in `Picked.pick`.
-  ipcMain.handle(CHANNELS.pickRepository, (_event, root: unknown) =>
-    typeof root === "string" || root === null ? connection?.repositories.pick(root) : undefined,
+  ipcMain.handle(CHANNELS.pickRepository, (event, root: unknown) =>
+    typeof root === "string" || root === null ? connection?.repositories.pick(windowIdOf(event), root) : undefined,
   );
   // Locate. The folder dialog is sheeted to the window that asked, so it cannot be left behind it.
   ipcMain.handle(CHANNELS.chooseFolder, async (event) => {
@@ -652,10 +697,12 @@ void app.whenReady().then(() => {
       : undefined,
   );
   // A repository-wide always-allow — Fleet's own table since protocol 13.5.
-  // Neither takes a path or a job id: Fleet names the repository.
-  ipcMain.handle(CHANNELS.listRepositoryAllowedCommands, () => connection?.repositoryAllows.list());
-  ipcMain.handle(CHANNELS.removeRepositoryAllowedCommand, (_event, run: string) =>
-    connection?.repositoryAllows.remove(run),
+  // Neither takes a path or a job id: Fleet names the repository this window picked.
+  ipcMain.handle(CHANNELS.listRepositoryAllowedCommands, (event) =>
+    connection?.repositoryAllowsFor(windowIdOf(event)).list(),
+  );
+  ipcMain.handle(CHANNELS.removeRepositoryAllowedCommand, (event, run: string) =>
+    connection?.repositoryAllowsFor(windowIdOf(event)).remove(run),
   );
   // A declared server, for this Job's worktree or the main checkout where no
   // Job is named. `servers` on the published state is what keeps a *Serving*

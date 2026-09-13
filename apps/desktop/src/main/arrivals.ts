@@ -148,7 +148,7 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // saves a file, and `manifest.reread` is what says so. This read is for
     // the window that opened after the save — which is most windows, since a
     // refusal stands until the file is corrected.
-    void host.repositories.readManifest(fleet.port);
+    void host.repositories.readManifestForEveryWindow(fleet.port);
     // And Fleet's three admission limits, once per connection: nothing but a
     // save changes them, and that act publishes its own new reading.
     void readLimits(fleet.port, host.publish);
@@ -375,10 +375,11 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // beside the news that the file is now fine.
     // Overview's drift spans every repository on All, so it reads whichever file this was.
     void host.overview.again(fleet.port);
-    // Another repository's reading is not the picked one's to draw.
-    if (!host.repositories.picked.reads(event.path)) return host.publish({ connection });
-    host.publish({ connection, manifestReading: event });
-    host.rehearsal.onManifestReread(fleet.port);
+    host.publish({ connection });
+    // Every window whose own pick reads this file draws it — `RepositoryReads.manifestReread`.
+    host.repositories.manifestReread(event);
+    // The still-shared pick's own reader — Verify, until it moves per window too.
+    if (host.repositories.picked.reads(event.path)) host.rehearsal.onManifestReread(fleet.port);
     return;
   }
   if (event.kind === "repositories.changed") {

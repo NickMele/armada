@@ -1,26 +1,41 @@
-// What Fleet serves, and which of it the rail picked: the holdings, the pick, and the
-// Manifest reading scoped to it. Beside `connection.ts`, which is at the length the gate refuses.
+// What Fleet serves, and which of it each window's own rail picked: the holdings, shared, and the
+// pick and the Manifest reading scoped to it, per window. Beside `connection.ts`, which is at the
+// length the gate refuses.
 
-import type { BridgeState } from "../shared/bridge";
-import type { Holdings, RepositoryList } from "@armada/protocol";
+import type { BridgeState, PickedView } from "../shared/bridge";
+import type { Holdings, ManifestReading, RepositoryList } from "@armada/protocol";
 import type { OverviewReads } from "./overview";
-import type { Picked } from "./picked";
+import { PickedByWindow, type Picked } from "./picked";
 import type { RehearsalConnection } from "./rehearsal";
 import { Locating } from "./locating";
 import { holdingsOf, manifestReadingOf, repositoriesOf } from "./request";
 
 export type RepositoryWiring = {
+  /**
+   * The one pick shared across every window, kept exactly as it was before this file went
+   * per-window. **Verify, Overview's drift and `holdingsOf`'s `leftOut` still read this** — none
+   * of the three take a window yet, so a pick made anywhere is still what they answer against,
+   * `checkout-runs.ts`'s own terms until it does too.
+   */
   picked: Picked;
+  /** Every window's own pick, apart from the shared one above and from each other. */
+  pickedByWindow: PickedByWindow;
   publish: (change: Partial<BridgeState>) => void;
+  /** One window's own `repository` and `manifestReading`, overlaid onto what it alone receives. */
+  publishToWindow: (windowId: number, change: Partial<PickedView>) => void;
+  /** Every window open right now, so a listing that moved reconciles every one of their picks. */
+  windowIds: () => readonly number[];
   holds: () => Holdings;
   rehearsal: RehearsalConnection;
-  /** Overview's reads, whose scope a listing or a pick moves. */
+  /** Overview's reads, whose scope a listing or the shared pick moves. */
   overview: OverviewReads;
   port: () => number | null;
 };
 
 export class RepositoryReads {
+  /** The still-shared pick — see `RepositoryWiring.picked`. */
   readonly picked: Picked;
+  readonly pickedByWindow: PickedByWindow;
   /** Locate: a repository added or cloned, then listed and picked here. */
   readonly locating: Locating;
   private readonly wiring: RepositoryWiring;
@@ -28,6 +43,7 @@ export class RepositoryReads {
   constructor(wiring: RepositoryWiring) {
     this.wiring = wiring;
     this.picked = wiring.picked;
+    this.pickedByWindow = wiring.pickedByWindow;
     this.locating = new Locating({
       port: wiring.port,
       list: (port) => this.readHoldings(port),
@@ -46,33 +62,69 @@ export class RepositoryReads {
   }
 
   /**
-   * A listing, read or carried whole by `repositories.changed`. Every window follows it, because
-   * main publishes one state to all of them; the pick stays where it is still served.
+   * A listing, read or carried whole by `repositories.changed`. **Shared**, because main
+   * publishes one catalogue to every window; each window's own pick is reconciled against it
+   * apart from every other window's.
    */
   async listed(listed: RepositoryList | null, port: number, moved = false): Promise<void> {
-    const shifted = listed !== null && this.picked.hold(listed.repositories);
+    const legacyShifted = listed !== null && this.picked.hold(listed.repositories);
+    // Every open window's own pick, reconciled against the new listing apart from every other's —
+    // **synchronously, before anything below awaits**, so a pick pressed the instant this listing
+    // is published never races a window's own `Picked` still holding the old one.
+    const shifted = new Map(
+      this.wiring.windowIds().map((windowId) => [
+        windowId,
+        listed !== null && this.pickedByWindow.of(windowId).hold(listed.repositories),
+      ]),
+    );
+    for (const windowId of shifted.keys()) {
+      this.wiring.publishToWindow(windowId, { repository: this.pickedByWindow.of(windowId).picked });
+    }
     const held = this.wiring.holds();
     const kept = listed === null ? held : { ...held, repositories: listed.repositories };
-    this.wiring.publish({ holds: await holdingsOf(port, kept, this.picked), repository: this.picked.picked });
-    if (moved || shifted) await Promise.all([this.readManifest(port), this.wiring.rehearsal.onRepositoryMoved(port)]);
-    // On All a repository added moves the scope without moving the pick, so Overview reads on every listing.
-    await this.wiring.overview.again(port);
+    this.wiring.publish({ holds: await holdingsOf(port, kept, this.picked) });
+    if (moved || legacyShifted) {
+      await Promise.all([this.wiring.rehearsal.onRepositoryMoved(port), this.wiring.overview.again(port)]);
+    } else {
+      await this.wiring.overview.again(port);
+    }
+    await Promise.all(
+      [...shifted.entries()].map(([windowId, one]) => (moved || one ? this.readManifestOf(windowId, port) : null)),
+    );
   }
 
-  /** The rail's pick, `null` for All repositories. A root Fleet does not list moves nothing. */
-  async pick(root: string | null): Promise<void> {
-    if (!this.picked.pick(root)) return;
-    this.wiring.publish({ repository: this.picked.picked });
+  /** One window's own pick, `null` for All. A root Fleet does not list moves nothing. */
+  async pick(windowId: number, root: string | null): Promise<void> {
+    const picked = this.pickedByWindow.of(windowId);
+    if (!picked.pick(root)) return;
+    this.wiring.publishToWindow(windowId, { repository: picked.picked });
+    // The still-shared pick moves with whichever window picked last — `RepositoryWiring.picked`.
+    this.picked.pick(root);
     const port = this.wiring.port();
     if (port !== null) await this.readHoldings(port, true);
   }
 
+  /** One window's own reading of its picked Manifest. */
+  async readManifestOf(windowId: number, port: number): Promise<void> {
+    const picked = this.pickedByWindow.of(windowId);
+    this.wiring.publishToWindow(windowId, { manifestReading: await manifestReadingOf(port, picked) });
+  }
+
   /**
-   * What Fleet's last read of the picked Manifest came to. **A failed read publishes `null`**:
-   * there is no reading to report, and keeping the previous one would be a refusal drawn
-   * against a Fleet that was never asked.
+   * Every open window's own reading, refreshed together. **Once per connection**, on `resync` —
+   * a window picked something in an earlier connection and Fleet may answer differently now.
    */
-  async readManifest(port: number): Promise<void> {
-    this.wiring.publish({ manifestReading: await manifestReadingOf(port, this.picked) });
+  async readManifestForEveryWindow(port: number): Promise<void> {
+    await Promise.all(this.wiring.windowIds().map((windowId) => this.readManifestOf(windowId, port)));
+  }
+
+  /**
+   * `manifest.reread`, told to every window whose own pick reads it — `Picked.reads`. The whole
+   * reading rides on the event, so this costs no second read.
+   */
+  manifestReread(event: ManifestReading): void {
+    for (const [windowId, picked] of this.pickedByWindow.all()) {
+      if (picked.reads(event.path)) this.wiring.publishToWindow(windowId, { manifestReading: event });
+    }
   }
 }

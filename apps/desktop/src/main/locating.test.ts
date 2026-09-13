@@ -10,10 +10,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { NOTHING_YET, type BridgeState } from "../shared/bridge";
+import { NOTHING_YET, type BridgeState, type PickedView } from "../shared/bridge";
 import { CLONE_MS, Locating, locateAnswerOf, resolvedFolder } from "./locating";
 import { OverviewReads } from "./overview";
-import { Picked } from "./picked";
+import { Picked, PickedByWindow } from "./picked";
 import type { RehearsalConnection } from "./rehearsal";
 import { RepositoryReads } from "./repositories";
 import { ask, COMMAND_MS } from "./request";
@@ -165,15 +165,22 @@ describe("a clone that lands late", () => {
     await once(server, "listening");
     const port = (server.address() as AddressInfo).port;
 
-    // Bridge opens on All repositories, so the person's pick is made, as the rail makes it.
+    // Bridge opens on All repositories, so the window's own pick is made, as the rail makes it.
     const picked = new Picked();
     picked.hold([armada]);
-    picked.pick(armada.root);
+    const WINDOW = 1;
+    const pickedByWindow = new PickedByWindow();
+    pickedByWindow.of(WINDOW).hold([armada]);
+    pickedByWindow.of(WINDOW).pick(armada.root);
     const published: Partial<BridgeState>[] = [];
+    const windows: { windowId: number; change: Partial<PickedView> }[] = [];
     const publish = (change: Partial<BridgeState>) => void published.push(change);
     const reads = new RepositoryReads({
       picked,
+      pickedByWindow,
       publish,
+      publishToWindow: (windowId, change) => void windows.push({ windowId, change }),
+      windowIds: () => [WINDOW],
       holds: () => NOTHING_YET.holds,
       rehearsal: { onRepositoryMoved: async () => {} } as unknown as RehearsalConnection,
       overview: new OverviewReads({ publish, picked, port: () => port }),
@@ -185,6 +192,9 @@ describe("a clone that lands late", () => {
     expect(told).toEqual([{ located: { repository: ADDED, at: expect.any(Number) } }]);
     // Listed before it is told, so a window that opens its Setup finds it in the picker.
     expect(published.findIndex((change) => change.holds !== undefined)).toBeLessThan(published.indexOf(told[0]!));
-    expect(published.filter((change) => "repository" in change).map((change) => change.repository)).toEqual([armada.root]);
+    // The window's own pick never moved off armada for a clone it did not ask for.
+    expect(windows.filter((one) => one.change.repository !== undefined).map((one) => one.change.repository)).toEqual([
+      armada.root,
+    ]);
   });
 });

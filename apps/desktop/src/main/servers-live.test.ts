@@ -83,6 +83,8 @@ async function bridgeOn(port: number) {
       latest = state;
       for (const [at, wait] of [...waits.entries()].reverse()) if (wait.holds(state)) waits.splice(at, 1) && wait.keep();
     },
+    publishToWindow: () => {},
+    windowIds: () => [],
   });
   opened.push(() => connection.stop());
   connection.start();
