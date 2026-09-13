@@ -458,11 +458,8 @@ where
             .map_err(|why| self.refusal(why))
     }
 
-    /// A preference, saved and put in force. Not `budgeted`, `save_limits`'s reason.
     async fn save_preferences(&self, save: SavePreference) -> Result<Preferences, Refusal> {
-        self.save_preference_now(save)
-            .await
-            .map_err(|why| self.refusal(why))
+        self.save_preference_now(save).await
     }
 
     /// Take back a rule a person always-allowed for this Manifest's

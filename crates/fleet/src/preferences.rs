@@ -3,6 +3,7 @@
 //! Drone, so there is no "shipped, overlaid by saved" to compute.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use api::Refusal;
 use ipc::{Preferences, SavePreference};
 use store::LoadJobError;
 
@@ -41,14 +42,20 @@ where
     }
 
     /// Save one preference, then answer with every preference now in force.
+    ///
+    /// **Answers `Refusal` rather than `Adrift`**, unlike `preferences_in_force`
+    /// — commanding.rs's `impl Commands` is at the gate's own line limit, and
+    /// mapping here rather than at the one call site is what keeps that arm to
+    /// a single line.
     pub(crate) async fn save_preference_now(
         &self,
         save: SavePreference,
-    ) -> Result<Preferences, Adrift> {
+    ) -> Result<Preferences, Refusal> {
         let mut store = self.store().lock().await;
         store
             .save_preference(&save.name, save.value)
             .map(as_wire)
             .map_err(Adrift::Writing)
+            .map_err(|why| self.refusal(why))
     }
 }
