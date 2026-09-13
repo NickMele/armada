@@ -411,7 +411,7 @@ export function App() {
   const pickedRepository = repositories.find((one) => one.root === state.repository) ?? null;
   const scoped = pickedRepository?.manifest;
   // The Board's Jobs follow the pick. The status bar, the palette and held worktrees read every Job.
-  const listed = useMemo(() => ofPicked(state.jobs, pickedRepository), [state.jobs, pickedRepository]);
+  const boardJobs = useMemo(() => ofPicked(state.jobs, pickedRepository), [state.jobs, pickedRepository]);
   const head = headOf({
     reading: reading !== null,
     composing,
@@ -429,7 +429,7 @@ export function App() {
     // Which Manifest view is up, so the head describes the one on screen.
     manifest: manifesting ? editing.view : false,
     onRefresh: () => void commands.refresh(),
-    jobs: listed,
+    jobs: boardJobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
     onForgetTerminal: (jobIds) => void commands.forgetTerminal(jobIds),
   });
@@ -445,7 +445,7 @@ export function App() {
         onScope={pick}
         onAddRepository={locate.onOpen}
         jobs={state.jobs}
-        boardJobs={listed}
+        boardJobs={boardJobs}
         capacity={state.capacity}
         title={head?.title}
         summary={
@@ -748,7 +748,7 @@ export function App() {
                 <Jobs
                   onCursor={setCursor}
                   reach={reach}
-                  jobs={listed}
+                  jobs={boardJobs}
                   stale={!live}
                   now={now}
                   workflows={state.holds.workflows}

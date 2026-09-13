@@ -1,10 +1,9 @@
-// What a repository is called in the picker and on a Board row — #886 and #889.
+// What a repository is called in the rail's picker — #886.
 
 import { describe, expect, it } from "vitest";
 
-import type { JobSummary, RepositorySummary } from "@armada/protocol";
-import { manifestLabel, repositoryLabel } from "@armada/shell/src/repository-label";
-import { BOARD_COLUMNS, columnsFor, REPOSITORY_COLUMN, repositoryOf } from "./board";
+import type { RepositorySummary } from "@armada/protocol";
+import { repositoryLabel } from "@armada/shell/src/repository-label";
 
 const manifest = (id: string, root: string) => ({ id, repository: id, path: `${root}/armada.yml`, records_root: `/records/${id}`, version: 1, checks: [] });
 const setUp = (id: string, root: string): RepositorySummary => ({ root, records_root: `/records/${id}`, manifest: manifest(id, root) });
@@ -27,25 +26,5 @@ describe("the picker's label", () => {
     expect(repositoryLabel(every[1]!, every)).toBe("old/api");
     expect(repositoryLabel(every[0]!, every)).toBe("/Users/user/code/api");
     expect(repositoryLabel(every[2]!, every)).toBe("/Volumes/code/api");
-  });
-
-  it("names a Job's repository by the Manifest id it carries, served or not", () => {
-    const every = [setUp("armada", "/Users/user/armada")];
-    expect(manifestLabel("armada", every)).toBe("armada");
-    expect(manifestLabel("gone", every)).toBe("gone");
-  });
-});
-
-describe("a Board row's repository", () => {
-  const job = { owner_manifest_id: "storefront" } as JobSummary;
-
-  it("is named, with its column, only where Fleet serves more than one", () => {
-    const two = [setUp("armada", "/Users/user/armada"), setUp("storefront", "/Users/user/storefront")];
-    expect(repositoryOf(job, two)).toBe("storefront");
-    expect(columnsFor(two)).toEqual([...BOARD_COLUMNS, REPOSITORY_COLUMN]);
-    for (const served of [null, [], two.slice(1)]) {
-      expect(repositoryOf(job, served)).toBeUndefined();
-      expect(columnsFor(served)).toEqual(BOARD_COLUMNS);
-    }
   });
 });

@@ -77,10 +77,8 @@
 // strip is still a breakdown of what is on screen — and a tab that empties
 // under a search renders no count rather than a `0`.
 
-import type { JobSummary, RepositorySummary } from "@armada/protocol";
+import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
-// The module, not the package: this file is arithmetic, tested in node, and the package draws.
-import { manifestLabel } from "@armada/shell/src/repository-label";
 import { needsYou, oldest, tabOf } from "./needs-you";
 import type { BoardTab } from "./needs-you";
 
@@ -219,19 +217,6 @@ export const BOARD_SORTS: readonly { id: BoardSort; label: string }[] = [
  * track for a value that never arrives, which reads as one that failed to load.
  */
 export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time"];
-
-/** The fourth fact, drawn only where Fleet serves more than one repository. #889. */
-export const REPOSITORY_COLUMN = "Repository";
-
-/** The Board's columns for what Fleet serves: `null` is a listing not read yet. */
-export function columnsFor(served: readonly RepositorySummary[] | null): string[] {
-  return (served?.length ?? 0) > 1 ? [...BOARD_COLUMNS, REPOSITORY_COLUMN] : BOARD_COLUMNS;
-}
-
-/** A row's repository by the picker's label, or `undefined` where one repository says it for every row. */
-export function repositoryOf(job: JobSummary, served: readonly RepositorySummary[] | null): string | undefined {
-  return served !== null && served.length > 1 ? manifestLabel(job.owner_manifest_id, served) : undefined;
-}
 
 /**
  * The Board's default order, recorded as `job_board.default_sort`.
