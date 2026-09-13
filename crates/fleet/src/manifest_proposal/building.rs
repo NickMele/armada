@@ -59,11 +59,16 @@ pub(super) fn drafts(scan: &RepositoryScan) -> Vec<Draft> {
     scan.workspaces
         .iter()
         .zip(ids)
-        .map(|(workspace, id)| draft(root, workspace, id))
+        .map(|(workspace, id)| draft(&scan.checkout, root, workspace, id))
         .collect()
 }
 
-fn draft(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace, id: String) -> Draft {
+fn draft(
+    checkout: &str,
+    root: Option<&ScannedWorkspace>,
+    workspace: &ScannedWorkspace,
+    id: String,
+) -> Draft {
     let lockfiles = lockfiles(root, workspace);
     let mut checks: Vec<ProposedCheck> = Vec::new();
     let mut commands: Vec<ProposedCommand> = Vec::new();
@@ -123,6 +128,7 @@ fn draft(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace, id: Stri
     };
     Draft {
         dir: workspace.dir.clone(),
+        path: Path::new(checkout).join(&file),
         file,
         id: ProposedId {
             value: id,
@@ -133,6 +139,7 @@ fn draft(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace, id: Stri
         commands,
         setup,
         policy: default_policy(),
+        written: None,
     }
 }
 

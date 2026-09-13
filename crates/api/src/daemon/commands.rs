@@ -774,6 +774,13 @@ pub trait Commands: Send + Sync + 'static {
         asked: ipc::EditManifestProposal,
     ) -> impl Future<Output = Result<ipc::ManifestProposal, Refusal>> + Send;
 
+    /// `write_manifest_proposal` — create `armada.yml` from a proposal. Refused where it would
+    /// not load or a file is already there, which is never written over.
+    fn write_manifest_proposal(
+        &self,
+        asked: ipc::WriteManifestProposal,
+    ) -> impl Future<Output = Result<ipc::ManifestProposal, Refusal>> + Send;
+
     /// `start_server` — start a server the Manifest declares, in a Job's
     /// worktree on its span or in the main checkout on its own, **or answer
     /// with the instance already up**: one per Job per server.

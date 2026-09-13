@@ -1,14 +1,17 @@
 //! A possible `armada.yml` per workspace, built from Scan and iterated before Write.
 //! Not `crate::proposing`, which proposes Jobs.
 
+use std::path::PathBuf;
+
 use ipc::{
-    ManifestProposal, PolicyKey, ProposedCheck, ProposedCommand, ProposedId, ProposedPolicy,
-    ProposedPort, ProposedSetup, Provenance, RepositoryScan,
+    ManifestProposal, ManifestSaved, PolicyKey, ProposedCheck, ProposedCommand, ProposedId,
+    ProposedPolicy, ProposedPort, ProposedSetup, Provenance, RepositoryScan,
 };
 
 mod amending;
 mod building;
 mod held;
+mod writing;
 
 #[cfg(test)]
 mod tests;
@@ -27,12 +30,15 @@ pub const REVIEW_GATE_DEFAULT: &str = "human_always";
 pub struct Draft {
     dir: String,
     file: String,
+    /// Where Write puts the file, and what a refusal cites.
+    path: PathBuf,
     id: ProposedId,
     ports: Vec<ProposedPort>,
     checks: Vec<ProposedCheck>,
     commands: Vec<ProposedCommand>,
     setup: Option<ProposedSetup>,
     policy: Vec<ProposedPolicy>,
+    written: Option<ManifestSaved>,
 }
 
 /// A proposal per workspace, from the findings alone, so every line carries a file.
@@ -46,6 +52,10 @@ impl Draft {
     }
 
     pub fn answer(&self) -> ManifestProposal {
+        let (text, refused) = match self.text() {
+            Ok(text) => (Some(text), None),
+            Err(refused) => (None, Some(refused)),
+        };
         ManifestProposal {
             dir: self.dir.clone(),
             file: self.file.clone(),
@@ -55,6 +65,9 @@ impl Draft {
             commands: self.commands.clone(),
             setup: self.setup.clone(),
             policy: self.policy.clone(),
+            text,
+            refused,
+            written: self.written.clone(),
         }
     }
 }

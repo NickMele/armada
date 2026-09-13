@@ -392,6 +392,14 @@ where
         self.edit_manifest_proposal(asked)
     }
 
+    /// A Setup proposal, created on disk and never over a file that is there.
+    async fn write_manifest_proposal(
+        &self,
+        asked: ipc::WriteManifestProposal,
+    ) -> Result<ipc::ManifestProposal, Refusal> {
+        self.write_manifest_proposal(asked)
+    }
+
     /// A person starting a server, for a Job or the main checkout. **The `Arc`
     /// is handed on**, so the server is a task of its own — `crate::servers`.
     ///

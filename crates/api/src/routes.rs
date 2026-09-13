@@ -109,6 +109,10 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             "/repository/edit_proposal",
             post(crate::manifest_proposals::edit_manifest_proposal::<D>),
         )
+        .route(
+            "/repository/write_proposal",
+            post(crate::manifest_proposals::write_manifest_proposal::<D>),
+        )
         .route("/manifest/file", get(get_manifest_file::<D>))
         .route("/manifest/save_file", post(save_manifest_file::<D>))
         .route("/manifest/edit", post(edit_manifest::<D>))

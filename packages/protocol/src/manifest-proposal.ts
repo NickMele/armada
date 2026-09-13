@@ -1,6 +1,9 @@
 // A possible `armada.yml` per workspace, built from Scan: `crates/ipc/src/manifest_proposal.rs`.
 // Hand-written under `protocol.ts`'s rules, so every closed set is a `string`.
 
+import type { ManifestSaved } from "./editing";
+import type { ManifestRefused } from "./reading";
+
 /** `GET /repository/proposals`. */
 export type ManifestProposals = {
   checkout: string;
@@ -25,6 +28,12 @@ export type ManifestProposal = {
   setup?: ProposedSetup;
   /** `auto_merge`, then `review_gate`. */
   policy: ProposedPolicy[];
+  /** The file Write would put down. Absent where it is refused. */
+  text?: string;
+  /** Every fault that stops the file loading. */
+  refused?: ManifestRefused;
+  /** Absent until Write lands it; after that it takes no edits. */
+  written?: ManifestSaved;
 };
 
 /**
@@ -76,3 +85,6 @@ export type ProposalEdit =
   | { edit: "policy"; key: string; value?: string }
   | { edit: "move"; name: string }
   | { edit: "remove"; band: string; name: string };
+
+/** `POST /repository/write_proposal`. */
+export type WriteManifestProposal = { dir: string };

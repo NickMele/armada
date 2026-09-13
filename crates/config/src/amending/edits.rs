@@ -17,6 +17,12 @@ use super::{NotAmended, Unplaceable};
 /// One edit a form makes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Edit {
+    /// `version`. With [`Edit::Id`], what lets a whole file be built from empty text.
+    Version(u32),
+    /// `id`.
+    Id(String),
+    /// `setup.requires`. Empty removes `setup`, which holds nothing else.
+    SetupRequires(Vec<String>),
     Check {
         name: String,
         edit: CheckEdit,
@@ -175,6 +181,9 @@ impl Edit {
     /// The key a refusal about the whole edit names.
     fn key(&self) -> String {
         match self {
+            Edit::Version(_) => "version".to_string(),
+            Edit::Id(_) => "id".to_string(),
+            Edit::SetupRequires(_) => "setup.requires".to_string(),
             Edit::Check { name, .. } => format!("checks.{name}"),
             Edit::Command { name, .. } => format!("commands.{name}"),
             Edit::Port { name, .. } => format!("ports.{name}"),
@@ -195,6 +204,12 @@ impl Edit {
     /// What this edit does to a document that reads as `doc`.
     pub(crate) fn ops(&self, doc: &Value) -> Result<Vec<Op>, NotAmended> {
         match self {
+            Edit::Version(version) => Ok(vec![Op::set(&["version"], number(*version))]),
+            Edit::Id(id) => Ok(vec![Op::set(&["id"], text(id))]),
+            Edit::SetupRequires(names) => Ok(vec![match names.is_empty() {
+                true => Op::remove(&["setup"]),
+                false => Op::set(&["setup", "requires"], texts(names)),
+            }]),
             Edit::Check { name, edit } => check(doc, name, edit),
             Edit::Command { name, edit } => command(doc, name, edit),
             Edit::Port { name, edit } => port(doc, name, edit),

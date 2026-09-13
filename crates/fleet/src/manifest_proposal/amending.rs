@@ -11,6 +11,8 @@ use super::{Draft, AUTO_MERGE_DEFAULT, REVIEW_GATE_DEFAULT};
 /// Why an edit was not applied.
 #[derive(Debug, PartialEq, Eq)]
 pub enum NotAmended {
+    /// Write landed it, so the file is what to change now.
+    Written { file: String },
     /// A move or a removal named a line the proposal does not have.
     NoSuchLine { band: Option<Band>, name: String },
     /// Moving would drop a key the other registry has no place for.
@@ -20,6 +22,12 @@ pub enum NotAmended {
 impl std::fmt::Display for NotAmended {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            NotAmended::Written { file } => {
+                write!(
+                    out,
+                    "{file} was written from this proposal, so it takes no more edits"
+                )
+            }
             NotAmended::NoSuchLine {
                 band: Some(band),
                 name,
@@ -61,6 +69,11 @@ fn touched(was: &Provenance) -> Provenance {
 impl Draft {
     /// Apply one edit. An edit that changes nothing moves nothing.
     pub fn amend(&mut self, edit: ProposalEdit) -> Result<(), NotAmended> {
+        if self.written.is_some() {
+            return Err(NotAmended::Written {
+                file: self.file.clone(),
+            });
+        }
         match edit {
             ProposalEdit::Id { id } => {
                 if self.id.value != id {

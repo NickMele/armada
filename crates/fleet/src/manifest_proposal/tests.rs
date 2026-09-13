@@ -3,6 +3,7 @@
 mod amending;
 mod building;
 mod creating;
+mod writing;
 
 use ipc::ManifestProposal;
 

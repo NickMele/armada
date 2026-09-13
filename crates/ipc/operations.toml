@@ -352,7 +352,7 @@ transport = "HTTP"
 agent_access = "No"
 description = "Proposal: a possible armada.yml per workspace Scan finds, every line citing the file it came from or reading convention"
 notes = """
-The step after Scan, for a repository with no `armada.yml` — `docs/journeys/set-up-a-project-manifest.md`, *The proposal sheet*. Each proposal carries its lines and where each came from. **Lines, not text**: the file a proposal becomes is Write's, and Write goes through `config`'s writer (#721) — the one writer of `armada.yml` — so a proposal and the Manifest form cannot disagree about what the file looks like.
+The step after Scan, for a repository with no `armada.yml` — `docs/journeys/set-up-a-project-manifest.md`, *The proposal sheet*. Each proposal carries its lines, where each came from, and `text`: the file Write would put down, built from empty text by `config`'s writer (#721), the one writer of `armada.yml`. Where that file would not load, `refused` carries every fault at its key instead.
 
 **Provenance is a record, not a value.** A port a file declares reads `read`; every script reads `convention`, because nothing proves a script gates code, so which registry it landed in is a guess. Policy rows read `default`: `auto_merge` and `review_gate` are Manifest-only, so there is no Kit or Machine value to show, and a default row is an absent key. The budget caps cross as `caps`, stated and never written.
 
@@ -369,9 +369,20 @@ description = "Apply one edit to one workspace's proposal, and answer with the p
 notes = """
 Put a port, a Check or a Command by name (replacing or adding), set `setup.requires`, set or clear a policy, move a line between Checks and Commands, or remove one. **No edit names a provenance**: a changed line Scan found reads `edited_during_setup`, a line a person wrote reads `added_during_setup`, and an edit that changes nothing moves nothing.
 
-**A value `config` would refuse is not refused here**, because a proposal is iterated through wrong states; Write is what refuses it. Refused, as a 422, is an edit that cannot apply: a workspace Scan does not find (`fleet.no_such_workspace`), a line that is not there, or a move that would drop `requires` or `destructive`, which the other registry has no key for (`fleet.proposal_not_amended`).
+**A value `config` would refuse is not refused here**, because a proposal is iterated through wrong states; Write is what refuses it. Refused, as a 422, is an edit that cannot apply: a workspace Scan does not find (`fleet.no_such_workspace`), a line that is not there, or a move that would drop `requires` or `destructive`, which the other registry has no key for (`fleet.proposal_not_amended`). After Write it is a 409, `fleet.proposal_written`.
 
 `agent_access` is `No` until Helm exists. Helm will need this read and a draft-shaped edit, at *Drafts only*, and never Write.
+"""
+
+[operations.write_manifest_proposal]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Create armada.yml for one workspace from its proposal as it stands"
+notes = """
+Writes the proposal's `text`, and creates rather than replaces: a file already at the path is a 409, `fleet.manifest_appeared`, carrying `on_disk`. A proposal whose file would not load is a 422, `fleet.proposal_refused`, carrying `faults` as `[key, fault]` pairs; bytes that would not go down are a 500, `fleet.proposal_unwritable`. Nothing is staged or committed. Afterwards the proposal carries `written` and takes no edits.
+
+`agent_access` is `No`: it puts the file every Job here is gated on into the owner's checkout, and Helm never reaches Write.
 """
 
 [operations.get_manifest_file]

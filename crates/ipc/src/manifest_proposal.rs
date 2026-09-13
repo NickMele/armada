@@ -3,6 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::editing::ManifestSaved;
+use crate::reading::ManifestRefused;
+
 /// `get_manifest_proposals`: one proposal per workspace Scan found, root first.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestProposals {
@@ -35,6 +38,15 @@ pub struct ManifestProposal {
     pub setup: Option<ProposedSetup>,
     /// Always `auto_merge`, then `review_gate`.
     pub policy: Vec<ProposedPolicy>,
+    /// The file Write would put down, from `config`'s writer. Absent where it is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Every fault that stops the file loading. Write refuses while this is present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refused: Option<ManifestRefused>,
+    /// Absent until Write lands it; after that the proposal takes no edits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub written: Option<ManifestSaved>,
 }
 
 /// Where a line came from.
@@ -176,4 +188,10 @@ pub enum Band {
     Ports,
     Checks,
     Commands,
+}
+
+/// `write_manifest_proposal`: one workspace's proposal, put on disk as it stands.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WriteManifestProposal {
+    pub dir: String,
 }

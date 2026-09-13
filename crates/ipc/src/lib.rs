@@ -202,7 +202,7 @@ pub use limits::{
 pub use manifest_proposal::{
     Band, EditManifestProposal, ManifestProposal, ManifestProposals, PolicyKey, ProposalEdit,
     ProposedCheck, ProposedCommand, ProposedId, ProposedPolicy, ProposedPort, ProposedSetup,
-    Provenance, StatedCaps,
+    Provenance, StatedCaps, WriteManifestProposal,
 };
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};

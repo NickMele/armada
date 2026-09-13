@@ -490,3 +490,13 @@ pub fn toward_the_journeys_e2e() -> Vec<ProposalEdit> {
         },
     ]
 }
+
+/// The text Write would put down, loaded where it would be.
+pub fn loads(proposal: &ManifestProposal) -> Manifest {
+    let text = proposal
+        .text
+        .as_deref()
+        .unwrap_or_else(|| panic!("{} is refused: {:?}", proposal.file, proposal.refused));
+    let at = Path::new(CHECKOUT).join(&proposal.file);
+    Manifest::parse(&at, text).unwrap_or_else(|why| panic!("{} loads: {why}", proposal.file))
+}

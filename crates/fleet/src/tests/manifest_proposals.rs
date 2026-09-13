@@ -61,4 +61,18 @@ async fn a_fleet_proposes_the_checkout_it_serves_and_holds_an_edit_between_reque
         !home.path().join("armada.yml").exists(),
         "a proposal writes nothing"
     );
+
+    let write = r#"{"dir":"."}"#;
+    let (status, body) = call(&app, "POST", "/repository/write_proposal", write).await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let written: ManifestProposal = ipc::decode("the proposal", &body).expect("a proposal");
+    assert!(written.written.is_some());
+    let file = home.path().join("armada.yml");
+    let on_disk = std::fs::read_to_string(&file).expect("on disk");
+    assert_eq!(Some(on_disk), written.text);
+    config::Manifest::load(&file).unwrap_or_else(|why| panic!("loads: {why}"));
+
+    let (status, body) = call(&app, "POST", "/repository/write_proposal", write).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(refusal(&body).code, "fleet.proposal_written");
 }
