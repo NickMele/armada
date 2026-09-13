@@ -192,6 +192,23 @@ What is left in the shipped definitions is `node_modules/` and `target/` — gen
 """
 why = "A denylist that resolved first could be widened by a later declaration. Splitting it in two came later, and for the opposite reason: one list that refused everything the same way left a Drone blocked by a guess with no route but to fail its step."
 
+[fields.for_requests]
+type = "string"
+concern = "Structure"
+purpose = "What a person asks for when this is the workflow they want, in their words rather than the steps'. Optional, and absent means the definition says nothing."
+notes = """
+Read by the Job proposer and by nothing else. It is rendered into the catalogue the proposer chooses from, on its own line between the workflow's name and its step labels, and a definition that declares none is rendered exactly as it was before the key existed.
+
+**It answers a different question from the step labels, and neither replaces the other.** The labels tell one workflow from its neighbours — a name alone separates Bug from Revert and does not separate Feature from Refactor. They do not say whether a request is this kind of work at all. On 3 Sep 2026 a request to finish the Board milestone was declined with `epic` on the list, because the proposer saw `epic — epic` and `Plan the wave -> Dispatch the wave -> Roll up the wave`, and *wave* is Armada's word rather than anything the request said. #424.
+
+**Written as a requester would say it.** A line reading *runs a plan, dispatch and roll-up loop* repeats the defect at greater length. `.claude/skills/asking-a-person/SKILL.md` is the rule, and it holds for text a model reads on a person's behalf.
+
+**Optional, and that is a decision.** A definition that has to justify itself before it loads is one somebody writes badly to get past the parser, and every definition written before the key existed has to go on loading. Present and blank is refused as `Fault::Empty` — a key started and not finished is not a definition declaring nothing.
+
+Not frozen onto the Job. It is read before a Job exists and never after, so `ResolvedWorkflow` holds it beside the frozen copy rather than inside it.
+"""
+why = "The proposer is told to decline rather than take the nearest fit, which is right, and was left with nothing to match a request to a workflow on but the workflow's own vocabulary."
+
 [fields.hard_prerequisite]
 type = "bool"
 concern = "Gating"
