@@ -1,28 +1,15 @@
-//! Editing `armada.yml` a key at a time, leaving every other byte where it was
-//! — Journey 9, *Editing*, and `#721`.
+//! Editing `armada.yml` a key at a time, every other byte left where it was —
+//! Journey 9, *Editing*, and `#721`.
 //!
-//! **A form changes only the lines it touches.** A writer that re-serialised
-//! the document would delete every comment in it, and this repository's own
-//! `armada.yml` is two thirds comment. So nothing here builds a document: an
-//! edit is a splice into the text the edit started from, at the bytes one key
-//! occupies, and everything outside that range is copied through.
+//! **A splice, never a re-serialisation**, which would delete every comment.
+//! [`document`] reads which bytes a key occupies, over the subset a Manifest is
+//! written in — block maps and lists, one-line scalars, `{}`, `[]`, comments —
+//! and refuses anything else at the key an edit touches.
 //!
-//! **Hand-written, over the subset a Manifest is written in** — block maps,
-//! block lists, one-line scalars, `{}` and `[]`, comments. `serde_yaml_ng`
-//! carries no positions, and a lossless YAML tree would be a new dependency
-//! for a file whose shapes this crate already names key by key. [`document`]
-//! reads where each key sits; anything outside the subset is refused at the
-//! key it was met on, never guessed at.
-//!
-//! **The reading is checked rather than trusted.** Each splice is re-parsed and
-//! compared, value for value and in order, with the document the edit should
-//! have produced. A misplaced byte cannot pass as an edit: it arrives as
-//! [`NotAmended::Unplaceable`], and the file view is where that edit is made.
-//!
-//! **What comes back always loads.** [`Amended`] is built only after
-//! [`Manifest::parse`] accepted the result, so a caller holding one cannot
-//! write text that would not load — unlike `save_manifest_file`, which writes
-//! work in progress on purpose.
+//! **Checked rather than trusted.** Each splice is re-parsed and compared, in
+//! order, with what the edit should have produced; a misplaced byte arrives as
+//! [`NotAmended::Unplaceable`]. **What comes back always loads**: [`Amended`] is
+//! built only from text [`Manifest::parse`] accepted.
 
 mod document;
 mod edits;

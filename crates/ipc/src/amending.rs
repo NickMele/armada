@@ -1,18 +1,12 @@
 //! A form's edits to `armada.yml`, on their way to Fleet, and the file they
 //! left — Journey 9, *Editing*, and `#721`.
 //!
-//! **Edits, not text.** [`SaveManifestFile`] carries a whole file because a
-//! person typed it; a form knows which key it changed and says so, and Fleet
-//! splices exactly that key into the file. Every comment and every line the
-//! form did not touch stays byte for byte, which a form sending a re-serialised
-//! file could not promise.
+//! **Edits, not text.** A form knows which key it changed, and Fleet splices
+//! exactly that key, so every comment and untouched line stays byte for byte.
+//! The vocabulary is closed — no dotted path — so a form reaches only the keys
+//! somebody decided it may. Clearing a list removes its key.
 //!
-//! **A closed vocabulary, one variant per thing a form edits.** Nothing here
-//! names a key by dotted path, so a form cannot reach a key nobody decided it
-//! may. Clearing a list removes its key; `requires: []` would not load.
-//!
-//! **What a form produces always loads.** Fleet refuses edits whose result
-//! would not parse, with every fault — unlike [`SaveManifestFile`], which
+//! **What a form produces always loads**, unlike [`SaveManifestFile`], which
 //! writes work in progress on purpose.
 //!
 //! [`SaveManifestFile`]: crate::SaveManifestFile
