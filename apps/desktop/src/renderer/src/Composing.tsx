@@ -6,13 +6,19 @@
 // The rail's own pick stays exactly where it was; this component reads it only to skip the ask
 // once one is already picked, and never writes it.
 
-import { useState } from "react";
-import type { ManifestSummary, RepositorySummary } from "@armada/protocol";
+import { useEffect, useState } from "react";
+import type { LeftOutWorkflow, ManifestReading, ManifestSummary, RepositorySummary } from "@armada/protocol";
 import { AskRepository, Composer, DispatchJob, watchOf } from "@armada/screens";
 import { Boundary } from "@armada/shell";
 
 import type { BridgeState } from "../../shared/bridge";
-import { searchFiles, stageAttachment, type useCommands } from "./commands";
+import { readComposing, searchFiles, stageAttachment, type useCommands } from "./commands";
+
+/** What the answered repository's own reads are, before they have come back. */
+const UNREAD: { leftOut: readonly LeftOutWorkflow[]; reading: ManifestReading | null } = {
+  leftOut: [],
+  reading: null,
+};
 
 export function Composing({
   state,
@@ -50,6 +56,22 @@ export function Composing({
   // answering it never narrows the Board — #959. `null` until answered; this
   // component is unmounted with the composer, so the next one opens unanswered.
   const [answered, setAnswered] = useState<string | null>(null);
+  // `leftOut` and the Manifest reading for the repository the ask answered —
+  // #959. Read once the answer is in, since `state.holds.leftOut` is scoped
+  // to the pick, which stays on All throughout. Off All, `state.holds`
+  // already carries the right one, so nothing here is asked.
+  const [composingFor, setComposingFor] = useState(UNREAD);
+  useEffect(() => {
+    if (!all || answered === null) return;
+    let current = true;
+    void readComposing(answered).then((read) => {
+      if (!current) return;
+      setComposingFor(read.ok ? { leftOut: read.leftOut, reading: read.reading } : UNREAD);
+    });
+    return () => {
+      current = false;
+    };
+  }, [all, answered]);
   if (all && answered === null) {
     return (
       <AskRepository
@@ -114,7 +136,7 @@ export function Composing({
         byHand={
           <Composer
             workflows={state.holds.workflows}
-            leftOut={state.holds.leftOut}
+            leftOut={all ? composingFor.leftOut : state.holds.leftOut}
             onStage={stageAttachment}
             onSearchFiles={searchFiles}
             manifest={manifest}

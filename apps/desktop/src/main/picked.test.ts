@@ -16,7 +16,7 @@ import { JobCommands, type Board } from "./command";
 import { ManifestFileCommands } from "./editing";
 import { Picked } from "./picked";
 import { RepositoryAllowsCommands } from "./repository-allows";
-import { holdingsOf, manifestReadingOf } from "./request";
+import { composingOf, holdingsOf, manifestReadingOf } from "./request";
 import { ServerCommands } from "./servers";
 
 const FIRST: RepositorySummary = {
@@ -286,6 +286,46 @@ describe("every per-repository call", () => {
     expect(picked.picked).toBeNull();
     const scoped = asked.filter((url) => !FLEETWIDE.has(url));
     expect(scoped.sort()).toEqual(["/manifest/reading?manifest_id=store-01", "/workflows/left_out?manifest_id=store-01"]);
+  });
+
+  it("reads the answered repository's `leftOut`, on All, without narrowing the pick", async () => {
+    const server = createServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        request.url?.startsWith("/workflows/left_out")
+          ? JSON.stringify([{ source: "armada", file: "bug.yml", said: "no checks configured" }])
+          : "null",
+      );
+    });
+    listening = server;
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const port = (server.address() as AddressInfo).port;
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+    expect(picked.picked).toBeNull();
+
+    const read = await composingOf(port, picked, SET_UP.root);
+
+    // The content came back — this is the repository's own catalogue, not the pick's.
+    expect(read).toEqual({
+      ok: true,
+      leftOut: [{ source: "armada", file: "bug.yml", said: "no checks configured" }],
+      reading: null,
+    });
+    // Reading for one repository never moved the pick — the Board stays on All.
+    expect(picked.picked).toBeNull();
+  });
+
+  it("refuses `composingOf` as not set up for a repository with no Manifest", async () => {
+    const asked: string[] = [];
+    const port = await recording(asked);
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+
+    const read = await composingOf(port, picked, NOT_SET_UP.root);
+
+    expect(read).toEqual({ ok: false, outcome: { ok: false, why: "not_set_up" } });
   });
 
   it("is built through the pick wherever `src/main` spells a per-repository route", () => {

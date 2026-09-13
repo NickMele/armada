@@ -74,6 +74,8 @@ export const readRemarks = (jobId: string | null): void => void window.armada.re
 export const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
 export const readCheckOutput = (jobId: string, kept: string) =>
   window.armada.readCheckOutput(jobId, kept);
+/** New job's own reads for the repository its ask answered, on All — #959. */
+export const readComposing = (repository: string) => window.armada.readComposing(repository);
 export const followCheckOutput = (jobId: string | null, kept: string | null): void =>
   void window.armada.followCheckOutput(jobId, kept);
 

@@ -21,6 +21,7 @@ import type { CallArguments, CheckOutput } from "@armada/protocol";
 import type { LeftOutWorkflow, ManifestSummary, ModelChoices, RepositoryList, WorkflowSummary } from "@armada/protocol";
 import { refusedWith } from "@armada/protocol";
 import { Socket } from "node:net";
+import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { Picked } from "./picked";
 import { HOST } from "./runtime-file";
 
@@ -212,16 +213,11 @@ export async function holdingsOf(
   picked: Picked,
   repository: string | null = null,
 ): Promise<Holdings> {
-  // A repository not set up has no catalogue to have left anything out of.
-  const leftOutAt =
-    repository === null
-      ? picked.manifest("/workflows/left_out")
-      : picked.manifestOf("/workflows/left_out", repository);
   const [workflows, manifests, models, leftOut] = await Promise.all([
     ask(port, "GET", "/workflows"),
     ask(port, "GET", "/manifests"),
     ask(port, "GET", "/models"),
-    leftOutAt === null ? null : ask(port, "GET", leftOutAt),
+    leftOutAsked(port, picked, repository),
   ]);
   return {
     workflows: workflows.ok === true ? (workflows.body as WorkflowSummary[]) : held.workflows,
@@ -230,6 +226,20 @@ export async function holdingsOf(
     leftOut: leftOut === null ? [] : leftOut.ok === true ? (leftOut.body as LeftOutWorkflow[]) : held.leftOut,
     ...(held.repositories === undefined ? {} : { repositories: held.repositories }),
   };
+}
+
+/**
+ * `/workflows/left_out`, named by the pick or by `repository` — `holdingsOf`'s
+ * one scoped field, and `composingOf`'s. `null` where a repository not set up
+ * has no catalogue to have left anything out of; the two callers read that
+ * differently, so it is theirs to interpret rather than this function's.
+ */
+async function leftOutAsked(port: number, picked: Picked, repository: string | null): Promise<Answer | null> {
+  const path =
+    repository === null
+      ? picked.manifest("/workflows/left_out")
+      : picked.manifestOf("/workflows/left_out", repository);
+  return path === null ? null : await ask(port, "GET", path);
 }
 
 /** Every repository Fleet serves, set up or not. `null` where Fleet did not answer, which an older Fleet does not. */
@@ -303,6 +313,27 @@ export async function manifestReadingOf(
   if (path === null) return null;
   const answer = await ask(port, "GET", path);
   return answer.ok === true ? ((answer.body as ManifestReading | null) ?? null) : null;
+}
+
+/**
+ * `leftOut` and the Manifest reading for the repository New job's ask
+ * answered — #959, and the one place both are read for a composer on All
+ * rather than for `BridgeState`. Both taken through `Picked.manifestOf`,
+ * since the pick stays on All throughout and cannot name what was answered.
+ *
+ * **A refusal, not `holdingsOf`'s `[]` or `manifestReadingOf`'s `null`.**
+ * Those two keep drawing whatever was last held on a failed read, because
+ * they are re-asked on a timer against a repository that stays picked; this
+ * is asked once, for a repository nothing has read before, so there is no
+ * old value under it to fall back to.
+ */
+export async function composingOf(port: number, picked: Picked, repository: string): Promise<ComposingRead> {
+  const [leftOut, reading] = await Promise.all([
+    leftOutAsked(port, picked, repository),
+    manifestReadingOf(port, picked, repository),
+  ]);
+  if (leftOut === null) return { ok: false, outcome: NOT_SET_UP };
+  return { ok: true, leftOut: leftOut.ok === true ? (leftOut.body as LeftOutWorkflow[]) : [], reading };
 }
 
 /**

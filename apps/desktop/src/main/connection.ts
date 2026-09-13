@@ -17,6 +17,7 @@ import { identifying, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState } from "../shared/bridge";
 import type { Connection, JobSummary } from "@armada/protocol";
 import type { CallRead, CheckOutputRead, FrameRead } from "@armada/protocol";
+import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import { applyArrival, readCapacity, reread } from "./arrivals";
 import type { ArrivalHost } from "./arrivals";
 import { JobCommands } from "./command";
@@ -191,7 +192,13 @@ export class FleetConnection {
       proposalOut: () => this.current.proposing,
       rereadCapacity: (port) => readCapacity(port, (change) => this.publish(change)),
     });
-    this.jobReads = new JobReads({ port, material: this.material, reports: this.reports, held: this.held });
+    this.jobReads = new JobReads({
+      port,
+      material: this.material,
+      reports: this.reports,
+      held: this.held,
+      picked,
+    });
     // The exact slice of this object `arrivals.ts`'s switch may reach — built
     // once, after everything it names, so the switch never touches a private
     // field directly. See the module doc.
@@ -348,6 +355,11 @@ export class FleetConnection {
 
   async readCheckOutput(jobId: string, kept: string): Promise<CheckOutputRead> {
     return await this.jobReads.readCheckOutput(jobId, kept);
+  }
+
+  /** `leftOut` and the Manifest reading for the repository New job's ask answered, on All — #959. */
+  async readComposing(repository: string): Promise<ComposingRead> {
+    return await this.jobReads.readComposing(repository);
   }
 
   async readFrame(jobId: string, kept: string): Promise<FrameRead> {

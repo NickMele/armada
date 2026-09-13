@@ -529,4 +529,8 @@ export const CHANNELS = {
   openPullRequest: "bridge:open-pull-request",
   openRemarkLink: "bridge:open-remark-link",
   summoned: "bridge:summoned",
+  // New job's own reads for the repository its ask answered, on All — #959.
+  // A request/response like `readCall`/`readCheckOutput`, answered to the
+  // caller and published nowhere: `BridgeState` carries nothing about it.
+  readComposing: "bridge:read-composing",
 } as const;

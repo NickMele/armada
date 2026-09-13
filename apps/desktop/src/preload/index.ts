@@ -29,6 +29,7 @@ import type {
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
+import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import type {
   ManifestProposalsRead,
@@ -429,6 +430,11 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.readCheckOutput, jobId, kept),
   readFrame: (jobId: string, kept: string): Promise<FrameRead> =>
     ipcRenderer.invoke(CHANNELS.readFrame, jobId, kept),
+  // New job's own reads on All — #959: `leftOut` and the Manifest reading for
+  // the repository the ask answered, named by root since the pick stays put.
+  // `readCall`'s shape: answered once, and nothing here is held or republished.
+  readComposing: (repository: string): Promise<ComposingRead> =>
+    ipcRenderer.invoke(CHANNELS.readComposing, repository),
 
   // A recording's address, composed rather than fetched — it is the one entry
   // here that opens no channel. What makes it safe to hand over is what makes

@@ -7,8 +7,10 @@
 // is found, only that one might not be.
 
 import type { CallRead, CheckOutputRead, FrameRead } from "@armada/protocol";
+import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { HeldReader } from "./holding";
-import { callArgumentsOf, checkOutputOf, frameOf } from "./request";
+import type { Picked } from "./picked";
+import { callArgumentsOf, checkOutputOf, composingOf, frameOf } from "./request";
 import type { ReportsReader } from "./reports";
 import type { ReviewMaterial } from "./review";
 
@@ -17,6 +19,8 @@ export type JobReadsWiring = {
   material: ReviewMaterial;
   reports: ReportsReader;
   held: HeldReader;
+  /** New job's own reads on All — #959. The rail's pick, read and never moved. */
+  picked: Picked;
 };
 
 export class JobReads {
@@ -98,6 +102,19 @@ export class JobReads {
     const port = this.wiring.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
     return await frameOf(port, jobId, kept);
+  }
+
+  /**
+   * `leftOut` and the Manifest reading for the repository New job's ask
+   * answered, on All — #959. **`readCall`'s shape, for a repository rather
+   * than a Job**: nothing here is held or republished, because it belongs to
+   * the composer that asked and not to `BridgeState` — the Board stays on
+   * All throughout, so nothing else on screen reads this repository at all.
+   */
+  async readComposing(repository: string): Promise<ComposingRead> {
+    const port = this.wiring.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    return await composingOf(port, this.wiring.picked, repository);
   }
 
   // ----------------------------------------------- every report, and the counts

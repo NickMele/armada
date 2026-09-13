@@ -45,6 +45,7 @@ import type {
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
+import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import type {
   ManifestProposalsRead,
@@ -656,6 +657,13 @@ export type BridgeApi = {
    */
   readCheckOutput: (jobId: string, kept: string) => Promise<CheckOutputRead>;
   readFrame: (jobId: string, kept: string) => Promise<FrameRead>;
+  /**
+   * `leftOut` and the Manifest reading for the repository New job's ask
+   * answered — #959. `readCall`'s shape: a repository named by root rather
+   * than a Job by id, answered once, and held nowhere — the Board stays on
+   * All throughout, so nothing else on screen ever reads this repository.
+   */
+  readComposing: (repository: string) => Promise<ComposingRead>;
   /**
    * Where one frame's bytes stream from, as an address.
    *
