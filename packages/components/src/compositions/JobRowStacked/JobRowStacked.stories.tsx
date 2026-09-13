@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Check, CircleDot, Clock, Cpu, Folder, GitBranch, OctagonAlert, Power, UserCheck, X } from "lucide-react";
+import { expect } from "storybook/test";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { StepBar } from "../StepBar/StepBar";
 import { JobRowStacked } from "./JobRowStacked";
@@ -496,6 +497,14 @@ export const SubDispatchedWaitingOnResources: Story = {
  * that would pass again the next time a longer verb is added. Widening the
  * fixed value would also have passed it — which is why the drawing's own 184px
  * is not the fix.
+ *
+ * **Past this length the badge takes the row's own first line (#984).**
+ * `minmax(132px, max-content)` alone still starved the headline beside it —
+ * beside a readable title, a whole handle and a visible action there is no
+ * width left to also grow the badge to its full 270-odd pixels, and the title
+ * disappeared entirely rather than the badge painting over it. The row grows
+ * in height instead, the same move already made for a title that outgrows its
+ * own line.
  */
 export const TheLongestVerbAtTheWidthFloor: StoryObj = {
   render: () => (
@@ -519,4 +528,16 @@ export const TheLongestVerbAtTheWidthFloor: StoryObj = {
       />
     </div>
   ),
+  play: async ({ canvasElement }) => {
+    const wrapper = canvasElement.querySelector<HTMLElement>("div")!.getBoundingClientRect();
+    const row = canvasElement.querySelector<HTMLElement>(".armada-job-row")!;
+    const badge = row.querySelector<HTMLElement>(".armada-badge")!;
+    await expect(badge).toHaveTextContent("A required command did not succeed");
+    await expect(badge.getBoundingClientRect().right).toBeLessThanOrEqual(wrapper.right);
+    const title = row.querySelector<HTMLElement>(".armada-job-row__title")!;
+    await expect(title).toHaveTextContent("Reconcile orphaned drones on Fleet start");
+    await expect(row.querySelector(".armada-job-row__action")!.getBoundingClientRect().right).toBeLessThanOrEqual(
+      wrapper.right,
+    );
+  },
 };

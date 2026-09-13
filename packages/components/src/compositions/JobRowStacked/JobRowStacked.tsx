@@ -264,6 +264,12 @@ export function JobRowStacked({
   // One animated mark per screen. `pulsing` says this Job is running; the
   // cursor says which running row is being read, and only that one breathes.
   const pulses = pulsing && onCursor;
+  // The Badge is nowrap (#262) and the registry's longest verb does not fit
+  // beside the headline at any width this app runs at. Past the threshold the
+  // badge takes the row's own first line rather than bleeding into the
+  // headline beside it — a state that pulses never carries a verb this long,
+  // so the column this gives up is one nothing was relying on.
+  const badgeWide = typeof statusLabel === "string" && statusLabel.length > 24;
 
   return (
     <div
@@ -279,6 +285,7 @@ export function JobRowStacked({
       data-focused={focused || undefined}
       data-selected={selected || undefined}
       data-dimmed={dimmed || undefined}
+      data-badge-wide={badgeWide || undefined}
       onClick={onOpen}
       onKeyDown={opens ? handleKeyDown : undefined}
     >

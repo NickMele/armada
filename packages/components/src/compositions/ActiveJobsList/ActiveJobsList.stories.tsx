@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement } from "react";
 import { cloneElement } from "react";
-import { Check, CircleDot, Cpu, GitBranch, Layers, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Cpu, GitBranch, Layers, OctagonAlert, Power, UserCheck, X } from "lucide-react";
 import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
@@ -419,10 +419,11 @@ const TABLE_ROWS = [
   { status: "completed-failed", icon: X, label: "Failed", headline: "Cache the manifest read", handle: "14-cache-the-manifest-read", act: "Open" },
 ] as const;
 
+/** Every drawn row opens a Job on the real Board (`selectable`), which is what lets a row's cursor reveal what its own columns gave up. */
 function TableAt({ width }: { width: string }) {
   return (
     <div style={{ width }}>
-      <ActiveJobsList heading="Job Board" summary="3 jobs." view="table" columns={["Workflow", "Progress", "Run time"]}>
+      <ActiveJobsList heading="Job Board" summary="3 jobs." view="table" selectable label="Job Board" columns={["Workflow", "Progress", "Run time"]}>
         {TABLE_ROWS.map((row) => (
           <JobRowStacked
             key={row.handle}
@@ -432,6 +433,7 @@ function TableAt({ width }: { width: string }) {
             headline={row.headline}
             jobId={row.handle}
             handle={row.handle}
+            onOpen={() => {}}
             fields={[
               { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
               {
@@ -471,14 +473,99 @@ async function everyRowReads(canvasElement: HTMLElement) {
   }
 }
 
+/**
+ * The Workflow column at the width floor gives way to its glyph — there is no
+ * room left beside a readable title, a whole handle and a visible action
+ * (#984). The cursor's own row is where the name comes back: on focus it
+ * floats free of that cramped column rather than the row fighting every other
+ * column for the width to keep it in place at rest.
+ */
+async function workflowReachableOnFocus(canvasElement: HTMLElement) {
+  const frame = canvasElement.querySelector(".armada-active-jobs__frame")!.getBoundingClientRect();
+  const rows = canvasElement.querySelectorAll<HTMLElement>('[role="option"]');
+  const first = rows[0]!;
+  first.focus();
+  const value = first.querySelector<HTMLElement>(".armada-job-row__field-value")!;
+  await expect(value).toHaveTextContent("Bug, 6 steps");
+  // The revealed value still reads inside the frame — floating free of its
+  // column is not the same as floating off the edge of the list.
+  await expect(value.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
+}
+
 /** The table at the narrowest window, 768px less the rail: the facts give way, and the title, handle and action do not. */
 export const TableAtTheWidthFloor: StoryObj = {
   render: () => <TableAt width="calc(var(--window-floor) - var(--sidebar-rail))" />,
-  play: async ({ canvasElement }) => everyRowReads(canvasElement),
+  play: async ({ canvasElement }) => {
+    await everyRowReads(canvasElement);
+    await workflowReachableOnFocus(canvasElement);
+  },
 };
 
 /** The table at the 1100px breakpoint, where the title used to give way to nothing beside a whole handle. */
 export const TableAtTheBreakpoint: StoryObj = {
   render: () => <TableAt width="calc(var(--layout-breakpoint) - var(--sidebar-rail))" />,
-  play: async ({ canvasElement }) => everyRowReads(canvasElement),
+  play: async ({ canvasElement }) => {
+    await everyRowReads(canvasElement);
+    await workflowReachableOnFocus(canvasElement);
+  },
+};
+
+/** The badge, the title, the handle and the action all stay inside the frame — no ellipsis, and nothing off its right edge. */
+async function escalatedRowStaysInFrame(canvasElement: HTMLElement) {
+  const frame = canvasElement.querySelector(".armada-active-jobs__frame")!.getBoundingClientRect();
+  const row = canvasElement.querySelector<HTMLElement>(".armada-job-row")!;
+  const badge = row.querySelector<HTMLElement>(".armada-badge")!;
+  await expect(badge).toHaveTextContent("A required command did not succeed");
+  await expect(badge.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
+  const title = row.querySelector<HTMLElement>(".armada-job-row__title")!;
+  await expect(title).toHaveTextContent("Reconcile orphaned drones on Fleet start");
+  await expect(row.querySelector(".armada-job-row__action")!.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
+}
+
+/**
+ * `a required command did not succeed` is 34 characters, the longest verb in
+ * `enum-verbs.toml`, drawn inside a real list at the 720px floor. The badge
+ * takes the row's own first line (#984) rather than the row's other columns
+ * fighting it for width — every character stays, nothing is clipped with an
+ * ellipsis (#914), and the row's own action stays inside the frame beside it,
+ * where it used to bleed down over the handle beneath it.
+ */
+export const EscalatedBadgeInTheTableAtTheWidthFloor: StoryObj = {
+  render: () => (
+    <div style={{ width: "calc(var(--window-floor) - var(--sidebar-rail))" }}>
+      <ActiveJobsList
+        heading="Job Board"
+        summary="1 job."
+        view="table"
+        selectable
+        label="Job Board"
+        columns={["Workflow", "Progress", "Run time"]}
+      >
+        <JobRowStacked
+          status="escalated"
+          statusIcon={OctagonAlert}
+          statusLabel="A required command did not succeed"
+          headline="Reconcile orphaned drones on Fleet start"
+          jobId="job_31c7"
+          handle="31-reconcile-orphaned-drones-fleet-start"
+          onOpen={() => {}}
+          fields={[
+            { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+            {
+              label: "Progress",
+              value: (
+                <>
+                  <StepBar total={6} current={2} activity="running" label="Step 2 of 6" />
+                  <span className="armada-row-step">regression_verify</span>
+                </>
+              ),
+            },
+            { label: "Run time", value: "1h 12m", mono: true },
+          ]}
+          action={<SplitButton ground="card" items={menu}>Open</SplitButton>}
+        />
+      </ActiveJobsList>
+    </div>
+  ),
+  play: async ({ canvasElement }) => escalatedRowStaysInFrame(canvasElement),
 };
