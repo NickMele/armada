@@ -780,7 +780,7 @@ the Job. `job.step_advanced` is the shape it follows.
 its next turn; a message sent from there would be dated wrong and would say what
 `job.checking` already says one message later.
 
-## Protocol 13.3: Always allow picks a rule, not a whole command
+## Protocol 13.4: Always allow picks a rule, not a whole command
 
 ## Protocol 13.4: Always allow picks a rule, not a whole command
 
