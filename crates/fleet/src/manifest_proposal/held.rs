@@ -152,7 +152,9 @@ where
             draft.write(at).map_err(|why| match why {
                 NotWritten::Written => Refusal::IllegalMove(raised(
                     PROPOSAL_WRITTEN,
-                    format!("{path} was already written from this proposal; nothing was written again"),
+                    format!(
+                        "{path} was already written from this proposal; nothing was written again"
+                    ),
                 )),
                 NotWritten::Refused(keys) => Refusal::Unacceptable(
                     raised(
@@ -163,7 +165,10 @@ where
                             keys.join(", ")
                         ),
                     )
-                    .with_field("keys", WireValue::List(keys.into_iter().map(WireValue::Str).collect())),
+                    .with_field(
+                        "keys",
+                        WireValue::List(keys.into_iter().map(WireValue::Str).collect()),
+                    ),
                 ),
                 NotWritten::Appeared(on_disk) => {
                     let said = format!(

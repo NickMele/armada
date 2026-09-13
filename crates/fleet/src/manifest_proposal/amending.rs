@@ -37,7 +37,10 @@ impl std::fmt::Display for NotAmended {
                 "{file} was written from this proposal, so it takes no more edits. Change the \
                  file itself"
             ),
-            NotAmended::NoSuchLine { band: Some(band), name } => write!(
+            NotAmended::NoSuchLine {
+                band: Some(band),
+                name,
+            } => write!(
                 out,
                 "this proposal has no `{name}` under `{}`",
                 spelled(*band)
@@ -87,20 +90,62 @@ impl Draft {
                     self.id.value = id;
                 }
             }
-            ProposalEdit::Port { name, container, env } => {
+            ProposalEdit::Port {
+                name,
+                container,
+                env,
+            } => {
                 let provenance = Provenance::AddedDuringSetup;
-                let put = ProposedPort { name, container, env, provenance };
-                put_line(&mut self.ports, put, |one| &one.name, |one| &mut one.provenance);
+                let put = ProposedPort {
+                    name,
+                    container,
+                    env,
+                    provenance,
+                };
+                put_line(
+                    &mut self.ports,
+                    put,
+                    |one| &one.name,
+                    |one| &mut one.provenance,
+                );
             }
-            ProposalEdit::Check { name, run, requires } => {
+            ProposalEdit::Check {
+                name,
+                run,
+                requires,
+            } => {
                 let provenance = Provenance::AddedDuringSetup;
-                let put = ProposedCheck { name, run, requires, provenance };
-                put_line(&mut self.checks, put, |one| &one.name, |one| &mut one.provenance);
+                let put = ProposedCheck {
+                    name,
+                    run,
+                    requires,
+                    provenance,
+                };
+                put_line(
+                    &mut self.checks,
+                    put,
+                    |one| &one.name,
+                    |one| &mut one.provenance,
+                );
             }
-            ProposalEdit::Command { name, run, destructive } => {
+            ProposalEdit::Command {
+                name,
+                run,
+                destructive,
+            } => {
                 let provenance = Provenance::AddedDuringSetup;
-                let put = ProposedCommand { name, run, destructive, provenance };
-                put_line(&mut self.commands, put, |one| &one.name, |one| &mut one.provenance);
+                let put = ProposedCommand {
+                    name,
+                    run,
+                    destructive,
+                    provenance,
+                };
+                put_line(
+                    &mut self.commands,
+                    put,
+                    |one| &one.name,
+                    |one| &mut one.provenance,
+                );
             }
             ProposalEdit::Setup { requires } => self.set_setup(requires),
             ProposalEdit::Policy { key, value } => self.set_policy(key, value),
@@ -112,7 +157,10 @@ impl Draft {
                     Band::Commands => take(&mut self.commands, |one| one.name == name).is_some(),
                 };
                 if !removed {
-                    return Err(NotAmended::NoSuchLine { band: Some(band), name });
+                    return Err(NotAmended::NoSuchLine {
+                        band: Some(band),
+                        name,
+                    });
                 }
             }
         }
@@ -159,7 +207,10 @@ impl Draft {
     fn moved(&mut self, name: String) -> Result<(), NotAmended> {
         if let Some(at) = self.checks.iter().position(|one| one.name == name) {
             if !self.checks[at].requires.is_empty() {
-                return Err(NotAmended::NotMovable { name, holds: "requires" });
+                return Err(NotAmended::NotMovable {
+                    name,
+                    holds: "requires",
+                });
             }
             let check = self.checks.remove(at);
             self.commands.push(ProposedCommand {
@@ -172,7 +223,10 @@ impl Draft {
         }
         if let Some(at) = self.commands.iter().position(|one| one.name == name) {
             if self.commands[at].destructive {
-                return Err(NotAmended::NotMovable { name, holds: "destructive" });
+                return Err(NotAmended::NotMovable {
+                    name,
+                    holds: "destructive",
+                });
             }
             let command = self.commands.remove(at);
             self.checks.push(ProposedCheck {

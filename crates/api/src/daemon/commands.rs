@@ -767,6 +767,28 @@ pub trait Commands: Send + Sync + 'static {
         edit: ipc::EditManifest,
     ) -> impl Future<Output = Result<ipc::ManifestEdited, Refusal>> + Send;
 
+    /// `edit_manifest_proposal` — one edit to one workspace's proposal, which
+    /// moves the provenance of what it touched. **No edit names a provenance.**
+    ///
+    /// [`Refusal::Unacceptable`] for a workspace Scan does not find, or an edit
+    /// that cannot apply; [`Refusal::IllegalMove`] once Write has landed. A
+    /// value `config` would refuse is not refused here — it is on `refused`.
+    fn edit_manifest_proposal(
+        &self,
+        asked: ipc::EditManifestProposal,
+    ) -> impl Future<Output = Result<ipc::ManifestProposal, Refusal>> + Send;
+
+    /// `write_manifest_proposal` — create `armada.yml` for one workspace from
+    /// its proposal as it stands.
+    ///
+    /// [`Refusal::Unacceptable`] where `config` would refuse the text, and
+    /// [`Refusal::IllegalMove`] where a file is already at the path — **never
+    /// written over**.
+    fn write_manifest_proposal(
+        &self,
+        asked: ipc::WriteManifestProposal,
+    ) -> impl Future<Output = Result<ipc::ManifestProposal, Refusal>> + Send;
+
     /// `start_server` — start a server the Manifest declares, in a Job's
     /// worktree on its span or in the main checkout on its own, **or answer
     /// with the instance already up**: one per Job per server.

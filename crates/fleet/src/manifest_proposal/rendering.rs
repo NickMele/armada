@@ -41,14 +41,24 @@ pub(super) fn text(draft: &Draft) -> String {
     if !draft.checks.is_empty() {
         out.push_str("checks:\n");
         for check in &draft.checks {
-            let _ = writeln!(out, "  {}:\n    run: {}", scalar(&check.name), scalar(&check.run));
+            let _ = writeln!(
+                out,
+                "  {}:\n    run: {}",
+                scalar(&check.name),
+                scalar(&check.run)
+            );
             list(&mut out, "    requires", &check.requires);
         }
     }
     if !draft.commands.is_empty() {
         out.push_str("commands:\n");
         for command in &draft.commands {
-            let _ = writeln!(out, "  {}:\n    run: {}", scalar(&command.name), scalar(&command.run));
+            let _ = writeln!(
+                out,
+                "  {}:\n    run: {}",
+                scalar(&command.name),
+                scalar(&command.run)
+            );
             if command.destructive {
                 out.push_str("    destructive: true\n");
             }
@@ -59,7 +69,11 @@ pub(super) fn text(draft: &Draft) -> String {
         list(&mut out, "  requires", &setup.requires);
     }
     // An inherited value is an absent key, so only a pinned one is written.
-    for row in draft.policy.iter().filter(|row| row.provenance != Provenance::Default) {
+    for row in draft
+        .policy
+        .iter()
+        .filter(|row| row.provenance != Provenance::Default)
+    {
         let key = match row.key {
             PolicyKey::AutoMerge => "auto_merge",
             PolicyKey::ReviewGate => "review_gate",
@@ -114,7 +128,9 @@ fn bare(text: &str) -> bool {
     };
     let allowed = |c: char| c.is_ascii_alphanumeric() || " _./-=+:,".contains(c);
     let lower = text.to_ascii_lowercase();
-    let numeric = text.chars().all(|c| c.is_ascii_digit() || "._:-+eE".contains(c));
+    let numeric = text
+        .chars()
+        .all(|c| c.is_ascii_digit() || "._:-+eE".contains(c));
     (first.is_ascii_alphanumeric() || first == '_' || first == '/')
         && text.chars().all(allowed)
         && !text.ends_with([' ', ':'])

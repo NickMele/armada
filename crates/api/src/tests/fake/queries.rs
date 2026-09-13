@@ -250,6 +250,22 @@ impl Queries for FakeDaemon {
         Ok(shapes::repository_scan())
     }
 
+    /// **No proposals and a stated cap**: what a proposal holds is
+    /// `fleet::manifest_proposal`'s and tested there against a Scan.
+    async fn get_manifest_proposals(&self) -> Result<ipc::ManifestProposals, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(ipc::ManifestProposals {
+            checkout: "/repo".to_string(),
+            proposals: Vec::new(),
+            caps: ipc::StatedCaps {
+                cost_micros: 5_000_000,
+                turns: 200,
+            },
+        })
+    }
+
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {

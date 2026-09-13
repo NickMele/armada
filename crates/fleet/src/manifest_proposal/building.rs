@@ -97,7 +97,11 @@ fn draft(
     };
     // That `cargo test` works on a bare `Cargo.toml` is convention, which Scan
     // left for this to say and label.
-    if let Some(cargo) = workspace.manifests.iter().find(|one| named(&one.file, "Cargo.toml")) {
+    if let Some(cargo) = workspace
+        .manifests
+        .iter()
+        .find(|one| named(&one.file, "Cargo.toml"))
+    {
         if !taken(&checks, &commands, "test") {
             let run = "cargo test".to_string();
             checks.push(check("test", run, convention(&cargo.file, None)));
@@ -105,7 +109,8 @@ fn draft(
     }
     let python = found(&lockfiles, PYTHON_RUNNERS).map_or("", |(_, run)| run);
     for section in &workspace.tools {
-        let Some((_, name, run)) = PYTHON_CHECKS.iter().find(|(key, ..)| *key == section.key) else {
+        let Some((_, name, run)) = PYTHON_CHECKS.iter().find(|(key, ..)| *key == section.key)
+        else {
             continue;
         };
         if !taken(&checks, &commands, name) {
@@ -126,8 +131,14 @@ fn draft(
     }
 
     let (file, path) = match workspace.dir.as_str() {
-        "." => ("armada.yml".to_string(), Path::new(&scan.checkout).join("armada.yml")),
-        dir => (format!("{dir}/armada.yml"), Path::new(&scan.checkout).join(dir).join("armada.yml")),
+        "." => (
+            "armada.yml".to_string(),
+            Path::new(&scan.checkout).join("armada.yml"),
+        ),
+        dir => (
+            format!("{dir}/armada.yml"),
+            Path::new(&scan.checkout).join(dir).join("armada.yml"),
+        ),
     };
     Draft {
         dir: workspace.dir.clone(),
@@ -182,7 +193,11 @@ fn named(file: &str, name: &str) -> bool {
 /// The workspace's own lockfiles, then the root's it shares by a workspace
 /// pattern — each as the file Scan cited.
 fn lockfiles(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace) -> Vec<String> {
-    let mut files: Vec<String> = workspace.lockfiles.iter().map(|one| one.file.clone()).collect();
+    let mut files: Vec<String> = workspace
+        .lockfiles
+        .iter()
+        .map(|one| one.file.clone())
+        .collect();
     let Some(root) = root.filter(|_| workspace.dir != ".") else {
         return files;
     };
@@ -202,7 +217,10 @@ fn lockfiles(root: Option<&ScannedWorkspace>, workspace: &ScannedWorkspace) -> V
 }
 
 /// The first of `table`'s entries a lockfile here is named for, with the file.
-fn found<'a>(files: &'a [String], table: &[(&str, &'static str)]) -> Option<(&'a str, &'static str)> {
+fn found<'a>(
+    files: &'a [String],
+    table: &[(&str, &'static str)],
+) -> Option<(&'a str, &'static str)> {
     table.iter().find_map(|(name, value)| {
         files
             .iter()
@@ -265,18 +283,21 @@ fn ids(scan: &RepositoryScan) -> Vec<String> {
         .workspaces
         .iter()
         .map(|one| match one.dir.as_str() {
-            "." => Path::new(&scan.checkout)
-                .file_name()
-                .map_or_else(|| "root".to_string(), |name| name.to_string_lossy().to_string()),
+            "." => Path::new(&scan.checkout).file_name().map_or_else(
+                || "root".to_string(),
+                |name| name.to_string_lossy().to_string(),
+            ),
             dir => dir.rsplit('/').next().unwrap_or(dir).to_string(),
         })
         .collect();
     short
         .iter()
         .zip(&scan.workspaces)
-        .map(|(id, one)| match short.iter().filter(|other| *other == id).count() {
-            1 => id.clone(),
-            _ => one.dir.replace('/', "-"),
-        })
+        .map(
+            |(id, one)| match short.iter().filter(|other| *other == id).count() {
+                1 => id.clone(),
+                _ => one.dir.replace('/', "-"),
+            },
+        )
         .collect()
 }

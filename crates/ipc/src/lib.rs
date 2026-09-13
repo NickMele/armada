@@ -196,13 +196,13 @@ pub use journal::{
     JobLog, JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
 pub use judged::{Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable};
+pub use limits::{
+    DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent, SaveLimits, Within,
+};
 pub use manifest_proposal::{
     Band, EditManifestProposal, ManifestProposal, ManifestProposals, PolicyKey, ProposalEdit,
     ProposedCheck, ProposedCommand, ProposedId, ProposedPolicy, ProposedPort, ProposedSetup,
     Provenance, StatedCaps, WriteManifestProposal,
-};
-pub use limits::{
-    DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent, SaveLimits, Within,
 };
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};

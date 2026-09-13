@@ -18,7 +18,9 @@ use config::{
     Catalogue, Fault, Manifest, ResolveError, ResolvedCatalogue, ResolvedWorkflow, Roster,
     WorkflowDef, Written,
 };
-use fleet::scanning::{Entry, Read, Tree};
+use fleet::manifest_proposal::{propose, Draft};
+use fleet::scanning::{scan, Entry, Read, Tree};
+use ipc::{ManifestProposal, PolicyKey, ProposalEdit, Provenance};
 
 /// The repository's checkout, as a Scan of it would say it read.
 pub const CHECKOUT: &str = "/repos/storefront";
@@ -421,4 +423,81 @@ pub fn carried_there(path: &str, text: &str) -> ResolvedWorkflow {
 fn resolved_def(def: &WorkflowDef) -> ResolvedWorkflow {
     ResolvedWorkflow::resolve(def, &written())
         .unwrap_or_else(|why| panic!("{} resolves there: {why}", def.path().display()))
+}
+
+/// The storefront's proposals, one per workspace, built from its Scan as a
+/// picker receives it — through `ipc::encode` and back.
+pub fn proposals(repository: &Held) -> Vec<Draft> {
+    let sent = ipc::encode(&scan(CHECKOUT, repository)).expect("a scan that serialises");
+    propose(&ipc::decode("a repository scan", sent.as_bytes()).expect("and reads back"))
+}
+
+/// A proposal as a sheet receives it: through `ipc::encode` and back.
+pub fn as_sent(draft: &Draft) -> ManifestProposal {
+    let sent = ipc::encode(&draft.answer()).expect("a proposal that serialises");
+    ipc::decode("a manifest proposal", sent.as_bytes()).expect("and reads back")
+}
+
+/// The text a proposal would write, loaded where Write would put it.
+pub fn loads(proposal: &ManifestProposal) -> Manifest {
+    let at = Path::new(CHECKOUT).join(&proposal.file);
+    Manifest::parse(&at, &proposal.text)
+        .unwrap_or_else(|why| panic!("{} loads: {why}\n{}", proposal.file, proposal.text))
+}
+
+pub fn convention(file: &str, key: Option<&str>) -> Provenance {
+    Provenance::Convention {
+        file: file.to_string(),
+        key: key.map(str::to_string),
+    }
+}
+
+pub fn read_from(file: &str, key: &str) -> Provenance {
+    Provenance::Read {
+        file: file.to_string(),
+        key: key.to_string(),
+    }
+}
+
+/// The shop's `e2e`, as the journey writes it, requiring these Commands.
+pub fn e2e_requiring(requires: &[&str]) -> ProposalEdit {
+    ProposalEdit::Check {
+        name: "e2e".to_string(),
+        run: "pnpm playwright test".to_string(),
+        requires: requires.iter().map(|one| one.to_string()).collect(),
+    }
+}
+
+/// **A person's corrections to the shop's proposal**, toward the journey's own
+/// `e2e`: `migrate` and `seed` written, `e2e` requiring them, `lint` moved to
+/// the Commands, the port given the variable the code reads, `auto_merge`
+/// pinned — and `test` re-sent exactly as proposed.
+pub fn toward_the_journeys_e2e() -> Vec<ProposalEdit> {
+    let command = |name: &str, run: &str| ProposalEdit::Command {
+        name: name.to_string(),
+        run: run.to_string(),
+        destructive: false,
+    };
+    vec![
+        command("migrate", "pnpm prisma migrate deploy"),
+        command("seed", "pnpm tsx scripts/seed.ts"),
+        e2e_requiring(&["migrate", "seed"]),
+        ProposalEdit::Move {
+            name: "lint".to_string(),
+        },
+        ProposalEdit::Port {
+            name: "dev".to_string(),
+            container: Some(3000),
+            env: Some("PORT".to_string()),
+        },
+        ProposalEdit::Policy {
+            key: PolicyKey::AutoMerge,
+            value: Some("checks-pass".to_string()),
+        },
+        ProposalEdit::Check {
+            name: "test".to_string(),
+            run: "pnpm run test".to_string(),
+            requires: Vec::new(),
+        },
+    ]
 }

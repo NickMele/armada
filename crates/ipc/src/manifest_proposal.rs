@@ -74,7 +74,10 @@ pub struct ManifestProposal {
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum Provenance {
     /// A file said this, at `key`.
-    Read { file: String, key: String },
+    Read {
+        file: String,
+        key: String,
+    },
     /// A file said this, and where it was put is a guess — a script placed as
     /// a Check or a Command, or a command a lockfile's tool conventionally
     /// takes. `key` is absent where the whole file is the evidence.

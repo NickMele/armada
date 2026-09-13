@@ -36,6 +36,15 @@ impl FakeDaemon {
             .cloned()
             .ok_or_else(|| self.no_such_job(job_id))
     }
+
+    fn no_such_workspace(&self, dir: &str) -> Refusal {
+        let said = format!("the fake holds no proposal for `{dir}`");
+        Refusal::Unacceptable(ipc::WireError::raised(
+            "fake.no_such_workspace",
+            said,
+            crate::tests::shapes::run_id(),
+        ))
+    }
 }
 
 impl Commands for FakeDaemon {
@@ -180,6 +189,21 @@ impl Commands for FakeDaemon {
             at: ipc::Instant::carried("2026-09-12T09:00:00.000Z"),
             text: format!("{}# {} edits\n", edit.read, edit.edits.len()),
         })
+    }
+
+    /// The fake holds no proposals, so every workspace is one Scan did not
+    /// find — the refusal a route test can tell from a missing route.
+    async fn edit_manifest_proposal(
+        &self,
+        asked: ipc::EditManifestProposal,
+    ) -> Result<ipc::ManifestProposal, Refusal> {
+        Err(self.no_such_workspace(&asked.dir))
+    }
+    async fn write_manifest_proposal(
+        &self,
+        asked: ipc::WriteManifestProposal,
+    ) -> Result<ipc::ManifestProposal, Refusal> {
+        Err(self.no_such_workspace(&asked.dir))
     }
 
     /// Each field the save names replaces the fake's value. What a save does to

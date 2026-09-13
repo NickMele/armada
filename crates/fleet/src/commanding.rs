@@ -384,6 +384,22 @@ where
         self.edit_manifest_file(asked)
     }
 
+    /// One edit to a Setup proposal. Held in memory, so nothing is written.
+    async fn edit_manifest_proposal(
+        &self,
+        asked: ipc::EditManifestProposal,
+    ) -> Result<ipc::ManifestProposal, Refusal> {
+        self.edit_manifest_proposal(asked)
+    }
+
+    /// A Setup proposal, created on disk — **never over a file that is there**.
+    async fn write_manifest_proposal(
+        &self,
+        asked: ipc::WriteManifestProposal,
+    ) -> Result<ipc::ManifestProposal, Refusal> {
+        self.write_manifest_proposal(asked)
+    }
+
     /// A person starting a server, for a Job or the main checkout. **The `Arc`
     /// is handed on**, so the server is a task of its own — `crate::servers`.
     ///
