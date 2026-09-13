@@ -15,6 +15,13 @@
 // **Pressed rather than called.** Every existing test of this control hands it
 // `fn()`, a mock that swallows an argument it never reads — which is exactly
 // why none of them saw this. The press has to go through the real hook.
+//
+// **A second, unrelated flake lives here, and it measured out as the machine
+// rather than this file.** `#840`: ~2 in 100 runs red at the `dialog` wait
+// below, already written the way that issue fixed `Decide.test.tsx` to wait.
+// Timed across ~110 runs, the sheet always mounted within a poll tick of the
+// click landing — `userEvent.click` itself is what stalls, on a machine also
+// running another Bridge suite.
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
