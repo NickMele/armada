@@ -73,8 +73,17 @@ fn called() -> DroneEvent {
 
 /// A Drone that says one thing and then works for half a minute. **The half
 /// minute is the case**: it is still working when its Fleet goes away.
+///
+/// **`exec sleep 30`, not `sleep 30`.** A multi-statement `-c` script forks
+/// its last command rather than replacing itself with it — measured directly,
+/// `ps` named the shell and `sleep` as two distinct pids sharing one process
+/// group. A case that then kills only the pid it recorded left `sleep`
+/// orphaned under launchd for its own remaining thirty seconds, unreachable by
+/// `waitpid` because it was never this test's child. `exec` collapses the two
+/// into one process at one pid, which is the one Fleet ever records and the
+/// one every case here already waits on.
 fn a_drone_that_keeps_working() -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "echo CALLED; sleep 30"])
+    FakeHarness::running("/bin/sh", &["-c", "echo CALLED; exec sleep 30"])
         .reading("CALLED", vec![called()])
 }
 
@@ -255,7 +264,7 @@ async fn a_drone_that_outlives_its_fleet_is_picked_up_by_the_next_one() {
     );
 
     // Tidy up the process this case deliberately left running.
-    end(pid);
+    end(pid).await;
 }
 
 /// The other half of "never left unowned": Fleet can still end what it adopted,
@@ -273,14 +282,12 @@ async fn an_adopted_drone_can_still_be_killed_by_a_person() {
     second.reconcile().await.expect("the boot read");
 
     let after = second.kill_drone(&job).await.expect("the Drone is killed");
-    // **Polled rather than asserted at once.** `SIGKILL` is delivered rather
-    // than awaited here: Fleet cannot `wait` on a process it did not spawn, so
-    // there is no moment at which it knows the process is collected — which is
-    // exactly what `Adopted::terminate` says its `Ok` does and does not mean.
-    assert!(
-        gone(pid).await,
-        "the group signal reached a process Fleet never spawned"
-    );
+    // **`Adopted::terminate`'s `Ok` is the signal delivered, not the process
+    // collected** — Fleet never held a spawn-time handle on an adopted pid, so
+    // it cannot `wait` on one. This test still can: the pid was spawned by
+    // `Detached::spawn` inside this same test binary, which stays its real OS
+    // parent regardless of which `Fleet` Rust value let go of it.
+    reap(pid).await;
     assert_eq!(
         after.status(),
         JobStatus::Escalated,
@@ -318,10 +325,10 @@ async fn a_drone_whose_process_is_gone_still_interrupts_its_job() {
     assert!(spoke(&first, 1).await, "the Drone never said anything");
     let pid = pid_of(&first).await;
     drop(first);
-    let deadline = tokio::time::Instant::now() + A_CHILD_HAS_LONG_ENOUGH;
-    while alive(pid) && tokio::time::Instant::now() < deadline {
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
+    // Dropping `first` closes the write end Fleet held, so `cat` sees EOF and
+    // the shell around it exits on its own — waited for directly rather than
+    // asked with `kill -0` on a timer.
+    reap(pid).await;
     assert!(!alive(pid), "the Drone was meant to have finished");
 
     let second = a_fleet(&home, a_drone_that_keeps_working());
@@ -397,24 +404,55 @@ fn a_pid_nothing_holds_is_gone() {
     ));
 }
 
-/// Wait for a pid to stop being held, bounded.
-async fn gone(pid: u32) -> bool {
-    let deadline = tokio::time::Instant::now() + A_CHILD_HAS_LONG_ENOUGH;
-    while tokio::time::Instant::now() < deadline {
-        if !alive(pid) {
-            return true;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    false
-}
-
-/// End a process a case deliberately left running. **Nothing in production
-/// leaves one** — this is the test tidying up after itself.
-fn end(pid: u32) {
+/// End a process a case deliberately left running, and do not return until it
+/// is collected. **Nothing in production leaves one** — this is the test
+/// tidying up after itself.
+///
+/// **`kill -9` returning is not the process dying**, and polling `kill -0`
+/// until it stops answering is a timer wait wearing a different hat — this
+/// waits on the process itself instead. Every pid `end` is handed here was
+/// spawned by `Detached::spawn` from inside *this* test binary, directly or
+/// via a re-admission the same binary drove, so this process is its real OS
+/// parent throughout: `libc::setsid()` in `crate::detach` moves the child to
+/// a new session, not a new parent — measured directly (`start_new_session`
+/// child, `ps -o ppid=` still names the spawning process once the language's
+/// own handle to it is gone) — so `libc::waitpid` on the pid is legal here
+/// the whole time the Rust `Child` inside a dropped `Fleet` is not.
+async fn end(pid: u32) {
     let _ = std::process::Command::new("/bin/kill")
         .args(["-9", &pid.to_string()])
         .status();
+    reap(pid).await;
+}
+
+/// Block until `pid` is collected, off the async runtime's own thread so the
+/// blocking syscall cannot stall a turn some other case is mid-way through.
+///
+/// **`ECHILD` is not a failure to wait for.** Dropping the spawning `Fleet`
+/// hands the same pid to tokio's own orphan reaper, which sometimes wins the
+/// race to collect it — `waitpid` then finds no child left to wait on, which
+/// means the process is exactly as gone as this call was asked to leave it.
+#[allow(unsafe_code)]
+async fn reap(pid: u32) {
+    tokio::task::spawn_blocking(move || {
+        let mut status: libc::c_int = 0;
+        // SAFETY: `pid` is a real OS child of this test binary (see `end`'s
+        // doc), so `waitpid` on it is the ordinary collect a real parent
+        // makes. `&mut status` is a live local the call writes through and
+        // nothing here reads afterwards — only whether the call itself
+        // succeeded is asked.
+        let collected = unsafe { libc::waitpid(pid as libc::pid_t, &mut status, 0) };
+        if collected == -1 {
+            let cause = std::io::Error::last_os_error();
+            assert_eq!(
+                cause.raw_os_error(),
+                Some(libc::ECHILD),
+                "waitpid on {pid} failed for a reason other than losing the reap race: {cause}"
+            );
+        }
+    })
+    .await
+    .expect("the blocking reap did not panic");
 }
 
 /// **The word, and it is the whole of `#410`.** An adopted Drone is silent to
@@ -503,7 +541,7 @@ async fn an_adopted_drone_out_of_quiet_budget_is_escalated_as_unheard() {
     // running, in its worktree, with everything it has written on the branch.
     assert!(alive(pid), "the ladder does not reap what it escalates");
 
-    end(pid);
+    end(pid).await;
 }
 
 /// The Fleet [`a_fleet`] builds, with a clock a case can push.
@@ -652,10 +690,10 @@ async fn an_unheard_job_with_no_stopped_step_offers_the_restart_and_it_lands() {
         .await
         .expect("the act the classification named");
 
-    assert!(
-        gone(pid).await,
-        "the group signal reached the process Fleet could not speak to"
-    );
+    // The pid was spawned by `Detached::spawn` inside this same test binary —
+    // Fleet cannot wait on a process it adopted rather than started, but this
+    // process is still its real OS parent, so this can.
+    reap(pid).await;
     // **The step was stopped on the way through, and the verdict says who.**
     // Re-admission reads the step's own state to decide which act put the Job
     // back, so a step left `running` would have opened the fresh Drone as
@@ -689,7 +727,7 @@ async fn an_unheard_job_with_no_stopped_step_offers_the_restart_and_it_lands() {
     let fresh = held.as_ref().map(|at_work| at_work.session().pid());
     drop(held);
     if let Some(fresh) = fresh {
-        end(fresh);
+        end(fresh).await;
     }
 }
 
@@ -717,10 +755,10 @@ async fn a_stopped_step_under_an_adopted_drone_offers_the_restart_and_it_lands()
     // **The unreadable Drone is ended, not left standing beside a fresh one.**
     // A restart that refused over it — which is what `DroneStillThere` did —
     // left every act on this Job refused.
-    assert!(
-        gone(pid).await,
-        "the group signal reached the process Fleet could not speak to"
-    );
+    // The pid was spawned by `Detached::spawn` inside this same test binary —
+    // Fleet cannot wait on a process it adopted rather than started, but this
+    // process is still its real OS parent, so this can.
+    reap(pid).await;
     let record = fleet.load(&job).await.unwrap();
     assert_ne!(
         record.status(),
@@ -741,7 +779,7 @@ async fn a_stopped_step_under_an_adopted_drone_offers_the_restart_and_it_lands()
     let fresh = held.as_ref().map(|at_work| at_work.session().pid());
     drop(held);
     if let Some(fresh) = fresh {
-        end(fresh);
+        end(fresh).await;
     }
 }
 
@@ -762,5 +800,5 @@ async fn an_undecided_gate_under_an_adopted_drone_offers_no_re_run() {
         "no re-run and no override: nothing ruled, and nothing can be asked again"
     );
 
-    end(pid);
+    end(pid).await;
 }
