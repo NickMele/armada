@@ -178,6 +178,7 @@ impl JobStep {
                 StepTarget::Running
                 | StepTarget::Returned(_)
                 | StepTarget::Revisited
+                | StepTarget::Retraced
                 | StepTarget::HeldForReview => self.last_verdict,
                 StepTarget::Advanced => Some(StepVerdict::Passed),
                 // **The verdict does not move on an override**, which is the
@@ -203,7 +204,10 @@ impl JobStep {
                 // below. A returned step is worked again from the top by a
                 // fresh Drone, so the clock that says how long this pass has
                 // taken starts now; a retrying step is the same run continuing.
-                StepTarget::Running | StepTarget::Returned(_) | StepTarget::Revisited => at.clone(),
+                StepTarget::Running
+                | StepTarget::Returned(_)
+                | StepTarget::Revisited
+                | StepTarget::Retraced => at.clone(),
                 // A hand-back does not re-enter the step: the step is still
                 // the one that was entered, and the time it has taken is
                 // measured across every run of it. Only the entry into

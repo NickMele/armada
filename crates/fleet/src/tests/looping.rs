@@ -499,3 +499,131 @@ async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
         "no retry budget was spent on any of it: nothing failed"
     );
 }
+
+/// Feature's shape once `review` sits after `tests`: the return to `implement`
+/// crosses a step that has already advanced.
+fn a_loop_across_a_step(cap: u32) -> config::ResolvedWorkflow {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture.yml"),
+        &format!(
+            "version: 1\nworkflow_id: fixture-loop\nname: fixture\nstructure: loop\n\
+             steps:\n  - id: implement\n    label: \"Implement\"\n    evidence: {{submitted: {{type: diff}}}}\n    \
+             mechanical_checks:\n      - type: diff_nonempty\n    delivers: false\n    advance_gate: auto\n  - \
+             id: tests\n    label: \"Tests\"\n    evidence: {{submitted: {{type: diff}}}}\n    \
+             mechanical_checks:\n      - type: diff_nonempty\n    delivers: false\n    advance_gate: auto\n  - \
+             id: summarise\n    label: \"Summarise\"\n    evidence: {{submitted: {{type: facts_note}}}}\n    \
+             delivers: true\n    advance_gate: human_always\n    verdict_routing:\n      \
+             request_changes: implement\n    iteration_cap: {cap}\n"
+        ),
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture loop did not parse: {refused}"));
+    config::ResolvedWorkflow::resolve(&def, &manifest())
+        .unwrap_or_else(|refused| panic!("the fixture loop did not resolve: {refused}"))
+}
+
+fn a_fleet_running_a_loop_across_a_step(home: &TempDir, work: FakeWorkProduct) -> Fixture {
+    let mut fittings = fittings(home, work);
+    fittings.starting().workflows = one(a_loop_across_a_step(5));
+    crate::daemon::Fleet::assembled(fittings)
+}
+
+/// **The redo walks forward through the step between, and every Drone on the
+/// way is told what sent the work back.** `tests` advanced on the first pass, so
+/// the walk from a redone `implement` arrives at a step that is neither
+/// `running` nor `awaiting_human` — Feature's shape, with `review` after `tests`.
+#[tokio::test]
+async fn a_return_across_an_advanced_step_walks_forward_through_it() {
+    let home = TempDir::new();
+    let fleet =
+        a_fleet_running_a_loop_across_a_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job = fleet
+        .propose(a_proposal_for("fix the off-by-one", "fixture-loop"))
+        .await
+        .expect("a Job at the approval gate");
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.expect("it dispatches");
+    let job_id = job.id().clone();
+
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("implement reports");
+    fleet.turn().await.expect("implement's gate runs");
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("tests reports");
+    fleet.turn().await.expect("tests' gate runs");
+    submitted_by_the_one(&fleet, note_evidence())
+        .await
+        .expect("summarise reports");
+    fleet.turn().await.expect("the human gate runs");
+    assert_eq!(
+        fleet.load(&job_id).await.expect("the Job").status(),
+        JobStatus::AwaitingReview
+    );
+
+    let before = fleet.harness().configured().len();
+    fleet
+        .request_changes(&job_id, &said("address the review"))
+        .await
+        .expect("the loop has room");
+    started(&fleet, &job_id)
+        .await
+        .expect("a Drone back on implement");
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("the redo reports");
+    let walked = fleet.turn().await;
+    assert!(
+        walked.is_ok(),
+        "the walk forward from the redo was refused: {:?}",
+        walked.as_ref().err()
+    );
+
+    let round = fleet.load(&job_id).await.expect("the Job is there");
+    let crossed = StepId::new("tests");
+    assert_eq!(
+        round.current_step_id(),
+        Some(&crossed),
+        "the redo walks on to the step between"
+    );
+    assert_eq!(
+        round.step(&crossed).map(|step| step.state()),
+        Some(StepState::Running)
+    );
+
+    let briefs: Vec<String> = fleet.harness().configured()[before..]
+        .iter()
+        .map(|config| config.prompt().as_str().to_string())
+        .collect();
+    assert_eq!(
+        briefs.len(),
+        2,
+        "one Drone back on implement and one on tests"
+    );
+    for brief in &briefs {
+        assert!(
+            brief.contains("WHAT SENT THIS PART BACK") && brief.contains("Part 3 read the work"),
+            "every Drone the walk puts on is told what sent the work back:\n{brief}"
+        );
+    }
+
+    let store = fleet.store();
+    let store = store.lock().await;
+    assert_eq!(
+        store
+            .step_iteration(&job_id, &gate())
+            .expect("counted")
+            .number(),
+        2,
+        "one loop is one pass, however many steps the walk crosses"
+    );
+    assert_eq!(
+        store
+            .step_iteration(&job_id, &crossed)
+            .expect("counted")
+            .number(),
+        1,
+        "and the step crossed caused none"
+    );
+}

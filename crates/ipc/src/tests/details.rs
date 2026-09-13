@@ -36,6 +36,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            returns: 0,
         }],
     );
     let json = encode(&ungated).expect("a detail is plain data");
@@ -56,6 +57,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            returns: 0,
         }],
     );
     let json = encode(&unanswerable).expect("a detail is plain data");
@@ -89,6 +91,7 @@ fn a_step_with_no_label_reads_as_its_id() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            returns: 0,
         }],
     );
     assert_eq!(detail.steps[0].label, "repro");
@@ -128,6 +131,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            returns: 0,
         }],
     );
     let json = encode(&detail).expect("a detail is plain data");
@@ -202,6 +206,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            returns: 0,
         }],
     );
     let json = encode(&detail).expect("a detail is plain data");
@@ -573,6 +578,7 @@ fn a_gate_running_its_checks_rides_beside_the_state() {
         verdicts: Vec::new(),
         judging: None,
         checking,
+        returns: 0,
     };
 
     let quiet = encode(&detail_of(&job, &[facts(None)])).expect("plain data");

@@ -571,6 +571,11 @@ impl Job {
         }
         let from = self.steps[index].state();
         admits_step(self.status, step_id, from, &to)?;
+        if matches!(to, StepTarget::Retraced) && self.sent_back_past(step_id).is_none() {
+            return Err(IllegalStepTransition::NothingToRetrace {
+                step_id: step_id.clone(),
+            });
+        }
 
         let event = StepEvent::recorded(
             self.id.clone(),
@@ -773,6 +778,29 @@ impl Job {
     /// One row by step id.
     pub fn step(&self, step_id: &StepId) -> Option<&JobStep> {
         self.steps.iter().find(|row| row.step_id() == step_id)
+    }
+    /// The later step still standing where it sent the work back, where a
+    /// loop return is open past `step_id`.
+    ///
+    /// **Read off the rows, not remembered.** A return leaves its emitter
+    /// `running`, or `awaiting_human` where a person asked, and nothing else
+    /// leaves a step past the one being entered in either state. So
+    /// [`StepTarget::Retraced`] is admitted only where this answers, and
+    /// `fleet::crossing` hands that step's findings to every Drone the walk
+    /// forward puts back.
+    pub fn sent_back_past(&self, step_id: &StepId) -> Option<&StepId> {
+        let here = self.step(step_id)?.ordinal();
+        self.steps
+            .iter()
+            .filter(|row| row.ordinal() > here)
+            .filter(|row| {
+                matches!(
+                    row.state(),
+                    crate::StepState::Running | crate::StepState::AwaitingHuman
+                )
+            })
+            .min_by_key(|row| row.ordinal())
+            .map(JobStep::step_id)
     }
     /// Every step that has a Drone on it, in the order the rows were written.
     ///

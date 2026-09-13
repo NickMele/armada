@@ -31,7 +31,7 @@ use core_model::{
 };
 use verification::TheBaseMoved;
 
-use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected};
+use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected, SentBack};
 use crate::terms::{Capturing, Checking, Declaring, Delivering, Splitting};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
@@ -166,6 +166,19 @@ impl Opening {
     pub(crate) fn overtaken_by(self, overtaken: Option<Overtaken>) -> Opening {
         Opening {
             crossed: self.crossed.and_overtaken(overtaken),
+            ..self
+        }
+    }
+
+    /// The same opening, plus what a later part found when it sent the work
+    /// back.
+    ///
+    /// **Folded in rather than passed in**, for `also_carrying`'s reason: an
+    /// open return is a fact about the Job when a Drone starts, and it is owed
+    /// to every Drone the walk forward puts on rather than to the first.
+    pub(crate) fn sent_back_by(self, sent_back: Option<SentBack>) -> Opening {
+        Opening {
+            crossed: self.crossed.and_sent_back(sent_back),
             ..self
         }
     }
@@ -562,6 +575,10 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     // step block has read the instruction, and the block itself says which of
     // the two comes first — an instruction placed after the definition it
     // overrides reads as a footnote to it.
+    // **Before the person's note**, which says what to do about what it found.
+    if let Some(sent_back) = crossed.sent_back() {
+        blocks.headed(&sent_back.text(), ipc::BlockKind::AboutThisJob);
+    }
     if let Some(redirect) = crossed.redirect() {
         blocks.headed(&redirect.text(), ipc::BlockKind::AboutThisJob);
     }

@@ -623,6 +623,12 @@ export type Currency = {
 export type Settled = "merged" | "closed_unmerged";
 
 /** One step: which, where in the order, and where it got to. */
+/** Which pass a looping step is on, counted from one, of its `iteration_cap`. */
+export type StepPass = {
+  number: number;
+  of: number;
+};
+
 export type StepDetail = {
   step_id: string;
   /**
@@ -675,6 +681,12 @@ export type StepDetail = {
    * pull request" from this field alone.
    */
   delivers?: boolean;
+  /**
+   * Which pass this step is on, where it closes a loop. Since protocol 13.20.
+   * **On the step that sends the work back, not the step it is sent to.**
+   * Absent on every step that sends nothing back, and where Fleet cannot say.
+   */
+  pass?: StepPass;
   /** Absent until a gate has ruled on the step. */
   last_verdict?: Verdict;
   /**

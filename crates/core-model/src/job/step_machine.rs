@@ -8,9 +8,10 @@
 //! **`stopped -> running` is one edge for two acts**, and which of them a Job
 //! admits is decided by whether it holds a Drone — `fleet::resume`'s to ask,
 //! not this file's. **`stopped -> advanced`, `advanced -> running`,
-//! `running -> running` and `awaiting_human -> running` are one edge for one
-//! each**, walked by [`StepTarget::Overridden`], [`StepTarget::Returned`] and
-//! [`StepTarget::Revisited`] alone — an open edge at any of the four would
+//! `running -> running` and `awaiting_human -> running` are narrowed**:
+//! [`StepTarget::Overridden`] walks the first, [`StepTarget::Returned`] and
+//! [`StepTarget::Retraced`] the second, [`StepTarget::Revisited`] the last
+//! two — an open edge at any of the four would
 //! admit the redispatch `fleet::resume` refuses above this layer. The last two
 //! are another pass at a step nobody dispatched into: a loop coming round to
 //! the step that emitted the verdict, or a person answering at a gate.
@@ -174,9 +175,9 @@ fn overruled_while_frozen(status: JobStatus, from: StepState, to: &StepTarget) -
 
 /// Where a step is going.
 ///
-/// Eight moves across the five destinations reached — `advanced` is arrived at
+/// Nine moves across the five destinations reached — `advanced` is arrived at
 /// two ways and the trigger is what tells them apart, and `running` is arrived
-/// at four. `not_started` is written at creation and is not a destination.
+/// at five. `not_started` is written at creation and is not a destination.
 ///
 /// **Not [`Copy`], since [`Returned`](StepTarget::Returned) carries a
 /// [`StepId`].** It was `Copy` while every payload was a trigger, and the
@@ -302,6 +303,20 @@ pub enum StepTarget {
     /// [`StepIsAlreadyRunning`]: IllegalStepTransition::StepIsAlreadyRunning
     /// [`StepAlreadyAdvanced`]: IllegalStepTransition::StepAlreadyAdvanced
     Revisited,
+    /// A step the loop's return went back past, entered again on the walk
+    /// forward.
+    ///
+    /// **It crosses `advanced -> running` as [`Returned`](StepTarget::Returned)
+    /// does, and names no emitter.** The pass was charged once, at the return,
+    /// to the step that sent the work back; naming that step here would count
+    /// one loop once for every step the walk crosses, since
+    /// `store::step_iteration` counts `returned_by`.
+    ///
+    /// **Admitted only while a later step still stands where it sent the work
+    /// back** — [`Job::sent_back_past`](crate::Job::sent_back_past). Anywhere
+    /// else it is the redispatch [`StepAlreadyAdvanced`] refuses, renamed, and
+    /// [`NothingToRetrace`](IllegalStepTransition::NothingToRetrace) refuses it.
+    Retraced,
     /// Every mechanical tier held and the step's advance gate is a human one,
     /// so the step is waiting on a person.
     ///
@@ -329,9 +344,10 @@ impl StepTarget {
     /// The state this target arrives at.
     pub fn state(&self) -> StepState {
         match self {
-            StepTarget::Running | StepTarget::Returned(_) | StepTarget::Revisited => {
-                StepState::Running
-            }
+            StepTarget::Running
+            | StepTarget::Returned(_)
+            | StepTarget::Revisited
+            | StepTarget::Retraced => StepState::Running,
             StepTarget::Advanced | StepTarget::Overridden(_) => StepState::Advanced,
             StepTarget::Stopped(_) => StepState::Stopped,
             StepTarget::Retrying(_) => StepState::Retrying,
@@ -350,7 +366,10 @@ impl StepTarget {
     pub fn begins_a_run(&self) -> bool {
         matches!(
             self,
-            StepTarget::Running | StepTarget::Returned(_) | StepTarget::Revisited
+            StepTarget::Running
+                | StepTarget::Returned(_)
+                | StepTarget::Revisited
+                | StepTarget::Retraced
         )
     }
 
@@ -362,6 +381,7 @@ impl StepTarget {
             | StepTarget::Advanced
             | StepTarget::Returned(_)
             | StepTarget::Revisited
+            | StepTarget::Retraced
             | StepTarget::HeldForReview => None,
             StepTarget::Stopped(why) | StepTarget::Overridden(why) | StepTarget::Retrying(why) => {
                 Some(*why)
@@ -381,6 +401,7 @@ impl StepTarget {
             StepTarget::Running
             | StepTarget::Advanced
             | StepTarget::Revisited
+            | StepTarget::Retraced
             | StepTarget::HeldForReview
             | StepTarget::Stopped(_)
             | StepTarget::Overridden(_)
@@ -405,20 +426,20 @@ impl StepTarget {
     /// [`Running`](StepTarget::Running), which [`admits_step`] then refuses,
     /// and a Job that had looped would be unreadable off its own log.
     ///
-    /// **`by` is refused where it does not belong and required where it does**,
-    /// exactly as a reason is: a return with no emitter would rebuild as a pass
-    /// nobody's `iteration_count` was charged for, and an emitter on any other
-    /// move is a row this build cannot have written.
+    /// **`by` is refused where it does not belong**, exactly as a reason is: an
+    /// emitter on any move but a return is a row this build cannot have
+    /// written. On `advanced -> running` its absence is what a retrace is.
     pub fn arriving_at(
         from: StepState,
         state: StepState,
         why: Option<StepLevelTrigger>,
         by: Option<StepId>,
     ) -> Option<StepTarget> {
-        // The loop return, and the only way to reach it: no other edge into
-        // `running` starts at `advanced`, so the triple is unambiguous.
+        // The two walkers of `advanced -> running`, told apart by the emitter:
+        // a return names the step that caused it, and a retrace names nobody
+        // because the pass was charged once, at the return.
         if from == StepState::Advanced && state == StepState::Running && why.is_none() {
-            return by.map(StepTarget::Returned);
+            return Some(by.map_or(StepTarget::Retraced, StepTarget::Returned));
         }
         if by.is_some() {
             return None;
@@ -542,6 +563,13 @@ pub enum IllegalStepTransition {
     /// own target already. The `from` is carried because which of the four it
     /// was is what tells the caller which act it meant.
     NotAnAdvancedStep { step_id: StepId, from: StepState },
+    /// A retrace was aimed at a step no open return lies past.
+    ///
+    /// [`StepTarget::Retraced`] walks the return's edge with nobody named on
+    /// it, so what makes it a loop rather than a redispatch is a later step
+    /// still standing where it sent the work back. With none, it is
+    /// [`StepAlreadyAdvanced`](Self::StepAlreadyAdvanced) under another name.
+    NothingToRetrace { step_id: StepId },
 }
 
 impl fmt::Display for IllegalStepTransition {
@@ -597,9 +625,15 @@ impl fmt::Display for IllegalStepTransition {
             ),
             IllegalStepTransition::NotAnAdvancedStep { step_id, from } => write!(
                 f,
-                "step `{}` is {} and a loop returns only to a step that advanced",
+                "step `{}` is {} and a loop returns to or retraces only a step that advanced",
                 step_id.as_str(),
                 from.as_wire()
+            ),
+            IllegalStepTransition::NothingToRetrace { step_id } => write!(
+                f,
+                "step `{}` has advanced and no later step is waiting on it again, so entering \
+                 it is a redispatch rather than a retrace",
+                step_id.as_str()
             ),
         }
     }
@@ -696,7 +730,7 @@ pub(crate) fn admits_step(
             step_id: step_id.clone(),
         });
     }
-    if from != StepState::Advanced && matches!(to, StepTarget::Returned(_)) {
+    if from != StepState::Advanced && matches!(to, StepTarget::Returned(_) | StepTarget::Retraced) {
         return Err(IllegalStepTransition::NotAnAdvancedStep {
             step_id: step_id.clone(),
             from,

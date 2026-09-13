@@ -114,9 +114,25 @@ where
         // the same kind of fact — what is true of this Job at the moment a
         // Drone starts, rather than what the act that reached this spawn knew.
         let overtaken = self.overtaken_by_a_sibling(job).await;
+        // Asked of the record on every spawn and answered `None` unless a later
+        // step still stands where it sent the work back. Its findings then go
+        // to every Drone the walk forward puts on, not only the first.
+        let sent_back = match job.sent_back_past(step) {
+            Some(by) => {
+                let recorded = self
+                    .store()
+                    .lock()
+                    .await
+                    .step_evidence(&job_id)
+                    .map_err(Adrift::Reading)?;
+                crate::crossing::SentBack::of(job.workflow(), by, &recorded)
+            }
+            None => None,
+        };
         let opening = opening
             .also_carrying(waiting.clone())
-            .overtaken_by(overtaken);
+            .overtaken_by(overtaken)
+            .sent_back_by(sent_back);
         let brief = match opening.turn(job, job.workflow(), step, moved.as_ref()) {
             Ok(brief) => brief,
             Err(cause) => {

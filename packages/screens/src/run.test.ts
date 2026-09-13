@@ -231,3 +231,21 @@ describe("the moment a Drone handed in", () => {
     expect(factsWith(working, { ...handed, step_id: "implement" }).has("Handed in")).toBe(false);
   });
 });
+
+describe("a step that sends the work back", () => {
+  it("says which pass it is on, of how many its workflow allows", () => {
+    const facts = factsOf(
+      step({ step_id: "review", label: "Review the change", state: "awaiting_human", pass: { number: 2, of: 3 } }),
+    );
+    expect(facts.get("Pass")).toBe("2 of 3");
+  });
+
+  it("says nothing about passes on a step that closes no loop", () => {
+    expect(factsOf(step()).has("Pass")).toBe(false);
+  });
+
+  it("says nothing about passes before the step has started", () => {
+    const facts = factsOf(step({ state: "not_started", pass: { number: 1, of: 3 } }));
+    expect(facts.has("Pass")).toBe(false);
+  });
+});

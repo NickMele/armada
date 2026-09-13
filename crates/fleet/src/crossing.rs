@@ -41,6 +41,7 @@ pub struct Crossed {
     redirect: Option<Redirected>,
     dispatched: Option<Dispatched>,
     overtaken: Option<Overtaken>,
+    sent_back: Option<SentBack>,
 }
 
 impl Crossed {
@@ -126,6 +127,16 @@ impl Crossed {
 
     pub(crate) fn overtaken(&self) -> Option<&Overtaken> {
         self.overtaken.as_ref()
+    }
+
+    /// What a later part found when it sent the work back, where a return is
+    /// open past this part. Folded in by `crate::spawning`, like the redirect.
+    pub(crate) fn and_sent_back(self, sent_back: Option<SentBack>) -> Crossed {
+        Crossed { sent_back, ..self }
+    }
+
+    pub(crate) fn sent_back(&self) -> Option<&SentBack> {
+        self.sent_back.as_ref()
     }
 }
 
@@ -538,5 +549,74 @@ impl Reconciling {
 
     pub fn text(&self) -> &str {
         &self.0
+    }
+}
+
+/// What the later part that sent this one back found, handed to every Drone
+/// the walk forward puts on until that part is reached again.
+///
+/// **Framed as work, like [`Redirected`], and not as context, like
+/// [`Produced`].** The later part read what this part and the ones after it
+/// produced, and asked for another pass: what it found is why this part is
+/// being worked. A person's note may come with it, and that block follows
+/// this one, so the note reads as what to do about the findings.
+///
+/// **The record [`Produced`] reads, asked about a later part.**
+/// `core_model::Job::sent_back_past` names the part, and the file is the one
+/// its definition declares. **Drafted wording** — `docs/contracts/agent-prompt.md`
+/// has no copy for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SentBack(Produced);
+
+impl SentBack {
+    /// What `by` produced, or `None` where the frozen workflow does not have it.
+    pub fn of(
+        workflow: &FrozenWorkflow,
+        by: &StepId,
+        recorded: &[(StepId, StepEvidence)],
+    ) -> Option<SentBack> {
+        let steps = workflow.steps();
+        let at = steps.iter().position(|step| step.id() == by)?;
+        let claimed = recorded
+            .iter()
+            .find(|(step, _)| step == by)
+            .map(|(_, evidence)| evidence.claimed.clone());
+        Some(SentBack(Produced {
+            part: at + 1,
+            claimed,
+            not_claimed: None,
+            at: steps[at].deliverable().map(str::to_string),
+        }))
+    }
+
+    /// The block, as it reaches a Drone.
+    ///
+    /// **"Address it", and not "do it again".** The part's own work passed
+    /// its gate; what the later part found is narrower than the step, and a
+    /// Drone told to redo the step would redo what nobody asked about.
+    pub(crate) fn text(&self) -> String {
+        let Produced {
+            part, claimed, at, ..
+        } = &self.0;
+        let mut block = format!(
+            "WHAT SENT THIS PART BACK\n\nPart {part} read the work after this part passed, \
+             and sent it back to be worked again. It found:\n\n"
+        );
+        block.push_str(&match claimed {
+            Some(claimed) => format!("  \"{claimed}\""),
+            None => String::from("  There is no record of what it found."),
+        });
+        block.push_str(&match at {
+            Some(at) => format!(
+                "\n\nThe whole of it is in {at}, in the worktree you are in. Read it \
+                 before you start and address what it found: it is why this part is \
+                 being worked again. What is quoted above summarises it and does not \
+                 replace it."
+            ),
+            None => String::from(
+                "\n\nAddress what it found: it is why this part is being worked again.",
+            ),
+        });
+        block
     }
 }
