@@ -130,6 +130,19 @@ export const FIRST_TAB: BoardTab = "all";
  */
 export { needsYou, needsYouClause, oldest, tabOf } from "./needs-you";
 
+/**
+ * The Jobs the Board lists: the picked repository's, by `owner_manifest_id`.
+ * `null` is no pick at all, from a Fleet that lists no repositories, and scopes
+ * nothing. A picked repository with no Manifest owns no Job yet.
+ */
+export function ofPicked(
+  jobs: readonly JobSummary[],
+  picked: { manifest?: { id: string } } | null,
+): readonly JobSummary[] {
+  if (picked === null) return jobs;
+  return jobs.filter((job) => job.owner_manifest_id === picked.manifest?.id);
+}
+
 /** Whether a tab admits a job. `all` admits every one, including the unplaceable. */
 export function inTab(job: JobSummary, tab: BoardTab): boolean {
   return tab === "all" || tabOf(job) === tab;
