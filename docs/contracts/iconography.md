@@ -96,9 +96,10 @@ raised `--fg-subtle` to `#7E8CA0`, 4.58:1 on `--bg-overlay`
 could not. Both are drawn against it because neither may carry a status hue.
 `circle-minus` is `gate_undecided`'s mark: it reads as unjudged rather than
 judged, and a verdict hue would say the wrong thing — see Judge criterion
-verdicts below. `circle-dashed` is `step_state.not_started`'s mark alone — a
-dormant step, never a loading state — where a hue would claim an activity
-that has not begun; `--fg-muted` was rejected for the same row because it is
+verdicts below. `circle-dashed` is `step_state.not_started`'s mark, and a
+Plan region task's `open` mark one level below it — a dormant step or task,
+never a loading state — where a hue would claim an activity that has not
+begun; `--fg-muted` was rejected for the same row because it is
 `retrying`'s colour, and `packages/tokens/src/status.css` keeps `not_started`
 one step dimmer than `retrying` on purpose. Full argument in
 `packages/icons/icons.toml`.
@@ -538,7 +539,8 @@ triangle-alert Doctor only, plus generic warnings in toasts. A release on
                withdrawal it was describing, and packages/icons/icons.toml has
                carried the withdrawal the whole time
 minus          nothing checked this — a verdict-sheet row where no Judge and no
-               Check beyond artifact_exists ruled. Never a Check outcome
+               Check beyond artifact_exists ruled — and a Plan region's
+               dropped task, one level below a Job. Never a Check outcome
                (shield-*) or a Judge outcome (circle-*)
 ```
 

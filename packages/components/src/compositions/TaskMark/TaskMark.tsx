@@ -9,11 +9,10 @@ import { Check, CircleDashed, CircleDot, Minus, type LucideIcon } from "lucide-r
  * vocabulary, not `job_steps.state`, so there is no `enum-verbs.toml` row to
  * read the accessible names from — `SAID` below is written, not generated.
  *
- * **`circle-dashed` and `minus` outrun their written reservation.**
- * `packages/icons/icons.toml` reserves the first to `step_state.not_started`
- * and the second to a verdict-sheet's unjudged row; a task is neither. The
- * assignment is the owner's, recorded in the journey above — the registry
- * text has not caught up.
+ * `circle-dashed` and `minus` are each reserved to two uses now —
+ * `packages/icons/icons.toml`'s `[[icons.circle-dashed.usage]]` and
+ * `[[icons.minus.usage]]` name this component's `open` and `dropped` marks
+ * beside the one each glyph already carried.
  */
 export type TaskMarkState = "open" | "working" | "done" | "dropped";
 
