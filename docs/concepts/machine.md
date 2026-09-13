@@ -30,7 +30,8 @@ It stays Machine because the preference is unfelt: demand already drives a claim
 
 ### Resources & Budget
 
-- CPU/mem headroom threshold
+- Memory headroom threshold
+- Disk headroom floor
 - Fleet health-check and resource-poll interval
 - SQLite WAL checkpoint interval
 - Concurrency cap

@@ -194,14 +194,15 @@ impl QueuedReason {
 /// replacement for it.** `job-statuses.toml` gives a `queued` Job exactly three
 /// labels and every variant here folds into the second of them, so a Board row
 /// is unchanged by this existing. What it adds is the fleet-wide answer to "why
-/// is nothing starting", which no surface could reach: the bound, CPU, memory
-/// and disk were one word.
+/// is nothing starting", which no surface could reach: the bound, memory and
+/// disk were one word. **CPU is not a reason** and has no variant: the
+/// operating system schedules it, so Fleet does not hold a Job back for it.
 ///
 /// # One value, because admission asks one question at a time
 ///
 /// `fleet::admitting::Room` asks the bound before it reads the machine, so a
 /// Fleet already at its cap never pays for a reading it would not have acted
-/// on. That ordering makes [`AdmissionHold::ConcurrencyBound`] and the three
+/// on. That ordering makes [`AdmissionHold::ConcurrencyBound`] and the two
 /// machine variants **exclusive**: "the cap is spent *and* the disk is full" is
 /// not a state this can carry. It reports what is stopping admission now, and
 /// says the next thing once that clears.
@@ -222,12 +223,10 @@ pub enum AdmissionHold {
     /// place. A count taken from Job statuses would disagree with admission
     /// exactly when somebody is asking why nothing started.
     ConcurrencyBound,
-    /// Too little of the machine's cores is spare.
-    Cpu,
     /// Too little of the machine's memory is spare.
     Memory,
     /// Too few bytes are free on the volume the worktrees are cut under. **The
-    /// one of the three that has actually run out**, and the one whose
+    /// one of the two that has actually run out**, and the one whose
     /// exhaustion destroys work rather than slowing it.
     Disk,
 }
@@ -238,14 +237,12 @@ impl AdmissionHold {
     pub const ALL: &'static [AdmissionHold] = &[
         AdmissionHold::ConcurrencyBound,
         AdmissionHold::Disk,
-        AdmissionHold::Cpu,
         AdmissionHold::Memory,
     ];
 
     pub fn as_wire(&self) -> &'static str {
         match self {
             AdmissionHold::ConcurrencyBound => "concurrency_bound",
-            AdmissionHold::Cpu => "cpu",
             AdmissionHold::Memory => "memory",
             AdmissionHold::Disk => "disk",
         }

@@ -178,6 +178,11 @@ where
         Ok(FleetCapacity::of(slots.cap(), slots.count(), room.hold()))
     }
 
+    /// The limits in force and what shipped — [`crate::limits`].
+    async fn get_limits(&self) -> Result<ipc::FleetLimits, Refusal> {
+        Ok(self.limits_in_force().await)
+    }
+
     /// What the last re-read of `armada.yml` came to, straight off what Fleet
     /// is holding.
     ///

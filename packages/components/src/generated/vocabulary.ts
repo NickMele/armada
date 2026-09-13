@@ -58,7 +58,6 @@ export const QUEUED_REASON: Readonly<Record<string, Rendering | undefined>> = {
 /** `admission_hold`, keyed by the wire value. */
 export const ADMISSION_HOLD: Readonly<Record<string, Rendering | undefined>> = {
   "concurrency_bound": { verb: "waiting on a free drone", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Every drone slot the fleet allows is already in use. This starts once one finishes or is redispatched." },
-  "cpu": { verb: "waiting on CPU", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Fleet did not find enough spare CPU to start another drone." },
   "memory": { verb: "waiting on memory", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Fleet did not find enough spare memory to start another drone." },
   "disk": { verb: "waiting on disk", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Fleet did not find enough free disk space to start another drone." },
 };
@@ -268,7 +267,6 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "step_state", variant: "stopped", missing: ["token"] },
   { vocabulary: "queued_reason", variant: "over_budget", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "concurrency_bound", missing: ["icon"] },
-  { vocabulary: "admission_hold", variant: "cpu", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "memory", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "disk", missing: ["icon"] },
   { vocabulary: "budget_hold", variant: "cost_cap", missing: ["icon"] },

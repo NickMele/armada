@@ -188,6 +188,19 @@ pub fn capacity() -> FleetCapacity {
     }
 }
 
+/// The shipped numbers, in force because nothing has been saved.
+pub fn limits() -> ipc::FleetLimits {
+    let shipped = ipc::LimitValues {
+        concurrency: 2,
+        memory_spare_percent: 15,
+        disk_floor_gib: 10,
+    };
+    ipc::FleetLimits {
+        values: shipped,
+        shipped,
+    }
+}
+
 /// A refused re-read: the shape with the most in it, because a refusal carries
 /// what an adoption does not.
 pub fn manifest_reading() -> ipc::ManifestReading {

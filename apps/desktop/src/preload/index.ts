@@ -21,7 +21,7 @@ import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@arm
 import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
 import type { SaveManifestFile } from "@armada/protocol";
 import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
-import type { CommandAnswer, JudgeAnswer, WhenBlocked, WhenRefused } from "@armada/protocol";
+import type { CommandAnswer, JudgeAnswer, SaveLimits, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
 // The whole surface the renderer is allowed to see.
@@ -188,6 +188,11 @@ const api: BridgeApi = {
   // The figure is a plain turn count, the unit `JobSpend` reads it in.
   raiseTurnCap: (jobId: string, turnCap: number): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.raiseTurnCap, jobId, turnCap),
+
+  // Fleet's three admission limits. **Fleet-wide, and no Job id crosses this
+  // channel** — the only act on this surface that names none.
+  saveLimits: (values: SaveLimits): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.saveLimits, values),
 
   // Say a job failed in error, and file its record with the reason. **Its own
   // entry and not a mode on `overrideVerdict`**: that one moves the job past a

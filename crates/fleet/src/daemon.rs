@@ -131,7 +131,13 @@ pub struct Fleet<H, V, W> {
     /// crate could hand one over already true. See [`mod@crate::naming`].
     names: Names,
     machine: Arc<dyn Machine>,
-    headroom: Headroom,
+    /// The headroom in force: shipped, or what a person saved. A `std` lock
+    /// for `drones`' reason — never held across an `.await`. See
+    /// [`crate::limits`], which is the only writer.
+    headroom: std::sync::Mutex<Headroom>,
+    /// What the composition root handed in, kept so a save can say what
+    /// shipped and an omitted field can fall back to it.
+    shipped: crate::limits::Limits,
     polling: Polling,
     noticing: Noticing,
     reclaiming: Reclaiming,

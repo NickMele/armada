@@ -27,6 +27,7 @@ export * from "./Reports";
 export * from "./Row";
 export * from "./Sheets";
 export * from "./Worktrees";
+export * from "./FleetSettings";
 export * from "./board";
 export * from "./calls";
 export * from "./outputs";

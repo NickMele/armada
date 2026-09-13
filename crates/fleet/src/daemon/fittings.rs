@@ -30,6 +30,7 @@ use crate::gate::CheckBudget;
 use crate::headroom::{Headroom, Machine, Polling};
 use crate::holding::Reclaiming;
 use crate::judging::{Aloft, JudgeBudget};
+use crate::limits::Limits;
 use crate::mint::Mint;
 use crate::noticing::{Noticing, Sweep};
 use crate::peer::{Drones, PeerOf};
@@ -116,17 +117,20 @@ pub struct Fittings<H, V, W> {
     /// [`peer::Kernel`](crate::peer::Kernel), and a fixture has no sockets to
     /// ask about.
     pub peers: Arc<dyn PeerOf>,
-    /// How many Jobs Fleet may work at once. **The
-    /// `settings.concurrency-cap` row, enforced** — see [`Concurrency`], which
-    /// has no default for the reason none of the four dials above it does.
+    /// How many Jobs Fleet may work at once **where nobody has saved another**.
+    /// The `settings.concurrency-cap` row, enforced — see [`Concurrency`], which
+    /// has no default for the reason none of the four dials above it does, and
+    /// `crate::limits` for how a saved value replaces it.
     pub concurrency: Concurrency,
     /// What the machine has left, asked rather than assumed. **A seam so a
     /// test can plant one**, exactly as `peers` is — the shipped answer is
     /// [`TheMachine`](crate::headroom::TheMachine) and a fixture has no machine
     /// it can hold still.
     pub machine: Arc<dyn Machine>,
-    /// How much of the machine must be free before another Drone starts. **The
-    /// `settings.cpu-mem-headroom-threshold-for-spawning` row, enforced** — see
+    /// How much memory and disk must be free before another Drone starts,
+    /// **where nobody has saved another**. The
+    /// `settings.cpu-mem-headroom-threshold-for-spawning` and
+    /// `settings.disk-headroom-floor-for-spawning` rows, enforced — see
     /// [`Headroom`], which has no default for [`Concurrency`]'s reason.
     pub headroom: Headroom,
     /// How stale a machine reading may be. **The
@@ -217,6 +221,14 @@ where
 {
     pub fn assembled(fittings: Fittings<H, V, W>) -> Fleet<H, V, W> {
         let run = fittings.mint.ulid();
+        let shipped = Limits {
+            concurrency: fittings.concurrency,
+            headroom: fittings.headroom,
+        };
+        // **A row that will not read is the shipped limits**, not a Fleet that
+        // will not start: `Store::open` already refused a damaged file, and the
+        // next save writes the whole row again.
+        let in_force = shipped.overlaid_by(&fittings.store.saved_limits().unwrap_or_default());
         Fleet {
             store: Mutex::new(fittings.store),
             harness: Arc::new(fittings.harness),
@@ -249,10 +261,11 @@ where
             turns: api::Turns::new(),
             inbox: EvidenceInbox::new(),
             delivered: Mutex::new(BTreeMap::new()),
-            slots: Mutex::new(Slots::bounded_by(fittings.concurrency)),
+            slots: Mutex::new(Slots::bounded_by(in_force.concurrency)),
             names: crate::naming::Names::new(),
             machine: fittings.machine,
-            headroom: fittings.headroom,
+            headroom: std::sync::Mutex::new(in_force.headroom),
+            shipped,
             polling: fittings.polling,
             noticing: fittings.noticing,
             reclaiming: fittings.reclaiming,

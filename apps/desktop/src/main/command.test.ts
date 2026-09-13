@@ -76,6 +76,7 @@ function boardOn(port: number): Board {
     publish: () => {},
     watchProposal: () => {},
     proposalOut: () => null,
+    rereadCapacity: async () => {},
   };
 }
 
@@ -294,6 +295,46 @@ it("names the allow it takes back by the whole command", async () => {
 
   expect(asked[0]?.path).toBe(`/jobs/${A_JOB.id}/remove_allowed_command`);
   expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({ run: "pnpm add -D reselect@5.1.1" });
+});
+
+/**
+ * **An omitted field never crosses.** `SaveLimits` is a partial, and a body
+ * built with the other two fields `undefined` would still put both keys on
+ * the wire — `JSON.stringify` drops `undefined`, but only where nothing else
+ * writes the key first — so this pins that only the one field sent is present.
+ */
+it("sends one changed limit alone, with the others left out", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  const answer = await commands.saveLimits({ concurrency: 4 });
+
+  expect(answer.ok).toBe(true);
+  expect(asked[0]?.path).toBe("/limits/save");
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({ concurrency: 4 });
+});
+
+/** More than one limit in one save is one request, not one per field. */
+it("sends every changed limit in one request", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  await commands.saveLimits({ memory_spare_percent: 20, disk_floor_gib: 5 });
+
+  expect(asked).toHaveLength(1);
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({
+    memory_spare_percent: 20,
+    disk_floor_gib: 5,
+  });
+});
+
+/** Nothing connected is nowhere to send a save to, `raiseCostCap`'s reason. */
+it("refuses a save with nothing connected, rather than throwing", async () => {
+  const commands = new JobCommands({ ...boardOn(0), port: () => null });
+
+  const answer = await commands.saveLimits({ concurrency: 4 });
+
+  expect(answer).toEqual({ ok: false, why: "not_connected" });
 });
 
 /** A listener that answers `search_files` with a fixed list, and records the path asked. */

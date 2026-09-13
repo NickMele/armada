@@ -199,7 +199,7 @@ rather than acting on the wrong one.
 | `awaiting_approval` | none | Waiting on your explicit Job-level dispatch approval |
 | `queued` | none | Approved. Nothing blocking but its turn |
 | `queued` | `blocked_by_dependency` | Waiting on another Job in the DAG |
-| `queued` | `waiting_on_resources` | CPU or memory headroom, or a port span, not currently available |
+| `queued` | `waiting_on_resources` | A free place under the concurrency cap, memory or disk headroom, or a port span, not currently available. Never CPU |
 
 **Approval is a status, not an axis.** A Job can be approved and out of resources at once, and a status plus a reason says both. `ready` is the absence of a reason rather than a value.
 

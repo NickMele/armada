@@ -442,9 +442,9 @@ export const Convoy: Story = {
  * over: no vocabulary in the repository contains those words, and the badge
  * beside it already carries the reason — which is exactly the correction
  * `Active jobs list` made to its own queued rows. The registry does have a word
- * for a Job the machine is holding, `admission_hold.cpu`, and it reads "waiting
- * on CPU"; it renders in the status bar, once for the whole fleet, because how
- * full the machine is is not a fact about one row.
+ * for a Job the machine is holding, `admission_hold.memory`, and it reads
+ * "waiting on memory"; it renders in the status bar, once for the whole fleet,
+ * because how full the machine is is not a fact about one row.
  */
 export const SubDispatchedWaitingOnResources: Story = {
   args: {

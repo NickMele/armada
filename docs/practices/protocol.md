@@ -201,8 +201,8 @@ other side's code has an exhaustive match, a presence assumption, or a name
 lookup anywhere near the thing you're touching.
 
 **The caveat row has exactly one instance, and it is deliberate.**
-`FleetCapacity.held_by` — which one of the concurrency bound, CPU, memory or
-disk is stopping the next Drone — is a `String` on the wire rather than a
+`FleetCapacity.held_by` — which one of the concurrency bound, memory or disk
+is stopping the next Drone — is a `String` on the wire rather than a
 `wire_enum!`, and `crates/ipc/src/capacity.rs` is where that is argued. Fleet is
 the only writer, Bridge looks the value up in the generated vocabulary rather
 than matching on it, and that map already answers `undefined` for a key it does
@@ -751,6 +751,17 @@ about `..` and about absolute paths; a list has none to break.
 **A press with no body is unchanged**, which is what keeps this additive in
 behaviour as well as in shape: an older Bridge sends nothing and runs the last
 spec a Drone named, exactly as it did at 13.0.
+
+## Protocol 13.2: the limits a person changes
+
+`get_limits` and `save_limits` are new routes, so the minor moves. `cpu` leaves
+`admission_hold` in the same change, and that is minor too: Bridge reads the set
+as opaque, and a Bridge built before this simply never sees the word again.
+
+**A value out of range does not decode.** `SaveLimits` holds each field as a
+bounded integer, so the refusal is the ordinary undecodable 400 and Fleet is
+never asked. Bridge bounds the field the same way, so a person meets the range
+before the wire does.
 
 ## Other things specific to this seam
 

@@ -47,6 +47,19 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/capacity",
     },
+    // The three numbers `/capacity` is measured against, beside it and for its
+    // reason: they are Fleet's, not a Job's. The save spells its act in the last
+    // segment the way `/manifest/save_file` does, so the read stays the noun.
+    Route {
+        operation: "get_limits",
+        method: "GET",
+        path: "/limits",
+    },
+    Route {
+        operation: "save_limits",
+        method: "POST",
+        path: "/limits/save",
+    },
     // Fleet's reading of its own Manifest, and singular where `/manifests` is
     // plural on purpose: that route lists what Fleet holds, and this one is the
     // single `armada.yml` Fleet is running on and watching. Not under `/jobs`

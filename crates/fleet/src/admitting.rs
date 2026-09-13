@@ -90,7 +90,6 @@ impl Room {
         match self {
             Room::Yes => None,
             Room::Bound => Some(AdmissionHold::ConcurrencyBound),
-            Room::Machine(Short::Cpu) => Some(AdmissionHold::Cpu),
             Room::Machine(Short::Memory) => Some(AdmissionHold::Memory),
             Room::Machine(Short::Disk) => Some(AdmissionHold::Disk),
         }

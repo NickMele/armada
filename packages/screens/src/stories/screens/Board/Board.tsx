@@ -52,6 +52,7 @@ export function BoardFrom({
     onReadReports: noop,
     onCloseWorktrees: noop,
     onReadWorktrees: noop,
+    onOpenLimits: noop,
     onRefresh: noop,
     jobs,
     onClearTerminal: noop,
@@ -71,6 +72,7 @@ export function BoardFrom({
         summary={head?.summary}
         actions={head?.actions}
         showing={SURFACE.board}
+        onOpenLimits={noop}
       >
         <div className="armada-screen__mounted">
           <Jobs

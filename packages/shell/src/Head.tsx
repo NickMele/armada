@@ -68,6 +68,9 @@ export type HeadProps = {
   onReadReports: () => void;
   onCloseWorktrees: () => void;
   onReadWorktrees: () => void;
+  /** Opens Fleet settings. Board's own menu row; the sheet itself is the
+   *  App's, since it opens over any screen, not just the Board's. */
+  onOpenLimits: () => void;
   onRefresh: () => void;
   /** Every Job Bridge holds, for the counts on the Board's two bulk acts. */
   jobs: readonly JobSummary[];
@@ -92,6 +95,7 @@ export function headOf({
   onReadReports,
   onCloseWorktrees,
   onReadWorktrees,
+  onOpenLimits,
   onRefresh,
   jobs,
   onClearTerminal,
@@ -178,6 +182,7 @@ export function headOf({
         onRefresh={onRefresh}
         onReadReports={onReadReports}
         onReadWorktrees={onReadWorktrees}
+        onOpenLimits={onOpenLimits}
         onClearTerminal={onClearTerminal}
         onForgetTerminal={onForgetTerminal}
       />

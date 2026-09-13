@@ -26,6 +26,7 @@ import type {
   RunListRead,
   RunOutputRead,
   CheckoutRunListRead,
+  SaveLimits,
   StagedAttachment,
   StartCheckoutRun,
   StartRun,
@@ -338,6 +339,16 @@ export type BridgeApi = {
    * turns left to take.
    */
   raiseTurnCap: (jobId: string, turnCap: number) => Promise<Outcome>;
+  /**
+   * Change one or more of Fleet's three admission limits: drones at once, the
+   * memory and the disk Fleet keeps free before starting another. **Fleet-wide
+   * and never a Job's own act.**
+   *
+   * Applies the next time a Job is ready to start; nothing running stops. An
+   * omitted field keeps its value. Fleet refuses a figure out of range in the
+   * API's own error shape, and nothing here saves any of the three.
+   */
+  saveLimits: (values: SaveLimits) => Promise<Outcome>;
   /**
    * Say that this Job failed in error, in your own words, and file the Job's
    * own record with it.

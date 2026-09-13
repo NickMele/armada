@@ -237,9 +237,10 @@ pub const PROVISIONAL_DRY_RUNS: DryRuns = DryRuns::of(3);
 /// deadlock `#215` describes impossible, and it is the smallest step that is
 /// still a step.
 ///
-/// **Raising it is a one-line edit here and a real decision.** What it buys is
-/// throughput; what it costs is the two unbuilt guards above, and a longer wait
-/// at the merge end, where `Fleet::merge_end` serialises every Job's push.
+/// **The shipped number, not the one in force.** A person changes it from
+/// Bridge while Fleet runs and the store keeps it — `fleet::limits`. What more
+/// buys is throughput; what it costs is the unbuilt guard above, and a longer
+/// wait at the merge end, where `Fleet::merge_end` serialises every push.
 pub const PROVISIONAL_CONCURRENCY: Concurrency = Concurrency::of(2);
 
 /// How much of the machine has to be free before another Drone starts.
@@ -250,12 +251,11 @@ pub const PROVISIONAL_CONCURRENCY: Concurrency = Concurrency::of(2);
 /// other dial on this page. They are two rows because disk is not a share —
 /// see [`Headroom::of`].
 ///
-/// **A sixth of the machine, and it is a floor rather than a measurement.**
-/// Nothing has measured what a Drone costs in CPU or memory — a Drone spends
-/// most of its life waiting on an API, and what actually loads this machine is
-/// the Checks its gate runs. What the number is for is refusing to start work
-/// on a machine that is already saturated, and a sixth is the smallest reserve
-/// that is visibly not noise.
+/// **Shipped values, each replaced by one a person saves** — `fleet::limits`.
+///
+/// **15% of memory, a floor rather than a measurement.** Nothing has measured
+/// what a Drone costs in memory; the number refuses work on a machine that is
+/// already full. CPU has no threshold at all: the operating system schedules it.
 ///
 /// **Ten gibibytes of disk, and that one is measured.** A parallel agent run
 /// filled a volume at 220 GB across 74 worktrees — three gigabytes each, cut

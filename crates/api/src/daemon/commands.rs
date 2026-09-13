@@ -758,4 +758,16 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         named: ipc::NamedServer,
     ) -> impl Future<Output = Result<ipc::ServerState, Refusal>> + Send;
+
+    /// `save_limits` — save any of the three limits and answer with what is
+    /// now in force. **An omitted field keeps its value.**
+    ///
+    /// **Nothing out of range reaches this.** `ipc::SaveLimits` cannot hold
+    /// one, so the route refuses it as undecodable. It changes the next
+    /// admission and stops nothing already running; [`Refusal::Fault`] where
+    /// the save would not be written, and then nothing changed.
+    fn save_limits(
+        &self,
+        save: ipc::SaveLimits,
+    ) -> impl Future<Output = Result<ipc::FleetLimits, Refusal>> + Send;
 }

@@ -80,6 +80,8 @@ mod job;
 /// activity log was designed around and nothing produced.**
 mod journal;
 mod judged;
+/// Fleet's three changeable limits. **A value out of range does not decode.**
+mod limits;
 /// The Evidence tool's transport. **A different seam** — Fleet to Drone, not
 /// Fleet to Bridge — so it is a module rather than a flat re-export and none of
 /// its types are in `operations.toml`.
@@ -181,6 +183,9 @@ pub use journal::{
     JobLog, JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
 pub use judged::{Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable};
+pub use limits::{
+    DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent, SaveLimits, Within,
+};
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
 pub use raising::{CapRaise, RaisedBy, TurnRaise};

@@ -1,9 +1,10 @@
 //! How many Jobs Fleet works at once, and where each one's Drone is held.
 //!
-//! **The bound is configured, not computed.** Nothing in this workspace reads
-//! memory, CPU or quota — `#44` is where that arrives — so [`Concurrency`] is
-//! handed in by the composition root like every other of Fleet's dials, and
+//! **The bound is configured, not computed.** [`Concurrency`] is handed in by
+//! the composition root as the shipped number, replaced by a saved one at
+//! assembly and again whenever a person saves — `crate::limits` — and
 //! `settings.toml`'s `concurrency-cap` row is the specification it satisfies.
+//! Machine headroom is `crate::headroom`'s, a separate question.
 //!
 //! **It bounds Drones, never approvals.** `docs/concepts/fleet.md` holds that
 //! rule; nothing here is reached until a person has approved, because
@@ -109,6 +110,13 @@ impl Slots {
     /// anything can start.
     pub(crate) fn cap(&self) -> usize {
         self.cap.jobs()
+    }
+
+    /// Replace the bound. **Nothing already held is closed**: a bound lowered
+    /// below [`Slots::count`] only stops [`Slots::room`] answering yes until
+    /// enough Jobs finish.
+    pub(crate) fn rebound(&mut self, cap: Concurrency) {
+        self.cap = cap;
     }
 
     /// Whether another Job may be admitted. **The predicate `admit_next` opens

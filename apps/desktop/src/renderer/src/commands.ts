@@ -40,6 +40,7 @@ import type {
 import type {
   CommandAnswer,
   JudgeAnswer,
+  SaveLimits,
   StartCheckoutRun,
   StartRun,
   WhenBlocked,
@@ -461,6 +462,18 @@ export function useCommands(sending: Sending) {
    * back is what the dialog shows next — held there rather than in app state,
    * where it would outlive the dialog that produced it.
    */
+  /**
+   * Change one or more of Fleet's three admission limits. **Not through
+   * `setActing`**, `report`'s reason: there is no Job here for that state to
+   * key on, and the sheet that sends this is off on its own while a save is
+   * out.
+   */
+  async function saveLimits(values: SaveLimits): Promise<Outcome> {
+    const answer = await window.armada.saveLimits(values);
+    setOutcome(answer);
+    return answer;
+  }
+
   async function report(jobId: string, filing: FileReport): Promise<Outcome> {
     const answer = await window.armada.fileReport(jobId, filing);
     // Published as well as returned: a refusal belongs in the one place this
@@ -579,6 +592,7 @@ export function useCommands(sending: Sending) {
     rerun,
     raiseCap,
     raiseTurns,
+    saveLimits,
     report,
     decide,
     refresh,

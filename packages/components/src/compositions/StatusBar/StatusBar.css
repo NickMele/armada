@@ -88,6 +88,25 @@
   color: var(--status-awaiting-review);
 }
 
+/* A fact in the bar that is also the door to the control behind it — the
+   admission hold naming the setting that would clear it. No border, no fill,
+   no icon: the same type as the item it sits inside, underlined only on
+   hover and focus, so the bar keeps reading as facts and not as a toolbar. */
+.armada-status-bar__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.armada-status-bar__link:hover,
+.armada-status-bar__link:focus-visible {
+  color: var(--fg-default);
+  text-decoration: underline;
+}
+
 /* Spend sits at the trailing edge. The segment is sized by its content and the
    window, not by a track: `68% quota left` and `~$2.40 of $20` are very
    different strings and neither mode is the default. */

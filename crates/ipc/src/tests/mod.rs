@@ -36,6 +36,7 @@ mod gates;
 /// A Job's timeline, in the three shapes a row can be.
 mod history;
 mod journal;
+mod limits;
 mod mcp;
 /// The one tool the harness calls rather than the model, and the two answers.
 mod permission;

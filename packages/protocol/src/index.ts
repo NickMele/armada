@@ -31,6 +31,7 @@ export * from "./history";
 export * from "./holding";
 export * from "./journal";
 export * from "./judged";
+export * from "./limits";
 export * from "./proposal";
 export * from "./protocol";
 export * from "./proposing";

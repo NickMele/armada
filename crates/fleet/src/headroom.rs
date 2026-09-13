@@ -7,14 +7,14 @@
 //! `docs/concepts/fleet.md` separates the two, `escalation-triggers.toml` types
 //! the second, and nothing here raises it.
 //!
-//! # Three signals, and disk is the one that has bitten
+//! # Three readings, two held against, and disk is the one that has bitten
 //!
-//! CPU and memory are what `settings.toml`'s headroom row names. Disk is here
-//! from a measured failure rather than from symmetry: a volume filled during a
-//! parallel agent run, 220 GB across 74 worktrees, and three agents died at
-//! zero bytes free holding uncommitted work. Nothing saw it coming and the
-//! first symptom was `ENOSPC`. A Job cuts a worktree and runs a build, so its
-//! disk cost is the one of the three that is predictable in advance.
+//! **CPU is read and never refuses.** The operating system schedules CPU, and a
+//! machine whose load was pushed to 27 on 10 cores by other agents left Fleet
+//! as the only thing on it that yielded. Doctor still prints it. Memory is what
+//! `settings.toml`'s headroom row names. Disk is here from a measured failure:
+//! a volume filled during a parallel agent run, 220 GB across 74 worktrees, and
+//! three agents died at zero bytes free holding uncommitted work.
 //!
 //! Quota is **not** a fourth. `docs/spikes/005-what-does-a-job-cost.md` settled
 //! it: the stream's rate-limit event carries a window and a status and no
@@ -83,6 +83,11 @@ impl Bytes {
     pub const fn count(&self) -> u64 {
         self.0
     }
+
+    /// Whole gibibytes, rounded down — the unit a floor is decided and saved in.
+    pub const fn whole_gibibytes(&self) -> u64 {
+        self.0 / (1024 * 1024 * 1024)
+    }
 }
 
 /// How stale a machine reading may be before it is taken again.
@@ -142,9 +147,11 @@ impl Reading {
 /// one of these folds to the second. This is the operator's distinction, not
 /// the Board's, and nothing reads it yet: `crate::admitting::Room` says what a
 /// surface would have to take to.
+///
+/// **No `Cpu`.** A variant here is a reason admission can refuse, and CPU is
+/// not one — see the module header.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Short {
-    Cpu,
     Memory,
     Disk,
 }
@@ -152,7 +159,6 @@ pub enum Short {
 impl std::fmt::Display for Short {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         out.write_str(match self {
-            Short::Cpu => "cpu",
             Short::Memory => "memory",
             Short::Disk => "disk",
         })
@@ -171,7 +177,7 @@ pub struct Headroom {
 }
 
 impl Headroom {
-    /// One share for CPU and memory, and an absolute floor for disk.
+    /// A share for memory, and an absolute floor for disk.
     ///
     /// **Two rows and not one, because disk is not a share.** A fraction of the
     /// volume is the wrong unit for a cost that is absolute: a tenth of a 4 TB
@@ -183,19 +189,26 @@ impl Headroom {
         Headroom { spare, disk }
     }
 
+    /// The share of memory that must be spare.
+    pub const fn memory_spare(&self) -> Spare {
+        self.spare
+    }
+
+    /// The bytes that must be free on the worktree volume.
+    pub const fn disk_floor(&self) -> Bytes {
+        self.disk
+    }
+
     /// Which resource is too short to start another Drone on, or `None` where
-    /// there is enough of all three.
+    /// there is enough of both. **The reading's CPU is never looked at.**
     ///
-    /// **Disk first.** All three refuse the same dispatch, so the order decides
-    /// only which one is named — and disk is the one that has actually run out
-    /// here, the one a person can act on, and the one whose exhaustion destroys
-    /// work rather than slowing it.
+    /// **Disk first.** Both refuse the same dispatch, so the order decides only
+    /// which one is named — and disk is the one that has actually run out here,
+    /// the one a person can act on, and the one whose exhaustion destroys work
+    /// rather than slowing it.
     pub fn short_of(&self, reading: &Reading) -> Option<Short> {
         if reading.disk_free() < self.disk {
             return Some(Short::Disk);
-        }
-        if reading.cpu().spare() < self.spare {
-            return Some(Short::Cpu);
         }
         if reading.memory().spare() < self.spare {
             return Some(Short::Memory);

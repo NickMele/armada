@@ -51,7 +51,7 @@ transport = "HTTP"
 agent_access = "Yes"
 description = "How many Drones Fleet may run, how many it is running, and which one thing is holding the next one back"
 notes = """
-Fleet-wide, and the answer no per-Job field could give. `get_job`'s `queued_reason` says why *that row* has not started and folds the concurrency bound, CPU, memory and disk into one label — `waiting_on_resources` is the only thing `job-statuses.toml` grants a `queued` Job short of anything. So a person saw that their Job was held and never what was holding it.
+Fleet-wide, and the answer no per-Job field could give. `get_job`'s `queued_reason` says why *that row* has not started and folds the concurrency bound, memory and disk into one label — `waiting_on_resources` is the only thing `job-statuses.toml` grants a `queued` Job short of anything. So a person saw that their Job was held and never what was holding it.
 
 `occupied` is the roster's own count, which is what admission measures the bound against, and never a count of `running` rows. A Job that escalated on a refusal keeps its Drone alive and idle so a redirect costs no respawn, and it keeps its place in the roster while its status is `escalated`. A status-derived count would read "1 of 2" while Fleet admits nothing.
 
@@ -62,6 +62,34 @@ Its spelling is the one open set on this seam. Bridge reads it through the gener
 A route of its own rather than a field on `list_jobs`, which is read on every Board refresh and is a list of Jobs. This is one small answer about Fleet, asked by the surface that draws Fleet's own state.
 
 `agent_access` is `Yes` for the reason the other queries have it: reading how full the fleet is costs three integers and tells Helm why the Job it dispatched has not started.
+"""
+
+[operations.get_limits]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "The Drones-at-once bound, the memory share and the disk floor in force, and the values Fleet shipped with"
+notes = """
+What `get_capacity` is measured against. A route of its own because the three change only when a person saves, where capacity moves every time a Drone starts or finishes.
+
+`shipped` rides beside the values in force so a surface can say which of them somebody changed, and offer the way back, without a second read.
+
+`agent_access` is `No`: nothing a Helm session does turns on these numbers that `get_capacity` does not already say, and adding a tool to every session is a decision of its own.
+"""
+
+[operations.save_limits]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Save any of the three limits, and answer with what is now in force"
+notes = """
+**Changed while Fleet runs, and kept across a restart.** The save is written to the store before anything in memory moves, and the next admission turn reads the new values; no restart, and nothing already running is stopped. A bound lowered below how many Drones are working holds new starts until enough finish.
+
+**An omitted field keeps its current value**, saved or shipped. A stored field nobody saved stays unsaved, so a later build shipping a different number still reaches it.
+
+**A value out of range is a 400 and nothing is saved** — including an in-range field sent beside it. The body does not decode, because `ipc::SaveLimits` cannot hold such a value; the daemon is never asked. Concurrency is 1 to 8, the memory share 0 to 50 percent, the disk floor 0 to 100 GiB.
+
+No event. `get_capacity` is computed at every read, so it reflects a saved bound the moment the save answers, and the limits themselves persist as a reading a surface asks for.
 """
 
 [operations.get_call]

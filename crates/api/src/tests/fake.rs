@@ -69,6 +69,8 @@ pub struct FakeDaemon {
     /// The one running Check's log `observe_check_output` resolves, by the
     /// name it answers to. Planted by a test, whose reader it drives.
     pub live: Mutex<Option<(String, crate::LiveOutput)>>,
+    /// The limits in force, which the fake's own saves change.
+    limits: Mutex<ipc::FleetLimits>,
 }
 
 impl FakeDaemon {
@@ -91,6 +93,7 @@ impl FakeDaemon {
             held: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
             live: Mutex::new(None),
+            limits: Mutex::new(shapes::limits()),
         }
     }
 

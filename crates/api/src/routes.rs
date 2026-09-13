@@ -36,6 +36,7 @@ use crate::commands::{
 };
 use crate::daemon::Daemon;
 use crate::editing::{get_manifest_file, save_manifest_file};
+use crate::limiting::{get_limits, save_limits};
 use crate::fleetwide::{
     get_drone, get_events_since, get_health, get_manifest, get_usage, list_drones,
 };
@@ -79,6 +80,8 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))
         .route("/capacity", get(get_capacity::<D>))
+        .route("/limits", get(get_limits::<D>))
+        .route("/limits/save", post(save_limits::<D>))
         .route("/health", get(get_health::<D>))
         .route("/usage", get(get_usage::<D>))
         .route("/alerts", get(list_alerts::<D>))
