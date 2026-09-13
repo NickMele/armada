@@ -50,6 +50,7 @@ import {
   observeCheckoutRun,
   getRunOutput,
   getCheckoutRunOutput,
+  getCheckoutRunDiff,
   readManifestFile,
   saveManifestFile,
   listRuns,
@@ -572,6 +573,7 @@ export function App() {
                 onUndoRun={undoCheckoutRun}
                 onListRuns={listCheckoutRuns}
                 onGetRunOutput={getCheckoutRunOutput}
+                onGetRunDiff={getCheckoutRunDiff}
                 // The one call this surface shares with a Job's own sheet:
                 // `start_server` has taken an optional Job since it landed,
                 // and no Job means the main checkout.

@@ -14,6 +14,7 @@
 import WebSocket from "ws";
 
 import type {
+  CheckoutRunDiff,
   CheckoutRunFollowed,
   CheckoutRunList,
   CheckoutRunListRead,
@@ -27,6 +28,7 @@ import type {
   RunOutputRead,
   StartCheckoutRun,
 } from "@armada/protocol";
+import type { CheckoutRunDiffRead } from "@armada/protocol";
 import { ask } from "./request";
 import { HOST } from "./runtime-file";
 
@@ -107,7 +109,7 @@ export type CheckoutBoard = {
   refreshSheet: (port: number) => Promise<void>;
 };
 
-/** `start`, `stop`, `undo`, and the two reads the page's history draws from. */
+/** `start`, `stop`, `undo`, and the three reads the page's history draws from. */
 export class CheckoutRunCommands {
   private readonly board: CheckoutBoard;
 
@@ -175,6 +177,21 @@ export class CheckoutRunCommands {
     const answer = await ask(port, "GET", `${MANIFEST}/runs/${encodeURIComponent(runId)}/output`);
     if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
     return { ok: true, output: answer.body as RunOutput };
+  }
+
+  /**
+   * What one run changed, **against the snapshot it took just before it** —
+   * never `HEAD`, which would show a person's own uncommitted work as the
+   * run's. A snapshot that is gone comes back as a reading that says so, not
+   * as a refusal. The patch is the expensive half, asked for by the person who
+   * pressed *Open the diff* rather than carried on the run list.
+   */
+  async getRunDiff(runId: string): Promise<CheckoutRunDiffRead> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(port, "GET", `${MANIFEST}/runs/${encodeURIComponent(runId)}/diff`);
+    if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+    return { ok: true, diff: answer.body as CheckoutRunDiff };
   }
 }
 

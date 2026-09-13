@@ -351,3 +351,11 @@ export type CheckoutRunFollowed =
 export type CheckoutRunListRead =
   | { ok: true; runs: CheckoutRunList }
   | { ok: false; outcome: Outcome };
+
+/**
+ * What `get_checkout_run_diff` came back as. `RunListRead`'s shape, and asked
+ * once by whoever pressed *Open the diff*: a finished run's patch does not move.
+ */
+export type CheckoutRunDiffRead =
+  | { ok: true; diff: CheckoutRunDiff }
+  | { ok: false; outcome: Outcome };

@@ -104,6 +104,7 @@ export const stopCheckoutRun = (runId: string) => window.armada.stopCheckoutRun(
 export const undoCheckoutRun = (runId: string) => window.armada.undoCheckoutRun(runId);
 export const listCheckoutRuns = () => window.armada.listCheckoutRuns();
 export const getCheckoutRunOutput = (runId: string) => window.armada.getCheckoutRunOutput(runId);
+export const getCheckoutRunDiff = (runId: string) => window.armada.getCheckoutRunDiff(runId);
 // The Manifest file. Held by the app, like the sheet above, so an unsaved edit
 // outlives the surface it was made on.
 export const readManifestFile = () => window.armada.readManifestFile();

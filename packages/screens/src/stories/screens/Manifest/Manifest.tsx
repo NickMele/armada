@@ -8,6 +8,8 @@
 import { useRef, useState } from "react";
 import { connectedTo, PROTOCOL_VERSION, type Connection } from "@armada/protocol";
 import type {
+  CheckoutRunDiff,
+  CheckoutRunDiffRead,
   CheckoutRunFollowed,
   CheckoutRunList,
   CheckoutRunSheetRead,
@@ -73,6 +75,7 @@ export function ManifestFrom({
   now = NOW,
   view = "run",
   save = "took",
+  diff,
 }: {
   sheet: CheckoutRunSheetRead;
   followed?: CheckoutRunFollowed;
@@ -83,6 +86,8 @@ export function ManifestFrom({
   view?: ManifestView;
   /** What pressing Save comes to. */
   save?: SaveGoesTo;
+  /** What `get_checkout_run_diff` answers when *Open the diff* is pressed. Absent: not connected. */
+  diff?: CheckoutRunDiff;
 }) {
   // A disk and a watch, faked just far enough to be Fleet's: a read answers
   // what is on disk, a save compares against it, and a reading follows.
@@ -170,8 +175,33 @@ export function ManifestFrom({
             onStopRun={nothingHappens}
             onUndoRun={nothingHappens}
             onListRuns={() => Promise.resolve({ ok: true, runs })}
-            onGetRunOutput={(): Promise<RunOutputRead> =>
-              Promise.resolve({ ok: false, outcome: { ok: false, why: "not_connected" } })
+            // Any earlier run's log reads, so a story can open one from *Earlier runs*.
+            onGetRunOutput={(runId): Promise<RunOutputRead> => {
+              const run = runs.runs.find((one) => one.id === runId);
+              return Promise.resolve(
+                run === undefined
+                  ? { ok: false, outcome: { ok: false, why: "not_connected" } }
+                  : {
+                      ok: true,
+                      output: {
+                        id: run.id,
+                        name: run.name,
+                        path: `.armada/${run.log}`,
+                        lines: [],
+                        from_line: 1,
+                        total_lines: 0,
+                        bytes: 0,
+                        whole: true,
+                      },
+                    },
+              );
+            }}
+            onGetRunDiff={(): Promise<CheckoutRunDiffRead> =>
+              Promise.resolve(
+                diff === undefined
+                  ? { ok: false, outcome: { ok: false, why: "not_connected" } }
+                  : { ok: true, diff },
+              )
             }
             onStartServer={nothingHappens}
             onStopServer={nothingHappens}

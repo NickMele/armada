@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ManifestFileProps } from "@armada/components";
 import type { ManifestReading, Outcome, SaveManifestFile } from "@armada/protocol";
 
-import { clockOf } from "./checkout-runs";
+import { clockOf } from "./duration";
 import { said } from "./copy";
 import {
   fileAnswered,

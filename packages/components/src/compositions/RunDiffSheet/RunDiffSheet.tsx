@@ -1,0 +1,164 @@
+import type { ReactNode } from "react";
+import { Sheet } from "../../primitives/Sheet/Sheet";
+import { railOfPatch } from "../JobDiffSheet/JobDiffSheet";
+import { UnifiedDiff, type DiffFile } from "../UnifiedDiff/UnifiedDiff";
+
+/**
+ * One checkout run's patch, **read against the snapshot the run took, never
+ * `HEAD`** — the main checkout holds a person's own uncommitted work, which a
+ * patch against `HEAD` would show as the run's. Journey 9, *Running one*.
+ */
+export type RunDiffReading =
+  /** Fleet has been asked and has not answered. */
+  | { state: "reading" }
+  | {
+      state: "read";
+      /** Every file in the patch, in the order git wrote them. `[]` draws `emptyNote`. */
+      files: DiffFile[];
+      /** Where the patch was longer than the bound — `UnifiedDiff`'s own `cut`. */
+      cut?: ReactNode;
+      /** What the region says with nothing to draw. The caller knows which silence. */
+      emptyNote: string;
+    }
+  /**
+   * **The snapshot is gone, and nothing stands in for it.** Retention swept the
+   * run's record, or none was taken. Never a fallback to `HEAD`.
+   */
+  | { state: "gone"; why: ReactNode }
+  /** Fleet refused, or was not there to ask. */
+  | { state: "failed"; saying: ReactNode };
+
+export type RunDiffSheetProps = {
+  open: boolean;
+  /** The Check or Command that ran, as the Manifest names it. */
+  name: ReactNode;
+  /** When it started, as a clock — the page's own run rows carry no date. */
+  ranAt: ReactNode;
+  reading: RunDiffReading;
+  /**
+   * The run was undone, as a sentence — `Undone at 14:21:03.` **The diff is
+   * still drawn**: Undo restores from the snapshot and keeps it, and a person
+   * may want to read what a run did before deciding to run it again.
+   */
+  undone?: ReactNode;
+  /** A clipboard write is silent, so the surface confirms it with a toast. */
+  onCopied?: (value: string) => void;
+  /** The window is at `--window-floor`. */
+  floor?: boolean;
+  onClose?: () => void;
+};
+
+/** What every reading of this sheet is measured against. The wire's `run_snapshot`. */
+const AGAINST = "against the checkout just before the run";
+
+/** Under the patch, saying what is not in it and why. */
+const NOT_HEAD =
+  "Read against the snapshot Fleet took just before this run, never against HEAD — so " +
+  "uncommitted work that was already in the checkout is not shown as the run's, and " +
+  "nothing written since the run is in it either.";
+
+export function RunDiffSheet({
+  open,
+  name,
+  ranAt,
+  reading,
+  undone,
+  onCopied,
+  floor = false,
+  onClose,
+}: RunDiffSheetProps) {
+  return (
+    <Sheet
+      open={open}
+      contained
+      size="widest"
+      floor={floor}
+      title="What this run changed"
+      subtitle={
+        <>
+          {name}
+          {" · "}
+          {ranAt}
+          <Measured reading={reading} />
+          {undone === undefined ? null : " · undone"}
+        </>
+      }
+      bands={
+        undone === undefined ? undefined : (
+          <p className="armada-run-diff-sheet__undone" role="note">
+            {undone} The checkout no longer holds these changes. This is what the run did, read
+            from the snapshot Undo restored.
+          </p>
+        )
+      }
+      closeLabel="Close"
+      closeBinding="Esc"
+      bleed
+      onClose={onClose}
+    >
+      <div className="armada-run-diff-sheet">
+        <Body reading={reading} onCopied={onCopied} />
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * The header's second half. **Counted only off a reading**: a sum drawn over
+ * `reading` or `gone` would be `0 files · +0 −0` asserted where nothing was
+ * read, which is #310 on a different sheet.
+ */
+function Measured({ reading }: { reading: RunDiffReading }) {
+  if (reading.state === "reading") return <>{" · reading"}</>;
+  if (reading.state === "failed") return <>{" · no reading"}</>;
+  if (reading.state === "gone") return <>{" · snapshot gone"}</>;
+  const rail = railOfPatch(reading.files);
+  const added = rail.reduce((sum, file) => sum + file.added, 0);
+  const removed = rail.reduce((sum, file) => sum + file.removed, 0);
+  return (
+    <>
+      {` · ${rail.length} ${rail.length === 1 ? "file" : "files"} · `}
+      <span className="armada-run-diff-sheet__added">{`+${added}`}</span>{" "}
+      <span className="armada-run-diff-sheet__removed">{`−${removed}`}</span>
+      {` · ${AGAINST}`}
+    </>
+  );
+}
+
+function Body({
+  reading,
+  onCopied,
+}: {
+  reading: RunDiffReading;
+  onCopied?: (value: string) => void;
+}) {
+  if (reading.state === "reading") {
+    return <p className="armada-run-diff-sheet__said">Reading this run's diff.</p>;
+  }
+  if (reading.state === "failed") {
+    return <p className="armada-run-diff-sheet__said">{reading.saying}</p>;
+  }
+  if (reading.state === "gone") {
+    return (
+      <div className="armada-run-diff-sheet__said">
+        <p>
+          There is no diff to read: {reading.why}. A run's diff is read against the snapshot it
+          took, and without that snapshot nothing can say what the run itself changed.
+        </p>
+        <p>
+          Nothing is drawn in its place. A diff against HEAD would show every uncommitted edit in
+          the checkout as this run's.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <UnifiedDiff
+      files={reading.files}
+      emptyNote={reading.emptyNote}
+      {...(reading.cut === undefined ? {} : { cut: reading.cut })}
+      note={NOT_HEAD}
+      {...(onCopied === undefined ? {} : { onCopied })}
+    />
+  );
+}

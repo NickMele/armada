@@ -168,10 +168,10 @@ const REFORMATTED: ChangedFile[] = [
 ];
 
 /**
- * A run that changed the checkout. **Undo is offered and nothing else is** —
- * there is no *Open the diff* here, because the main checkout has no base to
- * be read against and nothing on the wire answers for one. Pressing Undo puts
- * up the confirmation that names every path it would discard.
+ * A run that changed the checkout: the files, **Open the diff** and **Undo
+ * this run**. The diff is the run's own — read against the snapshot Fleet took
+ * just before it, never `HEAD` — and pressing Undo puts up the confirmation
+ * that names every path it would discard.
  */
 export const AfterARunThatChangedFiles: Story = {
   args: {
@@ -183,7 +183,72 @@ export const AfterARunThatChangedFiles: Story = {
     onDismiss: fn(),
     output: { rows: [{ row: "line", at: 1, text: "Diff in crates/fleet/src/rehearsing/checkout.rs" }] },
     result: { name: "fmt", exitCode: 0, expected: 0, ended: "exited", duration: "2.7s" },
-    changed: { files: REFORMATTED, onUndo: fn() },
+    changed: { files: REFORMATTED, onOpenDiff: fn(), onUndo: fn() },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Open the diff" }));
+    await expect(args.changed?.onOpenDiff).toHaveBeenCalled();
+    // A read, not an act: nothing was confirmed and nothing was put back.
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+    await expect(args.changed?.onUndo).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * **An undone run keeps its files and its diff, and loses Undo.** Undo keeps
+ * the snapshot, so what the run did can still be read — and a run already put
+ * back has nothing left to put back.
+ */
+export const AfterTheRunWasUndone: Story = {
+  args: {
+    ...EDITED,
+    groups: GROUPS,
+    selectedId: "command:fmt",
+    onSelect: fn(),
+    onRun: fn(),
+    onDismiss: fn(),
+    result: { name: "fmt", exitCode: 0, expected: 0, ended: "exited", duration: "2.7s" },
+    changed: {
+      files: REFORMATTED,
+      onOpenDiff: fn(),
+      undone: "Undone at 14:21:03. These files are back as they were before the run.",
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/Undone at 14:21:03/)).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Open the diff" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Undo this run" })).toBeNull();
+  },
+};
+
+/** The run's diff open over the page — the sheet is contained by it, under the view toggle. */
+export const TheRunsDiffOpen: Story = {
+  args: {
+    ...AfterARunThatChangedFiles.args,
+    diff: {
+      name: "fmt",
+      ranAt: "14:18:02",
+      reading: {
+        state: "read",
+        emptyNote: "This run changed nothing.",
+        files: [
+          {
+            path: "crates/fleet/src/rehearsing/checkout.rs",
+            lines: [
+              { kind: "hunk", text: "@@ -137,9 +137,7 @@ impl Fleet {" },
+              { kind: "removed", text: "-            answered(ipc::RunDiffReading::Gone {" },
+              { kind: "removed", text: "-                why: why.to_string()," },
+              { kind: "removed", text: "-            })" },
+              {
+                kind: "added",
+                text: "+            answered(ipc::RunDiffReading::Gone { why: why.to_string() })",
+              },
+            ],
+          },
+        ],
+      },
+      onClose: fn(),
+    },
   },
 };
 

@@ -15,7 +15,7 @@
 // one thing on one surface and another on the next is the drift the one scheme
 // exists to prevent.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ConsoleOutputProps,
   RunPageEntry,
@@ -26,6 +26,7 @@ import type {
   RunPageServerStatus,
 } from "@armada/components";
 import type {
+  CheckoutRunDiffRead,
   CheckoutRunFollowed,
   CheckoutRunListRead,
   CheckoutRunRecord,
@@ -39,7 +40,8 @@ import type {
   ServerState,
   StartCheckoutRun,
 } from "@armada/protocol";
-import { absoluteOf, span } from "./duration";
+import { checkoutChangedOf, checkoutRunDiffReadingOf } from "./checkout-run-diff";
+import { absoluteOf, clockOf, span } from "./duration";
 import { openServerLink } from "./opening";
 import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
 
@@ -56,6 +58,8 @@ export type ManifestSlice = {
   onUndoRun: (runId: string) => Promise<Outcome>;
   onListRuns: () => Promise<CheckoutRunListRead>;
   onGetRunOutput: (runId: string) => Promise<RunOutputRead>;
+  /** One run's patch, against the snapshot it took. Asked for when *Open the diff* is pressed. */
+  onGetRunDiff: (runId: string) => Promise<CheckoutRunDiffRead>;
   /** A declared server, in the main checkout — no Job. */
   onStartServer: (name: string) => Promise<Outcome>;
   onStopServer: (serverId: string) => Promise<Outcome>;
@@ -188,26 +192,6 @@ export function checkoutPastRunOf(
   };
 }
 
-/** `HH:MM:SS`, off an ISO instant — a run row here carries no date, and
- * neither does a save's receipt beside the file it saved. */
-export function clockOf(at: string): string {
-  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-/**
- * The newest run that wrote something and can still be put back.
- *
- * **`undoable` is Fleet's answer and not a guess.** A run with no snapshot
- * behind it has nothing to restore from, and this tree holds a person's own
- * uncommitted work — so an Undo offered where Fleet cannot honour it would be
- * the one control on this page whose failure costs somebody their work.
- */
-export function checkoutChangedRunOf(
-  runs: readonly CheckoutRunRecord[],
-): CheckoutRunRecord | undefined {
-  return runs.find((run) => run.changed.length > 0 && run.undone_at === undefined);
-}
-
 /** Whether the page should draw a running strip, and what it says. */
 export function checkoutRunningOf(
   sheet: CheckoutRunSheet | undefined,
@@ -268,6 +252,7 @@ export function useManifestRuns(
     onUndoRun,
     onListRuns,
     onGetRunOutput,
+    onGetRunDiff,
     onStartServer,
     onStopServer,
     onOpenServerLink,
@@ -283,6 +268,20 @@ export function useManifestRuns(
   // log** — every run writes its output under `./.armada`, so this throws away
   // a view and not a record, and the next run opens it again.
   const [dismissed, setDismissed] = useState(false);
+  // The run whose diff is open, and what Fleet answered for it. **A read held
+  // here rather than in main**: a finished run's patch does not move, so there
+  // is no stream to hold open and nothing for a resync to re-read.
+  const [diffOpen, setDiffOpen] = useState<{
+    runId: string;
+    read: "reading" | CheckoutRunDiffRead;
+  } | null>(null);
+  // Split once per answer. The app renders every second to move its clock,
+  // and a 2,000-line patch re-split on every tick is the freeze the v1 failure
+  // log recorded — `DiffSheet`'s reason in `Sheets.tsx`.
+  const diffReading = useMemo(
+    () => (diffOpen === null ? undefined : checkoutRunDiffReadingOf(diffOpen.runId, diffOpen.read)),
+    [diffOpen],
+  );
 
   // The palette picked one. **It selects rather than runs**: a row that
   // started a destructive Command straight off a list of forty would be an act
@@ -326,7 +325,7 @@ export function useManifestRuns(
   const shown = selected ?? runningEntryOf(groups, data?.running?.name) ?? null;
 
   const runningNow = checkoutRunningOf(data, now);
-  const changedRun = checkoutChangedRunOf(runs);
+  const diffRun = diffOpen === null ? undefined : runs.find((record) => record.id === diffOpen.runId);
   const server = checkoutServerStatusOf(data, shown, now);
   const live = checkoutOutputOf(followed, shown === null ? undefined : nameOf(shown));
   const output = dismissed ? undefined : (viewing?.output ?? live);
@@ -377,18 +376,28 @@ export function useManifestRuns(
     ...(runs.length === 0
       ? {}
       : { runs: runs.map((record) => checkoutPastRunOf(record, openPastRun)) }),
-    ...(changedRun === undefined || dismissed
+    // **The panel is the result line's run**, and nothing else's. Following
+    // the newest run that changed something put `fmt`'s files and Undo under
+    // a `format` result, which read as format having written them.
+    ...(about === undefined
       ? {}
       : {
-          changed: {
-            files: changedRun.changed,
-            // Offered only where Fleet says it can be honoured — `undoable` is
-            // its answer, not a guess. There is no *Open the diff*: the main
-            // checkout has no base to be read against, and nothing on the wire
-            // answers for one.
-            ...(changedRun.undoable
-              ? { onUndo: () => void onUndoRun(changedRun.id).then(refreshRuns) }
-              : {}),
+          changed: checkoutChangedOf(about, about.id === runs[0]?.id, {
+            onOpenDiff: openDiff,
+            onUndo: (id) => void onUndoRun(id).then(refreshRuns),
+          }),
+        }),
+    ...(diffOpen === null || diffReading === undefined
+      ? {}
+      : {
+          diff: {
+            // The record is on the list the page drew the button from. Where
+            // retention swept it while the sheet was open, the id stands in.
+            name: diffRun?.name ?? diffOpen.runId,
+            ranAt: diffRun === undefined ? "—" : clockOf(diffRun.started_at),
+            reading: diffReading,
+            ...(diffRun?.undone_at === undefined ? {} : { undone: `Undone at ${clockOf(diffRun.undone_at)}.` }),
+            onClose: () => setDiffOpen(null),
           },
         }),
     ...(server === undefined ? {} : { server }),
@@ -404,6 +413,18 @@ export function useManifestRuns(
       });
     },
   };
+
+  /**
+   * *Open the diff* — asks Fleet for one run's patch. **A read**: it writes,
+   * stages and commits nothing, and an answer for a run no longer open is let
+   * go rather than drawn under the one that is.
+   */
+  function openDiff(runId: string): void {
+    setDiffOpen({ runId, read: "reading" });
+    void onGetRunDiff(runId).then((read) =>
+      setDiffOpen((was) => (was?.runId === runId ? { runId, read } : was)),
+    );
+  }
 
   /** *Earlier runs*' own control — reads that run's log into the panel. */
   function openPastRun(runId: string): void {

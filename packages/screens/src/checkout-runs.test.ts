@@ -5,12 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import type {
   CheckoutRunFollowed,
-  CheckoutRunRecord,
   CheckoutRunSheet,
   RunEntry,
 } from "@armada/protocol";
 import {
-  checkoutChangedRunOf,
   checkoutGroupsOf,
   checkoutOutputOf,
   checkoutRunnablesOf,
@@ -41,26 +39,6 @@ const SHEET: CheckoutRunSheet = {
   commands: [entry("fmt", "cargo fmt --all", { destructive: true })],
 };
 
-function record(over: Partial<CheckoutRunRecord> = {}): CheckoutRunRecord {
-  return {
-    id: "crun_1",
-    name: "fmt",
-    command: "cargo fmt --all",
-    required: [],
-    started_at: "2026-09-12T14:18:02Z",
-    ended_at: "2026-09-12T14:18:05Z",
-    duration_ms: 2740,
-    exit_code: 0,
-    expect_exit_code: 0,
-    ended: "exited",
-    stopped: false,
-    changed: [{ path: "crates/api/src/rehearsing.rs", change: "modified" }],
-    undoable: true,
-    log: "runs/crun_1/output.log",
-    ...over,
-  };
-}
-
 describe("the groups the Manifest surface lists", () => {
   it("draws no narrowing, on a Check that declares one", () => {
     const checks = checkoutGroupsOf(SHEET).find((group) => group.kind === "checks");
@@ -88,23 +66,6 @@ describe("the groups the Manifest surface lists", () => {
 
   it("lists nothing for the palette before the read has answered", () => {
     expect(checkoutRunnablesOf({ state: "reading" })).toEqual([]);
-  });
-});
-
-describe("what Undo is offered for", () => {
-  it("offers nothing where Fleet says there is no snapshot behind the run", () => {
-    // The rule this exists for: the main checkout holds a person's own
-    // uncommitted work, so an Undo that could not be honoured would be the one
-    // control on this page whose failure costs somebody theirs.
-    expect(checkoutChangedRunOf([record({ undoable: false })])?.id).toBe("crun_1");
-  });
-
-  it("passes over a run already undone", () => {
-    expect(checkoutChangedRunOf([record({ undone_at: "2026-09-12T14:20:00Z" })])).toBeUndefined();
-  });
-
-  it("passes over a run that changed nothing", () => {
-    expect(checkoutChangedRunOf([record({ changed: [] })])).toBeUndefined();
   });
 });
 
