@@ -15,7 +15,12 @@ import type { Outcome, Proposed, StagedAttachment } from "@armada/protocol";
 import type { JobRequest, ProposedPlan } from "@armada/protocol";
 // Read, never minted: Fleet's own spellings, and the only thing on the wire
 // that tells a declined request from a call that could not be made.
-import { FLEET_FAULT, NO_WORKFLOW_FITS, PROPOSER_UNREACHABLE } from "@armada/protocol";
+import {
+  FLEET_FAULT,
+  NO_WORKFLOW_FITS,
+  PROPOSER_UNREACHABLE,
+  PROPOSER_UNREADABLE,
+} from "@armada/protocol";
 import { randomUUID } from "node:crypto";
 
 import { ask, isJobSummary, NO_WAIT } from "./request";
@@ -137,6 +142,9 @@ function notProposed(request: string, outcome: Outcome): Proposed {
     case NO_WORKFLOW_FITS:
       return { ok: false, why: "unresolved", request: carried, outcome };
     case PROPOSER_UNREACHABLE:
+    // The proposer answered twice and neither reply read — still not the
+    // caller's doing, and still reasonable to ask again.
+    case PROPOSER_UNREADABLE:
     case FLEET_FAULT:
       return { ok: false, why: "faulted", request: carried, outcome };
     default:

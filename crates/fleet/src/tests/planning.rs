@@ -243,6 +243,33 @@ fn one_job_is_briefed_on_the_whole_request_whatever_it_says_about_scope() {
     );
 }
 
+/// A `scope` that wraps onto the lines after it is still read as one value,
+/// rather than refusing the plan for want of a line `field` cannot see past.
+/// `#831`: the owner's own 12 Sep request, pasted as a table, wrapped every
+/// `scope` this way and was refused as `fleet.proposer_unreachable` — a call
+/// that was made and read, not one that failed.
+#[test]
+fn a_scope_that_wraps_onto_following_lines_is_read_as_one_value() {
+    let wrapped = "job: 1\nworkflow: bug\ntitle: First\n\
+                   scope: the first half of the work,\nsplit across more than\n\
+                   one line in the reply\nbecause: it is what the first Job owns\n\n\
+                   job: 2\nworkflow: bug\ntitle: Second\nscope: the second half\n\
+                   after: 1\n";
+
+    let Ok(Proposal::Resolved(jobs)) = read(wrapped) else {
+        panic!("a plan of two, each with a scope")
+    };
+
+    let [first, second] = &jobs[..] else {
+        panic!("two Jobs, not {}", jobs.len())
+    };
+    assert_eq!(
+        first.brief,
+        "the first half of the work, split across more than one line in the reply"
+    );
+    assert_eq!(second.brief, "the second half");
+}
+
 /// An edge that does not point backwards is not a plan Fleet can create.
 #[test]
 fn a_job_waiting_on_one_that_is_not_before_it_is_unreadable() {

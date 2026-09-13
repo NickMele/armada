@@ -985,6 +985,11 @@ A call that could not be made — the network, the quota, the timeout — is a
 fault and not that refusal. The two answer different statuses because a person
 does different things about them.
 
+An answer that could not be read is asked for once more, stating what was
+wrong with it; a second answer that still cannot be read is a fault carrying
+proposer_unreadable, never proposer_unreachable — the call was made both
+times, and it is what came back that could not be turned into a plan. `#831`.
+
 The call it makes is watched. A proposal is the one model call in Armada made
 with a person waiting in front of a form for it, so Fleet publishes proposal.moved
 as the call gets somewhere — started, at the vendor, thinking, answering — and a
