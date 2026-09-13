@@ -460,6 +460,35 @@ exists to show.
 within the detail view — staying in the queue without splitting the
 layout. Not an inspector.
 
+#### The trail
+
+**A route reached from another route carries a trail.** The panel head opens
+with it, above the title, naming each destination back to the surface.
+
+| | |
+|---|---|
+| Placement | First line of the panel head, above the title |
+| Type | `--text-2xs`, `--fg-muted`, current segment `--fg-default` |
+| Separator | `chevron-right` at 12px in `--fg-subtle` |
+| Segments | At most three. A fourth means the route is nested too deep |
+
+> **Rule.** A trail segment is a control, never an `a`.
+> Why: the anchor rule is about addresses leaving the shell, and a trail that
+> was an anchor would be the one control able to break it.
+
+> **Rule.** A surface reached from the rail carries no trail.
+> Why: the rail is already the answer to where you are, and a one-segment trail
+> repeats the title underneath it.
+
+> **Rule.** The last segment is the current destination and does not act.
+> Why: a control that returns you where you already are is a control that does
+> nothing.
+
+**It replaces a back control rather than joining one.** A back button names one
+step and says nothing about where that step sits; the trail names the whole
+path, which is what a route reached from a dock rather than from the rail
+needs.
+
 ### Status bar
 
 Fixed to the bottom, full window width, spanning **beneath** the
@@ -476,28 +505,47 @@ Token treatment is specified under Component → token mapping.
 
 ### Responsive behaviour
 
-**768px hard floor.** Half of a 1536px display, and a normal way to run
-something you glance at beside an editor. With the rail at 48px that
-leaves 720px of content.
+**A floor per client.** The desktop window floors at 768px, half of a
+1536px display and a normal way to run something you glance at beside an
+editor; with the rail at 48px that leaves 720px of content. The touch client
+floors at 390px, which leaves 358px between its gutters.
 
-**One breakpoint at ~1100px, with one consequence:**
+> **Rule.** `--window-floor` is the desktop window's minimum, and the touch
+> client never reads it.
+> Why: the main process sets the window's `minWidth` from it and
+> `packages/shell/src/floor.ts` answers whether the window is at it, and a
+> touch client has no window to bound.
 
-| | ≥ 1100px | < 1100px |
-| --- | --- | --- |
-| Sidebar | Expanded, user-resizable | Auto-collapses to the 48px rail |
-| Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes |
+**One breakpoint at ~1100px, and one client boundary at the desktop floor:**
+
+| | ≥ 1100px | < 1100px | Touch client |
+| --- | --- | --- | --- |
+| Sidebar | Expanded, user-resizable | Auto-collapses to the 48px rail | A bottom tab bar |
+| Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes | The same row, field run wrapped |
+
+The third column is a client and not a window width. Nothing between 390px and
+768px is drawn, because the desktop window cannot get there and the touch
+client is not resized into it.
 
 The stacked row is the status grammar's own shape: headline sentence on
 line one (`Job 12 stalled at step 3`), labelled field run on line two
 (`api · 3 pokes · auth/session.rs · 12m · ~$1.80`). The badge stays
 leading on line one so status is still the first thing caught.
 
-**No field is dropped at any width.** Every field in the universal row
-exists because a decision depends on it — responsive-hiding them
-contradicts P2, which requires the facts needed to decide to be on
-screen without a click. Narrow changes the row's *shape*, never its
-content. Secondary values truncate with a tooltip carrying the full
-string; they do not vanish.
+**No field is dropped at any width.** Every field in the universal row exists
+because a decision depends on it, and responsive-hiding them contradicts P2,
+which requires the facts needed to decide to be on screen without a click.
+Narrow changes the row's shape, never its content.
+
+> **Rule.** Above the desktop floor the field run holds one line, and a
+> secondary value truncates with a tooltip carrying the full string.
+> Why: a fixed shape is what lets the run read down a list, and a pointer can
+> always reach what truncation hid.
+
+> **Rule.** Below the desktop floor the field run wraps to as many lines as the
+> field set needs, and nothing truncates.
+> Why: a touch width has no room to truncate into and no hover to open a
+> tooltip, so the row grows taller rather than thinner.
 
 **Honest cost:** the stacked row is taller than a table row, so fewer
 jobs are visible at once. That is a real loss on a monitoring surface,
@@ -509,9 +557,9 @@ Below 1100 the user may still expand the sidebar manually. It overlays
 the content in that case rather than compressing the table further — a
 720px table has no width to give back.
 
-**Validation:** if the row cannot carry its whole field set at 720px,
-the field set needs revisiting, not the row. No field is dropped, and
-the row does not reshape.
+**Validation:** the field set needs revisiting rather than the row where it
+cannot carry itself at 720px on one line, or at 358px wrapped. No field is
+dropped at either width.
 
 ---
 
@@ -1153,7 +1201,7 @@ than one timeout message.
   Window and layout model above — frameless `hiddenInset` chrome,
   collapsible/resizable sidebar with Bridge and Helm as two levels,
   full-width routes with no inspector, bottom-fixed full-width status
-  bar, 768px floor with a single ~1100px breakpoint. Delivered as one
+  bar, and the floors and breakpoint under Responsive behaviour. Delivered as one
   responsive prototype rather than per-width comps.
 
 ---
