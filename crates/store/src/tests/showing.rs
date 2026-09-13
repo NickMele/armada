@@ -187,6 +187,115 @@ fn the_spec_a_press_reruns_is_the_last_one_a_captured_step_named() {
     assert_eq!(named.attempt.number(), 2, "named by the second run");
 }
 
+/// **The choices are every spec the Job's captured steps named**, across runs,
+/// latest first — and one entry per spec, because a run that named the same
+/// file again is the same choice rather than a second one.
+#[test]
+fn the_choices_are_every_spec_the_jobs_captured_steps_named_across_runs() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let mut job = on_its_first_run(&mut store, JOB);
+    let id = crate::tests::job_id(JOB);
+    submitted(
+        &mut store,
+        EvidenceType::Diff,
+        "e2e/first.spec.ts",
+        "2026-08-26T10:03:00.000Z",
+    );
+    for (spec, stopped, started, when) in [
+        (
+            "e2e/second.spec.ts",
+            "2026-08-26T10:05:00.000Z",
+            "2026-08-26T10:06:00.000Z",
+            "2026-08-26T10:07:00.000Z",
+        ),
+        (
+            "e2e/first.spec.ts",
+            "2026-08-26T10:09:00.000Z",
+            "2026-08-26T10:10:00.000Z",
+            "2026-08-26T10:11:00.000Z",
+        ),
+    ] {
+        job = run_it_again(&mut store, &job, stopped, started);
+        submitted(&mut store, EvidenceType::Diff, spec, when);
+    }
+
+    let choices = store.specs_named(&id, &captured()).expect("reads");
+    assert_eq!(
+        choices
+            .iter()
+            .map(|named| (named.spec.as_str(), named.attempt.number()))
+            .collect::<Vec<_>>(),
+        vec![("e2e/first.spec.ts", 3), ("e2e/second.spec.ts", 2)],
+        "latest first, one entry per spec, kept under the last run that named it"
+    );
+    assert_eq!(
+        store
+            .spec_last_named(&id, &captured())
+            .expect("reads")
+            .expect("named"),
+        choices[0],
+        "what a press runs when nobody picks is the head of the list"
+    );
+    assert!(
+        store.specs_named(&id, &[]).expect("reads").is_empty(),
+        "a Job whose steps are never captured offers nothing to pick"
+    );
+}
+
+/// **A set says which spec it ran**, so two presses on one step are told apart
+/// by more than the minute they ran.
+#[test]
+fn a_set_says_which_spec_the_press_ran() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let job = on_its_first_run(&mut store, JOB);
+    let id = crate::tests::job_id(JOB);
+    submitted(
+        &mut store,
+        EvidenceType::Diff,
+        "e2e/first.spec.ts",
+        "2026-08-26T10:03:00.000Z",
+    );
+    run_it_again(
+        &mut store,
+        &job,
+        "2026-08-26T10:05:00.000Z",
+        "2026-08-26T10:06:00.000Z",
+    );
+    submitted(
+        &mut store,
+        EvidenceType::Diff,
+        "e2e/second.spec.ts",
+        "2026-08-26T10:07:00.000Z",
+    );
+
+    let choices = store.specs_named(&id, &captured()).expect("reads");
+    for (press, named) in choices.iter().enumerate() {
+        let press = press as u32 + 1;
+        store
+            .record_shown_again(
+                &id,
+                press,
+                named,
+                &[frame(
+                    &format!("fix.again{press}.1.branch"),
+                    "home.png",
+                    "a",
+                )],
+                &at("2026-08-26T11:00:00.000Z"),
+            )
+            .expect("the press is recorded");
+    }
+
+    let sets = store.shown_again_every_press(&id).expect("reads");
+    assert_eq!(
+        sets.iter().map(|set| set.spec.as_str()).collect::<Vec<_>>(),
+        vec!["e2e/second.spec.ts", "e2e/first.spec.ts"],
+        "each set names the spec that produced it"
+    );
+}
+
 /// **Only a captured step names a spec.** Every other step's `shown_by` points
 /// at whatever shows its claim, and handing that to `evidence.run` would put a
 /// Drone's sentence into a command line written for a spec.

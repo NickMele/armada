@@ -202,7 +202,7 @@ pub use servers::{
     ServerPort, ServerState, StartServer, StartedBy,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
-pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet};
+pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet, SpecPicked};
 pub use since::{EventTally, EventsSince};
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,

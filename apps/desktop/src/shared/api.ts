@@ -282,9 +282,13 @@ export type BridgeApi = {
    */
   rerunGate: (jobId: string) => Promise<Outcome>;
   /**
-   * Ask a Job to show its work: Fleet reruns the last spec a Drone named, in
-   * the Job's worktree, and keeps what it captured as a set of its own beside
-   * the step's frames. **It moves nothing on the Job.**
+   * Ask a Job to show its work: Fleet reruns a spec a Drone named, in the Job's
+   * worktree, and keeps what it captured as a set of its own beside the step's
+   * frames. **It moves nothing on the Job.**
+   *
+   * **`spec` is one of `show_again.specs` on the Job's detail**, and without
+   * one Fleet runs the last a Drone named. Fleet refuses any spec its own
+   * record does not hold.
    *
    * **It answers when the press has landed**, which may be as long as the app
    * takes to start. Fleet runs it off the turn loop and bounds it by its own
@@ -292,7 +296,7 @@ export type BridgeApi = {
    * Fleet refuses 409 before anything runs where it cannot, naming what is
    * missing; a press that ran and captured nothing answers with why.
    */
-  showAgain: (jobId: string) => Promise<Outcome>;
+  showAgain: (jobId: string, spec?: string) => Promise<Outcome>;
   /**
    * Give one job a higher cost ceiling than the tier above it allows.
    *

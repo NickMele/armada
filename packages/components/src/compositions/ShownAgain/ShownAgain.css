@@ -16,6 +16,14 @@
   min-width: 0;
 }
 
+/* The chooser, where a Job's Drones named more than one spec. Bounded, because
+   a spec is a path and a long one would take the row from the button. */
+.armada-again__choice {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 20rem;
+}
+
 .armada-again__note,
 .armada-again__said {
   margin: 0;

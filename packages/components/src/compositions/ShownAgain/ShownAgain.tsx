@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "../../primitives/Button/Button";
+import { Select } from "../../primitives/Select/Select";
 import { FramesShown, type ShownFrame } from "../FramesShown/FramesShown";
 
 import "./ShownAgain.css";
@@ -34,6 +35,21 @@ export type ShownAgainSet = {
   frames: ShownFrame[];
 };
 
+/**
+ * The specs a press may be asked for, and which one it will run.
+ *
+ * **One spec draws no chooser.** A menu of one is a control a person has to
+ * read before learning it decides nothing, and the sentence beside the button
+ * already names what will run.
+ */
+export type ShowAgainChoices = {
+  /** Every spec this Job's Drones named, in the order to draw them. */
+  specs: string[];
+  /** Which of them the press will run. Always one of `specs`. */
+  chosen: string;
+  onChoose: (spec: string) => void;
+};
+
 export type ShownAgainProps = {
   /**
    * Whether the press can be made. **Absent draws no control**, only the sets
@@ -41,6 +57,11 @@ export type ShownAgainProps = {
    * earlier presses kept on it.
    */
   offer?: ShowAgainOffer;
+  /**
+   * What a press may be asked to run. **Absent, or one spec, draws no
+   * chooser**, which is every Job before a workflow named a second spec.
+   */
+  choices?: ShowAgainChoices;
   /** Every press this Job kept for the step, oldest first. **No sort here.** */
   sets: ShownAgainSet[];
   /**
@@ -65,12 +86,36 @@ export type ShownAgainProps = {
  * **Each set is an unchanged `FramesShown`.** A press's frames are frames like
  * the step's own, and drawing them any other way would be a second answer to
  * what a frame looks like. What this adds is the line above each set.
+ *
+ * **The chooser sits before the button and the sentence stays.** A person
+ * reading the line under the button learns what is about to run whether or not
+ * there was anything to choose between.
  */
-export function ShownAgain({ offer, sets, said, onShow, onOpen }: ShownAgainProps) {
+export function ShownAgain({ offer, choices, sets, said, onShow, onOpen }: ShownAgainProps) {
+  const chooser = offer !== undefined && choices !== undefined && choices.specs.length > 1;
   return (
     <div className="armada-again">
       {offer === undefined ? null : (
         <div className="armada-again__control">
+          {chooser && choices !== undefined ? (
+            // Wrapped rather than given a class: `Select` writes its own on the
+            // field, and the width is this row's business rather than the
+            // primitive's.
+            <div className="armada-again__choice">
+              <Select
+                aria-label="Spec to run"
+                value={choices.chosen}
+                disabled={offer.state !== "ready"}
+                onChange={(event) => choices.onChoose(event.target.value)}
+              >
+                {choices.specs.map((spec) => (
+                  <option key={spec} value={spec}>
+                    {spec}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
           <Button
             variant="secondary"
             onClick={onShow}

@@ -31,6 +31,12 @@ use crate::tests::tools::{submitted_by_the_one, Fixture};
 use crate::Adrift;
 
 const SPEC: &str = "e2e/panel.spec.ts";
+const OTHER_SPEC: &str = "e2e/board.spec.ts";
+
+/// Writes the spec it was handed into the frame, so a test reads back which one
+/// actually ran. `{}` is substituted with the spec, and `sh -c` hands it to the
+/// script as `$0`.
+const WROTE_THE_SPEC: &str = "sh -c 'mkdir -p shots && printf %s \"$0\" > shots/ran.txt'";
 
 /// Waits for as long as the worktree holds `hold`, then copies `marker` into
 /// the frames directory under the name `name` holds. **The hold is the test's
@@ -93,6 +99,36 @@ evidence:
     fittings.workflows = one(resolved);
     fittings.manifest = armada_yml;
     // A press held while `ready` is asked is bounded by the Check budget.
+    fittings.budget = CheckBudget::of(Duration::from_secs(600));
+    Arc::new(Fleet::assembled(fittings))
+}
+
+/// A two-step workflow whose steps are both captured, so one Job's Drones name
+/// two specs and a person has something to pick between. Its harness writes the
+/// spec it was handed — [`WROTE_THE_SPEC`] — which is how a test tells the one
+/// that ran from the one that did not.
+fn a_fleet_showing_two_captured_steps(home: &TempDir) -> Arc<Fixture> {
+    let def = WorkflowDef::parse(
+        std::path::Path::new("fixture-shown-two.yml"),
+        "version: 1\nworkflow_id: fixture-shown-two\nname: fixture\nstructure: linear\nsteps:\n  \
+         - id: show\n    label: \"Show\"\n    evidence: {submitted: {type: diff}, captured: \
+         true}\n    delivers: false\n    advance_gate: auto\n  - id: show_more\n    label: \"Show \
+         more\"\n    evidence: {submitted: {type: diff}, captured: true}\n    delivers: false\n    \
+         advance_gate: auto\n",
+        &Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    let armada_yml = Manifest::parse(
+        std::path::Path::new("fixture-shown-two-armada.yml"),
+        &format!("version: 1\nid: 01FIXTUREMANIFEST\nevidence:\n  run: {WROTE_THE_SPEC} {{}}\n  frames: shots\n"),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
+    let resolved = ResolvedWorkflow::resolve(&def, &armada_yml)
+        .unwrap_or_else(|refused| panic!("the fixture did not resolve: {refused}"));
+
+    let mut fittings = fittings(home, FakeWorkProduct::untouched());
+    fittings.workflows = one(resolved);
+    fittings.manifest = armada_yml;
     fittings.budget = CheckBudget::of(Duration::from_secs(600));
     Arc::new(Fleet::assembled(fittings))
 }
@@ -218,7 +254,7 @@ async fn a_harness_naming_a_declared_port_reaches_the_claim_on_the_step_and_on_a
 
     // The press, against the very claim the step's own run just proved.
     let pressed = Arc::clone(&fleet)
-        .show_again(job.id())
+        .show_again(job.id(), None)
         .await
         .expect("the press ran");
     let set = pressed.set.expect("the harness captured a frame");
@@ -278,7 +314,7 @@ async fn a_press_keeps_a_set_of_its_own_while_the_other_jobs_keep_turning() {
     let id = first.id().clone();
     let pressing = tokio::spawn({
         let fleet = Arc::clone(&fleet);
-        async move { fleet.show_again(&id).await }
+        async move { fleet.show_again(&id, None).await }
     });
     // Until the press is out: taken for this Job, and waiting on the hold.
     while fleet.pressing().since(first.id()).is_none() {
@@ -376,7 +412,7 @@ async fn two_presses_are_two_sets_told_apart_by_when_each_ran() {
     for marker in ["first press", "second press"] {
         std::fs::write(tree.join("marker"), marker).expect("the screen changed");
         Arc::clone(&fleet)
-            .show_again(job.id())
+            .show_again(job.id(), None)
             .await
             .expect("the press ran");
     }
@@ -408,7 +444,7 @@ async fn a_press_keeps_only_what_its_own_spec_wrote() {
     for name in ["b.txt", "c.txt"] {
         std::fs::write(tree.join("name"), name).expect("the spec names another frame");
         Arc::clone(&fleet)
-            .show_again(job.id())
+            .show_again(job.id(), None)
             .await
             .expect("the press ran");
     }
@@ -437,6 +473,98 @@ async fn a_press_keeps_only_what_its_own_spec_wrote() {
     );
 }
 
+// ------------------------------------------------------ a spec a person picks
+
+/// **`#619`.** A press runs the spec a person picked, a press that picks
+/// nothing runs the last a Drone named, and a spec no Drone named is refused
+/// before anything runs.
+///
+/// **The refusal is the whole of the path rule.** A spec reaches `evidence.run`
+/// as an argument, and what keeps it inside the worktree is that the only
+/// values Fleet will run are ones its own record holds — so `../../../etc/
+/// passwd` is refused as a spec nobody named rather than by a check on its
+/// shape.
+#[tokio::test]
+async fn a_press_runs_the_spec_that_was_picked_and_refuses_one_no_drone_named() {
+    let home = TempDir::new();
+    let fleet = a_fleet_showing_two_captured_steps(&home);
+    let job = fleet
+        .propose(a_proposal_for("show both panels", "fixture-shown-two"))
+        .await
+        .expect("a Job at the approval gate");
+    worktree_directory(&home, &job);
+    let tree = worktree_of(&home, &job);
+    std::fs::create_dir_all(tree.join("e2e")).expect("the specs' directory");
+    for spec in [SPEC, OTHER_SPEC] {
+        std::fs::write(tree.join(spec), b"a Drone's spec").expect("the spec");
+    }
+    dispatched(&fleet, job.id()).await.expect("released to run");
+    for spec in [SPEC, OTHER_SPEC] {
+        while fleet.working_on().await.is_empty() {
+            fleet.turn().await.expect("a turn brings the next step up");
+        }
+        submitted_by_the_one(&fleet, shown(spec))
+            .await
+            .expect("the Drone names its spec");
+        fleet.turn().await.expect("the gate ran");
+    }
+    let job = fleet.load(job.id()).await.expect("the Job reads");
+
+    let facts = fleet.showing_again_of(&job).await.expect("the facts read");
+    assert_eq!(
+        facts
+            .specs
+            .iter()
+            .map(|named| named.spec.as_str())
+            .collect::<Vec<_>>(),
+        vec![OTHER_SPEC, SPEC],
+        "both steps' specs are offered, latest first"
+    );
+    assert_eq!(
+        facts.spec.as_ref().map(|named| named.spec.as_str()),
+        Some(OTHER_SPEC),
+        "and the first is what a press with no pick runs"
+    );
+
+    let picked = Arc::clone(&fleet)
+        .show_again(job.id(), Some(SPEC))
+        .await
+        .expect("the press ran");
+    let set = picked.set.expect("the harness captured a frame");
+    assert_eq!(set.spec, SPEC, "the set says which spec produced it");
+    assert_eq!(
+        read(&home, &set.frames[0].path),
+        SPEC,
+        "and `evidence.run` was handed the spec that was picked"
+    );
+
+    let unpicked = Arc::clone(&fleet)
+        .show_again(job.id(), None)
+        .await
+        .expect("the press ran");
+    let set = unpicked.set.expect("the harness captured a frame");
+    assert_eq!(set.spec, OTHER_SPEC);
+    assert_eq!(
+        read(&home, &set.frames[0].path),
+        OTHER_SPEC,
+        "picking nothing still runs the last spec a Drone named"
+    );
+
+    let out = "../../../etc/passwd";
+    let why = why(Arc::clone(&fleet).show_again(job.id(), Some(out)).await);
+    assert_eq!(
+        why,
+        Unshowable::SpecNotNamed {
+            spec: out.to_string()
+        }
+    );
+    assert!(
+        why.said().contains("this Job's own record"),
+        "a person is told what a press will run: {}",
+        why.said()
+    );
+}
+
 // -------------------------------------------------------- what refuses
 
 fn why(refused: Result<ipc::ShownAgain, Adrift>) -> Unshowable {
@@ -462,7 +590,7 @@ async fn a_repository_that_declares_no_harness_is_told_so() {
         .expect("a Job");
     worktree_directory(&home, &job);
 
-    let refused = api::Commands::show_again(Arc::clone(&fleet), ipc::JobId::from(job.id()))
+    let refused = api::Commands::show_again(Arc::clone(&fleet), ipc::JobId::from(job.id()), None)
         .await
         .expect_err("nothing to run");
     assert_eq!(refused.status(), 409);
@@ -486,7 +614,7 @@ async fn a_job_whose_worktree_is_gone_is_told_so() {
         .await
         .expect("a Job with no worktree yet");
 
-    let refused = Arc::clone(&fleet).show_again(job.id()).await;
+    let refused = Arc::clone(&fleet).show_again(job.id(), None).await;
     let why = why(refused);
     assert_eq!(why, Unshowable::NoWorktree);
     assert!(why.said().contains("worktree is no longer on disk"));
@@ -502,7 +630,7 @@ async fn a_job_whose_drone_never_named_a_spec_is_told_so() {
         .expect("a Job");
     worktree_directory(&home, &job);
 
-    let why = why(Arc::clone(&fleet).show_again(job.id()).await);
+    let why = why(Arc::clone(&fleet).show_again(job.id(), None).await);
     assert_eq!(why, Unshowable::NoSpec);
     assert!(why.said().contains("no step of this Job named a spec"));
 }
@@ -514,7 +642,7 @@ async fn a_spec_a_later_run_deleted_is_named_rather_than_run() {
     let job = shown_once(&fleet, &home, "show the panel", "the step's own picture").await;
     std::fs::remove_file(worktree_of(&home, &job).join(SPEC)).expect("the spec went");
 
-    let why = why(Arc::clone(&fleet).show_again(job.id()).await);
+    let why = why(Arc::clone(&fleet).show_again(job.id(), None).await);
     assert_eq!(
         why,
         Unshowable::SpecGone {
@@ -537,7 +665,7 @@ async fn a_job_whose_drone_is_working_is_not_photographed_mid_edit() {
     assert_eq!(running.status(), JobStatus::Running);
 
     assert_eq!(
-        why(Arc::clone(&fleet).show_again(job.id()).await),
+        why(Arc::clone(&fleet).show_again(job.id(), None).await),
         Unshowable::DroneWorking
     );
 }

@@ -15,18 +15,23 @@
 // that captured nothing. Fleet still refuses the press in words, for a caller
 // that reaches it some other way.
 //
+// **The chooser offers what the Job's Drones named, and nothing else.** Fleet
+// sends the list and refuses anything outside it, so a choice is always a file
+// that was in the worktree when a Drone submitted it. One spec draws no menu.
+//
 // **A press's sets are drawn beside the step's frames, never among them.** Each
-// is the same `FramesShown` the step's own frames are, under the moment it ran.
+// is the same `FramesShown` the step's own frames are, headed by the spec that
+// produced it and the moment it ran.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ShowAgainOffer, ShownAgainSet } from "@armada/components";
-import type { KeptFrame, Outcome, ShowAgain } from "@armada/protocol";
+import type { ShowAgainChoices, ShowAgainOffer, ShownAgainSet } from "@armada/components";
+import type { KeptFrame, NamedSpec, Outcome, ShowAgain } from "@armada/protocol";
 import { said } from "./copy";
 import { shownFrames, type Frames } from "./frames";
 
 /** Asking Fleet for a press, as the screen's caller hands it in. */
-export type ShowAgainCall = (jobId: string) => Promise<Outcome>;
+export type ShowAgainCall = (jobId: string, spec?: string) => Promise<Outcome>;
 
 /** What this window knows about a press it sent. */
 export type Pressing = {
@@ -34,6 +39,13 @@ export type Pressing = {
   pressing: boolean;
   /** What the last one came to, where it was not a new set. */
   said?: string;
+  /**
+   * The spec the next press will run, where the Job named any. **Held in this
+   * window and never sent until the press is**, so a person who opens the menu
+   * and closes it again has asked Fleet for nothing.
+   */
+  chosen?: string;
+  choose: (spec: string) => void;
   press: () => void;
 };
 
@@ -54,6 +66,9 @@ export function useShowAgain(
 ): Pressing {
   const [pressing, setPressing] = useState(false);
   const [said, setSaid] = useState<string | undefined>(undefined);
+  // Absent until a person picks, which is what makes a press with no choice
+  // the press Fleet has always answered: no spec is sent.
+  const [chosen, setChosen] = useState<string | undefined>(undefined);
   // The Job an answer is about, so one landing after the person moved to
   // another Job is dropped rather than said on the wrong one.
   const current = useRef(jobId);
@@ -61,6 +76,7 @@ export function useShowAgain(
   useEffect(() => {
     setPressing(false);
     setSaid(undefined);
+    setChosen(undefined);
   }, [jobId]);
 
   const wanted = pressedFramesOf(facts, stepId);
@@ -73,7 +89,7 @@ export function useShowAgain(
     const asked = jobId;
     setPressing(true);
     setSaid(undefined);
-    void call(asked).then(
+    void call(asked, chosen).then(
       (outcome) => {
         if (current.current !== asked) return;
         setPressing(false);
@@ -85,15 +101,23 @@ export function useShowAgain(
         setSaid(NOT_ANSWERED);
       },
     );
-  }, [call, jobId]);
+  }, [call, jobId, chosen]);
 
-  return { pressing, said, press };
+  return {
+    pressing,
+    said,
+    ...(chosen === undefined ? {} : { chosen }),
+    choose: setChosen,
+    press,
+  };
 }
 
 /** What the Shown chapter draws for a press, where anything. */
 export type Again = {
   /** Absent where no control applies to this step. */
   offer?: ShowAgainOffer;
+  /** Absent where there is nothing to choose between. */
+  choices?: ShowAgainChoices;
   sets: ShownAgainSet[];
   said?: string;
   onShow: () => void;
@@ -116,17 +140,50 @@ export function againOf(
     .filter((set) => set.step_id === stepId)
     .map((set) => ({
       key: String(set.press),
-      heading: `Shown again ${when(set.pressed_at)}`,
+      heading: headingOf(set.pressed_at, set.spec),
       frames: shownFrames(set.frames, frames),
     }));
-  const offer = offerOf(facts, stepId, pressing.pressing);
+  const offer = offerOf(facts, stepId, pressing.pressing, pressing.chosen);
   if (offer === undefined && sets.length === 0) return undefined;
+  const choices = offer === undefined ? undefined : choicesOf(facts, pressing);
   return {
     ...(offer === undefined ? {} : { offer }),
+    ...(choices === undefined ? {} : { choices }),
     sets,
     ...(pressing.said === undefined ? {} : { said: pressing.said }),
     onShow: pressing.press,
   };
+}
+
+/**
+ * What a set is headed by.
+ *
+ * **The spec leads where the record holds one**, because two presses on one
+ * step may now have run different specs and the moment alone would not say
+ * which. A set kept before Fleet recorded it reads as it always did.
+ */
+function headingOf(at: string, spec: string | undefined): string {
+  const moment = when(at);
+  return spec === undefined || spec === "" ? `Shown again ${moment}` : `${spec}, shown again ${moment}`;
+}
+
+/**
+ * Every spec this Job's Drones named, and which the next press will run.
+ *
+ * **A Fleet before 13.1 sends no list**, so the one spec it does send is the
+ * whole of it — which draws no chooser, exactly as it drew none before.
+ */
+export function specsOf(facts: ShowAgain): NamedSpec[] {
+  if (facts.specs !== undefined && facts.specs.length > 0) return facts.specs;
+  return facts.spec === undefined ? [] : [facts.spec];
+}
+
+/** The chooser, where a Job's Drones named more than one spec. */
+export function choicesOf(facts: ShowAgain, pressing: Pressing): ShowAgainChoices | undefined {
+  const named = specsOf(facts);
+  if (named.length < 2) return undefined;
+  const chosen = named.find((one) => one.spec === pressing.chosen) ?? named[0]!;
+  return { specs: named.map((one) => one.spec), chosen: chosen.spec, onChoose: pressing.choose };
 }
 
 /**
@@ -139,9 +196,13 @@ export function offerOf(
   facts: ShowAgain,
   stepId: string,
   pressing: boolean,
+  chosen?: string,
 ): ShowAgainOffer | undefined {
-  const spec = facts.spec;
-  if (spec === undefined || spec.step_id !== stepId) return undefined;
+  const last = facts.spec;
+  if (last === undefined || last.step_id !== stepId) return undefined;
+  // What a person picked, or the last a Drone named — which is what a press
+  // with no pick runs, and what Fleet answers with.
+  const spec = specsOf(facts).find((one) => one.spec === chosen) ?? last;
   if (pressing || facts.showing_since !== undefined) return { state: "showing", spec: spec.spec };
   if (!facts.harness) return { state: "cannot", why: NO_HARNESS };
   if (!facts.worktree_on_disk) return { state: "cannot", why: NO_WORKTREE };

@@ -111,8 +111,9 @@ impl Commands for FakeDaemon {
     async fn show_again(
         self: std::sync::Arc<Self>,
         job_id: JobId,
+        picked: Option<String>,
     ) -> Result<ipc::ShownAgain, Refusal> {
-        self.fake_show_again(job_id).await
+        self.fake_show_again(job_id, picked).await
     }
     async fn start_run(
         self: std::sync::Arc<Self>,

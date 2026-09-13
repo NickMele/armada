@@ -660,7 +660,7 @@ export class JobCommands {
   }
 
   /**
-   * Ask a Job to show its work again.
+   * Ask a Job to show its work again, optionally naming which spec to run.
    *
    * **Not through `act`**, which folds a Job row or re-reads the whole board:
    * what comes back is a set of frames, and the only thing that changed is the
@@ -671,13 +671,16 @@ export class JobCommands {
    * a wait here would be a guess made by the side that knows least, and Bridge
    * giving up first would throw away the answer while the press ran on.
    */
-  async showAgain(jobId: string): Promise<Outcome> {
+  async showAgain(jobId: string, spec?: string): Promise<Outcome> {
     if (this.showing.has(jobId)) return { ok: false, why: "already_showing" };
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
     this.showing.add(jobId);
     try {
-      const answer = await ask(port, "POST", route(jobId, "show_again"), undefined, NO_WAIT);
+      // No body is the press this route took before 13.1: run the last spec a
+      // Drone named. Fleet refuses any spec its own record does not hold.
+      const picked = spec === undefined ? undefined : { spec };
+      const answer = await ask(port, "POST", route(jobId, "show_again"), picked, NO_WAIT);
       if (answer.ok !== true) return answer.outcome;
       this.board.refresh(port, jobId);
       return { ok: true, shown: answer.body as ShownAgain };
