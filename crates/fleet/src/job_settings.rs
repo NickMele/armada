@@ -70,9 +70,10 @@ where
     /// permission question**, so nothing respawns, and that question answers
     /// by the Job's setting again.
     ///
-    /// Refused where nothing a person allowed is spelled `run`. **The allow
-    /// row only**: a command made permanent is declared in `armada.yml` on the
-    /// Job's branch, in a commit of its own, and stays there.
+    /// Refused where nothing a person allowed is spelled `run`. **This Job's
+    /// own row only.** A rule a person always-allowed for the repository is
+    /// a different row, kept by Fleet per Manifest since `#836` — see
+    /// `remove_repository_allowed_command`, which is what takes that back.
     pub async fn remove_allowed_command(&self, job: &JobId, run: &str) -> Result<(), NotPermitted> {
         let removed = self
             .store()

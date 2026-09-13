@@ -19,6 +19,7 @@
 //! the permission turn.
 
 mod holding;
+mod repository;
 
 pub use holding::{domain_setting, wire_setting, NotPermitted};
 
@@ -440,9 +441,9 @@ pub struct Permitted(String);
 
 impl Permitted {
     /// `rule` is read only where `reach` is [`Reach::Repository`], and is what
-    /// was declared in `armada.yml` — the whole command, where a person named
+    /// a person kept for the repository — the whole command, where they named
     /// no rule of its own. **Named apart from `command`** because the two can
-    /// now differ: what is declared may be a cut of what the Drone ran, and a
+    /// now differ: what is kept may be a cut of what the Drone ran, and a
     /// Drone told only the cut would have nothing telling it to run the
     /// command it actually reached for.
     pub fn allowed(command: &str, reach: Reach, rule: Option<&str>) -> Permitted {
@@ -454,9 +455,8 @@ impl Permitted {
             Reach::Repository => {
                 let declared = rule.unwrap_or(command);
                 format!(
-                    "A person allowed `{declared}` in this repository. It is declared in \
-                     armada.yml on your branch, in a commit of its own; leave that change as it \
-                     is. Run `{command}` again now; it will not be refused."
+                    "A person allowed `{declared}` in this repository. Run `{command}` again \
+                     now; it will not be refused."
                 )
             }
         })

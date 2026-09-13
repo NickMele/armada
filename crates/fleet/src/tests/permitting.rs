@@ -20,11 +20,11 @@ use std::time::Duration;
 
 use adapter_traits::{CallDetail, DroneEvent, WorktreeSpec};
 use api::{PermissionAnswer, Queries};
-use config::{Manifest, ResolvedWorkflow};
+use config::ResolvedWorkflow;
 use core_model::{Actor, AllowedCommand, JobId, JobStatus, Reach, Timestamp, WhenBlocked};
 use ipc::mcp::{Incoming, PermissionAsked};
 use ipc::{CommandAnswer, CommandInFlight};
-use testkit::{CommitScope, FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
+use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
 use crate::daemon::{Fittings, Fleet};
 use crate::permitting::{Answered, NotPermitted, PermissionHold, Refusing};
@@ -113,7 +113,7 @@ fn a_fleet_holding_for(home: &TempDir, harness: FakeHarness, hold: Duration) -> 
     Fleet::assembled(fittings)
 }
 
-fn the_fittings(
+pub(super) fn the_fittings(
     home: &TempDir,
     harness: FakeHarness,
 ) -> Fittings<FakeHarness, FakeVcs, FakeWorkProduct> {
@@ -775,12 +775,13 @@ pub(super) async fn dirty_manifest_job(home: &TempDir) -> (Fixture, JobId, std::
     (fleet, job.id().clone(), armada_yml)
 }
 
-/// **The whole of what `#6` asks for.** Always allow commits the branch tip's
-/// `armada.yml` plus the one entry — never the Drone's own uncommitted edit —
-/// and the worktree keeps the Drone's edit with the same entry added, so the
-/// Job's own later commit still carries the allow.
+/// **`#836`: Always allow commits nothing.** The branch tip's `armada.yml`
+/// and the Drone's own uncommitted edit are both exactly as they were, and
+/// the allow is recorded for the repository rather than declared in the
+/// file — `crate::tests::always_allow` covers what that record is and where a
+/// later Job reads it.
 #[tokio::test]
-async fn always_allow_commits_the_tip_plus_the_entry_and_keeps_the_drones_edit_on_disk() {
+async fn always_allow_leaves_the_tip_and_the_drones_edit_untouched() {
     let home = TempDir::new();
     let (fleet, job, armada_yml) = dirty_manifest_job(&home).await;
     fleet
@@ -800,101 +801,25 @@ async fn always_allow_commits_the_tip_plus_the_entry_and_keeps_the_drones_edit_o
     answered.expect("the call is waiting, and always allow is one of the answers it offers");
     assert_eq!(answer, PermissionAnswer::Allow);
 
-    let at_tip = Manifest::declaring_command(&armada_yml, THE_TIP, "npm publish")
-        .expect("the tip text takes the command");
-    let in_worktree =
-        Manifest::declaring_named(&armada_yml, DRONES_EDIT, &at_tip.name, "npm publish")
-            .expect("the worktree's own dirty text takes the same entry");
-
-    let committed = fleet.vcs().committed();
     assert_eq!(
-        committed.len(),
-        before_the_allow + 1,
-        "exactly one more commit, the allow itself: {committed:?}"
+        fleet.vcs().committed().len(),
+        before_the_allow,
+        "an always-allow commits nothing, since #836"
     );
-    assert_eq!(
-        committed.last().expect("the allow's own commit").scope,
-        CommitScope::Content {
-            path: "armada.yml".to_string(),
-            content: at_tip.text,
-        },
-        "the commit holds the tip plus the entry, never the drone's edit"
-    );
-    assert_eq!(
-        std::fs::read_to_string(&armada_yml).expect("the file"),
-        in_worktree.text,
-        "the worktree keeps the drone's edit, with the same entry added"
-    );
-
-    let allowed = fleet.store().lock().await.allowed_commands(&job).unwrap();
-    assert_eq!(allowed.len(), 1);
-    assert_eq!(allowed[0].run, "npm publish");
-    assert_eq!(allowed[0].reach, Reach::Repository);
-}
-
-/// A tip too broken to take the command refuses `AlwaysAllow` with a reason a
-/// person can read, and leaves the worktree's own file untouched — and
-/// `AllowForJob` for the very same call still works, because it never reaches
-/// `declare_in_repository` at all.
-#[tokio::test]
-async fn an_unparseable_tip_refuses_always_allow_and_leaves_allow_for_job_working() {
-    let home = TempDir::new();
-    let mut fittings = the_fittings(&home, a_drone_that_reached_for("c1"));
-    fittings.vcs = FakeVcs::new().with_tip_content("armada.yml", "version: 1\nbudget: 40\n");
-    // **Briefly, not the fixture's thirty seconds.** The refusal below never
-    // answers the held call — nothing about a refused write settles it — so
-    // the call would otherwise wait out the whole hold before this case ends.
-    fittings.permission_hold = PermissionHold::of(BRIEFLY);
-    let fleet = Fleet::assembled(fittings);
-    let job = fleet
-        .propose(a_proposal("publish the package"))
-        .await
-        .unwrap();
-    worktree_directory(&home, &job);
-    let spec =
-        WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle()).expect("a legal spec");
-    let armada_yml = std::path::Path::new(&spec.worktree_path()).join("armada.yml");
-    std::fs::write(&armada_yml, DRONES_EDIT).expect("the drone's own edit");
-    dispatched(&fleet, job.id()).await.unwrap();
-    settled(&fleet).await;
-    let job = job.id().clone();
-    fleet
-        .set_when_blocked(&job, WhenBlocked::AskMe)
-        .await
-        .unwrap();
-    let before_the_refusal = fleet.vcs().committed().len();
-    let asking = asked("Bash", "npm publish", "c1");
-
-    let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
-        until_waiting(&fleet, &job).await;
-        fleet
-            .answer_command(&job, "c1", Answered::of(CommandAnswer::AlwaysAllow, None))
-            .await
-    });
-
-    assert!(
-        matches!(answered, Err(NotPermitted::NotDeclared { .. })),
-        "a person reads why: {answered:?}"
-    );
-    let PermissionAnswer::Deny(_) = answer else {
-        panic!("the call is still waiting, unanswered: {answer:?}");
-    };
     assert_eq!(
         std::fs::read_to_string(&armada_yml).expect("the file"),
         DRONES_EDIT,
-        "refused before anything on disk was touched"
-    );
-    assert_eq!(
-        fleet.vcs().committed().len(),
-        before_the_refusal,
-        "nothing more was committed"
+        "the drone's own uncommitted edit is exactly as it was"
     );
 
-    let allow_for_job = fleet
-        .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
-        .await;
     assert!(
-        allow_for_job.is_ok(),
-        "allow for this job never reaches declare_in_repository: {allow_for_job:?}"
+        fleet
+            .store()
+            .lock()
+            .await
+            .allowed_commands(&job)
+            .unwrap()
+            .is_empty(),
+        "the row lives in the repository-wide table, not this Job's own"
     );
 }

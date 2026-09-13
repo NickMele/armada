@@ -409,6 +409,26 @@ where
             .map_err(|why| self.refusal(why))
     }
 
+    /// Take back a rule a person always-allowed for this Manifest's
+    /// repository — `crate::permitting::repository`. **Not `budgeted`**, for
+    /// `save_limits`' reason: no Job is touched.
+    async fn remove_repository_allowed_command(
+        &self,
+        removing: ipc::RemoveRepositoryAllowedCommand,
+    ) -> Result<ipc::RepositoryAllowedCommands, Refusal> {
+        Fleet::remove_repository_allowed_command(self, &removing.run)
+            .await
+            .map_err(|why| self.repository_allow_refusal(why))?;
+        Ok(ipc::RepositoryAllowedCommands {
+            commands: self
+                .repository_allowed()
+                .await
+                .iter()
+                .map(ipc::AllowedCommandRow::from)
+                .collect(),
+        })
+    }
+
     /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
     async fn stop_server(&self, named: ipc::NamedServer) -> Result<ipc::ServerState, Refusal> {
         self.stopped_server(&named.id)

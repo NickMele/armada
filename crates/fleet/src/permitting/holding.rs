@@ -10,11 +10,8 @@
 //! at `blocked_by_policy`: the allow is recorded, and a Drone still standing
 //! there is told, or the step restarts where none is.
 
-use std::path::Path;
-
-use adapter_traits::{AgentHarness, CallDetail, CommitTime, Delivery, Vcs, WorkProduct, Worktree};
+use adapter_traits::{AgentHarness, CallDetail, Delivery, Vcs, WorkProduct};
 use api::PermissionAnswer;
-use config::Manifest;
 use core_model::{
     Actor, AllowedCommand, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, Level,
     Reach, StepId, WhenBlocked,
@@ -79,8 +76,6 @@ pub enum NotPermitted {
     NotOffered { answer: CommandAnswer, why: String },
     /// The allow would not write down.
     NotRecorded { cause: String },
-    /// `armada.yml` on the Job's branch could not take the command.
-    NotDeclared { cause: String },
     /// The answer would not reach the Drone, or the step would not restart.
     NotDelivered { cause: String },
     /// A model `list_models` does not offer, and what it does.
@@ -112,11 +107,6 @@ impl core::fmt::Display for NotPermitted {
             NotPermitted::NotRecorded { cause } => {
                 write!(out, "the allow could not be written down: {cause}")
             }
-            NotPermitted::NotDeclared { cause } => write!(
-                out,
-                "armada.yml on the job's branch could not take the command: {cause}. Allow it \
-                 for this job instead"
-            ),
             NotPermitted::NotDelivered { cause } => {
                 write!(out, "the answer could not reach the drone: {cause}")
             }
@@ -330,13 +320,18 @@ where
     /// Job that refuses and holds, with nothing allowed** — the closed way to
     /// be wrong.
     async fn first_answer(&self, job: &JobId, asked: &PermissionAsked) -> First {
-        let (when, allowed) = {
+        let (when, mut allowed) = {
             let store = self.store().lock().await;
             (
                 store.when_blocked(job).unwrap_or_default(),
                 store.allowed_commands(job).unwrap_or_default(),
             )
         };
+        // **This Job's own row, then every rule allowed for the repository.**
+        // `#836`: a repository-wide allow lives in Fleet's own table now, keyed
+        // by Manifest rather than by Job, so a Job that never itself pressed
+        // Always allow still reads what a person allowed a different Job.
+        allowed.extend(self.repository_allowed_commands().await);
         let command = asked.command();
         first(
             &asked.tool,
@@ -349,7 +344,7 @@ where
     }
 
     /// Every command the Manifest declares destructive, as `(name, run)`.
-    fn destructive_commands(&self) -> Vec<(String, String)> {
+    pub(super) fn destructive_commands(&self) -> Vec<(String, String)> {
         let manifest = self.manifest();
         manifest
             .command_names()
@@ -519,9 +514,7 @@ where
             return Ok(false);
         };
         let (command, step, tool) = (held.command.clone(), held.step.clone(), held.tool.clone());
-        let (_, _, worktree) = at_work.standing();
-        self.record_answer(job_id, &worktree, &command, &answered)
-            .await?;
+        self.record_answer(job_id, &command, &answered).await?;
         if let Answered::Rejected(note) = &answered {
             at_work.refused_by_fleet(
                 &tool,
@@ -589,13 +582,7 @@ where
         }
         let command = command.unwrap_or_default();
         if answer != CommandAnswer::Reject {
-            let worktree =
-                self.surviving_worktree(&job)
-                    .map_err(|why| NotPermitted::NotDeclared {
-                        cause: why.to_string(),
-                    })?;
-            self.record_answer(job_id, &worktree, &command, &answered)
-                .await?;
+            self.record_answer(job_id, &command, &answered).await?;
         }
         let step = crate::stuck::stopped_step(&job).cloned();
         let delivered = if self.drone_speakable(job_id).await {
@@ -653,25 +640,40 @@ where
         Some((refusal.tool.clone(), command))
     }
 
-    /// Write down what a person answered: the allow, and for Always allow the
-    /// rule in `armada.yml` first.
+    /// Write down what a person answered. **Since `#836`, an Always allow
+    /// commits nothing** — it is kept by Fleet itself, per Manifest, so the
+    /// gate's absolute boundary on `armada.yml` (`crates/verification/src/forbidden.rs`)
+    /// never meets a commit Fleet made on the Job's own branch.
     ///
     /// **The rule is checked against `command`'s own candidates before
     /// anything is written.** A rule absent from
     /// [`always_allow_rules`](crate::permitting::always_allow_rules)'s list for
     /// this exact command was never offered, and is a 409 rather than a
-    /// declaration nobody chose. Absent is the whole command, unchanged since
-    /// before `#834` — an older Bridge that never sends a rule still works.
+    /// rule nobody chose. Absent is the whole command, unchanged since before
+    /// `#834` — an older Bridge that never sends a rule still works.
     async fn record_answer(
         &self,
         job: &JobId,
-        worktree: &Worktree,
         command: &str,
         answered: &Answered,
     ) -> Result<(), NotPermitted> {
-        let (reach, declared_as) = match answered {
-            Answered::Rejected(_) => return Ok(()),
-            Answered::Allowed(Reach::Job, _) => (Reach::Job, command.to_string()),
+        match answered {
+            Answered::Rejected(_) => Ok(()),
+            Answered::Allowed(Reach::Job, _) => {
+                let allowed = AllowedCommand {
+                    run: command.to_string(),
+                    reach: Reach::Job,
+                    allowed_at: self.now(),
+                    by: Actor::Human,
+                };
+                self.store()
+                    .lock()
+                    .await
+                    .allow_command(job, &allowed)
+                    .map_err(|cause| NotPermitted::NotRecorded {
+                        cause: cause.to_string(),
+                    })
+            }
             Answered::Allowed(Reach::Repository, rule) => {
                 let declared_as = match rule {
                     Some(rule) => {
@@ -683,78 +685,9 @@ where
                     }
                     None => command.to_string(),
                 };
-                self.declare_in_repository(worktree, &declared_as)?;
-                (Reach::Repository, declared_as)
+                self.allow_in_repository(&declared_as).await
             }
-        };
-        let allowed = AllowedCommand {
-            run: declared_as,
-            reach,
-            allowed_at: self.now(),
-            by: Actor::Human,
-        };
-        self.store()
-            .lock()
-            .await
-            .allow_command(job, &allowed)
-            .map_err(|cause| NotPermitted::NotRecorded {
-                cause: cause.to_string(),
-            })
-    }
-
-    /// Declare the command in the Job's own `armada.yml`, committed alone on
-    /// its branch so the pull request shows the policy change apart from the
-    /// work.
-    ///
-    /// **The commit and the worktree are built from two different texts on
-    /// purpose.** The commit is the branch tip's `armada.yml` plus the one
-    /// entry, so a Drone's uncommitted edit never rides into a commit that is
-    /// supposed to say only "a person allowed this command." The worktree
-    /// keeps the Drone's own edit, with the same entry added, so the Job's own
-    /// later commit still carries the allow.
-    fn declare_in_repository(&self, worktree: &Worktree, run: &str) -> Result<(), NotPermitted> {
-        let failed = |cause: String| NotPermitted::NotDeclared { cause };
-        let name = self
-            .manifest()
-            .path()
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("armada.yml")
-            .to_string();
-        let file = Path::new(worktree.path()).join(&name);
-        let tip_text = self
-            .vcs()
-            .content_at_tip(worktree, &name)
-            .map_err(|why| failed(why.to_string()))?
-            .unwrap_or_default();
-        let at_tip = Manifest::declaring_command(&file, &tip_text, run)
-            .map_err(|why| failed(why.to_string()))?;
-        if at_tip.already {
-            return Ok(());
         }
-        let dirty_text = std::fs::read_to_string(&file).map_err(|why| failed(why.to_string()))?;
-        let in_worktree = Manifest::declaring_named(&file, &dirty_text, &at_tip.name, run)
-            .map_err(|why| failed(why.to_string()))?;
-        std::fs::write(&file, &in_worktree.text).map_err(|why| failed(why.to_string()))?;
-        let at = CommitTime::seconds_since_epoch(
-            self.now()
-                .epoch_millis()
-                .unwrap_or_default()
-                .div_euclid(1_000),
-        );
-        let message = format!(
-            "Allow `{run}` in this repository\n\nA person allowed it from Job detail for every \
-             task here. It is declared as commands.{} so each later Job's Drone is granted it.",
-            at_tip.name
-        );
-        if let Err(cause) = self
-            .vcs()
-            .commit_content(worktree, &name, &at_tip.text, &message, at)
-        {
-            let _ = std::fs::write(&file, &dirty_text);
-            return Err(failed(cause.to_string()));
-        }
-        Ok(())
     }
 
     fn publish_waiting(

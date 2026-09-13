@@ -1,40 +1,43 @@
 //! A person answering Always allow picks a rule, and that rule — not the whole
-//! command a Drone happened to type — is what `record_answer` declares.
+//! command a Drone happened to type — is what `record_answer` keeps.
 //!
-//! `#834`: `covers` (`crate::permitting::covers`) refuses anything after an
-//! allow that carries a shell operator, so declaring
-//! `gh issue view 792 --repo X 2>&1 | head -100` whole covered exactly that
-//! command and never the next `gh issue view`. What these prove: a chosen rule
-//! is what gets declared and recorded, an unoffered rule is a 409 and nothing
-//! is written, and a later command the declared rule covers runs without
-//! asking.
+//! `#834`: a chosen rule is what gets kept and recorded, an unoffered rule is
+//! a 409, and a later command the rule covers runs without asking.
 //!
-//! **The `AskMe` path.** Both paths answer through the one `record_answer` this
-//! file is about; `crate::tests::permitting` covers the fold and the
-//! refused-row path already.
+//! `#836`: Always allow stops writing to `armada.yml`. The rule is kept in
+//! Fleet's own store instead, a new Job against the same Manifest reads it
+//! without asking, taking it back makes the next Job ask again, and a rule
+//! the Manifest declares destructive stays withheld even where a row exists.
+//!
+//! `crate::tests::permitting` covers the fold and the refused-row path.
 
-use core_model::{Reach, WhenBlocked};
+use core_model::{Actor, AllowedCommand, Reach, WhenBlocked};
 use ipc::CommandAnswer;
 
+use crate::daemon::Fleet;
 use crate::permitting::{Answered, NotPermitted, Refusing};
-use crate::tests::permitting::{asked, dirty_manifest_job, until_waiting, THE_TIP};
+use crate::slots::Concurrency;
+use crate::tests::admitted::dispatched;
+use crate::tests::daemon::{a_proposal, worktree_directory};
+use crate::tests::permitting::{
+    a_drone_that_reached_for, asked, dirty_manifest_job, the_fittings, until_waiting,
+};
 use crate::tests::tmp::TempDir;
 
 const THE_COMMAND: &str = "gh issue view 792 --repo NickMele/armada 2>&1 | head -100";
 
-/// **The whole of what `#834` asks for.** The rule a person picked is what
-/// lands in `armada.yml` and on the Job's own allow list — not the command the
-/// Drone actually ran, which stays free to carry the pipe and the redirect
-/// `covers` would otherwise have to refuse forever.
+/// **The whole of what `#834` asks for**, and — since `#836` — proof that the
+/// rule lands in Fleet's own repository-wide table rather than a commit.
 #[tokio::test]
-async fn always_allow_declares_the_chosen_rule_and_not_the_whole_command() {
+async fn always_allow_keeps_the_chosen_rule_and_not_the_whole_command() {
     let home = TempDir::new();
-    let (fleet, job, armada_yml) = dirty_manifest_job(&home).await;
+    let (fleet, job, _armada_yml) = dirty_manifest_job(&home).await;
     fleet
         .set_when_blocked(&job, WhenBlocked::AskMe)
         .await
         .unwrap();
     let asking = asked("Bash", THE_COMMAND, "c1");
+    let before_the_allow = fleet.vcs().committed().len();
 
     let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
         let waiting = until_waiting(&fleet, &job).await;
@@ -59,25 +62,29 @@ async fn always_allow_declares_the_chosen_rule_and_not_the_whole_command() {
     answered.expect("gh issue view is one of the command's own candidates");
     assert!(matches!(answer, api::PermissionAnswer::Allow));
 
-    let allowed = fleet.store().lock().await.allowed_commands(&job).unwrap();
+    assert_eq!(
+        fleet.vcs().committed().len(),
+        before_the_allow,
+        "an always-allow commits nothing, since #836"
+    );
+    assert!(
+        fleet
+            .store()
+            .lock()
+            .await
+            .allowed_commands(&job)
+            .unwrap()
+            .is_empty(),
+        "the row is the repository's, not this Job's own"
+    );
+
+    let allowed = fleet.repository_allowed().await;
     assert_eq!(allowed.len(), 1);
     assert_eq!(
         allowed[0].run, "gh issue view",
-        "the rule was recorded, and not the pipe and the redirect beside it"
+        "the rule was kept, and not the pipe and the redirect beside it"
     );
     assert_eq!(allowed[0].reach, Reach::Repository);
-
-    let at_tip = config::Manifest::declaring_command(&armada_yml, THE_TIP, "gh issue view")
-        .expect("the tip text takes the rule");
-    let committed = fleet.vcs().committed();
-    assert_eq!(
-        committed.last().expect("the allow's own commit").scope,
-        testkit::CommitScope::Content {
-            path: "armada.yml".to_string(),
-            content: at_tip.text,
-        },
-        "armada.yml carries the rule, not the command"
-    );
 }
 
 /// A rule that is not one of the command's own candidates is refused before
@@ -123,13 +130,7 @@ async fn a_rule_the_command_does_not_offer_is_refused_and_the_call_still_waits()
         "a rule this command never offered is a 409: {bad:?}"
     );
     assert!(
-        fleet
-            .store()
-            .lock()
-            .await
-            .allowed_commands(&job)
-            .unwrap()
-            .is_empty(),
+        fleet.repository_allowed().await.is_empty(),
         "nothing was recorded on the refused answer"
     );
     assert_eq!(
@@ -179,5 +180,144 @@ async fn a_later_command_the_rule_covers_runs_without_asking() {
     assert!(
         matches!(later, api::PermissionAnswer::Allow),
         "a different issue, the same rule: {later:?}"
+    );
+}
+
+/// **`#836`'s own claim.** A Job that never itself asked still reads a rule a
+/// different Job on the same Manifest always-allowed — no waiting, because
+/// the repository's own row answers the permission tool before anyone asks.
+#[tokio::test]
+async fn a_new_job_on_the_same_manifest_runs_the_rule_without_asking() {
+    let home = TempDir::new();
+    let mut fittings = the_fittings(&home, a_drone_that_reached_for("c1"));
+    fittings.concurrency = Concurrency::of(2);
+    let fleet = Fleet::assembled(fittings);
+
+    let first = fleet.propose(a_proposal("first job")).await.unwrap();
+    worktree_directory(&home, &first);
+    dispatched(&fleet, first.id()).await.unwrap();
+    let first = first.id().clone();
+
+    let asking = asked("Bash", THE_COMMAND, "c1");
+    let (answer, answered) = tokio::join!(fleet.permission(&first, &asking), async {
+        until_waiting(&fleet, &first).await;
+        fleet
+            .answer_command(
+                &first,
+                "c1",
+                Answered::naming(CommandAnswer::AlwaysAllow, None, Some("gh issue view")),
+            )
+            .await
+    });
+    answered.expect("always allow is offered");
+    assert!(matches!(answer, api::PermissionAnswer::Allow));
+
+    let second = fleet.propose(a_proposal("second job")).await.unwrap();
+    worktree_directory(&home, &second);
+    dispatched(&fleet, second.id()).await.unwrap();
+    let second = second.id().clone();
+
+    let later = fleet
+        .permission(
+            &second,
+            &asked("Bash", "gh issue view 800 --repo NickMele/armada", "c2"),
+        )
+        .await;
+    assert!(
+        matches!(later, api::PermissionAnswer::Allow),
+        "a Job that never asked, granted the repository's own rule: {later:?}"
+    );
+}
+
+/// Taking the rule back is read by the next permission question: the Job
+/// asks again, exactly as one that never held the rule would.
+#[tokio::test]
+async fn removing_the_allow_makes_the_next_question_ask_again() {
+    let home = TempDir::new();
+    let (fleet, job, _armada_yml) = dirty_manifest_job(&home).await;
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
+    let asking = asked("Bash", THE_COMMAND, "c1");
+    let (_, answered) = tokio::join!(fleet.permission(&job, &asking), async {
+        until_waiting(&fleet, &job).await;
+        fleet
+            .answer_command(
+                &job,
+                "c1",
+                Answered::naming(CommandAnswer::AlwaysAllow, None, Some("gh issue view")),
+            )
+            .await
+    });
+    answered.expect("always allow is offered");
+    assert_eq!(fleet.repository_allowed().await.len(), 1);
+
+    fleet
+        .remove_repository_allowed_command("gh issue view")
+        .await
+        .expect("the rule was there to take back");
+    assert!(fleet.repository_allowed().await.is_empty());
+
+    let next_command = "gh issue view 900 --repo NickMele/armada";
+    let asking = asked("Bash", next_command, "c2");
+    let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
+        until_waiting(&fleet, &job).await;
+        fleet
+            .answer_command(&job, "c2", Answered::of(CommandAnswer::Reject, None))
+            .await
+    });
+    answered.expect("the call is waiting again, and reject is one of its offers");
+    assert_eq!(
+        answer,
+        api::PermissionAnswer::Deny(Refusing::Rejected { note: None }.to_the_drone(next_command)),
+        "asked again, not answered from a row that is gone"
+    );
+}
+
+/// A rule a Manifest now declares destructive stays withheld even where a row
+/// for it exists. The ordinary flow can never produce this shape —
+/// `offers_after` refuses to offer Always allow on a destructive command — so
+/// the row is planted directly, to prove the runtime read filters it rather
+/// than trusting it from when it was kept.
+#[tokio::test]
+async fn a_destructive_command_stays_withheld_even_with_a_row_for_it() {
+    let home = TempDir::new();
+    let mut fittings = the_fittings(&home, a_drone_that_reached_for("c1"));
+    fittings.manifest = config::Manifest::parse(
+        std::path::Path::new("armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\ncommands:\n  publish:\n    run: \"npm publish\"\n    destructive: true\n",
+    )
+    .expect("a manifest that parses");
+    let fleet = Fleet::assembled(fittings);
+    let job = fleet
+        .propose(a_proposal("publish the package"))
+        .await
+        .unwrap();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.unwrap();
+    let job = job.id().clone();
+
+    fleet
+        .store()
+        .lock()
+        .await
+        .allow_repository_command(
+            fleet.manifest().id(),
+            &AllowedCommand {
+                run: "npm publish".to_string(),
+                reach: Reach::Repository,
+                allowed_at: fleet.now(),
+                by: Actor::Human,
+            },
+        )
+        .expect("the row is written directly, bypassing the ordinary offer");
+
+    let answer = fleet
+        .permission(&job, &asked("Bash", "npm publish", "c1"))
+        .await;
+    assert!(
+        matches!(answer, api::PermissionAnswer::Deny(_)),
+        "declared destructive, still withheld: {answer:?}"
     );
 }
