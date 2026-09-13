@@ -789,7 +789,7 @@ answer is Always allow. All three are additive: an old Bridge neither reads
 `rules` nor sends `rule`, so it keeps writing the whole command as the rule,
 exactly as it always has, and the minor moves rather than the major.
 
-## Protocol 13.6: Always allow stops writing to `armada.yml`
+## Protocol 13.7: Always allow stops writing to `armada.yml`
 
 `#836`. Fleet's own commit of the always-allowed line was itself a change on
 the Job's branch, so the absolute boundary on `armada.yml`
@@ -804,7 +804,7 @@ new routes, so the minor moves. `ipc::JobDetail` gains
 person always-allowed for the Manifest, read-only there, beside the Job's own
 `allowed_commands`. **`allowed_commands` itself changes what it means, not its
 shape**: a `repository`-reach row there is now one an older Fleet wrote before
-13.6, kept rather than migrated, and never one this Fleet writes going
+13.7, kept rather than migrated, and never one this Fleet writes going
 forward — an old Bridge reading it as before still reads a real historical
 row, so nothing about the field's shape or presence changed under it.
 
