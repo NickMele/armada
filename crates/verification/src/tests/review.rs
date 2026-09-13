@@ -112,3 +112,66 @@ fn a_review_giving_no_reason_for_its_verdict_is_not_a_submission() {
         Err(NotASubmission::ClaimedEmpty)
     );
 }
+
+/// A patch with a real hunk header, which is how a View step names its code. #904.
+const PATCH: &str = "diff --git a/src/cursor.rs b/src/cursor.rs\n\
+                     --- a/src/cursor.rs\n\
+                     +++ b/src/cursor.rs\n\
+                     @@ -10,3 +10,3 @@ impl Cursor {\n\
+                     -fn reads_past_the_end() {\n\
+                     +fn stops_at_the_end() {\n";
+
+fn a_step(file: &str, hunk: &str) -> core_model::ViewStep {
+    core_model::ViewStep {
+        file: file.to_string(),
+        hunk: hunk.to_string(),
+        summary: "The bound moves to the end".to_string(),
+        tie_to_next: None,
+    }
+}
+
+fn viewed(area: Vec<core_model::ViewStep>, finding: Vec<core_model::ViewStep>) -> Review {
+    Review::written(
+        Confidence::Confident,
+        &["The bound moved."],
+        vec![Area::of("Cursor", "Stops at the end", &["src/cursor.rs"]).viewed(area)],
+        TestsInChange::default(),
+        vec![Finding::of(
+            Bucket::ForContext,
+            "The reader is next",
+            "It shares the bound",
+        )
+        .viewed(finding)],
+    )
+}
+
+#[test]
+fn a_view_step_names_its_hunk_by_the_header_the_patch_wrote() {
+    let accepted = viewed(vec![a_step("src/cursor.rs", "@@ -10,3 +10,3 @@")], vec![])
+        .against(&["src/cursor.rs"], PATCH)
+        .expect("the hunk is in the diff");
+    assert_eq!(accepted.recorded().areas[0].view().len(), 1);
+}
+
+#[test]
+fn a_view_step_on_a_hunk_the_diff_does_not_hold_there_is_refused_by_name() {
+    let refused = viewed(
+        vec![a_step("src/cursor.rs", "@@ -99,1 +99,1 @@")],
+        vec![a_step("src/reader.rs", "@@ -10,3 +10,3 @@")],
+    )
+    .against(&["src/cursor.rs"], PATCH)
+    .expect_err("two steps name code the diff does not hold");
+    assert_eq!(
+        refused,
+        vec![
+            ReviewRefused::ViewStepNotInDiff {
+                file: "src/cursor.rs".to_string(),
+                hunk: "@@ -99,1 +99,1 @@".to_string(),
+            },
+            ReviewRefused::ViewStepNotInDiff {
+                file: "src/reader.rs".to_string(),
+                hunk: "@@ -10,3 +10,3 @@".to_string(),
+            },
+        ]
+    );
+}

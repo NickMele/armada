@@ -469,6 +469,7 @@ function OneJob({
     onOpenPullRequest,
     onSaid,
     onAnswerJudge,
+    onOpenDiff: () => openSheet("diff"),
     notes: noted?.notes ?? [],
   });
 

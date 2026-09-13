@@ -1,0 +1,127 @@
+/* View sheet — the code a finding is about, as a chain of folded steps. #904.
+
+   A numbered column down the left, and each step's summary as a button over its
+   hunk, its tie to the next step and the whole file. */
+.armada-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-view__step {
+  display: grid;
+  grid-template-columns: var(--space-6) minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.armada-view__n {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  text-align: right;
+}
+
+.armada-view__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-view__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.armada-view__summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.armada-view__what {
+  grid-column: 1;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-view__file {
+  grid-column: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.armada-view__mark {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--fg-subtle);
+}
+
+.armada-view__detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.armada-view__hunk {
+  align-self: stretch;
+  margin: 0;
+  padding-block: var(--space-1);
+  overflow-x: auto;
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-view__line {
+  display: block;
+  padding-inline: var(--space-2);
+  white-space: pre;
+  color: var(--fg-default);
+}
+
+/* Attribute first, for the off-contract-value rule's reading of a bracket. */
+[data-kind="hunk"].armada-view__line {
+  color: var(--fg-subtle);
+}
+
+[data-kind="added"].armada-view__line {
+  background: var(--diff-add-bg);
+  color: var(--diff-add-fg);
+}
+
+[data-kind="removed"].armada-view__line {
+  background: var(--diff-del-bg);
+  color: var(--diff-del-fg);
+}
+
+.armada-view__tie,
+.armada-view__gone {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}

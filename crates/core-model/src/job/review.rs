@@ -56,12 +56,25 @@ impl Bucket {
     }
 }
 
+/// One step of a View: a hunk, named by reference, and why it leads to the next. #904.
+///
+/// **The hunk is git's `@@` header, never the code**, so the chain cannot drift from
+/// the branch: a step whose hunk a later push moved no longer finds it, and says so.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ViewStep {
+    pub file: String,
+    pub hunk: String,
+    pub summary: String,
+    pub tie_to_next: Option<String>,
+}
+
 /// One part of the change, the files in it, and what changed there.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Area {
     name: String,
     what: String,
     files: Vec<String>,
+    view: Vec<ViewStep>,
 }
 
 impl Area {
@@ -70,7 +83,14 @@ impl Area {
             name: name.to_string(),
             what: what.to_string(),
             files: files.iter().map(|file| file.to_string()).collect(),
+            view: Vec::new(),
         }
+    }
+
+    /// The same area, read through a View in the order one change forces the next.
+    pub fn viewed(mut self, view: Vec<ViewStep>) -> Area {
+        self.view = view;
+        self
     }
 
     pub fn name(&self) -> &str {
@@ -83,6 +103,10 @@ impl Area {
 
     pub fn files(&self) -> &[String] {
         &self.files
+    }
+
+    pub fn view(&self) -> &[ViewStep] {
+        &self.view
     }
 }
 
@@ -202,6 +226,7 @@ pub struct Finding {
     bucket: Bucket,
     finding: String,
     why: String,
+    view: Vec<ViewStep>,
 }
 
 impl Finding {
@@ -210,7 +235,18 @@ impl Finding {
             bucket,
             finding: finding.to_string(),
             why: why.to_string(),
+            view: Vec::new(),
         }
+    }
+
+    /// The same finding, with the code it is about as a View.
+    pub fn viewed(mut self, view: Vec<ViewStep>) -> Finding {
+        self.view = view;
+        self
+    }
+
+    pub fn view(&self) -> &[ViewStep] {
+        &self.view
     }
 
     pub fn bucket(&self) -> Bucket {

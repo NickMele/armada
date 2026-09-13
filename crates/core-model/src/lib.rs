@@ -52,9 +52,9 @@ pub use job::{
     Standing, StepCheck, StepEdge, StepEvent, StepEvidence, StepFrame, StepId, StepLevelTrigger,
     StepSeed, StepState, StepTarget, StepTransitioned, StepVerdict, Stuck, Subject, Target,
     TestChange, TestsInChange, Title, TopLevelOrigin, TransitionReason, Transitioned, TriggerKind,
-    TriggerLevel, Untested, Urgency, WhenBlocked, WhenRefused, WorkflowId, WorkflowSource,
-    WriteTargets, ADVANCING_STATUSES, ARTIFACT_EXISTS, CREDENTIAL_NAMES, DIFF_NONEMPTY, EDGES,
-    EVERY_MANIFEST_CHECK, MANIFEST_CHECK, STEP_EDGES,
+    TriggerLevel, Untested, Urgency, ViewStep, WhenBlocked, WhenRefused, WorkflowId,
+    WorkflowSource, WriteTargets, ADVANCING_STATUSES, ARTIFACT_EXISTS, CREDENTIAL_NAMES,
+    DIFF_NONEMPTY, EDGES, EVERY_MANIFEST_CHECK, MANIFEST_CHECK, STEP_EDGES,
 };
 pub use job::{
     Approach, DropReason, NewTask, NotAnUpdate, PlanAuthor, PlanChange, PlanEntry, PlanRefused,

@@ -189,3 +189,10 @@
 .armada-confidence__files .armada-confidence__path {
   display: block;
 }
+
+/* A row's View button, at the row's end. #904. */
+.armada-confidence__table .armada-confidence__act {
+  width: var(--space-12);
+  text-align: right;
+  overflow-wrap: normal;
+}

@@ -10,6 +10,7 @@ pub enum ReviewRefused {
     FileInNoArea { path: String },
     TestNotInDiff { name: String },
     FindingWithNoReason { finding: String },
+    ViewStepNotInDiff { file: String, hunk: String },
 }
 
 impl core::fmt::Display for ReviewRefused {
@@ -28,6 +29,11 @@ impl core::fmt::Display for ReviewRefused {
             ReviewRefused::FindingWithNoReason { finding } => write!(
                 f,
                 "\"{finding}\" gives no reason. Say why it is there, or leave it out"
+            ),
+            ReviewRefused::ViewStepNotInDiff { file, hunk } => write!(
+                f,
+                "View names `{hunk}` in `{file}`, and the diff holds no such hunk there. \
+                 Name a hunk by its @@ header, as git wrote it"
             ),
         }
     }
@@ -116,12 +122,41 @@ impl Review {
                 });
             }
         }
+        let views = self.areas.iter().flat_map(Area::view);
+        for step in views.chain(self.findings.iter().flat_map(Finding::view)) {
+            if !changed.contains(&step.file.as_str()) || !hunk_in(diff, &step.file, &step.hunk) {
+                refused.push(ReviewRefused::ViewStepNotInDiff {
+                    file: step.file.clone(),
+                    hunk: step.hunk.clone(),
+                });
+            }
+        }
         if refused.is_empty() {
             Ok(AcceptedReview::of(self.clone()))
         } else {
             Err(refused)
         }
     }
+}
+
+/// Whether `hunk`, a `@@` header, heads a hunk in `file`'s part of the patch. #904.
+///
+/// Matched from its start, so a header given without the function name after it still reads.
+fn hunk_in(diff: &str, file: &str, hunk: &str) -> bool {
+    let hunk = hunk.trim();
+    if !hunk.starts_with("@@") {
+        return false;
+    }
+    let file_header = format!(" b/{file}");
+    let mut in_file = false;
+    for line in diff.lines() {
+        if line.starts_with("diff --") {
+            in_file = line.ends_with(&file_header);
+        } else if in_file && line.starts_with(hunk) {
+            return true;
+        }
+    }
+    false
 }
 
 /// A review Fleet checked against the change, with what Fleet adds to it.

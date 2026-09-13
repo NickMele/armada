@@ -85,6 +85,7 @@ mod retrace;
 /// beside the Job rather than only in the pull request it may also carry.
 mod review;
 mod review_record;
+mod review_view;
 mod revision;
 mod row;
 mod schema;
