@@ -40,12 +40,12 @@ pub struct AreaRow {
     pub name: String,
     pub what: String,
     pub files: Vec<String>,
-    /// The area read as a View. Since 13.24, #904; left out where it has none.
+    /// The area read as a View. Since 13.25, #904; left out where it has none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub view: Vec<ViewStepRow>,
 }
 
-/// One step of a View: a hunk named by its `@@` header, never copied. Since 13.24, #904.
+/// One step of a View: a hunk named by its `@@` header, never copied. Since 13.25, #904.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewStepRow {
     pub file: String,
@@ -102,7 +102,7 @@ pub struct UntestedRow {
 pub struct FindingRow {
     pub finding: String,
     pub why: String,
-    /// The code the finding is about, as a View. Since 13.24, #904; left out where it has none.
+    /// The code the finding is about, as a View. Since 13.25, #904; left out where it has none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub view: Vec<ViewStepRow>,
 }

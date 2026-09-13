@@ -21,11 +21,11 @@ export type AreaRow = {
   name: string;
   what: string;
   files: string[];
-  /** The area read as a View. Since 13.24, #904; absent where it has none. */
+  /** The area read as a View. Since 13.25, #904; absent where it has none. */
   view?: ViewStepRow[];
 };
 
-/** One step of a View: a hunk named by its `@@` header, never copied. Since 13.24, #904. */
+/** One step of a View: a hunk named by its `@@` header, never copied. Since 13.25, #904. */
 export type ViewStepRow = {
   file: string;
   hunk: string;
@@ -70,6 +70,6 @@ export type UntestedRow = {
 export type FindingRow = {
   finding: string;
   why: string;
-  /** The code the finding is about, as a View. Since 13.24, #904; absent where it has none. */
+  /** The code the finding is about, as a View. Since 13.25, #904; absent where it has none. */
   view?: ViewStepRow[];
 };

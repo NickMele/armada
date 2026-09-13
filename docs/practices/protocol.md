@@ -814,7 +814,7 @@ row, so nothing about the field's shape or presence changed under it.
 
 **Not `review`.** `JobDetail.review` is the text Fleet composes for the pull request, from 10.11. **Absent is a Job with no accepted review**, which is every Job whose steps ask for none.
 
-## Protocol 13.24: the code a review is about, as a View
+## Protocol 13.25: the code a review is about, as a View
 
 `ipc::ViewStepRow`, additive on `JobConfidence` as `view` on an area and on a finding (#904): the files it is about, as steps in the order one change forces the next. Each step names its hunk by the patch's `@@` header, with a one-sentence summary and, except on the last, what ties it to the next.
 
