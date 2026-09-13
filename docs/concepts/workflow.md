@@ -53,6 +53,16 @@ Picking one by hand stays available and is the override, not the path. That docu
 
 **What is proposed is not what is stored.** The resolved `WorkflowDef` is frozen into the Job at creation, as above. The proposal chooses which one; freezing is what stops it moving afterwards, so a workflow edited in the repo between the proposal and the dispatch reaches no Job already created against it.
 
+### Where a definition comes from
+
+**Three places, merged by `workflow_id`, the most specific winning**: the set Armada carries, then [Kit](kit.md)'s Workflows at `~/.armada/workflows/`, then the repository's own `.armada/workflows/`. A repository with no workflows of its own dispatches on the carried set, and one file in either later place replaces a carried definition by id. `config::Catalogue` holds the rule. #425.
+
+**The carried set is this repository's eight definitions, compiled in**, and is judged against a repository with tests — Armada's built-in support is for code-with-tests repositories, the owner's decision. None of the eight names a Check: they gate on `every_manifest_check`, `artifact_exists`, `diff_nonempty` and Judge checks, so each resolves against any Manifest, and a repository declaring no Checks runs that gate as nothing.
+
+**That is Armada holding an opinion it used to refuse.** An empty `.armada/workflows/` was refused because a repository declares how its own work is done, and a carried set is Armada saying how work is done by default. The trade is accepted, and overriding is one file so that the default does not become the only way.
+
+**Fleet says where each workflow came from when it starts.** A Job's frozen record does not say it yet: the frozen document has no key for it, and adding one is a change to `store`.
+
 **Feature is the pattern other coding workflows follow; Bug is the sample to copy from.** Design Plan is the only loop; Prototype is the only workflow with gateless steps.
 
 **Refactor exercises the gaming-check path end to end and demonstrates the no-parsing rule.** A Manifest Check exit code is its entire mechanical tier, and every question about what the tests now cover is answered by a Judge reading the diff.

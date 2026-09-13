@@ -82,9 +82,9 @@ goes in it.
 
 ## Starting Fleet
 
-**A healthy start prints, then goes quiet.** The repository and its workflow,
-the pid, port and protocol version, what reconciliation found, the turn
-interval, and how many operations are being served. Quiet is a Fleet with
+**A healthy start prints, then goes quiet.** The repository, each workflow and
+where it came from, the pid, port and protocol version, what reconciliation
+found, the turn interval, and how many operations are being served. Quiet is a Fleet with
 nothing to do, not a wedge.
 
 **It refuses before it binds a port.** Every fault is on its own line, and a
@@ -93,7 +93,7 @@ refusal exits non-zero.
 | Fault |
 |---|
 | `armada.yml` missing or malformed |
-| `.armada/workflows/` holding no definition, or more than one |
+| Two definitions in one place naming the same `workflow_id` |
 | A step naming a Check the Manifest does not declare |
 | An agent CLI a Drone would not find on its own `PATH` |
 

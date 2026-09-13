@@ -24,6 +24,14 @@ The machine's AI tool set and defaults, and everything in `../contracts/configur
 
 Resources, budget, timing, interface and notification routing are **not** here — those are [Machine](machine.md). Setting up your *first project* is also out of scope — that's Manifest's Init, chained together in the broader First-Run Onboarding journey (not yet designed).
 
+## Kit's home
+
+**Kit lives at `~/.armada`, and Workflows are the first thing read from it.** Fleet makes the folder, with `workflows/` inside it, when it starts. A definition in `~/.armada/workflows/` replaces the one Armada carries with the same `workflow_id` in every repository on this machine, and a repository's own `.armada/workflows/` replaces both — [Workflow](workflow.md) holds the rule. #425.
+
+**A folder a person can see and sync**, apart from the store, the runtime file and [Machine](machine.md)'s settings: Kit travels and the Machine does not. Everything else this page lists arrives in the same home under #41, and nothing else is read from it yet.
+
+**A Kit definition is held to the repository it runs in.** One that will not parse, or names a Check that repository does not declare, refuses Fleet's start there, as a repository's own file always has. One the repository replaces is never resolved against it.
+
 ## Navigation — two functional groups
 
 The original four groups split across the two concepts: AI Behavior and the tooling half of Safety are Kit; Resources & Budget, Interface & Notifications and Helm action authority are [Machine](machine.md).
