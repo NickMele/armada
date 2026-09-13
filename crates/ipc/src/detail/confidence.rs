@@ -36,7 +36,7 @@ pub struct JobConfidence {
     /// Findings a person dismissed, taken out of the three lists above. Since 13.29, #907.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dismissed: Vec<DismissedRow>,
-    /// What a person made of a finding: a Job queued behind this one, or an issue. Since 13.35, #906.
+    /// What a person made of a finding: a Job queued behind this one, or an issue. Since 13.36, #906.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub followed: Vec<FollowedRow>,
 }
@@ -129,7 +129,7 @@ pub struct FindingDismissed {
     pub reason: String,
 }
 
-/// What a finding became. Since 13.35, #906. **One of `job` or `issue`**, whichever was made.
+/// What a finding became. Since 13.36, #906. **One of `job` or `issue`**, whichever was made.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FollowedRow {
     pub finding: String,
@@ -140,14 +140,14 @@ pub struct FollowedRow {
 }
 
 /// `queue_after_finding`'s body: a For context finding, in the words the review served it
-/// in. Since 13.35, #906.
+/// in. Since 13.36, #906.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FindingQueued {
     pub finding: String,
 }
 
 /// `file_finding_issue`'s body: the finding, and the issue as the person left the draft.
-/// Since 13.35, #906. **A blank title is refused by Fleet**, a 422.
+/// Since 13.36, #906. **A blank title is refused by Fleet**, a 422.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IssueFiled {
     pub finding: String,
