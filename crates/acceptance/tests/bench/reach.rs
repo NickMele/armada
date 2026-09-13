@@ -18,9 +18,12 @@ use config::{
     Catalogue, Fault, Manifest, ResolveError, ResolvedCatalogue, ResolvedWorkflow, Roster,
     WorkflowDef, Written,
 };
-use fleet::manifest_proposal::{propose, Draft};
-use fleet::scanning::{scan, Entry, Read, Tree};
-use ipc::{ManifestProposal, ProposalEdit, Provenance};
+use fleet::scanning::{Entry, Read, Tree};
+
+mod setup;
+// Only Reach's own test binary reaches Setup's apparatus; the other milestones compile it unused.
+#[allow(unused_imports)]
+pub use setup::*;
 
 /// The repository's checkout, as a Scan of it would say it read.
 pub const CHECKOUT: &str = "/repos/storefront";
@@ -425,73 +428,12 @@ fn resolved_def(def: &WorkflowDef) -> ResolvedWorkflow {
         .unwrap_or_else(|why| panic!("{} resolves there: {why}", def.path().display()))
 }
 
-/// The storefront's proposals, built from its Scan as it crosses the wire.
-pub fn proposals(repository: &Held) -> Vec<Draft> {
-    let sent = ipc::encode(&scan(CHECKOUT, repository)).expect("a scan that serialises");
-    propose(&ipc::decode("a repository scan", sent.as_bytes()).expect("and reads back"))
-}
-
-/// A proposal as a sheet receives it: through `ipc::encode` and back.
-pub fn as_sent(draft: &Draft) -> ManifestProposal {
-    let sent = ipc::encode(&draft.answer()).expect("a proposal that serialises");
-    ipc::decode("a manifest proposal", sent.as_bytes()).expect("and reads back")
-}
-
-pub fn convention(file: &str, key: Option<&str>) -> Provenance {
-    Provenance::Convention {
-        file: file.to_string(),
-        key: key.map(str::to_string),
-    }
-}
-
-pub fn read_from(file: &str, key: &str) -> Provenance {
-    Provenance::Read {
-        file: file.to_string(),
-        key: key.to_string(),
-    }
-}
-
-/// A person's corrections to the shop as a surface sends them, toward the journey's own `e2e`.
-pub fn toward_the_journeys_e2e() -> Vec<ProposalEdit> {
-    ipc::decode("a person's edits", TOWARD_THE_JOURNEYS_E2E.as_bytes()).expect("edits that decode")
-}
-
-/// `test` is re-sent exactly as proposed, so it should keep its citation.
-const TOWARD_THE_JOURNEYS_E2E: &str = r#"[
-  {"edit": "command", "name": "migrate", "run": "pnpm prisma migrate deploy"},
-  {"edit": "command", "name": "seed", "run": "pnpm tsx scripts/seed.ts"},
-  {"edit": "check", "name": "e2e", "run": "pnpm playwright test", "requires": ["migrate", "seed"]},
-  {"edit": "move", "name": "lint"},
-  {"edit": "port", "name": "dev", "container": 3000, "env": "PORT"},
-  {"edit": "policy", "key": "auto_merge", "value": "checks-pass"},
-  {"edit": "check", "name": "test", "run": "pnpm run test"}
-]"#;
-
-/// The text Write would put down, loaded where it would be.
-pub fn loads(proposal: &ManifestProposal) -> Manifest {
-    let Some(text) = &proposal.text else {
-        panic!("{} is refused: {:?}", proposal.file, proposal.refused);
-    };
-    let at = Path::new(CHECKOUT).join(&proposal.file);
-    Manifest::parse(&at, text).unwrap_or_else(|why| panic!("{} loads: {why}", proposal.file))
-}
-
-/// The provenance of the Check or Command named `name`.
-pub fn provenance_of(proposal: &ManifestProposal, name: &str) -> Provenance {
-    for check in &proposal.checks {
-        if check.name == name {
-            return check.provenance.clone();
-        }
-    }
-    for command in &proposal.commands {
-        if command.name == name {
-            return command.provenance.clone();
-        }
-    }
-    panic!("no line named {name}")
-}
-
-pub fn fault_keys(proposal: &ManifestProposal) -> Vec<&str> {
-    let faults = proposal.refused.iter().flat_map(|one| &one.faults);
-    faults.map(|one| one.key.as_str()).collect()
+/// The workflow a catalogue resolved to for `id`, against the storefront.
+pub fn held_there(catalogue: &ResolvedCatalogue, id: &str) -> ResolvedWorkflow {
+    catalogue
+        .workflows()
+        .values()
+        .find(|workflow| workflow.id().as_str() == id)
+        .unwrap_or_else(|| panic!("`{id}` is held"))
+        .clone()
 }

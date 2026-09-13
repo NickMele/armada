@@ -29,7 +29,6 @@
 //! | **Write, as far as a hermetic test reaches.** A proposal's text is edits to empty text through `config`'s one writer and loads, and one the parser refuses carries every fault at its key, which is what Write refuses | That the file lands, and that a file already at the path is never written over: both touch a disk, and are `fleet::manifest_proposal`'s own tests |
 //! | A Manifest for a repository that is not this one loads — a port, Checks in written order, the Commands a Check requires, a server, setup | That Setup wrote this one: what Setup writes for the storefront is asserted under Write |
 //! | A proposal saying more than the file can hold is refused, every fault in one pass | That a sheet shows each fault on its row — #824 |
-//! | Running one Manifest entry in the checkout, and reading and saving the file, are operations Fleet serves | Verify and Fix. One entry is not setup and every Check once, and a saved file is not a row corrected in place |
 
 //! # Carried: working there
 //!
@@ -41,7 +40,7 @@
 //! | **Override.** One file from Kit replaces a carried definition by id, and the repository's replaces Kit's, whatever order they arrive in | That `~/.armada/workflows/` is where Kit's are read from. That is a directory, `armada`'s tests again |
 //! | **Source.** Each workflow says which of the three places it came from, in words a person reads, and a Job created on the carried `bug` freezes `armada` onto its own record | That the record reads it back out of `store`, which has no in-memory constructor — `store`'s own round-trip test does. That a person sees it on a Job: nothing on the wire carries it, which is Bridge's half |
 //! | Running one Manifest entry in the checkout, and reading, saving and editing the file, are operations Fleet serves | — |
-//! | **Verify.** What it runs is setup in `setup.requires` order, then every Check in written order, once each, and nothing else the file declares — a Check's prerequisites run inside its own run, other Commands and the server not at all — and starting one is an act Fleet serves | That any of it runs, one step at a time, writing nothing: those are processes, and `fleet`'s `verify_runs` tests. That Verify is offered on the sheet that wrote the file, which is Write's, #823. That a failed setup skips the Checks after it, as a Job's does |
+//! | **Verify.** What it runs is setup in `setup.requires` order, then every Check in written order, once each, and nothing else the file declares — a Check's prerequisites run inside its own run, other Commands and the server not at all — and starting one is an act Fleet serves | That any of it runs, one step at a time, writing nothing: those are processes, and `fleet`'s `verify_runs` tests. That Verify is offered on the sheet that wrote the file — #824. That a failed setup skips the Checks after it, as a Job's does |
 //! | **Fix.** A failed Check's command corrected as a form sends it — that Check's `run`, by name — changes that one line: every comment and every other line stays, the result loads, and a correction that would not load is refused with its faults | That a person sees the failing row and corrects it there: the form is Bridge's, a later child of #721. That only that Check runs again: #719's scoped Verify. That Fleet writes it and refuses a file that moved: that touches a file, and is `fleet`'s own tests |
 //! | A request naming a milestone is offered `epic` with what it is for, in a requester's words, beside its steps — and a definition saying nothing is offered as before | That a model reading it proposes `epic`. Choosing is a model's, and this file calls none |
 
@@ -53,7 +52,6 @@
 //! | Step | What is not carried | Carried by |
 //! |---|---|---|
 //! | Locate | Pointing Armada at a repository it has not seen, by path or by clone. A Fleet reads the one repository it was started in | #821 |
-//! | Verify | Setup and every Check run once on approval, on the sheet that wrote the file, writing nothing | #719 |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the six.
@@ -68,38 +66,24 @@ use config::{
     WorkflowSource,
 };
 use core_model::{JobStatus, StepState, WorkflowId};
-use fleet::scanning::scan;
 use fleet::{Brief, Proposal};
 use ipc::{
-    EvidenceStrength, MissingName, ProposalEdit, Provenance, RepositoryScan, ScannedWorkspace,
-    ToolFile, VerifyGroup, VerifyStep, VerifyStepState, WorkspaceGlob,
+    EvidenceStrength, MissingName, ProposalEdit, Provenance, ToolFile, VerifyGroup, VerifyStep,
+    VerifyStepState, WorkspaceGlob,
 };
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    as_sent, carried_there, catalogued, convention, fault_keys, loads, one_step, proposals,
-    provenance_of, read_from, resolved_there, toward_the_journeys_e2e, written, Held, A_MILESTONE,
-    CARRYABLE, CHECKOUT, EPIC, EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING,
-    UNSET_UP, WRITTEN,
+    as_sent, carried_there, catalogued, convention, every_line, fault_keys, held_there, loads,
+    one_step, proposal_at, proposals, provenance_of, read_from, received, resolved_there,
+    toward_the_journeys_e2e, workspace, written, Held, A_MILESTONE, CARRYABLE, EPIC, EPIC_AT, KEPT,
+    MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP, WRITTEN,
 };
 use bench::{states, Bench};
 
 // ---------------------------------------------------------------------------
 // Scan and Pick
 // ---------------------------------------------------------------------------
-
-/// A scan as a picker receives it: through `ipc::encode` and back.
-fn received(repository: &Held) -> RepositoryScan {
-    let sent = ipc::encode(&scan(CHECKOUT, repository)).expect("a scan that serialises");
-    ipc::decode("a repository scan", sent.as_bytes()).expect("and reads back")
-}
-
-fn workspace<'a>(scan: &'a RepositoryScan, dir: &str) -> &'a ScannedWorkspace {
-    scan.workspaces
-        .iter()
-        .find(|one| one.dir == dir)
-        .unwrap_or_else(|| panic!("{dir} is a workspace"))
-}
 
 /// **Scan reads every workspace of a repository nobody set up, in one pass,
 /// and every finding names a file that repository has.** The Scan step, #822.
@@ -253,50 +237,31 @@ fn a_proposal_cites_the_file_each_line_came_from() {
 
     for one in &proposals {
         assert_eq!(one.id.provenance, convention(&one.dir, None));
-        assert!(
-            one.refused.is_none(),
-            "{} is refused: {:?}",
-            one.dir,
-            one.refused
-        );
+        let loaded = loads(one);
         assert_eq!(
-            loads(one).id().as_str(),
+            loaded.id().as_str(),
             one.id.value,
-            "and the text Write would write loads"
+            "the text Write would write loads"
         );
-        let cites = |provenance: &Provenance, guessed: bool| match (provenance, guessed) {
-            (Provenance::Read { file, .. }, false)
-            | (Provenance::Convention { file, .. }, true) => {
-                assert!(
-                    repository.has(file),
-                    "{} cites {file}, which is not there",
-                    one.dir
-                )
-            }
-            (other, _) => panic!("{} carries {other:?} where a file belongs", one.dir),
-        };
-        one.ports
-            .iter()
-            .for_each(|port| cites(&port.provenance, false));
-        let checks = one.checks.iter().map(|line| &line.provenance);
-        let commands = one.commands.iter().map(|line| &line.provenance);
-        let setup = one.setup.iter().map(|line| &line.provenance);
-        checks
-            .chain(commands)
-            .chain(setup)
-            .for_each(|provenance| cites(provenance, true));
+        for (provenance, guessed) in every_line(one) {
+            let file = match (provenance, guessed) {
+                (Provenance::Read { file, .. }, false) => file,
+                (Provenance::Convention { file, .. }, true) => file,
+                (other, _) => panic!("{} carries {other:?} where a file belongs", one.dir),
+            };
+            assert!(
+                repository.has(file),
+                "{} cites {file}, which is not there",
+                one.dir
+            );
+        }
         assert!(one
             .policy
             .iter()
             .all(|row| row.provenance == Provenance::Default));
     }
 
-    let at = |dir: &str| {
-        proposals
-            .iter()
-            .find(|one| one.dir == dir)
-            .expect("proposed")
-    };
+    let at = |dir: &str| proposal_at(&proposals, dir);
     let shop = at("apps/shop");
     let checks: Vec<&str> = shop.checks.iter().map(|one| one.name.as_str()).collect();
     let commands: Vec<&str> = shop.commands.iter().map(|one| one.name.as_str()).collect();
@@ -634,16 +599,6 @@ fn a_job_against_that_repository_is_held_to_its_checks() {
     );
 }
 
-/// The workflow a catalogue resolved to for `id`, against the storefront.
-fn held_there(catalogue: &config::ResolvedCatalogue, id: &str) -> ResolvedWorkflow {
-    catalogue
-        .workflows()
-        .values()
-        .find(|workflow| workflow.id().as_str() == id)
-        .unwrap_or_else(|| panic!("`{id}` is held"))
-        .clone()
-}
-
 /// **A repository with no workflows of its own dispatches on what Armada
 /// carries.** Dispatch.
 ///
@@ -872,6 +827,7 @@ fn a_failed_check_corrected_in_its_row_changes_that_line_and_still_loads() {
     );
 }
 
+// ---------------------------------------------------------------------------
 // Verify
 // ---------------------------------------------------------------------------
 
