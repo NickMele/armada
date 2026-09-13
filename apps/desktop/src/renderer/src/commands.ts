@@ -42,7 +42,6 @@ import type {
   CommandAnswer,
   JudgeAnswer,
   SaveLimits,
-  SavePreference,
   StartCheckoutRun,
   StartRun,
   WhenBlocked,
@@ -500,16 +499,6 @@ export function useCommands(sending: Sending) {
     return answer;
   }
 
-  /**
-   * Save one Bridge preference. `saveLimits`' shape and its reason: Fleet-wide,
-   * with no Job to key a `setActing` on.
-   */
-  async function savePreference(save: SavePreference): Promise<Outcome> {
-    const answer = await window.armada.savePreference(save);
-    setOutcome(answer);
-    return answer;
-  }
-
   async function report(jobId: string, filing: FileReport): Promise<Outcome> {
     const answer = await window.armada.fileReport(jobId, filing);
     // Published as well as returned: a refusal belongs in the one place this
@@ -629,7 +618,6 @@ export function useCommands(sending: Sending) {
     raiseCap,
     raiseTurns,
     saveLimits,
-    savePreference,
     report,
     decide,
     refresh,
