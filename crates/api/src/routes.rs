@@ -35,6 +35,7 @@ use crate::commands::{
     rerun_gate, resolve_pull_request_conflict, restart_step, set_when_blocked, set_when_refused,
     show_again, stop_proposal, take_up_remarks,
 };
+use crate::conversing::{ask_helm, observe_helm, start_helm_fresh};
 use crate::daemon::Daemon;
 use crate::editing::{get_manifest_file, save_manifest_file};
 use crate::fleetwide::{
@@ -250,6 +251,9 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             "/jobs/:job_id/checks/:kept/observe",
             get(observe_check_output::<D>),
         )
+        .route("/helm/observe", get(observe_helm::<D>))
+        .route("/helm/ask", post(ask_helm::<D>))
+        .route("/helm/start_fresh", post(start_helm_fresh::<D>))
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in
         // `SERVED`: it is the Fleet/Drone seam rather than the Fleet/Bridge

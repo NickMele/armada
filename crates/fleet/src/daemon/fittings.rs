@@ -243,6 +243,9 @@ where
 {
     pub fn assembled(fittings: Fittings<H, V, W>) -> Fleet<H, V, W> {
         let run = fittings.mint.ulid();
+        let helm = crate::helm::Conversations::hosted_by(Arc::new(
+            crate::helm::ProcessHost::on_this_machine(&fittings.host),
+        ));
         let shipped = Limits {
             concurrency: fittings.concurrency,
             headroom: fittings.headroom,
@@ -297,6 +300,7 @@ where
             models: fittings.models,
             events: fittings.events,
             turns: api::Turns::new(),
+            helm,
             inbox: EvidenceInbox::new(),
             delivered: Mutex::new(BTreeMap::new()),
             slots: Mutex::new(Slots::bounded_by(in_force.concurrency)),
@@ -320,5 +324,12 @@ where
             merge_end: Mutex::new(()),
             run,
         }
+    }
+
+    /// The same Fleet with Helm's messages carried by `host` — a stand-in in a
+    /// test, or a host somewhere other than a process Fleet starts.
+    pub fn hosting_helm_on(mut self, host: Arc<dyn crate::helm::Hosting>) -> Fleet<H, V, W> {
+        self.helm = crate::helm::Conversations::hosted_by(host);
+        self
     }
 }

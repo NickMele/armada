@@ -14,6 +14,7 @@ mod basing;
 mod ci_workflows;
 mod cloning;
 mod commit;
+mod conversing;
 mod delivery;
 mod git_guard_gaps;
 mod harness;

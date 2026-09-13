@@ -118,6 +118,45 @@ notes = """
 No event, `save_limits`' reason: the answer already carries what changed, and nothing else reads a preference on a timer.
 """
 
+[operations.observe_helm]
+kind = "query"
+transport = "WebSocket"
+agent_access = "No"
+description = "One repository's Helm conversation — the thread so far, then every message after it — on a socket of its own"
+notes = """
+**`observe_job`'s shape with a conversation for its subject**: `opened`, the thread, then what follows, with `missed` where a viewer fell behind. The session's own output arrives as `row`s in the transcript's vocabulary; `asked`, `fresh` and `unanswered` are what a Drone's socket has no word for. `docs/practices/protocol.md`, *The Helm socket*, is the design.
+
+**No end to close on.** A conversation outlives every process that answers in it, so `closed` is sent only when a person starts fresh.
+
+`?manifest_id=` names the repository, absent being the one Fleet started in, and a Manifest Fleet does not serve is refused before the upgrade. Not `/events`, for `observe_job`'s reason.
+
+`agent_access` is `No`: a session must not read another session.
+"""
+
+[operations.ask_helm]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Say something to one repository's Helm, answered at once while the reply streams on its socket"
+notes = """
+**202, and the reply is not in the answer.** Fleet takes the message and answers with whether the next message resumes a session; the reply is written on `observe_helm`. A message sent while a reply is being written waits its turn rather than being refused.
+
+**Resume, not keep-alive.** One process per message, exiting once it has answered; the next message resumes the stored session by id, after an idle exit, a Fleet restart or a reboot. A session the agent no longer has is forgotten and started again, and the thread is told so with `fresh`. A blank message does not decode.
+
+`agent_access` is `No`: a session must not drive another session.
+"""
+
+[operations.start_helm_fresh]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Forget one repository's Helm session and thread, so the next message starts over"
+notes = """
+The stored session and the thread's file both go, and every viewer is sent `closed` / `started_fresh`. **Refused with `fleet.helm_still_replying` while a reply is being written**: forgetting a session under a process still writing into it would leave its answer nowhere.
+
+`agent_access` is `No`, for `ask_helm`'s reason.
+"""
+
 [operations.get_call]
 kind = "query"
 transport = "HTTP"

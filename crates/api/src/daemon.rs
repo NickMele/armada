@@ -25,10 +25,12 @@
 //! this crate that did not follow it. Each module below states its own half.
 
 mod commands;
+mod conversing;
 mod queries;
 mod tools;
 
 pub use commands::Commands;
+pub use conversing::Conversations;
 pub use queries::{FramePart, FrameSpan, Queries};
 pub use tools::{PermissionAnswer, Tools};
 
@@ -55,9 +57,14 @@ use ipc::WireError;
 /// is `list_jobs`, for the resync it opens with, and that is an ordinary read
 /// behind a [`Queries`] bound; `get_job_events` is a history read and is a
 /// query for the same reason.
-pub trait Daemon: Queries + Commands + Tools {}
+///
+/// # Why a Helm conversation is a fourth
+///
+/// [`Conversations`] is whole on its own and is the part `#73` keeps movable,
+/// so its module argues it rather than this one.
+pub trait Daemon: Queries + Commands + Tools + Conversations {}
 
-impl<D: Queries + Commands + Tools> Daemon for D {}
+impl<D: Queries + Commands + Tools + Conversations> Daemon for D {}
 
 /// A request the daemon would not serve.
 ///

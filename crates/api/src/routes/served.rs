@@ -73,6 +73,22 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/preferences/save",
     },
+    // One repository's Helm conversation, named by `?manifest_id=`.
+    Route {
+        operation: "observe_helm",
+        method: "GET",
+        path: "/helm/observe",
+    },
+    Route {
+        operation: "ask_helm",
+        method: "POST",
+        path: "/helm/ask",
+    },
+    Route {
+        operation: "start_helm_fresh",
+        method: "POST",
+        path: "/helm/start_fresh",
+    },
     // Fleet's reading of its own Manifest, and singular where `/manifests` is
     // plural on purpose: that route lists what Fleet holds, and this one is the
     // single `armada.yml` Fleet is running on and watching. Not under `/jobs`

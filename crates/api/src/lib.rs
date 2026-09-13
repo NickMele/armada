@@ -30,6 +30,8 @@ mod answers;
 /// The four reads that narrow the Board rather than drawing it.
 mod attention;
 mod commands;
+/// One repository's Helm conversation, on a socket of its own — never `/events`.
+mod conversing;
 mod daemon;
 /// The agent's door: the HTTP surface, spoken as MCP. **Who may open it is
 /// `#698`; what it is scoped to is here.**
@@ -77,8 +79,10 @@ mod watching_run;
 #[cfg(test)]
 mod tests;
 
+pub use conversing::{HelmFeed, HelmSeen, HelmWatch, ObservedHelm, HELM_BACKLOG};
 pub use daemon::{
-    Commands, Daemon, FramePart, FrameSpan, PermissionAnswer, Queries, Refusal, Tools,
+    Commands, Conversations, Daemon, FramePart, FrameSpan, PermissionAnswer, Queries, Refusal,
+    Tools,
 };
 pub use door::{offered, Scope, DOOR_PATH};
 pub use following::{Follow, Followed, LiveOutput};

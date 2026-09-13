@@ -73,6 +73,8 @@ mod files;
 /// What Fleet can say about its own health, and what it cannot. **Not
 /// Doctor**, whose grid is ten modules and is not built.
 mod health;
+/// One repository's Helm conversation, and the socket its replies come on.
+mod helm;
 mod history;
 /// What Fleet is holding disk for, and the test each one did not pass.
 /// **A piloted worktree is not on this wire at all** — `#367`.
@@ -196,6 +198,10 @@ pub use event::{
 pub use explaining::CommandExplained;
 pub use files::FilesFound;
 pub use health::{FleetHealth, Probe, Unprobed};
+pub use helm::{
+    AskHelm, Blank, Freshness, HelmAsked, HelmClosed, HelmConversation, HelmFresh, HelmMessage,
+    HelmOpened, HelmSilence, HelmText, HelmUnanswered,
+};
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{

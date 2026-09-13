@@ -1,0 +1,151 @@
+//! One repository's Helm conversation: what a person sends, and the socket its
+//! replies come back on. `#939`.
+//!
+//! **`TurnMessage`'s shape, one subject over.** `opened`, the thread so far,
+//! then what follows, with `missed` where a viewer fell behind — and the rows
+//! the session writes are [`Shown`] rows, so a reply is read with the
+//! vocabulary a Drone's turn already is. **Deliberately not `/events`**, for
+//! the second socket's reason in `docs/practices/protocol.md`.
+//!
+//! **A conversation has no end to close on.** The socket carries every reply
+//! for as long as a viewer holds it, and `closed` is sent only when a person
+//! starts fresh and the thread it was showing is gone.
+
+use core::fmt;
+
+use serde::{Deserialize, Serialize};
+
+use crate::event::Missed;
+use crate::ids::{Instant, ManifestId};
+use crate::turn::Shown;
+use crate::version::ProtocolVersion;
+
+/// `POST /helm/ask` — what a person says to Helm.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AskHelm {
+    pub text: HelmText,
+}
+
+/// A message with something in it. **Blank does not decode**, so an empty
+/// message is the transport's 400 and never a session started for nothing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct HelmText(String);
+
+impl HelmText {
+    /// `None` where the text is blank.
+    pub fn said(text: &str) -> Option<HelmText> {
+        (!text.trim().is_empty()).then(|| HelmText(text.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A message that was only whitespace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Blank;
+
+impl fmt::Display for Blank {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.write_str("a message to Helm has nothing in it")
+    }
+}
+
+impl TryFrom<String> for HelmText {
+    type Error = Blank;
+
+    fn try_from(text: String) -> Result<HelmText, Blank> {
+        HelmText::said(&text).ok_or(Blank)
+    }
+}
+
+impl From<HelmText> for String {
+    fn from(text: HelmText) -> String {
+        text.0
+    }
+}
+
+/// What `ask_helm` and `start_helm_fresh` answer with. **Not the reply**, which
+/// arrives on the socket.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HelmConversation {
+    pub manifest_id: ManifestId,
+    /// A reply is being written, or a message is waiting for one.
+    pub replying: bool,
+    /// The next message resumes a stored session. `false` starts a new one.
+    pub resumes: bool,
+}
+
+/// One message on a Helm conversation's socket.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "message", rename_all = "snake_case")]
+pub enum HelmMessage {
+    /// The first message on every connection.
+    Opened(HelmOpened),
+    /// What the person said, as Fleet took it.
+    Asked(HelmAsked),
+    /// What the session wrote: its prose, its calls, and `ended` with what the
+    /// reply cost. `by` is `drone` on these, the decoder's word for a session's
+    /// own output; which session is the socket's.
+    Row(Shown),
+    /// The stored session could not be resumed, so this reply starts a new one.
+    Fresh(HelmFresh),
+    /// No reply came, and why.
+    Unanswered(HelmUnanswered),
+    /// This viewer fell behind and lost messages.
+    Missed(Missed),
+    /// Nothing more on this connection, and why.
+    Closed(HelmClosed),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HelmOpened {
+    pub protocol_version: ProtocolVersion,
+    pub manifest_id: ManifestId,
+    /// Whether a reply was being written when this opened.
+    pub replying: bool,
+    /// Older messages the thread left out, because the backfill is bounded.
+    pub skipped: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HelmAsked {
+    pub ts: Instant,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HelmFresh {
+    pub ts: Instant,
+    pub because: Freshness,
+}
+
+/// Why a conversation started over without a person asking it to. A plain
+/// enum for `Silence`'s reason: no registry declares the set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Freshness {
+    /// The agent CLI had no session by the stored id — its transcript was
+    /// cleaned up, or never written on this machine.
+    SessionNotFound,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HelmUnanswered {
+    pub ts: Instant,
+    pub why: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HelmClosed {
+    pub because: HelmSilence,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HelmSilence {
+    /// A person started fresh. The thread this connection showed is gone.
+    StartedFresh,
+}

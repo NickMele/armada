@@ -17,8 +17,11 @@
 //! to raise it. There are two, and the modules below hold none of their own.
 
 mod commands;
+mod conversing;
 mod queries;
 mod tools;
+
+pub use conversing::SERVED_MANIFEST;
 
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
@@ -76,6 +79,10 @@ pub struct FakeDaemon {
     /// Every rule a person always-allowed for the repository. Set by a test,
     /// and changed by the fake's own removes — `#836`.
     pub repository_allowed: Mutex<Vec<ipc::AllowedCommandRow>>,
+    /// The one Helm conversation's channel, which a test can offer into.
+    pub helm: crate::HelmFeed,
+    /// What `observe_helm` answers with as the thread. Set by a test.
+    pub helm_thread: Mutex<Vec<ipc::HelmMessage>>,
 }
 
 impl FakeDaemon {
@@ -101,6 +108,8 @@ impl FakeDaemon {
             limits: Mutex::new(shapes::limits()),
             preferences: Mutex::new(shapes::preferences()),
             repository_allowed: Mutex::new(Vec::new()),
+            helm: crate::HelmFeed::new(),
+            helm_thread: Mutex::new(Vec::new()),
         }
     }
 

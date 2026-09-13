@@ -343,6 +343,9 @@ where
     pub(crate) fn turns(&self) -> &api::Turns {
         &self.turns
     }
+    pub(crate) fn helm(&self) -> &crate::helm::Conversations {
+        &self.helm
+    }
     /// The roster, for `dispatch` and for a turn.
     pub(crate) fn slots(&self) -> &Mutex<Slots> {
         &self.slots

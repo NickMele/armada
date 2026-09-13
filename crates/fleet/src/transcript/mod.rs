@@ -47,6 +47,8 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
 
 use crate::clock::Clock;
+/// One event as a row, for a Helm conversation's thread as well as a Drone's.
+pub(crate) use row::seen;
 use row::Line;
 
 pub use backfill::{arguments, history, last_heard, refusals, HISTORY, REFUSALS};
