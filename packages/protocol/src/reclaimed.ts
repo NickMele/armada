@@ -5,6 +5,10 @@
 // here — but it reached the 900 lines the gate refuses, and the cut follows a
 // seam `crates/ipc` already draws rather than one invented for the line count.
 // `report.ts` and `events.ts` were cut the same way for the same reason.
+//
+// **Every optional field also admits `null`.** A Fleet built before #827 sent
+// an empty one as `null` rather than leaving it out, within the same 13.0
+// protocol, and a reader comparing against `undefined` alone crashed on it.
 
 /**
  * What giving one Job's worktree and branch back did, half by half.
@@ -31,7 +35,7 @@ export type ReclaimedWorktree = {
   /** Whether the checkout is gone from disk. True where there was nothing there to begin with. */
   removed: boolean;
   /** Why it is still there, where it is — a lock message, or what version control said. */
-  why?: string;
+  why?: string | null;
 };
 
 /**
@@ -46,8 +50,8 @@ export type ReclaimedBranch = {
   branch: string;
   deleted: boolean;
   /** The commit it pointed at. A deleted branch is recoverable from its SHA and nothing else. */
-  tip?: string;
-  why?: string;
-  base?: string;
-  unmerged_commits?: number;
+  tip?: string | null;
+  why?: string | null;
+  base?: string | null;
+  unmerged_commits?: number | null;
 };

@@ -210,7 +210,7 @@ export function useCommands(sending: Sending) {
   async function clearTerminal(jobIds: readonly string[]): Promise<void> {
     const result = await window.armada.clearTerminalJobs(jobIds);
     if (result.failed.length > 0) setOutcome(result.failed[0]!.outcome);
-    const kept = result.reclaimed.filter((one) => one.branch.unmerged_commits !== undefined);
+    const kept = result.reclaimed.filter((one) => one.branch.unmerged_commits != null);
     if (kept.length > 0) setGivenBack(kept);
   }
 

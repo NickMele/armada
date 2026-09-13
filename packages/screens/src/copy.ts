@@ -114,8 +114,8 @@ export function reclaimed(answer: WorktreeReclaimed): string {
     ? `The worktree at ${answer.worktree.path} is gone.`
     : `The worktree at ${answer.worktree.path} is still there — ${answer.worktree.why ?? "no reason was given"}.`;
   const branch = answer.branch.deleted
-    ? `Branch ${answer.branch.branch} was deleted${answer.branch.tip === undefined ? "" : `, at ${answer.branch.tip.slice(0, 12)}`}.`
-    : answer.branch.unmerged_commits === undefined
+    ? `Branch ${answer.branch.branch} was deleted${answer.branch.tip == null ? "" : `, at ${answer.branch.tip.slice(0, 12)}`}.`
+    : answer.branch.unmerged_commits == null
       ? `Branch ${answer.branch.branch} was left alone — ${answer.branch.why ?? "no reason was given"}.`
       : `Branch ${answer.branch.branch} was kept: ${answer.branch.why}. Merge it or delete it by hand when you have taken what you want.`;
   return `${checkout} ${branch}`;
