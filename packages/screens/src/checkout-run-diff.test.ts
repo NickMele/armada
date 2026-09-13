@@ -35,7 +35,7 @@ const ACTS = { onOpenDiff: () => {}, onUndo: () => {} };
 
 describe("the changed-files panel, for the result line's run", () => {
   it("offers the diff and Undo on a run that changed files", () => {
-    const panel = checkoutChangedOf(record(), ACTS);
+    const panel = checkoutChangedOf(record(), true, ACTS);
     expect(panel.files).toHaveLength(1);
     expect(panel.onOpenDiff).toBeDefined();
     expect(panel.onUndo).toBeDefined();
@@ -44,23 +44,31 @@ describe("the changed-files panel, for the result line's run", () => {
   it("says a run changed nothing and offers neither act", () => {
     // `format` after `fmt`: the panel under format's result must not carry
     // fmt's files and an Undo that reads as undoing format.
-    const panel = checkoutChangedOf(record({ name: "format", changed: [] }), ACTS);
+    const panel = checkoutChangedOf(record({ name: "format", changed: [] }), true, ACTS);
     expect(panel).toEqual({ files: [] });
   });
 
+  it("offers no Undo on an older run opened from Earlier runs, and still offers its diff", () => {
+    // Its snapshot predates the runs after it; Undo is the newest run's alone.
+    const panel = checkoutChangedOf(record(), false, ACTS);
+    expect(panel.onUndo).toBeUndefined();
+    expect(panel.onOpenDiff).toBeDefined();
+    expect(panel.files).toHaveLength(1);
+  });
+
   it("offers no Undo where Fleet says there is no snapshot behind the run", () => {
-    expect(checkoutChangedOf(record({ undoable: false }), ACTS).onUndo).toBeUndefined();
+    expect(checkoutChangedOf(record({ undoable: false }), true, ACTS).onUndo).toBeUndefined();
   });
 
   it("keeps an undone run's diff, says it was undone, and offers no second Undo", () => {
-    const panel = checkoutChangedOf(record({ undone_at: "2026-09-12T14:20:00Z" }), ACTS);
+    const panel = checkoutChangedOf(record({ undone_at: "2026-09-12T14:20:00Z" }), true, ACTS);
     expect(panel.onOpenDiff).toBeDefined();
     expect(panel.onUndo).toBeUndefined();
     expect(panel.undone).toMatch(/^Undone at /);
   });
 
   it("says why where the change could not be read, rather than that nothing changed", () => {
-    const panel = checkoutChangedOf(record({ changed: [], changed_unreadable: "git status failed" }), ACTS);
+    const panel = checkoutChangedOf(record({ changed: [], changed_unreadable: "git status failed" }), true, ACTS);
     expect(panel.unreadable).toMatch(/git status failed/);
     expect(panel.onOpenDiff).toBeUndefined();
   });

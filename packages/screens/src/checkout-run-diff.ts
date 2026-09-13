@@ -9,21 +9,24 @@ import { clockOf } from "./duration";
 import { drawnOf } from "./review";
 
 /**
- * Whether Undo is offered for a run. `undoable` is Fleet's answer: this tree
- * holds a person's own work, so an Undo Fleet cannot honour is never drawn —
- * and a run already undone has nothing left to put back.
+ * Whether Undo is offered for a run. **Only the newest**: Undo belongs to the
+ * run a person just did, and an older one's snapshot predates the runs after it
+ * — Fleet's refusal is the backstop, not how a person learns that. `undoable`
+ * is Fleet's answer, and a run already undone has nothing left to put back.
  */
-export function checkoutUndoOffered(run: CheckoutRunRecord): boolean {
-  return run.undoable && run.undone_at === undefined;
+export function checkoutUndoOffered(run: CheckoutRunRecord, newest: boolean): boolean {
+  return newest && run.undoable && run.undone_at === undefined;
 }
 
 /**
  * The panel for one run — **the result line's run**. Files with *Open the
  * diff* and Undo where it changed something; a line and neither where it did
- * not. An earlier run's changes are reached from *Earlier runs*.
+ * not. An earlier run's changes are reached from *Earlier runs*, without Undo.
  */
 export function checkoutChangedOf(
   run: CheckoutRunRecord,
+  /** Whether it is the newest run in the checkout — the only one Undo is offered on. */
+  newest: boolean,
   acts: { onOpenDiff: (runId: string) => void; onUndo: (runId: string) => void },
 ): NonNullable<RunPageProps["changed"]> {
   // `changed` means nothing here, so "changed nothing" would be a false claim.
@@ -35,7 +38,7 @@ export function checkoutChangedOf(
     files: run.changed,
     // An undone run still has its snapshot, so its diff still reads.
     onOpenDiff: () => acts.onOpenDiff(run.id),
-    ...(checkoutUndoOffered(run) ? { onUndo: () => acts.onUndo(run.id) } : {}),
+    ...(checkoutUndoOffered(run, newest) ? { onUndo: () => acts.onUndo(run.id) } : {}),
     ...(run.undone_at === undefined
       ? {}
       : { undone: `Undone at ${clockOf(run.undone_at)}. These files are back as they were before the run.` }),

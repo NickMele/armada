@@ -175,9 +175,27 @@ export function ManifestFrom({
             onStopRun={nothingHappens}
             onUndoRun={nothingHappens}
             onListRuns={() => Promise.resolve({ ok: true, runs })}
-            onGetRunOutput={(): Promise<RunOutputRead> =>
-              Promise.resolve({ ok: false, outcome: { ok: false, why: "not_connected" } })
-            }
+            // Any earlier run's log reads, so a story can open one from *Earlier runs*.
+            onGetRunOutput={(runId): Promise<RunOutputRead> => {
+              const run = runs.runs.find((one) => one.id === runId);
+              return Promise.resolve(
+                run === undefined
+                  ? { ok: false, outcome: { ok: false, why: "not_connected" } }
+                  : {
+                      ok: true,
+                      output: {
+                        id: run.id,
+                        name: run.name,
+                        path: `.armada/${run.log}`,
+                        lines: [],
+                        from_line: 1,
+                        total_lines: 0,
+                        bytes: 0,
+                        whole: true,
+                      },
+                    },
+              );
+            }}
             onGetRunDiff={(): Promise<CheckoutRunDiffRead> =>
               Promise.resolve(
                 diff === undefined

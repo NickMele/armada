@@ -340,6 +340,26 @@ export const TheNewestRunChangedNothing: Story = {
   },
 };
 
+/**
+ * **Only the newest run offers Undo.** `fmt` opened from *Earlier runs*, with
+ * `format` after it, shows its files and *Open the diff* and no Undo: its
+ * snapshot predates the run after it, and Undo belongs to the run a person
+ * just did.
+ */
+export const AnOlderRunFromEarlierRuns: Story = {
+  name: "An older run from Earlier runs",
+  args: { ...TheNewestRunChangedNothing.args },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("This run changed nothing.")).toBeVisible();
+    const logs = canvas.getAllByRole("button", { name: /log/ });
+    await userEvent.click(logs[logs.length - 1]!);
+    await expect(await canvas.findByText("crates/fleet/src/rehearsing/checkout.rs")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Open the diff" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Undo this run" })).toBeNull();
+  },
+};
+
 /** Fleet is up and could not read `armada.yml` — the page says so and lists nothing. */
 export const TheManifestWouldNotRead: Story = {
   name: "The Manifest would not read",

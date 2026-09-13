@@ -382,7 +382,7 @@ export function useManifestRuns(
     ...(about === undefined
       ? {}
       : {
-          changed: checkoutChangedOf(about, {
+          changed: checkoutChangedOf(about, about.id === runs[0]?.id, {
             onOpenDiff: openDiff,
             onUndo: (id) => void onUndoRun(id).then(refreshRuns),
           }),
