@@ -35,6 +35,10 @@ afterEach(unmount);
 test("pressing Run… opens the sheet instead of selecting the click event", async () => {
   mount(<JobDetail {...propsFor(running())} />);
 
+  // Where things are opens collapsed, `#896` — the worktree row it holds is
+  // one press away.
+  await userEvent.click(page.getByRole("button", { name: /Where things are/ }));
+
   const run = page.getByRole("button", { name: "Run…" });
   await expect.element(run).toBeVisible();
   await userEvent.click(run);

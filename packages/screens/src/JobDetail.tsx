@@ -27,6 +27,7 @@ import { useCheckOutputs, useFollowing } from "./outputs";
 const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames } from "./frames";
 import { openArtifact } from "./opening";
+import { planOf } from "./plan";
 import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
 import { named } from "./run-labels";
 import { useAtFloor } from "@armada/shell";
@@ -569,6 +570,9 @@ function OneJob({
       // the reason the two are separate props at all.
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
+      plan={planOf(whole)}
+      whereOpen={keys.whereOpen}
+      onOpenWhere={keys.onOpenWhere}
       where={workOf(
         onOpenArtifact,
         job,
