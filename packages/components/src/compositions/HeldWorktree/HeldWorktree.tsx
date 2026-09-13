@@ -335,8 +335,8 @@ function Receipt({ reclaimed }: { reclaimed: WorktreeReclaimed }) {
       <dt>The branch</dt>
       <dd>
         {reclaimed.branch.deleted
-          ? `Deleted${reclaimed.branch.tip === undefined ? "" : `, at ${reclaimed.branch.tip}`}.`
-          : reclaimed.branch.unmerged_commits === undefined
+          ? `Deleted${reclaimed.branch.tip == null ? "" : `, at ${reclaimed.branch.tip}`}.`
+          : reclaimed.branch.unmerged_commits == null
             ? `Left standing — ${reclaimed.branch.why ?? "no reason was given"}.`
             : `Kept, with ${counted(reclaimed.branch.unmerged_commits)} still on it. Merge it or delete it by hand once you have taken what you want.`}
       </dd>
