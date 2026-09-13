@@ -689,7 +689,11 @@ fn one_file_replaces_a_carried_definition_and_the_repositorys_own_wins() {
         (left.source.as_str(), left.instead.as_deref()),
         ("kit", Some("armada"))
     );
-    assert!(left.said.starts_with("Kit's `bug` was left out"), "{}", left.said);
+    assert!(
+        left.said.starts_with("Kit's `bug` was left out"),
+        "{}",
+        left.said
+    );
 }
 
 // ---------------------------------------------------------------------------

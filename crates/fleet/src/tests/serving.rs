@@ -464,7 +464,10 @@ async fn what_fleet_holds_is_what_a_proposal_may_name() {
     assert_eq!(workflows[0].id.as_str(), "fixture-workflow");
     assert_eq!(workflows[0].name, "fixture", "the name, not the id");
     assert_eq!(workflows[0].steps.len(), 2);
-    assert_eq!(workflows[0].source, "repository", "where the definition came from");
+    assert_eq!(
+        workflows[0].source, "repository",
+        "where the definition came from"
+    );
 
     let (status, body) = call(&app, "GET", "/workflows/left_out", "").await;
     assert_eq!(status, StatusCode::OK);

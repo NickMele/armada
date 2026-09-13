@@ -586,13 +586,13 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.editManifest, (_event, body: EditManifest) => connection?.editing.edit(body));
   ipcMain.handle(CHANNELS.readManifestSpend, () => connection?.editing.readSpend());
-  ipcMain.handle(CHANNELS.readRepositoryScan, () => connection?.setup.readScan());
-  ipcMain.handle(CHANNELS.readManifestProposals, () => connection?.setup.readProposals());
+  ipcMain.handle(CHANNELS.readRepositoryScan, () => connection?.editing.setup.readScan());
+  ipcMain.handle(CHANNELS.readManifestProposals, () => connection?.editing.setup.readProposals());
   ipcMain.handle(CHANNELS.editManifestProposal, (_event, body: EditManifestProposal) =>
-    connection?.setup.edit(body),
+    connection?.editing.setup.edit(body),
   );
   ipcMain.handle(CHANNELS.writeManifestProposal, (_event, body: WriteManifestProposal) =>
-    connection?.setup.write(body),
+    connection?.editing.setup.write(body),
   );
   // A repository-wide always-allow — Fleet's own table since protocol 13.5.
   // Neither takes a path or a job id: Fleet names the repository.

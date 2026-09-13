@@ -23,6 +23,7 @@ import type {
 } from "@armada/screens/src/editing";
 
 import { ask, type Answer } from "./request";
+import { SetupCommands } from "./setting-up";
 
 /**
  * The refusal Fleet raises where the file changed after the edit read it.
@@ -82,9 +83,12 @@ export function editAnswerOf(answer: Answer): ManifestEditAnswer {
 /** `get_manifest_file`, `save_manifest_file`, `edit_manifest` and `get_manifest_spend`. */
 export class ManifestFileCommands {
   private readonly port: () => number | null;
+  /** Setup's Scan, proposals, edits and Write: the other writer of `armada.yml`. */
+  readonly setup: SetupCommands;
 
   constructor(port: () => number | null) {
     this.port = port;
+    this.setup = new SetupCommands(port);
   }
 
   /** `armada.yml` as it is on disk, whole and unparsed. */
