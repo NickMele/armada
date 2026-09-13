@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use ipc::{EvidenceStrength, RepositoryScan, ScannedWorkspace};
+use adapter_traits::{CiConfiguration, CiNotFollowed, CiReading, RepositoryFiles};
+use adapters::ActionsWorkflows;
+use ipc::{CiCommand, EvidenceStrength, RepositoryScan, ScannedWorkspace};
 
 use super::{compose, scan, Checkout};
 use crate::tests::tmp::TempDir;
@@ -21,7 +23,7 @@ fn checkout(files: &[(&str, &str)]) -> TempDir {
 }
 
 fn scanned(dir: &TempDir) -> RepositoryScan {
-    scan("/repo", &Checkout::at(dir.path()))
+    scan("/repo", &Checkout::at(dir.path()), &ActionsWorkflows)
 }
 
 fn workspace<'a>(scan: &'a RepositoryScan, dir: &str) -> &'a ScannedWorkspace {
@@ -194,7 +196,11 @@ fn scan_writes_nothing() {
 
 #[test]
 fn a_checkout_that_will_not_list_says_why_rather_than_looking_empty() {
-    let scan = scan("/nowhere", &Checkout::at("/nowhere/at/all"));
+    let scan = scan(
+        "/nowhere",
+        &Checkout::at("/nowhere/at/all"),
+        &ActionsWorkflows,
+    );
     assert_eq!(dirs(&scan), ["."]);
     assert_eq!(scan.not_read[0].file, ".");
     assert!(scan.not_read[0].why.contains("would not list"));
@@ -305,5 +311,75 @@ fn a_compose_file_reads_every_port_form_or_says_which_it_could_not() {
     assert!(
         compose::services("services:\n  web: nginx\n").is_none(),
         "not a shape it reads"
+    );
+}
+
+/// A CI reader answering what it was planted with, whatever the files.
+struct Planted(CiReading);
+
+impl CiConfiguration for Planted {
+    fn read_jobs(&self, _: &dyn RepositoryFiles) -> CiReading {
+        self.0.clone()
+    }
+}
+
+#[test]
+fn ci_commands_join_scan_with_file_and_job_and_a_claimed_file_is_said_once() {
+    let dir = checkout(&[
+        ("package.json", r#"{"scripts":{"test":"vitest"}}"#),
+        (".ci/pipeline.yml", "jobs: {}"),
+        (".ci/other.yml", ""),
+        ("pipeline.yml", ""),
+    ]);
+    let planted = Planted(CiReading {
+        commands: vec![adapter_traits::CiCommand {
+            file: ".ci/pipeline.yml".to_string(),
+            job: "test".to_string(),
+            key: "jobs.test.steps[0].run".to_string(),
+            run: "pnpm test".to_string(),
+            cell: Some("node=20".to_string()),
+        }],
+        not_followed: vec![CiNotFollowed {
+            file: "pipeline.yml".to_string(),
+            why: "not followed".to_string(),
+        }],
+        claimed: vec![".ci/pipeline.yml".to_string(), "pipeline.yml".to_string()],
+    });
+    let scan = scan("/repo", &Checkout::at(dir.path()), &planted);
+    assert_eq!(
+        scan.ci_commands,
+        [CiCommand {
+            file: ".ci/pipeline.yml".to_string(),
+            job: "test".to_string(),
+            key: "jobs.test.steps[0].run".to_string(),
+            run: "pnpm test".to_string(),
+            cell: Some("node=20".to_string()),
+        }]
+    );
+    let unread: Vec<&str> = scan.not_read.iter().map(|one| one.file.as_str()).collect();
+    assert_eq!(
+        unread,
+        [".ci/other.yml", "pipeline.yml"],
+        "unclaimed still said"
+    );
+    let root = workspace(&scan, ".");
+    assert!(root.not_read.is_empty(), "{:?}", root.not_read);
+    assert_eq!(
+        root.runnables.len(),
+        1,
+        "a CI step is evidence, not a runnable"
+    );
+}
+
+#[test]
+fn a_ci_provider_the_reader_does_not_follow_reads_not_followed_through_scan() {
+    let dir = checkout(&[("Jenkinsfile", "pipeline {}\n")]);
+    let scan = scanned(&dir);
+    assert!(scan.ci_commands.is_empty());
+    assert_eq!(scan.not_read.len(), 1, "{:?}", scan.not_read);
+    assert_eq!(scan.not_read[0].file, "Jenkinsfile");
+    assert!(
+        scan.not_read[0].why.contains("does not follow"),
+        "never clean"
     );
 }

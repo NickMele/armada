@@ -25,7 +25,11 @@ fn checkout(files: &[(&str, &str)]) -> TempDir {
 /// Every proposal for `dir`, as built from a Scan of it.
 fn drafts(dir: &TempDir) -> Vec<Draft> {
     let root = dir.path().to_string_lossy().to_string();
-    propose(&scan(&root, &Checkout::at(&root)))
+    propose(&scan(
+        &root,
+        &Checkout::at(&root),
+        &adapters::ActionsWorkflows,
+    ))
 }
 
 fn draft(dir: &TempDir, workspace: &str) -> Draft {

@@ -253,7 +253,11 @@ where
     async fn get_repository_scan(&self) -> Result<ipc::RepositoryScan, Refusal> {
         let root = &self.host().repo_root;
         let tree = crate::scanning::Checkout::at(root);
-        Ok(crate::scanning::scan(root, &tree))
+        Ok(crate::scanning::scan(
+            root,
+            &tree,
+            &**self.ci_configuration(),
+        ))
     }
 
     /// A proposal per workspace — `crate::manifest_proposal`, which holds

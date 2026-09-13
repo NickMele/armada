@@ -22,7 +22,7 @@
 //!
 //! | What holds | What it does not reach |
 //! |---|---|
-//! | Scan reads every workspace of a repository nobody set up, in one pass — workspace globs, lockfiles, package scripts, compose services, the ports a file declares — each finding naming a file the repository has, what it did not read said beside it, and nothing written, because the tree it is handed has no write | That a checkout on disk reads the same, and that Fleet serves it: both touch a repository, and are `fleet`'s and `api`'s own tests. CI configuration is reported unread and never read, since naming whose it is belongs to `adapters` |
+//! | Scan reads every workspace of a repository nobody set up, in one pass — workspace globs, lockfiles, package scripts, compose services, the ports a file declares, and each CI step's command with its job and a matrix named once rather than per cell — each finding naming a file the repository has, what it did not read said beside it, and nothing written, because the tree it is handed has no write | That a checkout on disk reads the same, and that Fleet serves it: both touch a repository, and are `fleet`'s and `api`'s own tests. That a CI provider other than the one `adapters` reads is said not followed: naming one is `adapters`' own tests |
 //! | Each workspace carries how strong its evidence is, and a name every strong sibling declares is marked where one lacks it — the root never a sibling | That a picker ticks by it or draws the grid — #824. The mark is over the batch ticked by default; a batch a person re-ticks is the screen's to recompute |
 //! | **Proposal.** Scan's findings become one proposal per workspace: a port cites the file declaring it, every script reads `convention` whichever registry it landed in, and policy reads `default` | That Fleet serves one and holds it between reads — `fleet::manifest_proposal`'s own test, over a real checkout. That a sheet draws it — #824 |
 //! | An edit moves the provenance of the line it touched and no other, a line a person wrote reads added however often it changes, and a move corrects a guess | That Helm edits one: the routes are `agent_access = "No"`, and the reach Helm needs is not decided |
@@ -74,10 +74,10 @@ use ipc::{
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::reach::{
-    as_sent, carried_there, catalogued, convention, every_line, fault_keys, held_there, loads,
-    one_step, proposal_at, proposals, provenance_of, read_from, received, resolved_there,
-    toward_the_journeys_e2e, workspace, written, Held, A_MILESTONE, CARRYABLE, EPIC, EPIC_AT, KEPT,
-    MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, UNSET_UP, WRITTEN,
+    as_sent, carried_there, catalogued, ci_run, convention, every_line, fault_keys, held_there,
+    loads, one_step, proposal_at, proposals, provenance_of, read_from, received, resolved_there,
+    storefront, toward_the_journeys_e2e, workspace, written, A_MILESTONE, CARRYABLE, CI_RUNS, EPIC,
+    EPIC_AT, KEPT, MANIFEST_AT, NAMING_ARMADAS_CHECKS, OVERREACHING, WRITTEN,
 };
 use bench::{states, Bench};
 
@@ -93,7 +93,7 @@ use bench::{states, Bench};
 /// did, and a tool it does not follow is never clean.
 #[test]
 fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
-    let repository = Held::of(UNSET_UP);
+    let repository = storefront();
     let scan = received(&repository);
     let dirs: Vec<&str> = scan.workspaces.iter().map(|one| one.dir.as_str()).collect();
     assert_eq!(
@@ -178,6 +178,12 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
     assert_eq!(mailer.not_read[0].file, "services/mailer/go.mod");
     let unread: Vec<&str> = scan.not_read.iter().map(|one| one.file.as_str()).collect();
     assert_eq!(unread, [".ci/pipeline.yml"], "said, rather than skipped");
+    let ci: Vec<_> = scan.ci_commands.iter().map(ci_run).collect();
+    assert_eq!(
+        ci, CI_RUNS,
+        "a step once, its matrix cell named, not multiplied"
+    );
+    assert!(scan.ci_commands.iter().all(|one| repository.has(&one.file)));
 }
 
 /// **Each workspace carries how strong its evidence is, and a name every strong
@@ -188,7 +194,7 @@ fn scan_reads_every_workspace_and_cites_the_file_each_finding_came_from() {
 /// allowed to erase a mark.
 #[test]
 fn pick_ticks_by_evidence_and_marks_a_name_every_strong_sibling_declares() {
-    let scan = received(&Held::of(UNSET_UP));
+    let scan = received(&storefront());
     let strengths: Vec<(&str, EvidenceStrength)> = scan
         .workspaces
         .iter()
@@ -226,7 +232,7 @@ fn pick_ticks_by_evidence_and_marks_a_name_every_strong_sibling_declares() {
 /// The Proposal step, #823.
 #[test]
 fn a_proposal_cites_the_file_each_line_came_from() {
-    let repository = Held::of(UNSET_UP);
+    let repository = storefront();
     let proposals: Vec<_> = proposals(&repository).iter().map(as_sent).collect();
     let scanned = received(&repository).workspaces;
     let dirs = proposals.iter().map(|one| &one.dir);
@@ -300,7 +306,7 @@ fn a_proposal_cites_the_file_each_line_came_from() {
 /// Write.
 #[test]
 fn an_edit_moves_the_provenance_of_what_it_touched_and_nothing_else() {
-    let mut shop = proposals(&Held::of(UNSET_UP))
+    let mut shop = proposals(&storefront())
         .into_iter()
         .find(|draft| draft.dir() == "apps/shop")
         .expect("the shop is proposed");

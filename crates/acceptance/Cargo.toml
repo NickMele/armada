@@ -39,6 +39,9 @@ ipc = { path = "../ipc" }
 api = { path = "../api" }
 verification = { path = "../verification" }
 fleet = { path = "../fleet" }
+# **The CI reader Reach's Scan is asserted through.** It reads held text and
+# opens nothing, and a workflow's directory is its to name — gate rule six.
+adapters = { path = "../adapters" }
 testkit = { path = "../testkit" }
 # `fleet::rule_on` is async because a Manifest Check is a process. This test
 # declares no Manifest Check, so the future it awaits never reaches one — but
