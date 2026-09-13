@@ -77,7 +77,7 @@
 
 import { Button, JobRowStacked, SplitButton, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
-import { FolderGit2, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
@@ -223,8 +223,9 @@ export function Row({
       mono: true,
       quiet: elapsedNow === undefined,
     },
-    // Last, so the handle, the status and the three facts a person scans keep their places.
-    ...(repository === undefined ? [] : [{ label: "Repository", icon: FolderGit2, value: repository }]),
+    // Last, so the handle, the status and the three facts a person scans keep their places. No glyph:
+    // the registry's repository icon is `folder-git-2`, and its name is a vendor literal outside adapters.
+    ...(repository === undefined ? [] : [{ label: "Repository", value: repository }]),
   ];
 
   // **`landed` leaves the row with the old field run.** It said whether a Job's
