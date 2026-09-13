@@ -12,10 +12,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
+use adapter_traits::CiConfiguration;
 use ipc::{
     EvidenceStrength, MissingName, NotRead, RepositoryScan, ScannedWorkspace, WorkspaceGlob,
 };
 
+mod ci;
 mod compose;
 mod findings;
 mod workspaces;
@@ -23,32 +25,9 @@ mod workspaces;
 #[cfg(test)]
 mod tests;
 
-/// What reading one path came to.
-pub enum Read {
-    /// Nothing is there.
-    Absent,
-    Bytes(Vec<u8>),
-    /// Something is there and would not read, with why.
-    Unreadable(String),
-}
-
-/// One entry of a directory. A symbolic link is not listed, which is how a
-/// bounded walk stays bounded.
-pub struct Entry {
-    pub name: String,
-    pub is_dir: bool,
-}
-
-/// A repository's files, read and never written. Paths are relative and
-/// `/`-separated, and `""` is the root.
-///
-/// A trait so a test can hold a repository in memory — and neither that nor a
-/// directory on disk can be handed a write.
-pub trait Tree {
-    fn read(&self, path: &str) -> Read;
-    /// The entries of `dir`, or why it would not list.
-    fn entries(&self, dir: &str) -> Result<Vec<Entry>, String>;
-}
+/// A repository's files, read and never written — the seam's own type, so the
+/// CI reader is handed exactly what Scan is and neither can be handed a write.
+pub use adapter_traits::{FileEntry as Entry, FileRead as Read, RepositoryFiles as Tree};
 
 /// A directory on disk, as a [`Tree`].
 pub struct Checkout {
@@ -101,9 +80,9 @@ pub(crate) struct Reading {
     pub(crate) names_known: bool,
 }
 
-/// Read every workspace in `tree`, writing nothing. `checkout` is only what
-/// the answer says was read.
-pub fn scan(checkout: &str, tree: &impl Tree) -> RepositoryScan {
+/// Read every workspace in `tree`, and what its CI jobs run through `ci`,
+/// writing nothing. `checkout` is only what the answer says was read.
+pub fn scan(checkout: &str, tree: &impl Tree, ci: &dyn CiConfiguration) -> RepositoryScan {
     let found = workspaces::discover(tree);
     let mut readings: Vec<Reading> = found
         .dirs
@@ -112,11 +91,14 @@ pub fn scan(checkout: &str, tree: &impl Tree) -> RepositoryScan {
         .collect();
     mark_missing(&mut readings);
 
-    RepositoryScan {
+    let mut scanned = RepositoryScan {
         checkout: checkout.to_string(),
         workspaces: readings.into_iter().map(|one| one.scanned).collect(),
+        ci_commands: Vec::new(),
         not_read: found.not_read,
-    }
+    };
+    ci::join(&mut scanned, ci.read_jobs(tree));
+    scanned
 }
 
 fn read_one(

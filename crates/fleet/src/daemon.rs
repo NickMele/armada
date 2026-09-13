@@ -27,7 +27,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use adapter_traits::{LinkLookup, Model, ModelClient};
+use adapter_traits::{CiConfiguration, LinkLookup, Model, ModelClient};
 use config::{Manifest, ResolvedWorkflow};
 use core_model::{JobId, Ulid, WorkflowId};
 use store::Store;
@@ -110,6 +110,7 @@ pub struct Fleet<H, V, W> {
     judge_model: Model,
     proposer_model: Model,
     links: Arc<dyn LinkLookup + Send + Sync>,
+    ci_configuration: Arc<dyn CiConfiguration + Send + Sync>,
     models: ipc::ModelChoices,
     events: api::Broadcaster,
     /// Every Job somebody could be watching. **Minted here, not a fitting** —

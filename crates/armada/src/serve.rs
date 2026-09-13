@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapters::{GitVcs, HeadlessAgent, IssueLookup};
+use adapters::{ActionsWorkflows, GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
 use fleet::permitting::{self, PermissionHold};
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
@@ -831,6 +831,8 @@ fn assemble(
         // The one link shape resolved before dispatch. See
         // `adapters::IssueLookup` for why it is the only one.
         links: Arc::new(IssueLookup),
+        // The one CI provider Scan follows; the rest read as not followed.
+        ci_configuration: Arc::new(ActionsWorkflows),
         models,
         events: api::Broadcaster::new(),
     });

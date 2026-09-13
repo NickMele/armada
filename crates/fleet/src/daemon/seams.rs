@@ -13,7 +13,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use adapter_traits::{AgentHarness, Delivery, LinkLookup, SpawnConfigRefused, Vcs, WorkProduct};
+use adapter_traits::{
+    AgentHarness, CiConfiguration, Delivery, LinkLookup, SpawnConfigRefused, Vcs, WorkProduct,
+};
 use config::{Manifest, ResolvedWorkflow};
 use core_model::{Job, JobId, Timestamp, Ulid, WorkflowId};
 use store::Store;
@@ -311,6 +313,10 @@ where
     /// before a request becomes a Job's `facts`.
     pub(crate) fn links(&self) -> &Arc<dyn LinkLookup + Send + Sync> {
         &self.links
+    }
+    /// What reads a repository's CI configuration, for Scan.
+    pub(crate) fn ci_configuration(&self) -> &Arc<dyn CiConfiguration + Send + Sync> {
+        &self.ci_configuration
     }
     pub(crate) fn mint(&self) -> &Arc<dyn Mint> {
         &self.mint

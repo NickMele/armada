@@ -3,17 +3,26 @@
 
 use std::path::Path;
 
+use adapters::ActionsWorkflows;
 use config::Manifest;
 use fleet::manifest_proposal::{propose, Draft};
 use fleet::scanning::scan;
-use ipc::{ManifestProposal, ProposalEdit, Provenance, RepositoryScan, ScannedWorkspace};
+use ipc::{
+    CiCommand, ManifestProposal, ProposalEdit, Provenance, RepositoryScan, ScannedWorkspace,
+};
 
 use super::{Held, CHECKOUT};
 
 /// A scan as a picker receives it: through `ipc::encode` and back.
 pub fn received(repository: &Held) -> RepositoryScan {
-    let sent = ipc::encode(&scan(CHECKOUT, repository)).expect("a scan that serialises");
+    let scanned = scan(CHECKOUT, repository, &ActionsWorkflows);
+    let sent = ipc::encode(&scanned).expect("a scan that serialises");
     ipc::decode("a repository scan", sent.as_bytes()).expect("and reads back")
+}
+
+/// One CI finding as `(job, key, run, cell)`, beside [`super::CI_RUNS`].
+pub fn ci_run(one: &CiCommand) -> (&str, &str, &str, Option<&str>) {
+    (&one.job, &one.key, &one.run, one.cell.as_deref())
 }
 
 pub fn workspace<'a>(scan: &'a RepositoryScan, dir: &str) -> &'a ScannedWorkspace {

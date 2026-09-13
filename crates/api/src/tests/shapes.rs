@@ -279,6 +279,7 @@ pub fn repository_scan() -> ipc::RepositoryScan {
     ipc::RepositoryScan {
         checkout: "/repo".to_string(),
         workspaces: vec![at(".", ipc::EvidenceStrength::Strong), member],
+        ci_commands: Vec::new(),
         not_read: vec![ipc::NotRead {
             file: ".ci/pipeline.yml".to_string(),
             why: "YAML under a hidden directory, which no part of Scan reads".to_string(),

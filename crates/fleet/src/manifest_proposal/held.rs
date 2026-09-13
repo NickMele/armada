@@ -52,7 +52,8 @@ where
     /// `get_manifest_proposals`. A workspace already held is not rebuilt over.
     pub(crate) fn manifest_proposals(&self) -> ManifestProposals {
         let checkout = self.host().repo_root.clone();
-        let found = scan(&checkout, &Checkout::at(&checkout));
+        let ci = &**self.ci_configuration();
+        let found = scan(&checkout, &Checkout::at(&checkout), ci);
         let mut held = self.held_proposals().lock();
         for draft in propose(&found) {
             held.entry(draft.dir.clone()).or_insert(draft);

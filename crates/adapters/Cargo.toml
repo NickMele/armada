@@ -17,3 +17,5 @@ git2 = { version = "0.19", default-features = false }
 # `fleet` already reaches for it the same way, for its runtime file.
 ipc = { path = "../ipc" }
 serde = { version = "1", features = ["derive"] }
+# CI workflow files. The version `config` already reads `armada.yml` with.
+serde_yaml_ng = "0.10"

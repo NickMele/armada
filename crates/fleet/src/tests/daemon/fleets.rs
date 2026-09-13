@@ -161,6 +161,8 @@ pub fn fitted_with(
         // exactly as it did before this seam existed. The cases about it
         // plant their own.
         links: Arc::new(FakeLinkLookup::resolving_nothing()),
+        // The shipped reader: it only reads files, so a fixture runs what ships.
+        ci_configuration: Arc::new(adapters::ActionsWorkflows),
         // Planted, not read. The composition root resolves these from the
         // environment and the adapter; a test that read the same sources would
         // be asserting against a machine rather than against Fleet.

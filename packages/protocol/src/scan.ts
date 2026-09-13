@@ -16,6 +16,11 @@ export type RepositoryScan = {
   /** Every workspace, the root (`.`) first and always present. */
   workspaces: ScannedWorkspace[];
   /**
+   * What the repository's CI jobs run, each with its file and job. Evidence,
+   * not a Check. Absent from a Fleet that predates it.
+   */
+  ci_commands?: CiCommand[];
+  /**
    * What belongs to no workspace and was not read, and why. **Never evidence
    * of absence** — a checkout that would not list says so here rather than
    * answering with nothing.
@@ -69,6 +74,12 @@ export type ComposeService = { file: string; key: string; name: string };
 export type DeclaredPort = { file: string; key: string; name: string; container: number };
 
 export type MissingName = { name: string; declared_in: string[] };
+
+/**
+ * `key` is where in the file — `jobs.test.steps[2].run`. `cell` names the one
+ * matrix cell it was read as, never one finding per cell; rendered, never matched on.
+ */
+export type CiCommand = { file: string; job: string; key: string; run: string; cell?: string };
 
 /** `why` is rendered, never matched on. */
 export type NotRead = { file: string; why: string };

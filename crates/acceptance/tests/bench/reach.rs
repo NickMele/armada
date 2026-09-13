@@ -14,6 +14,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use adapters::ActionsWorkflows;
 use config::{
     Catalogue, Fault, Manifest, ResolveError, ResolvedCatalogue, ResolvedWorkflow, Roster,
     WorkflowDef, Written,
@@ -65,6 +66,36 @@ pub const UNSET_UP: &[(&str, &str)] = &[
         r#"{"name":"@storefront/tokens"}"#,
     ),
     ("services/mailer/go.mod", "module storefront/mailer\n"),
+];
+
+/// The storefront before its Manifest was written, with its CI workflow — held
+/// apart from [`UNSET_UP`] because the directory is the adapter's to spell.
+pub fn storefront() -> Held {
+    let mut held = Held::of(UNSET_UP);
+    let workflow = format!("{}/ci.yml", ActionsWorkflows::DIRECTORY);
+    held.0.insert(workflow, CI_WORKFLOW.to_string());
+    held
+}
+
+/// One job over a two-cell matrix, and a step that runs nothing Scan reads.
+pub const CI_WORKFLOW: &str = "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    \
+     strategy:\n      matrix:\n        node: [20, 22]\n    steps:\n      - uses: actions/checkout@v4\n      \
+     - run: pnpm install --frozen-lockfile\n      - run: pnpm -r test\n";
+
+/// What [`CI_WORKFLOW`] runs, as `(job, key, run, cell)`: a step once, not per cell.
+pub const CI_RUNS: &[(&str, &str, &str, Option<&str>)] = &[
+    (
+        "test",
+        "jobs.test.steps[1].run",
+        "pnpm install --frozen-lockfile",
+        Some("node=20"),
+    ),
+    (
+        "test",
+        "jobs.test.steps[2].run",
+        "pnpm -r test",
+        Some("node=20"),
+    ),
 ];
 
 /// A repository held in memory, as a Scan's [`Tree`]. Reading is all it

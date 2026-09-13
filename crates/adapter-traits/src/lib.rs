@@ -32,6 +32,7 @@
 extern crate alloc;
 
 mod basing;
+mod ci;
 mod commit;
 mod delivery;
 mod event;
@@ -44,6 +45,9 @@ mod work_product;
 mod worktree;
 
 pub use basing::{BaseCheckout, BaseSpec, BaseSpecRefused};
+pub use ci::{
+    CiCommand, CiConfiguration, CiNotFollowed, CiReading, FileEntry, FileRead, RepositoryFiles,
+};
 pub use commit::{CommitTime, Committed};
 pub use delivery::{
     how_the_base_was_found, Base, BaseOnTheRemote, BroughtUpToDate, Delivery, KeptCurrent, Landing,
