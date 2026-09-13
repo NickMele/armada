@@ -29,6 +29,9 @@ pub mod focus;
 /// Landing's own apparatus: the workflow that names a delivering step, and the
 /// run that reaches the gate on it. See its own header.
 pub mod landing;
+/// Reach's own apparatus: a Manifest and a workflow definition for a
+/// repository that is not this one, held as text. See its own header.
+pub mod reach;
 /// Recovery's own apparatus: the two moves a person makes on a Job, and a
 /// detail assembled against a standing the caller names. See its own header.
 pub mod recovery;
