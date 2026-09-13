@@ -28,7 +28,7 @@
 import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
-import type { SaveManifestFile } from "@armada/protocol";
+import type { EditManifest, SaveManifestFile } from "@armada/protocol";
 import type {
   Artifact,
   Draft,
@@ -114,6 +114,8 @@ export const startCheckoutVerify = () => window.armada.startCheckoutVerify();
 // outlives the surface it was made on.
 export const readManifestFile = () => window.armada.readManifestFile();
 export const saveManifestFile = (body: SaveManifestFile) => window.armada.saveManifestFile(body);
+export const editManifest = (body: EditManifest) => window.armada.editManifest(body);
+export const readManifestSpend = () => window.armada.readManifestSpend();
 // A repository-wide always-allow — Fleet's own table since protocol 13.5.
 export const listRepositoryAllowedCommands = () => window.armada.listRepositoryAllowedCommands();
 export const removeRepositoryAllowedCommand = (run: string) =>

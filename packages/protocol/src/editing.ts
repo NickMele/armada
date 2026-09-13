@@ -12,6 +12,8 @@
 // The header rules in `protocol.ts` hold here: these are hand-written, they
 // drift the day a field moves, and every closed set is left as `string`.
 
+import type { ManifestDeclared } from "./amending";
+
 /**
  * `armada.yml` as it is on disk, for the view that draws it.
  *
@@ -34,6 +36,8 @@ export type ManifestFile = {
    * rest.
    */
   text: string;
+  /** What `text` loads as, for the forms. Absent where it does not load. */
+  declared?: ManifestDeclared;
 };
 
 /**

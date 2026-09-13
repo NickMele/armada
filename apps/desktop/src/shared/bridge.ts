@@ -436,6 +436,9 @@ export const CHANNELS = {
   // write, and neither takes a path: Fleet names the file.
   readManifestFile: "bridge:read-manifest-file",
   saveManifestFile: "bridge:save-manifest-file",
+  // The forms' two: edits as keys rather than text, and what past Jobs cost.
+  editManifest: "bridge:edit-manifest",
+  readManifestSpend: "bridge:read-manifest-spend",
   // A repository-wide always-allow, kept in Fleet's own table since 13.5 —
   // #836. Two entries, a read and a remove, on `readManifestFile`'s terms:
   // Fleet names the repository, so neither takes a path or an id.

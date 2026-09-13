@@ -7,8 +7,20 @@
 // one repository and already holds the file it was started against, so a
 // caller names the act and Fleet resolves where it lands.
 
-import type { ManifestFile, ManifestSaved, SaveManifestFile } from "@armada/protocol";
-import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
+import type {
+  EditManifest,
+  ManifestEdited,
+  ManifestFile,
+  ManifestSaved,
+  ManifestSpend,
+  SaveManifestFile,
+} from "@armada/protocol";
+import type {
+  ManifestEditAnswer,
+  ManifestFileRead,
+  ManifestSaveAnswer,
+  ManifestSpendRead,
+} from "@armada/screens/src/editing";
 
 import { ask, type Answer } from "./request";
 
@@ -19,6 +31,13 @@ import { ask, type Answer } from "./request";
  * person does about it is reconcile rather than retry.
  */
 const MANIFEST_MOVED = "fleet.manifest_moved_under_the_edit";
+
+/** What Fleet would not write for a form, from `crates/fleet/src/amending.rs`. Matched, never minted. */
+const EDIT_REFUSALS = [
+  "fleet.manifest_edit_refused",
+  "fleet.manifest_edit_misnamed",
+  "fleet.manifest_edit_unplaceable",
+];
 
 /**
  * A save's answer, as the file view folds it.
@@ -37,7 +56,30 @@ export function saveAnswerOf(answer: Answer): ManifestSaveAnswer {
   return { state: "failed", outcome };
 }
 
-/** `get_manifest_file` and `save_manifest_file`. */
+/**
+ * An edit's answer, as the form folds it. `faults` rides as `[key, fault]`
+ * pairs; a pair in any other shape is dropped rather than drawn half-read.
+ */
+export function editAnswerOf(answer: Answer): ManifestEditAnswer {
+  if (answer.ok === true) return { state: "edited", edited: answer.body as ManifestEdited };
+  const outcome = answer.outcome;
+  if (outcome.ok || outcome.why !== "refused") return { state: "failed", outcome };
+  const { code, message, fields } = outcome.error;
+  if (code === MANIFEST_MOVED) {
+    const onDisk = fields["on_disk"];
+    return { state: "moved", onDisk: typeof onDisk === "string" ? onDisk : null };
+  }
+  if (!EDIT_REFUSALS.includes(code)) return { state: "failed", outcome };
+  const pairs = Array.isArray(fields["faults"]) ? (fields["faults"] as unknown[]) : [];
+  const faults = pairs.flatMap((pair) =>
+    Array.isArray(pair) && typeof pair[0] === "string" && typeof pair[1] === "string"
+      ? [{ key: pair[0], fault: pair[1] }]
+      : [],
+  );
+  return { state: "refused", saying: message, faults };
+}
+
+/** `get_manifest_file`, `save_manifest_file`, `edit_manifest` and `get_manifest_spend`. */
 export class ManifestFileCommands {
   private readonly port: () => number | null;
 
@@ -62,5 +104,21 @@ export class ManifestFileCommands {
     const port = this.port();
     if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
     return saveAnswerOf(await ask(port, "POST", "/manifest/save_file", body));
+  }
+
+  /** A form's edits, by key. **Writes and stops**, and answers with the file as written. */
+  async edit(body: EditManifest): Promise<ManifestEditAnswer> {
+    const port = this.port();
+    if (port === null) return { state: "failed", outcome: { ok: false, why: "not_connected" } };
+    return editAnswerOf(await ask(port, "POST", "/manifest/edit", body));
+  }
+
+  /** The costliest and the longest past Job against this Manifest. */
+  async readSpend(): Promise<ManifestSpendRead> {
+    const port = this.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(port, "GET", "/manifest/spend");
+    if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+    return { ok: true, spend: answer.body as ManifestSpend };
   }
 }

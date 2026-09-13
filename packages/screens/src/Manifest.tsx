@@ -22,9 +22,8 @@
 // is the file's name, never its format** — the lexicon bans calling a
 // Manifest by one.
 //
-// Journey 9 puts forms in front of the file, with the file behind that toggle.
-// The forms are #721 and not built; when they are, they are a third view here,
-// and the path toggle goes on switching to the file.
+// Journey 9 puts forms in front of the file, with the file behind that toggle:
+// Edit is the forms, and the path is the file.
 //
 // # What this page is not
 //
@@ -44,19 +43,29 @@
 // runs setup and every Check behind its own button. **Two panels, never one**,
 // and both report without offering a fix. `verify.ts` reads them.
 //
-// # What is not built here, and is this surface's by the journey
+// # What the forms do not carry yet
 //
-// The forms. A form that could not express the schema would be a labelled
-// blank.
+// `setup`, `evidence`, `after_merge` and `base`: no edit reaches them until the
+// writer's own edits for them land, so they are the file view's for now.
 
 import { useState } from "react";
 import type { ManifestDriftRead, Outcome } from "@armada/protocol";
-import { Alert, DriftPanel, ManifestFile, RunPage, Tabs, VerifyPanel } from "@armada/components";
+import {
+  Alert,
+  Button,
+  DriftPanel,
+  ManifestFile,
+  ManifestForm,
+  RunPage,
+  Tabs,
+  VerifyPanel,
+} from "@armada/components";
 
 import { said } from "./copy";
 import { useManifestRuns, type ManifestSlice } from "./checkout-runs";
 import { useRepositoryAllows, type RepositoryAllowsSlice } from "./manifest-allows";
 import type { ManifestEditing } from "./manifest-file";
+import type { ManifestForming } from "./manifest-form";
 import { driftPanelOf, verifyPanelOf } from "./verify";
 
 export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
@@ -74,6 +83,8 @@ export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
   onSaid: (sentence: string) => void;
   /** The file view, held by the app so an unsaved edit outlives the surface. */
   editing: ManifestEditing;
+  /** The forms, held by the app for the same reason. */
+  form: ManifestForming;
   /** `GET /manifest/drift`, held open by the app while this surface shows. */
   drift: ManifestDriftRead;
   /** Press Verify. **Only ever from its button** — nothing here calls it on a read. */
@@ -116,12 +127,19 @@ export function Manifest(props: ManifestProps) {
       <Tabs
         items={[
           { id: "run", label: "Checks and Commands" },
+          { id: "form", label: "Edit" },
           { id: "file", label: editing.named },
         ]}
         value={editing.view}
-        onChange={(id) => editing.onView(id === "file" ? "file" : "run")}
+        onChange={(id) => editing.onView(id === "file" || id === "form" ? id : "run")}
       />
-      {editing.view === "file" ? <FileView file={editing.file} /> : <RunView {...props} slot={slot} verify={verify} />}
+      {editing.view === "file" ? (
+        <FileView file={editing.file} />
+      ) : editing.view === "form" ? (
+        <FormView form={props.form} named={editing.named} onFile={() => editing.onView("file")} />
+      ) : (
+        <RunView {...props} slot={slot} verify={verify} />
+      )}
     </div>
   );
 }
@@ -191,4 +209,35 @@ function FileView({ file }: { file: ManifestEditing["file"] }) {
     return <p className="text-fg-muted">Reading the Manifest file.</p>;
   }
   return <ManifestFile {...file.props} />;
+}
+
+function FormView({ form, named, onFile }: { form: ManifestForming; named: string; onFile: () => void }) {
+  if (form.state === "failed") {
+    return (
+      <Alert tone="escalated" title="The Manifest file could not be read">
+        {form.saying}
+      </Alert>
+    );
+  }
+  if (form.state === "unloadable") {
+    // No form can be drawn from a file that does not load, and guessing at one
+    // would write back what the person never saw.
+    return (
+      <Alert
+        tone="caution"
+        title="This file does not load, so there is no form to show"
+        action={
+          <Button variant="ghost" size="sm" onClick={onFile}>
+            {`Open ${named}`}
+          </Button>
+        }
+      >
+        {`Correct ${form.path} as a file. The forms come back once it loads.`}
+      </Alert>
+    );
+  }
+  if (form.state === "reading") {
+    return <p className="text-fg-muted">Reading the Manifest file.</p>;
+  }
+  return <ManifestForm {...form.props} />;
 }
