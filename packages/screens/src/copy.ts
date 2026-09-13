@@ -256,6 +256,19 @@ export const RESTART_NOTE = {
 export const REPORT_LABEL = "Report this job";
 
 /**
+ * Add a task to a Job's plan. **Not a `JobAct`**, `REPORT_LABEL`'s reason: a
+ * task moves no status. `design-system.md`'s own small table, beside the
+ * enum→verb map, is what says this produces "Added".
+ */
+export const ADD_TASK_LABEL = "Add task";
+
+/**
+ * Drop a task from a Job's plan, with a reason. `ADD_TASK_LABEL`'s own
+ * reason. Produces "Dropped".
+ */
+export const DROP_TASK_LABEL = "Drop";
+
+/**
  * Give this job a higher cost ceiling. **Not a `JobAct`** for `REPORT_LABEL`'s
  * reason: it moves no status, no step and no drone, so it is outside the record
  * every other label here is keyed by. `actions.toml` calls it `raise_cost_cap`

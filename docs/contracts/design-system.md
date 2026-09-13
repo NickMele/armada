@@ -815,7 +815,7 @@ These are constraints on the map, not suggestions.
   weakening of the rule: the field *is* the confirmation, nothing is
   destroyed by pressing it, and the kbd is drawn on the confirm because
   that is where `Enter` fires there. Redirect, Overrule, Report,
-  Raise the cost cap and Raise the turn cap are the five.
+  Raise the cost cap, Raise the turn cap and Add task are the six.
   This line read "**Cancel holds initial focus**, `Enter` confirms,
   `Esc` cancels" until 2026-09-02. Both halves were true of something
   and the sentence did not say which won, so the implementation guessed
@@ -1465,6 +1465,15 @@ read plausibly under a different job has failed.
   be vague.
 - **An action keeps its name through the flow.** A button that says
   Kill produces "Killed". The verb table below enforces this.
+
+  Two acts do not move a Job status, so neither is in that table:
+
+  | Button | Produces |
+  | --- | --- |
+  | Add task | Added |
+  | Drop | Dropped |
+
+  `copy.ts`'s own labels are what enforce these two.
 
 ### Lexicon
 

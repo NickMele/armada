@@ -10,7 +10,7 @@ import { Button, Clamped, Dialog, Input, StepBar, TaskMark, Textarea } from "@ar
 
 import type { Outcome } from "@armada/protocol";
 import { Eyebrow, type PlanRegionData, type PlanTaskRow } from "./InsideAJob";
-import { said } from "./copy";
+import { ADD_TASK_LABEL, DROP_TASK_LABEL, said } from "./copy";
 import type { PlanEditAnswer } from "./plan-edits";
 
 /**
@@ -72,13 +72,13 @@ function AddTaskControl({
   return (
     <>
       <button type="button" className="armada-screen__eyebrow-act" onClick={() => setOpen(true)}>
-        Add task
+        {ADD_TASK_LABEL}
       </button>
       <Dialog
         open={open}
         tone="neutral"
         title="Add a task to this job's plan?"
-        confirmLabel="Add task"
+        confirmLabel={ADD_TASK_LABEL}
         confirmDisabled={title.trim() === "" || adding}
         onCancel={close}
         onConfirm={() => void add()}
@@ -194,7 +194,7 @@ function TaskRow({
                 disabled={dropping || reason.trim() === ""}
                 onClick={() => void drop()}
               >
-                Drop
+                {DROP_TASK_LABEL}
               </Button>
             </span>
           </span>
@@ -202,7 +202,7 @@ function TaskRow({
       </span>
       {canDrop && !open ? (
         <button type="button" className="armada-inside__plan-task-drop" onClick={() => setOpen(true)}>
-          Drop…
+          {DROP_TASK_LABEL}…
         </button>
       ) : null}
     </li>
