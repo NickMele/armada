@@ -278,6 +278,25 @@ pub enum Fault {
     /// **A `requires` entry naming a server.** A server never exits, so what
     /// was meant to run after it would wait forever.
     RequiresAServer { value: String },
+    /// **A second step whose product is `plan`.** Fleet holds one plan per
+    /// Job, so a second step declaring `plan` would be a second record
+    /// nothing after it could tell from the first.
+    TwoPlanSteps { first_at: usize },
+    /// **`plan_recorded` on a step whose product is not `plan`.** The check
+    /// reads Fleet's own record of the plan, which exists only where a step
+    /// declared `plan` as its product — so the check belongs on that step and
+    /// nowhere else.
+    PlanRecordedNotOnAPlanStep,
+    /// **A step whose product is `plan` and declares no `plan_recorded`.** A
+    /// step recording the plan is not done until Fleet's own record says so,
+    /// and nothing else in `mechanical_checks` reads it.
+    PlanStepWithoutPlanRecorded,
+    /// **`follows_plan: true` with no earlier step whose product is `plan`.**
+    /// Covers all three ways that can be true: the key on the plan step
+    /// itself, on a step before it, or in a workflow that declares no plan
+    /// step at all — each is a step asked to work a plan that does not exist
+    /// yet from where it stands.
+    FollowsPlanWithNoPlanStep,
 }
 
 /// Why a step's `artifact_exists` target cannot name the one file the next step
@@ -535,6 +554,28 @@ impl fmt::Display for Fault {
                 f,
                 "is `{gate}`, and the step declares no `judge_checks` criterion \
                  for a Judge to read"
+            ),
+            Fault::TwoPlanSteps { first_at } => write!(
+                f,
+                "is a second step whose product is `plan`, and steps[{first_at}] \
+                 already is. Fleet holds one plan per Job"
+            ),
+            Fault::PlanRecordedNotOnAPlanStep => write!(
+                f,
+                "is `plan_recorded`, and this step's product is not `plan`. The \
+                 check reads Fleet's own record of the plan, and only the step \
+                 that records one has one to read"
+            ),
+            Fault::PlanStepWithoutPlanRecorded => write!(
+                f,
+                "declares no `plan_recorded` check, and this step's product is \
+                 `plan`. A step that records the plan is not done until Fleet's \
+                 own record of it says so"
+            ),
+            Fault::FollowsPlanWithNoPlanStep => write!(
+                f,
+                "is `follows_plan: true`, and no step before this one has `plan` \
+                 as its product. There is no plan yet for this step to work"
             ),
         }
     }

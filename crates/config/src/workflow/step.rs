@@ -47,6 +47,7 @@ const STEP_KEYS: &[&str] = &[
     "iteration_cap",
     "quiet_after_seconds",
     "poke_limit",
+    "follows_plan",
 ];
 
 /// **The schema's whole set, spelled out rather than sketched.** This held
@@ -79,6 +80,7 @@ const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("test_suite_run", EvidenceType::TestSuiteRun),
     ("bundle", EvidenceType::Bundle),
     ("document", EvidenceType::Document),
+    ("plan", EvidenceType::Plan),
 ];
 const EVIDENCE_LEGAL: &[&str] = &[
     "diff",
@@ -87,6 +89,7 @@ const EVIDENCE_LEGAL: &[&str] = &[
     "test_suite_run",
     "bundle",
     "document",
+    "plan",
 ];
 
 /// The whole of the `evidence` block, and of the `submitted` object inside it.
@@ -112,6 +115,7 @@ pub struct Step {
     iteration_cap: Option<u32>,
     quiet_after_seconds: Option<u32>,
     poke_limit: Option<u32>,
+    follows_plan: bool,
 }
 
 impl Step {
@@ -246,6 +250,13 @@ impl Step {
     pub fn poke_limit(&self) -> Option<u32> {
         self.poke_limit
     }
+
+    /// Whether this step works the Job's plan. **False where the file leaves
+    /// the key out**, which is every step of every workflow written before it
+    /// existed.
+    pub fn follows_plan(&self) -> bool {
+        self.follows_plan
+    }
 }
 
 /// One step, or [`None`] where something on it was refused.
@@ -273,7 +284,7 @@ pub(super) fn read(
         .required("label", out)
         .and_then(|value| yaml::text(&table.at("label"), value, out));
     let (evidence_type, captured) = evidence(&mut table, out);
-    let mechanical_checks = mechanical::checks(&mut table, out);
+    let mechanical_checks = mechanical::checks(&mut table, evidence_type, out);
     let judge_checks = judge::checks(&mut table, roster, out);
     let evidence_scope = scope::evidence_scope(&mut table, out);
     // **Absent is none, and a malformed one is a refusal rather than none.**
@@ -329,6 +340,16 @@ pub(super) fn read(
     let poke_limit = table
         .optional("poke_limit")
         .and_then(|value| yaml::counted(&poke_key, value, out));
+    // **Absent is false, and anything that is not a boolean is a refusal** —
+    // `may_dispatch_jobs`'s rule, for its reason: a value read as absent would
+    // be a step written to work the plan that silently is not given the
+    // tools. Whether this step may say so at all — a plan strictly earlier —
+    // is a fact about the whole workflow and is refused in `super::workflow`.
+    let follows_key = table.at("follows_plan");
+    let follows_plan = match table.optional("follows_plan") {
+        None => Some(false),
+        Some(value) => yaml::flag(&follows_key, value, out),
+    };
     // **Required, and there is no default to fall back to.** A file that does
     // not say whether a step sends the work out has two readings and neither is
     // safe: taken as delivering, a workflow that produces a document opens a
@@ -383,6 +404,23 @@ pub(super) fn read(
         ));
     }
 
+    // **A step whose product is `plan` is not done until Fleet's own record
+    // says so.** `plan_recorded` is the only check that reads that record, so
+    // a step naming `plan` as its product and declaring none of these has
+    // nothing gating the one thing its Judge and every following step will
+    // trust. The reverse — `plan_recorded` on a step that is not this one —
+    // is refused where the check itself is read, in `super::mechanical`.
+    let records_plan = evidence_type == Some(EvidenceType::Plan);
+    let has_plan_recorded = mechanical_checks
+        .iter()
+        .any(|check| matches!(check, MechanicalCheck::PlanRecorded { .. }));
+    if records_plan && !has_plan_recorded {
+        out.push(Refusal::new(
+            format!("{at}.mechanical_checks"),
+            Fault::PlanStepWithoutPlanRecorded,
+        ));
+    }
+
     // **A `manifest_rule:` gate is outside the rule too, and not for
     // `human_always`'s reason.** That one names an actor, so neither failure
     // can arise; this one names a policy whose value is not in this file, so
@@ -404,7 +442,7 @@ pub(super) fn read(
         ));
     }
     table.close(STEP_KEYS, out);
-    if disagrees || (judged && evidence_type.is_none()) {
+    if disagrees || (judged && evidence_type.is_none()) || (records_plan && !has_plan_recorded) {
         return None;
     }
     let Looping {
@@ -429,6 +467,7 @@ pub(super) fn read(
         iteration_cap,
         quiet_after_seconds,
         poke_limit,
+        follows_plan: follows_plan?,
     })
 }
 

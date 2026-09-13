@@ -26,7 +26,8 @@ fn the_two_unimplemented_check_types_are_refused_by_name() {
                     "manifest_check",
                     "every_manifest_check",
                     "diff_nonempty",
-                    "artifact_exists"
+                    "artifact_exists",
+                    "plan_recorded"
                 ],
             }
         );

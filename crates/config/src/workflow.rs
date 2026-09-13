@@ -30,7 +30,7 @@ pub use step::Step;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use core_model::{Ulid, WorkflowId};
+use core_model::{EvidenceType, Ulid, WorkflowId};
 use serde_yaml_ng::Value;
 
 use crate::error::{BadReturn, Fault, LoadError, Refusal};
@@ -288,6 +288,37 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
                 Fault::TwoDeliveringSteps { first_at },
             )),
             None => delivers_at = Some(*n),
+        }
+    }
+
+    // **A workflow holds one plan, or none.** A second step whose product is
+    // `plan` would be a second record nothing after either could tell from
+    // the first — `TwoDeliveringSteps`'s shape, for the same reason: reported
+    // on the second and naming the first.
+    //
+    // **This is also where `follows_plan` is checked against position**,
+    // rather than on the step alone: a step cannot know, by itself, whether
+    // anything earlier in the file records a plan. One pass answers all three
+    // ways `follows_plan` can be wrong — on the plan step itself, on a step
+    // before it, or in a workflow with no plan step at all — because each of
+    // those is exactly "no step at an earlier index has `plan` as its
+    // product."
+    let mut plan_at: Option<usize> = None;
+    for (n, step) in &placed {
+        if step.evidence_type() == Some(EvidenceType::Plan) {
+            match plan_at {
+                Some(first_at) => out.push(Refusal::new(
+                    format!("steps[{n}].evidence.submitted.type"),
+                    Fault::TwoPlanSteps { first_at },
+                )),
+                None => plan_at = Some(*n),
+            }
+        }
+        if step.follows_plan() && plan_at.is_none_or(|first_at| first_at >= *n) {
+            out.push(Refusal::new(
+                format!("steps[{n}].follows_plan"),
+                Fault::FollowsPlanWithNoPlanStep,
+            ));
         }
     }
 
