@@ -74,7 +74,7 @@ export const readFrame = (jobId: string, kept: string) => window.armada.readFram
 /** Where a recording streams from. Composed, not fetched — main answers it. */
 export const frameSrc = (jobId: string, kept: string) => window.armada.frameStreamUrl(jobId, kept);
 /** Ask a Job to show its work again. Answered to the screen that pressed it. */
-export const showAgain = (jobId: string) => window.armada.showAgain(jobId);
+export const showAgain = (jobId: string, spec?: string) => window.armada.showAgain(jobId, spec);
 export const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
 export const openPullRequest = (jobId: string) => window.armada.openPullRequest(jobId);
 export const openRemarkLink = (jobId: string, remarkId: string) =>

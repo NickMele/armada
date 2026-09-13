@@ -513,6 +513,7 @@ function framesChapter(
         {again === undefined ? null : (
           <ShownAgain
             {...(again.offer === undefined ? {} : { offer: again.offer })}
+            {...(again.choices === undefined ? {} : { choices: again.choices })}
             sets={again.sets}
             {...(again.said === undefined ? {} : { said: again.said })}
             onShow={again.onShow}

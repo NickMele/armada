@@ -12,9 +12,9 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page } from "vitest/browser";
 
 import { ShownAgain } from "@armada/components";
-import type { Outcome, ShowAgain } from "@armada/protocol";
+import type { NamedSpec, Outcome, ShowAgain } from "@armada/protocol";
 
-import { againOf, offerOf, useShowAgain, type ShowAgainCall } from "./again";
+import { againOf, choicesOf, offerOf, useShowAgain, type ShowAgainCall } from "./again";
 import { NO_FRAMES } from "./frames";
 import { mount, unmount } from "./mounted";
 
@@ -22,6 +22,11 @@ afterEach(unmount);
 
 const JOB = "01M130Y1380016YK5S0JXBXDQ5";
 const SPEC = "e2e/panel.spec.ts";
+const OTHER = "e2e/board.spec.ts";
+
+function named(spec: string): NamedSpec {
+  return { step_id: "show", attempt: 1, spec, on_disk: true };
+}
 
 function facts(over: Partial<ShowAgain> = {}): ShowAgain {
   return {
@@ -43,6 +48,7 @@ function OnTheStep({ call, known }: { call: ShowAgainCall; known: ShowAgain }) {
   return (
     <ShownAgain
       {...(again.offer === undefined ? {} : { offer: again.offer })}
+      {...(again.choices === undefined ? {} : { choices: again.choices })}
       sets={again.sets}
       {...(again.said === undefined ? {} : { said: again.said })}
       onShow={again.onShow}
@@ -58,7 +64,7 @@ test("a press reaches the call, for the Job it is about, and waits for the answe
   mount(<OnTheStep call={call} known={facts()} />);
 
   await page.getByRole("button", { name: "Show again" }).click();
-  expect(call).toHaveBeenCalledWith(JOB);
+  expect(call).toHaveBeenCalledWith(JOB, undefined);
   await expect
     .element(page.getByRole("button", { name: "Showing…" }))
     .toBeDisabled();
@@ -103,6 +109,28 @@ test("a control that cannot run is never pressed through to Fleet", async () => 
   expect(call).not.toHaveBeenCalled();
 });
 
+test("one spec draws no chooser, and the press names none", async () => {
+  const call = vi.fn<ShowAgainCall>(async () => ({ ok: true, shown: { job_id: JOB } }));
+  mount(<OnTheStep call={call} known={facts()} />);
+
+  expect(page.getByRole("combobox", { name: "Spec to run" }).elements()).toHaveLength(0);
+  await page.getByRole("button", { name: "Show again" }).click();
+  expect(call).toHaveBeenCalledWith(JOB, undefined);
+});
+
+test("several specs are offered, and the one picked is what the press runs", async () => {
+  const call = vi.fn<ShowAgainCall>(async () => ({ ok: true, shown: { job_id: JOB } }));
+  mount(<OnTheStep call={call} known={facts({ specs: [named(SPEC), named(OTHER)] })} />);
+
+  const chooser = page.getByRole("combobox", { name: "Spec to run" });
+  await expect.element(chooser).toHaveValue(SPEC);
+
+  await chooser.selectOptions(OTHER);
+  await expect.element(chooser).toHaveValue(OTHER);
+  await page.getByRole("button", { name: "Show again" }).click();
+  expect(call).toHaveBeenCalledWith(JOB, OTHER);
+});
+
 // --------------------------------------------------- the reading, as arithmetic
 
 test("the reason is chosen in Fleet's own refusal order", () => {
@@ -136,5 +164,31 @@ test("a press out from any window reads as showing, whatever else is true", () =
 });
 
 function idle() {
-  return { pressing: false, press: () => {} };
+  return { pressing: false, press: () => {}, choose: () => {} };
 }
+
+test("the chooser is every spec the Job named, and a Fleet that sends none offers one", () => {
+  const one = facts();
+  expect(choicesOf(one, idle())).toBeUndefined();
+  const two = facts({ specs: [named(SPEC), named(OTHER)] });
+  expect(choicesOf(two, idle())?.specs).toEqual([SPEC, OTHER]);
+  expect(choicesOf(two, { ...idle(), chosen: OTHER })?.chosen).toBe(OTHER);
+  expect(offerOf(two, "show", false, OTHER)).toEqual({ state: "ready", spec: OTHER });
+});
+
+test("a set says which spec ran, and one kept before Fleet recorded it does not", () => {
+  const set = (spec: string | undefined) => ({
+    press: 1,
+    pressed_at: "2026-09-10T14:02:00Z",
+    step_id: "show",
+    attempt: 1,
+    ...(spec === undefined ? {} : { spec }),
+    frames: [],
+  });
+  const headings = (spec: string | undefined) =>
+    againOf(facts({ shown: [set(spec)] }), "show", NO_FRAMES, idle())?.sets.map(
+      (one) => one.heading,
+    );
+  expect(headings(SPEC)?.[0]).toMatch(new RegExp(`^${SPEC.replace(/\./g, "\\.")}, shown again`));
+  expect(headings(undefined)?.[0]).toMatch(/^Shown again/);
+});

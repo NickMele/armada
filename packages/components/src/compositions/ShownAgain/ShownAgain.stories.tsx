@@ -34,6 +34,7 @@ function shot(fill: string, said: string): string {
 }
 
 const SPEC = "e2e/panel.spec.ts";
+const OTHER = "e2e/board.spec.ts";
 
 /**
  * **The press can run, and says what it will run.** A person about to press is
@@ -148,5 +149,86 @@ export const TwoSets: Story = {
     await expect(canvas.getByRole("region", { name: "Shown again at 14:02" })).toBeInTheDocument();
     await expect(canvas.getByRole("region", { name: "Shown again at 14:19" })).toBeInTheDocument();
     await expect(canvas.getAllByRole("img")).toHaveLength(2);
+  },
+};
+
+/**
+ * **More than one spec to run, so a person picks.** Every Job whose Drones
+ * named several: the chooser carries the record's own words, the line under the
+ * button says which of them is about to run, and picking another changes both.
+ */
+export const SeveralSpecs: Story = {
+  args: {
+    offer: { state: "ready", spec: SPEC },
+    choices: { specs: [SPEC, OTHER], chosen: SPEC, onChoose: fn() },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const chooser = canvas.getByRole("combobox", { name: "Spec to run" });
+    await expect(chooser).toHaveValue(SPEC);
+    await userEvent.selectOptions(chooser, OTHER);
+    await expect(args.choices?.onChoose).toHaveBeenCalledWith(OTHER);
+  },
+};
+
+/**
+ * **One spec is not a choice.** A menu of one is a control a person reads
+ * before learning it decides nothing, and the line under the button already
+ * names what will run.
+ */
+export const OneSpec: Story = {
+  args: {
+    offer: { state: "ready", spec: SPEC },
+    choices: { specs: [SPEC], chosen: SPEC, onChoose: fn() },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("combobox", { name: "Spec to run" })).toBeNull();
+    await expect(canvas.getByText(SPEC)).toBeInTheDocument();
+  },
+};
+
+/**
+ * **A set says which spec produced it.** Two presses on one step may have run
+ * different specs, and the moment alone would not tell them apart.
+ */
+export const TwoSpecsShown: Story = {
+  args: {
+    offer: { state: "ready", spec: SPEC },
+    choices: { specs: [SPEC, OTHER], chosen: SPEC, onChoose: fn() },
+    sets: [
+      {
+        key: "1",
+        heading: `${SPEC}, shown again at 14:02`,
+        frames: [
+          {
+            kept: "show.again1.1.branch/panel.png",
+            name: "panel.png",
+            attempt: 1,
+            weight: "41.0 KB",
+            content: { kind: "image", src: shot("darkslategray", "Panel — 14:02") },
+          },
+        ],
+      },
+      {
+        key: "2",
+        heading: `${OTHER}, shown again at 14:19`,
+        frames: [
+          {
+            kept: "show.again2.1.branch/board.png",
+            name: "board.png",
+            attempt: 1,
+            weight: "52.4 KB",
+            content: { kind: "image", src: shot("midnightblue", "Board — 14:19") },
+          },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole("region", { name: `${SPEC}, shown again at 14:02` }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("region", { name: `${OTHER}, shown again at 14:19` }),
+    ).toBeInTheDocument();
   },
 };

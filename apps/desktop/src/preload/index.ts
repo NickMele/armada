@@ -167,8 +167,10 @@ const api: BridgeApi = {
   rerunGate: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.rerunGate, jobId),
 
   // Ask a Job to show its work. Its own entry because it moves nothing on the
-  // Job: what comes back is a set of frames, or why there is none.
-  showAgain: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.showAgain, jobId),
+  // Job: what comes back is a set of frames, or why there is none. `spec` names
+  // which to run; without one Fleet runs the last a Drone named.
+  showAgain: (jobId: string, spec?: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.showAgain, jobId, spec),
 
   // Give one job a higher cost ceiling. **Its own entry and never a general
   // update**: nothing else here sets a value on a job, and a capability that

@@ -133,10 +133,20 @@ export type ShowAgain = {
   /** Whether the Job's worktree is on disk. A clean or a reclaim takes it. */
   worktree_on_disk: boolean;
   /**
-   * The spec a press reruns — the last one a Drone named on a captured step.
-   * **Absent where no Drone ever named one.**
+   * The spec a press reruns where nobody picks — the last one a Drone named on
+   * a captured step. **Absent where no Drone ever named one.**
    */
   spec?: NamedSpec;
+  /**
+   * Every spec this Job's Drones named, latest first, and the only specs a
+   * press may be asked for. Since 13.1, and the first of them is `spec`.
+   *
+   * **The record's own words, never a directory listing.** Every entry was on
+   * disk when a Drone submitted it, so a choice cannot carry a path out of the
+   * worktree. Absent from a Fleet built before 13.1, which is a control that
+   * offers no choice rather than one that offers a wrong one.
+   */
+  specs?: NamedSpec[];
   /** Whether a Drone is working in the worktree right now. */
   drone_working: boolean;
   /** When the press out right now began. Absent where none is. */
@@ -170,6 +180,12 @@ export type ShownSet = {
   /** The step whose spec was rerun, and the run of it that named the spec. */
   step_id: string;
   attempt: number;
+  /**
+   * The spec this press ran. Since 13.1, and empty or absent on a set kept
+   * before it — two presses on one step are otherwise told apart by the minute
+   * alone.
+   */
+  spec?: string;
   /** Never empty: a press that captured nothing kept no set. */
   frames: KeptFrame[];
 };
