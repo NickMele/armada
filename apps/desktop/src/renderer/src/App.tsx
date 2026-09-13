@@ -445,6 +445,7 @@ export function App() {
         onScope={pick}
         onAddRepository={locate.onOpen}
         jobs={state.jobs}
+        boardJobs={listed}
         capacity={state.capacity}
         title={head?.title}
         summary={

@@ -64,8 +64,10 @@ export type ShellProps = {
   onScope: (root: string) => void;
   /** Opens Locate. Absent draws no control. */
   onAddRepository?: () => void;
-  /** Every Job, for the rail's count and the bar's two. */
+  /** Every Job, for the bar's counts. They span every repository. */
   jobs: readonly JobSummary[];
+  /** The Board's Jobs, for the rail's count. They follow the pick. */
+  boardJobs: readonly JobSummary[];
   /** How full the fleet is. `null` is a Fleet that has not answered yet. */
   capacity: FleetCapacity | null;
   /** Absent draws no head — see `TheShell`. One Job read whole passes none. */
@@ -97,6 +99,7 @@ export function Shell({
   onScope,
   onAddRepository,
   jobs,
+  boardJobs,
   capacity,
   title,
   summary,
@@ -127,8 +130,8 @@ export function Shell({
         // **Active Jobs only.** Finished and cleared ones are the Board's
         // record rather than its work, and the owner ruled on 11 Sep 2026
         // that the rail counts the work. Zero draws no count, as a tab's does.
-        ...(surface.id === SURFACE.board && activeOf(jobs) > 0
-          ? { count: activeOf(jobs) }
+        ...(surface.id === SURFACE.board && activeOf(boardJobs) > 0
+          ? { count: activeOf(boardJobs) }
           : {}),
       }))}
       activeId={showing}

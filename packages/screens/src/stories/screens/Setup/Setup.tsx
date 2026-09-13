@@ -319,6 +319,7 @@ export function SetupFrom({
           setSettingUp(to.manifest === undefined || settingUp);
         }}
         jobs={[]}
+        boardJobs={[]}
         capacity={{ bound: 4, occupied: 0 }}
         title={head?.title}
         summary="Set up a Manifest for each workspace in this checkout. Write puts one file down and stops, without staging or committing it."
