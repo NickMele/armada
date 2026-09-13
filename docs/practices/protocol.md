@@ -587,6 +587,36 @@ line of its output, for the run socket's reason. A Job's servers publish
 `server.exited` before the Job's own terminal `job.state_changed`, because they
 are torn down before its span is released.
 
+## The Helm socket: one repository's conversation
+
+`GET /helm/observe?manifest_id=` is the second socket's shape with a
+conversation for its subject, and `crates/api/src/conversing.rs`. It opens with
+the thread so far, then carries every message after it. `POST /helm/ask` takes a
+message and answers 202 at once, because the reply is the socket's;
+`POST /helm/start_fresh` forgets the stored session and the thread.
+
+**Who reads it.** Bridge's Helm thread. `agent_access` is `No` on all three: a
+session must not read or drive another session.
+
+**No end to close on.** A Drone ends and a run finishes; a conversation outlives
+every process that answers in it. So the socket carries reply after reply for as
+long as a viewer holds it, and `closed` is sent only when a person starts fresh.
+
+| What happened | What the viewer is told |
+| --- | --- |
+| A person asked | `asked`, then the session's own `row`s, ending in `ended` with what the reply cost |
+| The stored session was gone | `fresh` / `session_not_found`, then the rows of the new session |
+| No reply came | `unanswered`, with why |
+| A person started fresh | `closed` / `started_fresh` |
+| The Manifest is not served | **422 before the upgrade** |
+
+**A row is a `Shown` row**, so a reply is read with the vocabulary a Drone's turn
+already has. **Back-pressure** is the second socket's: a channel per
+conversation, drop-oldest, `missed` with the count, and the thread's file keeps
+what a slow viewer lost.
+
+**It is deliberately not `/events`**, for the second socket's reason.
+
 ## Protocol 10.11: the review Fleet composed
 
 Job detail's review area and the pull request's description said nearly the
