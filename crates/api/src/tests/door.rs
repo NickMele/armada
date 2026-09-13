@@ -456,3 +456,99 @@ async fn the_drones_endpoint_is_untouched_by_the_door_beside_it() {
         "the Drone's endpoint gained a fleet-control tool: {body}"
     );
 }
+
+/// A Job another Manifest owns, beside the one [`holding_one`] holds.
+fn holding_two_owners() -> FakeDaemon {
+    let daemon = holding_one();
+    crate::tests::fake::owned_by(&daemon, "01OTHERJOB", "2-another-repository", "01OTHER");
+    daemon
+}
+
+async fn standing_in(app: &Router, manifest_id: &str, body: &str) -> String {
+    let request = Request::builder()
+        .method("POST")
+        .uri(crate::door_within(manifest_id))
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("a well-formed request");
+    let response = app.clone().oneshot(request).await.expect("an answer");
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("a readable body")
+        .to_bytes();
+    String::from_utf8_lossy(&body).to_string()
+}
+
+/// A read Bridge makes, beside the door rather than through it.
+async fn bridge_get(app: &Router, uri: &str) -> (StatusCode, String) {
+    let request = Request::builder()
+        .uri(uri)
+        .body(Body::empty())
+        .expect("a well-formed request");
+    let response = app.clone().oneshot(request).await.expect("an answer");
+    let status = response.status();
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("a readable body")
+        .to_bytes();
+    (status, String::from_utf8_lossy(&body).to_string())
+}
+
+/// **The door names its scope on every Job list**, so a session is listed only
+/// the Jobs the Manifest it stands in owns, and Bridge's unnamed read is all.
+#[tokio::test]
+async fn every_job_list_through_the_door_is_the_sessions_manifests_alone() {
+    let app = wired(holding_two_owners());
+    for tool in [
+        "list_jobs",
+        "get_activity_feed",
+        "list_job_board",
+        "list_reviews",
+    ] {
+        let body = standing_in(&app, THE_MANIFEST, &calling(tool, "{}")).await;
+        assert!(!body.contains("2-another-repository"), "{tool}: {body}");
+    }
+    let listed = standing_in(&app, THE_MANIFEST, &calling("list_jobs", "{}")).await;
+    assert!(listed.contains("1-a-job"), "{listed}");
+    let (_, every) = bridge_get(&app, "/jobs").await;
+    assert!(every.contains("2-another-repository"), "{every}");
+}
+
+/// A Job another Manifest owns is refused through the door, and still answers
+/// on the route Bridge reads.
+#[tokio::test]
+async fn a_job_another_manifest_owns_is_refused_through_the_door_only() {
+    let app = wired(holding_two_owners());
+    let body = standing_in(
+        &app,
+        THE_MANIFEST,
+        &calling("get_job", r#"{"job_id":"01OTHERJOB"}"#),
+    )
+    .await;
+    assert!(body.contains("\"isError\":true"), "{body}");
+    assert!(body.contains("no_such_job"), "{body}");
+    let (status, _) = bridge_get(&app, "/jobs/01OTHERJOB").await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn a_session_naming_a_manifest_this_fleet_does_not_serve_is_refused_plainly() {
+    let app = wired(holding_one());
+    let handshake = standing_in(
+        &app,
+        "01NOTSERVED",
+        r#"{"jsonrpc":"2.0","id":6,"method":"initialize","params":{}}"#,
+    )
+    .await;
+    assert!(
+        handshake.contains("serves no Manifest `01NOTSERVED`"),
+        "{handshake}"
+    );
+    let called = standing_in(&app, "01NOTSERVED", &calling("list_jobs", "{}")).await;
+    assert!(called.contains("\"isError\":true"), "{called}");
+    assert!(!called.contains("1-a-job"), "{called}");
+}

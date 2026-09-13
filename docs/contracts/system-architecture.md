@@ -343,8 +343,9 @@ inside one Manifest, and the handshake says which.
 **Standing in a repository is what opens the door, and it is a selection
 rather than a permission.** A repository Fleet serves carries the entry in its
 own `.mcp.json`, naming `armada mcp` — a relay that reads the runtime file for
-the port, resolves its own working directory to a Manifest, and refuses where
-that Manifest is not the one Fleet is serving. A session started in a
+the port, resolves its own working directory to a Manifest, refuses where
+Fleet does not serve that Manifest, and names it on every call so the door
+answers about that repository alone. A session started in a
 subdirectory resolves upward to the repository root and discloses at its
 handshake which one it adopted; the walk stops at a repository with no Manifest
 and at the home directory, so it reaches neither a parent repository nor a

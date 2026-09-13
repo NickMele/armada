@@ -144,7 +144,7 @@ async fn watch<D: Queries>(mut socket: WebSocket, served: Served<D>) {
 /// reconnects gets a whole answer or none.
 async fn resync<D: Queries>(socket: &mut WebSocket, served: &Served<D>) -> bool {
     let cursor = served.events().cursor();
-    let Ok(jobs) = served.daemon().list_jobs().await else {
+    let Ok(jobs) = served.daemon().list_jobs(None).await else {
         return false;
     };
     send(

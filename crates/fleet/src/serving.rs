@@ -63,19 +63,44 @@ where
     ///
     /// **A number counts within a Manifest**, and Fleet serves several: one
     /// that more than one of them holds is refused rather than guessed.
-    async fn resolve_job(&self, named: String) -> Result<Resolved, Refusal> {
+    async fn resolve_job(
+        &self,
+        named: String,
+        within: Option<ManifestId>,
+    ) -> Result<Resolved, Refusal> {
         let Some(reference) = JobReference::read(&named) else {
             return Err(self.refusal(Adrift::Unresolvable(ResolveJobError::NoSuchJob { named })));
         };
+        let served = match &within {
+            None => self.repositories().served(),
+            Some(manifest_id) => vec![self.served_named(Some(manifest_id))?],
+        };
         let found = self
-            .resolve_job_across(&reference, &self.repositories().served())
+            .resolve_job_across(&reference, &served)
             .await
             .map_err(|why| self.refusal(Adrift::Unresolvable(why)))?;
+        // A ULID counts within nothing, so its owner is compared here.
+        if let Some(manifest_id) = &within {
+            let owner = self.names().owner_of(&found.job_id);
+            if owner.as_deref() != Some(manifest_id.as_str()) {
+                return Err(
+                    self.refusal(Adrift::Unresolvable(ResolveJobError::NoSuchJob {
+                        named: format!(
+                        "{named}` in Manifest `{}` — it belongs to another repository, and this \
+                         session answers only about the one it stands in",
+                        manifest_id.as_str()
+                    ),
+                    })),
+                );
+            }
+        }
         Ok(Resolved::of(JobId::from(&found.job_id), found.handle))
     }
 
-    async fn list_jobs(&self) -> Result<JobList, Refusal> {
-        let (loaded, unreadable) = self.every_job().await.map_err(|why| self.refusal(why))?;
+    async fn list_jobs(&self, manifest_id: Option<ManifestId>) -> Result<JobList, Refusal> {
+        let owned = self.owned_by(manifest_id.as_ref())?;
+        let (mut loaded, unreadable) = self.every_job().await.map_err(|why| self.refusal(why))?;
+        loaded.jobs.retain(|job| owned(job));
         // **One read for the whole list**, filled in afterwards rather than
         // passed into `JobSummary::of`. What became of a Job's pull request is
         // not on `core_model::Job` — it is in the delivery columns beside the
@@ -106,29 +131,28 @@ where
         })
     }
 
-    /// The Manifest every door answer is given inside — `#698` is what lets a
-    /// caller name one.
-    async fn scope(&self) -> Result<ManifestId, Refusal> {
-        // The agent door answers inside the first repository with a Manifest.
-        let served = self.served_named(None)?;
+    /// The Manifest a door session is answered inside: the one its relay
+    /// named, refused where Fleet does not serve it. Absent is the first.
+    async fn scope(&self, named: Option<ManifestId>) -> Result<ManifestId, Refusal> {
+        let served = self.served_named(named.as_ref())?;
         Ok(ManifestId::from(served.manifest().id()))
     }
 
     /// The four narrowings, each one rule, stated in `crate::attention`.
-    async fn list_job_board(&self) -> Result<JobList, Refusal> {
-        self.job_board().await
+    async fn list_job_board(&self, manifest_id: Option<ManifestId>) -> Result<JobList, Refusal> {
+        self.job_board(manifest_id.as_ref()).await
     }
 
-    async fn list_reviews(&self) -> Result<JobList, Refusal> {
-        self.reviews().await
+    async fn list_reviews(&self, manifest_id: Option<ManifestId>) -> Result<JobList, Refusal> {
+        self.reviews(manifest_id.as_ref()).await
     }
 
-    async fn get_activity_feed(&self) -> Result<JobList, Refusal> {
-        self.activity_feed().await
+    async fn get_activity_feed(&self, manifest_id: Option<ManifestId>) -> Result<JobList, Refusal> {
+        self.activity_feed(manifest_id.as_ref()).await
     }
 
-    async fn list_alerts(&self) -> Result<AlertList, Refusal> {
-        self.alerts().await
+    async fn list_alerts(&self, manifest_id: Option<ManifestId>) -> Result<AlertList, Refusal> {
+        self.alerts(manifest_id.as_ref()).await
     }
 
     /// The roster, read without taking a working slot — `crate::rostered`.

@@ -99,9 +99,14 @@ impl<D: Queries> FromRequestParts<Served<D>> for Resolved {
                     &WireError::raised(NO_JOB_SEGMENT, &why.to_string(), served.run_id().clone()),
                 )
             })?;
+        // Only the agent door sets this; bytes on the wire cannot.
+        let within = parts
+            .extensions
+            .get::<crate::door::Scoped>()
+            .map(|scoped| scoped.manifest_id());
         served
             .daemon()
-            .resolve_job(named.job_id)
+            .resolve_job(named.job_id, within)
             .await
             .map_err(refused)
     }

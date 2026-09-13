@@ -77,20 +77,34 @@ pub trait Queries: Send + Sync + 'static {
     /// **A number counts within a Manifest.** A Fleet serves several
     /// repositories, and a number more than one of them holds is refused rather
     /// than resolved against whichever answered first.
-    fn resolve_job(&self, named: String) -> impl Future<Output = Result<Resolved, Refusal>> + Send;
+    ///
+    /// **`within` is a scope, not a count.** Named, a Job another Manifest owns
+    /// is refused whatever form named it; absent is every repository.
+    fn resolve_job(
+        &self,
+        named: String,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Resolved, Refusal>> + Send;
 
-    /// `list_jobs` — Jobs with state and reason.
-    fn list_jobs(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+    /// `list_jobs` — Jobs with state and reason. `manifest_id` narrows it to
+    /// the Jobs one Manifest owns; absent is every repository.
+    fn list_jobs(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<JobList, Refusal>> + Send;
 
     /// The Manifest every answer to this caller is given inside.
     ///
     /// **Not an operation, and on no route of its own** — [`resolve_job`]'s
-    /// shape one question over. A Fleet serves one repository, so this is that
-    /// repository's Manifest; what selects a *session's* scope when an agent
-    /// may name one is `#698`, and the door compares the two.
+    /// shape one question over. Named, it is that Manifest where Fleet serves
+    /// it and refused where not; absent is the first repository. The agent
+    /// door names the one its session stands in.
     ///
     /// [`resolve_job`]: Queries::resolve_job
-    fn scope(&self) -> impl Future<Output = Result<ManifestId, Refusal>> + Send;
+    fn scope(
+        &self,
+        named: Option<ManifestId>,
+    ) -> impl Future<Output = Result<ManifestId, Refusal>> + Send;
 
     /// `list_job_board` — the open queue: Jobs no Drone has been started on.
     ///
@@ -98,28 +112,40 @@ pub trait Queries: Send + Sync + 'static {
     /// `get_activity_feed` are. The three differ in which Jobs they carry, not
     /// in what a Job is, and three near-identical types would be three places
     /// to forget the partial-failure list.
-    fn list_job_board(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+    fn list_job_board(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<JobList, Refusal>> + Send;
 
     /// `list_reviews` — Jobs resting at a gate a person has to answer.
     ///
     /// **Not every Job that needs somebody**: one stopped mid-flight is
     /// `list_alerts`'s `blocked`, and folding the two would put work that is
     /// holding a Drone into a queue somebody reads at leisure.
-    fn list_reviews(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+    fn list_reviews(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<JobList, Refusal>> + Send;
 
     /// `get_activity_feed` — Jobs that are over, newest first.
     ///
     /// **Terminal by the registry's own `terminal` column**, never by a list of
     /// status names kept here. A status added to `job-statuses.toml` joins this
     /// answer without anything in this workspace being edited.
-    fn get_activity_feed(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+    fn get_activity_feed(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<JobList, Refusal>> + Send;
 
     /// `list_alerts` — what is waiting on a person, split by what the waiting
     /// costs. See [`ipc::AlertList`] for the line between the two buckets.
     ///
     /// **Derived, never stored.** Fleet keeps no Alert record, which is why no
     /// `alert.raised` event exists to go with this.
-    fn list_alerts(&self) -> impl Future<Output = Result<AlertList, Refusal>> + Send;
+    fn list_alerts(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<AlertList, Refusal>> + Send;
 
     /// `list_drones` — every Drone Fleet holds a slot for.
     ///

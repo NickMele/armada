@@ -9,22 +9,25 @@
 //! `GET` and `DELETE` for it too: no server-initiated stream, no session to
 //! end, and so nothing added to the unbounded-sink risk on the event socket.
 //!
-//! Who may open this door is `#698`. What it is scoped to is here, and so is
-//! the one caller it narrows: a Helm session the daemon places by its
-//! connection (`#941`, [`crate::Admitting`]). Every other caller is answered
-//! as before.
+//! Who may open this door is `#698`. What it is scoped to is here: the
+//! Manifest its relay names as `?manifest_id=`, which selects and grants
+//! nothing. So is the one caller it narrows: a Helm session the daemon places
+//! by its connection (`#941`, [`crate::Admitting`]).
 
 use axum::body::Bytes;
+use axum::extract::Query;
 use axum::extract::State;
 use axum::http::{header, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::Router;
 use ipc::door::{self, Answer, Answered, Asked, Reachable, Shape};
+use ipc::ManifestId;
 use tower::ServiceExt;
 
 use crate::daemon::{offerable, Admitting, HelmReach, Queries};
 use crate::routes::SERVED;
+use crate::scoped::InManifest;
 use crate::served::Served;
 
 /// Where an agent reaches Fleet.
@@ -81,10 +84,8 @@ fn shaped<'a>(rows: impl Iterator<Item = &'a Reachable>) -> Vec<Shape> {
 
 /// The Manifest a session is answered inside.
 ///
-/// **The mechanism, not the identity.** One scope is reachable today — the
-/// Manifest this Fleet serves — and every call is checked against it, so when
-/// `#698` gives a session a chosen Manifest the check is already the thing
-/// that enforces it rather than something to remember to add.
+/// **Named by the relay, checked by the daemon.** `armada mcp` names the
+/// Manifest it walked to; a caller naming none is answered inside the first.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scope(String);
 
@@ -95,6 +96,37 @@ impl Scope {
 
     pub fn named(&self) -> &str {
         &self.0
+    }
+}
+
+/// The door path a relay standing in `manifest_id` posts to.
+pub fn door_within(manifest_id: &str) -> String {
+    format!("{DOOR_PATH}?manifest_id={}", door::encoded(manifest_id))
+}
+
+/// The routes that read `?manifest_id=` and, absent it, answer about every
+/// repository or the first. The door always names its scope on these.
+const NAMES_ITS_SCOPE: &[&str] = &[
+    "list_jobs",
+    "list_job_board",
+    "list_reviews",
+    "get_activity_feed",
+    "list_alerts",
+    "get_manifest_reading",
+    "get_manifest_drift",
+    "get_manifest_spend",
+    "start_server",
+];
+
+/// Set on every call the door makes, so a `:job_id` resolves inside the
+/// session's Manifest. **An extension, never a header**, for [`HelmCalled`]'s
+/// reason: Bridge's own `/jobs/:job_id` requests cannot carry one.
+#[derive(Clone, Debug)]
+pub(crate) struct Scoped(ManifestId);
+
+impl Scoped {
+    pub(crate) fn manifest_id(&self) -> ManifestId {
+        self.0.clone()
     }
 }
 
@@ -141,6 +173,9 @@ async fn called<D: Queries + Admitting>(
     request: axum::extract::Request,
 ) -> Response {
     let (parts, body) = request.into_parts();
+    let named = Query::<InManifest>::try_from_uri(&parts.uri)
+        .ok()
+        .and_then(|Query(scope)| scope.manifest());
     let helm = doorway
         .served
         .daemon()
@@ -170,7 +205,7 @@ async fn called<D: Queries + Admitting>(
         // Drone's endpoint refuses that way: an agent reads the one and can
         // only retry the other.
         Asked::NotACall { id, why } => Answered::Refused { id, why },
-        Asked::Handshake { id, revision } => match doorway.scope().await {
+        Asked::Handshake { id, revision } => match doorway.scope(named).await {
             Ok(scope) => Answered::Handshake {
                 id,
                 revision,
@@ -178,15 +213,15 @@ async fn called<D: Queries + Admitting>(
             },
             Err(why) => Answered::Refused { id, why },
         },
-        Asked::Call { id, call } => match (doorway.scope().await, &helm) {
+        Asked::Call { id, call } => match (doorway.scope(named).await, &helm) {
             (Err(why), _) => Answered::Refused { id, why },
             (Ok(_), Some(reach)) if !reach.may(call.operation) => Answered::Refused {
                 id,
                 why: reach.refusing(call.operation),
             },
-            (Ok(_), _) => Answered::Served {
+            (Ok(scope), _) => Answered::Served {
                 id,
-                answer: doorway.through(&call, helm.is_some()).await,
+                answer: doorway.through(&call, helm.is_some(), &scope).await,
             },
         },
     };
@@ -221,8 +256,8 @@ impl<D: Queries> Doorway<D> {
     /// **Asked per call rather than held.** A session that outlived a
     /// Manifest reload would be answering inside one Fleet no longer serves,
     /// and the read is a field on a struct.
-    async fn scope(&self) -> Result<Scope, String> {
-        match self.served.daemon().scope().await {
+    async fn scope(&self, named: Option<ManifestId>) -> Result<Scope, String> {
+        match self.served.daemon().scope(named).await {
             Ok(manifest_id) => Ok(Scope::of(manifest_id.as_str())),
             Err(refusal) => Err(format!(
                 "this Fleet could not say which Manifest your session is inside, so nothing \
@@ -232,12 +267,13 @@ impl<D: Queries> Doorway<D> {
         }
     }
 
-    /// One tool call, made against the surface. `by_helm` marks it for the
-    /// route that records who acted.
-    async fn through(&self, call: &door::Call, by_helm: bool) -> Answer {
+    /// One tool call, made against the surface inside `scope`. `by_helm`
+    /// marks it for the route that records who acted.
+    async fn through(&self, call: &door::Call, by_helm: bool, scope: &Scope) -> Answer {
+        let path = scoped_path(call, scope);
         let request = Request::builder()
             .method(call.method)
-            .uri(&call.path)
+            .uri(&path)
             .header(header::CONTENT_TYPE, "application/json")
             .body(axum::body::Body::from(
                 call.body.clone().unwrap_or_default(),
@@ -248,6 +284,9 @@ impl<D: Queries> Doorway<D> {
         if by_helm {
             request.extensions_mut().insert(HelmCalled);
         }
+        request
+            .extensions_mut()
+            .insert(Scoped(ManifestId::carried(scope.named())));
         // Infallible: the surface's error type is `Infallible`, so a failure
         // here is a request that was never made rather than a route that
         // refused — and a refusal comes back as a status like any other.
@@ -270,9 +309,22 @@ impl<D: Queries> Doorway<D> {
             status,
             media_type,
             body,
-            whole_at: call.path.clone(),
+            whole_at: path,
         }
     }
+}
+
+/// The call's path, with the session's Manifest named where the route reads one.
+fn scoped_path(call: &door::Call, scope: &Scope) -> String {
+    if !NAMES_ITS_SCOPE.contains(&call.operation) {
+        return call.path.clone();
+    }
+    let joined = if call.path.contains('?') { '&' } else { '?' };
+    format!(
+        "{}{joined}manifest_id={}",
+        call.path,
+        door::encoded(scope.named())
+    )
 }
 
 /// The most a surface answer may weigh before the door stops reading it.

@@ -49,8 +49,11 @@ pub(crate) struct Framed {
     name: String,
 }
 
-pub(crate) async fn list_jobs<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().list_jobs().await {
+pub(crate) async fn list_jobs<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().list_jobs(scope.manifest()).await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, served.run_id()),
         Err(refusal) => refused(refusal),
     }

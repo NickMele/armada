@@ -323,7 +323,7 @@ fn said(value: &Value) -> Option<String> {
 /// **By hand, because the gate keeps this crate's dependencies to two.** The
 /// unreserved set is RFC 3986's; everything else is escaped, which is safe in
 /// both positions even where it need not have been.
-fn encoded(value: &str) -> String {
+pub fn encoded(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.bytes() {
         match byte {
@@ -466,9 +466,9 @@ fn describe(name: &str) -> String {
         "job_id" => String::from(
             "The Job: its id, the handle a person reads, or the number that handle starts with",
         ),
-        "manifest_id" => String::from(
-            "The Manifest. This Fleet serves one, and it is the one your session is scoped to",
-        ),
+        "manifest_id" => {
+            String::from("The Manifest. Your session is scoped to the one you are standing in")
+        }
         "drone_id" => String::from("The Drone, as `list_drones` names it"),
         "since" => String::from(
             "The cursor your last call answered with, as `upto`. Nought is the whole stream",

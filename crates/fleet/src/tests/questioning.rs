@@ -283,14 +283,14 @@ async fn the_board_row_says_the_drone_is_waiting_and_stops_saying_it() {
     let fleet = a_fleet_with(&home, a_drone_that_listens());
     let job = started(&fleet, &home).await;
 
-    let before = Queries::list_jobs(&fleet).await.expect("a board");
+    let before = Queries::list_jobs(&fleet, None).await.expect("a board");
     assert!(
         before.jobs.iter().all(|row| !row.asking),
         "a Drone that has asked nothing is not waiting on anybody"
     );
 
     let asked = fleet.ask_question(&job, a_question()).await.unwrap();
-    let waiting = Queries::list_jobs(&fleet).await.expect("a board");
+    let waiting = Queries::list_jobs(&fleet, None).await.expect("a board");
     assert!(
         waiting
             .jobs
@@ -303,7 +303,7 @@ async fn the_board_row_says_the_drone_is_waiting_and_stops_saying_it() {
         .answer_question(&job, asked.id().as_str(), "Fold it in")
         .await
         .unwrap();
-    let after = Queries::list_jobs(&fleet).await.expect("a board");
+    let after = Queries::list_jobs(&fleet, None).await.expect("a board");
     assert!(
         after.jobs.iter().all(|row| !row.asking),
         "answered once, so the row stops claiming it — there is no badge to go stale"

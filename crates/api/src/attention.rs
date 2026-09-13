@@ -4,41 +4,54 @@
 //! whole list itself; the point of four routes is that the rule which decides
 //! *what is waiting on you* lives in one place instead of in each surface.
 
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Response;
 
 use crate::answers::{answer, refused};
 use crate::daemon::Queries;
+use crate::scoped::InManifest;
 use crate::served::Served;
 
 /// The open queue: Jobs no Drone has been started on.
-pub(crate) async fn list_job_board<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().list_job_board().await {
+pub(crate) async fn list_job_board<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().list_job_board(scope.manifest()).await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }
 
 /// Jobs resting at a gate somebody has to answer.
-pub(crate) async fn list_reviews<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().list_reviews().await {
+pub(crate) async fn list_reviews<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().list_reviews(scope.manifest()).await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }
 
 /// Jobs that are over, newest first.
-pub(crate) async fn get_activity_feed<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().get_activity_feed().await {
+pub(crate) async fn get_activity_feed<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().get_activity_feed(scope.manifest()).await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }
 
 /// What is waiting on a person, split by what the waiting costs.
-pub(crate) async fn list_alerts<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().list_alerts().await {
+pub(crate) async fn list_alerts<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().list_alerts(scope.manifest()).await {
         Ok(alerts) => answer(StatusCode::OK, &alerts, served.run_id()),
         Err(refusal) => refused(refusal),
     }

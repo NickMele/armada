@@ -213,6 +213,14 @@ pub fn running(daemon: &FakeDaemon, id: &str) {
     at(daemon, id, "running");
 }
 
+/// A running Job another Manifest owns, for a case about scope.
+pub fn owned_by(daemon: &FakeDaemon, id: &str, handle: &str, manifest_id: &str) {
+    let mut job = shapes::job_at(id, "running");
+    job.handle = handle.to_string();
+    job.owner_manifest_id = ipc::ManifestId::carried(manifest_id);
+    daemon.jobs.lock().expect("not poisoned").push(job);
+}
+
 /// A Job put straight into the record at any status the registry has, without
 /// a transition to get it there. **Putting it there is this side's**; the row
 /// it puts is [`shapes::job_at`].

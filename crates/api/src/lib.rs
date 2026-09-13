@@ -84,7 +84,7 @@ pub use daemon::{
     offerable, Admitting, Commands, Conversations, Daemon, FramePart, FrameSpan, HelmReach,
     PermissionAnswer, Queries, Redirector, Refusal, Tools,
 };
-pub use door::{offered, Scope, DOOR_PATH};
+pub use door::{door_within, offered, Scope, DOOR_PATH};
 pub use following::{Follow, Followed, LiveOutput};
 pub use journal::{Journal, Reading, Window, FOLLOW};
 pub use mcp::{Caller, MCP_PATH};
