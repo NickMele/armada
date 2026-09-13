@@ -273,6 +273,21 @@ describe("every per-repository call", () => {
     expect(asked.filter((url) => !FLEETWIDE.has(url))).toEqual([]);
   });
 
+  it("names New job's answered repository for `left_out` and `manifest/reading`, with the pick on All", async () => {
+    const asked: string[] = [];
+    const port = await recording(asked);
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+    expect(picked.picked).toBeNull();
+
+    await holdingsOf(port, { workflows: [], manifests: [], models: null }, picked, SET_UP.root);
+    await manifestReadingOf(port, picked, SET_UP.root);
+
+    expect(picked.picked).toBeNull();
+    const scoped = asked.filter((url) => !FLEETWIDE.has(url));
+    expect(scoped.sort()).toEqual(["/manifest/reading?manifest_id=store-01", "/workflows/left_out?manifest_id=store-01"]);
+  });
+
   it("is built through the pick wherever `src/main` spells a per-repository route", () => {
     const routes = /["`](\/manifest\/|\/repository\/|\/workflows\/left_out|\/servers\/start|\/jobs\/from_request)/;
     const dir = __dirname;

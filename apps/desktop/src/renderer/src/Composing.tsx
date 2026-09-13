@@ -57,6 +57,7 @@ export function Composing({
         title="Pick the repository this Job is for"
         next="A Job belongs to one repository. The Board stays on All; the new Job is listed under the repository you pick."
         onPick={setAnswered}
+        onlySetUp
       />
     );
   }

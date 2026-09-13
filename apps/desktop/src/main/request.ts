@@ -199,10 +199,24 @@ export function isJobSummary(body: unknown): body is JobSummary {
  * A failed one keeps what was already held: a stale roster beats none, and
  * Fleet refuses an id that has gone, so the worst case is a picker offering one
  * value too many rather than a form with nothing in it.
+ *
+ * `repository` is the root New job's ask answered, where the pick cannot name
+ * it: on All, #959 keeps the Board there, so `leftOut` — the one field here
+ * that is scoped at all — must be read against what was answered rather than
+ * `picked`. `null`, the default, is every other caller; the pick still names
+ * it, as it always did.
  */
-export async function holdingsOf(port: number, held: Holdings, picked: Picked): Promise<Holdings> {
+export async function holdingsOf(
+  port: number,
+  held: Holdings,
+  picked: Picked,
+  repository: string | null = null,
+): Promise<Holdings> {
   // A repository not set up has no catalogue to have left anything out of.
-  const leftOutAt = picked.manifest("/workflows/left_out");
+  const leftOutAt =
+    repository === null
+      ? picked.manifest("/workflows/left_out")
+      : picked.manifestOf("/workflows/left_out", repository);
   const [workflows, manifests, models, leftOut] = await Promise.all([
     ask(port, "GET", "/workflows"),
     ask(port, "GET", "/manifests"),
@@ -274,9 +288,18 @@ export async function preferencesOf(port: number): Promise<Preferences | null> {
  * Asked once per connection rather than on a timer: the reading changes when
  * somebody saves a file, and `manifest.reread` is what says so. This is for the
  * window that opened *after* the save, which an event cannot reach.
+ *
+ * `repository` is New job's own answered root, on `holdingsOf`'s terms above:
+ * `null`, the default, keeps reading the pick, as every caller but the
+ * composer on All does.
  */
-export async function manifestReadingOf(port: number, picked: Picked): Promise<ManifestReading | null> {
-  const path = picked.manifest("/manifest/reading");
+export async function manifestReadingOf(
+  port: number,
+  picked: Picked,
+  repository: string | null = null,
+): Promise<ManifestReading | null> {
+  const path =
+    repository === null ? picked.manifest("/manifest/reading") : picked.manifestOf("/manifest/reading", repository);
   if (path === null) return null;
   const answer = await ask(port, "GET", path);
   return answer.ok === true ? ((answer.body as ManifestReading | null) ?? null) : null;
