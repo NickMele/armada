@@ -277,6 +277,24 @@ export const BothListed: Story = {
   },
 };
 
+/** A workspace verifies on its own, in a repository whose root has no armada.yml. */
+export const VerifyWorkspaceAlone: Story = {
+  name: "Verify a workspace before the root is set up",
+  args: { ...TWO, onVerify: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.selectOptions(canvas.getByRole("combobox", { name: "Project" }), SCRATCH.root);
+    const list = await canvas.findByRole("region", { name: "Workspaces" });
+    await userEvent.click(within(list).getByRole("button", { name: "Open apps/web" }));
+    const sheet = await canvas.findByRole("dialog", { name: "Proposal for apps/web" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "Write apps/web/armada.yml" }));
+    const verify = await within(sheet).findByRole("region", { name: "Verify" });
+    await expect(within(verify).queryByText(/at its root/)).toBeNull();
+    await userEvent.click(within(verify).getByRole("button", { name: "Verify" }));
+    await expect(args.onVerify).toHaveBeenCalledWith("apps/web");
+  },
+};
+
 /** Pick the folder nobody set up: Setup alone opens for it, Write puts its root file down, and Verify is there. */
 export const PickNotSetUp: Story = {
   name: "Pick one not set up, write it, verify",

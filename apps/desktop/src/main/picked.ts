@@ -53,6 +53,18 @@ export class Picked {
     return named(path, "manifest_id", repository.manifest.id);
   }
 
+  /**
+   * Verify and what its panel reads: the main checkout, which may have no root Manifest. Named by
+   * `?manifest_id=` where it has one, and by root where it has none.
+   */
+  checkout(path: string): string {
+    const repository = this.repository;
+    if (repository === null) return path;
+    return repository.manifest === undefined
+      ? named(path, "repository", repository.root)
+      : named(path, "manifest_id", repository.manifest.id);
+  }
+
   /** Scan and its proposals, which name a repository by its root — it may have no Manifest. */
   scan(path: string): string {
     const repository = this.repository;

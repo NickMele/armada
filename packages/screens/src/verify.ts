@@ -75,10 +75,7 @@ export function verifyPanelOf(inputs: VerifyInputs): VerifyPanelProps {
   const out = verify?.steps.find((step) => step.state === "running");
 
   let offer: Pick<VerifyPanelProps, "onVerify" | "unavailable"> = { onVerify: inputs.onVerify };
-  const failed = inputs.sheet.state === "failed" ? inputs.sheet.outcome : undefined;
-  if (failed?.ok === false && failed.why === "not_set_up")
-    offer = { unavailable: "Verify can start once this repository's own armada.yml, at its root, is written." };
-  else if (data === undefined) offer = { unavailable: "Verify can start once this Manifest has been read." };
+  if (data === undefined) offer = { unavailable: "Verify can start once this Manifest has been read." };
   else if (underway) offer = {};
   else if (other !== undefined)
     offer = { unavailable: `Verify is running ${fileOf(other.workspace)} in this checkout. This file can be verified once it ends.` };

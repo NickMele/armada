@@ -242,3 +242,164 @@ async fn a_workspace_outside_the_root_or_without_a_file_is_refused() {
         .expect("a sheet");
     assert_eq!(sheet.verify, None, "nothing was begun");
 }
+
+/// A repository with `apps/web/armada.yml` and nothing at its root, served
+/// beside the Fleet's own. Answers its root.
+fn only_a_workspace(home: &TempDir, fleet: &Fixture) -> String {
+    let root = home.path().join("alone");
+    std::fs::create_dir_all(root.join("apps/web")).expect("a workspace");
+    std::fs::write(root.join("apps/web/armada.yml"), WEB).expect("its Manifest");
+    let git = |args: &[&str]| {
+        let run = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args([
+                "-c",
+                "user.name=a person",
+                "-c",
+                "user.email=a@person.invalid",
+            ])
+            .args(args)
+            .output()
+            .expect("git on PATH");
+        assert!(run.status.success(), "git {args:?} failed");
+    };
+    git(&["-c", "init.defaultBranch=main", "init", "--quiet"]);
+    git(&["add", "."]);
+    git(&["commit", "--quiet", "-m", "the first commit"]);
+    let located = crate::repositories::Located {
+        root: root.to_string_lossy().to_string(),
+        records_root: home
+            .path()
+            .join("alone-records")
+            .to_string_lossy()
+            .to_string(),
+        set_up: None,
+    };
+    fleet
+        .repositories()
+        .add(located)
+        .expect("served without a Manifest");
+    root.to_string_lossy().to_string()
+}
+
+fn routed(fleet: &Arc<Fixture>) -> axum::Router {
+    api::router(api::Served::sharing(
+        Arc::clone(fleet),
+        ipc::RunId::carried("01RUN"),
+        fleet.events(),
+    ))
+}
+
+/// **A workspace verifies on its own, named by `?repository=`, before its
+/// repository has a root Manifest** — and the run sheet read the same way
+/// names the workspace it ran.
+#[tokio::test]
+async fn a_workspace_verifies_by_repository_where_the_root_has_no_manifest() {
+    let home = TempDir::new();
+    let fleet = a_checkout(&home);
+    let root = only_a_workspace(&home, &fleet);
+    let app = routed(&fleet);
+    let scope = format!("?repository={root}");
+
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/manifest/start_verify{scope}"),
+        r#"{"workspace":"apps/web"}"#,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::ACCEPTED,
+        "{}",
+        String::from_utf8_lossy(&body)
+    );
+
+    let verify = tokio::time::timeout(Duration::from_secs(60), async {
+        loop {
+            let (status, body) =
+                call(&app, "GET", &format!("/manifest/run_sheet{scope}"), "").await;
+            assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+            let sheet: ipc::CheckoutRunSheet = ipc::decode("a sheet", &body).expect("a sheet");
+            assert!(sheet.checks.is_empty(), "no root Manifest lists nothing");
+            if let Some(verify) = sheet.verify.filter(|one| one.ended_at.is_some()) {
+                return verify;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the Verify ended");
+
+    assert_eq!(verify.workspace.as_deref(), Some("apps/web"));
+    let codes: Vec<(&str, Option<i32>)> = verify
+        .steps
+        .iter()
+        .map(|step| match &step.state {
+            ipc::VerifyStepState::Ran { record } => (step.name.as_str(), record.exit_code),
+            other => panic!("`{}` did not run: {other:?}", step.name),
+        })
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            ("prepare", Some(0)),
+            ("where", Some(0)),
+            ("prepared", Some(0))
+        ]
+    );
+    assert!(Path::new(&root).join("apps/web/ran-in.txt").exists());
+    let own = fleet
+        .checkout_run_sheet(fleet.first())
+        .await
+        .expect("the Fleet's own sheet");
+    assert_eq!(
+        own.verify, None,
+        "held by its own root, not the first repository's"
+    );
+}
+
+/// **With no workspace, a repository with no root Manifest is refused plainly,
+/// and so is a route naming both `manifest_id` and `repository`.**
+#[tokio::test]
+async fn no_workspace_or_both_names_is_refused_where_the_root_has_no_manifest() {
+    let home = TempDir::new();
+    let fleet = a_checkout(&home);
+    let root = only_a_workspace(&home, &fleet);
+    let app = routed(&fleet);
+
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/manifest/start_verify?repository={root}"),
+        "",
+    )
+    .await;
+    let said = String::from_utf8_lossy(&body);
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{said}");
+    assert!(said.contains("no armada.yml at its root"), "{said}");
+
+    let both = format!("?manifest_id=01FIXTUREMANIFEST&repository={root}");
+    for (method, path, body) in [
+        (
+            "POST",
+            "/manifest/start_verify",
+            r#"{"workspace":"apps/web"}"#,
+        ),
+        ("GET", "/manifest/run_sheet", ""),
+        ("POST", "/manifest/stop_run", r#"{"id":"01RUN"}"#),
+    ] {
+        let (status, answered) = call(&app, method, &format!("{path}{both}"), body).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{path}");
+        assert!(
+            String::from_utf8_lossy(&answered).contains("fleet.repository_named_twice"),
+            "{path}"
+        );
+    }
+    let sheet = fleet
+        .checkout_run_sheet(fleet.first())
+        .await
+        .expect("a sheet");
+    assert_eq!(sheet.verify, None, "nothing was begun");
+}

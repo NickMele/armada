@@ -157,6 +157,7 @@ impl Commands for FakeDaemon {
         &self,
         _run: ipc::NamedRun,
         _manifest_id: Option<ipc::ManifestId>,
+        _repository: Option<String>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
         self.runs_nothing_here()
     }
@@ -171,6 +172,7 @@ impl Commands for FakeDaemon {
         self: std::sync::Arc<Self>,
         _asked: ipc::StartCheckoutVerify,
         _manifest_id: Option<ipc::ManifestId>,
+        _repository: Option<String>,
     ) -> Result<ipc::CheckoutVerify, Refusal> {
         self.runs_nothing_here()
     }

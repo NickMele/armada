@@ -79,7 +79,9 @@ where
         let loaded = self.load(job_id).await.map_err(|why| self.refusal(why))?;
         let place = self.job_place(loaded.clone())?;
         let tree = self.tree_at(&place);
-        let (manifest, has_snapshot) = self.manifest_at(&place).await;
+        let Some((manifest, has_snapshot)) = self.manifest_at(&place).await else {
+            return Err(self.refused_run(&place.owner, Unrehearsable::NoManifest));
+        };
         let listed = entries::frozen(&loaded, &manifest, has_snapshot);
         let changed = tree
             .as_ref()

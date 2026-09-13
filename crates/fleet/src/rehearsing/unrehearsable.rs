@@ -114,6 +114,8 @@ pub enum Unrehearsable {
     VerifyUnderway,
     /// The Manifest declares no setup and no Checks.
     NothingToVerify,
+    /// The checkout's root has no Manifest, and nothing else was named to run.
+    NoManifest,
     /// A workspace named by a path that leaves the repository.
     WorkspaceOutside {
         dir: String,
@@ -142,7 +144,7 @@ impl Unrehearsable {
             | AlreadyUndone { .. }
             | NothingToUndo { .. }
             | Moved { .. } => (CANNOT_UNDO, Refusal::IllegalMove),
-            NotDeclared { .. } | IsAServer { .. } | NothingToVerify => {
+            NotDeclared { .. } | IsAServer { .. } | NothingToVerify | NoManifest => {
                 (NOT_DECLARED_HERE, Refusal::Unacceptable)
             }
             WorktreeManifest { .. } => (WORKTREE_MANIFEST_UNREADABLE, Refusal::Unacceptable),
@@ -258,6 +260,10 @@ impl fmt::Display for Unrehearsable {
             ),
             NothingToVerify => out.write_str(
                 "this Manifest declares no setup and no Checks, so Verify has nothing to run",
+            ),
+            NoManifest => out.write_str(
+                "this repository has no armada.yml at its root, so there is nothing to run \
+                 here. Name a workspace whose own armada.yml Verify runs",
             ),
             WorkspaceOutside { dir } => write!(
                 out,

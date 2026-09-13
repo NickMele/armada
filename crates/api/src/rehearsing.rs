@@ -16,7 +16,7 @@ use serde::Deserialize;
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::{Commands, Queries};
 use crate::reference::Resolved;
-use crate::scoped::InManifest;
+use crate::scoped::{InCheckout, InManifest};
 use crate::served::Served;
 
 /// The segment after `runs` on `get_run_output`.
@@ -130,11 +130,12 @@ pub(crate) async fn undo_run<D: Commands>(
 
 pub(crate) async fn get_checkout_run_sheet<D: Queries>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
 ) -> Response {
+    let (manifest_id, repository) = scope.scope();
     match served
         .daemon()
-        .get_checkout_run_sheet(scope.manifest())
+        .get_checkout_run_sheet(manifest_id, repository)
         .await
     {
         Ok(sheet) => answer(StatusCode::OK, &sheet, served.run_id()),
@@ -188,13 +189,14 @@ pub(crate) async fn get_checkout_run_diff<D: Queries>(
 /// owner over.
 pub(crate) async fn observe_checkout_run<D: Queries>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
     Path(Ran { run_id }): Path<Ran>,
     upgrade: WebSocketUpgrade,
 ) -> Response {
+    let (manifest_id, repository) = scope.scope();
     match served
         .daemon()
-        .observe_checkout_run(run_id, scope.manifest())
+        .observe_checkout_run(run_id, manifest_id, repository)
         .await
     {
         Ok(observed) => {
@@ -228,9 +230,10 @@ pub(crate) async fn start_checkout_run<D: Commands>(
 /// empty runs the root's Manifest, and `workspace` names one below it.
 pub(crate) async fn start_checkout_verify<D: Commands>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
     body: Bytes,
 ) -> Response {
+    let (manifest_id, repository) = scope.scope();
     // Empty is the root's file, which every press before workspaces sent.
     let asked = if body.is_empty() {
         ipc::StartCheckoutVerify::default()
@@ -242,7 +245,7 @@ pub(crate) async fn start_checkout_verify<D: Commands>(
     };
     match served
         .shared()
-        .start_checkout_verify(asked, scope.manifest())
+        .start_checkout_verify(asked, manifest_id, repository)
         .await
     {
         Ok(verify) => answer(StatusCode::ACCEPTED, &verify, served.run_id()),
@@ -252,16 +255,17 @@ pub(crate) async fn start_checkout_verify<D: Commands>(
 
 pub(crate) async fn stop_checkout_run<D: Commands>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
     body: Bytes,
 ) -> Response {
+    let (manifest_id, repository) = scope.scope();
     let named: NamedRun = match ipc::decode("a run to stop", &body) {
         Ok(named) => named,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served
         .daemon()
-        .stop_checkout_run(named, scope.manifest())
+        .stop_checkout_run(named, manifest_id, repository)
         .await
     {
         Ok(record) => answer(StatusCode::OK, &record, served.run_id()),

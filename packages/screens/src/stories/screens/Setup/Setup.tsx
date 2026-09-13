@@ -283,11 +283,8 @@ export function SetupFrom({
     },
   });
 
-  // Main's read for a repository with no Manifest refuses before it is sent; after Write it is the sheet.
-  const verifiable: CheckoutRunSheetRead =
-    picked === undefined
-      ? NOTHING_SERVED
-      : picked.manifest === undefined ? { state: "failed", outcome: { ok: false, why: "not_set_up" } } : sheet;
+  // Main reads a repository with no Manifest by its root, so a workspace's Verify reads the sheet as well.
+  const verifiable: CheckoutRunSheetRead = picked === undefined ? NOTHING_SERVED : sheet;
 
   // The Manifest surface's other views, faked only far enough to mount.
   const readFile = () => Promise.resolve({ ok: false as const, outcome: { ok: false as const, why: "not_connected" as const } });

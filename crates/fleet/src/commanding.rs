@@ -345,9 +345,10 @@ where
         &self,
         run: ipc::NamedRun,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
-        self.stop_checkout_rehearsal(run.id, self.served_named(manifest_id.as_ref())?)
-            .await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        self.stop_checkout_rehearsal(run.id, checkout).await
     }
 
     /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
@@ -366,9 +367,10 @@ where
         self: std::sync::Arc<Self>,
         asked: ipc::StartCheckoutVerify,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ipc::CheckoutVerify, Refusal> {
-        let served = self.served_named(manifest_id.as_ref())?;
-        Fleet::begin_checkout_verify(self, served, asked.workspace.as_deref()).await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        Fleet::begin_checkout_verify(self, checkout, asked.workspace.as_deref()).await
     }
 
     /// A corrected Manifest, written and nothing more —

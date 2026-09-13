@@ -706,6 +706,7 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         run: NamedRun,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<CheckoutRunRecord, Refusal>> + Send;
 
     /// `undo_checkout_run` — put back what one run changed, from the snapshot
@@ -741,6 +742,7 @@ pub trait Commands: Send + Sync + 'static {
         self: std::sync::Arc<Self>,
         asked: ipc::StartCheckoutVerify,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<ipc::CheckoutVerify, Refusal>> + Send;
 
     /// `save_manifest_file` — write a corrected `armada.yml` to disk, and stop
