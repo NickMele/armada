@@ -288,6 +288,10 @@ Fleet asks about **one** pull request per sweep and rotates, because the turn in
 
 A Job claims a contiguous span of ports for the life of its worktree. Each repository's main checkout claims one too, held while Fleet runs; the proof run after a merge and any server started with no Job draw from it. Fleet's own listener claims a single port the same way, out of the same range.
 
+**A workspace Verify claims a span of its own, sized from that workspace's `armada.yml`, for the life of the Verify.** Its commands resolve `${port.NAME}` against that span laid over the main checkout's: a name the root alone declares is the root's number, and a name both declare is the workspace's. The span is kept under the workspace's own directory, so a row a crashed Verify left is reconciled at boot, released at shutdown, and replaced by the next Verify of that workspace.
+
+> Why its own span, not the root's grown: a span is contiguous, so growing one re-picks it, and that moves a port a server in the main checkout is already bound to.
+
 ### The range
 
 `Port range base` and `Port range ceiling` are settings. The ceiling is **detected at daemon start from the platform's ephemeral port floor, minus one** — `net.inet.ip.portrange.first` via sysctl on macOS, `net.ipv4.ip_local_port_range` in `/proc` on Linux — with `32767` as a fallback if the read fails rather than as the value.

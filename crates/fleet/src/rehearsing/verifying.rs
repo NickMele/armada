@@ -15,7 +15,6 @@
 //! memory, as a run in flight is.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -177,8 +176,8 @@ where
         let owner = Place::of_checkout(checkout.clone()).owner;
         let workspace = workspace::resolved(checkout.root(), asked)
             .map_err(|why| self.refused_run(&owner, why))?;
-        let (manifest, dir) = match (workspace, checkout.served()) {
-            (Some(one), _) => (one.manifest, Some(one.dir)),
+        let (manifest, workspace) = match (workspace, checkout.served()) {
+            (Some(one), _) => (one.manifest.clone(), Some(one)),
             (None, Some(served)) => (served.manifest().clone(), None),
             (None, None) => return Err(self.refused_run(&owner, Unrehearsable::NoManifest)),
         };
@@ -204,7 +203,7 @@ where
                 id: id.clone(),
                 started_at: Instant::from(&self.now()),
                 ended_at: None,
-                workspace: dir.clone(),
+                workspace: workspace.as_ref().map(|one| one.dir.clone()),
                 steps: steps
                     .into_iter()
                     .map(|(group, entry)| (group, entry, VerifyStepState::Waiting))
@@ -215,8 +214,7 @@ where
             return Err(self.refused_run(&owner, Unrehearsable::VerifyUnderway));
         }
         let (out, first) = oneshot::channel();
-        let within = dir.map(PathBuf::from);
-        tokio::spawn(Arc::clone(&self).verified(id, out, checkout.clone(), within));
+        tokio::spawn(Arc::clone(&self).verified(id, out, checkout.clone(), workspace));
         let _ = first.await;
         verifies.seen(checkout.root()).ok_or_else(|| {
             let why = Unrehearsable::NotKept {
@@ -233,8 +231,12 @@ where
         id: String,
         out: oneshot::Sender<()>,
         checkout: Checkout,
-        within: Option<PathBuf>,
+        workspace: Option<workspace::Workspace>,
     ) {
+        let within = match workspace {
+            Some(one) => Some(self.workspace_claimed(&checkout, one).await),
+            None => None,
+        };
         let verifies = self.rehearsals().verifies().clone();
         let mut waiting = vec![out];
         let mut at = 0;
@@ -300,6 +302,10 @@ where
                 break why;
             }
         };
+        // Given back before the Verify reads as ended, so its reader finds it free.
+        if let Some(within) = &within {
+            self.released_workspace_ports(within).await;
+        }
         verifies.ended(checkout.root(), &id, &why, Instant::from(&self.now()));
         answered(&mut waiting);
     }

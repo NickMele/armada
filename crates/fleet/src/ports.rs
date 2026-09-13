@@ -440,7 +440,7 @@ where
     /// that read exactly like a Job's.
     ///
     /// [`Store::every_port_claim`]: store::Store::every_port_claim
-    async fn try_claim(
+    pub(crate) async fn try_claim(
         &self,
         claimant: PortClaimant,
         manifest: &Manifest,

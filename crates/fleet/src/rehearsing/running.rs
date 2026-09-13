@@ -169,13 +169,14 @@ where
     /// `${port.NAME}` is resolved in each command before it runs and
     /// `ARMADA_PORT_<NAME>` plus any declared `env` ride in the process's own
     /// environment — see `crate::ports`. Both are empty where the Job's
-    /// Manifest declares no `ports:`.
+    /// Manifest declares no `ports:`. A workspace Verify's own file lays its
+    /// ports over the root's — `super::workspace::Within`.
     async fn ran(&self, plan: &Plan, log: &Path, stopped: watch::Receiver<bool>) -> Outcome {
         let budget = self.budget().duration();
         let dir = plan.tree.commands_in();
         let path = dir.as_path();
         // The Job's own claimed span, or the main checkout's — `crate::ports`.
-        let (ports, env) = match (plan.place.job.as_ref(), plan.place.checkout.served()) {
+        let (mut ports, mut env) = match (plan.place.job.as_ref(), plan.place.checkout.served()) {
             (Some(job), _) => (self.port_map(job).await, self.port_env(job).await),
             (None, Some(served)) => (
                 self.main_checkout_ports(served).await,
@@ -184,6 +185,9 @@ where
             // No root Manifest, so no ports are declared to lease.
             (None, None) => Default::default(),
         };
+        if let Some(within) = plan.tree.within.as_ref() {
+            within.overlaid(&mut ports, &mut env);
+        }
         let mut required = Vec::new();
         for needed in &plan.entry.requires {
             if *stopped.borrow() {

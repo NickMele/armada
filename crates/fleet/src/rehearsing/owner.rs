@@ -19,6 +19,7 @@ use core_model::{Job, JobId};
 use ipc::WireError;
 
 use super::unrehearsable::Whose;
+use super::workspace::Within;
 use crate::daemon::Fleet;
 use crate::repositories::{Repository, Served};
 
@@ -78,16 +79,17 @@ pub(crate) struct Tree {
     /// *before* the run. What the run itself changed is the snapshot's answer,
     /// and that is taken the same way in both trees.
     pub(crate) worktree: Option<Worktree>,
-    /// Where commands run, relative to `path`: a workspace's own directory in
-    /// a Verify of its file. The snapshot and Undo stay on `path`.
-    pub(crate) within: Option<PathBuf>,
+    /// Where commands run, relative to `path`, and the ports they draw: a
+    /// workspace's own in a Verify of its file. The snapshot and Undo stay on
+    /// `path`.
+    pub(crate) within: Option<Within>,
 }
 
 impl Tree {
     /// The directory a command runs in.
     pub(crate) fn commands_in(&self) -> PathBuf {
         match &self.within {
-            Some(dir) => self.path.join(dir),
+            Some(within) => self.path.join(&within.dir),
             None => self.path.clone(),
         }
     }

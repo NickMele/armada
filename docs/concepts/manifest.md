@@ -355,7 +355,7 @@ Each entry has a name and these fields:
 
 Exact key naming and nesting is tracked in `../contracts/configuration.md`.
 
-**A span outlives an interrupted Job and is released by the Job ending, not by anything about ports.** A claim lasts as long as its worktree; an interrupted Job holds both until a person answers its escalation and it reaches a terminal, after which retention sweeps the worktree and the span goes. The main checkout holds a span of its own while Fleet runs, which the proof run and servers started with no Job draw from.
+**A span outlives an interrupted Job and is released by the Job ending, not by anything about ports.** A claim lasts as long as its worktree; an interrupted Job holds both until a person answers its escalation and it reaches a terminal, after which retention sweeps the worktree and the span goes. The main checkout holds a span of its own while Fleet runs, which the proof run and servers started with no Job draw from. A workspace's own `ports:` are claimed when that workspace is verified and win over the root's for a name both declare; a name neither declares stays as written.
 
 Nothing here asks a person to release a port — there is no such action, and adding one would offer a control for a decision they are already making elsewhere. Past a threshold Fleet surfaces the hold so accumulation is not discovered at exhaustion. [Fleet](fleet.md) owns the mechanism.
 
