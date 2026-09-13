@@ -71,8 +71,9 @@ export type JobSummary = {
    */
   budget_hold?: string;
   /**
-   * The gating Manifests that are frozen, by id, where `queued_reason` is
-   * `frozen`. Absent everywhere else, and from a Fleet built before a freeze.
+   * The gating Manifests that are frozen, by id: on a queued Job where
+   * `queued_reason` is `frozen`, and on an `awaiting_review` Job, whose merge
+   * and next step wait for the freeze. Absent otherwise, and from an older Fleet.
    */
   frozen_by?: string[];
   /**

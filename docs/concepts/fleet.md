@@ -155,7 +155,9 @@ A **port span that cannot be re-claimed during a scope revision** is the case wi
 
 **A running Job is held at its next step boundary, not stopped.** The step it is on finishes; once it passes its gate the Drone stands down on the same `running -> queued` edge a dispatching parent takes, and re-admission puts a fresh Drone on the next step when the freeze lifts.
 
-**A person's act is never refused for it**, for the reason above: an approval, a restart, an override and a merge each land where they always do, and where a step follows, admission holds the Job at `queued`. A freeze on a Convoy already running stays the open question on [Convoy](convoy.md).
+**Nothing lands while it holds.** The delivering step is where the branch goes out, and it is not entered; the `auto_merge` sweep does not merge; a person's merge press is recorded and carried out by the first sweep after the freeze lifts.
+
+**A person's act is never refused for it**, for the reason above: an approval, a restart and an override each land where they always do, and where a step follows, admission holds the Job at `queued`. A freeze on a Convoy already running stays the open question on [Convoy](convoy.md).
 
 ### DAG scheduling
 

@@ -509,9 +509,11 @@ A Manifest-level toggle to pause/freeze **all** dispatch for this project — du
 | --- | --- |
 | Approved, never started | Stays `queued`, reading `frozen`, with `frozen_by` naming the Manifest |
 | Running | Finishes the step it is on. When that step passes its gate the Job goes back to `queued` with the step advanced and the next not entered, and says so in its log |
-| At a person's gate | The approve, restart, override or merge is taken. Where a step follows, the Job then waits at `queued` as above; a merge or approval that finishes the Job starts no Drone, so there is nothing to hold |
+| About to deliver | The delivering step is not entered, so nothing is committed, pushed or opened. It is entered, and the branch sent out, when the freeze lifts |
+| At a gate under `auto_merge` | The sweep does not merge, and the Job's log says so once. The first sweep after the freeze lifts merges it |
+| At a person's gate | The approve, restart or override is taken, and where a step follows the Job waits at `queued` as above. A merge press is taken and written in the Job's log, and nothing merges: the sweep after the freeze lifts carries it out. The press is held in memory, so a restart drops it and it is pressed again |
 
-Lifting it admits on the next turn, onto the step after the one that passed. Nothing is re-run and nothing is lost. A person's act is never refused for it, for [Fleet](fleet.md)'s reason: admission is the only thing that starts a Drone.
+Lifting it admits on the next turn, onto the step after the one that passed. Nothing is re-run and nothing is lost. Both the queued row and the gate's row carry `frozen_by`; only a queued one reads `frozen`, because that label is `queued`'s. A person's act is never refused for it, for [Fleet](fleet.md)'s reason: admission is the only thing that starts a Drone.
 
 That answers dispatch. **A freeze landing on a Convoy already running is still unresolved** — freeze is enforced live at every gated checkpoint, not only at dispatch — see [Convoy](convoy.md), Open questions.
 

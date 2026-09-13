@@ -113,9 +113,9 @@ pub struct JobSummary {
     /// and until Sept 2026 only one of them had an act at all.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget_hold: Option<BudgetHold>,
-    /// The gating Manifests that are frozen, where `queued_reason` is `frozen`.
-    ///
-    /// **Empty whenever that one is not**, and left out when empty. Filled by
+    /// The gating Manifests that are frozen: on a `queued` Job where
+    /// `queued_reason` is `frozen`, and on an `awaiting_review` Job, whose merge
+    /// and next step both wait for the freeze. Left out when empty. Filled by
     /// Fleet after [`JobSummary::of`], as `tasks` is.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frozen_by: Vec<ManifestId>,

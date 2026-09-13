@@ -5,6 +5,9 @@
 //! Manifest Fleet holds is the one `Reloads` moves, with no restart between.
 
 use std::path::PathBuf;
+use std::time::Duration;
+
+use adapter_traits::{Landing, Rendering, UnderReview, WhatPeopleSaid, WhatTheForgeRan};
 
 use api::Queries;
 use config::{Manifest, Reloads};
@@ -13,10 +16,13 @@ use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::freezing::frozen_among;
+use crate::noticing::Noticing;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
-    a_proposal, diff_evidence, fittings, one, two_steps_gated_on_a_person, worktree_directory,
+    a_proposal, diff_evidence, fittings, one, two_steps_gated_on_a_manifest_rule,
+    two_steps_gated_on_a_person, worktree_directory,
 };
+use crate::tests::merging::{at_the_gate_having_delivered, PULL_REQUEST};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
@@ -32,7 +38,7 @@ struct Frozen {
 }
 
 impl Frozen {
-    fn over(home: &TempDir, says: &str, gated_on_a_person: bool) -> Frozen {
+    fn over(home: &TempDir, says: &str, workflow: Option<config::ResolvedWorkflow>) -> Frozen {
         let dir = home.path().join("manifest");
         std::fs::create_dir_all(&dir).expect("a directory for the file");
         let file = dir.join("armada.yml");
@@ -40,9 +46,9 @@ impl Frozen {
         let (manifest, reloads) = Manifest::reloadable(&file).expect("the file loads");
         let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
         fittings.starting().manifest = manifest;
-        if gated_on_a_person {
-            fittings.starting().workflows =
-                one(two_steps_gated_on_a_person("implement", None, None));
+        if let Some(workflow) = workflow {
+            fittings.starting().workflows = one(workflow);
+            fittings.noticing = Noticing::every(Duration::ZERO);
         }
         Frozen {
             fleet: Fleet::assembled(fittings),
@@ -89,7 +95,7 @@ fn held_by_the_fixture() -> Vec<ipc::ManifestId> {
 #[tokio::test]
 async fn a_frozen_repository_starts_no_new_job_and_lifting_the_freeze_starts_it() {
     let home = TempDir::new();
-    let at = Frozen::over(&home, "freeze: true\n", false);
+    let at = Frozen::over(&home, "freeze: true\n", None);
     let job = at.proposed(&home, "a change during a release freeze").await;
 
     let approved = at
@@ -130,7 +136,7 @@ async fn a_frozen_repository_starts_no_new_job_and_lifting_the_freeze_starts_it(
 #[tokio::test]
 async fn a_running_job_waits_at_its_next_gate_and_resumes_on_the_next_step() {
     let home = TempDir::new();
-    let at = Frozen::over(&home, "", false);
+    let at = Frozen::over(&home, "", None);
     let job = at.proposed(&home, "a change already under way").await;
     dispatched(&at.fleet, job.id()).await.expect("it starts");
 
@@ -147,6 +153,10 @@ async fn a_running_job_waits_at_its_next_gate_and_resumes_on_the_next_step() {
         "held at the gate, in the queue"
     );
     assert!(!at.working(job.id()).await, "and holding no Drone");
+    assert!(
+        at.fleet.vcs().delivered().is_empty(),
+        "the next step delivers, so nothing is committed, pushed or opened while frozen"
+    );
     let implement = standing
         .steps()
         .iter()
@@ -184,6 +194,10 @@ async fn a_running_job_waits_at_its_next_gate_and_resumes_on_the_next_step() {
         Some("summarise".to_string()),
         "on the step after the one that passed, not the same one again"
     );
+    assert!(
+        !at.fleet.vcs().delivered().is_empty(),
+        "and the branch goes out as that step is entered, where it stopped"
+    );
 }
 
 /// **The owner's decision.** A person approving at a review gate while the repository is
@@ -191,7 +205,11 @@ async fn a_running_job_waits_at_its_next_gate_and_resumes_on_the_next_step() {
 #[tokio::test]
 async fn an_approval_at_a_review_gate_is_recorded_and_then_waits_for_the_freeze() {
     let home = TempDir::new();
-    let at = Frozen::over(&home, "", true);
+    let at = Frozen::over(
+        &home,
+        "",
+        Some(two_steps_gated_on_a_person("implement", None, None)),
+    );
     let job = at.proposed(&home, "a change a person reviews").await;
     dispatched(&at.fleet, job.id()).await.expect("it starts");
     submitted_by_the_one(&at.fleet, diff_evidence())
@@ -226,6 +244,105 @@ async fn an_approval_at_a_review_gate_is_recorded_and_then_waits_for_the_freeze(
     assert!(
         at.working(job.id()).await,
         "and it carries on once the freeze lifts"
+    );
+}
+
+/// The forge's reading of an open pull request whose checks all passed.
+fn open_and_green(at: &Frozen) {
+    at.fleet.vcs().now_landed(Landing::Open {
+        url: String::from(PULL_REQUEST),
+        rendering: Rendering::AsWritten,
+    });
+    at.fleet.vcs().now_under_review(UnderReview {
+        people: WhatPeopleSaid::NobodyHasLooked,
+        checks: WhatTheForgeRan::AllPassed { checks: 3 },
+        remarks: Vec::new(),
+        verdicts: Vec::new(),
+    });
+}
+
+/// **The owner's first ruling.** `auto_merge: always` does not merge at a frozen
+/// repository, however many sweeps pass; the sweep after the freeze lifts does.
+#[tokio::test]
+async fn auto_merge_waits_for_the_freeze_and_merges_on_the_sweep_after_it_lifts() {
+    let home = TempDir::new();
+    let at = Frozen::over(
+        &home,
+        "auto_merge: always\n",
+        Some(two_steps_gated_on_a_manifest_rule(
+            "summarise",
+            "auto_merge",
+            Some("summarise"),
+        )),
+    );
+    let job = at_the_gate_having_delivered(&at.fleet, &home).await;
+    at.saved("auto_merge: always\nfreeze: true\n");
+    open_and_green(&at);
+
+    at.fleet.turn().await.expect("a sweep");
+    at.fleet.turn().await.expect("and another");
+    assert_eq!(
+        at.fleet.vcs().times_asked_to_merge(),
+        0,
+        "nothing lands while frozen"
+    );
+    assert_eq!(
+        at.fleet.load(&job).await.expect("the Job").status(),
+        JobStatus::AwaitingReview
+    );
+    assert_eq!(at.row(&job).await.frozen_by, held_by_the_fixture());
+
+    at.saved("auto_merge: always\n");
+    at.fleet.turn().await.expect("the sweep after the save");
+    assert_eq!(at.fleet.vcs().times_asked_to_merge(), 1);
+    assert_eq!(
+        at.fleet.load(&job).await.expect("the Job").status(),
+        JobStatus::CompletedSuccess
+    );
+}
+
+/// **A person's press is recorded, then waits.** It is taken at a frozen repository,
+/// nothing merges, and the first sweep after the freeze lifts carries it out.
+#[tokio::test]
+async fn a_merge_press_at_a_frozen_repository_is_taken_and_merges_once_it_lifts() {
+    let home = TempDir::new();
+    let at = Frozen::over(
+        &home,
+        "",
+        Some(two_steps_gated_on_a_person(
+            "summarise",
+            None,
+            Some("summarise"),
+        )),
+    );
+    let job = at_the_gate_having_delivered(&at.fleet, &home).await;
+    at.saved("freeze: true\n");
+    open_and_green(&at);
+
+    let pressed = at
+        .fleet
+        .merge_pull_request(&job)
+        .await
+        .expect("a person's press is never refused for a freeze");
+    assert_eq!(pressed.status(), JobStatus::AwaitingReview);
+    at.fleet.turn().await.expect("a sweep while frozen");
+    assert_eq!(
+        at.fleet.vcs().times_asked_to_merge(),
+        0,
+        "nothing lands while frozen"
+    );
+    assert_eq!(at.row(&job).await.frozen_by, held_by_the_fixture());
+
+    at.saved("");
+    at.fleet.turn().await.expect("the sweep after the save");
+    assert_eq!(
+        at.fleet.vcs().times_asked_to_merge(),
+        1,
+        "the press, carried out once"
+    );
+    assert_eq!(
+        at.fleet.load(&job).await.expect("the Job").status(),
+        JobStatus::CompletedSuccess
     );
 }
 

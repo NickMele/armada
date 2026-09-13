@@ -39,7 +39,8 @@ pub(crate) struct Waiting {
     /// **Absent unless `reason` is `over_budget`.** It qualifies that label and
     /// says nothing on its own.
     pub(crate) budget: Option<BudgetHold>,
-    /// **Empty unless `reason` is `frozen`**: the gating Manifests holding it.
+    /// The frozen gating Manifests: on a queued Job where `reason` is `frozen`,
+    /// and on a Job at a gate whose merge or next step the freeze holds.
     pub(crate) frozen_by: Vec<ManifestId>,
 }
 
@@ -115,6 +116,14 @@ where
     /// changes it is a person raising the cap and a stored label would survive
     /// that.
     pub(crate) async fn queued_reason(&self, job: &Job) -> Result<Waiting, Refusal> {
+        // Nothing lands from a gate while frozen, so a gate's row names the freeze too.
+        if job.status() == CoreJobStatus::AwaitingReview {
+            return Ok(Waiting {
+                reason: None,
+                budget: None,
+                frozen_by: self.frozen_by(job),
+            });
+        }
         if job.status() != CoreJobStatus::Queued {
             return Ok(Waiting::on(None));
         }

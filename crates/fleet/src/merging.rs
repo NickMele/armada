@@ -58,6 +58,10 @@ where
     /// the way through. Holding one across a process that talks to a forge
     /// would put a network round trip inside a lock the turn wants.
     pub async fn merge_pull_request(&self, job_id: &JobId) -> Result<Job, Adrift> {
+        // Recorded and held, never refused: `crate::freezing`.
+        if let Some(held) = self.merge_pressed_while_frozen(job_id).await? {
+            return Ok(held);
+        }
         self.merged(
             job_id,
             Actor::Human,
@@ -78,7 +82,12 @@ where
     /// A retry would be the machine deciding after all, and a quiet failure is
     /// worse than no button — so each kind the forge names carries its own wire
     /// code. What bounds the *sweep's* asking is one caller down.
-    async fn merged(&self, job_id: &JobId, by: Actor, why: &'static str) -> Result<Job, Adrift> {
+    pub(crate) async fn merged(
+        &self,
+        job_id: &JobId,
+        by: Actor,
+        why: &'static str,
+    ) -> Result<Job, Adrift> {
         let job = self.load(job_id).await?;
         // Before the forge is touched, so a Job that is not at a gate is
         // refused without anything having been written anywhere. The same
@@ -192,6 +201,11 @@ where
         let Ok(step) = self.at_the_gate(&job) else {
             return;
         };
+        // Before the policy and before `merged_by_policy`, so the sweep after a
+        // freeze lifts still merges — and a press held by the freeze lands here.
+        if self.held_from_the_sweep(&job, url).await {
+            return;
+        }
         let asked_for_it = job
             .workflow()
             .step(&step)
