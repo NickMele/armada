@@ -145,6 +145,7 @@ fn shown(spec: &'static str) -> Call<'static> {
         claimed: Claimed("the panel now collapses"),
         shown_by: ShownBy(spec),
         not_claimed: NotClaimed(""),
+        review: None,
     }
 }
 

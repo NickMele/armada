@@ -21,6 +21,7 @@
 // The header rules there hold here: these are hand-written, they drift the day
 // a field moves, and every closed set is left as `string`.
 
+import type { JobConfidence } from "./confidence";
 import type { JobFootprint } from "./footprint";
 import type { Flagged, Judged, KeptDeliverable } from "./judged";
 import type { KeptFrame, ShowAgain } from "./showing";
@@ -250,6 +251,8 @@ export type JobDetail = {
    * than 10.11, which draws the same as one that has not reached a gate.
    */
   review?: JobReview;
+  /** Armada's review of the change: confident or not, why, and what needs the person. Since 13.24. */
+  confidence?: JobConfidence;
 };
 
 /**

@@ -22,6 +22,7 @@ import { GitPullRequest, Minus } from "lucide-react";
 import {
   Button,
   CheckRuns,
+  ConfidenceSheet,
   JudgeQuestion,
   Tooltip,
   VerdictSheet,
@@ -612,7 +613,7 @@ export function verdictSlotAtGate({
     ) : (
       "The run tree on the left is where each step's own evidence is. This reads the Job."
     );
-  return (
+  const sheet = (
     <VerdictSheet
       {...verdictOf({
         job,
@@ -656,6 +657,15 @@ export function verdictSlotAtGate({
         />
       }
     />
+  );
+  // Armada's review comes first, above the record it is about. #903.
+  const confidence = whole?.confidence;
+  if (confidence === undefined) return sheet;
+  return (
+    <>
+      <ConfidenceSheet confidence={confidence} />
+      {sheet}
+    </>
   );
 }
 

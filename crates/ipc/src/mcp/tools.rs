@@ -54,7 +54,7 @@ pub const CHECKS_TOOL: &str = "run_checks";
 /// decoder names these keys to put a call's argument on a row, and it was
 /// blind to all three for as long as it carried its own copy of the list — a
 /// rename here has to break that reader rather than silently empty it.
-pub const EVIDENCE_FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed"];
+pub const EVIDENCE_FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed", "review"];
 /// The one field the scope tool takes. Public for [`EVIDENCE_FIELDS`]' reason.
 pub const SCOPE_FIELDS: &[&str] = &["context_paths"];
 /// The one field the Checks tool takes. Public for [`EVIDENCE_FIELDS`]' reason,
@@ -72,6 +72,8 @@ pub struct SubmitEvidence {
     /// here either. A Drone that left nothing behind has answered; a Drone
     /// that omitted the field has not, and is refused by name.
     pub not_claimed: String,
+    /// Present only where the step asks for a review. #903.
+    pub review: Option<super::reviewing::SubmittedReview>,
 }
 
 /// Where a Drone says its work for this step will be.
@@ -166,6 +168,8 @@ pub enum NotAnArgument {
     /// A plan tool's arguments that did not read as a change. The rules are
     /// [`planning`](mod@super::planning)'s, beside the tools they belong to.
     Planning(super::planning::PlanArgument),
+    /// A `review` object that did not read as one. [`reviewing`](mod@super::reviewing)'s rules.
+    Reviewing(super::reviewing::ReviewArgument),
 }
 
 impl core::fmt::Display for NotAnArgument {
@@ -285,6 +289,7 @@ impl core::fmt::Display for NotAnArgument {
                  scope you already declared does not cover, or get on with the \
                  work inside the scope you have",
             ),
+            NotAnArgument::Reviewing(why) => write!(out, "{why}"),
             NotAnArgument::Planning(why) => write!(out, "{why}"),
         }
     }
@@ -315,6 +320,7 @@ pub(crate) fn submission(arguments: &Map<String, Value>) -> Result<SubmitEvidenc
         claimed: text(arguments, "claimed")?,
         shown_by: text(arguments, "shown_by")?,
         not_claimed: text(arguments, "not_claimed")?,
+        review: super::reviewing::review(arguments)?,
     })
 }
 
@@ -625,6 +631,7 @@ fn evidence_tool() -> Value {
                          and the side effect you caused. Empty is a legal answer; \
                          omitting it is not.",
                 },
+                "review": super::reviewing::review_property(),
             },
             "required": ["claimed", "shown_by", "not_claimed"],
             "additionalProperties": false,

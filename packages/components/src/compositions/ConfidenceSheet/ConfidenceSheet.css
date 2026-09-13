@@ -1,0 +1,191 @@
+/* Confidence sheet — Armada's review above the verdict sheet at the gate. #903.
+
+   One column of blocks sharing the verdict sheet's label treatment, closed off
+   from the record below it by a rule. A folded block is a button over a summary line. */
+.armada-confidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-confidence__block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* The one legal ALL CAPS, per the design contract's header-row treatment. */
+.armada-confidence__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.armada-confidence__count {
+  font-family: var(--font-mono);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.armada-confidence__says {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+/* Attribute first, for the off-contract-value rule's reading of a bracket. */
+[data-says="confident"].armada-confidence__says {
+  color: var(--verdict-met);
+}
+
+[data-says="not_confident"].armada-confidence__says {
+  color: var(--verdict-not-met);
+}
+
+.armada-confidence__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-confidence__fold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.armada-confidence__fold:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.armada-confidence__mark {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+.armada-confidence__summary {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* Why a section opened itself. The waiting hue, because it is a person being asked to look. */
+.armada-confidence__callout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--status-awaiting-review);
+  border-radius: var(--radius-sm);
+  background: var(--status-awaiting-review-bg);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+.armada-confidence__eye {
+  flex: none;
+  color: var(--status-awaiting-review);
+}
+
+.armada-confidence__empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-confidence__tests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Fixed layout, so the first column's edge falls in one place from table to table. */
+.armada-confidence__table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+.armada-confidence__table th {
+  text-align: left;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-subtle);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-confidence__table th:first-child {
+  width: 30%;
+}
+
+.armada-confidence__table td {
+  padding: var(--space-1) var(--space-2);
+  vertical-align: top;
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  overflow-wrap: anywhere;
+}
+
+/* The row a callout names, and every finding that needs the person: the callout's own hue. */
+[data-flagged] td,
+[data-marked].armada-confidence__table td {
+  background: var(--status-awaiting-review-bg);
+}
+
+[data-flagged] td:first-child,
+[data-marked].armada-confidence__table td:first-child {
+  border-left: var(--border-width) solid var(--status-awaiting-review);
+}
+
+.armada-confidence__muted {
+  color: var(--fg-muted);
+}
+
+/* Two classes, to outrank the header cell's left alignment. */
+.armada-confidence__table .armada-confidence__number {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.armada-confidence__path {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  overflow-wrap: anywhere;
+}
+
+/* An area's files stack one to a line. */
+.armada-confidence__files .armada-confidence__path {
+  display: block;
+}

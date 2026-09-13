@@ -67,6 +67,7 @@ pub fn diff_evidence() -> Call<'static> {
         claimed: Claimed("The reader stops one line later."),
         shown_by: ShownBy("src/log.rs, six lines"),
         not_claimed: NotClaimed("The writer has the same bug and is untouched."),
+        review: None,
     }
 }
 
@@ -76,5 +77,6 @@ pub fn note_evidence() -> Call<'static> {
         claimed: Claimed("The cause was an inclusive bound."),
         shown_by: ShownBy("`.armada/root-cause.md`, written this step"),
         not_claimed: NotClaimed(""),
+        review: None,
     }
 }

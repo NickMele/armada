@@ -17,6 +17,7 @@ export * from "./artifacts";
 export * from "./asking";
 export * from "./attempt";
 export * from "./commanding";
+export * from "./confidence";
 export * from "./connection";
 export * from "./detail";
 export * from "./drift";

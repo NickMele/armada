@@ -79,6 +79,8 @@ pub struct Call<'a> {
     /// which is why it is not an `Option`: a Drone that left nothing behind
     /// has answered, and there is no way to spell declining to.
     pub not_claimed: NotClaimed<'a>,
+    /// On a step that asks for a review, the review Fleet checked against the change. #903.
+    pub review: Option<&'a verification::Review>,
 }
 
 /// Evidence that arrived, waiting for the gate to run.
@@ -333,6 +335,10 @@ impl<'a> EvidenceTool<'a> {
             call.shown_by,
             call.not_claimed,
         )?;
+        let submission = match call.review {
+            Some(review) => submission.carrying(review.clone()),
+            None => submission,
+        };
         self.inbox.accept(Landed {
             job: self.job.clone(),
             submission,
@@ -429,7 +435,7 @@ where
         let Some(at_work) = working.as_ref() else {
             return Err(NotSubmitted::NothingIsWorking);
         };
-        let (job, step, _) = at_work.standing();
+        let (job, step, worktree) = at_work.standing();
         // The Job's own frozen workflow, read under the slot lock the way every
         // other half of this binding is. What evidence type the step asks for is
         // what it asked for when the Job was approved.
@@ -450,6 +456,17 @@ where
         if self.inbox().waiting_for_job(&job) > 0 {
             return Err(NotSubmitted::AlreadyWaiting { step });
         }
+        // Checked against the change before anything is recorded, and kept first: a
+        // resubmission in the same run replaces what an earlier one kept.
+        let accepted =
+            self.accounted_for(evidence_type, submission.review.as_ref(), &worktree, &step)?;
+        if let Some(accepted) = &accepted {
+            self.store()
+                .lock()
+                .await
+                .record_confidence(&job, &step, &accepted.recorded(), &at)
+                .map_err(|why| NotSubmitted::ReviewNotKept(why.to_string()))?;
+        }
         let recorded = EvidenceTool::for_job(job.clone(), self.inbox())
             .submit(
                 Call {
@@ -457,12 +474,56 @@ where
                     claimed: Claimed(&submission.claimed),
                     shown_by: ShownBy(&submission.shown_by),
                     not_claimed: NotClaimed(&submission.not_claimed),
+                    review: accepted.as_ref().map(|accepted| accepted.review()),
                 },
                 at.clone(),
             )
             .map_err(NotSubmitted::Malformed)?;
         self.published_submission(&job, &step, evidence_type, &at);
         Ok(recorded)
+    }
+
+    /// Check a review against the change the worktree holds, on the step that asks for one.
+    fn accounted_for(
+        &self,
+        evidence_type: EvidenceType,
+        written: Option<&ipc::mcp::SubmittedReview>,
+        worktree: &adapter_traits::Worktree,
+        step: &StepId,
+    ) -> Result<Option<verification::AcceptedReview>, NotSubmitted> {
+        let written = match (evidence_type, written) {
+            (EvidenceType::Review, Some(written)) => written,
+            (EvidenceType::Review, None) => {
+                return Err(NotSubmitted::NoReview { step: step.clone() })
+            }
+            (_, Some(_)) => return Err(NotSubmitted::NotAReviewStep { step: step.clone() }),
+            (_, None) => return Ok(None),
+        };
+        let unreadable = |why: String| NotSubmitted::ChangeUnreadable {
+            step: step.clone(),
+            why,
+        };
+        let changed = self
+            .work()
+            .changed_files(worktree)
+            .map_err(|why| unreadable(why.to_string()))?;
+        let patch = self
+            .work()
+            .patch(worktree)
+            .map_err(|why| unreadable(why.to_string()))?;
+        let paths = changed.paths();
+        let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
+        let reasons: Vec<&str> = written.reasons.iter().map(String::as_str).collect();
+        verification::Review::written(
+            written.says,
+            &reasons,
+            written.areas.clone(),
+            written.tests.clone(),
+            written.findings.clone(),
+        )
+        .against(&paths, patch.as_str())
+        .map(Some)
+        .map_err(NotSubmitted::ReviewRefused)
     }
 
     /// How many submissions are waiting for the gate, over every Job.
@@ -534,6 +595,16 @@ pub enum NotSubmitted {
     /// The call itself was not a submission — an empty `claimed`, an empty
     /// `shown_by`.
     Malformed(verification::NotASubmission),
+    /// The step asks for a review and the call carries none.
+    NoReview { step: StepId },
+    /// A review sent to a step that asks for another kind of evidence.
+    NotAReviewStep { step: StepId },
+    /// The review does not account for the change. Every fault is named.
+    ReviewRefused(Vec<verification::ReviewRefused>),
+    /// The worktree's changed files or patch could not be read. Not the Drone's.
+    ChangeUnreadable { step: StepId, why: String },
+    /// The store would not keep an accepted review. Not the Drone's.
+    ReviewNotKept(String),
 }
 
 impl fmt::Display for NotSubmitted {
@@ -564,6 +635,35 @@ impl fmt::Display for NotSubmitted {
                  second submission is not read",
                 step.as_str()
             ),
+            NotSubmitted::NoReview { step } => write!(
+                out,
+                "step `{}` asks for a review, and this submission carries no `review`. \
+                 Submit again with one",
+                step.as_str()
+            ),
+            NotSubmitted::NotAReviewStep { step } => write!(
+                out,
+                "step `{}` does not ask for a review, so `review` is not read here. \
+                 Submit again without it",
+                step.as_str()
+            ),
+            NotSubmitted::ReviewRefused(refused) => {
+                out.write_str("the review does not account for the change.")?;
+                for why in refused {
+                    write!(out, " {why}.")?;
+                }
+                out.write_str(" Fix every one and submit again")
+            }
+            NotSubmitted::ChangeUnreadable { step, why } => write!(
+                out,
+                "the change on step `{}` could not be read, so the review could not be \
+                 checked: {why}. This is a fault in Fleet and not in the review",
+                step.as_str()
+            ),
+            NotSubmitted::ReviewNotKept(why) => write!(
+                out,
+                "the review was not kept: {why}. This is a fault in Fleet and not in the review"
+            ),
             NotSubmitted::Malformed(cause) => write!(out, "{cause}"),
         }
     }
@@ -575,7 +675,12 @@ impl Error for NotSubmitted {
             NotSubmitted::NothingIsWorking
             | NotSubmitted::NoSuchStep { .. }
             | NotSubmitted::StepDeclaresNothing { .. }
-            | NotSubmitted::AlreadyWaiting { .. } => None,
+            | NotSubmitted::AlreadyWaiting { .. }
+            | NotSubmitted::NoReview { .. }
+            | NotSubmitted::NotAReviewStep { .. }
+            | NotSubmitted::ReviewRefused(_)
+            | NotSubmitted::ChangeUnreadable { .. }
+            | NotSubmitted::ReviewNotKept(_) => None,
             NotSubmitted::Malformed(cause) => Some(cause),
         }
     }

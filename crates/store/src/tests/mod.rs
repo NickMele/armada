@@ -39,6 +39,7 @@ mod repositories;
 mod resolving;
 mod retain;
 mod review;
+mod review_record;
 mod revision;
 mod roundtrip;
 mod showing;

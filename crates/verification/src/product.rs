@@ -72,7 +72,8 @@ impl<'a> Written<'a> {
             EvidenceType::FactsNote
             | EvidenceType::Document
             | EvidenceType::Bundle
-            | EvidenceType::Plan => {
+            | EvidenceType::Plan
+            | EvidenceType::Review => {
                 let submission = accepted.submission();
                 Some(Written {
                     claimed: submission.claimed(),

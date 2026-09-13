@@ -26,6 +26,7 @@ the gate asserts about it.
 | Landing | A Job's work reaches the thing it was for | `crates/acceptance/tests/landing.rs` |
 | Reach | Armada works on a repository I did not write the Manifest for by hand | `crates/acceptance/tests/reach.rs` |
 | Plan | A running Job shows how far through its plan it is | `crates/acceptance/tests/plan.rs` |
+| Trust | Work that passes its Check but is wrong gets caught, and I can see that it was caught rightly, before I take it | `crates/acceptance/tests/trust.rs` |
 
 The apparatus is `crates/acceptance/tests/bench/`, shared, with a file per
 milestone. Claim and apparatus are separated so that what a milestone claims and

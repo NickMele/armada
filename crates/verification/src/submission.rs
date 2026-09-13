@@ -27,6 +27,8 @@
 use config::EvidenceType;
 use core_model::StepEvidence;
 
+use crate::review::Review;
+
 /// What the work now does, as an observable.
 ///
 /// A newtype so that it cannot be passed where [`ShownBy`] is expected. It
@@ -105,6 +107,8 @@ pub struct Submission {
     /// so "nothing left behind" has one representation and a reader's empty
     /// check is total.
     not_claimed: String,
+    /// Present only on review evidence, and only ever from [`Submission::reviewed`].
+    review: Option<Review>,
 }
 
 impl Submission {
@@ -134,7 +138,32 @@ impl Submission {
             claimed: claimed.0.to_string(),
             shown_by: shown_by.0.to_string(),
             not_claimed: not_claimed.to_string(),
+            review: None,
         })
+    }
+
+    /// A review handed in as evidence. Its reasons are the claim, so a review giving none is refused.
+    pub fn reviewed(review: Review) -> Result<Submission, NotASubmission> {
+        let claimed = review.reasons().join(" ");
+        let mut submission = Submission::submitted(
+            EvidenceType::Review,
+            Claimed(&claimed),
+            ShownBy("the review's areas, tests and findings"),
+            NotClaimed(""),
+        )?;
+        submission.review = Some(review);
+        Ok(submission)
+    }
+
+    /// The same submission, carrying the review Fleet checked against the change.
+    pub fn carrying(mut self, review: Review) -> Submission {
+        self.review = Some(review);
+        self
+    }
+
+    /// The review, on review evidence.
+    pub fn review(&self) -> Option<&Review> {
+        self.review.as_ref()
     }
 
     pub fn evidence_type(&self) -> EvidenceType {
@@ -201,6 +230,7 @@ mod tests {
             claimed: _,
             shown_by: _,
             not_claimed: _,
+            review: _,
         } = submitted;
     }
 }

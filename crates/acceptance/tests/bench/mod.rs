@@ -38,6 +38,9 @@ pub mod reach;
 /// Recovery's own apparatus: the two moves a person makes on a Job, and a
 /// detail assembled against a standing the caller names. See its own header.
 pub mod recovery;
+/// Trust's own apparatus: a workflow whose delivering step asks for a review,
+/// and the review a Drone hands in over a diff this file wrote. See its own header.
+pub mod trust;
 
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicU64, Ordering};

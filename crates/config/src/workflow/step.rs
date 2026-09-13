@@ -81,6 +81,7 @@ const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("bundle", EvidenceType::Bundle),
     ("document", EvidenceType::Document),
     ("plan", EvidenceType::Plan),
+    ("review", EvidenceType::Review),
 ];
 const EVIDENCE_LEGAL: &[&str] = &[
     "diff",
@@ -90,6 +91,7 @@ const EVIDENCE_LEGAL: &[&str] = &[
     "bundle",
     "document",
     "plan",
+    "review",
 ];
 
 /// The whole of the `evidence` block, and of the `submitted` object inside it.

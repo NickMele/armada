@@ -51,6 +51,7 @@ mod reports;
 /// A repository to clone, as Bridge spells it.
 mod repositories;
 /// What a reviewing person is handed, and the note they send back.
+mod review_argument;
 mod reviewing;
 mod servers;
 /// The Board row, and the redaction it exists for.
