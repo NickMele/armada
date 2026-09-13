@@ -535,7 +535,7 @@ description = "Clone a repository from a URL into a new folder under one a perso
 notes = """
 Locate, by URL — `docs/journeys/set-up-a-project-manifest.md`, *Getting in*. The body is `url` and `parent`, absolute. The new folder is named from the URL as `git clone` names it, and git on the machine runs the clone with whatever credentials it already has. Answers 201 with the repository as `add_repository` answers it, which it then is.
 
-**Answers when git finishes, within ten minutes** — `CLONE_BUDGET` in `crates/fleet/src/repositories/cloning.rs`. A clone still running then is stopped and what it wrote removed (`fleet.clone_not_finished`, a 500). The work is spawned, so a caller that stops waiting does not strand a clone unserved. No lock another request needs is held while git runs.
+**Answers when git finishes, within ten minutes** — `CLONE_BUDGET` in `crates/fleet/src/repositories/cloning.rs`. A clone still running then is stopped and what it wrote removed (`fleet.clone_not_finished`, a 500). The work is spawned, so a caller that stops waiting does not strand a clone unserved. No lock another request needs is held while git runs. **Bridge must wait longer than its 20-second `COMMAND_MS` here**, past the ten minutes, so Fleet's own answer arrives rather than Bridge's abort.
 
 Refused with a 422 where `parent` is not an absolute folder that exists (`fleet.no_such_folder`) or git refuses the URL, with git's own words (`fleet.clone_refused`); a 409 where the new folder exists and is not empty, or a clone into it is already under way (`fleet.destination_occupied`). After the clone, every refusal `add_repository` gives, under its codes — and the clone stays on disk.
 """
