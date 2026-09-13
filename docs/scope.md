@@ -101,6 +101,24 @@ without it a Drone comes up holding every MCP server the operator has connected
 — measured at seven servers, ninety-five tools, personal accounts. That is not
 hypothetical tightening; it is the v1 defect that made a Drone unusable.
 
+**It is not built for every kind of repository.** What Armada brings — its
+carried workflows and the gates on their steps — assumes code with tests: a Check
+a shell can run in a worktree, and a diff a Judge can read. A repository whose
+correctness shows up another way needs evidence of its own kind, and Armada does
+not bring it.
+
+| Shape | Where its correctness shows up instead |
+|---|---|
+| A game | A scene or an asset behaving in an engine, not a readable diff |
+| Firmware | A toolchain outside the tree, and hardware |
+| Notebooks and data | Outputs and cells a text diff renders as JSON |
+| Infrastructure as code | Only after `apply`, against real state |
+| Prose | There is no behaviour to test |
+
+**In such a repository a coding step can have nothing to check.** Its gate then
+passes on a non-empty diff and the Judge alone — an empty Check registry expands
+to nothing in `crates/config/src/resolve.rs` — and #847 is what tells a person so.
+
 **It is not a chat.** See the third attempt.
 
 **It is not about throughput.** Running more agents was never the problem.
