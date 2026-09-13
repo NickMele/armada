@@ -40,6 +40,7 @@ import { JobReader } from "./reader";
 import { HeldReader } from "./holding";
 import { RehearsalConnection } from "./rehearsal";
 import { ManifestFileCommands } from "./editing";
+import { RepositoryAllowsCommands } from "./repository-allows";
 import { ReportsReader } from "./reports";
 import {
   ask,
@@ -118,6 +119,8 @@ export class FleetConnection {
   readonly rehearsal: RehearsalConnection;
   /** The Manifest file, read and saved — see `editing.ts`. */
   readonly editing: ManifestFileCommands;
+  /** Repository-wide always-allows, read and removed — see `repository-allows.ts`. */
+  readonly repositoryAllows: RepositoryAllowsCommands;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
   /**
@@ -216,6 +219,7 @@ export class FleetConnection {
       port: () => this.connected()?.port ?? null,
     });
     this.editing = new ManifestFileCommands(() => this.connected()?.port ?? null);
+    this.repositoryAllows = new RepositoryAllowsCommands(() => this.connected()?.port ?? null);
     this.commands = new JobCommands({
       port: () => this.connected()?.port ?? null,
       fold: (job) => this.fold(job),

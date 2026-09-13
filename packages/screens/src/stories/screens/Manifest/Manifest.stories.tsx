@@ -7,7 +7,7 @@ import type {
   ServerEntry,
 } from "@armada/protocol";
 import { expect, userEvent, within } from "storybook/test";
-import { ManifestFrom, MANIFEST_TEXT, NOW, PULLED_TEXT } from "./Manifest";
+import { GH_ISSUE_VIEW, ManifestFrom, MANIFEST_TEXT, NOW, PULLED_TEXT } from "./Manifest";
 
 /**
  * Bridge's Manifest surface, at `⌘4` — Journey 9's *Running one*, with no Job
@@ -357,6 +357,23 @@ export const AnOlderRunFromEarlierRuns: Story = {
     await expect(await canvas.findByText("crates/fleet/src/rehearsing/checkout.rs")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Open the diff" })).toBeVisible();
     await expect(canvas.queryByRole("button", { name: "Undo this run" })).toBeNull();
+  },
+};
+
+/**
+ * A repository-wide always-allow, beside the Commands it grew a Job's own
+ * row of — #836's own case, `gh issue view` from Job 7. Removing it here
+ * reaches every job against this repository at once; Fleet's own table, so
+ * nothing on this page reads `armada.yml` for it.
+ */
+export const WithAnAlwaysAllowedCommand: Story = {
+  name: "A repository-wide always-allow",
+  args: { sheet: { state: "read", sheet: sheet() }, alwaysAllowed: [GH_ISSUE_VIEW] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("gh issue view")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Remove gh issue view" }));
+    await expect(canvas.getByText("Nothing always allowed yet.")).toBeVisible();
   },
 };
 

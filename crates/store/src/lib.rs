@@ -43,6 +43,9 @@ mod gaming;
 mod judged;
 /// The Fleet limits a person saved, one row or none.
 mod limits;
+/// Commands a person always-allowed for a whole Manifest, kept here instead
+/// of a commit on some Job's branch.
+mod manifest_allowed;
 /// What the Manifest read at Job creation, kept whole and off the Job row's
 /// own fields.
 mod manifest_snapshot;

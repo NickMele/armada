@@ -54,6 +54,9 @@ mod reference;
 /// The run sheet's routes: a person's run of one Manifest entry in a Job's
 /// worktree, and what the runs left.
 mod rehearsing;
+/// Rules a person always-allowed for a Manifest's repository, read and taken
+/// back — kept by Fleet itself since `#836`, never `armada.yml`.
+mod repository_allow;
 mod routes;
 /// Everything a handler is given. **Next door to the table**, which is what
 /// the gate rule reads.

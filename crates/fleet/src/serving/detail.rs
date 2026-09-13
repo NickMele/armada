@@ -250,6 +250,12 @@ where
             .iter()
             .map(ipc::AllowedCommandRow::from)
             .collect();
+        detail.repository_allowed_commands = self
+            .repository_allowed()
+            .await
+            .iter()
+            .map(ipc::AllowedCommandRow::from)
+            .collect();
         detail.model_override = self.model_override_of(job.id()).await;
         if let Some(stuck) = detail.stuck.as_mut() {
             for refused in &mut stuck.refused {

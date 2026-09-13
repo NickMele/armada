@@ -183,6 +183,21 @@ where
         Ok(self.limits_in_force().await)
     }
 
+    /// Every rule a person always-allowed for this Manifest's repository —
+    /// `crate::permitting::repository`.
+    async fn get_repository_allowed_commands(
+        &self,
+    ) -> Result<ipc::RepositoryAllowedCommands, Refusal> {
+        Ok(ipc::RepositoryAllowedCommands {
+            commands: self
+                .repository_allowed()
+                .await
+                .iter()
+                .map(ipc::AllowedCommandRow::from)
+                .collect(),
+        })
+    }
+
     /// What the last re-read of `armada.yml` came to, straight off what Fleet
     /// is holding.
     ///

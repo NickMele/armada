@@ -202,6 +202,19 @@ impl Queries for FakeDaemon {
         Ok(*self.limits.lock().expect("not poisoned"))
     }
 
+    /// Whatever a test planted, unfiltered — `#836`.
+    async fn get_repository_allowed_commands(
+        &self,
+    ) -> Result<ipc::RepositoryAllowedCommands, Refusal> {
+        Ok(ipc::RepositoryAllowedCommands {
+            commands: self
+                .repository_allowed
+                .lock()
+                .expect("not poisoned")
+                .clone(),
+        })
+    }
+
     /// **Always a reading, and always one worth saying.** The fake exists so a
     /// route test has a shape to assert on; a `None` here would make the
     /// ordinary case a test of the empty answer.

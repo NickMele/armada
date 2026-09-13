@@ -578,6 +578,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.saveManifestFile, (_event, body: SaveManifestFile) =>
     connection?.editing.saveFile(body),
   );
+  // A repository-wide always-allow — Fleet's own table since protocol 13.5.
+  // Neither takes a path or a job id: Fleet names the repository.
+  ipcMain.handle(CHANNELS.listRepositoryAllowedCommands, () => connection?.repositoryAllows.list());
+  ipcMain.handle(CHANNELS.removeRepositoryAllowedCommand, (_event, run: string) =>
+    connection?.repositoryAllows.remove(run),
+  );
   // A declared server, for this Job's worktree or the main checkout where no
   // Job is named. `servers` on the published state is what keeps a *Serving*
   // row on screen after the sheet that started it closes.

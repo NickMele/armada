@@ -24,6 +24,7 @@ mod forget;
 mod gaming;
 mod iteration;
 mod limits;
+mod manifest_allowed;
 mod manifest_snapshot;
 mod migrate;
 mod model_override;

@@ -52,6 +52,7 @@ use crate::rehearsing::{
     get_run_sheet, list_checkout_runs, list_runs, observe_checkout_run, observe_run,
     start_checkout_run, start_run, stop_checkout_run, stop_run, undo_checkout_run, undo_run,
 };
+use crate::repository_allow::{get_repository_allowed_commands, remove_repository_allowed_command};
 use crate::served::Served;
 use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
@@ -103,6 +104,14 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/manifest/save_file", post(save_manifest_file::<D>))
         .route("/manifest/edit", post(edit_manifest::<D>))
         .route("/manifest/files", get(search_files::<D>))
+        .route(
+            "/manifest/allowed_commands",
+            get(get_repository_allowed_commands::<D>),
+        )
+        .route(
+            "/manifest/allowed_commands/remove",
+            post(remove_repository_allowed_command::<D>),
+        )
         .route("/jobs/:job_id", get(get_job::<D>))
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
         .route("/jobs/:job_id/evidence", get(get_evidence::<D>))

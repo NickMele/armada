@@ -13,7 +13,6 @@
 mod after_merge;
 mod amending;
 mod catalogue;
-mod declaring;
 mod fences;
 mod harness;
 mod live;

@@ -205,16 +205,29 @@ pub struct JobDetail {
     /// `JobDetail::of`, like `when_blocked`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when_refused: Option<WhenRefused>,
-    /// The commands a person allowed for this Job, oldest first. **Since
-    /// 11.0.**
+    /// The commands a person allowed for this Job alone, oldest first.
+    /// **Since 11.0.**
     ///
     /// **Empty is a Job nobody allowed anything on**, and a detail from before
-    /// the field reads the same way rather than failing. A command allowed
-    /// with [`Reach::Repository`](crate::Reach::Repository) is listed here too:
-    /// the Job holds it whichever way it was allowed. Filled after
+    /// the field reads the same way rather than failing. **Since `#836`,
+    /// [`Reach::Repository`](crate::Reach::Repository) is never written here**
+    /// — a repository-wide allow is
+    /// [`repository_allowed_commands`](Self::repository_allowed_commands)'s,
+    /// kept apart from any one Job. A row at that reach here is one a Fleet
+    /// before `#836` wrote, kept rather than migrated. Filled after
     /// [`JobDetail::of`], like `when_blocked`.
     #[serde(default)]
     pub allowed_commands: Vec<crate::AllowedCommandRow>,
+    /// Every rule a person always-allowed for this Manifest's repository,
+    /// oldest first — read-only here, and covering every Job against this
+    /// Manifest rather than this one alone. **Since `#836`.**
+    ///
+    /// **Empty is a repository nobody always-allowed anything for**, and a
+    /// detail from a Fleet older than `#836` reads the same way. Removing one
+    /// is `remove_repository_allowed_command`, not a route under a Job.
+    /// Filled after [`JobDetail::of`], like `when_blocked`.
+    #[serde(default)]
+    pub repository_allowed_commands: Vec<crate::AllowedCommandRow>,
     /// The model a person chose for this Job's later steps. **Since 11.0.**
     ///
     /// **Absent is no choice**, and each step runs on the model its workflow
@@ -594,6 +607,7 @@ impl JobDetail {
             judge_question: None,
             when_refused: None,
             allowed_commands: Vec::new(),
+            repository_allowed_commands: Vec::new(),
             model_override: None,
             review,
         }

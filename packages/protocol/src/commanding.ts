@@ -128,15 +128,19 @@ export type SetWhenBlocked = {
 /**
  * How far a person's allow reaches. Since protocol 11.0.
  *
- * `job` is this job only — `allow_for_job`. `repository` also wrote the
- * command into `armada.yml` under `commands` — `always_allow` — and **that line
- * outlives the row**: removing the allow from this job leaves the file as it is.
+ * `job` is this job only — `allow_for_job`. `repository` is `always_allow` —
+ * every job against this manifest — and, since protocol 13.5, is kept by
+ * fleet itself rather than written into `armada.yml`: a row at this reach in
+ * `JobDetail.allowed_commands` is one an older fleet wrote before 13.5, kept
+ * rather than migrated, and `JobDetail.repository_allowed_commands` is the
+ * current shape.
  */
 export type Reach = "job" | "repository";
 
 /**
- * One command a person allowed for this job. Since protocol 11.0.
- * `crates/ipc/src/commanding.rs`.
+ * One command a person allowed — a row of `JobDetail.allowed_commands`,
+ * `JobDetail.repository_allowed_commands` or `RepositoryAllowedCommands`.
+ * Since protocol 11.0. `crates/ipc/src/commanding.rs`.
  */
 export type AllowedCommandRow = {
   /** The command, whole, as the person allowed it. What `remove_allowed_command` names. */
@@ -146,6 +150,15 @@ export type AllowedCommandRow = {
   allowed_at: string;
   /** Who allowed it, in the envelope's spelling. Left as `string` like `actor`. */
   by: string;
+};
+
+/**
+ * `get_repository_allowed_commands`'s answer: every rule a person
+ * always-allowed for this manifest's repository, oldest first. Since
+ * protocol 13.5.
+ */
+export type RepositoryAllowedCommands = {
+  commands: AllowedCommandRow[];
 };
 
 /**
@@ -166,10 +179,24 @@ export type SetModel = {
  * The body of `remove_allowed_command`. Since protocol 11.0. Answered with the
  * job's summary.
  *
- * `run` is `AllowedCommandRow.run`, exactly. The next reach for the command is
- * answered by the job's `when_blocked` again, and **an always-allow already in
- * `armada.yml` stays there**. A command the job holds no allow for is a 409.
+ * **This job's own row only**, since protocol 13.5: `run` is
+ * `AllowedCommandRow.run`, exactly, the next reach for the command is
+ * answered by the job's `when_blocked` again, and a rule always-allowed for
+ * the repository is `RemoveRepositoryAllowedCommand`'s row instead. A command
+ * the job holds no allow for is a 409.
  */
 export type RemoveAllowedCommand = {
+  run: string;
+};
+
+/**
+ * The body of `remove_repository_allowed_command`. Since protocol 13.5.
+ * Answered with `RepositoryAllowedCommands`.
+ *
+ * Not scoped to a job: it names a rule kept for the manifest, and every job
+ * against it stops being granted the rule from the next spawn on. A rule this
+ * manifest holds no allow for is a 409.
+ */
+export type RemoveRepositoryAllowedCommand = {
   run: string;
 };

@@ -51,9 +51,7 @@ pub use catalogue::{
 };
 pub use error::{Disagreement, Fault, LoadError, Refusal, ResolveError, UnknownCheck};
 pub use live::{Adopted, Frozen, LiveKey, Moved, Reloads};
-pub use manifest::{
-    Check, Command, Declared, Harness, Link, Manifest, NotDeclared, Preparation, Server,
-};
+pub use manifest::{Check, Command, Harness, Link, Manifest, Preparation, Server};
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;
 pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};

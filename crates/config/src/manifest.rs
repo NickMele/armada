@@ -25,7 +25,6 @@
 //! this file produces live in [`declared`], and a server in [`serving`].
 
 mod declared;
-mod declaring;
 mod harness;
 mod referring;
 mod serving;
@@ -34,7 +33,6 @@ use referring::{after_merge, preparation, required_by};
 use serving::CommandEntry;
 
 pub use declared::{Check, Command, Port, Preparation};
-pub use declaring::{Declared, NotDeclared};
 pub use harness::Harness;
 pub use serving::{Link, Server};
 

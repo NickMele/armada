@@ -22,6 +22,7 @@ import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
 import type { SaveManifestFile } from "@armada/protocol";
 import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
+import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
 import type { CommandAnswer, JudgeAnswer, SaveLimits, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
@@ -298,6 +299,14 @@ const api: BridgeApi = {
 
   saveManifestFile: (body: SaveManifestFile): Promise<ManifestSaveAnswer> =>
     ipcRenderer.invoke(CHANNELS.saveManifestFile, body),
+
+  // A repository-wide always-allow — Fleet's own table since protocol 13.5.
+  // Neither takes a path or a job id: Fleet names the repository.
+  listRepositoryAllowedCommands: (): Promise<RepositoryAllowedCommandsRead> =>
+    ipcRenderer.invoke(CHANNELS.listRepositoryAllowedCommands),
+
+  removeRepositoryAllowedCommand: (run: string): Promise<RepositoryAllowedCommandsRead> =>
+    ipcRenderer.invoke(CHANNELS.removeRepositoryAllowedCommand, run),
 
   // Start a declared server, for this Job's worktree or, with no Job, the
   // main checkout — the capability the Manifest surface shares, which is why

@@ -329,10 +329,6 @@ pub enum CommitWorkError {
     /// A path to commit that is absolute or climbs out with `..`. Refused
     /// before anything is staged, so the index is as it was.
     PathOutsideTheWorktree { worktree: String, path: String },
-    /// A path read at the branch tip is not UTF-8. `armada.yml` is always
-    /// text, so this is a defensive arm rather than one any caller expects to
-    /// take.
-    NotUtf8 { worktree: String, path: String },
 }
 
 impl fmt::Display for CommitWorkError {
@@ -342,11 +338,6 @@ impl fmt::Display for CommitWorkError {
                 f,
                 "`{path}` is not a path inside the worktree at {worktree}, so \
                  nothing was committed and nothing was staged"
-            ),
-            CommitWorkError::NotUtf8 { worktree, path } => write!(
-                f,
-                "`{path}` at the branch tip of the worktree at {worktree} is \
-                 not valid UTF-8"
             ),
             CommitWorkError::WorktreeUnreadable { worktree, cause } => {
                 write!(f, "the worktree at {worktree} would not open: {cause}")
@@ -375,9 +366,7 @@ impl Error for CommitWorkError {
             CommitWorkError::WorktreeUnreadable { cause, .. }
             | CommitWorkError::NotStaged { cause, .. }
             | CommitWorkError::NotCommitted { cause, .. } => Some(cause),
-            CommitWorkError::PathOutsideTheWorktree { .. } | CommitWorkError::NotUtf8 { .. } => {
-                None
-            }
+            CommitWorkError::PathOutsideTheWorktree { .. } => None,
         }
     }
 }

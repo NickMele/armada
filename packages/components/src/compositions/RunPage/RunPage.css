@@ -152,6 +152,24 @@
   white-space: nowrap;
 }
 
+/* A rule from Fleet's own table rather than a declared entry: it wraps
+   instead of ellipsizing, because there is nowhere to open it to and no
+   second surface a person could read the cut-off end from — Undo's row list
+   is the nearest cousin, and it wraps for the same reason. */
+.armada-run-page__allowed-run {
+  display: block;
+  margin: 0 var(--space-2) var(--space-1) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+.armada-run-page__allowed-remove {
+  padding: 0 var(--space-2) var(--space-1) var(--space-2);
+}
+
 /* A plain sentence, never a bare tag. */
 .armada-run-page__entry-note {
   margin: 0 var(--space-2);

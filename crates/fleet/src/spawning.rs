@@ -353,8 +353,8 @@ where
 
     /// What the Drone may call: the Evidence tool, its own worktree, the git
     /// verbs that cannot change a repository, each **non-destructive** command
-    /// the Manifest declares, and — on one step of one workflow — the dispatch
-    /// tool.
+    /// the Manifest declares, every rule a person always-allowed for the
+    /// repository, and — on one step of one workflow — the dispatch tool.
     ///
     /// **The read-only git grant is unconditional, like the worktree grant
     /// beside it** — not read off a person's own settings file, and not one a
@@ -385,6 +385,13 @@ where
                 }
                 _ => {}
             }
+        }
+        // **A rule a person always-allowed for the repository, granted the
+        // same way `armada.yml` grants a declared Command.** `#836`: it is
+        // kept in Fleet's own store, per Manifest, rather than a line in the
+        // file, so it is read here rather than off `manifest.command_names()`.
+        for allowed in self.repository_allowed_commands().await {
+            belt = belt.and(Grant::RunADeclaredCommand(allowed.run));
         }
         // **Read off the step Fleet is about to put a Drone on, not off the
         // Job's current step.** They are the same on every path that reaches

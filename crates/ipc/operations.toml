@@ -724,11 +724,37 @@ description = "Take back a command a person allowed for one Job"
 notes = """
 The body is `run`, the command exactly as `JobDetail.allowed_commands` lists it, and the answer is the Job's summary. **The next reach for it is answered by the Job's `when_blocked` again.**
 
-**An always-allow already written into `armada.yml` stays in `armada.yml`.** A `repository` allow was two things — the row on this Job and a commit on its branch — and this takes back the row. The line in the file is an edit to `armada.yml`, not an act on a Job.
+**This Job's own row only, since `#836`.** A rule always-allowed for the whole repository is a different row — `remove_repository_allowed_command`'s — kept by Fleet apart from any one Job rather than written into `armada.yml`. Before `#836` a `repository` allow was two things, this Job's row and a commit on its branch, and this route took back only the row; the row is now the whole of what an always-allow is, and this route is unchanged.
 
 Refused with a 409 where the Job holds no such allow, so a window left open across a removal is told rather than answered 200.
 
 `agent_access` is `No`, for `answer_command`'s reason: what a Drone may run is the owner's to decide.
+"""
+
+[operations.get_repository_allowed_commands]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "Every rule a person always-allowed for this Manifest's repository"
+notes = """
+`#836`: Always allow stopped writing to `armada.yml`, on the finding that Fleet's own commit of the line was itself a change on the Job's branch, and the gate's absolute boundary on `armada.yml` refuses every later step of that Job over its own commit. A repository-wide allow is now a row Fleet keeps per Manifest, granted the same way a declared, non-destructive Command is — to every Job's Drone, from the next spawn on — and never a line a pull request's reviewer reads.
+
+The same list, unfiltered, rides on `get_job`'s `JobDetail.repository_allowed_commands`, for a person reading one Job to see why its Drone was let through something `armada.yml` never declares. This route is the Manifest screen's own read, apart from any one Job.
+
+`agent_access` is `No`: what a Drone may run without asking is the owner's to decide, `answer_command`'s reason for the write beside this read.
+"""
+
+[operations.remove_repository_allowed_command]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Take back a rule a person always-allowed for this Manifest's repository"
+notes = """
+The body is `run`, exactly as `get_repository_allowed_commands` lists it. **Read by the next permission question and the next spawn**, so nothing already running is touched: a Job whose Drone was spawned under the grant keeps it for the step it is on, and the next Job dispatched against this Manifest is asked again.
+
+Refused with a 409 where nothing always-allowed for this Manifest is spelled `run`.
+
+`agent_access` is `No`, for `remove_allowed_command`'s reason.
 """
 
 [operations.approve_dispatch]

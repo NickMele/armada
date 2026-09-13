@@ -82,6 +82,14 @@ export type RunPageGroup = {
   entries: RunPageEntry[];
 };
 
+/**
+ * One rule a person always-allowed for this repository. **Fleet's own table,
+ * since protocol 13.5 — never `armada.yml`.** #836 moved it there because a
+ * command declared destructive stays an absolute boundary, and a boundary a
+ * gate could be argued past by reading its own commit is not one.
+ */
+export type RunPageAlwaysAllowedRow = { run: string };
+
 export type RunPagePastRun = {
   id: string;
   name: ReactNode;
@@ -126,6 +134,20 @@ export type RunPageProps = {
   /** Which entry the control and the panel below answer for. */
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+
+  /**
+   * Every rule a person always-allowed for this repository, oldest first,
+   * beside the Commands group they came from a Job's own row of. `undefined`
+   * is not yet read, and draws "Reading." rather than an empty list — which
+   * would say a person removed every rule there ever was.
+   */
+  alwaysAllowed?: RunPageAlwaysAllowedRow[];
+  /**
+   * Take one back. Every job against this repository stops being granted it
+   * from the next spawn on. Absent draws no Remove — the Job settings panel
+   * shows this same list read-only, with no capability to send this.
+   */
+  onRemoveAlwaysAllowed?: (run: string) => void;
   /**
    * Run the named entry. **Already confirmed** where the entry is destructive
    * — this component puts that dialog up itself and calls this after it.
@@ -192,6 +214,8 @@ export function RunPage({
   selectedId = null,
   onSelect,
   onRun,
+  alwaysAllowed,
+  onRemoveAlwaysAllowed,
   output,
   onDismiss,
   running,
@@ -245,6 +269,9 @@ export function RunPage({
             onSelect={onSelect}
           />
         ))}
+        {alwaysAllowed === undefined ? null : (
+          <RunPageAlwaysAllowedList rows={alwaysAllowed} onRemove={onRemoveAlwaysAllowed} />
+        )}
       </div>
 
       <div className="armada-run-page__main">
@@ -457,6 +484,50 @@ function RunPageGroupList({
               </button>
               {entry.note === undefined ? null : (
                 <p className="armada-run-page__entry-note">{entry.note}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Every rule a person always-allowed for this repository. **Beside the
+ * Commands group it grew a Job's own row of a level up.** Fleet's own table
+ * since 13.5, so this list is never `armada.yml` — no drone reads it and no
+ * commit sits behind it.
+ */
+function RunPageAlwaysAllowedList({
+  rows,
+  onRemove,
+}: {
+  rows: RunPageAlwaysAllowedRow[];
+  onRemove?: (run: string) => void;
+}) {
+  return (
+    <div className="armada-run-page__group">
+      <span className="armada-run-page__group-label">Always allowed</span>
+      {rows.length === 0 ? (
+        <p className="armada-run-page__group-empty">Nothing always allowed yet.</p>
+      ) : (
+        <ul className="armada-run-page__entries">
+          {rows.map((row) => (
+            <li className="armada-run-page__entry" key={row.run}>
+              <span className="armada-run-page__allowed-run">{row.run}</span>
+              {onRemove === undefined ? null : (
+                <div className="armada-run-page__allowed-remove">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    ground="sunken"
+                    aria-label={`Remove ${row.run}`}
+                    onClick={() => onRemove(row.run)}
+                  >
+                    Remove
+                  </Button>
+                </div>
               )}
             </li>
           ))}

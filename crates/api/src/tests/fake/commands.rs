@@ -1,4 +1,4 @@
-//! The nineteen commands, in one list, each delegating to its subject.
+//! Every command, in one list, each delegating to its subject.
 //!
 //! **A trait implementation cannot be split across files**, so this is the whole
 //! `Commands` block and the bodies are inherent methods next door. What that
@@ -191,6 +191,30 @@ impl Commands for FakeDaemon {
             limits.values.disk_floor_gib = v.get();
         }
         Ok(*limits)
+    }
+
+    /// The named row goes, by its exact text; one absent is the 409 every
+    /// fake give a name that names nothing.
+    async fn remove_repository_allowed_command(
+        &self,
+        removing: ipc::RemoveRepositoryAllowedCommand,
+    ) -> Result<ipc::RepositoryAllowedCommands, Refusal> {
+        let mut allowed = self.repository_allowed.lock().expect("not poisoned");
+        let before = allowed.len();
+        allowed.retain(|row| row.run != removing.run);
+        if allowed.len() == before {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fake.no_such_repository_allow",
+                format!(
+                    "nothing always-allowed for the repository is spelled `{}`",
+                    removing.run
+                ),
+                crate::tests::shapes::run_id(),
+            )));
+        }
+        Ok(ipc::RepositoryAllowedCommands {
+            commands: allowed.clone(),
+        })
     }
 
     /// Refused, naming what was asked for, so a route test can tell the body

@@ -154,7 +154,8 @@ pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use commanding::{
     AllowedCommandRow, AnswerCommand, CommandAnswer, CommandInFlight, Reach, RemoveAllowedCommand,
-    SetModel, SetWhenBlocked, WhenBlocked,
+    RemoveRepositoryAllowedCommand, RepositoryAllowedCommands, SetModel, SetWhenBlocked,
+    WhenBlocked,
 };
 pub use configured::ManifestConfig;
 pub use detail::{

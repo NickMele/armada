@@ -644,10 +644,8 @@ names the command and says what to do next and nothing else.
 ```
 ┌─ TURN ─────────────────────────────────────────
 │ A person allowed `npm publish --access public`
-│ in this repository. It is declared in
-│ armada.yml on your branch, in a commit of its
-│ own; leave that change as it is. Run the
-│ command again now; it will not be refused.
+│ in this repository. Run `npm publish --access
+│ public` again now; it will not be refused.
 └────────────────────────────────────────────────
 ```
 

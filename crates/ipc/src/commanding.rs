@@ -165,17 +165,20 @@ pub struct SetWhenBlocked {
 /// How far a person's allow reaches.
 ///
 /// **The seam's own set, like the two above**, and for their reason: Bridge
-/// matches on it to say whether removing the allow leaves a line in
-/// `armada.yml` behind. `core_model::Reach` is the domain's and is mapped here
-/// rather than wrapped, as [`WhenBlocked`] is in Fleet.
+/// matches on it to say which of the two rows an allow lives in.
+/// `core_model::Reach` is the domain's and is mapped here rather than
+/// wrapped, as [`WhenBlocked`] is in Fleet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Reach {
     /// This Job only — [`CommandAnswer::AllowForJob`].
     Job,
-    /// This Job, and written into `armada.yml` under `commands` as well —
-    /// [`CommandAnswer::AlwaysAllow`]. **The line in the file outlives the
-    /// row**: removing the allow from this Job leaves `armada.yml` as it is.
+    /// Every Job against this Manifest —
+    /// [`CommandAnswer::AlwaysAllow`]. **Since `#836`, kept by Fleet itself,
+    /// per Manifest, and never written into `armada.yml`.** A row at this
+    /// reach in `JobDetail::allowed_commands` is one a Fleet before `#836`
+    /// wrote into `armada.yml` and this Job's own row together; a row in
+    /// [`crate::JobDetail::repository_allowed_commands`] is the current shape.
     Repository,
 }
 
@@ -188,8 +191,11 @@ impl From<core_model::Reach> for Reach {
     }
 }
 
-/// One command a person allowed for this Job. A row of
-/// [`JobDetail::allowed_commands`](crate::JobDetail::allowed_commands).
+/// One command a person allowed — a row of
+/// [`JobDetail::allowed_commands`](crate::JobDetail::allowed_commands) or of
+/// [`JobDetail::repository_allowed_commands`](crate::JobDetail::repository_allowed_commands),
+/// and of [`RepositoryAllowedCommands`], which is the same row read apart from
+/// any one Job.
 ///
 /// **Every field of the record crosses**, which is a decision rather than a
 /// default: `run` is text a person already read in full before allowing it, and
@@ -197,7 +203,8 @@ impl From<core_model::Reach> for Reach {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AllowedCommandRow {
     /// The command, as the person allowed it. **What `remove_allowed_command`
-    /// names**, so it crosses whole and never cut to one line.
+    /// or `remove_repository_allowed_command` names**, so it crosses whole and
+    /// never cut to one line.
     pub run: String,
     pub reach: Reach,
     /// When it was allowed, by Fleet's clock.
@@ -214,6 +221,18 @@ impl From<&core_model::AllowedCommand> for AllowedCommandRow {
             by: allowed.by.into(),
         }
     }
+}
+
+/// `get_repository_allowed_commands`'s answer: every rule a person
+/// always-allowed for this Manifest's repository, oldest first. **Since
+/// `#836`.**
+///
+/// **A named wrapper rather than a bare list**, matching every other
+/// `list_*` answer on this seam — [`ReportList`](crate::ReportList) is the
+/// precedent.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepositoryAllowedCommands {
+    pub commands: Vec<AllowedCommandRow>,
 }
 
 /// The request half of `set_model`. **A live setting on one Job**, like
@@ -233,15 +252,25 @@ pub struct SetModel {
     pub model: Option<String>,
 }
 
-/// The request half of `remove_allowed_command`.
-///
-/// The next reach for the command is answered by the Job's [`WhenBlocked`]
-/// again. **An always-allow already written into `armada.yml` stays there** —
-/// this takes back the Job's row, not the commit.
+/// The request half of `remove_allowed_command`. **This Job's own row only**:
+/// the next reach for the command is answered by the Job's [`WhenBlocked`]
+/// again, and a rule always-allowed for the repository is a different row,
+/// [`RemoveRepositoryAllowedCommand`]'s.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoveAllowedCommand {
     /// [`AllowedCommandRow::run`], exactly. A command this Job holds no allow
     /// for is a 409.
+    pub run: String,
+}
+
+/// The request half of `remove_repository_allowed_command`. **Since `#836`.**
+///
+/// Not scoped to a Job: it names a rule kept for the Manifest, and every Job
+/// against it stops being granted the rule from the next spawn on. A rule
+/// this Manifest holds no allow for is a 409.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoveRepositoryAllowedCommand {
+    /// [`AllowedCommandRow::run`], exactly.
     pub run: String,
 }
 

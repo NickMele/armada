@@ -37,6 +37,7 @@ import type { BridgeState, Summons } from "./bridge";
 import type { SaveManifestFile } from "@armada/protocol";
 import type { ManifestFileRead, ManifestSaveAnswer } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
+import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
 
 /**
  * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and
@@ -484,6 +485,18 @@ export type BridgeApi = {
    * no commit. What Fleet made of it follows as `manifest.reread`.
    */
   saveManifestFile: (body: SaveManifestFile) => Promise<ManifestSaveAnswer>;
+
+  /**
+   * Every rule a person always-allowed for this repository, oldest first —
+   * Fleet's own table since protocol 13.5. No path and no job id: it names no
+   * Job and covers every job against this repository.
+   */
+  listRepositoryAllowedCommands: () => Promise<RepositoryAllowedCommandsRead>;
+  /**
+   * Take one back. Every job against this repository stops being granted it
+   * from the next spawn on.
+   */
+  removeRepositoryAllowedCommand: (run: string) => Promise<RepositoryAllowedCommandsRead>;
 
   /** Start a declared server — this Job's worktree, or the main checkout with
    * no Job. `server.serving`/`server.exited` follow as events. */

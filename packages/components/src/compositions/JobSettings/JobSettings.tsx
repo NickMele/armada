@@ -62,6 +62,14 @@ export type JobSettingsProps = {
   /** The line under the list once an allow was taken back. */
   allowedSaid?: ReactNode;
   /**
+   * Every rule a person always-allowed for this repository, oldest first —
+   * covering every job against it, not this one alone. **Read-only here.**
+   * Fleet's own table since protocol 13.5; removing one is the Manifest
+   * screen's, where it reaches every job at once rather than this job's own
+   * settings.
+   */
+  repositoryAllowed?: readonly string[];
+  /**
    * Every control is off — the reading is not live, or a change is already
    * out — as every control that sends is. The raise buttons go with them.
    */
@@ -115,6 +123,7 @@ export function JobSettings({
   whenRefusedSaid,
   allowed,
   allowedSaid,
+  repositoryAllowed = [],
   disabled = false,
   disabledNote,
   onModel,
@@ -258,7 +267,8 @@ export function JobSettings({
               Allowed for this job
             </span>
             <p className="armada-job-settings__means">
-              Commands you allowed while it ran. Always-allowed ones live in armada.yml instead.
+              Commands you allowed for this job alone. What you always-allowed for every job in
+              this repository is listed below.
             </p>
             {runsAll && allowed.length > 0 ? (
               <p className="armada-job-settings__means">
@@ -299,6 +309,31 @@ export function JobSettings({
               </ul>
             )}
             <Said>{allowedSaid}</Said>
+          </div>
+
+          {/* Read-only: removing one reaches every job against this
+              repository, so it is the Manifest screen's act and not this
+              panel's — this row exists so a person can see why a drone was
+              let through without leaving the job. */}
+          <div className="armada-job-settings__allowed">
+            <span className="armada-job-settings__label" id={`${group}-repository-allowed`}>
+              Allowed for every job in this repository
+            </span>
+            <p className="armada-job-settings__means">
+              Always-allowed on the Manifest screen. Covers every job against this repository,
+              not this one alone — remove one there, not here.
+            </p>
+            {repositoryAllowed.length === 0 ? (
+              <p className="armada-job-settings__empty">Nothing always allowed for this repository yet.</p>
+            ) : (
+              <ul className="armada-job-settings__commands" aria-labelledby={`${group}-repository-allowed`}>
+                {repositoryAllowed.map((run) => (
+                  <li className="armada-job-settings__command" key={run}>
+                    <span className="armada-job-settings__mono">{run}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
 
