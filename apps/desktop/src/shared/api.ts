@@ -43,6 +43,7 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
+import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import type {
   ManifestProposalsRead,
@@ -542,6 +543,13 @@ export type BridgeApi = {
    * lists. What changed arrives as state: `repository`, and the reads held open, taken again.
    */
   pickRepository: (root: string) => Promise<void>;
+
+  /** The OS's folder dialog, over this window. `null` where the person cancelled it. */
+  chooseFolder: () => Promise<string | null>;
+  /** Serve a folder, by its absolute path. Once served it is listed and picked before this answers. */
+  addRepository: (path: string) => Promise<LocateAnswer>;
+  /** Clone `url` into a new folder under `parent`, then serve and pick it. **Waits past Fleet's ten minutes.** */
+  cloneRepository: (url: string, parent: string) => Promise<LocateAnswer>;
 
   /** Start a declared server — this Job's worktree, or the main checkout with
    * no Job. `server.serving`/`server.exited` follow as events. */

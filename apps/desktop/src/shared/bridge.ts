@@ -457,6 +457,10 @@ export const CHANNELS = {
   removeRepositoryAllowedCommand: "bridge:remove-repository-allowed-command",
   // The rail's pick. A root and nothing else; main ignores one Fleet does not list.
   pickRepository: "bridge:pick-repository",
+  // Locate: the OS folder dialog, and a repository added or cloned. Main asks Fleet; the renderer names paths.
+  chooseFolder: "bridge:choose-folder",
+  addRepository: "bridge:add-repository",
+  cloneRepository: "bridge:clone-repository",
   startServer: "bridge:start-server",
   stopServer: "bridge:stop-server",
   openServerLink: "bridge:open-server-link",

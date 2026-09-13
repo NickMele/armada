@@ -35,6 +35,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   JOB_LIFECYCLE,
   plural,
+  Button,
   Select,
   TheShell,
   Tooltip,
@@ -58,6 +59,8 @@ export type ShellProps = {
   /** The picked repository's root: what every per-repository read and act names. */
   scope: string;
   onScope: (root: string) => void;
+  /** Opens Locate. Absent draws no control. */
+  onAddRepository?: () => void;
   /** Every Job, for the rail's count and the bar's two. */
   jobs: readonly JobSummary[];
   /** How full the fleet is. `null` is a Fleet that has not answered yet. */
@@ -88,6 +91,7 @@ export function Shell({
   repositories,
   scope,
   onScope,
+  onAddRepository,
   jobs,
   capacity,
   title,
@@ -127,6 +131,7 @@ export function Shell({
       onSelect={onSurface}
       collapsed={collapsed}
       railHeader={
+        <>
         <Select
           aria-label="Project"
           value={scope}
@@ -142,6 +147,16 @@ export function Shell({
             <optgroup label="Not set up">{repositories.filter((one) => one.manifest === undefined).map(optionOf)}</optgroup>
           ) : null}
         </Select>
+        {/* Under the picker rather than in it: an option that opened a dialog would be a pick that picked nothing. */}
+        {onAddRepository === undefined ? null : (
+          // A block around it, so the rail's column does not stretch it and centre its label.
+          <div>
+            <Button variant="ghost" size="sm" onClick={onAddRepository}>
+              Add a repository
+            </Button>
+          </div>
+        )}
+        </>
       }
       title={title}
       summary={summary}
@@ -153,14 +168,29 @@ export function Shell({
   );
 }
 
-/** What the picker calls a repository: its folder, because `armada.yml` declares no name, and the whole root where two share one. */
+/**
+ * What the picker calls a repository: its Manifest's id, or its folder where it has none yet.
+ * Where two read alike each takes its parent folder, and the whole root past that; the root is
+ * always the option's title.
+ */
 export function repositoryLabel(
   repository: RepositorySummary,
   repositories: readonly RepositorySummary[],
 ): string {
-  const named = folderOf(repository.root);
-  const shared = repositories.some((other) => other.root !== repository.root && folderOf(other.root) === named);
-  return shared ? repository.root : named;
+  const others = repositories.filter((other) => other.root !== repository.root);
+  const named = nameOf(repository);
+  if (!others.some((other) => nameOf(other) === named)) return named;
+  const placed = placedOf(repository);
+  return others.some((other) => placedOf(other) === placed) ? repository.root : placed;
+}
+
+function nameOf(repository: RepositorySummary): string {
+  return repository.manifest?.id ?? folderOf(repository.root);
+}
+
+function placedOf(repository: RepositorySummary): string {
+  const parent = repository.root.replace(/\/+$/, "").split("/").slice(0, -1).join("/");
+  return `${folderOf(parent)}/${nameOf(repository)}`;
 }
 
 function folderOf(root: string): string {

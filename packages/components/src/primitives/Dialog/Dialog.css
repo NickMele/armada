@@ -180,6 +180,16 @@
   border-color: var(--accent-hover);
 }
 
+/* Button's own disabled rendering, which every variant collapses onto. Without it a confirm
+ * waiting on a field, or on a press already out, drew as a live accent fill. After the hovers,
+ * so it wins at equal specificity. */
+.armada-dialog__button:disabled {
+  background: var(--bg-sunken);
+  border-color: var(--border-strong);
+  color: var(--fg-subtle);
+  cursor: default;
+}
+
 /* The key drawn on the control it fires. kbd's own surface is --bg-sunken,
  * which sits below the secondary's fill and reads correctly on it; on the
  * outlined destructive and the accent-filled primary it is the same box, so

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage, net, Notification, protocol } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, Notification, protocol } from "electron";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -597,6 +597,21 @@ void app.whenReady().then(() => {
   // Anything but a string is dropped here; a root Fleet does not list, in `Picked.pick`.
   ipcMain.handle(CHANNELS.pickRepository, (_event, root: unknown) =>
     typeof root === "string" ? connection?.repositories.pick(root) : undefined,
+  );
+  // Locate. The folder dialog is sheeted to the window that asked, so it cannot be left behind it.
+  ipcMain.handle(CHANNELS.chooseFolder, async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = { properties: ["openDirectory", "createDirectory"] };
+    const chosen = window === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(window, options);
+    return chosen.canceled ? null : (chosen.filePaths[0] ?? null);
+  });
+  ipcMain.handle(CHANNELS.addRepository, (_event, path: unknown) =>
+    typeof path === "string" ? connection?.repositories.locating.add(path) : undefined,
+  );
+  ipcMain.handle(CHANNELS.cloneRepository, (_event, url: unknown, parent: unknown) =>
+    typeof url === "string" && typeof parent === "string"
+      ? connection?.repositories.locating.clone(url, parent)
+      : undefined,
   );
   // A repository-wide always-allow — Fleet's own table since protocol 13.5.
   // Neither takes a path or a job id: Fleet names the repository.

@@ -73,3 +73,6 @@ export * from "./work";
 export * from "./Setup";
 export * from "./setup-held";
 export type * from "./setup-reads";
+// Locate — Journey 3's *Getting in*: a repository added by folder or cloned, then Setup.
+export * from "./Locate";
+export * from "./locate-reads";
