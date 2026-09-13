@@ -91,8 +91,8 @@ export const RemoveACommand: Story = {
 };
 
 /** Fleet refused a result that would not load. Nothing was written, and the edit is still on screen. */
-export const ARefusedSave: Story = {
-  name: "A refused save",
+export const AFormEditRefused: Story = {
+  name: "A refused save on the forms",
   args: { ...TheForms.args, edit: "refused" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
