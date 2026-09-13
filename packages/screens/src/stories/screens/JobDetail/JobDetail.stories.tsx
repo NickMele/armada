@@ -147,6 +147,12 @@ export const PlanPartwayDone: Story = {
   },
 };
 
+/** The same moment, open — `whereOpen` set directly, the preference's own terms. */
+export const PlanPartwayDoneWhereOpen: Story = {
+  name: "Plan, partway done, Where things are open",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} on={{ whereOpen: true }} />,
+};
+
 /** A dropped task stays on the list, struck through, with its reason. */
 export const PlanWithADroppedTask: Story = {
   name: "Plan, with a dropped task",
