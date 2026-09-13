@@ -9,17 +9,23 @@
 //! a genuine refusal, held there with a real open question, can show what the
 //! wire actually sends `answer_judge`.
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use api::{Next, Subscription};
 use core_model::{
     EscalationTrigger, JobId, JobStatus, StepId, StepLevelTrigger, StepState, StepVerdict,
     TransitionReason, WhenRefused,
 };
-use ipc::JudgeAnswer;
+use ipc::{Event, JudgeAnswer};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::tests::admitted::dispatched;
-use crate::tests::daemon::{a_fleet_judged_by, a_proposal, diff_evidence, worktree_directory};
+use crate::tests::daemon::{
+    a_fleet_judged_by, a_proposal, diff_evidence, fittings, one, worktree_directory, Ticking,
+};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
@@ -99,6 +105,98 @@ pub(super) async fn asking_a_question(home: &TempDir) -> (Fixture, JobId) {
         "the question this suite answers has to be genuinely open"
     );
     (fleet, job_id)
+}
+
+/// Find the one event a Bridge dock reacts to: this Job's move to
+/// `awaiting_review`. `#935`'s race is between this announcement and the
+/// question `get_job` answers with, so a case proving the race is closed
+/// reads exactly this — the same signal a client has, and nothing more.
+async fn moved_to_awaiting_review(watching: &mut Subscription, job_id: &JobId) -> ipc::Instant {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match watching.next().await {
+                Some(Next::Send(delivered)) => {
+                    if let Event::JobStateChanged(changed) = delivered.event {
+                        if changed.job_id == ipc::JobId::from(job_id)
+                            && changed.to.domain() == JobStatus::AwaitingReview
+                        {
+                            return changed.at;
+                        }
+                    }
+                }
+                Some(Next::Missed(dropped)) => {
+                    panic!("the stream dropped {dropped} events in so short a run")
+                }
+                None => panic!("the stream closed before the Job moved"),
+            }
+        }
+    })
+    .await
+    .expect("the Job reaches awaiting_review")
+}
+
+/// **`#935`'s race, closed — proved by the clock rather than by timing.**
+/// `Ticking` hands out a strictly later reading on every call `self.now()`
+/// makes, in the order Fleet makes them, on one thread — so the two readings
+/// this case compares are not a snapshot taken after the fact, they are two
+/// specific calls inside the one `act_on` invocation this turn makes, ordered
+/// exactly as that invocation made them. A stream re-drained after `turn`
+/// returns cannot tell the two call orders apart — both writes are long done
+/// by then regardless of which came first — which is why this compares the
+/// two stamps `Ticking` gave each write, not the state the store settles into.
+#[tokio::test]
+async fn the_question_is_stamped_before_the_move_to_awaiting_review_is() {
+    let home = TempDir::new();
+    let mut fittings = fittings(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]).showing("+    let n = n - 1;\n"),
+    );
+    fittings.starting().workflows = one(a_two_step_workflow());
+    fittings.judge = Arc::new(FakeJudge::refusing(
+        "the loop stops at n",
+        "the loop stops at n - 1",
+        "the last row is dropped",
+    ));
+    fittings.clock = Arc::new(Ticking::from_nine());
+    let fleet: Fixture = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one"))
+        .await
+        .expect("a Job at the gate");
+    let job_id = job.id().clone();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, &job_id).await.expect("released to run");
+    fleet
+        .set_when_refused(&job_id, WhenRefused::AlwaysAsk)
+        .await
+        .expect("a Job may ask to be asked");
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("the tool took it");
+
+    // Subscribed before the ruling runs — the same order `Broadcaster`'s own
+    // doc requires of a resync, so nothing published in this turn can be
+    // missed.
+    let mut watching = fleet.events().subscribe();
+    let turned = fleet.turn().await.expect("the gate rules");
+    assert!(
+        matches!(turned.ruled(), Some(Ruling::Questioned { .. })),
+        "{:?}",
+        turned.ruled()
+    );
+
+    let announced_at = moved_to_awaiting_review(&mut watching, &job_id).await;
+    let asked_at = fleet
+        .judge_question_of(&job_id)
+        .await
+        .expect("the question is on record at all")
+        .asked_at;
+    assert!(
+        asked_at < announced_at,
+        "the question was stamped {asked_at:?}, the announcement {announced_at:?} — \
+         the write has to precede the move it is about"
+    );
 }
 
 /// **Agree fails against the code this fixes.** `awaiting_review ->
