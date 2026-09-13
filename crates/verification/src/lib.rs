@@ -37,6 +37,7 @@ mod outcome;
 mod product;
 mod quoted;
 mod request;
+mod review;
 mod scope;
 mod shown;
 mod submission;
@@ -47,6 +48,9 @@ mod tests;
 
 pub use answered::{Answered, Printed};
 pub use converging::{Convergence, ConvergenceBrief, NotConverging};
+pub use core_model::{
+    Area, Bucket, ChangedTest, Confidence, Finding, Proves, TestChange, TestsInChange, Untested,
+};
 pub use drift::{drift_criterion, DECLARED_PLAN_DRIFT};
 pub use forbidden::{forbidden, forbidden_among, out_of_bounds, Forbidden};
 pub use gaming::{in_the_diff, judged_patterns, Baseline, Flagged, GamingBrief};
@@ -61,6 +65,7 @@ pub use product::{
     Delivered, NothingToJudge, Product, Reference, TooBigToJudge, Written, A_DELIVERABLE,
 };
 pub use request::Request;
+pub use review::{AcceptedReview, Review, ReviewRefused};
 pub use scope::{drifted, InScope, Lifted, OutsideScope};
 pub use shown::{digest, digest_of};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};

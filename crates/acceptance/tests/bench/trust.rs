@@ -75,7 +75,10 @@ fn every_file_in_an_area() -> Vec<Area> {
         Area::of(
             "Admission",
             "CPU no longer holds a Job",
-            &["crates/fleet/src/headroom.rs", "crates/fleet/src/admitting.rs"],
+            &[
+                "crates/fleet/src/headroom.rs",
+                "crates/fleet/src/admitting.rs",
+            ],
         ),
         Area::of(
             "Tests",
@@ -88,7 +91,11 @@ fn every_file_in_an_area() -> Vec<Area> {
 /// The removal is named and given no reason, which is the case the claim is about.
 fn tests_with_a_removal() -> TestsInChange {
     TestsInChange {
-        proves: vec![Proves::of("Admission", "A saturated CPU holds nothing back", 1)],
+        proves: vec![Proves::of(
+            "Admission",
+            "A saturated CPU holds nothing back",
+            1,
+        )],
         changed: vec![ChangedTest {
             name: REMOVED_TEST.to_string(),
             change: TestChange::Removed {

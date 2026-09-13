@@ -412,6 +412,7 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // beside a store's own record, and this daemon holds no store.
         review: None,
         work_plan: None,
+        confidence: None,
     }
 }
 

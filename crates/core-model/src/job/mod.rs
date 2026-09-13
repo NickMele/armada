@@ -45,6 +45,7 @@ mod note;
 mod policy;
 mod prerequisite;
 mod record;
+mod review;
 mod scope;
 mod source;
 mod status;
@@ -88,6 +89,10 @@ pub use note::{RedirectAlreadyWaiting, RedirectWaiting};
 pub use policy::{AutoMerge, ReviewGate};
 pub use prerequisite::Prerequisite;
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
+pub use review::{
+    Area, Bucket, ChangedTest, Confidence, Finding, Proves, ReviewRecord, TestChange,
+    TestsInChange, Untested,
+};
 pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};
 pub use source::WorkflowSource;
 pub use status::{JobStatus, StepState};

@@ -21,8 +21,8 @@ use verification::{Bucket, ReviewRefused};
 
 use bench::board::{delivered, on_its_branch, received_detail, step_facts};
 use bench::trust::{
-    a_review_that_removes_a_test, a_review_wrong_three_ways, reviews_before_merging,
-    submitted, the_diff, CHANGED, HANDOFF, REMOVED_TEST,
+    a_review_that_removes_a_test, a_review_wrong_three_ways, reviews_before_merging, submitted,
+    the_diff, CHANGED, HANDOFF, REMOVED_TEST,
 };
 use bench::{a_fix_diff, a_root_cause_note, states, Bench, Run};
 
@@ -46,7 +46,13 @@ async fn a_job_at_the_review() -> (Run, Bench, Option<core_model::TransitionReas
     bench.approved_and_dispatched(&mut run);
     worked(&bench, &mut run, 0, &a_root_cause_note()).await;
     worked(&bench, &mut run, 1, &a_fix_diff()).await;
-    worked(&bench, &mut run, 2, &submitted(a_review_that_removes_a_test())).await;
+    worked(
+        &bench,
+        &mut run,
+        2,
+        &submitted(a_review_that_removes_a_test()),
+    )
+    .await;
     let reason = bench.reasons().last().cloned();
     (run, bench, reason)
 }
@@ -111,7 +117,9 @@ fn a_removed_test_with_no_reason_needs_the_person() {
         .map(|finding| finding.finding())
         .collect();
     assert!(
-        needs_you.iter().any(|finding| finding.contains(REMOVED_TEST)),
+        needs_you
+            .iter()
+            .any(|finding| finding.contains(REMOVED_TEST)),
         "{needs_you:?}"
     );
 }
@@ -137,7 +145,7 @@ async fn a_removed_test_opens_its_section_and_names_the_test() {
             unpushed: None,
         },
     );
-    detail.confidence = Some(ipc::JobConfidence::of(&accepted));
+    detail.confidence = Some(ipc::JobConfidence::of(&accepted.recorded()));
     let received = received_detail(&detail);
 
     let review = received.confidence.expect("the review reaches the Job");

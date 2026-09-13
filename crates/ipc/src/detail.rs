@@ -24,6 +24,7 @@
 //! Evidence is absent because nothing produces it and an always-empty field
 //! reads as working; the log, because `#437` serves it as a stream of its own.
 
+mod confidence;
 mod step;
 
 use serde::{Deserialize, Serialize};
@@ -37,6 +38,10 @@ use crate::overlap::ScopeOverlap;
 use crate::waiting::{QuestionInFlight, RedirectInFlight, RedirectWaiting};
 use crate::work::JobFootprint;
 
+pub use confidence::{
+    AreaRow, ChangedTestRow, FindingRow, JobConfidence, OpenedBecause, ProvesRow, Says,
+    TestsSection, UntestedRow,
+};
 pub use step::{JudgeInFlight, StepDetail, StepFacts, StepPass, Verdict};
 
 /// One Job, whole.
@@ -251,6 +256,10 @@ pub struct JobDetail {
     /// step at all, carries nothing here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<JobReview>,
+    /// Armada's review of the change: confident or not, why, and what needs the person.
+    /// **Since 13.22**, set after [`JobDetail::of`] like `model_override`. #903.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<JobConfidence>,
     /// Where the Job's frozen workflow came from — `armada`, `kit` or `repository` — off its
     /// own record, so a definition changed since still reads as the one this Job runs.
     #[serde(default)]
@@ -619,6 +628,7 @@ impl JobDetail {
             repository_allowed_commands: Vec::new(),
             model_override: None,
             review,
+            confidence: None,
             workflow_source: job.workflow().source().as_wire().to_string(),
             work_plan: None,
         }

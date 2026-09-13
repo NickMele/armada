@@ -152,7 +152,7 @@ parent = "submitted"
 purpose = "What the step produces as its work product. Determines what the Judge is handed."
 open_questions = ["Does the Judge see the Drone's transcript, or only task text, diff and deterministic facts?"]
 notes = """
-The legal values: `diff`, `failing_test`, `facts_note`, `test_suite_run`, `bundle`, `document`, `plan`. A step may declare none — Bug's `merge` produces nothing a Judge reads. A step with no gate advances once evidence of its declared type arrives, so on a gateless step this field is the entire advance condition.
+The legal values: `diff`, `failing_test`, `facts_note`, `test_suite_run`, `bundle`, `document`, `plan`, `review`. A step may declare none — Bug's `merge` produces nothing a Judge reads. A step with no gate advances once evidence of its declared type arrives, so on a gateless step this field is the entire advance condition.
 
 What the Judge receives for each value, and what `context_paths` is for in each case, is the per-type table on Workflow under Evidence Scope Object. Code Review is the exception that table cannot fold in — there the diff is the input and the review is the work product.
 
