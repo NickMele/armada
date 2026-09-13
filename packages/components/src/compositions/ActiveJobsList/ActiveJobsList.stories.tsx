@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement } from "react";
 import { cloneElement } from "react";
-import { Check, CircleDot, Cpu, GitBranch, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Cpu, GitBranch, Layers, Power, UserCheck, X } from "lucide-react";
 import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
@@ -410,4 +410,75 @@ export const OneOption: Story = {
     await expect(row).toHaveFocus();
     await expect(row).toHaveAttribute("tabindex", "0");
   },
+};
+
+/** The Board's table: long titles, and handles at Fleet's 44-character limit, which is what a day's work leaves. */
+const TABLE_ROWS = [
+  { status: "awaiting-approval", icon: UserCheck, label: "Needs approval", headline: "Board's Clear button should reclaim worktrees a Job left behind", handle: "1-board-s-clear-button-should-reclaim-worktr", act: "Approve" },
+  { status: "running", icon: CircleDot, label: "Running", headline: "Refuse a merge press whose chosen comments were never posted", handle: "2-refuse-a-merge-press-whose-chosen-comments", act: "Open" },
+  { status: "completed-failed", icon: X, label: "Failed", headline: "Cache the manifest read", handle: "14-cache-the-manifest-read", act: "Open" },
+] as const;
+
+function TableAt({ width }: { width: string }) {
+  return (
+    <div style={{ width }}>
+      <ActiveJobsList heading="Job Board" summary="3 jobs." view="table" columns={["Workflow", "Progress", "Run time"]}>
+        {TABLE_ROWS.map((row) => (
+          <JobRowStacked
+            key={row.handle}
+            status={row.status}
+            statusIcon={row.icon}
+            statusLabel={row.label}
+            headline={row.headline}
+            jobId={row.handle}
+            handle={row.handle}
+            fields={[
+              { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+              {
+                label: "Progress",
+                value: (
+                  <>
+                    <StepBar total={6} current={2} activity="running" label="Step 2 of 6" />
+                    <span className="armada-row-step">regression_verify</span>
+                  </>
+                ),
+              },
+              { label: "Run time", value: "11h 00m", mono: true },
+            ]}
+            action={<SplitButton ground="card" items={menu}>{row.act}</SplitButton>}
+          />
+        ))}
+      </ActiveJobsList>
+    </div>
+  );
+}
+
+/** Every row shows its action inside the frame, its handle whole, and a readable part of its title (#925). */
+async function everyRowReads(canvasElement: HTMLElement) {
+  const frame = canvasElement.querySelector(".armada-active-jobs__frame")!.getBoundingClientRect();
+  const rows = [...canvasElement.querySelectorAll<HTMLElement>(".armada-job-row")];
+  await expect(rows).toHaveLength(TABLE_ROWS.length);
+  for (const row of rows) {
+    const title = row.querySelector<HTMLElement>(".armada-job-row__title")!;
+    const handle = row.querySelector<HTMLElement>(".armada-job-row__id")!;
+    const headline = row.querySelector<HTMLElement>(".armada-job-row__headline")!.getBoundingClientRect();
+    await expect(row.querySelector(".armada-job-row__action")!.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
+    // Eight ems of title is a phrase, where the title used to keep a letter or two.
+    await expect(title.getBoundingClientRect().width).toBeGreaterThanOrEqual(parseFloat(getComputedStyle(title).fontSize) * 8);
+    await expect(handle.scrollWidth).toBeLessThanOrEqual(handle.clientWidth);
+    await expect(handle.getBoundingClientRect().right).toBeLessThanOrEqual(headline.right);
+    await expect(handle.getBoundingClientRect().bottom).toBeLessThanOrEqual(headline.bottom);
+  }
+}
+
+/** The table at the narrowest window, 768px less the rail: the facts give way, and the title, handle and action do not. */
+export const TableAtTheWidthFloor: StoryObj = {
+  render: () => <TableAt width="calc(var(--window-floor) - var(--sidebar-rail))" />,
+  play: async ({ canvasElement }) => everyRowReads(canvasElement),
+};
+
+/** The table at the 1100px breakpoint, where the title used to give way to nothing beside a whole handle. */
+export const TableAtTheBreakpoint: StoryObj = {
+  render: () => <TableAt width="calc(var(--layout-breakpoint) - var(--sidebar-rail))" />,
+  play: async ({ canvasElement }) => everyRowReads(canvasElement),
 };
