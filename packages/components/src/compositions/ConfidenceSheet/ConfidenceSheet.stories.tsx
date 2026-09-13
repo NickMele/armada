@@ -166,6 +166,7 @@ export const WithAView: Story = {
     await userEvent.click(views[1]!);
     await expect(args.onView).toHaveBeenCalledWith({
       title: "A busy CPU no longer delays a Job",
+      finding: "A busy CPU no longer delays a Job",
       steps: [
         {
           file: "crates/fleet/src/admitting.rs",
@@ -174,5 +175,31 @@ export const WithAView: Story = {
         },
       ],
     });
+  },
+};
+
+/** A finding a person dismissed is off the lists, and kept with its reason under Dismissed. #907. */
+export const WithADismissal: Story = {
+  args: {
+    confidence: {
+      says: "confident",
+      reasons: ["It only moves the lock into the store."],
+      areas: [{ name: "Store", what: "Saving takes one lock", files: ["crates/store/src/open.rs"] }],
+      needs_you: [],
+      small_fixes: [],
+      for_context: [],
+      dismissed: [
+        {
+          finding: "The lock order when saving",
+          reason: "Saving takes one lock, so there is no order.",
+        },
+      ],
+    },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const fold = canvas.getByRole("button", { name: /Dismissed/ });
+    await expect(fold).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(fold);
+    await expect(canvas.getByText("Saving takes one lock, so there is no order.")).toBeVisible();
   },
 };

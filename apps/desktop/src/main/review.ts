@@ -260,3 +260,13 @@ export function decide(
     ? ask(port, "POST", path)
     : ask(port, "POST", path, { note });
 }
+
+/** Dismiss a finding the review raised, with the reason. It moves nothing. #907. */
+export function dismiss(
+  port: number,
+  jobId: string,
+  finding: string,
+  reason: string,
+): Promise<Answer> {
+  return ask(port, "POST", `/jobs/${encodeURIComponent(jobId)}/dismiss_finding`, { finding, reason });
+}

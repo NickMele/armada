@@ -58,6 +58,10 @@ pub mod currency;
 pub mod daemon;
 pub mod delivery;
 pub mod detach;
+/// A person picks comments off a pull request, and they reach a Drone as its
+/// opening brief. **The one place text somebody outside this machine wrote
+/// enters a prompt.**
+mod dismissing;
 pub mod dispatch;
 pub mod drafting;
 /// Whether the repository still has what `armada.yml` names. **A read of the
@@ -166,9 +170,6 @@ mod regating;
 /// A person's run of one Manifest entry in a Job's worktree, and Undo from
 /// the snapshot taken before it. **A rehearsal, never a verdict.**
 mod rehearsing;
-/// A person picks comments off a pull request, and they reach a Drone as its
-/// opening brief. **The one place text somebody outside this machine wrote
-/// enters a prompt.**
 pub mod remarks;
 pub mod reporting;
 /// The repositories one Fleet serves, and adding one by folder.

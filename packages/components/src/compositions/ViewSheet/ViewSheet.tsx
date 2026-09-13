@@ -31,6 +31,8 @@ export type ViewSheetProps = {
   onOpenFile?: (file: string) => void;
   /** Adds a note for the Drone to What should change. Absent leaves the note out. */
   onAddNote?: (note: string) => void;
+  /** Dismisses the finding this View is of, with the note as the reason. Absent on an area. #907. */
+  onDismiss?: (reason: string) => void;
   /** The window is at `--window-floor`. */
   floor?: boolean;
   onClose?: () => void;
@@ -42,6 +44,7 @@ export function ViewSheet({
   steps,
   onOpenFile,
   onAddNote,
+  onDismiss,
   floor = false,
   onClose,
 }: ViewSheetProps) {
@@ -147,6 +150,22 @@ export function ViewSheet({
           >
             Add to What should change
           </Button>
+          {onDismiss === undefined ? null : (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={draft.trim() === ""}
+                onClick={() => onDismiss(draft.trim())}
+              >
+                Dismiss this finding
+              </Button>
+              <p className="armada-view__tie">
+                Dismissing takes the finding out of the review, keeps your note as the reason, and
+                tells the next review pass not to raise it again.
+              </p>
+            </>
+          )}
           {added === 0 ? null : (
             <p className="armada-view__tie" role="status">
               {added === 1 ? "1 note added" : `${added} notes added`} to What should change.

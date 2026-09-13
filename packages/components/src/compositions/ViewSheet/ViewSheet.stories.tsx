@@ -108,3 +108,26 @@ export const ANoteForTheDrone: Story = {
     await expect(canvas.getByRole("status")).toHaveTextContent("1 note added to What should change.");
   },
 };
+
+/** A View of a finding can dismiss it, with the note as the reason. Off while the note is blank. #907. */
+export const DismissingAFinding: Story = {
+  args: {
+    open: true,
+    title: "The lock order when saving",
+    steps: STEPS.slice(0, 1),
+    onAddNote: fn(),
+    onDismiss: fn(),
+    onClose: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const dismiss = canvas.getByRole("button", { name: "Dismiss this finding" });
+    await expect(dismiss).toBeDisabled();
+    await userEvent.type(
+      canvas.getByLabelText("Note for the drone"),
+      "Saving takes one lock, so there is no order.",
+    );
+    await userEvent.click(dismiss);
+    await expect(args.onDismiss).toHaveBeenCalledWith("Saving takes one lock, so there is no order.");
+    await expect(args.onAddNote).not.toHaveBeenCalled();
+  },
+};

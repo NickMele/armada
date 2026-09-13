@@ -180,6 +180,11 @@ pub enum Adrift {
     /// must not meet it again as if it were new — the comment reads the same
     /// on the forge forever, and only Armada's own record can tell them apart.
     RemarksAlreadyTakenUp { job: JobId, already: Vec<String> },
+    /// A person dismissed a finding with no reason. A 422: the reason is what the next
+    /// review pass is told, and a dismissal that says nothing would tell it nothing. #907.
+    NoDismissalReason { job: JobId },
+    /// A person dismissed a finding the Job's latest review did not raise.
+    FindingNotInReview { job: JobId, finding: String },
     /// The comments a person picked would not write to a file in the Drone's
     /// worktree.
     ///

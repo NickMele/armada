@@ -540,6 +540,8 @@ export type VerdictSlotAtGateArgs = {
   onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
   /** Opens the Job's whole diff, from a View step. #904. */
   onOpenDiff?: () => void;
+  /** Dismisses a finding the review raised, with the reason. #907. */
+  onDismissFinding?: (jobId: string, finding: string, reason: string) => void;
 };
 
 /**
@@ -572,6 +574,7 @@ export function verdictSlotAtGate({
   onSaid,
   onAnswerJudge,
   onOpenDiff,
+  onDismissFinding,
 }: VerdictSlotAtGateArgs): ReactNode {
   // A judge question outranks the rest of this slot: the gate is a human
   // boundary either way, but this step is answered before it is reviewed.
@@ -671,6 +674,12 @@ export function verdictSlotAtGate({
       diff={recorded.diff}
       jobId={job.id}
       {...(onOpenDiff === undefined ? {} : { onOpenDiff })}
+      {...(onDismissFinding === undefined
+        ? {}
+        : {
+            onDismissFinding: (finding: string, reason: string) =>
+              onDismissFinding(job.id, finding, reason),
+          })}
       sheet={sheetWith}
     />
   );

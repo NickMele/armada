@@ -141,7 +141,8 @@ where
             .also_carrying(waiting.clone())
             .overtaken_by(overtaken)
             .sent_back_by(sent_back)
-            .carrying_the_plan(the_plan);
+            .carrying_the_plan(the_plan)
+            .ruling_out(self.dismissed_for(job, step).await?);
         let brief = match opening.turn(job, job.workflow(), step, moved.as_ref()) {
             Ok(brief) => brief,
             Err(cause) => {

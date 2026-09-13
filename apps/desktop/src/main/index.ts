@@ -717,6 +717,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.takeUpRemarks, (_event, jobId: string, remarks: string[]) =>
     connection?.commands.takeUpRemarks(jobId, remarks),
   );
+  // A person ruling on the review. It moves nothing. #907.
+  ipcMain.handle(
+    CHANNELS.dismissFinding,
+    (_event, jobId: string, finding: string, reason: string) =>
+      connection?.commands.dismissFinding(jobId, finding, reason),
+  );
   // The one channel that reaches the OS, and the only one carrying no Fleet
   // request at all. **The path is built here** from the Job and the repository
   // its Manifest was read from; what crosses is a Job id and one of three

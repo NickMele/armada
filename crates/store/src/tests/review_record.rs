@@ -150,3 +150,38 @@ fn a_job_nobody_reviewed_reads_as_no_review() {
         None
     );
 }
+
+/// A dismissal is kept with its reason, and dismissing the same finding again replaces it. #907.
+#[test]
+fn a_dismissal_reads_back_and_a_second_replaces_its_reason() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    on_its_first_run(&mut store, "01DISMISSED");
+    let job = job_id("01DISMISSED");
+    let first = core_model::Dismissal {
+        finding: "The lock order when saving".to_string(),
+        reason: "The first reading.".to_string(),
+    };
+    let second = core_model::Dismissal {
+        reason: "Saving takes one lock, so there is no order.".to_string(),
+        ..first.clone()
+    };
+    store
+        .record_dismissal(&job, &first, &at("2026-09-13T10:00:00.000Z"))
+        .expect("the dismissal is kept");
+    store
+        .record_dismissal(&job, &second, &at("2026-09-13T10:01:00.000Z"))
+        .expect("the second replaces it");
+
+    assert_eq!(
+        store.dismissals(&job).expect("the dismissals read"),
+        vec![second]
+    );
+    assert_eq!(
+        store
+            .dismissals(&job_id("01REVIEWED"))
+            .expect("the read answers"),
+        vec![],
+        "a Job nobody dismissed anything on has none"
+    );
+}

@@ -1322,6 +1322,21 @@ notes = """
 `agent_access` is `No`, because Helm access on a command is the Intervention Ladder rung and this has none.
 """
 
+[operations.dismiss_finding]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "A person dismisses a finding Armada's review raised, and says why"
+notes = """
+**Kept, not deleted.** The finding leaves the lists `get_job` serves under `confidence`, the reason stays on the Job's record as `confidence.dismissed`, and the next review pass is handed both in its opening brief so it does not raise the finding again. #907.
+
+**The finding is named by its words**, as the review served them: a review record has no ids, and the words are what a person saw. A finding the Job's latest review did not raise is refused, a 409. A blank reason is refused, a 422, because the reason is what the next pass is told.
+
+**It moves nothing.** The Job stays where it stands, and what comes back is the Job as it now stands.
+
+`agent_access` is `No`: a Drone never rules on its own review.
+"""
+
 [operations.request_changes]
 kind = "command"
 transport = "HTTP"

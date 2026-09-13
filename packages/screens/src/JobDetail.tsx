@@ -143,6 +143,7 @@ function OneJob({
   onRequestChanges,
   onReject,
   onTakeUpRemarks,
+  onDismissFinding,
   onOpenRemarkLink,
   onCopied,
   onSaid,
@@ -478,6 +479,7 @@ function OneJob({
     onSaid,
     onAnswerJudge,
     onOpenDiff: () => openSheet("diff"),
+    onDismissFinding,
     notes: noted?.notes ?? [],
   });
 

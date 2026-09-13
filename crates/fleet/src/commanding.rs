@@ -223,9 +223,6 @@ where
         self.summarised(&job).await
     }
 
-    /// The comments a person picked off the pull request reach a Drone.
-    /// Nothing is written back onto the pull request.
-    ///
     /// **Nothing is decoded into a note here**, unlike `request_changes`: the
     /// body carries handles and the words come off the forge inside the act. An
     /// empty list is refused there rather than here, because it is a fact about
@@ -242,6 +239,14 @@ where
             .await
             .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
+    }
+
+    async fn dismiss_finding(
+        &self,
+        job_id: JobId,
+        dismissed: ipc::FindingDismissed,
+    ) -> Result<JobSummary, Refusal> {
+        self.dismissing(job_id, dismissed).await
     }
 
     /// The Judge refused, a person disagrees, and the step advances anyway.

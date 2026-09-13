@@ -105,6 +105,13 @@ impl Commands for FakeDaemon {
     ) -> Result<JobSummary, Refusal> {
         self.fake_take_up_remarks(job_id, picked).await
     }
+    async fn dismiss_finding(
+        &self,
+        job_id: JobId,
+        dismissed: ipc::FindingDismissed,
+    ) -> Result<JobSummary, Refusal> {
+        self.fake_dismiss_finding(job_id, dismissed).await
+    }
     async fn reject_job(self: std::sync::Arc<Self>, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.fake_reject_job(job_id).await
     }

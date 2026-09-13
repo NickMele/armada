@@ -86,6 +86,7 @@ mod retrace;
 /// The review Fleet composed at a Job's gate — the one builder's text, kept
 /// beside the Job rather than only in the pull request it may also carry.
 mod review;
+mod review_dismissals;
 mod review_record;
 mod review_view;
 mod revision;

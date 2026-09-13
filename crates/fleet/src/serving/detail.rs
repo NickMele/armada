@@ -274,7 +274,15 @@ where
             .await
             .confidence_record(job.id())
             .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-        detail.confidence = reviewed.as_ref().map(ipc::JobConfidence::of);
+        let dismissed = self
+            .store()
+            .lock()
+            .await
+            .dismissals(job.id())
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+        detail.confidence = reviewed
+            .as_ref()
+            .map(|record| ipc::JobConfidence::of(record).without(&dismissed));
         if let Some(stuck) = detail.stuck.as_mut() {
             for refused in &mut stuck.refused {
                 let command = (refused.tool == "Bash").then(|| refused.detail.clone());

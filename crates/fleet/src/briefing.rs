@@ -31,7 +31,9 @@ use core_model::{
 };
 use verification::TheBaseMoved;
 
-use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected, SentBack, ThePlan};
+use crate::crossing::{
+    Crossed, Dismissed, Overtaken, Produced, Reconciling, Redirected, SentBack, ThePlan,
+};
 use crate::terms::{Capturing, Checking, Declaring, Delivering, RecordingThePlan, Splitting};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
@@ -188,6 +190,14 @@ impl Opening {
     pub(crate) fn carrying_the_plan(self, the_plan: Option<ThePlan>) -> Opening {
         Opening {
             crossed: self.crossed.and_the_plan(the_plan),
+            ..self
+        }
+    }
+
+    /// The same opening, plus what a person dismissed from an earlier review. #907.
+    pub(crate) fn ruling_out(self, dismissed: Option<Dismissed>) -> Opening {
+        Opening {
+            crossed: self.crossed.and_dismissed(dismissed),
             ..self
         }
     }
@@ -611,6 +621,10 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     // Drone is told rather than the Job stopped.
     if let Some(overtaken) = crossed.overtaken() {
         blocks.headed(&overtaken.text(), ipc::BlockKind::AboutThisJob);
+    }
+    // Before the step, so a review pass reads what was ruled out before it reviews. #907.
+    if let Some(dismissed) = crossed.dismissed() {
+        blocks.headed(&dismissed.text(), ipc::BlockKind::AboutThisJob);
     }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         blocks.headed(&step_block(step), ipc::BlockKind::AboutThisJob);

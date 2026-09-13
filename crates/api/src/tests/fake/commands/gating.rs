@@ -93,6 +93,26 @@ impl FakeDaemon {
         }
         self.move_to(&job_id, "awaiting_review", "queued", "human")
     }
+    /// A dismissal moves nothing, so the fake answers with the Job as it stands. A blank
+    /// reason is refused, which is the one thing the route refuses the transport can see.
+    pub(super) async fn fake_dismiss_finding(
+        &self,
+        job_id: JobId,
+        dismissed: ipc::FindingDismissed,
+    ) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if dismissed.reason.trim().is_empty() {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fake.unreasoned_dismissal",
+                "dismissing a finding needs a reason".to_string(),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
     /// A verdict on the work. Terminal, and from the review gate alone: the
     /// other edge into `rejected` is the dispatch gate's and belongs to
     /// `deny_dispatch`.

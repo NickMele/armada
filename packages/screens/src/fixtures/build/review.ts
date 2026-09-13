@@ -152,7 +152,25 @@ const CONFIDENCE: JobConfidence = {
     },
   ],
   small_fixes: [{ finding: "`selectors.ts` still exports a helper nothing calls", why: "In scope. Delete it with the split." }],
-  for_context: [{ finding: "The consumers still import the old path", why: "The next step checks them" }],
+  for_context: [
+    {
+      finding: "The consumers still import the old path",
+      why: "The next step checks them",
+      view: [
+        {
+          file: "packages/settings/src/index.ts",
+          hunk: "@@ -0,0 +1,2 @@",
+          summary: "The package exports the selectors from their new home, so old imports still resolve.",
+        },
+      ],
+    },
+  ],
+  dismissed: [
+    {
+      finding: "The reducer test file is named after the old module",
+      reason: "It is renamed in the next step, which owns the tests.",
+    },
+  ],
 };
 
 export function review(): JobFixture {

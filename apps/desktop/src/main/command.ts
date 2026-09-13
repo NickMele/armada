@@ -48,7 +48,7 @@ import { Limits } from "./limits";
 import { Preferring } from "./preferences";
 import { Reporting } from "./reporting";
 import { proposeFromRequest as propose } from "./proposing";
-import { decide, takeUp, type Decision } from "./review";
+import { decide, dismiss, takeUp, type Decision } from "./review";
 
 /**
  * What an act needs of the connection, and nothing more.
@@ -874,6 +874,17 @@ export class JobCommands {
     if (remarks.length === 0) return { ok: false, why: "no_remarks_chosen" };
     return this.act(jobId, this.deciding, "already_deciding", (port) =>
       takeUp(port, jobId, remarks),
+    );
+  }
+
+  /**
+   * Dismiss a finding the review raised, with the reason. #907. **It moves nothing**, so it
+   * answers with the Job as it stands. A blank reason is refused here, as a blank note is.
+   */
+  async dismissFinding(jobId: string, finding: string, reason: string): Promise<Outcome> {
+    if (reason.trim() === "") return { ok: false, why: "empty_note" };
+    return this.act(jobId, this.deciding, "already_deciding", (port) =>
+      dismiss(port, jobId, finding, reason),
     );
   }
 

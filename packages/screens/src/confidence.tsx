@@ -17,10 +17,19 @@ export type ReviewAtGateProps = {
   onOpenDiff?: () => void;
   /** Adds a note written in a View to What should change. #907. */
   onAddNote?: (view: string, note: string) => void;
+  /** Dismisses a finding with the reason written in its View. #907. */
+  onDismissFinding?: (finding: string, reason: string) => void;
 };
 
 /** Armada's review at the gate, and the View a row of it opens. #903, #904. */
-export function ReviewAtGate({ confidence, diff, jobId, onOpenDiff, onAddNote }: ReviewAtGateProps) {
+export function ReviewAtGate({
+  confidence,
+  diff,
+  jobId,
+  onOpenDiff,
+  onAddNote,
+  onDismissFinding,
+}: ReviewAtGateProps) {
   const [viewing, setViewing] = useState<ConfidenceView | null>(null);
   return (
     <>
@@ -42,6 +51,14 @@ export function ReviewAtGate({ confidence, diff, jobId, onOpenDiff, onAddNote }:
           {...(onAddNote === undefined
             ? {}
             : { onAddNote: (note: string) => onAddNote(viewing.title, note) })}
+          {...(onDismissFinding === undefined || viewing.finding === undefined
+            ? {}
+            : {
+                onDismiss: (reason: string) => {
+                  onDismissFinding(viewing.finding ?? "", reason);
+                  setViewing(null);
+                },
+              })}
           onClose={() => setViewing(null)}
         />
       )}

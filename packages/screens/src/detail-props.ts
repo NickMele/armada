@@ -206,6 +206,8 @@ export type JobDetailProps = {
    * told.
    */
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
+  /** Dismiss a finding the review raised, with the reason. #907. */
+  onDismissFinding: (jobId: string, finding: string, reason: string) => void;
   /** Open one comment on the forge. `Decide`'s own note on why this is a Job
    *  id and a comment id, never an address. */
   onOpenRemarkLink: (jobId: string, remarkId: string) => void;

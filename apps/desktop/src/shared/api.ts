@@ -735,6 +735,8 @@ export type BridgeApi = {
    * told. What it does to the Job is what `requestChanges` does.
    */
   takeUpRemarks: (jobId: string, remarks: string[]) => Promise<Outcome>;
+  /** Dismiss a finding the review raised, with the reason. It moves nothing. #907. */
+  dismissFinding: (jobId: string, finding: string, reason: string) => Promise<Outcome>;
   /**
    * Open one of a Job's artifacts in whatever the OS opens it with.
    *

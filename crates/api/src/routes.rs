@@ -28,12 +28,12 @@ use axum::Router;
 use crate::amending::edit_manifest;
 use crate::attention::{get_activity_feed, list_alerts, list_job_board, list_reviews};
 use crate::commands::{
-    answer_command, answer_judge, answer_question, approve_dispatch, approve_review, examine_job,
-    file_report, forget_job, kill_drone, kill_job, merge_pull_request, override_verdict,
-    propose_from_request, propose_job, raise_cost_cap, raise_turn_cap, reclaim_worktree,
-    redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate,
-    resolve_pull_request_conflict, restart_step, set_when_blocked, set_when_refused, show_again,
-    stop_proposal, take_up_remarks,
+    answer_command, answer_judge, answer_question, approve_dispatch, approve_review,
+    dismiss_finding, examine_job, file_report, forget_job, kill_drone, kill_job,
+    merge_pull_request, override_verdict, propose_from_request, propose_job, raise_cost_cap,
+    raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job, reject_job, request_changes,
+    rerun_gate, resolve_pull_request_conflict, restart_step, set_when_blocked, set_when_refused,
+    show_again, stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
 use crate::editing::{get_manifest_file, save_manifest_file};
@@ -164,6 +164,7 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))
         .route("/jobs/:job_id/reject", post(reject_job::<D>))
         .route("/jobs/:job_id/take_up_remarks", post(take_up_remarks::<D>))
+        .route("/jobs/:job_id/dismiss_finding", post(dismiss_finding::<D>))
         .route(
             "/jobs/:job_id/override_verdict",
             post(override_verdict::<D>),
