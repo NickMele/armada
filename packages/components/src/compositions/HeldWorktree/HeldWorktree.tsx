@@ -107,7 +107,7 @@ export function HeldWorktree({
 
       <div className="armada-held__where">
         <Value glyph={Folder} title={held.path} onCopied={onCopied}>
-          {held.path}
+          {held.on_disk ? held.path : "The checkout is already gone"}
         </Value>
         <Value glyph={GitBranch} title={held.branch} onCopied={onCopied}>
           {held.branch}
@@ -292,8 +292,8 @@ function Reason({ reason, sitting }: { reason: HeldReason; sitting?: string }) {
           <span className="armada-held__safe">
             The branch is kept and the commits stay on it.
           </span>{" "}
-          Reclaiming takes the checkout only. Deleting the branch is a separate, explicit
-          choice below — nothing here does both at once.
+          Removing the checkout never touches them. Deleting the branch does, and the tip
+          below is the only way back.
           <span className="armada-held__tip">
             <GitCommitHorizontal size={12} strokeWidth={2} aria-hidden="true" />
             <span className="armada-held__mono">{reason.tip}</span>
