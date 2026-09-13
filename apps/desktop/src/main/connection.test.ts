@@ -81,8 +81,19 @@ const SCREEN = {
  */
 const REMARKS_ROUTE = `/jobs/${A_JOB}/remarks`;
 
-/** What each of those answers. Every body is the smallest one that reads. */
-function answering(route: string): unknown {
+/** `readPreferences`' own route, read once per connection like `/limits`. */
+const PREFERENCES_ROUTE = "/preferences";
+
+/**
+ * What each of those answers. Every body is the smallest one that reads.
+ *
+ * **`preferences` is the one answer a case can vary.** Every route above it is
+ * the open Job's screen and fixed for every case in this file; `preferences`
+ * is Fleet-wide and read on every resync, so the one case about a failed read
+ * needs the 404 every other unlisted route already gets — passing `undefined`
+ * is that, without a second switch arm.
+ */
+function answering(route: string, preferences: unknown): unknown {
   switch (route) {
     case SCREEN.detail:
       return { ...A_ROW, steps: [], acceptance_criteria: [], workflow_steps: [] };
@@ -96,6 +107,8 @@ function answering(route: string): unknown {
       return { job_id: A_JOB };
     case REMARKS_ROUTE:
       return { job_id: A_JOB, pull_request: "https://forge.example/armada/pull/1", remarks: [] };
+    case PREFERENCES_ROUTE:
+      return preferences;
     default:
       return undefined;
   }
@@ -127,8 +140,15 @@ function arriving(server: WebSocketServer): {
   };
 }
 
-/** A Fleet on one port: `/events`, both per-Job sockets, and the reads between. */
-async function serving(): Promise<{
+/**
+ * A Fleet on one port: `/events`, both per-Job sockets, and the reads between.
+ *
+ * `preferencesUnavailable` makes `GET /preferences` 404 instead of answering
+ * `{ where_things_are_open: true }` — a boolean rather than the body itself,
+ * because passing `undefined` for "no override" is indistinguishable from
+ * passing it for "this is the failure case" once it is a default parameter.
+ */
+async function serving(preferencesUnavailable = false): Promise<{
   port: number;
   /** Each connection to `/events`. A reconnection is the second one. */
   stream: (past: number) => Promise<WebSocket>;
@@ -156,7 +176,10 @@ async function serving(): Promise<{
     reads.set(route, (reads.get(route) ?? 0) + 1);
     // Anything off the list answers a refusal, which every reader here already
     // renders rather than throwing on.
-    const body = answering(route);
+    const body = answering(
+      route,
+      preferencesUnavailable ? undefined : { where_things_are_open: true },
+    );
     answer.writeHead(body === undefined ? 404 : 200, { "content-type": "application/json" });
     answer.end(JSON.stringify(body ?? {}));
   });
@@ -729,4 +752,57 @@ it("takes the patch again when a surface asks for the Job it already holds", asy
   drawn.length = 0;
   await connection.readDiff("01M1HQZAKN001AJ5MT3PT0OTHR");
   expect(drawn).toContain("reading");
+});
+
+/**
+ * `readPreferences`, `readLimits`' terms: once per connection, off the same
+ * resync every other Fleet-wide read rides on. `#927`.
+ */
+it("publishes a person's Bridge preferences once Fleet answers the resync", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
+
+  await published.until((state) => state.preferences.where_things_are_open === true);
+  expect(fleet.read(PREFERENCES_ROUTE)).toBe(1);
+});
+
+/**
+ * **A failed read is never taken as "nothing is saved."** `BridgeState.preferences`
+ * is never `null`, unlike `limits` — so the shipped default a person never
+ * touched and a person's own choice Fleet could not answer for would draw
+ * identically, and only the second one is safe to publish over what is
+ * already there.
+ */
+it("keeps drawing the shipped default when Fleet's preferences read fails", async () => {
+  const fleet = await serving(true);
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
+
+  // Nothing publishes *because* the read failed, so what is waited on is a
+  // different Fleet-wide read from the same resync — `readCapacity`, which
+  // always publishes — landing after it. `#507`'s reason: waiting on a state
+  // change the failure itself makes would wait forever.
+  await published.until(() => fleet.read(PREFERENCES_ROUTE) === 1);
+  expect(published.latest().preferences).toEqual({ where_things_are_open: false });
 });

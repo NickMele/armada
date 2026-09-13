@@ -16,6 +16,7 @@ mod journal;
 mod limits;
 mod mcp;
 mod observing;
+mod preferences;
 mod reference;
 mod served;
 mod shapes;

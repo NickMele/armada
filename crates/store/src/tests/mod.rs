@@ -30,6 +30,7 @@ mod migrate;
 mod model_override;
 mod plan;
 mod ports;
+mod preferences;
 mod process;
 mod proving;
 mod rebuilding;

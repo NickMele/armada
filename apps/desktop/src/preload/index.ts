@@ -35,7 +35,14 @@ import type {
   ProposalAnswer,
   RepositoryScanRead,
 } from "@armada/screens/src/setup-reads";
-import type { CommandAnswer, JudgeAnswer, SaveLimits, WhenBlocked, WhenRefused } from "@armada/protocol";
+import type {
+  CommandAnswer,
+  JudgeAnswer,
+  SaveLimits,
+  SavePreference,
+  WhenBlocked,
+  WhenRefused,
+} from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
 // The whole surface the renderer is allowed to see.
@@ -209,6 +216,10 @@ const api: BridgeApi = {
   // channel** — the only act on this surface that names none.
   saveLimits: (values: SaveLimits): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.saveLimits, values),
+
+  // A person's Bridge preferences. **Fleet-wide**, `saveLimits`' reason.
+  savePreference: (save: SavePreference): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.savePreference, save),
 
   // Say a job failed in error, and file its record with the reason. **Its own
   // entry and not a mode on `overrideVerdict`**: that one moves the job past a

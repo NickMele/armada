@@ -203,6 +203,11 @@ pub fn limits() -> ipc::FleetLimits {
     }
 }
 
+/// Nothing saved, so every preference reads its shipped default.
+pub fn preferences() -> ipc::Preferences {
+    ipc::Preferences::default()
+}
+
 /// A refused re-read: the shape with the most in it, because a refusal carries
 /// what an adoption does not.
 pub fn manifest_reading() -> ipc::ManifestReading {

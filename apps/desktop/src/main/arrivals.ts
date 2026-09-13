@@ -19,7 +19,7 @@ import { connects, PROTOCOL_VERSION, skew } from "@armada/protocol";
 import type { Connection, JobSummary, ServerState, StreamMessage } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
 import type { RehearsalConnection } from "./rehearsal";
-import { ask, capacityOf, limitsOf } from "./request";
+import { ask, capacityOf, limitsOf, preferencesOf } from "./request";
 import type { ReviewMaterial } from "./review";
 import type { RepositoryReads } from "./repositories";
 import type { Again } from "./screen";
@@ -82,6 +82,24 @@ export async function readLimits(
   publish({ limits: await limitsOf(port) });
 }
 
+/**
+ * A person's Bridge preferences. **Once per connection**, `readLimits`'
+ * terms: nothing but a save changes them, and `Preferring.save` publishes the
+ * new reading itself.
+ *
+ * **A failed read publishes nothing**, unlike `readLimits` — `preferencesOf`'s
+ * reason: `BridgeState.preferences` is never `null`, so there is no "not read
+ * yet" to draw, and overwriting it with the shipped default on a glitch would
+ * draw a person's own choice as though it had never been saved.
+ */
+export async function readPreferences(
+  port: number,
+  publish: (change: Partial<BridgeState>) => void,
+): Promise<void> {
+  const read = await preferencesOf(port);
+  if (read !== null) publish({ preferences: read });
+}
+
 export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeStateFleet): void {
   let message: StreamMessage;
   try {
@@ -130,6 +148,9 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // And Fleet's three admission limits, once per connection: nothing but a
     // save changes them, and that act publishes its own new reading.
     void readLimits(fleet.port, host.publish);
+    // And a person's Bridge preferences, once per connection, `readLimits`'
+    // reason.
+    void readPreferences(fleet.port, host.publish);
     // And every server Fleet holds, once per connection — `server.*` on
     // `/events` carries each row whole from here on.
     void host.rehearsal.readServers(fleet.port);

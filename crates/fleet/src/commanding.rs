@@ -22,7 +22,8 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
 use ipc::{
     CapRaise, ChangesRequested, JobExamined, JobForgotten, JobId, JobSummary, Overruled,
-    ProposeJob, Redirection, Redispatched, RemarksTakenUp, TurnRaise, WorktreeReclaimed,
+    Preferences, ProposeJob, Redirection, Redispatched, RemarksTakenUp, SavePreference, TurnRaise,
+    WorktreeReclaimed,
 };
 
 use crate::adrift::Adrift;
@@ -455,6 +456,10 @@ where
         self.save_limits_now(save)
             .await
             .map_err(|why| self.refusal(why))
+    }
+
+    async fn save_preferences(&self, save: SavePreference) -> Result<Preferences, Refusal> {
+        self.save_preference_now(save).await
     }
 
     /// Take back a rule a person always-allowed for this Manifest's

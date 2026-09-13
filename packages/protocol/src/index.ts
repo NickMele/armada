@@ -35,6 +35,7 @@ export * from "./journal";
 export * from "./judged";
 export * from "./limits";
 export * from "./manifest-proposal";
+export * from "./preferences";
 export * from "./proposal";
 export * from "./protocol";
 export * from "./proposing";

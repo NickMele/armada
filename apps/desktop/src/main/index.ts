@@ -13,6 +13,7 @@ import type {
   CommandAnswer,
   JudgeAnswer,
   SaveLimits,
+  SavePreference,
   WhenBlocked,
   WhenRefused,
 } from "@armada/protocol";
@@ -486,6 +487,11 @@ void app.whenReady().then(() => {
   // channel — the only one among the acts above that names none.
   ipcMain.handle(CHANNELS.saveLimits, (_event, values: SaveLimits) =>
     connection?.commands.saveLimits(values),
+  );
+  // A person's Bridge preferences. Fleet-wide, so no Job id rides this
+  // channel either.
+  ipcMain.handle(CHANNELS.savePreference, (_event, save: SavePreference) =>
+    connection?.commands.savePreference(save),
   );
   // Saying a job failed in error. Its own channel beside the override rather
   // than a flag on it: the override moves the job past a verdict and this moves

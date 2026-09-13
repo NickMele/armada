@@ -42,6 +42,7 @@ use crate::fleetwide::{
     list_drones,
 };
 use crate::limiting::{get_limits, save_limits};
+use crate::preferring::{get_preferences, save_preferences};
 use crate::queries::{
     explain_command, get_call, get_capacity, get_check_output, get_diff, get_evidence, get_frame,
     get_job, get_job_events, get_job_log, get_job_resources, get_manifest_drift,
@@ -94,6 +95,8 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/capacity", get(get_capacity::<D>))
         .route("/limits", get(get_limits::<D>))
         .route("/limits/save", post(save_limits::<D>))
+        .route("/preferences", get(get_preferences::<D>))
+        .route("/preferences/save", post(save_preferences::<D>))
         .route("/health", get(get_health::<D>))
         .route("/usage", get(get_usage::<D>))
         .route("/alerts", get(list_alerts::<D>))

@@ -518,6 +518,21 @@ Needs you first because the row waiting longest is usually waiting on nothing, w
 The sort agrees with the state filter rather than cutting across it: the tab grouping the statuses that stop until a person reads them lifts the same set to the top, so changing tab reorders nothing a person had already learned.
 """
 
+[settings.job-detail-where-things-are-open]
+name = "Job detail: Where things are open"
+scope = "Machine"
+default = "false"
+lifetime = "Read at render"
+merge_strategy = "n/a — single layer"
+peer_polarity = "n/a — single layer"
+owner = "Job Board"
+read_by = "bridge (TS)"
+notes = """
+Whether Job detail's *Where things are* chapter opens collapsed (`false`) or expanded (`true`) — `docs/journeys/monitor-active-work.md` wants it to "open with one click and remember the choice", which had nowhere to be remembered until this. `#927`.
+
+**Delivered, not orphaned — the first row of this shape to say so.** Not through the two rows above's own gap, though: those are Kit/Machine values `config` resolves from `armada.yml`/`machine.yml` with no crate carrying the resolved figure to Bridge, and this preference is never in either file — a person sets it in Bridge and Fleet is where it is kept, the way `fleet_limits` keeps the three admission limits. `get_preferences`/`save_preferences` (`crates/ipc/operations.toml`, protocol 13.24) read and save a `preferences` table (`crates/store/src/preferences.rs`, V60) keyed by name; `apps/desktop/src/main/preferences.ts` loads it when Fleet connects and saves on change, and it reaches the renderer on `BridgeState.preferences`. The other two Bridge-scoped rows above stay orphaned, and so does `[bridge-notification-routing-path]` — this is a different path, not that one closed.
+"""
+
 [settings.landing-manifest-last-opened-project]
 name = "Landing Manifest / last-opened project"
 scope = "Machine"
