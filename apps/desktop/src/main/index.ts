@@ -334,8 +334,8 @@ void app.whenReady().then(() => {
   // make the model call a flag.
   ipcMain.handle(
     CHANNELS.proposeFromRequest,
-    (_event, request: string, attachments: StagedAttachment[]) =>
-      connection?.commands.proposeFromRequest(request, attachments),
+    (_event, request: string, attachments: StagedAttachment[], repository: string | null) =>
+      connection?.commands.proposeFromRequest(request, attachments, repository),
   );
   // No argument: what may be stopped is what this window started. See
   // `JobCommands.stopProposal`.

@@ -21,7 +21,7 @@ import type { AddressInfo } from "node:net";
 
 import { afterEach, expect, it } from "vitest";
 
-import type { JobSummary, StagedAttachment } from "@armada/protocol";
+import type { JobSummary, RepositorySummary, StagedAttachment } from "@armada/protocol";
 import type { Board } from "./command";
 import { Picked } from "./picked";
 import { proposeFromRequest } from "./proposing";
@@ -62,11 +62,11 @@ async function fleetThat(answer: (respond: Respond) => void): Promise<number> {
 
 type Respond = ServerResponse<IncomingMessage>;
 
-/** The board a proposal folds into. Nothing here is under test. */
-function boardOn(port: number): Board {
+/** The board a proposal folds into. Nothing here is under test but `picked`, held open for #959. */
+function boardOn(port: number, picked: Picked = new Picked()): Board {
   return {
     port: () => port,
-    picked: new Picked(),
+    picked,
     fold: () => {},
     forget: () => {},
     reread: async () => {},
@@ -208,4 +208,87 @@ it("sends an empty attachments list where nothing was staged", async () => {
 
   const sent = JSON.parse(bodies[0] ?? "null") as { attachments: unknown };
   expect(sent.attachments).toEqual([]);
+});
+
+/** A listener that answers every proposal, and records the URL it was asked for. */
+async function fleetNaming(urls: string[]): Promise<number> {
+  const server = createServer((request, response) => {
+    urls.push(request.url ?? "");
+    request.resume();
+    request.on("end", () => {
+      response.writeHead(201, { "content-type": "application/json" });
+      response.end(JSON.stringify({ jobs: [A_JOB] }));
+    });
+  });
+  listening = server;
+  await new Promise<void>((up) => server.listen(0, "127.0.0.1", up));
+  return (server.address() as AddressInfo).port;
+}
+
+const REPOSITORY_A: RepositorySummary = {
+  root: "/Users/user/repo-a",
+  records_root: "/records/repo-a",
+  manifest: { id: "manifest-a", repository: "repo-a", path: "/Users/user/repo-a/armada.yml", records_root: "/records/repo-a", version: 1, checks: [] },
+};
+const REPOSITORY_B: RepositorySummary = {
+  root: "/Users/user/repo-b",
+  records_root: "/records/repo-b",
+  manifest: { id: "manifest-b", repository: "repo-b", path: "/Users/user/repo-b/armada.yml", records_root: "/records/repo-b", version: 1, checks: [] },
+};
+
+/**
+ * #959: New job's ask on All answers with a repository, and the Board must
+ * stay on All rather than narrow to it. What is under test is that the
+ * request names the answered repository's own Manifest, and that nothing
+ * here ever moves the pick to get there.
+ */
+it("holds the request to the answered repository's Manifest while the pick is All", async () => {
+  const urls: string[] = [];
+  const port = await fleetNaming(urls);
+  const picked = new Picked();
+  picked.hold([REPOSITORY_A, REPOSITORY_B]);
+  expect(picked.picked).toBeNull();
+
+  const answered = await proposeFromRequest(
+    boardOn(port, picked),
+    "Fix the parser",
+    [],
+    REPOSITORY_B.root,
+  );
+
+  expect(answered.ok).toBe(true);
+  expect(urls).toEqual([`/jobs/from_request?manifest_id=${REPOSITORY_B.manifest?.id}`]);
+  // Answering did not narrow the Board: the pick is exactly where it was.
+  expect(picked.picked).toBeNull();
+});
+
+/**
+ * Off All — a repository already picked — the request still names it through
+ * the pick, unchanged: `repository` is only for the case the pick cannot
+ * carry, and every other caller passes nothing.
+ */
+it("still names the picked repository when no repository is given", async () => {
+  const urls: string[] = [];
+  const port = await fleetNaming(urls);
+  const picked = new Picked();
+  picked.hold([REPOSITORY_A, REPOSITORY_B]);
+  picked.pick(REPOSITORY_A.root);
+
+  await proposeFromRequest(boardOn(port, picked), "Fix the parser");
+
+  expect(urls).toEqual([`/jobs/from_request?manifest_id=${REPOSITORY_A.manifest?.id}`]);
+});
+
+/** A repository nobody has set up yet has no Manifest to name, answered or not. */
+it("refuses as not set up where the answered repository has no Manifest", async () => {
+  const urls: string[] = [];
+  const port = await fleetNaming(urls);
+  const picked = new Picked();
+  const loose: RepositorySummary = { root: "/Users/user/scratch", records_root: "/records/scratch" };
+  picked.hold([loose]);
+
+  const answered = await proposeFromRequest(boardOn(port, picked), "Fix the parser", [], loose.root);
+
+  expect(answered).toEqual({ ok: false, why: "refused", outcome: { ok: false, why: "not_set_up" } });
+  expect(urls).toEqual([]);
 });

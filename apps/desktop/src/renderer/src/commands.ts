@@ -226,13 +226,17 @@ export function useCommands(sending: Sending) {
    * **What it is read against comes from the render.** The workflow roster and
    * Bridge's identity are published state, so they arrive as an argument rather
    * than being reached for here.
+   *
+   * `repository` is the root New job's own ask answered, on All — #959, so the
+   * request names it rather than the pick, which stays on All while composing.
    */
   async function proposeFrom(
     request: string,
     attachments: readonly StagedAttachment[],
     proposing: Proposing,
+    repository: string | null = null,
   ): Promise<Answered> {
-    const read = await proposeRequest(request, attachments, proposing);
+    const read = await proposeRequest(request, attachments, proposing, repository);
     if (read.outcome !== null) setOutcome(read.outcome);
     return read;
   }

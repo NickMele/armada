@@ -301,12 +301,16 @@ export class JobCommands {
    * because a person does different things about them. `Proposed` is both.
    *
    * `proposing.ts` is what it is, for the reason `decide` is `review.ts`'s.
+   *
+   * `repository` is the root New job's ask answered on All, where the Board
+   * stays and the pick cannot carry it — #959. `null` for every other caller.
    */
   async proposeFromRequest(
     request: string,
     attachments: StagedAttachment[],
+    repository: string | null = null,
   ): Promise<Proposed> {
-    return propose(this.board, request, attachments);
+    return propose(this.board, request, attachments, repository);
   }
 
   /**

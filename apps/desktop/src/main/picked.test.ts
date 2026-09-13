@@ -98,6 +98,17 @@ describe("the pick", () => {
     expect(picked.each("/manifest/drift")).toEqual([{ repository: SET_UP, path: "/manifest/drift?manifest_id=store-01" }]);
   });
 
+  it("names a repository by root rather than the pick, for a caller New job's ask has given one", () => {
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+    // The pick stays on All throughout: `manifestOf` never reads it.
+    expect(picked.picked).toBeNull();
+    expect(picked.manifestOf("/jobs/from_request", SET_UP.root)).toBe("/jobs/from_request?manifest_id=store-01");
+    expect(picked.picked).toBeNull();
+    expect(picked.manifestOf("/jobs/from_request", NOT_SET_UP.root)).toBeNull();
+    expect(picked.manifestOf("/jobs/from_request", "/nowhere")).toBeNull();
+  });
+
   it("reads only the picked repository's `manifest.reread`", () => {
     const picked = pickedAt(SET_UP.root);
     expect(picked.reads("/Users/user/store front/armada.yml")).toBe(true);
@@ -272,7 +283,12 @@ describe("every per-repository call", () => {
           .split("\n")
           .map((line, index) => ({ at: `${file}:${index + 1}`, line }))
           .filter(({ line }) => routes.test(line) && !line.trim().startsWith("*") && !line.trim().startsWith("//"))
-          .filter(({ line }) => !["picked.manifest(", "picked.scan(", "picked.checkout(", "picked.each("].some((built) => line.includes(built))),
+          .filter(
+            ({ line }) =>
+              !["picked.manifest(", "picked.manifestOf(", "picked.scan(", "picked.checkout(", "picked.each("].some(
+                (built) => line.includes(built),
+              ),
+          ),
       )
       .map(({ at }) => at);
     expect(unnamed).toEqual([]);

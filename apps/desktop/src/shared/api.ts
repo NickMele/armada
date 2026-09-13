@@ -79,10 +79,16 @@ export type BridgeApi = {
    * different things about them — a request nothing fits is said again
    * differently or hand-entered, and a call that could not be made is simply
    * asked again.
+   *
+   * `repository` is the root New job's ask answered on All. The Board stays
+   * on All while composing (#959), so the request names what was answered
+   * rather than a pick that never moved. `null`, the default, where a
+   * repository was already picked before the composer opened.
    */
   proposeFromRequest: (
     request: string,
     attachments: readonly StagedAttachment[],
+    repository?: string | null,
   ) => Promise<Proposed>;
   /**
    * Stop the proposal this window is waiting on.

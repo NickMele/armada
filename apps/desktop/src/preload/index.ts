@@ -78,11 +78,16 @@ const api: BridgeApi = {
   // `proposeJob` rather than a mode on it: one carries a workflow the person
   // chose and the other carries the sentence they wrote, and a single
   // capability taking which would read as one act and perform two.
+  //
+  // `repository` is the root New job's ask answered on All, so the request
+  // names it rather than the pick — #959. `null` where a repository was
+  // already picked, as it always was.
   proposeFromRequest: (
     request: string,
     attachments: readonly StagedAttachment[],
+    repository: string | null = null,
   ): Promise<Proposed> =>
-    ipcRenderer.invoke(CHANNELS.proposeFromRequest, request, attachments),
+    ipcRenderer.invoke(CHANNELS.proposeFromRequest, request, attachments, repository),
   stopProposal: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.stopProposal),
 
   // Bytes never round-trip through `proposeJob`'s JSON channel as base64 —
