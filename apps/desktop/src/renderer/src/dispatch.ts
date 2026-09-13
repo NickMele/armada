@@ -38,13 +38,19 @@ export type Proposing = {
  * **No guard here.** Nothing about this call is idempotent, and the form is
  * what stops a second press — see `DispatchJob` in `@armada/screens`. A guard
  * in two places is two answers about whether a request went out.
+ *
+ * `repository` is the root New job's own ask answered, on All — #959: the
+ * Board stays there while composing, so the request names what was answered
+ * rather than a pick that never moved. `null` where a repository was already
+ * picked before the composer opened.
  */
 export async function proposeRequest(
   request: string,
   attachments: readonly StagedAttachment[],
   seen: Proposing,
+  repository: string | null = null,
 ): Promise<Answered> {
-  return answeredAs(await window.armada.proposeFromRequest(request, attachments), {
+  return answeredAs(await window.armada.proposeFromRequest(request, attachments, repository), {
     sent: request,
     workflows: seen.workflows,
     bridge: seen.bridge,

@@ -45,11 +45,18 @@ import type { Board } from "./command";
  * **No in-flight guard, matching `proposeJob`.** Nothing here is an act on a
  * Job, so there is no id to key one on — a second dispatch is a second request,
  * and the form is what stops a double press.
+ *
+ * `repository` is the root New job's ask answered, where the pick cannot
+ * carry it: on All, #959 keeps the Board there rather than narrowing it, so
+ * the request must name what was answered instead of reading `board.picked`.
+ * `null`, the default, is every other caller — the pick still names it, as it
+ * always did.
  */
 export async function proposeFromRequest(
   board: Board,
   request: string,
   attachments: StagedAttachment[] = [],
+  repository: string | null = null,
 ): Promise<Proposed> {
   const said = request.trim();
   if (said === "") return { ok: false, why: "refused", outcome: { ok: false, why: "empty_brief" } };
@@ -57,7 +64,10 @@ export async function proposeFromRequest(
   if (port === null) {
     return { ok: false, why: "refused", outcome: { ok: false, why: "not_connected" } };
   }
-  const path = board.picked.manifest("/jobs/from_request");
+  const path =
+    repository === null
+      ? board.picked.manifest("/jobs/from_request")
+      : board.picked.manifestOf("/jobs/from_request", repository);
   if (path === null) return { ok: false, why: "refused", outcome: NOT_SET_UP };
 
   // The token this window recognises its own call by. Minted here because the

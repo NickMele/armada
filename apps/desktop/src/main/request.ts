@@ -21,6 +21,7 @@ import type { CallArguments, CheckOutput } from "@armada/protocol";
 import type { LeftOutWorkflow, ManifestSummary, ModelChoices, RepositoryList, WorkflowSummary } from "@armada/protocol";
 import { refusedWith } from "@armada/protocol";
 import { Socket } from "node:net";
+import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { Picked } from "./picked";
 import { HOST } from "./runtime-file";
 
@@ -199,15 +200,24 @@ export function isJobSummary(body: unknown): body is JobSummary {
  * A failed one keeps what was already held: a stale roster beats none, and
  * Fleet refuses an id that has gone, so the worst case is a picker offering one
  * value too many rather than a form with nothing in it.
+ *
+ * `repository` is the root New job's ask answered, where the pick cannot name
+ * it: on All, #959 keeps the Board there, so `leftOut` — the one field here
+ * that is scoped at all — must be read against what was answered rather than
+ * `picked`. `null`, the default, is every other caller; the pick still names
+ * it, as it always did.
  */
-export async function holdingsOf(port: number, held: Holdings, picked: Picked): Promise<Holdings> {
-  // A repository not set up has no catalogue to have left anything out of.
-  const leftOutAt = picked.manifest("/workflows/left_out");
+export async function holdingsOf(
+  port: number,
+  held: Holdings,
+  picked: Picked,
+  repository: string | null = null,
+): Promise<Holdings> {
   const [workflows, manifests, models, leftOut] = await Promise.all([
     ask(port, "GET", "/workflows"),
     ask(port, "GET", "/manifests"),
     ask(port, "GET", "/models"),
-    leftOutAt === null ? null : ask(port, "GET", leftOutAt),
+    leftOutAsked(port, picked, repository),
   ]);
   return {
     workflows: workflows.ok === true ? (workflows.body as WorkflowSummary[]) : held.workflows,
@@ -216,6 +226,20 @@ export async function holdingsOf(port: number, held: Holdings, picked: Picked): 
     leftOut: leftOut === null ? [] : leftOut.ok === true ? (leftOut.body as LeftOutWorkflow[]) : held.leftOut,
     ...(held.repositories === undefined ? {} : { repositories: held.repositories }),
   };
+}
+
+/**
+ * `/workflows/left_out`, named by the pick or by `repository` — `holdingsOf`'s
+ * one scoped field, and `composingOf`'s. `null` where a repository not set up
+ * has no catalogue to have left anything out of; the two callers read that
+ * differently, so it is theirs to interpret rather than this function's.
+ */
+async function leftOutAsked(port: number, picked: Picked, repository: string | null): Promise<Answer | null> {
+  const path =
+    repository === null
+      ? picked.manifest("/workflows/left_out")
+      : picked.manifestOf("/workflows/left_out", repository);
+  return path === null ? null : await ask(port, "GET", path);
 }
 
 /** Every repository Fleet serves, set up or not. `null` where Fleet did not answer, which an older Fleet does not. */
@@ -274,12 +298,42 @@ export async function preferencesOf(port: number): Promise<Preferences | null> {
  * Asked once per connection rather than on a timer: the reading changes when
  * somebody saves a file, and `manifest.reread` is what says so. This is for the
  * window that opened *after* the save, which an event cannot reach.
+ *
+ * `repository` is New job's own answered root, on `holdingsOf`'s terms above:
+ * `null`, the default, keeps reading the pick, as every caller but the
+ * composer on All does.
  */
-export async function manifestReadingOf(port: number, picked: Picked): Promise<ManifestReading | null> {
-  const path = picked.manifest("/manifest/reading");
+export async function manifestReadingOf(
+  port: number,
+  picked: Picked,
+  repository: string | null = null,
+): Promise<ManifestReading | null> {
+  const path =
+    repository === null ? picked.manifest("/manifest/reading") : picked.manifestOf("/manifest/reading", repository);
   if (path === null) return null;
   const answer = await ask(port, "GET", path);
   return answer.ok === true ? ((answer.body as ManifestReading | null) ?? null) : null;
+}
+
+/**
+ * `leftOut` and the Manifest reading for the repository New job's ask
+ * answered — #959, and the one place both are read for a composer on All
+ * rather than for `BridgeState`. Both taken through `Picked.manifestOf`,
+ * since the pick stays on All throughout and cannot name what was answered.
+ *
+ * **A refusal, not `holdingsOf`'s `[]` or `manifestReadingOf`'s `null`.**
+ * Those two keep drawing whatever was last held on a failed read, because
+ * they are re-asked on a timer against a repository that stays picked; this
+ * is asked once, for a repository nothing has read before, so there is no
+ * old value under it to fall back to.
+ */
+export async function composingOf(port: number, picked: Picked, repository: string): Promise<ComposingRead> {
+  const [leftOut, reading] = await Promise.all([
+    leftOutAsked(port, picked, repository),
+    manifestReadingOf(port, picked, repository),
+  ]);
+  if (leftOut === null) return { ok: false, outcome: NOT_SET_UP };
+  return { ok: true, leftOut: leftOut.ok === true ? (leftOut.body as LeftOutWorkflow[]) : [], reading };
 }
 
 /**

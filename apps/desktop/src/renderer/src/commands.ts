@@ -74,6 +74,8 @@ export const readRemarks = (jobId: string | null): void => void window.armada.re
 export const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
 export const readCheckOutput = (jobId: string, kept: string) =>
   window.armada.readCheckOutput(jobId, kept);
+/** New job's own reads for the repository its ask answered, on All — #959. */
+export const readComposing = (repository: string) => window.armada.readComposing(repository);
 export const followCheckOutput = (jobId: string | null, kept: string | null): void =>
   void window.armada.followCheckOutput(jobId, kept);
 
@@ -226,13 +228,17 @@ export function useCommands(sending: Sending) {
    * **What it is read against comes from the render.** The workflow roster and
    * Bridge's identity are published state, so they arrive as an argument rather
    * than being reached for here.
+   *
+   * `repository` is the root New job's own ask answered, on All — #959, so the
+   * request names it rather than the pick, which stays on All while composing.
    */
   async function proposeFrom(
     request: string,
     attachments: readonly StagedAttachment[],
     proposing: Proposing,
+    repository: string | null = null,
   ): Promise<Answered> {
-    const read = await proposeRequest(request, attachments, proposing);
+    const read = await proposeRequest(request, attachments, proposing, repository);
     if (read.outcome !== null) setOutcome(read.outcome);
     return read;
   }

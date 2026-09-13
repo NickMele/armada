@@ -334,8 +334,8 @@ void app.whenReady().then(() => {
   // make the model call a flag.
   ipcMain.handle(
     CHANNELS.proposeFromRequest,
-    (_event, request: string, attachments: StagedAttachment[]) =>
-      connection?.commands.proposeFromRequest(request, attachments),
+    (_event, request: string, attachments: StagedAttachment[], repository: string | null) =>
+      connection?.commands.proposeFromRequest(request, attachments, repository),
   );
   // No argument: what may be stopped is what this window started. See
   // `JobCommands.stopProposal`.
@@ -694,6 +694,10 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.readCheckOutput, (_event, jobId: string, kept: string) =>
     connection?.readCheckOutput(jobId, kept),
+  );
+  // New job's own reads for the repository its ask answered, on All — #959.
+  ipcMain.handle(CHANNELS.readComposing, (_event, repository: string) =>
+    connection?.readComposing(repository),
   );
   // Every report a person has filed, and the counts they are read beside. The
   // one read here that names no Job: a report outlives the Job it is about, so

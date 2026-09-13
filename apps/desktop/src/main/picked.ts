@@ -58,6 +58,22 @@ export class Picked {
   }
 
   /**
+   * A route acting on a named repository's own Manifest, not the pick's.
+   *
+   * **What a caller uses once it has been given a repository, rather than
+   * reading the pick** — New job's ask on All answers with one while the pick
+   * stays on All (#959), so nothing built from `this.root` would be right.
+   * `manifest`'s twin, with the repository named instead of read off the pick.
+   * `null` where Fleet has not listed that root, or it has no Manifest yet:
+   * sending nothing would act on whichever repository Fleet started in.
+   */
+  manifestOf(path: string, root: string): string | null {
+    const repository = this.listed.find((one) => one.root === root);
+    if (repository === undefined || repository.manifest === undefined) return null;
+    return named(path, "manifest_id", repository.manifest.id);
+  }
+
+  /**
    * Verify and what its panel reads: the main checkout, which may have no root Manifest. Named by
    * `?manifest_id=` where it has one, and by root where it has none. `null` on All.
    */

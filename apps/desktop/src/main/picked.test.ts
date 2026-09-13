@@ -16,7 +16,7 @@ import { JobCommands, type Board } from "./command";
 import { ManifestFileCommands } from "./editing";
 import { Picked } from "./picked";
 import { RepositoryAllowsCommands } from "./repository-allows";
-import { holdingsOf, manifestReadingOf } from "./request";
+import { composingOf, holdingsOf, manifestReadingOf } from "./request";
 import { ServerCommands } from "./servers";
 
 const FIRST: RepositorySummary = {
@@ -96,6 +96,17 @@ describe("the pick", () => {
     ]);
     picked.pick(SET_UP.root);
     expect(picked.each("/manifest/drift")).toEqual([{ repository: SET_UP, path: "/manifest/drift?manifest_id=store-01" }]);
+  });
+
+  it("names a repository by root rather than the pick, for a caller New job's ask has given one", () => {
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+    // The pick stays on All throughout: `manifestOf` never reads it.
+    expect(picked.picked).toBeNull();
+    expect(picked.manifestOf("/jobs/from_request", SET_UP.root)).toBe("/jobs/from_request?manifest_id=store-01");
+    expect(picked.picked).toBeNull();
+    expect(picked.manifestOf("/jobs/from_request", NOT_SET_UP.root)).toBeNull();
+    expect(picked.manifestOf("/jobs/from_request", "/nowhere")).toBeNull();
   });
 
   it("reads only the picked repository's `manifest.reread`", () => {
@@ -262,6 +273,61 @@ describe("every per-repository call", () => {
     expect(asked.filter((url) => !FLEETWIDE.has(url))).toEqual([]);
   });
 
+  it("names New job's answered repository for `left_out` and `manifest/reading`, with the pick on All", async () => {
+    const asked: string[] = [];
+    const port = await recording(asked);
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+    expect(picked.picked).toBeNull();
+
+    await holdingsOf(port, { workflows: [], manifests: [], models: null }, picked, SET_UP.root);
+    await manifestReadingOf(port, picked, SET_UP.root);
+
+    expect(picked.picked).toBeNull();
+    const scoped = asked.filter((url) => !FLEETWIDE.has(url));
+    expect(scoped.sort()).toEqual(["/manifest/reading?manifest_id=store-01", "/workflows/left_out?manifest_id=store-01"]);
+  });
+
+  it("reads the answered repository's `leftOut`, on All, without narrowing the pick", async () => {
+    const server = createServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        request.url?.startsWith("/workflows/left_out")
+          ? JSON.stringify([{ source: "armada", file: "bug.yml", said: "no checks configured" }])
+          : "null",
+      );
+    });
+    listening = server;
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const port = (server.address() as AddressInfo).port;
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+    expect(picked.picked).toBeNull();
+
+    const read = await composingOf(port, picked, SET_UP.root);
+
+    // The content came back — this is the repository's own catalogue, not the pick's.
+    expect(read).toEqual({
+      ok: true,
+      leftOut: [{ source: "armada", file: "bug.yml", said: "no checks configured" }],
+      reading: null,
+    });
+    // Reading for one repository never moved the pick — the Board stays on All.
+    expect(picked.picked).toBeNull();
+  });
+
+  it("refuses `composingOf` as not set up for a repository with no Manifest", async () => {
+    const asked: string[] = [];
+    const port = await recording(asked);
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+
+    const read = await composingOf(port, picked, NOT_SET_UP.root);
+
+    expect(read).toEqual({ ok: false, outcome: { ok: false, why: "not_set_up" } });
+  });
+
   it("is built through the pick wherever `src/main` spells a per-repository route", () => {
     const routes = /["`](\/manifest\/|\/repository\/|\/workflows\/left_out|\/servers\/start|\/jobs\/from_request)/;
     const dir = __dirname;
@@ -272,7 +338,12 @@ describe("every per-repository call", () => {
           .split("\n")
           .map((line, index) => ({ at: `${file}:${index + 1}`, line }))
           .filter(({ line }) => routes.test(line) && !line.trim().startsWith("*") && !line.trim().startsWith("//"))
-          .filter(({ line }) => !["picked.manifest(", "picked.scan(", "picked.checkout(", "picked.each("].some((built) => line.includes(built))),
+          .filter(
+            ({ line }) =>
+              !["picked.manifest(", "picked.manifestOf(", "picked.scan(", "picked.checkout(", "picked.each("].some(
+                (built) => line.includes(built),
+              ),
+          ),
       )
       .map(({ at }) => at);
     expect(unnamed).toEqual([]);
