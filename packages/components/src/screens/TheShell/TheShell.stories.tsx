@@ -4,6 +4,7 @@ import { expect } from "storybook/test";
 import { ClipboardList, HardDrive, Megaphone } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { ActiveJobsList } from "../../compositions/ActiveJobsList/ActiveJobsList";
+import { DockQuestions } from "../../compositions/DockQuestions/DockQuestions";
 import { JobRowStacked } from "../../compositions/JobRowStacked/JobRowStacked";
 import { Select } from "../../primitives/Select/Select";
 import { TheShell } from "./TheShell";
@@ -196,6 +197,57 @@ export const DockBesideTheContent: Story = {
       </div>
     </div>
   ),
+};
+
+/** Questions from two repositories in the dock's questions zone, above where Helm's conversation will sit. */
+export const DockWithQuestions: Story = {
+  args: {
+    ...shell,
+    dock: {
+      open: true,
+      binding: "⌘J",
+      questions: 2,
+      onOpen: () => {},
+      children: (
+        <DockQuestions
+          questions={[
+            {
+              id: "b:judge",
+              repository: "shop-01",
+              job: "3",
+              title: "Checkout total ignores the discount code",
+              label: "Judge refused a criterion and is asking you",
+              asked: "Does the fix address the cause the note names?",
+              detail: "A customer with a valid code is still charged the full price.",
+              waiting: "22m",
+              answers: [
+                { id: "agree", label: "Agree with the refusal" },
+                { id: "disagree_once", label: "Disagree, just this step" },
+                { id: "disagree_always", label: "Always disagree" },
+              ],
+              note: "Open job 3 to answer.",
+            },
+            {
+              id: "a:command",
+              repository: "armada",
+              job: "12",
+              title: "The drone count is wrong after a restart",
+              label: "The drone wants to run a command it was not given",
+              asked: <span className="mono">cargo nextest run -p store</span>,
+              waiting: "1m",
+              answers: [
+                { id: "allow_for_job", label: "Allow for this job" },
+                { id: "always_allow", label: "Always allow in this repository" },
+                { id: "reject", label: "Reject" },
+              ],
+              note: "Open job 12 to answer.",
+            },
+          ]}
+        />
+      ),
+    },
+  },
+  render: DockBesideTheContent.render,
 };
 
 /** Below the breakpoint: the dock folds to an edge strip carrying the questions waiting, and opens as a sheet. */
