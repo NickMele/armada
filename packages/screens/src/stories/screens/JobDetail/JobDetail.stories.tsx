@@ -193,8 +193,21 @@ export const PlanDropReasonEmpty: Story = {
     // Pristine: a hint, not an error — nothing has been tried yet.
     await expect(within(row).getByText("A reason is needed.")).toHaveAttribute("data-tone", "muted");
     await expect(within(row).getByRole("button", { name: "Drop" })).toBeDisabled();
-    // Only a submit tried empty turns it red. Drop itself stays disabled and
-    // unclickable while blank, so the keyboard path is what tries it.
+  },
+};
+
+/**
+ * The same field, once a submit has been tried empty — the only way there,
+ * since Drop itself stays disabled and unclickable while blank. `#897`.
+ */
+export const PlanDropReasonAttemptedEmpty: Story = {
+  name: "Plan, Drop reason tried empty",
+  render: () => <JobDetailFrom fixture={withPlan(PLAN_PARTWAY)} />,
+  play: async ({ canvas, userEvent }) => {
+    const found = await canvas.findByText("Add a unit test that does not construct the store");
+    const row = found.closest("li");
+    if (row === null) throw new Error("the task row was not found");
+    await userEvent.click(within(row).getByRole("button", { name: "Drop…" }));
     await userEvent.click(within(row).getByLabelText("Reason"));
     await userEvent.keyboard("{Enter}");
     await expect(within(row).getByText("A reason is needed.")).toHaveAttribute("data-tone", "error");
