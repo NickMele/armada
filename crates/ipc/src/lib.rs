@@ -229,7 +229,9 @@ pub use preferences::{Preferences, SavePreference};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
 pub use raising::{CapRaise, RaisedBy, TurnRaise};
 pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
-pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
+pub use reclaimed::{
+    BranchDeleted, DeleteBranch, ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed,
+};
 pub use rehearsal::{
     CheckoutRunDiff, CheckoutRunList, CheckoutRunMessage, CheckoutRunOpened, CheckoutRunRecord,
     CheckoutRunSheet, CheckoutRunUnderway, DiffAgainst, NamedRun, RunDiffReading, RunEntry,

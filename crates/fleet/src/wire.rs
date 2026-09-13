@@ -668,6 +668,7 @@ pub(crate) fn worktree_held(holding: &Holding) -> WorktreeHeld {
         status: holding.status.into(),
         last_moved_at: (&holding.last_moved).into(),
         path: holding.path.clone(),
+        on_disk: holding.on_disk,
         branch: holding.branch.clone(),
         held: holding.held.iter().filter_map(held_reason).collect(),
     }

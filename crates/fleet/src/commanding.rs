@@ -569,23 +569,20 @@ where
         Ok(JobForgotten { job_id })
     }
 
-    /// The disk, given back, with the record left standing. **Nothing is
-    /// redacted here either** — every field of the answer is about a directory
-    /// and a branch this Job derived, and there is no path in it a person
-    /// clearing their own disk should not be shown.
+    /// The disk, given back — `crate::reclaiming`, which says why nothing is redacted.
     async fn reclaim_worktree(
         self: Arc<Self>,
         job_id: JobId,
     ) -> Result<WorktreeReclaimed, Refusal> {
-        let id = job_id.to_domain();
-        let gave_back = budgeted_for(self.command_budget(), job_id, {
-            let fleet = Arc::clone(&self);
-            let id = id.clone();
-            async move { Fleet::reclaim_worktree(&fleet, &id).await }
-        })
-        .await
-        .map_err(|why| self.refusal(why))?;
-        Ok(crate::wire::reclaimed(&id, gave_back))
+        Fleet::reclaim_answered(self, job_id).await
+    }
+
+    async fn delete_branch(
+        self: Arc<Self>,
+        job_id: JobId,
+        asked: ipc::DeleteBranch,
+    ) -> Result<ipc::BranchDeleted, Refusal> {
+        Fleet::delete_branch_answered(self, job_id, asked).await
     }
 
     /// **Two Jobs, redacted separately.** The failed one is now `killed`; the

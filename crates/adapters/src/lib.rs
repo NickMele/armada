@@ -78,7 +78,7 @@ pub use harness::{
 pub use issue_lookup::IssueLookup;
 pub use mcp::{only_the_evidence_server, publish_the_agents_door, Published, REPOSITORY_CONFIG};
 pub use reclaim::{
-    reclaim, standing, BranchGone, BranchStanding, Reclaimed, RepoUnreadable, Standing,
-    UnmergedWork, WorktreeGone, WorktreeStanding,
+    delete_branch, reclaim, standing, BranchGone, BranchRefused, BranchStanding, Reclaimed,
+    RepoUnreadable, Standing, UnmergedWork, WorktreeGone, WorktreeStanding,
 };
 pub use worktree::GitVcs;

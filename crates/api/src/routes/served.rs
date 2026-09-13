@@ -563,6 +563,12 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/reclaim_worktree",
     },
+    // The branch a reclaim keeps, deleted by a person against the tip they saw.
+    Route {
+        operation: "delete_branch",
+        method: "POST",
+        path: "/jobs/:job_id/delete_branch",
+    },
     Route {
         operation: "redispatch_job",
         method: "POST",

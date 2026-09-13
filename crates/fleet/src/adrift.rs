@@ -317,6 +317,15 @@ pub enum Adrift {
     /// alternative reading is "there was nothing to reclaim" and that is the
     /// answer a person would act on by never looking again.
     NotReclaimed { job: JobId, cause: RepoUnreadable },
+    /// A person's `delete_branch` refused before anything was touched. A 409,
+    /// and [`Undeletable`](crate::reclaiming::Undeletable) says what to do.
+    BranchNotDeletable {
+        job: JobId,
+        why: crate::reclaiming::Undeletable,
+    },
+    /// The delete was allowed and did not happen: the repository would not
+    /// open, or git refused. A 500, in git's own words.
+    BranchNotDeleted { job: JobId, why: String },
     /// A redispatch was asked for on a Job that has not stopped.
     ///
     /// **Not an illegal transition**, which is why it is its own variant: the

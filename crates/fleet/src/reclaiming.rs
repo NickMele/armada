@@ -21,13 +21,75 @@
 //! work nobody has taken, so the setting is fixed rather than a parameter, and
 //! a branch left standing comes back as part of a successful answer rather than
 //! as a failure.
+//!
+//! **[`Fleet::delete_branch`] is a person's act, not Fleet's.** It takes the
+//! branch a reclaim kept only against the tip that person was shown.
+
+use std::fmt;
+use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, WorktreeSpec};
-use adapters::{Reclaimed, UnmergedWork};
-use core_model::JobId;
+use adapters::{BranchGone, BranchRefused, Reclaimed, UnmergedWork};
+use api::Refusal;
+use core_model::{Component, Envelope, FieldValue, JobId, JobStatus, Level};
 
 use crate::adrift::Adrift;
+use crate::budget::budgeted_for;
 use crate::daemon::Fleet;
+
+/// Why a person's `delete_branch` was refused. Nothing was touched.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Undeletable {
+    NotTerminal {
+        status: JobStatus,
+    },
+    CheckoutOnDisk {
+        path: String,
+    },
+    Absent {
+        branch: String,
+    },
+    /// **The guard.** The branch moved since the person looked at it.
+    TipMoved {
+        branch: String,
+        asked: String,
+        found: String,
+    },
+}
+
+impl fmt::Display for Undeletable {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Undeletable::NotTerminal { status } => write!(
+                out,
+                "the Job is {} and may still need it. `kill_job` ends a Job still in flight",
+                status.as_wire()
+            ),
+            Undeletable::CheckoutOnDisk { path } => write!(
+                out,
+                "its checkout is still at {path}. Reclaim the worktree first, then delete the branch"
+            ),
+            Undeletable::Absent { branch } => {
+                write!(out, "{branch} is already gone, so there is nothing to delete")
+            }
+            Undeletable::TipMoved {
+                branch,
+                asked,
+                found,
+            } => write!(
+                out,
+                "{branch} now stands at {found}, not {asked}. Look at it again before deleting it"
+            ),
+        }
+    }
+}
+
+/// The branch a person deleted, and the tip it is recoverable from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeletedBranch {
+    pub branch: String,
+    pub tip: String,
+}
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -97,5 +159,102 @@ where
             .retain_job(job_id, &self.now())
             .map_err(Adrift::Writing)?;
         Ok(reclaimed)
+    }
+
+    /// Delete this terminal Job's branch, unmerged commits and all, once its
+    /// checkout is gone and only while the branch stands at `tip`.
+    ///
+    /// **`UnmergedWork::Delete`, which the sweep and `reclaim_worktree` never
+    /// use.** A person confirmed against this tip; Fleet deciding alone did not.
+    pub async fn delete_branch(&self, job_id: &JobId, tip: &str) -> Result<DeletedBranch, Adrift> {
+        let job = self.load(job_id).await?;
+        let refused = |why| Adrift::BranchNotDeletable {
+            job: job_id.clone(),
+            why,
+        };
+        if !job.status().is_terminal() {
+            return Err(refused(Undeletable::NotTerminal {
+                status: job.status(),
+            }));
+        }
+        let served = self.served_by(&job)?;
+        let spec = WorktreeSpec::for_job(served.root(), &job.handle()).map_err(|cause| {
+            Adrift::Unworkable {
+                job: job_id.clone(),
+                cause,
+            }
+        })?;
+        let failed = |why| Adrift::BranchNotDeleted {
+            job: job_id.clone(),
+            why,
+        };
+        let gone = adapters::delete_branch(&spec, tip).map_err(|no| match no {
+            BranchRefused::CheckoutOnDisk { path } => refused(Undeletable::CheckoutOnDisk { path }),
+            BranchRefused::Absent { branch } => refused(Undeletable::Absent { branch }),
+            BranchRefused::TipMoved {
+                branch,
+                asked,
+                found,
+            } => refused(Undeletable::TipMoved {
+                branch,
+                asked,
+                found,
+            }),
+            BranchRefused::Unreadable(cause) => {
+                failed(format!("{} would not open: {}", cause.repo, cause.why))
+            }
+        })?;
+        let BranchGone::Deleted { branch, tip } = gone else {
+            return Err(failed(crate::holding::said_of_branch(&gone)));
+        };
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Info,
+            Component::Fleet,
+            self.run().clone(),
+            "a person deleted this job's branch",
+        )
+        .in_job(job_id.as_ulid().clone())
+        .with_field("branch", FieldValue::Str(branch.clone()))
+        .with_field("tip", FieldValue::Str(tip.clone()));
+        self.noted_in_the_log(job_id, &envelope);
+        Ok(DeletedBranch { branch, tip })
+    }
+
+    /// `Commands::reclaim_worktree`. **Nothing is redacted**: every field is
+    /// about a directory and a branch this Job derived.
+    pub(crate) async fn reclaim_answered(
+        self: Arc<Self>,
+        job_id: ipc::JobId,
+    ) -> Result<ipc::WorktreeReclaimed, Refusal> {
+        let id = job_id.to_domain();
+        let gave_back = budgeted_for(self.command_budget(), job_id, {
+            let fleet = Arc::clone(&self);
+            let id = id.clone();
+            async move { Fleet::reclaim_worktree(&fleet, &id).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
+        Ok(crate::wire::reclaimed(&id, gave_back))
+    }
+
+    /// `Commands::delete_branch`, redacting nothing for the reason above.
+    pub(crate) async fn delete_branch_answered(
+        self: Arc<Self>,
+        job_id: ipc::JobId,
+        asked: ipc::DeleteBranch,
+    ) -> Result<ipc::BranchDeleted, Refusal> {
+        let deleted = budgeted_for(self.command_budget(), job_id.clone(), {
+            let fleet = Arc::clone(&self);
+            let id = job_id.to_domain();
+            async move { Fleet::delete_branch(&fleet, &id, &asked.tip).await }
+        })
+        .await
+        .map_err(|why| self.refusal(why))?;
+        Ok(ipc::BranchDeleted {
+            job_id,
+            branch: deleted.branch,
+            tip: deleted.tip,
+        })
     }
 }

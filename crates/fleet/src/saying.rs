@@ -275,6 +275,12 @@ impl fmt::Display for Adrift {
                 cause.repo,
                 cause.why
             ),
+            Adrift::BranchNotDeletable { job, why } => {
+                write!(out, "{}'s branch was not deleted: {why}", job.as_str())
+            }
+            Adrift::BranchNotDeleted { job, why } => {
+                write!(out, "{}'s branch could not be deleted: {why}", job.as_str())
+            }
             Adrift::NotRedispatchable { job, status } => write!(
                 out,
                 "{} is {} and cannot be redispatched. Redispatch replaces a Job that ran and \
@@ -635,6 +641,8 @@ impl Adrift {
             | Adrift::TurnCapNotRaised { job, .. }
             | Adrift::TurnCapAboveCeiling { job, .. }
             | Adrift::NotReclaimed { job, .. }
+            | Adrift::BranchNotDeletable { job, .. }
+            | Adrift::BranchNotDeleted { job, .. }
             | Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }
             | Adrift::NotReplaceable { job }
@@ -745,6 +753,8 @@ impl Error for Adrift {
             | Adrift::TurnCapNotRaised { .. }
             | Adrift::TurnCapAboveCeiling { .. }
             | Adrift::NotReclaimed { .. }
+            | Adrift::BranchNotDeletable { .. }
+            | Adrift::BranchNotDeleted { .. }
             | Adrift::NotRedispatchable { .. }
             | Adrift::NeverRan { .. }
             | Adrift::NotReplaceable { .. }

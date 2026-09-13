@@ -108,6 +108,11 @@ const NOT_CAPPABLE: &str = "fleet.not_cappable";
 /// 200 with both halves absent** — a client reading "nothing to reclaim" would
 /// draw a Job whose disk is back when the disk is still there.
 const NOT_RECLAIMED: &str = "fleet.not_reclaimed";
+/// A `delete_branch` refused on the status, the checkout, the branch or its
+/// tip. A 409, one code: the sentence names which and what to do.
+const BRANCH_NOT_DELETABLE: &str = "fleet.branch_not_deletable";
+/// A `delete_branch` that was allowed and failed in git. A 500.
+const BRANCH_NOT_DELETED: &str = "fleet.branch_not_deleted";
 /// Nothing on this machine could say what is on a pull request. **A 500**, for
 /// [`MERGE_NO_TOOL`]'s reason: nothing about the request is wrong and asking
 /// again is reasonable. It is never an empty list — a pull request nobody has
@@ -299,6 +304,14 @@ where
             // wrong, which is the 500 this variant is for.
             Adrift::NotReclaimed { job, .. } => Refusal::Fault(
                 WireError::raised(NOT_RECLAIMED, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::BranchNotDeletable { job, .. } => Refusal::IllegalMove(
+                WireError::raised(BRANCH_NOT_DELETABLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::BranchNotDeleted { job, .. } => Refusal::Fault(
+                WireError::raised(BRANCH_NOT_DELETED, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
             // What an act on a stopped step refuses with — plus a redirect

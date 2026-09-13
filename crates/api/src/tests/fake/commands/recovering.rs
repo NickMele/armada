@@ -156,6 +156,31 @@ impl FakeDaemon {
         }
         Ok(shapes::reclaimed(job_id))
     }
+    /// The branch, deleted. **The fake has no repository**, so it refuses only
+    /// on the status and answers with the tip it was sent.
+    pub(super) async fn fake_delete_branch(
+        &self,
+        job_id: JobId,
+        asked: ipc::DeleteBranch,
+    ) -> Result<ipc::BranchDeleted, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if !job.status.domain().is_terminal() {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.branch_not_deletable",
+                format!("a Job at {} still has its branch", job.status.as_wire()),
+                run_id(),
+            )));
+        }
+        let branch = format!("armada/{}", job_id.as_str());
+        Ok(ipc::BranchDeleted {
+            job_id,
+            branch,
+            tip: asked.tip,
+        })
+    }
     /// Mint a replacement for a stopped Job. **The fake asserts one thing about
     /// the domain and no more**: a Job that ran and stopped is replaceable and
     /// anything else is refused, because that is the whole of what the route

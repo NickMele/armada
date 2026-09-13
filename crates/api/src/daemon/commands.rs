@@ -193,6 +193,15 @@ pub trait Commands: Send + Sync + 'static {
         job_id: JobId,
     ) -> impl Future<Output = Result<WorktreeReclaimed, Refusal>> + Send;
 
+    /// `delete_branch` — deletes a terminal Job's branch, unmerged or not, once
+    /// its checkout is gone and only while it stands at the `tip` a person was
+    /// shown. [`Refusal::IllegalMove`] otherwise, naming which.
+    fn delete_branch(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        asked: ipc::DeleteBranch,
+    ) -> impl Future<Output = Result<ipc::BranchDeleted, Refusal>> + Send;
+
     /// `redispatch_job` — mints a replacement for a Job that ran and stopped,
     /// and kills the original where it is still killable. Intervention Ladder
     /// rung 2, and the answer to a Job with no way to be tried again.
