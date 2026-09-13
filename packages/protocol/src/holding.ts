@@ -46,7 +46,7 @@ export type WorktreeHeld = {
   path: string;
   /**
    * Whether the checkout is still there. False on a job whose checkout is gone
-   * and whose branch is still held, which `delete_branch` is for. Since 13.29.
+   * and whose branch is still held, which `delete_branch` is for. Since 13.32.
    */
   on_disk: boolean;
   /** The branch the job derived, named even where it is already gone. */
