@@ -15,6 +15,7 @@ import type {
   TransportFault,
 } from "@armada/protocol";
 import type { FleetCapacity, FleetLimits, JobSummary, ManifestReading } from "@armada/protocol";
+import type { Preferences } from "@armada/protocol";
 import type { ServerList } from "@armada/protocol";
 import type { CallArguments, CheckOutput } from "@armada/protocol";
 import type { LeftOutWorkflow, ManifestSummary, ModelChoices, RepositoryList, WorkflowSummary } from "@armada/protocol";
@@ -245,6 +246,20 @@ export async function capacityOf(port: number): Promise<FleetCapacity | null> {
 export async function limitsOf(port: number): Promise<FleetLimits | null> {
   const answer = await ask(port, "GET", "/limits");
   return answer.ok === true ? (answer.body as FleetLimits) : null;
+}
+
+/**
+ * Every preference a person has saved, and what is in force for each.
+ *
+ * **`null` where Fleet did not answer**, and the caller keeps whatever
+ * `BridgeState.preferences` already holds — the shipped default until the
+ * first read, and the last good reading after. Unlike `limitsOf`, a failed
+ * read here is never taken as "nothing is saved": that would draw a person's
+ * own choice as the default the moment a read glitches.
+ */
+export async function preferencesOf(port: number): Promise<Preferences | null> {
+  const answer = await ask(port, "GET", "/preferences");
+  return answer.ok === true ? (answer.body as Preferences) : null;
 }
 
 /**

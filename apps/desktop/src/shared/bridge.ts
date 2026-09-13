@@ -32,6 +32,7 @@ import type {
   FleetCapacity,
   FleetLimits,
   JobSummary,
+  Preferences,
   ProposalInFlight,
   UnreadableJob,
 } from "@armada/protocol";
@@ -107,6 +108,16 @@ export type BridgeState = {
    * not re-reading on a timer: nothing but a save changes it.
    */
   limits: FleetLimits | null;
+  /**
+   * A person's Bridge preferences, and what is in force for each.
+   *
+   * **Never `null`, unlike `limits`.** A screen reading this draws the
+   * shipped default until the first read lands and its own choice after —
+   * there is no "not read yet" state worth a screen's own branch, because the
+   * default is itself a real, showable value. Read once per connection and
+   * republished on every save, `limits`' terms otherwise.
+   */
+  preferences: Preferences;
   /**
    * What Fleet's last read of `armada.yml` came to, or `null` because there
    * has not been one.
@@ -343,6 +354,7 @@ export const NOTHING_YET: BridgeState = {
   unreadable: [],
   capacity: null,
   limits: null,
+  preferences: { where_things_are_open: false },
   manifestReading: null,
   missed: 0,
   readAt: null,
@@ -407,6 +419,7 @@ export const CHANNELS = {
   raiseCostCap: "bridge:raise-cost-cap",
   raiseTurnCap: "bridge:raise-turn-cap",
   saveLimits: "bridge:save-limits",
+  savePreference: "bridge:save-preference",
   fileReport: "bridge:file-report",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",

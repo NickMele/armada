@@ -23,6 +23,7 @@ import type {
   Outcome,
   ReclaimOutcome,
   SaveLimits,
+  SavePreference,
   StagedAttachment,
 } from "@armada/protocol";
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, RestartRequested, TurnRaise } from "@armada/protocol";
@@ -44,6 +45,7 @@ import { ask, COMMAND_MS, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answ
 import type { Picked } from "./picked";
 import { Clearing } from "./clearing";
 import { Limits } from "./limits";
+import { Preferring } from "./preferences";
 import { Reporting } from "./reporting";
 import { proposeFromRequest as propose } from "./proposing";
 import { decide, takeUp, type Decision } from "./review";
@@ -130,6 +132,9 @@ export class JobCommands {
   private readonly clearing: Clearing;
   /** Fleet's three admission limits. Not acts on a Job either — `limits.ts`. */
   private readonly limits: Limits;
+  /** A person's Bridge preferences. Not acts on a Job either —
+   *  `preferences.ts`. */
+  private readonly preferring: Preferring;
   /** A report being filed. Its own class beside `clearing` and `limits` —
    *  `reporting.ts`. */
   private readonly reporting: Reporting;
@@ -190,6 +195,7 @@ export class JobCommands {
     this.board = board;
     this.clearing = new Clearing(board);
     this.limits = new Limits(board);
+    this.preferring = new Preferring(board);
     this.reporting = new Reporting(board);
   }
 
@@ -332,6 +338,13 @@ export class JobCommands {
    *  why this is not the shape `act` or `setting` above are. */
   saveLimits(values: SaveLimits): Promise<Outcome> {
     return this.limits.save(values);
+  }
+
+  // --------------------------------------------------------- Bridge preferences
+  /** Save one preference by name. `preferences.ts` holds why this is not the
+   *  shape `act` or `setting` above are. */
+  savePreference(save: SavePreference): Promise<Outcome> {
+    return this.preferring.save(save);
   }
 
   /**

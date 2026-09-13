@@ -27,6 +27,7 @@ import type {
   RunOutputRead,
   CheckoutRunListRead,
   SaveLimits,
+  SavePreference,
   StagedAttachment,
   StartCheckoutRun,
   StartRun,
@@ -367,6 +368,16 @@ export type BridgeApi = {
    * API's own error shape, and nothing here saves any of the three.
    */
   saveLimits: (values: SaveLimits) => Promise<Outcome>;
+  /**
+   * Save one preference by name. **Fleet-wide and never a Job's own act**,
+   * `saveLimits`' reason — and one preference at a time, unlike `saveLimits`,
+   * which sends every field it has an opinion on in one request: a preference
+   * is a row keyed by name, so saving one leaves every other one untouched.
+   *
+   * What comes back is every preference now in force, and `BridgeState.preferences`
+   * is republished with it — `readPreferences`' terms otherwise.
+   */
+  savePreference: (save: SavePreference) => Promise<Outcome>;
   /**
    * Say that this Job failed in error, in your own words, and file the Job's
    * own record with it.
