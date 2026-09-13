@@ -168,6 +168,8 @@ Two different reasons for freezing, not one. Some items are frozen because a pro
 | Checks added mid-Job | **Live** | — | **Additive-only.** Adding a gate is not weakening one |
 | Allowlist, budget caps, dispatch freeze | Live | — | Re-evaluated at every gated checkpoint |
 
+**Dispatch freeze is asked where a Drone would start**: at admission, and at the step boundary after a step passes its gate. A step already being worked finishes, since stopping a Drone mid-step would lose its work; see [Manifest](manifest.md), *Dispatch freeze*.
+
 The boot-time constraint: injected MCP servers cannot be swapped, nor the system prompt rewritten, without a kill and respawn. It says a value cannot change *within* a process; it does not say when the value is chosen. Commands and Checks are frozen by choice rather than by that constraint, and now every row is — **the snapshot is taken earlier than any process that reads it.**
 
 Fleet resolves Checks from the Job's snapshot rather than live — the rule `acceptance_criteria` already follows. A Job may write a new Manifest or a new named Check and have it gate.

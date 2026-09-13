@@ -15,6 +15,7 @@ mod amending;
 mod amending_sections;
 mod catalogue;
 mod fences;
+mod freezing;
 mod from_nothing;
 mod harness;
 mod live;

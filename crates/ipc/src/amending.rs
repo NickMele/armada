@@ -129,6 +129,10 @@ pub enum ManifestEdit {
         #[serde(deserialize_with = "stated")]
         turn_cap_per_job: Option<u32>,
     },
+    /// `freeze`. `false` removes a written `true`; absent already means not frozen.
+    SetFreeze {
+        freeze: bool,
+    },
     /// `0` removes a written code, since absent already means `0`.
     SetCheckExpectExitCode {
         name: String,
@@ -296,6 +300,9 @@ pub struct ManifestDeclared {
     pub ports: Vec<NamedPort>,
     pub auto_merge: PolicyWords,
     pub review_gate: PolicyWords,
+    /// `freeze`: `false` where the file says nothing, and from an older Fleet.
+    #[serde(default)]
+    pub freeze: bool,
     /// `drone.cost_cap_micros_per_job`, absent where the file defers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost_cap_micros_per_job: Option<u32>,

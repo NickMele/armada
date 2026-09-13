@@ -57,6 +57,8 @@ pub enum Edit {
     PokeLimit(Option<u32>),
     /// `drone.exclude_paths`. Empty defers to what Fleet runs with.
     ExcludePaths(Vec<String>),
+    /// `freeze`. `false` removes a written `true`; absent already means not frozen.
+    Freeze(bool),
 }
 
 /// An edit to one Check.
@@ -184,6 +186,7 @@ impl Edit {
             Edit::QuietAfterSeconds(_) => "drone.quiet_after_seconds".to_string(),
             Edit::PokeLimit(_) => "drone.poke_limit".to_string(),
             Edit::ExcludePaths(_) => "drone.exclude_paths".to_string(),
+            Edit::Freeze(_) => "freeze".to_string(),
         }
     }
 
@@ -231,6 +234,12 @@ impl Edit {
                 true if only_key(doc, &["drone"], "exclude_paths") => Op::remove(&["drone"]),
                 true => Op::remove(&["drone", "exclude_paths"]),
             }]),
+            Edit::Freeze(true) => Ok(vec![Op::set(&["freeze"], Node::Flag(true))]),
+            // A written `false` is somebody's, and stays, as `destructive`'s does.
+            Edit::Freeze(false) => Ok(match found(doc, &["freeze"]) {
+                Some(Value::Bool(true)) => vec![Op::remove(&["freeze"])],
+                _ => Vec::new(),
+            }),
         }
     }
 }

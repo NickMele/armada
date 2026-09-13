@@ -271,6 +271,7 @@ fn edit(wire: ManifestEdit) -> Result<Vec<Edit>, Unknown> {
         ManifestEdit::SetTurnCapPerJob { turn_cap_per_job } => {
             Edit::TurnCapPerJob(turn_cap_per_job)
         }
+        ManifestEdit::SetFreeze { freeze } => Edit::Freeze(freeze),
     }])
 }
 
@@ -402,6 +403,7 @@ pub(crate) fn declared_in(manifest: &config::Manifest) -> ManifestDeclared {
                 .map(|word| word.as_written().to_string())
                 .collect(),
         },
+        freeze: manifest.frozen(),
         cost_cap_micros_per_job: manifest.cost_cap_micros(),
         turn_cap_per_job: manifest.turn_cap(),
         base: manifest.base().map(str::to_string),

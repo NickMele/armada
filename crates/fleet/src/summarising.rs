@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::Refusal;
 use core_model::{
-    BudgetHold, Job, JobId as CoreJobId, JobStatus as CoreJobStatus,
+    BudgetHold, Job, JobId as CoreJobId, JobStatus as CoreJobStatus, ManifestId,
     QueuedReason as CoreQueuedReason,
 };
 
@@ -39,6 +39,8 @@ pub(crate) struct Waiting {
     /// **Absent unless `reason` is `over_budget`.** It qualifies that label and
     /// says nothing on its own.
     pub(crate) budget: Option<BudgetHold>,
+    /// **Empty unless `reason` is `frozen`**: the gating Manifests holding it.
+    pub(crate) frozen_by: Vec<ManifestId>,
 }
 
 impl Waiting {
@@ -47,6 +49,7 @@ impl Waiting {
         Waiting {
             reason,
             budget: None,
+            frozen_by: Vec::new(),
         }
     }
 }
@@ -84,6 +87,7 @@ where
             asking,
             self.resumption(job),
         );
+        summary.frozen_by = queued.frozen_by.iter().map(ipc::ManifestId::from).collect();
         summary.tasks = self
             .task_counts(job.id())
             .await
@@ -113,6 +117,16 @@ where
     pub(crate) async fn queued_reason(&self, job: &Job) -> Result<Waiting, Refusal> {
         if job.status() != CoreJobStatus::Queued {
             return Ok(Waiting::on(None));
+        }
+        // **First, because nothing below would start the Job while it holds**,
+        // and only a person lifts it. Admission's own predicate.
+        let frozen_by = self.frozen_by(job);
+        if !frozen_by.is_empty() {
+            return Ok(Waiting {
+                reason: Some(CoreQueuedReason::Frozen),
+                budget: None,
+                frozen_by,
+            });
         }
         let (loaded, _) = self.every_job().await.map_err(|why| self.refusal(why))?;
         let standing: BTreeMap<CoreJobId, CoreJobStatus> = loaded
@@ -146,6 +160,7 @@ where
                     Overspent::Cost => BudgetHold::CostCap,
                     Overspent::Turns => BudgetHold::TurnCap,
                 }),
+                frozen_by: Vec::new(),
             });
         }
         // **The same predicate admission opens with**, asked of the same

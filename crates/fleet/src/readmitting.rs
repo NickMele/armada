@@ -27,7 +27,7 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
     Actor, FrozenWorkflow, IllegalStepTransition, Job, ResolvedStep, Resumption, StepEvidence,
-    StepId, StepState, StepTarget, Target,
+    StepId, StepState, StepTarget, StepVerdict, Target,
 };
 
 use crate::adrift::Adrift;
@@ -48,13 +48,14 @@ use crate::working::Working;
 /// | `stopped` | a restart | the same step, told what stopped it |
 /// | `advanced`, no dispatch | an override | the step after it, told a person cleared this one |
 /// | `advanced`, it dispatched | Fleet, once the children finished | the step after it, told what they came to |
+/// | `advanced` and `passed`, no dispatch | Fleet, once a freeze lifted | the step after it, told the gate cleared this one |
 ///
 /// The two `running` cases are told apart by the waiting note, which is
 /// `request_changes`'s alone — that test predates this file and is unchanged.
 /// The two `advanced` cases are told apart by the frozen workflow, which is the
 /// only thing that knows whether a step was allowed to create Jobs.
 ///
-/// **Three of the four are a person and the fourth is not**, which is what
+/// **Three are a person and the other two are not**, which is what
 /// [`Owed::resumption`] answers `None` for.
 pub(crate) enum Owed {
     /// The step is `running` — a person answered at a human advance gate, and
@@ -81,6 +82,9 @@ pub(crate) enum Owed {
     /// a person accepted it would be the record saying something that did not
     /// happen.
     AfterADispatch { dispatched: StepId, next: StepId },
+    /// The step is `advanced` and `passed` — the machine cleared it — and a
+    /// freeze stood the Job down before the next one started. Fleet's doing.
+    AfterAFreeze { advanced: StepId, next: StepId },
 }
 
 impl Owed {
@@ -113,7 +117,7 @@ impl Owed {
             Owed::Standing { .. } => Some(Resumption::Reviewed),
             Owed::Restarted { .. } => Some(Resumption::Restarted),
             Owed::Overruled { .. } => Some(Resumption::Overruled),
-            Owed::AfterADispatch { .. } => None,
+            Owed::AfterADispatch { .. } | Owed::AfterAFreeze { .. } => None,
         }
     }
 }
@@ -300,6 +304,18 @@ where
                         next: next.id().clone(),
                     })
                 }
+                // An override keeps the `failed` it stopped on, so a step that
+                // reads `passed` here was stood down by a freeze.
+                Some(next)
+                    if job.step(&step).is_some_and(|row| {
+                        matches!(row.last_verdict(), Some(StepVerdict::Passed))
+                    }) =>
+                {
+                    Ok(Owed::AfterAFreeze {
+                        advanced: step,
+                        next: next.id().clone(),
+                    })
+                }
                 Some(next) => Ok(Owed::Overruled {
                     advanced: step,
                     next: next.id().clone(),
@@ -332,7 +348,9 @@ where
                 let job = self.move_step(&job, step, StepTarget::Running).await?;
                 Ok((job, step.clone()))
             }
-            Owed::Overruled { next, .. } | Owed::AfterADispatch { next, .. } => {
+            Owed::Overruled { next, .. }
+            | Owed::AfterADispatch { next, .. }
+            | Owed::AfterAFreeze { next, .. } => {
                 // `entering` for `crate::dispatch`'s reason: the step a
                 // forward walk arrives at is already `running` where a loop
                 // came round to it, and the two entrances walk different edges.
@@ -375,9 +393,17 @@ fn carried_across(
         // left out for the opposite reason: the part before it *was* cleared, by
         // the machine, and that is `Cleared::checked` two arms down rather than
         // `Cleared::reviewed`.
-        Owed::Standing { .. } | Owed::Restarted { .. } | Owed::AfterADispatch { .. } => None,
+        Owed::Standing { .. }
+        | Owed::Restarted { .. }
+        | Owed::AfterADispatch { .. }
+        | Owed::AfterAFreeze { .. } => None,
     };
-    if let Owed::AfterADispatch { dispatched, .. } = owed {
+    if let Owed::AfterADispatch { dispatched, .. }
+    | Owed::AfterAFreeze {
+        advanced: dispatched,
+        ..
+    } = owed
+    {
         if let Some(passed) = job.workflow().step(dispatched) {
             return crossed.and_cleared(Cleared::checked(passed));
         }

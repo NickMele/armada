@@ -501,6 +501,18 @@ A Manifest-level toggle to pause/freeze **all** dispatch for this project — du
 
 **Most-restrictive-wins.** Any frozen Manifest in a Job's gate list freezes the whole Job. Why: a freeze means do not touch this project, and the Job would touch it.
 
+**It is `freeze: true`, a top-level flag, and nothing else.** Absent or `false` is not frozen; any other value is refused at the key. There is no note of why: a key nothing reads is refused on principle. The Manifest form sets it through the same writer as every other key, and the file's own read carries it back.
+
+**It is live, and it holds rather than refuses.** A save is adopted on the re-read Fleet already does, with no restart:
+
+| Where the Job is | What a freeze does |
+| --- | --- |
+| Approved, never started | Stays `queued`, reading `frozen`, with `frozen_by` naming the Manifest |
+| Running | Finishes the step it is on. When that step passes its gate the Job goes back to `queued` with the step advanced and the next not entered, and says so in its log |
+| At a person's gate | The approve, restart, override or merge is taken. Where a step follows, the Job then waits at `queued` as above; a merge or approval that finishes the Job starts no Drone, so there is nothing to hold |
+
+Lifting it admits on the next turn, onto the step after the one that passed. Nothing is re-run and nothing is lost. A person's act is never refused for it, for [Fleet](fleet.md)'s reason: admission is the only thing that starts a Drone.
+
 That answers dispatch. **A freeze landing on a Convoy already running is still unresolved** — freeze is enforced live at every gated checkpoint, not only at dispatch — see [Convoy](convoy.md), Open questions.
 
 ## Auto-merge and review gate

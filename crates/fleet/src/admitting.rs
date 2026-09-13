@@ -17,7 +17,8 @@
 //! roster, about no Job in particular; a new machine-wide reason is a variant
 //! there. **A reason belonging to one Job is a predicate of its own**:
 //! [`clear_to_run`] for dependencies, `Fleet::overspent` for what it has spent,
-//! asked where a Job is chosen rather than once per admission. All three are
+//! `Fleet::frozen_by` for a freeze, asked where a Job is chosen rather than once
+//! per admission. All four are
 //! shared with `serving`'s `queued_reason`, so a Board cannot say a Job is
 //! blocked while Fleet is starting it.
 //!
@@ -258,6 +259,11 @@ where
         let mut waiting = Vec::new();
         for job in loaded.jobs {
             if job.status() != JobStatus::Queued {
+                continue;
+            }
+            // A frozen repository starts nothing, whoever put the Job here —
+            // `crate::freezing`. First, because only a person lifts it.
+            if !self.frozen_by(&job).is_empty() {
                 continue;
             }
             // Approved and still waiting on a peer. It is skipped rather than

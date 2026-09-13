@@ -142,6 +142,9 @@ impl Urgency {
 /// is no variant meaning "no reason" for a renderer to have a case for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueuedReason {
+    /// A Manifest gating it says `freeze: true`. **Asked first**, because only a
+    /// person lifts it; `JobSummary.frozen_by` says which Manifest.
+    Frozen,
     /// A Job it depends on has not reached `completed_success`.
     BlockedByDependency,
     /// Its Drones have already spent more than the Job is allowed, so Fleet
@@ -167,6 +170,7 @@ pub enum QueuedReason {
 impl QueuedReason {
     /// Every variant, in the order `job-statuses.toml` names them.
     pub const ALL: &'static [QueuedReason] = &[
+        QueuedReason::Frozen,
         QueuedReason::BlockedByDependency,
         QueuedReason::OverBudget,
         QueuedReason::WaitingOnResources,
@@ -174,6 +178,7 @@ impl QueuedReason {
 
     pub fn as_wire(&self) -> &'static str {
         match self {
+            QueuedReason::Frozen => "frozen",
             QueuedReason::BlockedByDependency => "blocked_by_dependency",
             QueuedReason::OverBudget => "over_budget",
             QueuedReason::WaitingOnResources => "waiting_on_resources",

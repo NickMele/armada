@@ -71,6 +71,11 @@ export type JobSummary = {
    */
   budget_hold?: string;
   /**
+   * The gating Manifests that are frozen, by id, where `queued_reason` is
+   * `frozen`. Absent everywhere else, and from a Fleet built before a freeze.
+   */
+  frozen_by?: string[];
+  /**
    * Which act a person took to put this Job back in the queue — a key into
    * `RESUMPTION` in the generated vocabulary.
    *
