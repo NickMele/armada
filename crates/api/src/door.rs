@@ -9,7 +9,10 @@
 //! `GET` and `DELETE` for it too: no server-initiated stream, no session to
 //! end, and so nothing added to the unbounded-sink risk on the event socket.
 //!
-//! Who may open this door is `#698`. What it is scoped to is here.
+//! Who may open this door is `#698`. What it is scoped to is here, and so is
+//! the one caller it narrows: a Helm session the daemon places by its
+//! connection (`#941`, [`crate::Admitting`]). Every other caller is answered
+//! as before.
 
 use axum::body::Bytes;
 use axum::extract::State;
@@ -17,10 +20,10 @@ use axum::http::{header, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::Router;
-use ipc::door::{self, Answer, Answered, Asked, Shape};
+use ipc::door::{self, Answer, Answered, Asked, Reachable, Shape};
 use tower::ServiceExt;
 
-use crate::daemon::Queries;
+use crate::daemon::{offerable, Admitting, HelmReach, Queries};
 use crate::routes::SERVED;
 use crate::served::Served;
 
@@ -51,22 +54,29 @@ const QUERIES: &[(&str, &[&str])] = &[("search_files", &["q"]), ("get_events_sin
 /// listed as not served — which the gate refuses, and which is answered rather
 /// than silently dropped if it ever happens.
 pub fn offered() -> Vec<Shape> {
-    door::REACHABLE
-        .iter()
-        .map(|row| {
-            let route = SERVED.iter().find(|route| route.operation == row.operation);
-            Shape {
-                operation: row.operation,
-                method: route.map(|route| route.method).unwrap_or("GET"),
-                path: route.map(|route| route.path).unwrap_or(""),
-                query: QUERIES
-                    .iter()
-                    .find(|(operation, _)| *operation == row.operation)
-                    .map(|(_, names)| *names)
-                    .unwrap_or(&[]),
-            }
-        })
-        .collect()
+    shaped(door::REACHABLE.iter())
+}
+
+/// Set on a call the door makes for a Helm session it placed, and by nothing
+/// else. **An extension, never a header**: bytes on the wire cannot carry one.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct HelmCalled;
+
+fn shaped<'a>(rows: impl Iterator<Item = &'a Reachable>) -> Vec<Shape> {
+    rows.map(|row| {
+        let route = SERVED.iter().find(|route| route.operation == row.operation);
+        Shape {
+            operation: row.operation,
+            method: route.map(|route| route.method).unwrap_or("GET"),
+            path: route.map(|route| route.path).unwrap_or(""),
+            query: QUERIES
+                .iter()
+                .find(|(operation, _)| *operation == row.operation)
+                .map(|(_, names)| *names)
+                .unwrap_or(&[]),
+        }
+    })
+    .collect()
 }
 
 /// The Manifest a session is answered inside.
@@ -112,7 +122,7 @@ impl<D> Clone for Doorway<D> {
     }
 }
 
-pub fn mounted<D: Queries>(served: Served<D>, surface: Router) -> Router {
+pub fn mounted<D: Queries + Admitting>(served: Served<D>, surface: Router) -> Router {
     Router::new()
         .route(
             DOOR_PATH,
@@ -126,12 +136,34 @@ pub fn mounted<D: Queries>(served: Served<D>, surface: Router) -> Router {
 ///
 /// A notification is acknowledged with 202 and no body, for
 /// [`crate::mcp`]'s reason: JSON-RPC forbids answering one.
-async fn called<D: Queries>(State(doorway): State<Doorway<D>>, body: Bytes) -> Response {
-    let shapes = offered();
+async fn called<D: Queries + Admitting>(
+    State(doorway): State<Doorway<D>>,
+    request: axum::extract::Request,
+) -> Response {
+    let (parts, body) = request.into_parts();
+    let helm = doorway
+        .served
+        .daemon()
+        .helm_at(crate::mcp::who_called(&parts));
+    let body = match axum::body::to_bytes(body, MOST_A_CALL_MAY_BE).await {
+        Ok(body) => body,
+        // Answered as unreadable bytes, `crate::mcp`'s shape for the same case.
+        Err(_) => Bytes::new(),
+    };
+    // **A Helm session reads against everything it could be offered**, so a
+    // call outside its reach is refused by name below rather than answered
+    // as a tool that does not exist.
+    let shapes = match &helm {
+        None => offered(),
+        Some(_) => shaped(offerable()),
+    };
     let answered = match door::read(&body, &shapes) {
         Asked::Nothing => return StatusCode::ACCEPTED.into_response(),
         Asked::Ping { id } => Answered::Ping { id },
-        Asked::Tools { id } => Answered::Tools { id, shapes },
+        Asked::Tools { id } => Answered::Tools {
+            id,
+            shapes: within(shapes, helm.as_ref()),
+        },
         Asked::NoSuchMethod { id, named } => Answered::NoSuchMethod { id, named },
         Asked::Unreadable { why } => Answered::Unreadable { why },
         // Refused as a tool error and never a status code, for the reason the
@@ -146,11 +178,15 @@ async fn called<D: Queries>(State(doorway): State<Doorway<D>>, body: Bytes) -> R
             },
             Err(why) => Answered::Refused { id, why },
         },
-        Asked::Call { id, call } => match doorway.scope().await {
-            Err(why) => Answered::Refused { id, why },
-            Ok(_) => Answered::Served {
+        Asked::Call { id, call } => match (doorway.scope().await, &helm) {
+            (Err(why), _) => Answered::Refused { id, why },
+            (Ok(_), Some(reach)) if !reach.may(call.operation) => Answered::Refused {
                 id,
-                answer: doorway.through(&call).await,
+                why: reach.refusing(call.operation),
+            },
+            (Ok(_), _) => Answered::Served {
+                id,
+                answer: doorway.through(&call, helm.is_some()).await,
             },
         },
     };
@@ -164,6 +200,18 @@ async fn called<D: Queries>(State(doorway): State<Doorway<D>>, body: Bytes) -> R
         // Unreachable for plain data, and answered rather than panicked: a
         // panic here drops the connection an agent's whole session runs on.
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// The tools a caller is listed: every shape for any agent, and only what the
+/// daemon decided for a Helm session.
+fn within(shapes: Vec<Shape>, helm: Option<&HelmReach>) -> Vec<Shape> {
+    match helm {
+        None => shapes,
+        Some(reach) => shapes
+            .into_iter()
+            .filter(|shape| reach.may(shape.operation))
+            .collect(),
     }
 }
 
@@ -184,8 +232,9 @@ impl<D: Queries> Doorway<D> {
         }
     }
 
-    /// One tool call, made against the surface.
-    async fn through(&self, call: &door::Call) -> Answer {
+    /// One tool call, made against the surface. `by_helm` marks it for the
+    /// route that records who acted.
+    async fn through(&self, call: &door::Call, by_helm: bool) -> Answer {
         let request = Request::builder()
             .method(call.method)
             .uri(&call.path)
@@ -193,9 +242,12 @@ impl<D: Queries> Doorway<D> {
             .body(axum::body::Body::from(
                 call.body.clone().unwrap_or_default(),
             ));
-        let Ok(request) = request else {
+        let Ok(mut request) = request else {
             return unanswerable(call, "that call did not make a request");
         };
+        if by_helm {
+            request.extensions_mut().insert(HelmCalled);
+        }
         // Infallible: the surface's error type is `Infallible`, so a failure
         // here is a request that was never made rather than a route that
         // refused — and a refusal comes back as a status like any other.

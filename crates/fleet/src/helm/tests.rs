@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use config::Manifest;
-use ipc::door::REACHABLE;
+use ipc::door::{DRAFTING, REACHABLE};
 
 use super::reach::ACTS;
 use super::{brief, may, Authority, Voice};
@@ -57,6 +57,8 @@ and no others:
   stop_run
   start_server
   stop_server
+  propose_job
+  propose_from_request
 
 Any other act is the person's, including a tool you have been given that is \
 not listed here. Where one would help, say which and why, and leave it to \
@@ -160,6 +162,20 @@ fn every_act_is_an_operation_an_agent_may_reach() {
                 || row.contains("agent_access = \"Drafts only\""),
             "`{act}` is one no agent may reach"
         );
+    }
+}
+
+/// The door offers drafting to a Helm session alone, so an acting Helm must be
+/// allowed every row of it and a read-only one none. `#941`.
+#[test]
+fn drafting_is_an_acting_helms_and_never_a_read_only_ones() {
+    assert!(
+        !DRAFTING.is_empty(),
+        "the inventory has rows reading `Drafts only`"
+    );
+    for row in DRAFTING {
+        assert!(may(Authority::Acting, row), "`{}`", row.operation);
+        assert!(!may(Authority::ReadOnly, row), "`{}`", row.operation);
     }
 }
 

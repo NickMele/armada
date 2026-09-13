@@ -66,13 +66,15 @@ fn number(text: &str, key: &str, source: &Path) -> u32 {
         .unwrap_or_else(|| panic!("{} has no `{key} = <integer>` line", source.display()))
 }
 
-/// Every row whose `agent_access` is `Yes`, as a table.
+/// Every row whose `agent_access` is `Yes`, as a table, and every row reading
+/// `Drafts only` as a second.
 ///
-/// **`Yes` and nothing else.** `Bridge only` and `Drafts only` are decisions
-/// about a surface that is not this door, and a row reading either is not
-/// half-reachable.
+/// **Two tables, never one with a flag.** `REACHABLE` is what the door offers
+/// any agent; `DRAFTING` is offered to a Helm session alone (`#941`), so a
+/// reader that forgot a flag could not hand drafting to everyone.
 fn reachable(inventory: &str, source: &Path) -> String {
     let mut rows = String::new();
+    let mut drafting = String::new();
     let mut found = 0usize;
     for block in inventory.split("\n[operations.") {
         let Some((header, body)) = block.split_once(']') else {
@@ -84,18 +86,22 @@ fn reachable(inventory: &str, source: &Path) -> String {
         if name.is_empty() || name.contains(char::is_whitespace) {
             continue;
         }
-        if !field(body, "agent_access").is_some_and(|access| access == "Yes") {
-            continue;
-        }
+        let into = match field(body, "agent_access").as_deref() {
+            Some("Yes") => {
+                found += 1;
+                &mut rows
+            }
+            Some("Drafts only") => &mut drafting,
+            _ => continue,
+        };
         let kind = field(body, "kind").unwrap_or_default();
         let description = field(body, "description").unwrap_or_default();
-        rows.push_str(&format!(
+        into.push_str(&format!(
             "    Reachable {{ operation: {}, kind: {}, description: {} }},\n",
             quoted(name),
             quoted(&kind),
             quoted(&description),
         ));
-        found += 1;
     }
     // A parser that matched nothing would emit an empty tool set, and an empty
     // tool set is a door that opens onto nothing while every gate stays green.
@@ -105,7 +111,10 @@ fn reachable(inventory: &str, source: &Path) -> String {
          either the file's shape changed or this parser no longer matches it",
         source.display()
     );
-    format!("pub const REACHABLE: &[Reachable] = &[\n{rows}];\n")
+    format!(
+        "pub const REACHABLE: &[Reachable] = &[\n{rows}];\n\
+         pub const DRAFTING: &[Reachable] = &[\n{drafting}];\n"
+    )
 }
 
 /// One `key = "value"` out of a block, ignoring the `\"\"\"` prose fields.

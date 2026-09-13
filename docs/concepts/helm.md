@@ -38,7 +38,7 @@ Anything genuinely cross-Manifest stays a Bridge job.
 
 Helm's advantage is not more access than you have. It is reasoning over results and chaining calls you would otherwise make one at a time — "why is Job 12 failing", "what needs my attention, one by one", "what is open that we could dispatch".
 
-**Helm gets a strict subset, not a mirror.** `../contracts/system-architecture.md`, section 6 carries the inventory of queries, commands and events. **Helm gets every query and exactly one command directly.**
+**Helm gets a strict subset, not a mirror.** `../contracts/system-architecture.md`, section 6 carries the inventory of queries, commands and events. **Helm gets every query, and of the commands only the acts the owner gave it: redirecting a Drone, drafting Jobs, examining a Job, showing again, runs, servers, and raising a cap within Fleet's Helm bound.** `fleet::helm::may` is that line, and the agent door refuses every other command to a Helm session by name — undoing a run stays the person's. With action authority set to read-only, Helm is refused every command.
 
 **The 8 WebSocket events are Bridge-only.** Why: an agent cannot be interrupted mid-turn.
 

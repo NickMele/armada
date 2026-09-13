@@ -168,6 +168,42 @@ impl PeerOf for Kernel {
             .filter_map(|fd| ports_of(pid, fd))
             .any(|(lport, fport)| lport == from && fport == to)
     }
+
+    fn children(&self, pid: u32) -> Vec<u32> {
+        children_of(pid)
+    }
+}
+
+/// `PROC_PPID_ONLY`, from `sys/proc_info.h`. Not in `libc`.
+const PPID_ONLY: u32 = 6;
+
+/// How many children one process may be asked about in one pass.
+const CHILDREN: usize = 64;
+
+/// Every process whose parent is `pid`. Empty on any failure.
+fn children_of(pid: u32) -> Vec<u32> {
+    let mut pids: Vec<libc::pid_t> = vec![0; CHILDREN];
+    // SAFETY: the pointer is to `pids`, live for this call, and the size handed
+    // over is that allocation's own. The kernel writes no more than it is told
+    // and answers how many bytes it wrote; a pid with no children writes none.
+    #[allow(unsafe_code)]
+    let bytes = unsafe {
+        libc::proc_listpids(
+            PPID_ONLY,
+            pid,
+            pids.as_mut_ptr().cast::<c_void>(),
+            (size_of::<libc::pid_t>() * CHILDREN) as c_int,
+        )
+    };
+    if bytes <= 0 {
+        return Vec::new();
+    }
+    let held = (bytes as usize) / size_of::<libc::pid_t>();
+    pids.into_iter()
+        .take(held.min(CHILDREN))
+        .filter_map(|child| u32::try_from(child).ok())
+        .filter(|child| *child != 0)
+        .collect()
 }
 
 /// Every socket file descriptor the process holds. Empty on any failure,

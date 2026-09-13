@@ -81,8 +81,8 @@ mod tests;
 
 pub use conversing::{HelmFeed, HelmSeen, HelmWatch, ObservedHelm, HELM_BACKLOG};
 pub use daemon::{
-    Commands, Conversations, Daemon, FramePart, FrameSpan, PermissionAnswer, Queries, Refusal,
-    Tools,
+    offerable, Admitting, Commands, Conversations, Daemon, FramePart, FrameSpan, HelmReach,
+    PermissionAnswer, Queries, Redirector, Refusal, Tools,
 };
 pub use door::{offered, Scope, DOOR_PATH};
 pub use following::{Follow, Followed, LiveOutput};

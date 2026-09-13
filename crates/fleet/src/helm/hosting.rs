@@ -13,6 +13,7 @@ use std::future::Future;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, DroneEvent, Launch, McpConfig, Model};
@@ -61,6 +62,37 @@ pub trait Hosting: Send + Sync + 'static {
     /// **Nothing reaches `heard` until the session has started**, so a resume
     /// the agent refused leaves no row behind it.
     fn carry<'a>(&'a self, carry: Carry, heard: &'a dyn Heard) -> Carrying<'a>;
+
+    /// The process each message is being answered in right now, by pid.
+    ///
+    /// **What places a Helm session at the agent's door** (`#941`): its relay is
+    /// started inside this process's tree. A host running no process of Fleet's
+    /// answers none, and the door treats its sessions as any other agent.
+    fn running(&self) -> Vec<u32>;
+}
+
+/// A session's pid, listed while its process runs and taken off however the
+/// reply ends.
+struct Listed<'a> {
+    running: &'a Mutex<Vec<u32>>,
+    pid: Option<u32>,
+}
+
+impl<'a> Listed<'a> {
+    fn while_running(running: &'a Mutex<Vec<u32>>, pid: Option<u32>) -> Listed<'a> {
+        if let (Some(pid), Ok(mut listed)) = (pid, running.lock()) {
+            listed.push(pid);
+        }
+        Listed { running, pid }
+    }
+}
+
+impl Drop for Listed<'_> {
+    fn drop(&mut self) {
+        if let (Some(pid), Ok(mut listed)) = (self.pid, self.running.lock()) {
+            listed.retain(|held| *held != pid);
+        }
+    }
 }
 
 /// How long one reply may take before its process is ended. A reply that reads
@@ -88,6 +120,8 @@ pub struct ProcessHost {
     home: String,
     user: String,
     budget: Duration,
+    /// Every session process started and not yet ended. See [`Hosting::running`].
+    running: Mutex<Vec<u32>>,
 }
 
 impl ProcessHost {
@@ -105,6 +139,7 @@ impl ProcessHost {
             home: host.home.to_string(),
             user: host.user.to_string(),
             budget: REPLY_BUDGET,
+            running: Mutex::new(Vec::new()),
         }
     }
 
@@ -170,6 +205,7 @@ impl ProcessHost {
             Err(why) => return failed(format!("{} would not start: {why}", launch.program())),
         };
         let pid = child.id();
+        let _listed = Listed::while_running(&self.running, pid);
         let (Some(mut input), Some(output), Some(mut complaints)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
@@ -241,5 +277,12 @@ impl ProcessHost {
 impl Hosting for ProcessHost {
     fn carry<'a>(&'a self, carry: Carry, heard: &'a dyn Heard) -> Carrying<'a> {
         Box::pin(self.carried(carry, heard))
+    }
+
+    fn running(&self) -> Vec<u32> {
+        self.running
+            .lock()
+            .map(|listed| listed.clone())
+            .unwrap_or_default()
     }
 }

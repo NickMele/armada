@@ -59,7 +59,10 @@ async fn a_redirect_does_not_unfreeze_a_step_under_a_job_nobody_escalated() {
         .await
         .unwrap();
 
-    let after = fleet.redirect(&job, &advice()).await.unwrap();
+    let after = fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     assert_eq!(after.status(), JobStatus::Running);
     assert_eq!(
@@ -90,7 +93,10 @@ async fn a_redirect_into_a_healthy_drone_does_not_put_the_step_clock_back() {
         before >= Duration::from_secs(5),
         "the step has run long enough for the reading to mean something: {before:?}"
     );
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     let after = running_for(&fleet).await;
     assert!(
@@ -109,7 +115,10 @@ async fn a_redirect_onto_a_stopped_step_starts_the_step_clock_again() {
     let job = refused(&fleet, &home).await;
 
     let before = running_for(&fleet).await;
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     let after = running_for(&fleet).await;
     assert!(

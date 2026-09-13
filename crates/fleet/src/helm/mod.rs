@@ -5,6 +5,7 @@
 //! resumed by id for each message — is `#939`'s, and its host sits behind one
 //! interface, [`Hosting`], so a host elsewhere is a switch.
 
+mod admitting;
 mod brief;
 mod conversation;
 mod hosting;

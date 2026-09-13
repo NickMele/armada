@@ -181,8 +181,9 @@ where
             .helm_session(key.as_str())
             .map_err(|why| format!("the conversation's session would not read: {why}"))?;
         let host = self.helm().host();
+        let authority = self.helm_authority();
         let mut carried = host
-            .carry(carrying(served, text, stored.clone()), heard)
+            .carry(carrying(served, text, stored.clone(), authority), heard)
             .await;
         if carried == Carried::NoSuchSession && stored.is_some() {
             self.store()
@@ -194,7 +195,9 @@ where
                 ts: Instant::from(&self.now()),
                 because: Freshness::SessionNotFound,
             }));
-            carried = host.carry(carrying(served, text, None), heard).await;
+            carried = host
+                .carry(carrying(served, text, None, authority), heard)
+                .await;
         }
         match carried {
             Carried::Answered { session } => self
@@ -213,12 +216,12 @@ where
 
 /// A message as its session is told it: after Helm's brief on a new session,
 /// alone on one that already heard the brief.
-fn carrying(served: &Served, text: &str, resuming: Option<String>) -> Carry {
+fn carrying(served: &Served, text: &str, resuming: Option<String>, authority: Authority) -> Carry {
     let turn = match resuming {
         Some(_) => text.to_string(),
         None => format!(
             "{}\n\n{text}",
-            brief(served.manifest(), Authority::Acting, None).as_str()
+            brief(served.manifest(), authority, None).as_str()
         ),
     };
     Carry {

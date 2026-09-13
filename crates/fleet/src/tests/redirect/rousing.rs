@@ -81,7 +81,10 @@ async fn the_job_returns_to_running_only_once_the_drone_turns() {
         JobStatus::Escalated
     );
 
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     let roused = until_roused(&fleet).await;
     assert_eq!(roused.job, job);
@@ -116,7 +119,7 @@ async fn a_drone_that_never_wakes_leaves_the_job_escalated() {
     let job = stalled(&fleet, &home).await;
 
     fleet
-        .redirect(&job, &advice())
+        .redirect(&job, &advice(), api::Redirector::Person)
         .await
         .expect("the pipe took the write");
 
@@ -145,7 +148,10 @@ async fn a_progress_heartbeat_does_not_bring_the_job_back() {
     let job = stalled(&fleet, &home).await;
     let before = heard(&fleet).await;
 
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     for _ in 0..40 {
         assert!(fleet.turn().await.expect("a turn").roused().is_none());
@@ -172,7 +178,10 @@ async fn a_step_that_stopped_is_handed_back_on_the_send() {
     let fleet = a_fleet_with(&home, a_drone_that_answers());
     let job = refused(&fleet, &home).await;
 
-    let after = fleet.redirect(&job, &advice()).await.unwrap();
+    let after = fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     assert_eq!(after.status(), JobStatus::Running);
     assert_eq!(step_state(&fleet, &job).await, StepState::Running);

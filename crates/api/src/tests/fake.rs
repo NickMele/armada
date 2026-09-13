@@ -83,6 +83,12 @@ pub struct FakeDaemon {
     pub helm: crate::HelmFeed,
     /// What `observe_helm` answers with as the thread. Set by a test.
     pub helm_thread: Mutex<Vec<ipc::HelmMessage>>,
+    /// The peer port a test says a Helm session holds, and what that session
+    /// may call. **Fleet's placement is `fleet::peer`'s and tested there**;
+    /// this is what the door does with the answer.
+    pub helm_on: Mutex<Option<(u16, fn(&ipc::door::Reachable) -> bool)>>,
+    /// Who each redirect that reached this daemon was recorded against.
+    pub redirected_by: Mutex<Vec<crate::Redirector>>,
 }
 
 impl FakeDaemon {
@@ -110,6 +116,8 @@ impl FakeDaemon {
             repository_allowed: Mutex::new(Vec::new()),
             helm: crate::HelmFeed::new(),
             helm_thread: Mutex::new(Vec::new()),
+            helm_on: Mutex::new(None),
+            redirected_by: Mutex::new(Vec::new()),
         }
     }
 

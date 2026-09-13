@@ -612,12 +612,13 @@ where
         self: Arc<Self>,
         job_id: JobId,
         instruction: Redirection,
+        by: api::Redirector,
     ) -> Result<JobSummary, Refusal> {
         let said = Instruction::saying(&instruction.instruction)
             .ok_or_else(|| self.refusal(Adrift::Unnameable))?;
         let job = budgeted_for(self.command_budget(), job_id.clone(), {
             let fleet = Arc::clone(&self);
-            async move { fleet.redirect(&job_id.to_domain(), &said).await }
+            async move { fleet.redirect(&job_id.to_domain(), &said, by).await }
         })
         .await
         .map_err(|why| self.refusal(why))?;

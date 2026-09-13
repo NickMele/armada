@@ -227,7 +227,9 @@ async fn a_spent_budget_frees_the_slot_and_leaves_a_restart_as_the_answer() {
     let said = Redirection::saying("the assertion is in tests/parse.rs").expect("something in it");
     assert!(
         matches!(
-            fleet.redirect(job.id(), &said).await,
+            fleet
+                .redirect(job.id(), &said, api::Redirector::Person)
+                .await,
             Err(Adrift::NoDroneToRedirect { .. })
         ),
         "there is no session left to inject a turn into"

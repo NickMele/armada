@@ -27,7 +27,7 @@ use crate::adrift::Adrift;
 use crate::drafting::StatedBy;
 use crate::drone::{aftermath, Aftermath, Ending};
 use crate::drone_moves::steps_holding_a_drone;
-use crate::peer::{attributed, Drones, NotACaller};
+use crate::peer::{attributed, held_within, Drones, NotACaller};
 use crate::readopting::Recovered;
 use crate::reconciled::Reconciled;
 
@@ -355,6 +355,18 @@ where
             self.peers.as_ref(),
         )
         .ok_or(NotACaller)
+    }
+
+    /// Whether a Helm session this Fleet is hosting holds this call's
+    /// connection: [`caller_of`](Fleet::caller_of)'s port pair, matched across
+    /// every process a Helm host is running and what each started. `#941`.
+    pub(crate) fn helm_holds(&self, caller: &api::Caller) -> bool {
+        held_within(
+            caller,
+            self.host.port,
+            &self.helm.host().running(),
+            self.peers.as_ref(),
+        )
     }
 
     /// A Drone started on this Job, as this process.

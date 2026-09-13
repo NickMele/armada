@@ -14,6 +14,7 @@ use axum::extract::Query;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
+use axum::Extension;
 use ipc::{
     AddTask, AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, DropTask, FileReport,
     JobRequest, JudgeAnswered, Overruled, ProposeJob, Redirection, RemarksTakenUp,
@@ -21,7 +22,8 @@ use ipc::{
 };
 
 use crate::answers::{answer, refused, undecodable};
-use crate::daemon::Commands;
+use crate::daemon::{Commands, Redirector};
+use crate::door::HelmCalled;
 use crate::reference::Resolved;
 use crate::scoped::InManifest;
 use crate::served::Served;
@@ -497,13 +499,22 @@ pub(crate) async fn drop_task<D: Commands>(
 pub(crate) async fn redirect_drone<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
+    helm: Option<Extension<HelmCalled>>,
     body: Bytes,
 ) -> Response {
     let instruction: Redirection = match ipc::decode("a redirect", &body) {
         Ok(instruction) => instruction,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.shared().redirect_drone(job.id(), instruction).await {
+    let by = match helm {
+        Some(_) => Redirector::Helm,
+        None => Redirector::Person,
+    };
+    match served
+        .shared()
+        .redirect_drone(job.id(), instruction, by)
+        .await
+    {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }

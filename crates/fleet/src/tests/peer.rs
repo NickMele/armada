@@ -17,13 +17,13 @@ use std::sync::{Arc, Mutex};
 
 use core_model::{JobId, Ulid};
 
-use crate::peer::{attributed, Kernel, PeerOf};
+use crate::peer::{attributed, held_within, Kernel, PeerOf};
 use api::Caller;
 
 /// A `PeerOf` a test plants, for the cases that are about Fleet rather than
 /// about the kernel. It answers from a list of connections somebody wrote down.
 #[derive(Debug, Default)]
-pub struct Placing(Mutex<Vec<(u32, u16, u16)>>);
+pub struct Placing(Mutex<Vec<(u32, u16, u16)>>, Mutex<Vec<(u32, u32)>>);
 
 impl Placing {
     /// Nobody holds anything. The default a fixture is assembled with — a fake
@@ -40,6 +40,14 @@ impl Placing {
             .expect("the plant is not held across a panic")
             .push((pid, from, to));
     }
+
+    /// `parent` started `child`, which is still running.
+    pub fn started(&self, parent: u32, child: u32) {
+        self.1
+            .lock()
+            .expect("the plant is not held across a panic")
+            .push((parent, child));
+    }
 }
 
 impl PeerOf for Placing {
@@ -49,6 +57,16 @@ impl PeerOf for Placing {
             .expect("the plant is not held across a panic")
             .iter()
             .any(|held| *held == (pid, from, to))
+    }
+
+    fn children(&self, pid: u32) -> Vec<u32> {
+        self.1
+            .lock()
+            .expect("the plant is not held across a panic")
+            .iter()
+            .filter(|(parent, _)| *parent == pid)
+            .map(|(_, child)| *child)
+            .collect()
     }
 }
 
@@ -67,6 +85,10 @@ pub struct TheOnlyDrone;
 impl PeerOf for TheOnlyDrone {
     fn holds(&self, _pid: u32, _from: u16, _to: u16) -> bool {
         true
+    }
+
+    fn children(&self, _pid: u32) -> Vec<u32> {
+        Vec::new()
     }
 }
 
@@ -160,4 +182,88 @@ fn a_call_nothing_holds_is_refused_rather_than_guessed_at() {
         attributed(&Caller::unplaceable(), 12345, &drones, peers.as_ref()),
         None
     );
+}
+
+/// **A Helm session's relay is its agent's child**, and the child holds the
+/// socket. So a call is placed within a session anywhere in the tree the host
+/// started, and nowhere outside it. `#941`.
+#[test]
+fn a_call_from_a_process_a_session_started_is_placed_within_it() {
+    let peers = Placing::nothing();
+    peers.started(7000, 7001);
+    peers.started(7001, 7002);
+    peers.holding(7002, 52000, 12345);
+    peers.holding(9000, 52001, 12345);
+
+    let relay = Caller::at("127.0.0.1:52000".parse::<SocketAddr>().expect("an address"));
+    assert!(held_within(&relay, 12345, &[7000], peers.as_ref()));
+    assert!(
+        !held_within(&relay, 54321, &[7000], peers.as_ref()),
+        "the same port to another listener is not a call to Fleet"
+    );
+    let outsider = Caller::at("127.0.0.1:52001".parse::<SocketAddr>().expect("an address"));
+    assert!(
+        !held_within(&outsider, 12345, &[7000], peers.as_ref()),
+        "a process no session started is not the session, whatever it sends"
+    );
+    assert!(!held_within(&relay, 12345, &[], peers.as_ref()));
+    assert!(!held_within(
+        &Caller::unplaceable(),
+        12345,
+        &[7000],
+        peers.as_ref()
+    ));
+}
+
+/// The kernel's half, against a real tree: a shell whose subshell opens the
+/// connection, so the socket is held by a process this test never started.
+#[tokio::test]
+async fn the_kernel_places_a_connection_held_by_a_child_of_the_root() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("a listener");
+    let served_on = listener.local_addr().expect("its address").port();
+    let script = format!("(exec 3<>/dev/tcp/127.0.0.1/{served_on}; read -r _ <&3); :");
+    let mut shell = crate::detach::Detached::program("/bin/bash")
+        .args(["-c", script.as_str()])
+        .spawn()
+        .expect("a shell");
+    let root = shell.id().expect("a running shell");
+
+    listener
+        .set_nonblocking(true)
+        .expect("a listener that can be polled");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let (accepted, peer) = loop {
+        match listener.accept() {
+            Ok(accepted) => break accepted,
+            Err(_) if std::time::Instant::now() < deadline => {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await
+            }
+            Err(why) => panic!("the subshell never connected: {why}"),
+        }
+    };
+
+    assert!(
+        !Kernel.children(root).is_empty(),
+        "the shell started a subshell"
+    );
+    assert!(
+        !Kernel.holds(root, peer.port(), served_on),
+        "the shell itself does not hold the connection"
+    );
+    assert!(held_within(&Caller::at(peer), served_on, &[root], &Kernel));
+    // **A sibling, not this test's own pid**: a detached child keeps its
+    // parent, so the shell is inside this process's tree and would be found.
+    let mut sibling = crate::detach::Detached::program("/bin/sleep")
+        .args(["5"])
+        .spawn()
+        .expect("a process beside the shell");
+    let beside = sibling.id().expect("a running sibling");
+    assert!(
+        !held_within(&Caller::at(peer), served_on, &[beside], &Kernel),
+        "a process that did not start the caller is not where the call came from"
+    );
+
+    drop(accepted);
+    let _ = sibling.kill().await;
+    let _ = shell.wait().await;
 }

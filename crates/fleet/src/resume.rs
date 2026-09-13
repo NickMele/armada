@@ -108,8 +108,20 @@ where
     /// transcript by `Working::instructed`, and on a healthy Drone that is all
     /// there is: `drone.md` gives the mid-step path a session and nothing
     /// written down, and the note written down is `request_changes`.
-    pub async fn redirect(&self, job_id: &JobId, instruction: &Redirection) -> Result<Job, Adrift> {
-        self.steer(job_id, Steer::Words(instruction)).await
+    ///
+    /// `by` is who is recorded as having moved the Job: a person, or a Helm
+    /// session the agent door placed (`#941`).
+    pub async fn redirect(
+        &self,
+        job_id: &JobId,
+        instruction: &Redirection,
+        by: api::Redirector,
+    ) -> Result<Job, Adrift> {
+        let by = match by {
+            api::Redirector::Person => Actor::Human,
+            api::Redirector::Helm => Actor::Helm,
+        };
+        self.steer(job_id, Steer::Words(instruction, by)).await
     }
 
     /// [`redirect`](Fleet::redirect)'s act, for whichever of the two things a
@@ -147,11 +159,12 @@ where
         // step back because somebody typed at the Drone is exactly the restart
         // this act must never quietly become.
         let stopped = self.stopped_step(&job).ok();
+        let by = speech.by();
         let job = match stopped.as_ref() {
             // After both moves, never before. A turn delivered to a Drone whose
             // Job then failed to move would be an instruction acted on by a
             // process nobody had unpaused.
-            Some(step) => self.resumed(&job, step, Actor::Human).await?,
+            Some(step) => self.resumed(&job, step, by).await?,
             None => job,
         };
         self.instruct(job_id, &speech, &working).await?;
@@ -178,7 +191,7 @@ where
                     // still `running` and with nothing to prove. Both wait on
                     // the same turn and only the first has a move to make when
                     // it comes. See [`watch_redirect`](Fleet::watch_redirect).
-                    at_work.awaiting_answer(turned, self.now());
+                    at_work.awaiting_answer(turned, self.now(), by);
                 }
             }
         }
@@ -199,10 +212,9 @@ where
     /// store — the property [`watch_silence`](Fleet::watch_silence) has, for the
     /// same reason.
     ///
-    /// The actor is **human**. A person took a Job out of `escalated` by
-    /// redirecting it; Fleet only chose the instant, once the Drone had shown
-    /// the instruction landed. `job-statuses.toml` says a person is who acts on
-    /// an escalated Job, and a row saying Fleet un-escalated one would be Fleet
+    /// The actor is **whoever redirected**: a person, or Helm acting for one.
+    /// Fleet only chose the instant, once the Drone had shown the instruction
+    /// landed, and a row saying Fleet un-escalated a Job would be Fleet
     /// claiming a decision it did not take.
     pub(crate) async fn watch_redirect(
         &self,
@@ -214,6 +226,9 @@ where
         if !at_work.turned_since_redirect() {
             return Ok(None);
         }
+        let Some(by) = at_work.awaiting_by() else {
+            return Ok(None);
+        };
         let (job, step, _) = at_work.standing();
         // From here it costs a store read, and only on the turn a redirect is
         // answered.
@@ -225,8 +240,7 @@ where
         // `awaiting_repair` is not asked about and cannot be: it holds no
         // session, so no redirect was ever outstanding on one.
         if record.status() == JobStatus::Escalated {
-            self.move_job(&record, Target::Running, Actor::Human)
-                .await?;
+            self.move_job(&record, Target::Running, by).await?;
             self.noted_roused(&job, &step);
         }
         if let Some(at_work) = working.as_mut() {
@@ -614,7 +628,7 @@ where
             });
         };
         let sent = match speech {
-            Steer::Words(instruction) => {
+            Steer::Words(instruction, _) => {
                 at_work.instructed(Occasion::Redirect, instruction.text());
                 at_work.session().redirect(instruction).await
             }
@@ -634,10 +648,20 @@ where
 /// each goes through its own `LiveSession` method and neither can be sent as
 /// the other.
 pub(crate) enum Steer<'a> {
-    /// A person's own words.
-    Words(&'a Redirection),
+    /// Words for the Drone, and who sent them: a person, or Helm.
+    Words(&'a Redirection, Actor),
     /// A person's answer to a command the Drone was refused.
     Permission(&'a crate::permitting::Permitted),
+}
+
+impl Steer<'_> {
+    /// Who the moves this steer makes are recorded against.
+    fn by(&self) -> Actor {
+        match self {
+            Steer::Words(_, by) => *by,
+            Steer::Permission(_) => Actor::Human,
+        }
+    }
 }
 
 /// One step's rows out of a whole Job's, which is the shape every step read

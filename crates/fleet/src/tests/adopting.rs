@@ -675,7 +675,7 @@ async fn an_unheard_job_with_no_stopped_step_offers_the_restart_and_it_lands() {
     // that offers what an act declines is a person pressing a button for a 409.
     let said = Redirection::saying("read tests/parse.rs first").expect("something to act on");
     let refused = fleet
-        .redirect(&job, &said)
+        .redirect(&job, &said, api::Redirector::Person)
         .await
         .expect_err("there is no pipe to redirect down");
     assert!(

@@ -41,7 +41,10 @@ async fn a_waiting_redirect_is_on_the_wire_and_a_reread_finds_it() {
         "nothing has been said to this Drone yet"
     );
 
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     let waiting = detail(&fleet, &job).await;
     assert!(
@@ -67,7 +70,10 @@ async fn a_redirect_onto_a_stopped_step_leaves_nothing_waiting() {
     let fleet = a_fleet_with(&home, a_drone_that_answers());
     let job = refused(&fleet, &home).await;
 
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     let after = detail(&fleet, &job).await;
     assert_eq!(after.job.status.domain(), JobStatus::Running);
@@ -86,7 +92,10 @@ async fn the_wait_is_over_when_the_drone_turns() {
     let fleet = a_fleet_with(&home, a_drone_that_answers());
     let job = stalled(&fleet, &home).await;
 
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
     assert!(detail(&fleet, &job).await.redirecting.is_some());
 
     until_roused(&fleet).await;
@@ -110,7 +119,10 @@ async fn a_healthy_job_carries_the_wait_and_moves_nothing_when_it_is_answered() 
     let job = started(&fleet, &home).await;
     let moved = job_moves(&fleet, &job).await;
 
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
     assert!(detail(&fleet, &job).await.redirecting.is_some());
 
     let roused = until_roused(&fleet).await;
@@ -144,7 +156,10 @@ async fn a_job_that_was_not_redirected_carries_no_wait() {
         .id()
         .clone();
 
-    fleet.redirect(&job, &advice()).await.unwrap();
+    fleet
+        .redirect(&job, &advice(), api::Redirector::Person)
+        .await
+        .unwrap();
 
     assert!(detail(&fleet, &other).await.redirecting.is_none());
 }

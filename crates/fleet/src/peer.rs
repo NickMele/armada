@@ -99,6 +99,47 @@ pub trait PeerOf: Send + Sync {
     /// module's header for the measurement, and for what matching on one alone
     /// gets wrong.
     fn holds(&self, pid: u32, from: u16, to: u16) -> bool;
+
+    /// The processes `pid` started that are still running. Empty on any
+    /// failure, the direction [`held_within`] may fail in.
+    fn children(&self, pid: u32) -> Vec<u32>;
+}
+
+/// How deep and how wide [`held_within`] walks. A Helm session's relay is its
+/// agent's child; the bound is there so a runaway tree cannot stall a call.
+const DEEPEST: usize = 6;
+const MOST: usize = 256;
+
+/// Whether a call arrived on a connection held by one of `roots` or by a
+/// process one of them started. `#941`.
+///
+/// **Descendants, because a Helm session reaches the door through a relay its
+/// agent started**, and that relay holds the socket. A process outside the tree
+/// cannot join it: a parent is the kernel's record, not a process's claim.
+pub fn held_within(caller: &Caller, served_on: u16, roots: &[u32], peers: &dyn PeerOf) -> bool {
+    let Some(from) = caller.port() else {
+        return false;
+    };
+    let mut seen: Vec<u32> = Vec::new();
+    let mut level = roots.to_vec();
+    for _ in 0..DEEPEST {
+        let mut below = Vec::new();
+        for pid in level {
+            if pid == 0 || seen.contains(&pid) || seen.len() >= MOST {
+                continue;
+            }
+            if peers.holds(pid, from, served_on) {
+                return true;
+            }
+            seen.push(pid);
+            below.extend(peers.children(pid));
+        }
+        if below.is_empty() {
+            break;
+        }
+        level = below;
+    }
+    false
 }
 
 /// Which Job a call belongs to, over the Drones handed in.
@@ -136,6 +177,10 @@ mod kernel {
     impl super::PeerOf for Kernel {
         fn holds(&self, _pid: u32, _from: u16, _to: u16) -> bool {
             false
+        }
+
+        fn children(&self, _pid: u32) -> Vec<u32> {
+            Vec::new()
         }
     }
 }
