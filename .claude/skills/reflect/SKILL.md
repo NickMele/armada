@@ -108,6 +108,15 @@ six failures that belonged to work in flight rather than to `main`. A clean
 `git worktree add <path> origin/main` answers the same question, cannot lose
 somebody else's uncommitted work, and is the tree the fixes then land in.
 
+**And give that worktree its own `CARGO_TARGET_DIR`.** Confirmed 2026-09-13: a
+baseline worktree was pointed at the branch's target directory to save a build,
+then removed. The `ipc` build script had cached the baseline's path to
+`protocol-version.toml`, and `xtask` was rebuilt with the baseline's root baked
+in. The branch then failed to build and `verify-foundations` read RED, 77
+failing, on files that were all on disk. That cost two `cargo clean -p` rounds
+and nearly a report of a broken branch. A separate target directory costs one
+cold build.
+
 **A measurement is a timestamp, not a state.** The same session reported two
 worktrees that had been removed minutes earlier, and offered the owner a branch
 as "green, 152 lines of headroom" after `main` had made it unmergeable. Nothing
