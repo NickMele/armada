@@ -94,6 +94,36 @@ fn the_implement_brief_carries_the_plan_fleet_holds_with_every_tasks_state() {
     );
 }
 
+/// #894's first `## In` item: **a plan step's own brief asks it to record the
+/// plan with `record_plan`**, rather than depending on a Drone noticing the
+/// tool's description by chance. Rendered through `fleet::briefing::first_turn`,
+/// the same assembly a real spawn calls.
+#[test]
+fn the_plan_steps_brief_asks_it_to_record_the_plan() {
+    let planned = Planned::created("fix the reader's bound");
+
+    let step = StepId::new(PLAN);
+    let brief = briefing::first_turn(
+        &planned.job,
+        planned.job.workflow(),
+        &step,
+        &Crossed::nothing(),
+    )
+    .expect("a brief assembles");
+    let said = brief.as_str();
+
+    assert!(said.contains("WHAT THIS PART DELIVERS"), "{said}");
+    assert!(said.contains("record_plan"), "{said}");
+    assert!(
+        !said.contains("Write this part's finding to a file"),
+        "the plan step no longer asks for a file: {said}"
+    );
+    assert!(
+        !said.contains("THE PLAN\n"),
+        "the recording step is not shown a plan it has not recorded: {said}"
+    );
+}
+
 /// #894's other half of the same row: **a step that does not follow the plan
 /// is shown it and told it is not the step's to change.**
 #[test]

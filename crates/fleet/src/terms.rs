@@ -82,6 +82,36 @@ impl Delivering {
     }
 }
 
+/// [`Delivering`]'s counterpart on the step it never fires for: a plan step
+/// declares no `deliverable`, so this fills the gap for spike 6's reason — a
+/// tool's own description does not make a Drone call it. **Drafted**, like
+/// [`Delivering`] and [`Checking`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordingThePlan(String);
+
+impl RecordingThePlan {
+    /// `Some` on the step whose product is the Job's plan — the same switch
+    /// `crate::work_plan::plan_grants` reads to grant the tool at all.
+    pub fn at(step: &ResolvedStep) -> Option<RecordingThePlan> {
+        if !step.records_plan() {
+            return None;
+        }
+        Some(RecordingThePlan(String::from(
+            "WHAT THIS PART DELIVERS\n\nThis part's product is the Job's \
+             plan. Record it with record_plan: an approach in a paragraph, \
+             then the tasks it breaks into, in the order they will be \
+             done. Recording again replaces the whole plan, so correct one \
+             by recording it again. Recording does not finish this part — \
+             submit_evidence still does.",
+        )))
+    }
+
+    /// The block, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
+
 /// What a step tells its Drone when it is captured: that `shown_by` names a
 /// file `evidence.run` runs, not one it only reads.
 ///

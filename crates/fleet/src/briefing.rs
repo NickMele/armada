@@ -32,7 +32,7 @@ use core_model::{
 use verification::TheBaseMoved;
 
 use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected, SentBack, ThePlan};
-use crate::terms::{Capturing, Checking, Declaring, Delivering, Splitting};
+use crate::terms::{Capturing, Checking, Declaring, Delivering, RecordingThePlan, Splitting};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
 /// never task content**, identical on every step of every Job, which is what
@@ -630,6 +630,9 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
         }
         if let Some(delivers) = Delivering::at(step) {
             blocks.headed(delivers.text(), ipc::BlockKind::AboutThisJob);
+        }
+        if let Some(records) = RecordingThePlan::at(step) {
+            blocks.headed(records.text(), ipc::BlockKind::AboutThisJob);
         }
         if let Some(asked) = Declaring::at(step) {
             blocks.headed(asked.text(), ipc::BlockKind::Standing);
