@@ -67,7 +67,7 @@ A Convoy in the graph is expected rather than exceptional, and whether it render
 
 ## The controls
 
-**Two axes: state, plus one text match.** The repository is already the scope, so
+**Two axes: state, plus one text match.** The picker is already the scope, so
 it is not an axis, and origin is a label rather than an axis — drawn as a filter
 and rejected, see Origin tagging below. What is left is a state filter, a text
 match and a sort.
@@ -245,7 +245,7 @@ It carries no `dispatched_by`, linking back through `subject` instead, which is 
 rejected on the drawing, answering `[origin-tag-filterable-or-display]`. Both
 readings were drawn side by side; the filter earned no question a person
 actually asks. *What needs me*, *what is running* and *why has that not started*
-are all state, and the Board's scope is already the repository — so an origin axis
+are all state, and the Board's scope is already the picker — so an origin axis
 adds a control that narrows by a fact nobody is narrowing on.
 
 **And it names the condition that would reverse this.** One machine dispatches
