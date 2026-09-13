@@ -177,6 +177,14 @@ checks:
     # under a second until it gained a browser project of its own, and the
     # sentence that used to be here said so. The order is the order they answer
     # in — 6s, 40s, then the stories — so a failure surfaces as early as it can.
+    #
+    # **Still `&&`, and it hid two suites once.** #613: a run went red on
+    # `setTypeOfService EINVAL`, raised inside Node's own `undici`, after every
+    # `apps/desktop` test had passed — and the two suites behind it never ran.
+    # Fail-fast is not what made that expensive; a red that meant nothing is,
+    # and it is fixed where it was raised, in `apps/desktop/src/main/request.ts`.
+    # Should that errno ever reach this Check again it is the OS refusing an
+    # advisory byte on a socket it has already torn down, and no test failed.
     run: pnpm bridge-test
     when:
       - "apps/**"
