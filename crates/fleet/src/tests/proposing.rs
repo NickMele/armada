@@ -326,6 +326,63 @@ fn the_call_is_told_the_request_and_every_workflow_with_its_steps() {
     );
 }
 
+/// A fixture workflow that says what requests it is for, in `workflow_named`'s
+/// shape otherwise.
+fn workflow_for(id: &str, for_requests: &str) -> ResolvedWorkflow {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture.yml"),
+        &format!(
+            "version: 1\nworkflow_id: {id}\nname: {id}\nfor_requests: {for_requests}\n\
+             structure: linear\nsteps:\n  - id: only_in_{id}\n    label: \"only_in_{id}\"\n    \
+             evidence: {{submitted: {{type: diff}}}}\n    delivers: true\n    advance_gate: auto\n"
+        ),
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    let manifest = config::Manifest::parse(
+        std::path::Path::new("fixture-armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\n",
+    )
+    .expect("the fixture manifest parses");
+    ResolvedWorkflow::resolve(&def, &manifest)
+        .unwrap_or_else(|refused| panic!("the fixture workflow did not resolve: {refused}"))
+}
+
+/// **What a workflow is for is offered on the line under its name**, beside
+/// its steps rather than instead of them. #424.
+#[test]
+fn a_workflow_that_says_what_it_is_for_is_offered_with_it_beside_its_steps() {
+    let mut catalogue = a_catalogue();
+    catalogue.push(workflow_for("epic", "Finishing a milestone"));
+    let held = held(catalogue);
+
+    let question = Brief::about(A_REQUEST, &held).question().to_string();
+
+    assert!(
+        question.contains("  epic — epic\n    for: Finishing a milestone\n    only_in_epic\n"),
+        "the name, then what it is for, then its steps:\n{question}"
+    );
+}
+
+/// **A workflow that says nothing is offered exactly as it was before the key
+/// existed** — the whole catalogue block, byte for byte, and no `for:` line
+/// anywhere in it.
+#[test]
+fn a_workflow_that_says_nothing_about_what_it_is_for_is_offered_as_before() {
+    let held = held(a_catalogue());
+
+    let question = Brief::about(A_REQUEST, &held).question().to_string();
+
+    assert!(
+        question.contains(
+            "  bug — bug\n    only_in_bug\n  feature — feature\n    only_in_feature\n  \
+             revert — revert\n    only_in_revert\n\n"
+        ),
+        "the catalogue as it read before:\n{question}"
+    );
+    assert!(!question.contains("    for: "));
+}
+
 /// What the call is denied. A Policy reads the request and the catalogue; a
 /// thing that could read the repository is a Drone at many times the price.
 #[test]

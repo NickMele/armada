@@ -244,7 +244,7 @@ pub use policy::{HeldBecause, Policies};
 pub use ports::{detect_ceiling, BindConnectProbe, PortRange, PortsRefused};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
 pub use proposal::{proposed, Proposing};
-pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};
+pub use proposing::{Brief, NotProposed, Proposal, ProposedJob, Unresolved};
 pub use questioning::{Answer, NotAnswered, NotAsked, Question, Told};
 pub use readopting::Recovered;
 pub use reconciled::Reconciled;

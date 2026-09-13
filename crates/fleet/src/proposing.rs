@@ -234,6 +234,18 @@ impl Brief {
                 workflow.id().as_str(),
                 workflow.name()
             ));
+            // **What it is for, where the definition says, and in the words a
+            // requester would use.** The steps below tell one workflow from
+            // its neighbours; they do not say whether a request is this kind
+            // of work at all. A milestone asked for by link was declined on
+            // 3 Sep 2026 while `epic` sat on this list, because nothing in
+            // `Plan the wave` is a word the request used. #424.
+            //
+            // Absent writes no line, so a definition that declares nothing is
+            // offered exactly as it was before the key existed.
+            if let Some(asked) = workflow.for_requests() {
+                question.push_str(&format!("    for: {asked}\n"));
+            }
             // The steps are how a workflow is told apart from its five
             // neighbours. A name alone separates `bug` from `revert` and does
             // not separate `feature` from `refactor`.
