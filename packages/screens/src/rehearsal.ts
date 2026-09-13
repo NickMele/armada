@@ -121,7 +121,10 @@ export function serverStatusOf(
 function statusOf(instance: ServerState | undefined, now: number): RunSheetServerStatus | undefined {
   if (instance === undefined) return undefined;
   if (instance.phase === "starting") return { phase: "starting" };
-  if (instance.phase === "exited") return { phase: "exited", exitCode: instance.exit_code ?? 0 };
+  if (instance.phase === "exited") {
+    // `checkout-runs.ts`' `exitedOf`, for its reason.
+    return { phase: "exited", stopped: instance.stopped, ...(instance.exit_code === undefined ? {} : { exitCode: instance.exit_code }) };
+  }
   return {
     phase: "serving",
     address: instance.ports[0] === undefined ? instance.serve : `localhost:${instance.ports[0].port}`,

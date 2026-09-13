@@ -389,10 +389,12 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     event.kind === "server.serving" ||
     event.kind === "server.exited"
   ) {
-    // Replaced, never patched: the event carries the whole `ServerState`.
+    // Replaced, never patched: the event carries the whole `ServerState`. The list alone moved no
+    // sheet, so Run and Stop on a server drew nothing until a reload.
     const row: ServerState = event;
     const servers = host.rehearsal.onServerEvent(host.current().servers.servers, row);
     host.publish({ connection, servers: { servers } });
+    host.rehearsal.onServerMoved(row, fleet.port);
     return;
   }
 

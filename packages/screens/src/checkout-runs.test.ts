@@ -5,13 +5,17 @@ import { describe, expect, it } from "vitest";
 
 import type {
   CheckoutRunFollowed,
+  CheckoutRunRecord,
   CheckoutRunSheet,
   RunEntry,
+  ServerState,
 } from "@armada/protocol";
 import {
   checkoutGroupsOf,
   checkoutOutputOf,
+  checkoutResultRunOf,
   checkoutRunnablesOf,
+  exitedOf,
   runningEntryOf,
 } from "./checkout-runs";
 
@@ -101,5 +105,40 @@ describe("the entry a run in flight is for", () => {
 
   it("is nothing where nothing is running", () => {
     expect(runningEntryOf(checkoutGroupsOf(SHEET), undefined)).toBeUndefined();
+  });
+});
+
+describe("the result line, keyed to the selection", () => {
+  // The owner's screen after a reload: `storybook_dev` selected, and the panel under it reading
+  // `gate was stopped`, the newest run of anything.
+  const run = (id: string, name: string) => ({ id, name }) as CheckoutRunRecord;
+  const RUNS = [run("r2", "gate"), run("r1", "fmt")];
+
+  it("is nothing for a server, which is not a run", () => {
+    expect(checkoutResultRunOf(RUNS, "server:storybook_dev", undefined)).toBeUndefined();
+  });
+
+  it("is the selected entry's own newest run, not the newest of anything", () => {
+    expect(checkoutResultRunOf(RUNS, "command:fmt", undefined)?.id).toBe("r1");
+  });
+
+  it("is nothing for an entry that has not run", () => {
+    expect(checkoutResultRunOf(RUNS, "check:test", undefined)).toBeUndefined();
+  });
+
+  it("is the run opened from Earlier runs, whatever is selected", () => {
+    expect(checkoutResultRunOf(RUNS, "server:storybook_dev", "r2")?.id).toBe("r2");
+  });
+});
+
+describe("an ended server", () => {
+  const ENDED = { phase: "exited", stopped: false } as ServerState;
+
+  it("does not say it stopped on its own, or exit 0, when somebody pressed Stop", () => {
+    expect(exitedOf({ ...ENDED, stopped: true })).toEqual({ phase: "exited", stopped: true });
+  });
+
+  it("carries its code where it exited on its own", () => {
+    expect(exitedOf({ ...ENDED, exit_code: 1 })).toEqual({ phase: "exited", stopped: false, exitCode: 1 });
   });
 });
