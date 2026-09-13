@@ -782,6 +782,8 @@ its next turn; a message sent from there would be dated wrong and would say what
 
 ## Protocol 13.3: Always allow picks a rule, not a whole command
 
+## Protocol 13.4: Always allow picks a rule, not a whole command
+
 `#834`. `CommandInFlight` and `Refusal` each gain `rules` (the leading cuts of
 the command, shortest first) and `suggested_rule` (the one pre-selected), and
 `AnswerCommand` gains `rule` — the one a person picked, read only where the
