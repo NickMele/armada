@@ -17,25 +17,30 @@ export type PopoverProps = {
   children: ReactNode;
   align?: PopoverAlign;
   defaultOpen?: boolean;
+  /** Names the layer, where more than one popover can be open on a page in turn. */
+  label?: string;
 };
 
-export function Popover({ trigger, children, align = "start", defaultOpen = false }: PopoverProps) {
+export function Popover({ trigger, children, align = "start", defaultOpen = false, label }: PopoverProps) {
   const [open, setOpen] = useState(defaultOpen);
   const root = useRef<HTMLDivElement>(null);
 
-  // Esc closes an overlay, per the global tier.
+  // Esc closes an overlay, per the global tier, and stops there: in capture, so a sheet under it
+  // does not close on the same press.
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setOpen(false);
     }
     function onDown(event: MouseEvent) {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     }
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     window.addEventListener("mousedown", onDown);
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("mousedown", onDown);
     };
   }, [open]);
@@ -53,6 +58,7 @@ export function Popover({ trigger, children, align = "start", defaultOpen = fals
               : "armada-popover__panel armada-popover__panel--start"
           }
           role="dialog"
+          aria-label={label}
         >
           {children}
         </div>

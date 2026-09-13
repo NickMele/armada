@@ -15,7 +15,7 @@ import { Alert, ProposalSheet, SetupPicker, VerifyPanel } from "@armada/componen
 
 import { said } from "./copy";
 import type { Setting } from "./setup-held";
-import { pickerOf, sheetOf } from "./setup-view";
+import { destructiveEdit, pickerOf, requiresEdit, runEdit, sheetOf } from "./setup-view";
 import { verifyPanelOf } from "./verify";
 
 export type SetupProps = {
@@ -49,11 +49,7 @@ export function Setup({ setting, now, sheet, onStartVerify, onStopRun, onOpenEdi
   }
 
   const opened = held.proposals.proposals.find((one) => one.dir === held.open);
-  const edit = (change: ProposalEdit) => opened !== undefined && setting.onEdit(opened.dir, change);
-  const entry = (band: "checks" | "commands", name: string) =>
-    band === "checks"
-      ? opened?.checks.find((one) => one.name === name)
-      : opened?.commands.find((one) => one.name === name);
+  const edit = (change: ProposalEdit | null) => opened !== undefined && change !== null && setting.onEdit(opened.dir, change);
 
   let verify = null;
   if (opened?.written !== undefined) {
@@ -95,16 +91,9 @@ export function Setup({ setting, now, sheet, onStartVerify, onStopRun, onOpenEdi
           floor={floor}
           onClose={setting.onClose}
           onEditId={(id) => edit({ edit: "id", id })}
-          onEditRun={(band, name, run) => {
-            const was = entry(band, name);
-            if (band === "checks") {
-              const requires = was !== undefined && "requires" in was ? was.requires : undefined;
-              edit({ edit: "check", name, run, ...(requires === undefined ? {} : { requires }) });
-            } else {
-              const destructive = was !== undefined && "destructive" in was ? was.destructive : undefined;
-              edit({ edit: "command", name, run, ...(destructive === undefined ? {} : { destructive }) });
-            }
-          }}
+          onEditRun={(band, name, run) => edit(runEdit(opened, band, name, run))}
+          onRequires={(name, requires) => edit(requiresEdit(opened, name, requires))}
+          onDestructive={(name, destructive) => edit(destructiveEdit(opened, name, destructive))}
           onMove={(_band, name) => edit({ edit: "move", name })}
           onRemove={(band, name) => edit({ edit: "remove", band, name })}
           onAdd={(band, name, run) => edit(band === "checks" ? { edit: "check", name, run } : { edit: "command", name, run })}

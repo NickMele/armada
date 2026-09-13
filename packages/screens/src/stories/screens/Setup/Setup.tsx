@@ -82,7 +82,7 @@ export const PROPOSALS: ManifestProposals = {
   proposals: [
     { ...proposal(".", ["test"]), present: true },
     proposal("apps/web", ["test", "lint", "typecheck"], ["dev"]),
-    proposal("services/api", ["test", "typecheck"], ["migrate"]),
+    proposal("services/api", ["test", "typecheck"], ["migrate", "reset"]),
     proposal("docs", []),
   ],
   caps: { cost_micros: 5_000_000, turns: 200 },
@@ -95,8 +95,17 @@ function applied(one: ManifestProposal, { edit }: EditManifestProposal): Manifes
   switch (edit.edit) {
     case "check": {
       const was = one.checks.some((check) => check.name === edit.name);
-      const line = { name: edit.name, run: edit.run, provenance: was ? edited : added };
+      const requires = edit.requires ?? [];
+      const line = { name: edit.name, run: edit.run, ...(requires.length === 0 ? {} : { requires }), provenance: was ? edited : added };
       return { ...one, checks: was ? one.checks.map((check) => (check.name === edit.name ? line : check)) : [...one.checks, line] };
+    }
+    case "command": {
+      const was = one.commands.some((command) => command.name === edit.name);
+      const line = { name: edit.name, run: edit.run, ...(edit.destructive === true ? { destructive: true } : {}), provenance: was ? edited : added };
+      return {
+        ...one,
+        commands: was ? one.commands.map((command) => (command.name === edit.name ? line : command)) : [...one.commands, line],
+      };
     }
     case "move": {
       const check = one.checks.find((line) => line.name === edit.name);
@@ -119,6 +128,24 @@ function applied(one: ManifestProposal, { edit }: EditManifestProposal): Manifes
     default:
       return one;
   }
+}
+
+/** The file Write puts down, laid out as Fleet's writer lays out the keys a play test reads. */
+function textOf(one: ManifestProposal): string {
+  const lines = ["version: 1", `id: ${one.id.value}`];
+  if (one.checks.length > 0) lines.push("checks:");
+  for (const check of one.checks) {
+    lines.push(`  ${check.name}:`, `    run: ${check.run}`);
+    if (check.requires !== undefined && check.requires.length > 0) {
+      lines.push("    requires:", ...check.requires.map((name) => `      - ${name}`));
+    }
+  }
+  if (one.commands.length > 0) lines.push("commands:");
+  for (const command of one.commands) {
+    lines.push(`  ${command.name}:`, `    run: ${command.run}`);
+    if (command.destructive === true) lines.push("    destructive: true");
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 /** What Write comes to: the file lands, the parser refuses it, or a file is already there. */
@@ -146,11 +173,14 @@ export function SetupFrom({
   clone = "took",
   onAdded,
   onCloned,
+  onWritten,
 }: {
   clone?: CloneGoesTo;
   /** Called on every add and every clone Locate sends. */
   onAdded?: (path: string) => void;
   onCloned?: (url: string, parent: string) => void;
+  /** Called with the file and its text on every Write that lands. */
+  onWritten?: (file: string, text: string) => void;
   write?: WriteGoesTo;
   /** Whether the root already has an `armada.yml`, as any Fleet's own repository does. */
   rootSetUp?: boolean;
@@ -223,7 +253,11 @@ export function SetupFrom({
         const setUp = { ...manifestOf(picked), id: "scratch" };
         setListed((was) => was.map((one) => (one.root === scope ? { ...one, manifest: setUp } : one)));
       }
-      return answer(dir, (one) => ({ ...one, written: { path: file, at: WROTE_AT } }));
+      return answer(dir, (one) => {
+        const text = textOf(one);
+        onWritten?.(file, text);
+        return { ...one, text, written: { path: file, at: WROTE_AT } };
+      });
     },
   });
 

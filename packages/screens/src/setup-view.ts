@@ -2,7 +2,16 @@
 // batch, the sheet a proposal draws, and how an edit's or a Write's answer folds in.
 // No React, so every rule here is a unit test.
 
-import type { ManifestProposal, ManifestProposals, Outcome, Provenance, RepositoryScan, StatedCaps } from "@armada/protocol";
+import type {
+  ManifestProposal,
+  ManifestProposals,
+  Outcome,
+  ProposalEdit,
+  Provenance,
+  RepositoryScan,
+  StatedCaps,
+} from "@armada/protocol";
+import { ADVANCE_GATE, AUTO_MERGE } from "@armada/components";
 import type {
   ProposalPolicy,
   ProposalSheetProps,
@@ -136,27 +145,61 @@ export function gridOf(
   return { names, grid };
 }
 
+/** A registry verb, as the first word of a label. */
+function sentence(verb: string | null | undefined, word: string): string {
+  return verb === null || verb === undefined ? word : `${verb.charAt(0).toUpperCase()}${verb.slice(1)}`;
+}
+
 /**
- * Every value each policy takes, with its consequence. `settings.toml` is the authority on
- * the words; a proposal carries only the value in force, so they are listed here.
+ * Every value each policy takes, in words and with its consequence. A proposal carries only the
+ * value in force. Auto merge's words and consequences are the registry's; the review gate's
+ * consequences have no registry row yet, so they are written here.
  */
-export const POLICY_CHOICES: Record<string, { label: string; options: { value: string; says: string }[] }> = {
+export const POLICY_CHOICES: Record<string, { label: string; options: { value: string; reads: string; says: string }[] }> = {
   auto_merge: {
     label: "Auto merge",
-    options: [
-      { value: "never", says: "A person merges every pull request here." },
-      { value: "checks-pass", says: "Fleet merges once every check the forge runs has passed." },
-      { value: "always", says: "Fleet merges without waiting on the forge's checks or a review." },
-    ],
+    options: Object.entries(AUTO_MERGE).map(([value, reading]) => ({
+      value,
+      reads: sentence(reading?.verb, value),
+      says: reading?.hint ?? "",
+    })),
   },
   review_gate: {
     label: "Review gate",
     options: [
-      { value: "human_always", says: "A person answers every review step." },
-      { value: "auto_if_judge_passes", says: "The checks decide a review step, unless the Judge objects." },
+      { value: "human_always", reads: sentence(ADVANCE_GATE.human_always?.verb, "human_always"), says: "A person answers every review step." },
+      {
+        value: "auto_if_judge_passes",
+        reads: sentence(ADVANCE_GATE.auto_if_judge_passes?.verb, "auto_if_judge_passes"),
+        says: "The checks decide a review step, unless the Judge objects.",
+      },
     ],
   },
 };
+
+/** A put replaces the whole line, so a retyped command carries the key beside it. */
+export function runEdit(proposal: ManifestProposal, band: "checks" | "commands", name: string, run: string): ProposalEdit {
+  if (band === "checks") {
+    const requires = proposal.checks.find((one) => one.name === name)?.requires ?? [];
+    return { edit: "check", name, run, ...(requires.length === 0 ? {} : { requires }) };
+  }
+  const destructive = proposal.commands.find((one) => one.name === name)?.destructive === true;
+  return { edit: "command", name, run, ...(destructive ? { destructive } : {}) };
+}
+
+/** A Check's prerequisites, sent with its command. `null` for a Check the proposal no longer has. */
+export function requiresEdit(proposal: ManifestProposal, name: string, requires: string[]): ProposalEdit | null {
+  const check = proposal.checks.find((one) => one.name === name);
+  if (check === undefined) return null;
+  return { edit: "check", name, run: check.run, ...(requires.length === 0 ? {} : { requires }) };
+}
+
+/** A Command's flag, sent with its command. `null` for a Command the proposal no longer has. */
+export function destructiveEdit(proposal: ManifestProposal, name: string, destructive: boolean): ProposalEdit | null {
+  const command = proposal.commands.find((one) => one.name === name);
+  if (command === undefined) return null;
+  return { edit: "command", name, run: command.run, ...(destructive ? { destructive } : {}) };
+}
 
 /** The caps in one line, never controls: at Setup no Job has run here to set them against. */
 export function capsLine(caps: StatedCaps): string {
@@ -184,6 +227,8 @@ type Drawn = Omit<
   | "onClose"
   | "onEditId"
   | "onEditRun"
+  | "onRequires"
+  | "onDestructive"
   | "onMove"
   | "onRemove"
   | "onAdd"

@@ -137,6 +137,9 @@ export function Sheet({
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
+      // A popover open inside the sheet is the top layer, and takes the press itself.
+      const within = event.target instanceof Element ? event.target.closest(".armada-popover") : null;
+      if (within?.querySelector(".armada-popover__panel")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

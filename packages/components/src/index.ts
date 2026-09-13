@@ -277,3 +277,4 @@ export * from "./compositions/SetupPicker/SetupPicker";
 // Locate — Journey 3's *Getting in*: a repository added by folder or cloned from a URL.
 export * from "./compositions/LocateForm/LocateForm";
 export * from "./compositions/ProposalSheet/ProposalSheet";
+export * from "./compositions/ValuePopover/ValuePopover";

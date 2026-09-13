@@ -1,0 +1,74 @@
+/* A value a cell cannot hold. At rest it reads as the in-place values beside it: text over a
+   hairline dashed rule. The layer is Popover's, the one floating layer on the sheet. */
+.armada-value-popover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-value-popover__value {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: var(--border-width) dashed var(--border-default);
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+/* Nothing set is a placeholder, not a value, so it is sans and quieter. */
+.armada-value-popover__value[data-empty] {
+  font-family: var(--font-sans);
+  color: var(--fg-muted);
+}
+
+.armada-value-popover__value:focus-visible {
+  outline: var(--focus-ring);
+}
+
+.armada-value-popover__picks,
+.armada-value-popover__flag {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-value-popover__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-value-popover__pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+}
+
+.armada-value-popover__name,
+.armada-value-popover__order {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-value-popover__order {
+  color: var(--fg-muted);
+}
+
+.armada-value-popover__says {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}

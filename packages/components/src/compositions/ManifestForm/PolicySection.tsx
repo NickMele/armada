@@ -1,19 +1,19 @@
-import { ADVANCE_GATE } from "../../generated/vocabulary";
+import { ADVANCE_GATE, AUTO_MERGE, type Rendering } from "../../generated/vocabulary";
 import { Select } from "../../primitives/Select/Select";
 
 import { Section } from "./Entries";
 import type { ManifestFormProps } from "./ManifestForm";
 
-/** The registry's words for a gate, with the file's word beside them. */
-function gateReads(word: string): string {
-  const verb = ADVANCE_GATE[word]?.verb;
+/** The registry's words for a policy value, with the file's word beside them. */
+function reads(vocabulary: Readonly<Record<string, Rendering | undefined>>, word: string): string {
+  const verb = vocabulary[word]?.verb;
   return verb === null || verb === undefined ? word : `${verb.charAt(0).toUpperCase()}${verb.slice(1)} · ${word}`;
 }
 
 export function PolicySection({ draft, onDraft, autoMergeWords, reviewGateWords }: ManifestFormProps) {
+  const consequence = AUTO_MERGE[draft.autoMerge]?.hint;
   return (
     <Section title="Policy" says="Who decides a landing and a review here. Across several Manifests, the most cautious wins.">
-      {/* No registry row says `auto_merge`'s values in words yet, so the file's word is shown. */}
       <div className="armada-manifest-form__hinted">
         <Select
           label="Auto merge"
@@ -22,14 +22,13 @@ export function PolicySection({ draft, onDraft, autoMergeWords, reviewGateWords 
         >
           {autoMergeWords.map((word) => (
             <option key={word} value={word}>
-              {word}
+              {reads(AUTO_MERGE, word)}
             </option>
           ))}
         </Select>
-        <p className="armada-manifest-form__hint">
-          <span className="armada-manifest-form__key">checks-pass</span> is the forge's checks, not Armada's, and{" "}
-          <span className="armada-manifest-form__key">always</span> means always.
-        </p>
+        {consequence === null || consequence === undefined ? null : (
+          <p className="armada-manifest-form__hint">{consequence}</p>
+        )}
       </div>
       <Select
         label="Review gate"
@@ -38,7 +37,7 @@ export function PolicySection({ draft, onDraft, autoMergeWords, reviewGateWords 
       >
         {reviewGateWords.map((word) => (
           <option key={word} value={word}>
-            {gateReads(word)}
+            {reads(ADVANCE_GATE, word)}
           </option>
         ))}
       </Select>

@@ -7,6 +7,7 @@ import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
 import { Sheet } from "../../primitives/Sheet/Sheet";
 import { PortAddForm, type PortAddition } from "../PortAddForm/PortAddForm";
 import { Provenance, type ProvenanceProps } from "../Provenance/Provenance";
+import { Destructive, RunsFirst } from "./values";
 
 /**
  * One workspace's proposal, over the picker — Journey 3's *The proposal sheet*.
@@ -14,7 +15,8 @@ import { Provenance, type ProvenanceProps } from "../Provenance/Provenance";
  * **Ports first**, so a variable is met before a command reading it. **Checks and Commands are
  * two registries**, and every row moves between them, because which one Scan put a script in
  * is a guess. **The values are the fields**: a value is text until pressed, then an input at
- * the same height. Edits land in Fleet's draft at once; Write puts the file down, once.
+ * the same height. **A set opens a popover from its value**: a Check's prerequisites and a
+ * Command's destructive flag. Edits land in Fleet's draft at once; Write puts the file down, once.
  *
  * **No Open in Helm.** Nothing serves a Helm session scoped to a proposal, and a control that
  * reaches nothing is worse than none. Row actions are labelled ghosts: the icon registry has
@@ -38,8 +40,8 @@ export type ProposalPolicy = {
   key: string;
   label: string;
   value: string;
-  /** Every value it takes, each with the consequence in plain words. */
-  options: { value: string; says: string }[];
+  /** Every value it takes, each in words where the registry has them, and its consequence. */
+  options: { value: string; reads?: string; says: string }[];
   cited: ProvenanceProps;
 };
 
@@ -75,6 +77,9 @@ export type ProposalSheetProps = {
   busy?: boolean;
   onEditId: (id: string) => void;
   onEditRun: (band: ProposalBand, name: string, run: string) => void;
+  /** A Check's prerequisites, whole and in order. */
+  onRequires: (check: string, requires: string[]) => void;
+  onDestructive: (command: string, destructive: boolean) => void;
   onMove: (band: ProposalBand, name: string) => void;
   onRemove: (band: ProposalBand | "ports", name: string) => void;
   onAdd: (band: ProposalBand, name: string, run: string) => void;
@@ -206,7 +211,13 @@ export function ProposalSheet(props: ProposalSheetProps) {
                     disabled={locked}
                     onChange={() => props.onPolicy(row.key, option.value)}
                   >
-                    <span className="armada-proposal-sheet__mono">{option.value}</span>
+                    {option.reads === undefined ? (
+                      <span className="armada-proposal-sheet__mono">{option.value}</span>
+                    ) : (
+                      <>
+                        {option.reads} <span className="armada-proposal-sheet__mono">{option.value}</span>
+                      </>
+                    )}
                   </Radio>
                 ))}
               </RadioGroup>
@@ -317,16 +328,14 @@ function Registry({
               }
             >
               <span className="armada-proposal-sheet__run">
-                {entry.requires === undefined || entry.requires.length === 0 ? null : (
-                  <span className="armada-proposal-sheet__mono">{`${entry.requires.join(", ")} →`}</span>
-                )}
+                {band === "checks" ? <RunsFirst entry={entry} {...props} /> : null}
                 <InPlace
                   label={`${entry.name} command`}
                   value={entry.run}
                   locked={locked}
                   onCommit={(run) => props.onEditRun(band, entry.name, run)}
                 />
-                {entry.destructive ? <span className="armada-proposal-sheet__says">destructive</span> : null}
+                {band === "commands" ? <Destructive entry={entry} {...props} /> : null}
               </span>
             </Row>
           ))}
