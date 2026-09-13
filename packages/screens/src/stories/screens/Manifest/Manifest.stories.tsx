@@ -460,7 +460,9 @@ export const ASaveOverAFileThatMoved: Story = {
 
 /**
  * **A Check whose script the repository no longer has**, found by opening the
- * surface: `bridge_test` names a `package.json` script that is gone. `gone`, in
+ * surface: `bridge_test` runs a `package.json` script that is gone. `run` is
+ * what makes it `gone` rather than unfollowed — a bare `pnpm bridge-test` could
+ * be a binary, and drift says so instead. `gone`, in
  * amber, naming what is missing — and nothing on the row to press.
  */
 export const DriftWithAGoneLine: Story = {
@@ -477,7 +479,7 @@ export const DriftWithAGoneLine: Story = {
             section: "checks",
             name: "bridge_test",
             key: "run",
-            run: "pnpm bridge-test",
+            run: "pnpm run bridge-test",
             drift: { verdict: "gone", missing: ["package.json: scripts.bridge-test"] },
             unfollowed: [],
           },

@@ -49,12 +49,13 @@
 }
 
 /* Bounded for the same reason drift's rows are: a Manifest with a dozen
-   Checks must not push the run page and its live output below the window. */
+   Checks must not push the run page and its live output below the window.
+   One line a step is what lets a Manifest's usual ten fit without scrolling. */
 .armada-verify-panel__groups {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  max-height: calc(var(--space-12) * 4);
+  max-height: calc(var(--space-12) * 6);
   overflow-y: auto;
 }
 
@@ -74,15 +75,18 @@
 .armada-verify-panel__steps {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* One line: the name, its `run` line clipped between, and where it got to.
+   The whole line is in the title, so clipping hides nothing for good. */
 .armada-verify-panel__step {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  align-items: baseline;
   column-gap: var(--space-3);
   min-width: 0;
 }
@@ -94,19 +98,24 @@
   color: var(--fg-default);
 }
 
-.armada-verify-panel__state {
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  color: var(--fg-muted);
-}
-
 .armada-verify-panel__run {
-  grid-column: 1 / -1;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.armada-verify-panel__state {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
 }
 
 .armada-verify-panel__scope {

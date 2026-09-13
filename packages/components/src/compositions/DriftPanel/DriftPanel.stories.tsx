@@ -45,7 +45,7 @@ const CURRENT: DriftPanelRow[] = [
 const GONE: DriftPanelRow = {
   id: "checks.bridge_test.run",
   where: "checks.bridge_test.run",
-  run: "pnpm bridge-test",
+  run: "pnpm run bridge-test",
   verdict: "gone",
   missing: ["package.json: scripts.bridge-test"],
 };

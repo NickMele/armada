@@ -101,8 +101,10 @@ export function VerifyPanel({
                 {members.map((step) => (
                   <li className="armada-verify-panel__step" key={step.id}>
                     <span className="armada-verify-panel__name">{step.name}</span>
+                    <code className="armada-verify-panel__run" title={step.run}>
+                      {step.run}
+                    </code>
                     <span className="armada-verify-panel__state">{stateOf(step.state)}</span>
-                    <code className="armada-verify-panel__run">{step.run}</code>
                   </li>
                 ))}
               </ol>
