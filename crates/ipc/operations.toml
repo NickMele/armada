@@ -975,6 +975,28 @@ Refused with a 409 on a Job that is not at `awaiting_review`, sharing that refus
 `agent_access` is `No`, like every other act at this gate. Deciding that work lands is the owner's, and this one lands it in somebody else's repository.
 """
 
+[operations.rerun_failed_checks]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Asks the forge to start a Job's pull request's failed CI runs again"
+notes = """
+**A write to the forge, taken only from a person's press**, like `merge_pull_request` (#905). `gh run rerun --failed` starts each failed run's failed jobs again and writes nothing on the pull request. It moves nothing on the Job, and what comes back is the Job as it stands.
+
+Refused with a 409 where the Job has no open pull request, and with a 409 carrying the forge's own words where it would not start them. `agent_access` is `No`: a forge act is a person's.
+"""
+
+[operations.investigate_failed_checks]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Sends the branch back for a Drone to find out why a pull request's CI failed"
+notes = """
+`resolve_pull_request_conflict`'s road with a note (#905): the Job goes back to the step before the one that delivers, and the Drone there opens with the failed checks and is asked to say which of five kinds each is and fix what is the change's. **It re-runs nothing**; a flaky run is reported, and re-running it is a person's press. Once its step passes, the ordinary forward walk delivers again and the pull request updates.
+
+Refused with a 409 anywhere but `awaiting_review`, where the Job has no open pull request or no failed check when Fleet last read it, and where the workflow has no step before the one that delivers.
+"""
+
 [operations.resolve_pull_request_conflict]
 kind = "command"
 transport = "HTTP"

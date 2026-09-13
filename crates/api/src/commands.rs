@@ -150,6 +150,30 @@ pub(crate) async fn resolve_pull_request_conflict<D: Commands>(
     }
 }
 
+/// Start the pull request's failed CI runs again. #905. 409 with no open pull request,
+/// and 409 carrying the forge's words where it would not.
+pub(crate) async fn rerun_failed_checks<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+) -> Response {
+    match served.daemon().rerun_failed_checks(job.id()).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Send the branch back for a Drone to find out why CI failed. #905. 409 off the gate,
+/// with no open pull request, or where nothing failed.
+pub(crate) async fn investigate_failed_checks<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+) -> Response {
+    match served.daemon().investigate_failed_checks(job.id()).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Send the work back with a note. **The Job comes back `running`**, at the
 /// same step, with the same Drone — nothing was thrown away and nothing was
 /// spawned.

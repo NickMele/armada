@@ -1,0 +1,44 @@
+// The review's Pull request CI row, from what the sweep last read off the pull request. #905.
+//
+// **The forge's own CI, never totalled with Armada's Checks.** Its words say what ran on the
+// forge; a conflict with main outranks a failed run, because a run on a conflicted branch
+// says nothing about the change.
+
+import type { ConfidenceCi } from "@armada/components";
+import type { PullRequestChecks } from "@armada/protocol";
+
+/** What a person can do from the row, bound to the Job by the caller. */
+export type CiActs = Pick<ConfidenceCi, "onInvestigate" | "onRerun" | "onResolve" | "disabled">;
+
+export function ciOf(
+  checks: PullRequestChecks | undefined,
+  conflicted: boolean,
+  acts: CiActs,
+): ConfidenceCi {
+  return {
+    kind: checks?.kind ?? "unreadable",
+    said: conflicted ? "The branch conflicts with main." : saidOf(checks),
+    failed: conflicted ? [] : (checks?.failed ?? []),
+    conflicted,
+    ...acts,
+  };
+}
+
+/** The row's one line, in the forge's terms. */
+export function saidOf(checks: PullRequestChecks | undefined): string {
+  if (checks === undefined) return "Fleet has not read the pull request's CI yet.";
+  switch (checks.kind) {
+    case "nothing_ran":
+      return "Nothing ran against the pull request.";
+    case "all_passed":
+      return `All ${checks.checks} passed.`;
+    case "still_waiting":
+      return `${checks.finished ?? 0} of ${checks.checks} finished, none failed yet.`;
+    case "some_failed": {
+      const failed = checks.failed?.length ?? 0;
+      return `${failed} of ${checks.checks} failed.`;
+    }
+    case "unreadable":
+      return "The forge would not say what ran.";
+  }
+}

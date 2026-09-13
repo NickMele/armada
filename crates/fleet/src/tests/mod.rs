@@ -128,6 +128,7 @@ mod rejecting;
 mod remarks;
 mod reporting;
 pub(crate) mod repositories;
+mod rerunning;
 mod resources;
 mod restarting;
 mod resting;

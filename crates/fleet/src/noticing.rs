@@ -149,6 +149,34 @@ pub fn settled(landed: &Landing) -> Option<Settled> {
     }
 }
 
+/// The forge's own CI, as the pull request's detail carries it. #905.
+fn ci_of(ran: &adapter_traits::WhatTheForgeRan) -> ipc::PullRequestChecks {
+    let (checks, finished, failed) = match ran {
+        adapter_traits::WhatTheForgeRan::NothingRan
+        | adapter_traits::WhatTheForgeRan::Unreadable => (0, None, Vec::new()),
+        adapter_traits::WhatTheForgeRan::AllPassed { checks } => {
+            (*checks, Some(*checks), Vec::new())
+        }
+        adapter_traits::WhatTheForgeRan::StillWaiting { finished, checks } => {
+            (*checks, Some(*finished), Vec::new())
+        }
+        adapter_traits::WhatTheForgeRan::SomeFailed { failed, checks } => (
+            *checks,
+            None,
+            failed
+                .iter()
+                .map(|name| name.as_written().to_string())
+                .collect(),
+        ),
+    };
+    ipc::PullRequestChecks {
+        kind: ran.kind().to_string(),
+        checks,
+        finished,
+        failed,
+    }
+}
+
 impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
@@ -370,6 +398,7 @@ where
                 })
                 .unwrap_or_default(),
             currency,
+            checks: reviewed.map(|reviewed| ci_of(&reviewed.checks)),
         };
         self.sweeping()
             .lock()

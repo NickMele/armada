@@ -668,6 +668,12 @@ pub trait Delivery {
         pull_request: &str,
     ) -> Option<crate::PullRequestDiff>;
 
+    /// Start a pull request's failed CI runs again. #905.
+    ///
+    /// **A write to the forge, taken only from a person's press**, like [`merge`](Delivery::merge).
+    /// Nothing is posted on the pull request.
+    fn rerun_failed(&self, in_repo: &str, pull_request: &str) -> Result<Rerun, NotRerun>;
+
     /// Merge a pull request Armada opened.
     ///
     /// **The one method on this trait that writes into a repository nobody on
@@ -773,4 +779,17 @@ mod tests {
         assert_eq!(review.title(), "fix the reader");
         assert_eq!(review.body(), "## What was checked");
     }
+}
+
+/// Failed CI runs started again. #905.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rerun {
+    /// How many runs the forge was asked to start again.
+    pub runs: usize,
+}
+
+/// Why failed CI runs were not started again, in the words the forge or the tool used.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NotRerun {
+    pub said: String,
 }

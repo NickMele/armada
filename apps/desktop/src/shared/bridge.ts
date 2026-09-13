@@ -521,6 +521,8 @@ export const CHANNELS = {
   approveReview: "bridge:approve-review",
   mergePullRequest: "bridge:merge-pull-request",
   resolvePullRequestConflict: "bridge:resolve-pull-request-conflict",
+  rerunFailedChecks: "bridge:rerun-failed-checks",
+  investigateFailedChecks: "bridge:investigate-failed-checks",
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
   takeUpRemarks: "bridge:take-up-remarks",

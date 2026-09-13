@@ -177,6 +177,7 @@ pub mod remarks;
 pub mod reporting;
 /// The repositories one Fleet serves, and adding one by folder.
 pub mod repositories;
+mod rerunning;
 /// What one Job holds on this machine — its processes, what they are burning,
 /// and the disk its worktree has taken. **Read on demand, never on the turn.**
 pub mod resources;

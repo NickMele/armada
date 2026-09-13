@@ -189,6 +189,8 @@ pub enum Delivered {
     AskedForInlineRemarks { pull_request: String },
     /// The forge was asked for a pull request's diff, for a Code Review Job's review.
     AskedForTheDiff { pull_request: String },
+    /// The forge was asked to start a pull request's failed CI runs again. A write, like a merge.
+    RerunFailed { pull_request: String },
     /// The branch was asked to be kept current against a base that moved —
     /// `Delivery::kept_current`, in place of the close-and-reopen this
     /// replaced. **Counted for
@@ -244,6 +246,8 @@ pub struct Delivering {
     pub inline_remarks: Vec<Remark>,
     /// The forge's answer for a pull request's diff. `None` by default, the forge's silence.
     pub pull_request_diff: Option<adapter_traits::PullRequestDiff>,
+    /// What re-running failed CI runs comes to. One run started again by default.
+    pub rerun: Result<adapter_traits::Rerun, adapter_traits::NotRerun>,
     /// What keeping the branch current comes to. A clean rebase by default,
     /// because the case a test has to write out is the one where it conflicted
     /// or found no branch.
@@ -277,6 +281,7 @@ impl Default for Delivering {
             under_review: UnderReview::unreadable(),
             inline_remarks: Vec::new(),
             pull_request_diff: None,
+            rerun: Ok(adapter_traits::Rerun { runs: 1 }),
             kept_current: KeptCurrent::Rebased {
                 onto: String::from("5b4ec82700000000000000000000000000000000"),
                 commits: 1,
@@ -712,6 +717,20 @@ impl Delivery for FakeVcs {
             .expect("not poisoned")
             .pull_request_diff
             .clone()
+    }
+
+    fn rerun_failed(
+        &self,
+        _in_repo: &str,
+        pull_request: &str,
+    ) -> Result<adapter_traits::Rerun, adapter_traits::NotRerun> {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::RerunFailed {
+                pull_request: pull_request.to_string(),
+            });
+        self.delivery.lock().expect("not poisoned").rerun.clone()
     }
 
     fn merge(&self, _in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged> {

@@ -397,6 +397,16 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/resolve_pull_request_conflict",
     },
+    Route {
+        operation: "rerun_failed_checks",
+        method: "POST",
+        path: "/jobs/:job_id/rerun_failed_checks",
+    },
+    Route {
+        operation: "investigate_failed_checks",
+        method: "POST",
+        path: "/jobs/:job_id/investigate_failed_checks",
+    },
     // The answer at a gate that refused, which is a different place from the
     // three above: those answer `awaiting_review` and this answers `escalated`.
     // Its own route rather than a flag on `approve_review` — one route taking

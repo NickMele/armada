@@ -48,7 +48,9 @@ export type Decision =
   | "request_changes"
   | "reject"
   | "merge"
-  | "resolve_pull_request_conflict";
+  | "resolve_pull_request_conflict"
+  | "rerun_failed_checks"
+  | "investigate_failed_checks";
 
 /**
  * One Job's claims and one Job's diff, each read when a surface asks for it.

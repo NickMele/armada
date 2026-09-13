@@ -617,6 +617,26 @@ export function useCommands(sending: Sending) {
     }
   }
 
+  /** Start the pull request's failed CI runs again. #905. */
+  async function rerunFailedChecks(jobId: string): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(await window.armada.rerunFailedChecks(jobId));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
+  /** Send the branch back for a Drone to find out why CI failed. #905. */
+  async function investigateFailedChecks(jobId: string): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(await window.armada.investigateFailedChecks(jobId));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
   /**
    * Ask Fleet for current state over the connection Bridge already holds.
    *
@@ -643,6 +663,8 @@ export function useCommands(sending: Sending) {
     takeUpRemarks,
     dismissFinding,
     resolvePullRequestConflict,
+    rerunFailedChecks,
+    investigateFailedChecks,
     givenBack,
     setGivenBack,
     refreshing,

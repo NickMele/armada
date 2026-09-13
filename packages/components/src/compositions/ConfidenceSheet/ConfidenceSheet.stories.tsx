@@ -203,3 +203,33 @@ export const WithADismissal: Story = {
     await expect(canvas.getByText("Saving takes one lock, so there is no order.")).toBeVisible();
   },
 };
+
+/** A pull request whose CI failed: Investigate on the face, Re-run the failed runs under the caret. #905. */
+export const WithFailedCi: Story = {
+  args: {
+    confidence: {
+      says: "not_confident",
+      reasons: ["The unit tests failed on the pull request."],
+      areas: [],
+      needs_you: [],
+      small_fixes: [],
+      for_context: [],
+    },
+    ci: {
+      kind: "some_failed",
+      said: "1 of 3 failed.",
+      failed: ["unit tests"],
+      conflicted: false,
+      onInvestigate: fn(),
+      onRerun: fn(),
+    },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole("list", { name: "Failed checks" })).toHaveTextContent("unit tests");
+    await userEvent.click(canvas.getByRole("button", { name: "Investigate" }));
+    await expect(args.ci?.onInvestigate).toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "More about CI" }));
+    await userEvent.click(await canvas.findByRole("menuitem", { name: "Re-run the failed runs" }));
+    await expect(args.ci?.onRerun).toHaveBeenCalled();
+  },
+};

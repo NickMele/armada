@@ -204,6 +204,12 @@ pub enum Adrift {
     /// A conflict resolution was asked for on a Job with no open pull request
     /// to resolve one against. `#663`.
     NothingToResolve { job: JobId },
+    /// Re-run was pressed on a Job with no open pull request. #905.
+    NothingToRerun { job: JobId },
+    /// The forge would not start the failed runs again, in its own words. #905.
+    RerunRefused { job: JobId, said: String },
+    /// Investigate was pressed on a Job whose pull request has no failed check. #905.
+    NothingToInvestigate { job: JobId },
     /// A conflict resolution was asked for on a workflow whose delivering step
     /// has nothing before it — a single step that both writes the work and
     /// sends it out, which this cannot redo without redelivering onto its own

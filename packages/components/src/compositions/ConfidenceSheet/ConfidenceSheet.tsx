@@ -10,6 +10,7 @@ import type {
   ViewStepRow,
 } from "@armada/protocol";
 import { Button } from "../../primitives/Button/Button";
+import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 
 /**
  * Armada's review of a change, drawn above the verdict sheet at the gate. #903.
@@ -22,6 +23,23 @@ export type ConfidenceSheetProps = {
   confidence: JobConfidence;
   /** Opens a row's View. #904. Absent leaves every View button out. */
   onView?: (view: ConfidenceView) => void;
+  /** The pull request's CI, and what a person can do about it. #905. Absent draws no row. */
+  ci?: ConfidenceCi;
+};
+
+/** The Pull request CI row: the forge's own CI, never totalled with Armada's Checks. #905. */
+export type ConfidenceCi = {
+  kind: string;
+  /** The row's one line. */
+  said: string;
+  /** What the forge calls each check that failed. */
+  failed: string[];
+  /** The branch conflicts with main, which outranks a failed run. */
+  conflicted: boolean;
+  onInvestigate?: () => void;
+  onRerun?: () => void;
+  onResolve?: () => void;
+  disabled?: boolean;
 };
 
 /** What a View button hands over: what the View is of, and its steps. */
@@ -34,7 +52,7 @@ export type ConfidenceView = {
 
 type OnView = ConfidenceSheetProps["onView"];
 
-export function ConfidenceSheet({ confidence, onView }: ConfidenceSheetProps) {
+export function ConfidenceSheet({ confidence, onView, ci }: ConfidenceSheetProps) {
   const { says, reasons, areas, tests, needs_you, small_fixes, for_context } = confidence;
   const dismissed = confidence.dismissed ?? [];
   return (
@@ -52,6 +70,43 @@ export function ConfidenceSheet({ confidence, onView }: ConfidenceSheetProps) {
           </ul>
         )}
       </div>
+      {ci === undefined ? null : (
+        <div className="armada-confidence__block">
+          <span className="armada-confidence__label">Pull request CI</span>
+          <div className="armada-confidence__ci">
+            <span className="armada-confidence__said" data-ci={ci.kind}>
+              {ci.said}
+            </span>
+            {ci.conflicted && ci.onResolve !== undefined ? (
+              <Button size="sm" disabled={ci.disabled} onClick={ci.onResolve}>
+                Resolve conflicts
+              </Button>
+            ) : ci.failed.length > 0 && ci.onInvestigate !== undefined ? (
+              <SplitButton
+                items={
+                  ci.onRerun === undefined
+                    ? []
+                    : [{ label: "Re-run the failed runs", onSelect: ci.onRerun }]
+                }
+                disabled={ci.disabled}
+                onAction={ci.onInvestigate}
+                menuLabel="More about CI"
+              >
+                Investigate
+              </SplitButton>
+            ) : null}
+          </div>
+          {ci.failed.length === 0 ? null : (
+            <ul className="armada-confidence__failed" aria-label="Failed checks">
+              {ci.failed.map((name) => (
+                <li key={name}>
+                  <code className="armada-confidence__path">{name}</code>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {areas.length > 0 && (
         <Fold title="Shape of the change" summary={areaCount(areas)}>
           <Areas areas={areas} onView={onView} />

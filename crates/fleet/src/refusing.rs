@@ -149,6 +149,12 @@ const FINDING_NOT_IN_REVIEW: &str = "fleet.finding_not_in_review";
 const NOTHING_TO_MERGE: &str = "fleet.nothing_to_merge";
 /// A conflict resolution asked for on a Job with no open pull request. `#663`.
 const NOTHING_TO_RESOLVE: &str = "fleet.nothing_to_resolve";
+/// Re-run pressed on a Job with no open pull request. A 409. #905.
+const NOTHING_TO_RERUN: &str = "fleet.nothing_to_rerun";
+/// The forge would not start the failed runs again. A 409, carrying what it said. #905.
+const RERUN_REFUSED: &str = "fleet.rerun_refused";
+/// Investigate pressed where no check failed. A 409. #905.
+const NOTHING_TO_INVESTIGATE: &str = "fleet.nothing_to_investigate";
 /// A conflict resolution asked for on a workflow with no step before the one
 /// that delivers. `#663`.
 const NO_STEP_TO_REDO: &str = "fleet.no_step_to_redo";
@@ -516,6 +522,19 @@ where
             // Nothing was ever opened, so there is no forge answer to name.
             Adrift::NothingToMerge { job } => Refusal::IllegalMove(
                 WireError::raised(NOTHING_TO_MERGE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::NothingToRerun { job } => Refusal::IllegalMove(
+                WireError::raised(NOTHING_TO_RERUN, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::RerunRefused { job, said: forge } => Refusal::IllegalMove(
+                WireError::raised(RERUN_REFUSED, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("forge", WireValue::Str(forge.clone())),
+            ),
+            Adrift::NothingToInvestigate { job } => Refusal::IllegalMove(
+                WireError::raised(NOTHING_TO_INVESTIGATE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
             Adrift::NothingToResolve { job } => Refusal::IllegalMove(

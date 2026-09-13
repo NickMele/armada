@@ -30,6 +30,7 @@ import {
   type VerdictSheetProps,
 } from "@armada/components";
 import { ReviewedGate, type PendingChanges } from "./confidence";
+import { ciOf } from "./ci";
 import type {
   Diff,
   Evidence,
@@ -529,6 +530,10 @@ export type VerdictSlotAtGateArgs = {
   onMergePullRequest: (jobId: string) => void;
   /** Send the branch back for a Drone that can edit files. `#663`. */
   onResolvePullRequestConflict: (jobId: string) => void;
+  /** Start the pull request's failed CI runs again. #905. */
+  onRerunFailedChecks?: (jobId: string) => void;
+  /** Send the branch back for a Drone to find out why CI failed. #905. */
+  onInvestigateFailedChecks?: (jobId: string) => void;
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -565,6 +570,8 @@ export function verdictSlotAtGate({
   deciding,
   onMergePullRequest,
   onResolvePullRequestConflict,
+  onRerunFailedChecks,
+  onInvestigateFailedChecks,
   onApproveReview,
   onRequestChanges,
   onReject,
@@ -679,6 +686,20 @@ export function verdictSlotAtGate({
         : {
             onDismissFinding: (finding: string, reason: string) =>
               onDismissFinding(job.id, finding, reason),
+          })}
+      {...(detail?.checks === undefined && !conflicted
+        ? {}
+        : {
+            ci: ciOf(detail?.checks, conflicted, {
+              ...(onInvestigateFailedChecks === undefined
+                ? {}
+                : { onInvestigate: () => onInvestigateFailedChecks(job.id) }),
+              ...(onRerunFailedChecks === undefined
+                ? {}
+                : { onRerun: () => onRerunFailedChecks(job.id) }),
+              onResolve: () => onResolvePullRequestConflict(job.id),
+              disabled: stale || deciding,
+            }),
           })}
       sheet={sheetWith}
     />

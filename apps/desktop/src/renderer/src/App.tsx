@@ -588,6 +588,8 @@ export function App() {
                 onResolvePullRequestConflict={(jobId) =>
                   void commands.resolvePullRequestConflict(jobId)
                 }
+                onRerunFailedChecks={(jobId) => void commands.rerunFailedChecks(jobId)}
+                onInvestigateFailedChecks={(jobId) => void commands.investigateFailedChecks(jobId)}
                 onApproveReview={(jobId) => void commands.decide(jobId, "approve")}
                 onRequestChanges={(jobId, note) => void commands.decide(jobId, "changes", note)}
                 onReject={(jobId) => void commands.decide(jobId, "reject")}

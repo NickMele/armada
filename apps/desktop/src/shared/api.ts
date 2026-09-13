@@ -731,6 +731,10 @@ export type BridgeApi = {
    * on the step before the one that delivers, never the gate's own.
    */
   resolvePullRequestConflict: (jobId: string) => Promise<Outcome>;
+  /** Start the pull request's failed CI runs again. A forge write, only from a press. #905. */
+  rerunFailedChecks: (jobId: string) => Promise<Outcome>;
+  /** Send the branch back for a Drone to find out why CI failed. #905. */
+  investigateFailedChecks: (jobId: string) => Promise<Outcome>;
   /**
    * Send the work back with a note. **The Job comes back `running`**, same step,
    * same Drone — nothing is spawned and nothing done is thrown away.
