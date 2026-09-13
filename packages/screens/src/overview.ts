@@ -11,7 +11,8 @@ import { statementOf } from "@armada/shell/src/fleet";
 import { manifestLabel, repositoryLabel } from "@armada/shell/src/repository-label";
 import { ofPicked, tabOf } from "./board";
 import { said } from "./copy";
-import type { DriftsRead, FleetHealth, HealthRead, RepositoryDrift } from "./overview-reads";
+import type { FleetHealth } from "@armada/protocol";
+import type { DriftsRead, HealthRead, RepositoryDrift } from "./overview-reads";
 
 /** A tile's reading. Where it opens is the band's, not the reading's. */
 export type TileReading = Omit<OverviewTileProps, "opens" | "onOpen">;

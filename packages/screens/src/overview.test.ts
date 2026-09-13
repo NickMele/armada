@@ -2,11 +2,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { Connection, ManifestDriftRead, RepositorySummary } from "@armada/protocol";
+import type { Connection, FleetHealth, ManifestDriftRead, RepositorySummary } from "@armada/protocol";
 import { connectedTo, PROTOCOL_VERSION } from "@armada/protocol";
 import { job } from "./fixtures/build/base";
 import { doctorReading, driftReading, dronesReading, fleetReading, queuedIn, queuedReading } from "./overview";
-import type { FleetHealth, RepositoryDrift } from "./overview-reads";
+import type { RepositoryDrift } from "./overview-reads";
 
 const NOW = Date.parse("2026-09-13T12:00:00Z");
 const FLEET = { protocolVersion: PROTOCOL_VERSION, pid: 4242, port: 7878, startedAt: "2026-09-13T11:00:00Z" };

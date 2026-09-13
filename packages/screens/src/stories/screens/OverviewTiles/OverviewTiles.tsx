@@ -1,7 +1,8 @@
 import { connectedTo, PROTOCOL_VERSION } from "@armada/protocol";
 import type { Connection, FleetCapacity, JobSummary, ManifestDriftRead, RepositorySummary } from "@armada/protocol";
 import { OverviewTiles } from "../../../OverviewTiles";
-import type { DriftsRead, FleetHealth, HealthRead } from "../../../overview-reads";
+import type { FleetHealth } from "@armada/protocol";
+import type { DriftsRead, HealthRead } from "../../../overview-reads";
 import { job, repository } from "../../../fixtures/build/base";
 
 /** The moment every figure is read at, so a story never moves. */

@@ -9,8 +9,8 @@
 // **The last good reading stays up through a re-read.** Only opening draws the placeholders; a
 // tile blanking on every save would read as a Fleet that stopped answering.
 
-import type { ManifestDrift, ManifestDriftRead } from "@armada/protocol";
-import type { DriftsRead, FleetHealth, HealthRead, RepositoryDrift } from "@armada/screens/src/overview-reads";
+import type { FleetHealth, ManifestDrift, ManifestDriftRead } from "@armada/protocol";
+import type { DriftsRead, HealthRead, RepositoryDrift } from "@armada/screens/src/overview-reads";
 import type { BridgeState } from "../shared/bridge";
 import type { Picked } from "./picked";
 import { ask, NOT_SET_UP } from "./request";
