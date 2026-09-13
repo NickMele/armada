@@ -18,7 +18,7 @@ It is not the same shape as either tier above it. [Kit](kit.md) is the tool set 
 
 **One Manifest per workspace.** Even inside a large monolith with multiple independent components, each workspace gets its own `armada.yml` and is independently scoped on the [Job Board](job-board.md), same as a standalone repo.
 
-**The Board scopes by a Job's `owner_manifest_id`**, which is always exactly one. Every Job — Convoy included — therefore has exactly one Board it appears on.
+**A Job's `owner_manifest_id` is always exactly one**, which is what lets the Board focus on a single repository's Jobs when one is picked — see [Job Board](job-board.md).
 
 Components typically share one lockfile at the repo root under pnpm/yarn/npm-style workspaces. Only the package manifest (e.g. `package.json`) is truly per-workspace; the shared lockfile is evidence common to all of them, not a per-workspace artifact.
 

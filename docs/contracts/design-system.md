@@ -1701,12 +1701,16 @@ characters of which a person reads four, and the whole of it stays on
 the link's `title`. A Job with no pull request draws nothing here rather
 than an empty field.
 
-**Workspace is not in the row.** It was, and it came out: a row is
+**Workspace is not in the row, once a repository is picked.** A row is
 scanned, and the workspace is the field a reader already knows — they
-opened this board, and every Job on it is theirs. Spending a track on it
-costs the one that answers "is this stuck", which is elapsed. It stays on
-the detail view, where a reader is asking about one Job rather than
-comparing several.
+picked it, and every Job on the Board is theirs. Spending a track on it
+costs the one that answers "is this stuck", which is elapsed.
+
+**On All repositories, with more than one served, the row names it.**
+There the workspace is no longer implicit, so a reader needs it to tell
+one Job's row from another's — see [Job Board](../concepts/job-board.md).
+It otherwise stays off the row and always sits on the detail view, where
+a reader is asking about one Job rather than comparing several.
 
 **Spend follows the active billing mode.** Personal-machine mode gates
 on the quota % floor, so the row shows quota % remaining, which is

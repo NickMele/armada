@@ -22,13 +22,15 @@ Your lens on **every Job and what it is doing** — picking work to dispatch, wa
 
 **One list rather than four surfaces.** Splitting not-yet-started, running, awaiting-review and finished across separate destinations divided one population four ways, made a person learn which surface held which state, and gave four lists of Jobs four chances to disagree about what a Job row looks like. What used to be Active Jobs is this list filtered to what is running, what used to be Reviews is it filtered to `awaiting_review`, and there is no Activity Feed: finished Jobs are this list filtered to what is over.
 
-Why it matters that this is a filter: the state a Job is in changes constantly and is not where a person's attention lives. Scoping by Manifest is a place; scoping by state is a question, and a question belongs in a control.
+Why it matters that this is a filter: the state a Job is in changes constantly and is not where a person's attention lives. Scoping by repository is a place; scoping by state is a question, and a question belongs in a control.
 
-### One Board per Manifest
+### The Board's scope is the repository picker
 
-**The Board is per-Manifest.** You pick a Manifest first and the Board scopes to that Manifest's Workspace. It is not a unified cross-Manifest view.
+**The picker's first entry is All repositories, and Bridge opens on it.** On All, the Board lists every repository's Jobs. Picking a repository focuses the Board on that repository's Jobs alone, and the Manifest surface and New job both ask which repository first while All is showing.
 
-**The Board scopes by `owner_manifest_id`.** A Job's old `manifest_id` / `manifest_ids` field split into an owner (exactly one, always present), a gate list (Manifests whose Checks must pass, possibly empty) and a write list. Every Job — [Convoy](convoy.md) included — has exactly one Board and appears on it.
+**A row on All names its repository by the picker's label, where more than one is served.** Picking one repository already says it for every row, so the column appears only on All.
+
+**The Board scopes by a Job's `owner_manifest_id` once a repository is picked.** A Job's old `manifest_id` / `manifest_ids` field split into an owner (exactly one, always present), a gate list (Manifests whose Checks must pass, possibly empty) and a write list. Every Job — [Convoy](convoy.md) included — has exactly one owner, so which repository's picked view it belongs to is never ambiguous, and it appears on All regardless.
 
 ### A Board outlives its Workspace
 
@@ -65,7 +67,7 @@ A Convoy in the graph is expected rather than exceptional, and whether it render
 
 ## The controls
 
-**Two axes: state, plus one text match.** The Manifest is already the scope, so
+**Two axes: state, plus one text match.** The repository is already the scope, so
 it is not an axis, and origin is a label rather than an axis — drawn as a filter
 and rejected, see Origin tagging below. What is left is a state filter, a text
 match and a sort.
@@ -243,7 +245,7 @@ It carries no `dispatched_by`, linking back through `subject` instead, which is 
 rejected on the drawing, answering `[origin-tag-filterable-or-display]`. Both
 readings were drawn side by side; the filter earned no question a person
 actually asks. *What needs me*, *what is running* and *why has that not started*
-are all state, and the Board's scope is already the Manifest — so an origin axis
+are all state, and the Board's scope is already the repository — so an origin axis
 adds a control that narrows by a fact nobody is narrowing on.
 
 **And it names the condition that would reverse this.** One machine dispatches

@@ -28,7 +28,7 @@ Cross-Job reasoning covers every Job in the selected Manifest, not one Job at a 
 
 Inside Bridge, **scoped to the selected Manifest**. Selecting a Manifest opens a Helm session for it; Helm sees that Manifest's Jobs, Drones, evidence and escalations, and nothing outside it.
 
-**Fleet-wide reasoning is not a Helm capability.** Why: Bridge already carries a selected Manifest and the [Job Board](job-board.md) is per-Manifest by definition, so a Fleet-wide Helm would be the only thing in the product ignoring that selection.
+**Fleet-wide reasoning is not a Helm capability.** Why: a Helm session belongs to the Manifest selected when it opened, so a Fleet-wide Helm would be the only thing in the product ignoring that selection.
 
 Anything genuinely cross-Manifest stays a Bridge job.
 
