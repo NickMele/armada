@@ -178,8 +178,12 @@ where
         // of them it was is not a Board fact.
         let mut slots = self.slots().lock().await;
         let room = self.room_for_another(&mut slots).await;
+        drop(slots);
+        // Bound and memory are `room`'s; disk is this Job's own repository's
+        // volume, asked the way admission itself asks it — `crate::admitting`.
+        let short = !room.granted() || self.volume_is_short(job).await;
         Ok(Waiting::on(
-            (!room.granted()).then_some(CoreQueuedReason::WaitingOnResources),
+            short.then_some(CoreQueuedReason::WaitingOnResources),
         ))
     }
 }

@@ -16,6 +16,7 @@
 //! full disk holds a Job, and it is the pairing that catches a change to
 //! either.
 
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -55,6 +56,10 @@ impl Machine for Plentiful {
     fn read(&self) -> Option<Reading> {
         Some(PLENTY)
     }
+
+    fn disk_free_at(&self, _path: &std::path::Path) -> Option<Bytes> {
+        Some(PLENTY.disk_free())
+    }
 }
 
 /// A machine a test moves, counting how often it was asked.
@@ -92,6 +97,15 @@ impl Machine for Plant {
     fn read(&self) -> Option<Reading> {
         self.reads.fetch_add(1, Ordering::SeqCst);
         *self.saw.lock().expect("the plant is not poisoned")
+    }
+
+    /// **Not counted by `reads`**, which is `read`'s own — the two are asked
+    /// at different rates and a case about one must not see the other move.
+    fn disk_free_at(&self, _path: &std::path::Path) -> Option<Bytes> {
+        self.saw
+            .lock()
+            .expect("the plant is not poisoned")
+            .map(|reading| reading.disk_free())
     }
 }
 
@@ -429,6 +443,94 @@ async fn a_running_job_is_left_alone_when_the_machine_fills() {
         "it kept running: nothing here escalates, and nothing here queues it back"
     );
     assert_eq!(fleet.working_on().await, vec![job]);
+}
+
+// -------------------------------------------------------- one Fleet, two volumes
+
+/// A machine whose disk answer depends on which volume is asked, so a case can
+/// starve one repository's without moving the other's.
+struct ByVolume {
+    short: PathBuf,
+}
+
+impl Machine for ByVolume {
+    fn read(&self) -> Option<Reading> {
+        Some(PLENTY)
+    }
+
+    fn disk_free_at(&self, path: &Path) -> Option<Bytes> {
+        Some(if path == self.short {
+            Bytes::gibibytes(2)
+        } else {
+            Bytes::gibibytes(500)
+        })
+    }
+}
+
+/// **Only the Job on the short volume waits.** Approved in the order that would
+/// have wedged every repository under the old, single-reading `room_for_another`
+/// — the short one first — a single admission pass still starts the other.
+#[tokio::test]
+async fn only_the_jobs_own_short_volume_holds_it_back() {
+    let home = TempDir::new();
+    let second = crate::tests::repositories::second_repository(&home);
+    let second_root = PathBuf::from(&second.root);
+
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.concurrency = crate::slots::Concurrency::of(2);
+    fittings.headroom = SHIPPED;
+    fittings.machine = Arc::new(ByVolume {
+        short: second_root.clone(),
+    });
+    let fleet = Fleet::assembled(fittings);
+    let added = fleet
+        .repositories()
+        .add(second)
+        .expect("a second repository");
+    let second_manifest = added
+        .manifest()
+        .expect("set up already")
+        .id()
+        .as_str()
+        .to_string();
+
+    // The short volume's Job, approved first — the one an admission that
+    // stopped at the first hold would never get past.
+    let mut on_the_short_volume = a_proposal("a change on the volume that filled");
+    on_the_short_volume.owner_manifest_id = ipc::ManifestId::carried(&second_manifest);
+    let short_job = fleet
+        .propose(on_the_short_volume)
+        .await
+        .expect("a proposal");
+    let spec =
+        adapter_traits::WorktreeSpec::for_job(&second_root.to_string_lossy(), &short_job.handle())
+            .expect("a legal spec");
+    std::fs::create_dir_all(spec.worktree_path()).expect("a directory for the Drone to run in");
+    fleet.approve(short_job.id()).await.expect("approved");
+
+    let healthy_job = fleet
+        .propose(a_proposal("a change on the healthy volume"))
+        .await
+        .expect("a proposal");
+    worktree_directory(&home, &healthy_job);
+    fleet.approve(healthy_job.id()).await.expect("approved");
+
+    fleet.admit_next().await.expect("one admission pass");
+
+    assert_eq!(
+        board(&fleet, healthy_job.id()).await,
+        ("running".to_string(), None),
+        "its own repository's volume has room"
+    );
+    assert_eq!(
+        board(&fleet, short_job.id()).await,
+        (
+            "queued".to_string(),
+            Some("waiting_on_resources".to_string())
+        ),
+        "held for its own volume, and only that one"
+    );
+    assert_eq!(fleet.working_on().await, vec![healthy_job.id().clone()]);
 }
 
 // ----------------------------------------------- a person's act, and the queue

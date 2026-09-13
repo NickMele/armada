@@ -45,6 +45,10 @@ impl Machine for Fixed {
     fn read(&self) -> Option<Reading> {
         Some(self.0)
     }
+
+    fn disk_free_at(&self, _path: &std::path::Path) -> Option<Bytes> {
+        Some(self.0.disk_free())
+    }
 }
 
 fn plenty() -> Arc<dyn Machine> {
@@ -271,6 +275,10 @@ async fn a_machine_that_will_not_answer_holds_nothing_back() {
     struct Silent;
     impl Machine for Silent {
         fn read(&self) -> Option<Reading> {
+            None
+        }
+
+        fn disk_free_at(&self, _path: &std::path::Path) -> Option<Bytes> {
             None
         }
     }

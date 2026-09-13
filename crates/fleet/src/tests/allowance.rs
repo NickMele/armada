@@ -295,6 +295,10 @@ impl crate::headroom::Machine for NoDisk {
             Bytes::gibibytes(1),
         ))
     }
+
+    fn disk_free_at(&self, _path: &std::path::Path) -> Option<Bytes> {
+        Some(Bytes::gibibytes(1))
+    }
 }
 
 /// **The cap does not stop a Drone that is spending, and this is the case that

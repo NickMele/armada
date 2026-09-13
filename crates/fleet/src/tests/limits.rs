@@ -27,6 +27,10 @@ impl Machine for Fixed {
     fn read(&self) -> Option<Reading> {
         Some(self.0)
     }
+
+    fn disk_free_at(&self, _path: &std::path::Path) -> Option<Bytes> {
+        Some(self.0.disk_free())
+    }
 }
 
 /// Fittings on `home` whose machine has plenty of disk and `memory_in_use`

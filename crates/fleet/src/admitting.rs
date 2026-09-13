@@ -13,18 +13,21 @@
 //!
 //! # One predicate per question, and every reason to refuse belongs inside one
 //!
-//! [`Room`] answers "may another Drone start **at all**" — the machine and the
-//! roster, about no Job in particular; a new machine-wide reason is a variant
+//! [`Room`] answers "may another Drone start **at all**" — the bound and
+//! memory, about no Job in particular; a new machine-wide reason is a variant
 //! there. **A reason belonging to one Job is a predicate of its own**:
 //! [`clear_to_run`] for dependencies, `Fleet::overspent` for what it has spent,
 //! `Fleet::frozen_by` for a freeze, asked where a Job is chosen rather than once
 //! per admission. All four are
 //! shared with `serving`'s `queued_reason`, so a Board cannot say a Job is
-//! blocked while Fleet is starting it.
+//! blocked while Fleet is starting it. **Disk is a fifth, of the same kind**:
+//! [`Fleet::admit_next`] asks it per Job, of that Job's own repository's
+//! volume rather than the machine's — `#987`.
 //!
 //! [`Fleet::next_queued`]: crate::Fleet
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -176,10 +179,12 @@ where
 
     /// Start every approved Job there is room for.
     ///
-    /// **[`Fleet::room_for_another`] is the whole of what "room" means here**,
-    /// and it is the same predicate `queued_reason` answers
-    /// `waiting_on_resources` from — one answer, because a Board saying a Job is
-    /// blocked while Fleet is starting it is worse than a Board saying nothing.
+    /// **The bound and memory are [`Fleet::room_for_another`]**, asked once a
+    /// pass and shared with `queued_reason` — a Board saying a Job is blocked
+    /// on either while Fleet is starting it is worse than saying nothing.
+    /// **Disk is asked per Job, of its own served repository's volume**, so a
+    /// Job on a short volume is skipped and the next queued Job, on whatever
+    /// volume it lands on, is still tried — `#987`.
     ///
     /// **The roster lock is held across the loop, and nothing else is.** Two
     /// admissions running at once would each read the same `queued` Job as next
@@ -187,10 +192,10 @@ where
     /// It is released the moment the last Drone is spawned — a slot is held for
     /// as long as a Job is worked, and this for as long as one is *started*.
     ///
-    /// Admission stops at the first Job that will not start. The failure is
-    /// returned, its Job is left `escalated` by `dispatch`, and the next turn
-    /// asks again — Fleet does not walk on down the queue to find one that works,
-    /// because the reason the first failed is ordinarily the disk.
+    /// Admission stops at the first Job whose `dispatch` itself fails — a real
+    /// error, never a Job merely held back by [`Room`] or by its own volume,
+    /// both of which are skipped rather than failed. The failure is returned,
+    /// its Job is left `escalated`, and the next turn asks again.
     ///
     /// **Never from a `Commands` method, and none does** — `#428`, then `#456`
     /// for the six that freed a place and filled it in one breath. This runs a
@@ -202,8 +207,22 @@ where
     pub(crate) async fn admit_next(&self) -> Result<Vec<JobId>, Adrift> {
         let mut slots = self.slots().lock().await;
         let mut admitted = Vec::new();
-        while self.room_for_another(&mut slots).await.granted() {
-            let Some(job) = self.next_queued().await? else {
+        // Jobs this pass found short of their own repository's volume, so
+        // `next_queued` does not hand the same one back — `#987`.
+        let mut short_on_volume: Vec<JobId> = Vec::new();
+        loop {
+            // Not `room_for_another`: that bundles a disk reading of its own
+            // one configured volume, which is the wrong question for a Fleet
+            // serving several — see [`Fleet::volume_is_short`] below.
+            if !slots.room() {
+                break;
+            }
+            if let Some(reading) = self.machine_reading().await {
+                if reading.memory().spare() < self.headroom().memory_spare() {
+                    break;
+                }
+            }
+            let Some(job) = self.next_queued(&short_on_volume).await? else {
                 break;
             };
             let job_id = job.id().clone();
@@ -214,6 +233,13 @@ where
             // it starts a Drone, and `crate::superseding` says why a Drone that
             // finds the work already done is not a source anybody may act on.
             if self.superseded_by_a_sibling(&job).await? {
+                continue;
+            }
+            // The Job's own repository's volume, not the machine's — a short
+            // one holds only this Job back, so the pass moves on rather than
+            // stopping.
+            if self.volume_is_short(&job).await {
+                short_on_volume.push(job_id);
                 continue;
             }
             let slot = slots.opened_for(&job_id);
@@ -236,6 +262,27 @@ where
         Ok(admitted)
     }
 
+    /// Whether the volume this Job's worktree would land on is short of the
+    /// disk floor. **The served repository's root**, since that is where
+    /// `WorktreeSpec` cuts one; a Job this Fleet does not serve carries no
+    /// volume to ask about and is not held back for one it cannot name.
+    ///
+    /// `pub(crate)` for `summarising::queued_reason`, which needs this Job's
+    /// own answer and not `room_for_another`'s machine-wide one.
+    pub(crate) async fn volume_is_short(&self, job: &Job) -> bool {
+        let Ok(served) = self.served_by(job) else {
+            return false;
+        };
+        let volume = PathBuf::from(served.root());
+        let machine = Arc::clone(self.machine());
+        let floor = self.headroom().disk_floor();
+        tokio::task::spawn_blocking(move || machine.disk_free_at(&volume))
+            .await
+            .ok()
+            .flatten()
+            .is_some_and(|free| free < floor)
+    }
+
     /// The Job that has been waiting longest, by when it was approved.
     ///
     /// Ordered by the sequence of the event that put it at `queued`, not by id
@@ -246,7 +293,10 @@ where
     /// A row that would not rebuild is not dispatchable, and is reported by
     /// every read that returns a list rather than being silently completed
     /// here.
-    async fn next_queued(&self) -> Result<Option<Job>, Adrift> {
+    ///
+    /// `short_on_volume` is this pass's own — Jobs already found short of
+    /// their repository's disk, so a Job skipped once is not handed back.
+    async fn next_queued(&self, short_on_volume: &[JobId]) -> Result<Option<Job>, Adrift> {
         let (loaded, _) = self.every_job().await?;
         let standing: BTreeMap<JobId, JobStatus> = loaded
             .jobs
@@ -258,7 +308,7 @@ where
         let children = children_standing(&loaded.jobs);
         let mut waiting = Vec::new();
         for job in loaded.jobs {
-            if job.status() != JobStatus::Queued {
+            if job.status() != JobStatus::Queued || short_on_volume.contains(job.id()) {
                 continue;
             }
             // A frozen repository starts nothing, whoever put the Job here —
