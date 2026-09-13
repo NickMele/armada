@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import { expect, fn, waitFor, within } from "storybook/test";
 
-import type { JobSummary, ServerState, WorkPlan } from "@armada/protocol";
+import type { JobSummary, ServerState } from "@armada/protocol";
 import { takenNotice, type Taken } from "../../../freeze";
 import { TakenNotice } from "../../../Taken";
 import type { JobFixture } from "../../../fixtures/fixture";
