@@ -39,11 +39,16 @@ function pickedAt(root: string): Picked {
 }
 
 describe("the pick", () => {
-  it("falls to the first repository Fleet lists, and sends nothing before any is listed", () => {
+  it("opens on All repositories, which names none, and goes bare before any is listed", () => {
     const picked = new Picked();
     expect(picked.manifest("/manifest/file")).toBe("/manifest/file");
-    expect(picked.hold([FIRST, NOT_SET_UP])).toBe(true);
-    expect(picked.picked).toBe(FIRST.root);
+    expect(picked.hold([FIRST, NOT_SET_UP])).toBe(false);
+    expect(picked.picked).toBeNull();
+    expect(picked.manifest("/manifest/files?q=src")).toBeNull();
+    expect(picked.checkout("/manifest/run_sheet")).toBeNull();
+    expect(picked.scan("/repository/scan")).toBeNull();
+    expect(picked.reads("/Users/user/armada/armada.yml")).toBe(false);
+    expect(picked.pick(FIRST.root)).toBe(true);
     expect(picked.manifest("/manifest/files?q=src")).toBe("/manifest/files?q=src&manifest_id=armada");
   });
 
@@ -52,6 +57,15 @@ describe("the pick", () => {
     expect(picked.pick("/somewhere/else")).toBe(false);
     expect(picked.hold([FIRST, SET_UP])).toBe(false);
     expect(picked.picked).toBe(SET_UP.root);
+  });
+
+  it("goes back to All when the picked repository is no longer served, and when All is picked", () => {
+    const picked = pickedAt(SET_UP.root);
+    expect(picked.hold([FIRST])).toBe(true);
+    expect(picked.picked).toBeNull();
+    picked.pick(FIRST.root);
+    expect(picked.pick(null)).toBe(true);
+    expect(picked.picked).toBeNull();
   });
 
   it("names a repository nobody set up by root for Scan, and refuses a Manifest route for it", () => {
@@ -222,6 +236,18 @@ describe("every per-repository call", () => {
     );
     const editing = new ManifestFileCommands(() => port, picked, async () => {});
     expect(await editing.readFile()).toEqual({ ok: false, outcome: { ok: false, why: "not_set_up" } });
+  });
+
+  it("sends none on All repositories: a surface that needs one asks first", async () => {
+    const asked: string[] = [];
+    const port = await recording(asked);
+    const picked = new Picked();
+    picked.hold([FIRST, SET_UP, NOT_SET_UP]);
+    await everyCall(port, picked);
+    const socket = new CheckoutRunSocket(() => {}, picked);
+    socket.open(port, "run-1");
+    socket.close();
+    expect(asked.filter((url) => !FLEETWIDE.has(url))).toEqual([]);
   });
 
   it("is built through the pick wherever `src/main` spells a per-repository route", () => {

@@ -168,7 +168,8 @@ export type BridgeState = {
   holds: Holdings;
   /**
    * The root of the repository the rail picked, which every per-repository read and act names.
-   * `null` until Fleet lists one. Main holds the pick — `main/picked.ts`.
+   * `null` is no one repository: All repositories, where Bridge opens, or a Fleet that lists
+   * none. Main holds the pick — `main/picked.ts`.
    */
   repository: string | null;
   /**

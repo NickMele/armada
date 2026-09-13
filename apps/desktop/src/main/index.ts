@@ -603,9 +603,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.writeManifestProposal, (_event, body: WriteManifestProposal) =>
     connection?.editing.setup.write(body),
   );
-  // Anything but a string is dropped here; a root Fleet does not list, in `Picked.pick`.
+  // `null` is All repositories. Anything but a string or `null` is dropped here; a root Fleet does not list, in `Picked.pick`.
   ipcMain.handle(CHANNELS.pickRepository, (_event, root: unknown) =>
-    typeof root === "string" ? connection?.repositories.pick(root) : undefined,
+    typeof root === "string" || root === null ? connection?.repositories.pick(root) : undefined,
   );
   // Locate. The folder dialog is sheeted to the window that asked, so it cannot be left behind it.
   ipcMain.handle(CHANNELS.chooseFolder, async (event) => {

@@ -77,7 +77,7 @@ async function bridgeOn(port: number) {
   connection.start();
   const until = (holds: (state: BridgeState) => boolean) =>
     latest !== null && holds(latest) ? Promise.resolve() : new Promise<void>((keep) => waits.push({ holds, keep }));
-  return { until, latest: () => latest! };
+  return { until, latest: () => latest!, pick: (root: string | null) => connection.repositories.pick(root) };
 }
 
 const resync = JSON.stringify({ message: "resync", protocol_version: PROTOCOL_VERSION, cursor: 1, jobs: { jobs: [], unreadable: [] } });
@@ -85,7 +85,7 @@ const changed = (repositories: RepositorySummary[]) =>
   JSON.stringify({ message: "event", cursor: 2, event: { kind: "repositories.changed", repositories } });
 const rootsOf = (state: BridgeState) => (state.holds.repositories ?? []).map((one) => one.root);
 
-it("picks the first repository added to a Fleet that served none, from the event alone", async () => {
+it("lists the first repository added to a Fleet that served none, from the event alone, and stays on All", async () => {
   const fleet = await fleetServing([]);
   const bridge = await bridgeOn(fleet.port);
   (await fleet.socket).send(resync);
@@ -94,8 +94,9 @@ it("picks the first repository added to a Fleet that served none, from the event
   expect(bridge.latest().repository).toBeNull();
 
   (await fleet.socket).send(changed([SCRATCH]));
-  await bridge.until((state) => state.repository === SCRATCH.root);
+  await bridge.until((state) => rootsOf(state).length === 1);
   expect(rootsOf(bridge.latest())).toEqual([SCRATCH.root]);
+  expect(bridge.latest().repository).toBeNull();
   expect(fleet.read("/repositories")).toBe(1);
 });
 
@@ -103,12 +104,17 @@ it("keeps the pick where it is still served when another repository is added els
   const fleet = await fleetServing([ARMADA]);
   const bridge = await bridgeOn(fleet.port);
   (await fleet.socket).send(resync);
+  await bridge.until((state) => rootsOf(state).length === 1);
+  expect(bridge.latest().repository).toBeNull();
+  // Picking reads the listing again, so what the event costs is counted from here.
+  await bridge.pick(ARMADA.root);
   await bridge.until((state) => state.repository === ARMADA.root);
+  const read = fleet.read("/repositories");
 
   // Listed ahead of the pick, which would take the first place if the pick were reset.
   (await fleet.socket).send(changed([SCRATCH, ARMADA]));
   await bridge.until((state) => rootsOf(state).length === 2);
   expect(rootsOf(bridge.latest())).toEqual([SCRATCH.root, ARMADA.root]);
   expect(bridge.latest().repository).toBe(ARMADA.root);
-  expect(fleet.read("/repositories")).toBe(1);
+  expect(fleet.read("/repositories")).toBe(read);
 });

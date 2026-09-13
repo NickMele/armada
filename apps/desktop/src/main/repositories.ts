@@ -49,8 +49,8 @@ export class RepositoryReads {
     if (moved || shifted) await Promise.all([this.readManifest(port), this.wiring.rehearsal.onRepositoryMoved(port)]);
   }
 
-  /** The rail's pick. A root Fleet does not list moves nothing. */
-  async pick(root: string): Promise<void> {
+  /** The rail's pick, `null` for All repositories. A root Fleet does not list moves nothing. */
+  async pick(root: string | null): Promise<void> {
     if (!this.picked.pick(root)) return;
     this.wiring.publish({ repository: this.picked.picked });
     const port = this.wiring.port();

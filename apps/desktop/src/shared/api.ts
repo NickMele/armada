@@ -552,9 +552,10 @@ export type BridgeApi = {
 
   /**
    * Pick the repository every per-repository read and act names, by a root `holds.repositories`
-   * lists. What changed arrives as state: `repository`, and the reads held open, taken again.
+   * lists, or `null` for All repositories, which names none. What changed arrives as state:
+   * `repository`, and the reads held open, taken again.
    */
-  pickRepository: (root: string) => Promise<void>;
+  pickRepository: (root: string | null) => Promise<void>;
 
   /** The OS's folder dialog, over this window. `null` where the person cancelled it. */
   chooseFolder: () => Promise<string | null>;
