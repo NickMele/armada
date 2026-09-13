@@ -338,8 +338,8 @@ export const COMMAND_ANSWER: Record<CommandAnswer, { label: string; means: strin
   always_allow: {
     label: "Always allow in this repository",
     means:
-      "The drone runs it now, and it is written into armada.yml under commands, as its own " +
-      "commit on this job's branch.",
+      "The drone runs it now, and the rule you pick below is written into armada.yml under " +
+      "commands, as its own commit on this job's branch.",
   },
   reject: {
     label: "Reject",
