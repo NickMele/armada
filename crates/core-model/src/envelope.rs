@@ -152,22 +152,31 @@ impl Component {
     }
 }
 
-/// Who caused the line. Three ways, and the separation is baked in now because
+/// Who caused the line. Four ways, and the separation is baked in now because
 /// adding it later is a schema migration over recorded history.
 ///
 /// Verification source is orthogonal to this and is null for a human.
+///
+/// **`Helm` is a fourth kind, not a `Fleet` speaking.** Fleet's own moves —
+/// dispatch, escalation, admission — stay `Fleet`; a redirect, a drafted Job or
+/// anything else Helm does on a person's behalf is `Helm`, so the three-way
+/// separation `docs/concepts/helm.md` requires (Drone evidence, a person's act,
+/// Helm's act) survives a Job's record. Nothing sets it yet — telling a Helm
+/// caller apart at the agent door is a later change — but the value exists so
+/// that change is additive rather than a migration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Actor {
     Human,
     Fleet,
     Drone,
+    Helm,
 }
 
 impl Actor {
     /// Every variant. **`domain/` has no row for this one** — the actor
     /// vocabulary is the log envelope's, not the registry's, so the order is
     /// the enum's own and there is no key to be verbatim against.
-    pub const ALL: &'static [Actor] = &[Actor::Human, Actor::Fleet, Actor::Drone];
+    pub const ALL: &'static [Actor] = &[Actor::Human, Actor::Fleet, Actor::Drone, Actor::Helm];
 
     /// The wire value. `job_events.actor` and `scope_revisions[].approved_by`
     /// are both stored from here, so the two spellings cannot diverge.
@@ -176,10 +185,11 @@ impl Actor {
             Actor::Human => "human",
             Actor::Fleet => "fleet",
             Actor::Drone => "drone",
+            Actor::Helm => "helm",
         }
     }
 
-    /// Read a stored value back. `None` where it is not one of the three,
+    /// Read a stored value back. `None` where it is not one of the four,
     /// which is a row written by something that did not share this enum.
     pub fn from_wire(value: &str) -> Option<Actor> {
         Actor::ALL.iter().copied().find(|a| a.as_wire() == value)
