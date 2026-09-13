@@ -19,7 +19,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const URL = "https://github.com/owner/storefront.git";
+const URL = "https://forge.invalid/owner/storefront.git";
 
 async function opened(canvasElement: HTMLElement) {
   const canvas = within(canvasElement);

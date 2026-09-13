@@ -63,7 +63,7 @@ export const CloneFromAURL: Story = {
   args: {
     ...BASE,
     mode: "clone",
-    url: "https://github.com/owner/storefront.git",
+    url: "https://forge.invalid/owner/storefront.git",
     parent: "/Users/user/code",
     landsIn: "/Users/user/code/storefront",
     ready: true,
@@ -91,7 +91,7 @@ export const CloneRefused: Story = {
     refusal: {
       code: "fleet.clone_refused",
       saying:
-        "git refused the clone: fatal: repository 'https://github.com/owner/storefront.git/' not found",
+        "git refused the clone: fatal: repository 'https://forge.invalid/owner/storefront.git/' not found",
     },
   },
 };
