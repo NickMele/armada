@@ -877,15 +877,9 @@ export class JobCommands {
     );
   }
 
-  /**
-   * Dismiss a finding the review raised, with the reason. #907. **It moves nothing**, so it
-   * answers with the Job as it stands. A blank reason is refused here, as a blank note is.
-   */
   async dismissFinding(jobId: string, finding: string, reason: string): Promise<Outcome> {
     if (reason.trim() === "") return { ok: false, why: "empty_note" };
-    return this.act(jobId, this.deciding, "already_deciding", (port) =>
-      dismiss(port, jobId, finding, reason),
-    );
+    return this.act(jobId, this.deciding, "already_deciding", (p) => dismiss(p, jobId, finding, reason));
   }
 
   /**
