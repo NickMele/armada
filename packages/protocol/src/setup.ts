@@ -129,6 +129,18 @@ export type AddRepository = {
 };
 
 /**
+ * A repository to clone, and the folder a person picked to clone it under —
+ * `POST /repositories/clone`. `crates/ipc/src/repositories.rs`. Answers the
+ * `RepositorySummary` an add does, once git has finished.
+ */
+export type CloneRepository = {
+  /** What `git clone` takes, read with the credentials git already has. */
+  url: string;
+  /** Absolute, and already there. The clone lands in a new folder under it, named from the URL. */
+  parent: string;
+};
+
+/**
  * One repository Fleet serves. **Listed whether or not it has a Manifest**:
  * Setup starts from a folder nobody wrote an `armada.yml` for.
  */

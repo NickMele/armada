@@ -65,7 +65,7 @@ Process-group semantics differ across platforms, and where that difference belon
 
 ## Repositories
 
-**One Fleet serves many repositories, and one Board lists every one's Jobs.** The repository `armada serve` starts in is the first; a person adds another by folder, and the rail's project picker switches between their Manifests. The rejected alternative was one Fleet per repository, which would have put a Board, a store and a listener per project in front of a person who wanted one.
+**One Fleet serves many repositories, and one Board lists every one's Jobs.** The repository `armada serve` starts in is the first; a person adds another by folder, or clones one from a URL into a folder they pick, and the rail's project picker switches between their Manifests. The rejected alternative was one Fleet per repository, which would have put a Board, a store and a listener per project in front of a person who wanted one.
 
 > **Rule.** A Job belongs to the repository whose Manifest it was created against, found through `owner_manifest_id`.
 > Why: every path a Job writes to — its worktree, its records, its main checkout — is that repository's, and a lookup that fell back to another would work a Job in a tree it never ran in.

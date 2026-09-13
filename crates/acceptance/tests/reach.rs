@@ -22,7 +22,7 @@
 //!
 //! | What holds | What it does not reach |
 //! |---|---|
-//! | **Locate, by folder.** A Fleet started in one repository serves a second a person adds: both Manifests list, a folder or a Manifest id already served is refused, a folder with no `armada.yml` is served without listing as a Manifest, and each repository holds its Jobs to its own Checks | That the folder is a git repository's root and its `armada.yml` is read off disk — `armada`'s `locating` tests. That `add_repository` serves one, a Job is created in each and a restart reconciles both — `fleet`'s `repositories` tests. That a restart remembers what was added: it needs a store table. Clone from a URL, and the dialog on an empty rail |
+//! | **Locate, by folder or URL.** A Fleet started in one repository serves a second a person adds: both Manifests list, a folder or a Manifest id already served is refused, a folder with no `armada.yml` is served without listing as a Manifest, each repository holds its Jobs to its own Checks, and a clone URL names the folder it lands in | That the folder is a git repository's root and its `armada.yml` is read off disk — `armada`'s `locating` tests. That `add_repository` serves one, a Job is created in each and a restart reconciles both — `fleet`'s `repositories` tests. That a restart remembers what was added: it needs a store table. That git clones a URL there and what landed is served, and what it refuses — git is a process, so `fleet`'s `cloning` tests. The dialog on an empty rail |
 //! | Scan reads every workspace of a repository nobody set up, in one pass — workspace globs, lockfiles, package scripts, compose services, the ports a file declares, and each CI step's command with its job and a matrix named once rather than per cell — each finding naming a file the repository has, what it did not read said beside it, and nothing written, because the tree it is handed has no write | That a checkout on disk reads the same, and that Fleet serves it: both touch a repository, and are `fleet`'s and `api`'s own tests. That a CI provider other than the one `adapters` reads is said not followed: naming one is `adapters`' own tests |
 //! | Each workspace carries how strong its evidence is, and a name every strong sibling declares is marked where one lacks it — the root never a sibling | That a picker ticks by it or draws the grid — #824. The mark is over the batch ticked by default; a batch a person re-ticks is the screen's to recompute |
 //! | **Proposal.** Scan's findings become one proposal per workspace: a port cites the file declaring it, every script reads `convention` whichever registry it landed in, and policy reads `default` | That Fleet serves one and holds it between reads — `fleet::manifest_proposal`'s own test, over a real checkout. That a sheet draws it — #824 |
@@ -58,7 +58,7 @@ use config::{
     WorkflowSource,
 };
 use core_model::{JobStatus, StepState, WorkflowId};
-use fleet::repositories::NotAdded;
+use fleet::repositories::{folder_named_by, NotAdded};
 use fleet::{Brief, Proposal};
 use ipc::{
     EvidenceStrength, MissingName, ProposalEdit, Provenance, ToolFile, VerifyGroup, VerifyStep,
@@ -100,6 +100,12 @@ fn a_second_repository_added_by_folder_is_served_beside_the_first() {
     let (e2e, deliver) = (String::from("e2e"), String::from("deliver"));
     assert!(checks("storefront").contains(&e2e) && !checks("storefront").contains(&deliver));
     assert!(checks("mailer").contains(&deliver) && !checks("mailer").contains(&e2e));
+    let cloned = folder_named_by("ssh://host.invalid/owner/mailer.git");
+    assert_eq!(
+        cloned.as_deref(),
+        Some("mailer"),
+        "a clone lands where its URL names"
+    );
 }
 
 /// **Scan reads every workspace of a repository nobody set up, in one pass,

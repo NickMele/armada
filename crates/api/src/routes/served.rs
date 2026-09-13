@@ -93,6 +93,11 @@ pub const SERVED: &[Route] = &[
         path: "/repositories/add",
     },
     Route {
+        operation: "clone_repository",
+        method: "POST",
+        path: "/repositories/clone",
+    },
+    Route {
         operation: "get_repository_scan",
         method: "GET",
         path: "/repository/scan",

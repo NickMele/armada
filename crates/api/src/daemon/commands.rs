@@ -839,6 +839,15 @@ pub trait Commands: Send + Sync + 'static {
         asked: ipc::AddRepository,
     ) -> impl Future<Output = Result<ipc::RepositorySummary, Refusal>> + Send;
 
+    /// `clone_repository` — clone from a URL into a new folder under `parent`,
+    /// then serve it as [`add_repository`](Commands::add_repository) does.
+    /// Answers when git finishes; its refusals are `add_repository`'s and three
+    /// more, in `crates/ipc/operations.toml`.
+    fn clone_repository(
+        self: std::sync::Arc<Self>,
+        asked: ipc::CloneRepository,
+    ) -> impl Future<Output = Result<ipc::RepositorySummary, Refusal>> + Send;
+
     fn remove_repository_allowed_command(
         &self,
         removing: ipc::RemoveRepositoryAllowedCommand,

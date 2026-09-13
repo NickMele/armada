@@ -221,7 +221,7 @@ pub use rehearsal::{
 pub use rehearsal::{CheckoutVerify, VerifyGroup, VerifyStep, VerifyStepState};
 pub use remarks::{InlineContext, JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
-pub use repositories::{AddRepository, RepositoryList, RepositorySummary};
+pub use repositories::{AddRepository, CloneRepository, RepositoryList, RepositorySummary};
 pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
 };

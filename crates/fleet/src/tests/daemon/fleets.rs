@@ -60,11 +60,22 @@ pub fn fitted_with(
     work: FakeWorkProduct,
     harness: FakeHarness,
 ) -> Fittings<FakeHarness, FakeVcs, FakeWorkProduct> {
+    fitted_over(home, work, harness, FakeVcs::new())
+}
+
+/// The same fittings over any version control: a real one where git's own
+/// answer is the subject — `crate::tests::cloning`.
+pub fn fitted_over<V>(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    harness: FakeHarness,
+    vcs: V,
+) -> Fittings<FakeHarness, V, FakeWorkProduct> {
     let root = home.path().to_string_lossy().to_string();
     Fittings {
         store: Store::open(&home.path().join("armada.db")).expect("a store"),
         harness,
-        vcs: FakeVcs::new(),
+        vcs,
         work,
         clock: Arc::new(Ticking::from_nine()),
         mint: Arc::new(Counted::from_one()),

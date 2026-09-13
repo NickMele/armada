@@ -484,6 +484,14 @@ where
         self.added_repository(asked).await
     }
 
+    /// Clone from a URL, then serve it — `crate::repositories`.
+    async fn clone_repository(
+        self: Arc<Self>,
+        asked: ipc::CloneRepository,
+    ) -> Result<ipc::RepositorySummary, Refusal> {
+        self.cloned_repository(asked).await
+    }
+
     /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
     async fn stop_server(&self, named: ipc::NamedServer) -> Result<ipc::ServerState, Refusal> {
         self.stopped_server(&named.id)

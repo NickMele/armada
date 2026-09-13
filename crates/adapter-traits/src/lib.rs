@@ -33,6 +33,7 @@ extern crate alloc;
 
 mod basing;
 mod ci;
+mod cloning;
 mod commit;
 mod delivery;
 mod event;
@@ -48,6 +49,7 @@ pub use basing::{BaseCheckout, BaseSpec, BaseSpecRefused};
 pub use ci::{
     CiCommand, CiConfiguration, CiNotFollowed, CiReading, FileEntry, FileRead, RepositoryFiles,
 };
+pub use cloning::NotCloned;
 pub use commit::{CommitTime, Committed};
 pub use delivery::{
     how_the_base_was_found, Base, BaseOnTheRemote, BroughtUpToDate, Delivery, KeptCurrent, Landing,
@@ -269,6 +271,19 @@ pub trait Vcs {
         message: &str,
         at: CommitTime,
     ) -> Result<Committed, Self::CommitError>;
+
+    /// Clone `url` into `destination`, which git creates, and stop it if it
+    /// is still running after `within`.
+    ///
+    /// **Whatever credentials git on this machine already has**, and nothing
+    /// else: no prompt, because Fleet has no terminal to ask on. A destination
+    /// that exists and is not empty is git's to refuse.
+    fn clone_repository(
+        &self,
+        url: &str,
+        destination: &str,
+        within: core::time::Duration,
+    ) -> Result<(), NotCloned>;
 }
 
 /// Credential access, brokered. A Drone never holds a secret directly, and what

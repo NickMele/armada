@@ -41,6 +41,7 @@
 mod base;
 mod basing;
 mod ci_workflows;
+mod cloning;
 mod commit;
 mod delivery;
 mod error;
