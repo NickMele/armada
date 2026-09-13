@@ -154,7 +154,8 @@ where
         job: &JobId,
         url: &str,
     ) -> Option<UnderReview> {
-        let read = self.vcs().under_review(&self.host().repo_root, url);
+        let served = self.served_by_id(job).ok()?;
+        let read = self.vcs().under_review(served.root(), url);
         // **A forge that would not answer changes nothing that was already
         // known.** Recording the silence would erase the last real reading and
         // then write the same line again when it came back — `Landing::Unknown`

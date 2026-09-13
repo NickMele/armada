@@ -342,7 +342,11 @@ async fn a_server_that_falls_over_shows_as_stopped_on_its_own_with_its_log() {
     let on_the_sheet = fleet
         .declared_servers(
             &crate::servers::Holder::Job(job.id().clone()),
-            &fleet.effective_manifest(&job).await.0,
+            &fleet
+                .effective_manifest(&job)
+                .await
+                .expect("a served Job")
+                .0,
         )
         .into_iter()
         .find(|entry| entry.name == "falls_over")
@@ -402,14 +406,18 @@ async fn a_server_with_no_job_uses_the_main_checkouts_span_and_stops_on_stop() {
     let events = api::Broadcaster::new();
     let fleet = a_fleet_serving(&home, &events);
     let port = *fleet
-        .main_checkout_ports()
+        .main_checkout_ports(&fleet.first())
         .await
         .get("storybook")
         .expect("the main checkout's span");
     let mut watching = events.subscribe();
 
     let (started, _) = Arc::clone(&fleet)
-        .hold_server(Place::MainCheckout, "storybook", StartedBy::Person)
+        .hold_server(
+            Place::MainCheckout(fleet.first()),
+            "storybook",
+            StartedBy::Person,
+        )
         .await
         .expect("it starts");
     assert_eq!(started.job_id, None);
@@ -473,11 +481,11 @@ async fn a_jobs_servers_are_the_ones_it_froze() {
     let fleet = a_fleet_holding(&home, &events, MANIFEST, &with_a_later_server());
     let job = a_running_job(&fleet, &home).await;
 
-    let (froze, frozen) = fleet.effective_manifest(&job).await;
+    let (froze, frozen) = fleet.effective_manifest(&job).await.expect("a served Job");
     assert!(frozen, "the Job carries a snapshot");
     assert_eq!(
         froze.server("storybook"),
-        fleet.manifest().server("storybook"),
+        fleet.first().manifest().server("storybook"),
         "`serve`, `ready` and `links` survive the snapshot whole"
     );
     let storybook = froze.server("storybook").expect("snapshotted");
@@ -508,7 +516,11 @@ async fn a_jobs_servers_are_the_ones_it_froze() {
         .any(|entry| entry.name == "late"));
 
     let (main, _) = Arc::clone(&fleet)
-        .hold_server(Place::MainCheckout, "late", StartedBy::Person)
+        .hold_server(
+            Place::MainCheckout(fleet.first()),
+            "late",
+            StartedBy::Person,
+        )
         .await
         .expect("the file Fleet holds declares it");
     fleet.stopped_server(&main.id).await.expect("it stops");
@@ -560,7 +572,7 @@ async fn a_job_with_no_readable_snapshot_finds_its_servers_in_the_live_file() {
         .set_manifest_snapshot(job.id(), "{ not: a manifest")
         .expect("written");
 
-    let (read, frozen) = fleet.effective_manifest(&job).await;
+    let (read, frozen) = fleet.effective_manifest(&job).await.expect("a served Job");
     assert!(!frozen, "nothing frozen to read");
     assert!(fleet
         .declared_servers(&crate::servers::Holder::Job(job.id().clone()), &read)

@@ -84,6 +84,19 @@ pub struct Host {
     pub attachments_dir: String,
 }
 
+/// [`Host`] without the repository: what is true of the machine whichever
+/// repository a Job is in. **What Fleet holds**, so a repository's root is
+/// only ever read off the repository — `crate::repositories`.
+#[derive(Clone, Debug)]
+pub(crate) struct Local {
+    pub(crate) path: String,
+    pub(crate) home: String,
+    pub(crate) user: String,
+    pub(crate) mcp_config: String,
+    pub(crate) port: u16,
+    pub(crate) attachments_dir: String,
+}
+
 /// Everything Fleet is assembled from.
 ///
 /// A plain struct with public fields rather than a builder, for the reason
@@ -108,7 +121,11 @@ pub struct Fittings<H, V, W> {
     /// The `armada.yml` that workflow resolved against. Held because a Drone's
     /// toolbelt is built from the commands it declares.
     pub manifest: Manifest,
+    /// The repository Fleet was started in is `host.repo_root`, and it is the
+    /// first of [`crate::repositories::Repositories`].
     pub host: Host,
+    /// Reading a folder a person adds. See [`crate::repositories::Locating`].
+    pub locating: Arc<dyn crate::repositories::Locating>,
     /// The range a Job's port span is claimed from. `settings.port-range-base`,
     /// `settings.port-range-ceiling` (`crate::ports::detect_ceiling` supplies
     /// the composition root's default) and `settings.port-block-granule`.
@@ -243,10 +260,21 @@ where
             work: fittings.work,
             clock: fittings.clock,
             mint: fittings.mint,
-            workflows: fittings.workflows,
+            repositories: Arc::new(crate::repositories::Repositories::starting_in(
+                fittings.host.repo_root,
+                fittings.host.records_root,
+                crate::repositories::SetUp::of(fittings.manifest, fittings.workflows),
+            )),
+            locating: fittings.locating,
             left_out: fittings.left_out,
-            manifest: fittings.manifest,
-            host: fittings.host,
+            host: Local {
+                path: fittings.host.path,
+                home: fittings.host.home,
+                user: fittings.host.user,
+                mcp_config: fittings.host.mcp_config,
+                port: fittings.host.port,
+                attachments_dir: fittings.host.attachments_dir,
+            },
             port_range: fittings.port_range,
             run_log_retention: fittings.run_log_retention,
             budget: fittings.budget,
@@ -261,7 +289,6 @@ where
             aloft: Aloft::default(),
             underway: Underway::default(),
             proposals: Proposals::new(),
-            manifest_proposals: Default::default(),
             judge_model: fittings.judge_model,
             proposer_model: fittings.proposer_model,
             links: fittings.links,
@@ -272,14 +299,13 @@ where
             inbox: EvidenceInbox::new(),
             delivered: Mutex::new(BTreeMap::new()),
             slots: Mutex::new(Slots::bounded_by(in_force.concurrency)),
-            names: crate::naming::Names::new(),
+            names: Arc::new(crate::naming::Names::new()),
             machine: fittings.machine,
             headroom: std::sync::Mutex::new(in_force.headroom),
             shipped,
             polling: fittings.polling,
             noticing: fittings.noticing,
             reclaiming: fittings.reclaiming,
-            reading: std::sync::Mutex::new(None),
             swept: Mutex::new(None),
             sweeping: Mutex::new(Sweep::default()),
             proving: Arc::new(Mutex::new(crate::proving::Proving::default())),

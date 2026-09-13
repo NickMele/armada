@@ -93,7 +93,10 @@ fn a_fleet(home: &TempDir, text: &str, events: &api::Broadcaster) -> Arc<Fixture
 async fn ended(fleet: &Fixture) -> ipc::CheckoutVerify {
     tokio::time::timeout(Duration::from_secs(60), async {
         loop {
-            let sheet = fleet.checkout_run_sheet().await.expect("a sheet");
+            let sheet = fleet
+                .checkout_run_sheet(fleet.first())
+                .await
+                .expect("a sheet");
             if let Some(verify) = sheet.verify.filter(|one| one.ended_at.is_some()) {
                 return verify;
             }
@@ -138,7 +141,7 @@ async fn each_step_runs_once_in_order_one_after_another() {
     let fleet = a_fleet(&home, MANIFEST, &api::Broadcaster::new());
 
     let begun = Arc::clone(&fleet)
-        .begin_checkout_verify()
+        .begin_checkout_verify(fleet.first())
         .await
         .expect("underway");
     assert!(begun.ended_at.is_none());
@@ -165,7 +168,10 @@ async fn each_step_runs_once_in_order_one_after_another() {
         );
     }
 
-    let history = fleet.checkout_rehearsal_history().await.expect("a history");
+    let history = fleet
+        .checkout_rehearsal_history(fleet.first())
+        .await
+        .expect("a history");
     let mut kept: Vec<&str> = history.runs.iter().map(|run| run.name.as_str()).collect();
     kept.reverse();
     assert_eq!(
@@ -196,7 +202,7 @@ async fn a_steps_finish_is_published_after_the_next_step_is_out() {
                 Some(api::Next::Send(delivered)) => {
                     if let ipc::Event::CheckoutRunFinished(record) = delivered.event {
                         let sheet = handle
-                            .block_on(reader.checkout_run_sheet())
+                            .block_on(reader.checkout_run_sheet(reader.first()))
                             .expect("a sheet");
                         read.push((
                             record.name,
@@ -212,7 +218,7 @@ async fn a_steps_finish_is_published_after_the_next_step_is_out() {
     });
 
     Arc::clone(&fleet)
-        .begin_checkout_verify()
+        .begin_checkout_verify(fleet.first())
         .await
         .expect("underway");
     let read = tokio::time::timeout(
@@ -256,7 +262,7 @@ async fn a_verify_holds_the_checkout_and_stop_ends_it() {
     let fleet = a_fleet(&home, SLOW, &api::Broadcaster::new());
 
     let begun = Arc::clone(&fleet)
-        .begin_checkout_verify()
+        .begin_checkout_verify(fleet.first())
         .await
         .expect("underway");
     let ipc::VerifyStepState::Running { run_id } = &begun.steps[0].state else {
@@ -267,16 +273,21 @@ async fn a_verify_holds_the_checkout_and_stop_ends_it() {
     };
 
     let run = Arc::clone(&fleet)
-        .start_checkout_rehearsal(ipc::StartCheckoutRun {
-            name: String::from("after"),
-        })
+        .start_checkout_rehearsal(
+            ipc::StartCheckoutRun {
+                name: String::from("after"),
+            },
+            fleet.first(),
+        )
         .await;
     assert!(matches!(run, Err(api::Refusal::IllegalMove(_))));
-    let again = Arc::clone(&fleet).begin_checkout_verify().await;
+    let again = Arc::clone(&fleet)
+        .begin_checkout_verify(fleet.first())
+        .await;
     assert!(matches!(again, Err(api::Refusal::IllegalMove(_))));
 
     let stopped = fleet
-        .stop_checkout_rehearsal(run_id.clone())
+        .stop_checkout_rehearsal(run_id.clone(), fleet.first())
         .await
         .expect("the step stopped");
     assert!(stopped.stopped);
@@ -296,7 +307,7 @@ async fn a_failed_setup_leaves_the_checks_not_run() {
     let fleet = a_fleet(&home, SETUP_FAILS, &api::Broadcaster::new());
 
     Arc::clone(&fleet)
-        .begin_checkout_verify()
+        .begin_checkout_verify(fleet.first())
         .await
         .expect("underway");
     let verify = ended(&fleet).await;

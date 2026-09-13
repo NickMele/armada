@@ -28,8 +28,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use adapter_traits::{CiConfiguration, LinkLookup, Model, ModelClient};
-use config::{Manifest, ResolvedWorkflow};
-use core_model::{JobId, Ulid, WorkflowId};
+use core_model::{JobId, Ulid};
 use store::Store;
 use tokio::sync::Mutex;
 
@@ -58,6 +57,7 @@ mod fittings;
 mod rereading;
 mod seams;
 
+pub(crate) use fittings::Local;
 pub use fittings::{Fittings, Host};
 
 /// The daemon core: **the only writer of Job state.**
@@ -68,10 +68,12 @@ pub struct Fleet<H, V, W> {
     work: W,
     clock: Arc<dyn Clock>,
     mint: Arc<dyn Mint>,
-    workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
+    /// Every repository this Fleet serves. See [`crate::repositories`].
+    repositories: Arc<crate::repositories::Repositories>,
+    /// Reading a folder a person adds. The composition root's.
+    locating: Arc<dyn crate::repositories::Locating>,
     left_out: Vec<ipc::LeftOutWorkflow>,
-    manifest: Manifest,
-    host: Host,
+    host: Local,
     /// The range a Job's port span is claimed from, and the granule its width
     /// rounds up to. See [`crate::ports`].
     port_range: crate::ports::PortRange,
@@ -105,9 +107,6 @@ pub struct Fleet<H, V, W> {
     /// **Minted here, not a fitting** — nothing outside this crate holds one,
     /// and it is empty after a restart because a proposal is not a record.
     proposals: Proposals,
-    /// The `armada.yml` proposals Setup is iterating, by workspace. **Never
-    /// written down** — [`crate::manifest_proposal`] says why.
-    manifest_proposals: crate::manifest_proposal::Held,
     judge_model: Model,
     proposer_model: Model,
     links: Arc<dyn LinkLookup + Send + Sync>,
@@ -134,7 +133,7 @@ pub struct Fleet<H, V, W> {
     /// What each Job is called on disk. **Minted here, not a fitting** — it is
     /// filled from the boot read and from every insert, so nothing outside this
     /// crate could hand one over already true. See [`mod@crate::naming`].
-    names: Names,
+    names: Arc<Names>,
     machine: Arc<dyn Machine>,
     /// The headroom in force: shipped, or what a person saved. A `std` lock
     /// for `drones`' reason — never held across an `.await`. See
@@ -146,12 +145,6 @@ pub struct Fleet<H, V, W> {
     polling: Polling,
     noticing: Noticing,
     reclaiming: Reclaiming,
-    /// What this Fleet's last read of `armada.yml` came to. **Never written
-    /// down**, for `swept`'s reason: a reading that outlived the process would
-    /// describe a file this Fleet never read. `None` is a Fleet still running
-    /// on the Manifest it booted with, which is not a re-read at all. See
-    /// [`mod@rereading`], and `drones` for why the lock is `std`'s.
-    reading: std::sync::Mutex<Option<ipc::ManifestReading>>,
     /// When the reclaim sweep last ran. **Never written down**, for
     /// `sweeping`'s reason: what it decides is re-derived from git and the
     /// board every time, so a stamp that outlived the process would only make

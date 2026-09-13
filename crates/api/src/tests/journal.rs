@@ -52,7 +52,7 @@ impl FakeLog {
 }
 
 impl Journal for FakeLog {
-    fn read(&self, _handle: &str, from: u64) -> Reading {
+    fn read(&self, _job: &ipc::JobId, _handle: &str, from: u64) -> Reading {
         let written = self.written.lock().expect("not poisoned");
         let seen = from as usize;
         Reading {
@@ -66,7 +66,7 @@ impl Journal for FakeLog {
     /// The settled read, on the same terms: everything written, counted, with
     /// nothing in front of it. What a real window leaves out is proved in
     /// `fleet`, beside the file; what is proved here is the route's own answer.
-    fn window(&self, _handle: &str) -> Window {
+    fn window(&self, _job: &ipc::JobId, _handle: &str) -> Window {
         let written = self.written.lock().expect("not poisoned");
         Window {
             notes: written.clone(),

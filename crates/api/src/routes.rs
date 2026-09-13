@@ -54,6 +54,7 @@ use crate::rehearsing::{
     start_checkout_run, start_checkout_verify, start_run, stop_checkout_run, stop_run,
     undo_checkout_run, undo_run,
 };
+use crate::repositories::{add_repository, list_repositories};
 use crate::repository_allow::{get_repository_allowed_commands, remove_repository_allowed_command};
 use crate::served::Served;
 use crate::servers::{list_servers, observe_server, start_server, stop_server};
@@ -86,6 +87,8 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             get(crate::queries::list_left_out_workflows::<D>),
         )
         .route("/manifests", get(list_manifests::<D>))
+        .route("/repositories", get(list_repositories::<D>))
+        .route("/repositories/add", post(add_repository::<D>))
         .route("/models", get(list_models::<D>))
         .route("/capacity", get(get_capacity::<D>))
         .route("/limits", get(get_limits::<D>))

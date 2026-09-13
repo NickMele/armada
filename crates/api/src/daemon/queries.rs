@@ -74,10 +74,9 @@ pub trait Queries: Send + Sync + 'static {
     /// [`Resolved`] is the extractor — so a client that has a handle can call
     /// every route under `/jobs/:job_id` with it and nothing else changes.
     ///
-    /// **The Manifest a number counts within is the implementation's own.** A
-    /// Fleet serves one repository and supplies it; a number is refused rather
-    /// than resolved against whichever repository answered first, which is why
-    /// nothing about the scope is a parameter here.
+    /// **A number counts within a Manifest.** A Fleet serves several
+    /// repositories, and a number more than one of them holds is refused rather
+    /// than resolved against whichever answered first.
     fn resolve_job(&self, named: String) -> impl Future<Output = Result<Resolved, Refusal>> + Send;
 
     /// `list_jobs` — Jobs with state and reason.
@@ -163,6 +162,7 @@ pub trait Queries: Send + Sync + 'static {
     /// Manifest this Fleet serves, for the budget form's warning.
     fn get_manifest_spend(
         &self,
+        manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<ipc::ManifestSpend, Refusal>> + Send;
 
     /// `get_manifest` — one Manifest as Fleet resolved it.
@@ -205,6 +205,7 @@ pub trait Queries: Send + Sync + 'static {
     /// reading one Job. The only `Refusal` is a fault.
     fn get_repository_allowed_commands(
         &self,
+        manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<ipc::RepositoryAllowedCommands, Refusal>> + Send;
 
     /// `get_manifest_reading` — what Fleet's last re-read of `armada.yml` came
@@ -223,6 +224,7 @@ pub trait Queries: Send + Sync + 'static {
     /// is reachable.
     fn get_manifest_reading(
         &self,
+        manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<Option<ManifestReading>, Refusal>> + Send;
 
     /// `get_manifest_file` — `armada.yml` as it is on disk, for the view that
@@ -235,11 +237,14 @@ pub trait Queries: Send + Sync + 'static {
     /// not parse reads back as well as one that does — the case a person
     /// opening this is most likely to be in.
     ///
-    /// **No path in, and no `manifest_id`**, matching the two reads beside it:
-    /// a Fleet serves one repository and resolves its own file.
+    /// **No path in.** `manifest_id` names the repository, absent being the one
+    /// Fleet was started in, and Fleet resolves that repository's own file.
     ///
     /// [`Refusal::Fault`] where the file will not open.
-    fn get_manifest_file(&self) -> impl Future<Output = Result<ManifestFile, Refusal>> + Send;
+    fn get_manifest_file(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<ManifestFile, Refusal>> + Send;
 
     /// `get_manifest_drift` — whether the repository still has what
     /// `armada.yml` names, line by line.
@@ -254,13 +259,16 @@ pub trait Queries: Send + Sync + 'static {
     /// a dry-run that runs a real test suite behind its own button. Nothing in
     /// the implementation may start a process to find out whether one exists.
     ///
-    /// **No `manifest_id`, matching [`Queries::get_manifest_reading`].** A
-    /// Fleet serves one repository.
+    /// `manifest_id` names the repository, absent being the one Fleet was
+    /// started in.
     ///
     /// It cannot refuse: every line gets a verdict, and a line naming nothing
     /// this read can look for is answered as such rather than as a failure.
     /// `Result` is here to match the surface.
-    fn get_manifest_drift(&self) -> impl Future<Output = Result<ManifestDrift, Refusal>> + Send;
+    fn get_manifest_drift(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<ManifestDrift, Refusal>> + Send;
 
     /// `get_repository_scan` — every workspace in the checkout, what each
     /// one's files declare, and the file each finding came from.
@@ -270,12 +278,14 @@ pub trait Queries: Send + Sync + 'static {
     /// read is said in the answer. `Result` is here to match the surface.
     fn get_repository_scan(
         &self,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<ipc::RepositoryScan, Refusal>> + Send;
 
     /// `get_manifest_proposals` — a proposal per workspace Scan finds, held between calls
     /// so edits persist. It cannot refuse; `Result` matches the surface.
     fn get_manifest_proposals(
         &self,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<ipc::ManifestProposals, Refusal>> + Send;
 
     /// `get_job` — one Job in full: its steps and where each got to, the
@@ -644,11 +654,15 @@ pub trait Queries: Send + Sync + 'static {
     /// is the whole of what Journey 9's *Running one* asks for.
     fn get_checkout_run_sheet(
         &self,
+        manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<CheckoutRunSheet, Refusal>> + Send;
 
     /// `list_checkout_runs` — the main checkout's earlier runs, newest first,
     /// with the records that would not read answered beside them.
-    fn list_checkout_runs(&self) -> impl Future<Output = Result<CheckoutRunList, Refusal>> + Send;
+    fn list_checkout_runs(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<CheckoutRunList, Refusal>> + Send;
 
     /// `get_checkout_run_output` — one checkout run's log, as a window that
     /// says it is one. [`Queries::get_run_output`]'s shape and its allowlist:
@@ -657,6 +671,7 @@ pub trait Queries: Send + Sync + 'static {
     fn get_checkout_run_output(
         &self,
         run_id: String,
+        manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<RunOutput, Refusal>> + Send;
 
     /// `get_checkout_run_diff` — what one checkout run changed, against the
@@ -667,6 +682,7 @@ pub trait Queries: Send + Sync + 'static {
     fn get_checkout_run_diff(
         &self,
         run_id: String,
+        manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<ipc::CheckoutRunDiff, Refusal>> + Send;
 
     /// `observe_checkout_run` — one checkout run's output on a socket of its
@@ -674,6 +690,7 @@ pub trait Queries: Send + Sync + 'static {
     fn observe_checkout_run(
         &self,
         run_id: String,
+        manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<crate::ObservedCheckoutRun, Refusal>> + Send;
 
     /// `list_servers` — every server Fleet holds, a Job's and the main
@@ -691,15 +708,21 @@ pub trait Queries: Send + Sync + 'static {
     /// `search_files` — paths under the checkout narrowed against typed text,
     /// for Bridge's `@` mention popup.
     ///
-    /// **No `manifest_id`, matching [`Queries::get_manifest_reading`].** A
-    /// Fleet serves one repository, and this reads it before any Job — and
-    /// therefore any worktree — exists to read one from instead.
+    /// `manifest_id` names the checkout, absent being the one Fleet was started
+    /// in; this reads it before any Job — and so any worktree — exists.
     ///
     /// It never refuses. A directory it cannot read is skipped rather than
     /// failing the whole search, [`Queries::get_capacity`]'s own reasoning for
     /// answering rather than 500ing over a corner of the machine.
+    /// `list_repositories` — every repository this Fleet serves, the one it was
+    /// started in first, each with its Manifest where one has loaded.
+    fn list_repositories(
+        &self,
+    ) -> impl Future<Output = Result<ipc::RepositoryList, Refusal>> + Send;
+
     fn search_files(
         &self,
         query: String,
+        manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<FilesFound, Refusal>> + Send;
 }

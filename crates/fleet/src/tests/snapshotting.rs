@@ -69,7 +69,7 @@ async fn a_jobs_effective_manifest_is_unmoved_by_an_edit_to_the_file_it_was_snap
     // The file moves on. Nothing reads it again for this Job.
     std::fs::write(home.path().join("armada.yml"), EDITED).expect("the file is edited");
 
-    let (manifest, has_snapshot) = fleet.effective_manifest(&job).await;
+    let (manifest, has_snapshot) = fleet.effective_manifest(&job).await.expect("a served Job");
     assert!(has_snapshot, "a Job created after the migration has one");
     assert_eq!(
         manifest
@@ -94,6 +94,7 @@ async fn a_jobs_effective_manifest_is_unmoved_by_an_edit_to_the_file_it_was_snap
     // path taken twice.
     assert_eq!(
         fleet
+            .first()
             .manifest()
             .command("build")
             .expect("still declared")
@@ -129,9 +130,12 @@ async fn a_job_whose_snapshot_could_not_be_taken_falls_back_to_fleets_live_manif
         "the fixture Manifest names no real file, so there was nothing to read"
     );
 
-    let (manifest, has_snapshot) = fleet.effective_manifest(&job).await;
+    let (manifest, has_snapshot) = fleet.effective_manifest(&job).await.expect("a served Job");
     assert!(!has_snapshot);
-    assert_eq!(manifest.id().as_str(), fleet.manifest().id().as_str());
+    assert_eq!(
+        manifest.id().as_str(),
+        fleet.first().manifest().id().as_str()
+    );
 }
 
 /// **The run route's own claim.** Every entry the sheet lists — Setup, the

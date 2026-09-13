@@ -10,6 +10,7 @@
 //! daemon's — see `crate::answers::undecodable`. Nothing downstream was asked.
 
 use axum::body::Bytes;
+use axum::extract::Query;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -22,6 +23,7 @@ use ipc::{
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::Commands;
 use crate::reference::Resolved;
+use crate::scoped::InManifest;
 use crate::served::Served;
 
 pub(crate) async fn propose_job<D: Commands>(
@@ -47,13 +49,18 @@ pub(crate) async fn propose_job<D: Commands>(
 /// filled the workflow in, and that one request can be several Jobs.
 pub(crate) async fn propose_from_request<D: Commands>(
     State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
     body: Bytes,
 ) -> Response {
     let request: JobRequest = match ipc::decode("request", &body) {
         Ok(request) => request,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.daemon().propose_from_request(request).await {
+    match served
+        .daemon()
+        .propose_from_request(request, scope.manifest())
+        .await
+    {
         Ok(job) => answer(StatusCode::CREATED, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }

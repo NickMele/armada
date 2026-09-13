@@ -185,7 +185,7 @@ async fn a_job_and_the_main_checkout_never_overlap() {
     worktree_directory(&home, &job);
     let dispatched = dispatched(&fleet, job.id()).await.expect("dispatch runs");
 
-    let main_checkout = fleet.main_checkout_ports().await;
+    let main_checkout = fleet.main_checkout_ports(&fleet.first()).await;
     let job_ports = fleet.port_map(&dispatched).await;
     assert_ne!(
         main_checkout.get("storybook"),
@@ -202,8 +202,8 @@ async fn the_main_checkouts_span_is_reused_rather_than_reclaimed() {
     let home = TempDir::new();
     let fleet = a_fleet_declaring_storybook(&home, 1);
 
-    let first = fleet.main_checkout_ports().await;
-    let second = fleet.main_checkout_ports().await;
+    let first = fleet.main_checkout_ports(&fleet.first()).await;
+    let second = fleet.main_checkout_ports(&fleet.first()).await;
     assert_eq!(first, second, "the same claim, read back twice");
     assert_eq!(
         fleet
@@ -224,7 +224,7 @@ async fn the_main_checkouts_span_is_reused_rather_than_reclaimed() {
 async fn the_main_checkouts_span_is_released_on_shutdown() {
     let home = TempDir::new();
     let fleet = a_fleet_declaring_storybook(&home, 1);
-    let claimed = fleet.main_checkout_ports().await;
+    let claimed = fleet.main_checkout_ports(&fleet.first()).await;
     assert!(!claimed.is_empty(), "a span was claimed");
 
     fleet.released_main_checkout_ports().await;

@@ -48,12 +48,17 @@ async fn a_form_edit_changes_its_line_on_disk_and_answers_with_the_file_as_writt
     fittings.manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
-    let opened = fleet.read_manifest_file().expect("the file view opens");
+    let opened = fleet
+        .read_manifest_file(&fleet.first())
+        .expect("the file view opens");
     let edited = fleet
-        .edit_manifest_file(EditManifest {
-            read: opened.text,
-            edits: vec![run_of("lint", "pnpm -r lint")],
-        })
+        .edit_manifest_file(
+            EditManifest {
+                read: opened.text,
+                edits: vec![run_of("lint", "pnpm -r lint")],
+            },
+            &fleet.first(),
+        )
         .expect("the edit lands");
 
     let disk = std::fs::read_to_string(&file).expect("reads");
@@ -116,7 +121,9 @@ async fn a_file_that_does_not_load_reads_whole_with_nothing_declared() {
     let broken = "version: 1\nid: edited\ndrone:\n  poke_limit: soon\n";
     std::fs::write(&file, broken).expect("a correction under way");
 
-    let opened = fleet.read_manifest_file().expect("the file view opens");
+    let opened = fleet
+        .read_manifest_file(&fleet.first())
+        .expect("the file view opens");
     assert_eq!(opened.text, broken);
     assert_eq!(opened.declared, None);
 }
@@ -131,15 +138,20 @@ async fn a_form_edit_over_a_file_that_moved_is_refused_and_writes_nothing() {
     fittings.manifest = Manifest::parse(&file, KEPT).expect("the fixture parses");
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
-    let opened = fleet.read_manifest_file().expect("the file view opens");
+    let opened = fleet
+        .read_manifest_file(&fleet.first())
+        .expect("the file view opens");
     let incoming = KEPT.replace("pnpm vitest run", "pnpm vitest run --coverage");
     std::fs::write(&file, &incoming).expect("a pull lands");
 
     let refused = fleet
-        .edit_manifest_file(EditManifest {
-            read: opened.text,
-            edits: vec![run_of("lint", "pnpm -r lint")],
-        })
+        .edit_manifest_file(
+            EditManifest {
+                read: opened.text,
+                edits: vec![run_of("lint", "pnpm -r lint")],
+            },
+            &fleet.first(),
+        )
         .expect_err("edits over a moved file are refused");
     assert_eq!(refused.status(), 409);
     assert_eq!(refused.error().code, "fleet.manifest_moved_under_the_edit");
@@ -161,13 +173,16 @@ async fn a_form_edit_whose_result_would_not_load_is_refused_with_its_faults() {
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let refused = fleet
-        .edit_manifest_file(EditManifest {
-            read: KEPT.to_string(),
-            edits: vec![ManifestEdit::SetCheckRequires {
-                name: "lint".to_string(),
-                requires: vec!["nothing_declares_this".to_string()],
-            }],
-        })
+        .edit_manifest_file(
+            EditManifest {
+                read: KEPT.to_string(),
+                edits: vec![ManifestEdit::SetCheckRequires {
+                    name: "lint".to_string(),
+                    requires: vec!["nothing_declares_this".to_string()],
+                }],
+            },
+            &fleet.first(),
+        )
         .expect_err("a result that would not load is refused");
     assert_eq!(refused.status(), 422);
     assert_eq!(refused.error().code, "fleet.manifest_edit_refused");
@@ -195,10 +210,13 @@ async fn a_form_edit_naming_what_the_file_does_not_hold_is_refused_by_what_it_na
     let fleet = crate::daemon::Fleet::assembled(fittings);
 
     let misnamed = fleet
-        .edit_manifest_file(EditManifest {
-            read: KEPT.to_string(),
-            edits: vec![run_of("build", "cargo build")],
-        })
+        .edit_manifest_file(
+            EditManifest {
+                read: KEPT.to_string(),
+                edits: vec![run_of("build", "cargo build")],
+            },
+            &fleet.first(),
+        )
         .expect_err("a Check the file does not declare");
     assert_eq!(misnamed.status(), 422);
     assert_eq!(misnamed.error().code, "fleet.manifest_edit_misnamed");
@@ -207,12 +225,15 @@ async fn a_form_edit_naming_what_the_file_does_not_hold_is_refused_by_what_it_na
     );
 
     let unknown = fleet
-        .edit_manifest_file(EditManifest {
-            read: KEPT.to_string(),
-            edits: vec![ManifestEdit::SetAutoMerge {
-                auto_merge: Some("sometimes".to_string()),
-            }],
-        })
+        .edit_manifest_file(
+            EditManifest {
+                read: KEPT.to_string(),
+                edits: vec![ManifestEdit::SetAutoMerge {
+                    auto_merge: Some("sometimes".to_string()),
+                }],
+            },
+            &fleet.first(),
+        )
         .expect_err("a word `auto_merge` does not take");
     assert_eq!(unknown.error().code, "fleet.manifest_edit_refused");
     assert_eq!(std::fs::read_to_string(&file).expect("reads"), KEPT);

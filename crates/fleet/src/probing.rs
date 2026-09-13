@@ -76,7 +76,7 @@ where
             format!("answering — this process is run {}", self.run_id().as_str()),
         )];
         probes.push(self.store_probe().await);
-        probes.push(self.manifest_probe());
+        probes.extend(self.manifest_probes());
         probes.push(self.machine_probe().await);
         Ok(FleetHealth {
             probes,
@@ -110,9 +110,14 @@ where
     ///
     /// **No reading is a `pass`**, not a gap: Fleet is running on the file it
     /// booted with, which is a configuration in force.
-    fn manifest_probe(&self) -> Probe {
-        let path = self.manifest().path().display().to_string();
-        match self.last_reading() {
+    fn manifest_probes(&self) -> Vec<Probe> {
+        let served = self.repositories().served();
+        served.iter().map(|one| self.manifest_probe(one)).collect()
+    }
+
+    fn manifest_probe(&self, served: &crate::repositories::Served) -> Probe {
+        let path = served.manifest().path().display().to_string();
+        match served.repository().reading() {
             None => probe("Manifest", PASS, format!("{path}, as Fleet booted with it")),
             Some(reading) => match reading.refused {
                 None => probe("Manifest", PASS, format!("{path}, re-read and adopted")),

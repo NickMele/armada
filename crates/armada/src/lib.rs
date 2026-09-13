@@ -26,11 +26,14 @@
 //! [`loopback`](mod@loopback). [`watching`](mod@watching) is what makes the
 //! Manifest's live keys live — `#430` — and it is here because the composition
 //! root owns the runtime and nothing below it may spawn a task.
+//! [`locating`](mod@locating) reads a folder a person adds into one more
+//! repository Fleet serves, and holds every watch.
 
 pub mod agent;
 pub mod clean;
 pub mod cli;
 pub mod declared;
+pub mod locating;
 pub mod loopback;
 pub mod mcp;
 pub mod say;

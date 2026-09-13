@@ -51,6 +51,7 @@ impl Commands for FakeDaemon {
     async fn propose_from_request(
         &self,
         request: ipc::JobRequest,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::ProposedPlan, Refusal> {
         self.fake_propose_from_request(request).await
     }
@@ -148,23 +149,27 @@ impl Commands for FakeDaemon {
     async fn start_checkout_run(
         self: std::sync::Arc<Self>,
         _run: ipc::StartCheckoutRun,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
         self.runs_nothing_here()
     }
     async fn stop_checkout_run(
         &self,
         _run: ipc::NamedRun,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
         self.runs_nothing_here()
     }
     async fn undo_checkout_run(
         &self,
         _run: ipc::NamedRun,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
         self.runs_nothing_here()
     }
     async fn start_checkout_verify(
         self: std::sync::Arc<Self>,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::CheckoutVerify, Refusal> {
         self.runs_nothing_here()
     }
@@ -174,6 +179,7 @@ impl Commands for FakeDaemon {
     async fn save_manifest_file(
         &self,
         save: ipc::SaveManifestFile,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::ManifestSaved, Refusal> {
         Ok(ipc::ManifestSaved {
             path: format!("armada.yml ({} bytes)", save.text.len()),
@@ -183,7 +189,11 @@ impl Commands for FakeDaemon {
     /// The edits counted into the answer so a route test can tell the body
     /// arrived. Nothing is placed: what edits do to a file is
     /// `config::amend`'s, and `fleet::amending`'s against a real one.
-    async fn edit_manifest(&self, edit: ipc::EditManifest) -> Result<ipc::ManifestEdited, Refusal> {
+    async fn edit_manifest(
+        &self,
+        edit: ipc::EditManifest,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::ManifestEdited, Refusal> {
         Ok(ipc::ManifestEdited {
             path: "armada.yml".to_string(),
             at: ipc::Instant::carried("2026-09-12T09:00:00.000Z"),
@@ -197,12 +207,14 @@ impl Commands for FakeDaemon {
     async fn edit_manifest_proposal(
         &self,
         asked: ipc::EditManifestProposal,
+        _repository: Option<String>,
     ) -> Result<ipc::ManifestProposal, Refusal> {
         Err(self.no_such_workspace(&asked.dir))
     }
     async fn write_manifest_proposal(
         &self,
         asked: ipc::WriteManifestProposal,
+        _repository: Option<String>,
     ) -> Result<ipc::ManifestProposal, Refusal> {
         Err(self.no_such_workspace(&asked.dir))
     }
@@ -225,9 +237,21 @@ impl Commands for FakeDaemon {
 
     /// The named row goes, by its exact text; one absent is the 409 every
     /// fake give a name that names nothing.
+    async fn add_repository(
+        &self,
+        asked: ipc::AddRepository,
+    ) -> Result<ipc::RepositorySummary, Refusal> {
+        Ok(ipc::RepositorySummary {
+            root: asked.path,
+            records_root: String::from("/records"),
+            manifest: None,
+        })
+    }
+
     async fn remove_repository_allowed_command(
         &self,
         removing: ipc::RemoveRepositoryAllowedCommand,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::RepositoryAllowedCommands, Refusal> {
         let mut allowed = self.repository_allowed.lock().expect("not poisoned");
         let before = allowed.len();
@@ -252,6 +276,7 @@ impl Commands for FakeDaemon {
     async fn start_server(
         self: std::sync::Arc<Self>,
         asked: ipc::StartServer,
+        _manifest_id: Option<ipc::ManifestId>,
     ) -> Result<ipc::ServerState, Refusal> {
         Err(Refusal::Unacceptable(ipc::WireError::raised(
             "fleet.not_a_server",

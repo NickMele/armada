@@ -57,8 +57,8 @@ const A_DRONE_WAITS: Duration = Duration::from_secs(120);
 pub(crate) enum Place {
     /// In the Job's worktree, on its span.
     Job(Job),
-    /// In the main checkout, on the span it holds while Fleet runs.
-    MainCheckout,
+    /// In this repository's main checkout, on the span it holds while Fleet runs.
+    MainCheckout(crate::repositories::Served),
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -86,9 +86,15 @@ where
         name: &str,
         by: StartedBy,
     ) -> Result<(ServerState, bool), Unservable> {
+        let served = match &place {
+            Place::Job(job) => self.served_by(job).map_err(|why| Unservable::NotKept {
+                why: why.to_string(),
+            })?,
+            Place::MainCheckout(served) => served.clone(),
+        };
         let manifest = match &place {
-            Place::Job(job) => self.effective_manifest(job).await.0,
-            Place::MainCheckout => self.manifest().clone(),
+            Place::Job(job) => self.effective_manifest_in(&served, job).await.0,
+            Place::MainCheckout(_) => served.manifest().clone(),
         };
         let Some(server) = manifest.server(name).cloned() else {
             return Err(match manifest.command(name) {
@@ -113,7 +119,7 @@ where
                 if job.status().is_terminal() {
                     return Err(Unservable::JobEnded);
                 }
-                let tree = WorktreeSpec::for_job(&self.host().repo_root, &job.handle())
+                let tree = WorktreeSpec::for_job(served.root(), &job.handle())
                     .map(|spec| PathBuf::from(spec.worktree_path()))
                     .map_err(|_| Unservable::NoWorktree)?;
                 if !tree.is_dir() {
@@ -128,12 +134,12 @@ where
                     format!("jobs/{}", job.handle()),
                 )
             }
-            Place::MainCheckout => (
-                Holder::MainCheckout,
+            Place::MainCheckout(_) => (
+                Holder::MainCheckout(served.root().to_string()),
                 None,
-                PathBuf::from(&self.host().repo_root),
-                self.main_checkout_ports().await,
-                self.main_checkout_port_env().await,
+                PathBuf::from(served.root()),
+                self.main_checkout_ports(&served).await,
+                self.main_checkout_port_env(&served).await,
                 String::from("main"),
             ),
         };
@@ -141,7 +147,7 @@ where
             return Ok((up.borrow().clone(), false));
         }
         let id = self.mint().ulid().as_str().to_string();
-        let servers_dir = Path::new(&self.host().records_root)
+        let servers_dir = Path::new(served.records_root())
             .join(".armada")
             .join("servers")
             .join(&under);
@@ -354,8 +360,8 @@ where
     /// End what a crashed Fleet left running — **first thing at startup,
     /// before the main checkout's span is re-probed**, so the ports those
     /// servers held are free when it is. See [`left`].
-    pub(crate) async fn reaped_left_servers(&self) -> left::Reaped {
-        let root = self.host().records_root.clone();
+    pub(crate) async fn reaped_left_servers(&self, records_root: &str) -> left::Reaped {
+        let root = records_root.to_string();
         tokio::task::spawn_blocking(move || left::reaped(&root))
             .await
             .unwrap_or_default()

@@ -78,7 +78,7 @@ where
             return Ok(Recovered::Interrupted);
         };
         let last_heard = crate::transcript::last_heard(
-            &self.host().records_root,
+            self.served_by(job)?.records_root(),
             &job.handle(),
             &recorded.drone_id,
         )
@@ -161,7 +161,9 @@ where
         // the live tier behaving as `#414` says it does — a step that declared
         // nothing follows the file — and it is the one case where the boundary
         // it follows the file across is a restart.
-        let liveness = self.liveness().at(self.manifest(), job, adopted.step());
+        let liveness = self
+            .liveness()
+            .at(self.served_by(job)?.manifest(), job, adopted.step());
         let taken = Working::adopting(adopted, worktree, taps, liveness, self.now());
         // The first thing written through the new handle, so the row lands in
         // the transcript between the last line the previous Fleet read and

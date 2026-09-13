@@ -114,6 +114,7 @@ mod rehearsing;
 mod rejecting;
 mod remarks;
 mod reporting;
+pub(crate) mod repositories;
 mod resources;
 mod restarting;
 mod resting;

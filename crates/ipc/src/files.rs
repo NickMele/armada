@@ -2,10 +2,8 @@
 //! a person opens while typing a request or a brief — `search_files` in
 //! `crates/ipc/operations.toml`.
 //!
-//! **No `manifest_id`.** A Fleet serves one repository, [`crate::ManifestReading`]
-//! and [`crate::ManifestSummary`] already read that way, and a search asked
-//! before any Job — and therefore any worktree — exists has only the one
-//! checkout to read.
+//! **Named by `?manifest_id=`, not in the body.** A Fleet serves several
+//! repositories; an absent one reads the checkout Fleet was started in.
 
 use serde::{Deserialize, Serialize};
 

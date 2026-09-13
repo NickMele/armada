@@ -63,7 +63,7 @@ pub trait Journal: Send + Sync + 'static {
     /// briefs and its deliverables, and all four are named by what a person
     /// calls the Job. The socket resolves the route's segment once and passes
     /// what came back.
-    fn read(&self, handle: &str, from: u64) -> Reading;
+    fn read(&self, job: &ipc::JobId, handle: &str, from: u64) -> Reading;
 
     /// The whole log, once, as a window that says it is one — `get_job_log`.
     ///
@@ -76,7 +76,7 @@ pub trait Journal: Send + Sync + 'static {
     ///
     /// **A Job with no log yet is an empty window and not a fault**, for the
     /// reason above it: a Job at the approval gate has written no line.
-    fn window(&self, handle: &str) -> Window;
+    fn window(&self, job: &ipc::JobId, handle: &str) -> Window;
 }
 
 /// What one pass over a Job's log came to.
@@ -144,7 +144,7 @@ impl Window {
 /// subscribe message, and dropping the connection is the whole of unsubscribing.
 pub(crate) async fn relay(mut socket: WebSocket, job: Resolved, journal: Arc<dyn Journal>) {
     let job_id = job.id();
-    let first = pass(&journal, job.handle(), 0).await;
+    let first = pass(&journal, &job_id, job.handle(), 0).await;
     let opened = JournalOpened {
         protocol_version: PROTOCOL_VERSION,
         job_id: job_id.clone(),
@@ -166,7 +166,7 @@ pub(crate) async fn relay(mut socket: WebSocket, job: Resolved, journal: Arc<dyn
             }
         }
         tokio::time::sleep(FOLLOW).await;
-        reading = pass(&journal, job.handle(), from).await;
+        reading = pass(&journal, &job_id, job.handle(), from).await;
         from = reading.from;
     }
 }
@@ -176,10 +176,10 @@ pub(crate) async fn relay(mut socket: WebSocket, job: Resolved, journal: Arc<dyn
 /// **Blocking, and said so.** The read is a file read, and running it inline
 /// would hold a worker for the length of it — which is nothing on a short log
 /// and is a stall on the first pass over a long one.
-async fn pass(journal: &Arc<dyn Journal>, handle: &str, from: u64) -> Reading {
+async fn pass(journal: &Arc<dyn Journal>, job: &ipc::JobId, handle: &str, from: u64) -> Reading {
     let journal = Arc::clone(journal);
-    let handle = handle.to_string();
-    match tokio::task::spawn_blocking(move || journal.read(&handle, from)).await {
+    let (job, handle) = (job.clone(), handle.to_string());
+    match tokio::task::spawn_blocking(move || journal.read(&job, &handle, from)).await {
         Ok(reading) => reading,
         // The task itself failed, which is a panic in the reader rather than
         // anything about the log. Ending the stream with a reason is the only

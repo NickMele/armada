@@ -64,6 +64,7 @@ pub trait Commands: Send + Sync + 'static {
     fn propose_from_request(
         &self,
         request: ipc::JobRequest,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ipc::ProposedPlan, Refusal>> + Send;
 
     /// `stop_proposal` — stops a Job proposer call that is still out.
@@ -695,6 +696,7 @@ pub trait Commands: Send + Sync + 'static {
     fn start_checkout_run(
         self: std::sync::Arc<Self>,
         run: StartCheckoutRun,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<CheckoutRunUnderway, Refusal>> + Send;
 
     /// `stop_checkout_run` — end the run's process group, and answer with its
@@ -703,6 +705,7 @@ pub trait Commands: Send + Sync + 'static {
     fn stop_checkout_run(
         &self,
         run: NamedRun,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<CheckoutRunRecord, Refusal>> + Send;
 
     /// `undo_checkout_run` — put back what one run changed, from the snapshot
@@ -718,6 +721,7 @@ pub trait Commands: Send + Sync + 'static {
     fn undo_checkout_run(
         &self,
         run: NamedRun,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<CheckoutRunRecord, Refusal>> + Send;
 
     /// `start_checkout_verify` — run setup and every Check once in the main
@@ -731,6 +735,7 @@ pub trait Commands: Send + Sync + 'static {
     /// checkout; [`Refusal::Unacceptable`] where there is nothing to run.
     fn start_checkout_verify(
         self: std::sync::Arc<Self>,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ipc::CheckoutVerify, Refusal>> + Send;
 
     /// `save_manifest_file` — write a corrected `armada.yml` to disk, and stop
@@ -751,6 +756,7 @@ pub trait Commands: Send + Sync + 'static {
     fn save_manifest_file(
         &self,
         save: SaveManifestFile,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ManifestSaved, Refusal>> + Send;
 
     /// `edit_manifest` — apply a form's edits to `armada.yml`, **changing only
@@ -765,6 +771,7 @@ pub trait Commands: Send + Sync + 'static {
     fn edit_manifest(
         &self,
         edit: ipc::EditManifest,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ipc::ManifestEdited, Refusal>> + Send;
 
     /// `edit_manifest_proposal` — one edit to one proposal. [`Refusal::Unacceptable`] for an
@@ -772,6 +779,7 @@ pub trait Commands: Send + Sync + 'static {
     fn edit_manifest_proposal(
         &self,
         asked: ipc::EditManifestProposal,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<ipc::ManifestProposal, Refusal>> + Send;
 
     /// `write_manifest_proposal` — create `armada.yml` from a proposal. Refused where it would
@@ -779,6 +787,7 @@ pub trait Commands: Send + Sync + 'static {
     fn write_manifest_proposal(
         &self,
         asked: ipc::WriteManifestProposal,
+        repository: Option<String>,
     ) -> impl Future<Output = Result<ipc::ManifestProposal, Refusal>> + Send;
 
     /// `start_server` — start a server the Manifest declares, in a Job's
@@ -791,6 +800,7 @@ pub trait Commands: Send + Sync + 'static {
     fn start_server(
         self: std::sync::Arc<Self>,
         asked: ipc::StartServer,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ipc::ServerState, Refusal>> + Send;
 
     /// `stop_server` — end a server's process group, and answer with the
@@ -818,8 +828,20 @@ pub trait Commands: Send + Sync + 'static {
     /// **Fleet-wide, and touches no running Job**: read by the next permission
     /// question and the next spawn, so a Drone already granted the rule keeps
     /// it for the step it is on. Refused where nothing is spelled `run`.
+    /// `add_repository` — serve one more repository, from a folder.
+    ///
+    /// [`Refusal::Unacceptable`] where the folder is not a git repository's
+    /// root or its `armada.yml` will not load; [`Refusal::IllegalMove`] where
+    /// it, or its Manifest id, is already served. A folder with no `armada.yml`
+    /// is served, for Scan to read.
+    fn add_repository(
+        &self,
+        asked: ipc::AddRepository,
+    ) -> impl Future<Output = Result<ipc::RepositorySummary, Refusal>> + Send;
+
     fn remove_repository_allowed_command(
         &self,
         removing: ipc::RemoveRepositoryAllowedCommand,
+        manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ipc::RepositoryAllowedCommands, Refusal>> + Send;
 }

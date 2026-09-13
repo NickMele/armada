@@ -20,6 +20,7 @@ use ipc::{JobLog, WireError};
 use crate::answers::{answer, asked_for, file, file_beyond, file_span, problem, refused, streams};
 use crate::daemon::{FramePart, Queries};
 use crate::reference::Resolved;
+use crate::scoped::{InManifest, InRepository};
 use crate::served::Served;
 
 /// The second segment of `/jobs/:job_id/calls/:call_id`.
@@ -73,8 +74,11 @@ pub(crate) async fn get_capacity<D: Queries>(State(served): State<Served<D>>) ->
 /// Fleet still running on the Manifest it booted with is not a missing
 /// resource; it is a Fleet with nothing to report, and a client draws nothing
 /// either way.
-pub(crate) async fn get_manifest_reading<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().get_manifest_reading().await {
+pub(crate) async fn get_manifest_reading<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().get_manifest_reading(scope.manifest()).await {
         Ok(reading) => answer(StatusCode::OK, &reading, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -88,8 +92,11 @@ pub(crate) async fn get_manifest_reading<D: Queries>(State(served): State<Served
 ///
 /// **It runs nothing**, which is what lets a surface make this call on opening.
 /// The dry-run beside it is a real test suite and is behind its own button.
-pub(crate) async fn get_manifest_drift<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().get_manifest_drift().await {
+pub(crate) async fn get_manifest_drift<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().get_manifest_drift(scope.manifest()).await {
         Ok(drift) => answer(StatusCode::OK, &drift, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -98,8 +105,15 @@ pub(crate) async fn get_manifest_drift<D: Queries>(State(served): State<Served<D
 /// What Scan found in the checkout. **Never a 404 for a repository with
 /// nothing in it**: that is one workspace, not followed, and a checkout that
 /// would not list says why in the answer.
-pub(crate) async fn get_repository_scan<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().get_repository_scan().await {
+pub(crate) async fn get_repository_scan<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InRepository>,
+) -> Response {
+    match served
+        .daemon()
+        .get_repository_scan(scope.repository())
+        .await
+    {
         Ok(scan) => answer(StatusCode::OK, &scan, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -114,15 +128,22 @@ pub(crate) async fn get_repository_scan<D: Queries>(State(served): State<Served<
 pub(crate) struct Search {
     #[serde(default)]
     q: String,
+    /// The checkout searched, absent being the one Fleet was started in.
+    #[serde(default)]
+    manifest_id: Option<String>,
 }
 
 /// Paths under the checkout narrowed against typed text, for Bridge's `@`
 /// mention popup. It never refuses — see `Queries::search_files`.
 pub(crate) async fn search_files<D: Queries>(
     State(served): State<Served<D>>,
-    Query(Search { q }): Query<Search>,
+    Query(Search { q, manifest_id }): Query<Search>,
 ) -> Response {
-    match served.daemon().search_files(q).await {
+    match served
+        .daemon()
+        .search_files(q, manifest_id.map(ipc::ManifestId::carried))
+        .await
+    {
         Ok(found) => answer(StatusCode::OK, &found, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -330,8 +351,9 @@ pub(crate) async fn get_job_log<D: Queries>(
     };
     // Blocking, and said so — [`crate::journal::pass`]'s reason: the read is a
     // file read, and running it inline would hold a worker for the length of it.
-    let handle = job.handle().to_string();
-    let Ok(window) = tokio::task::spawn_blocking(move || journal.window(&handle)).await else {
+    let (job_id, handle) = (job.id(), job.handle().to_string());
+    let Ok(window) = tokio::task::spawn_blocking(move || journal.window(&job_id, &handle)).await
+    else {
         return problem(
             StatusCode::INTERNAL_SERVER_ERROR,
             &WireError::raised(

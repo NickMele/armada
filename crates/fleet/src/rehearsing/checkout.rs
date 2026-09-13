@@ -35,22 +35,28 @@ where
     ///
     /// **It needs no Job and reads no store.** This is the file Fleet is
     /// already holding, which is why it answers before any Job exists.
-    pub(crate) async fn checkout_run_sheet(&self) -> Result<ipc::CheckoutRunSheet, Refusal> {
-        let place = Place::of_checkout();
+    pub(crate) async fn checkout_run_sheet(
+        &self,
+        served: crate::repositories::Served,
+    ) -> Result<ipc::CheckoutRunSheet, Refusal> {
+        let place = Place::of_checkout(served);
         let tree = self.tree_at(&place);
-        let manifest = self.manifest().clone();
+        let manifest = place.served.manifest().clone();
         let listed = entries::declared(&manifest);
         let (setup, checks, commands) = listed.sheet(&[]);
         Ok(ipc::CheckoutRunSheet {
             setup,
             checks,
             commands,
-            manifest_edited_at: self.edited_before(&self.now(), tree.as_ref()),
+            manifest_edited_at: self.edited_before(&place, &self.now(), tree.as_ref()),
             running: self
                 .rehearsals()
                 .in_flight(&place.owner)
                 .map(|out| out.of_checkout()),
-            servers: self.declared_servers(&crate::servers::Holder::MainCheckout, &manifest),
+            servers: self.declared_servers(
+                &crate::servers::Holder::MainCheckout(place.served.root().to_string()),
+                &manifest,
+            ),
             verify: self.rehearsals().verifies().seen(),
         })
     }
@@ -60,8 +66,9 @@ where
     pub(crate) async fn start_checkout_rehearsal(
         self: Arc<Self>,
         asked: ipc::StartCheckoutRun,
+        served: crate::repositories::Served,
     ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
-        let place = Place::of_checkout();
+        let place = Place::of_checkout(served);
         let owner = place.owner.clone();
         // A Verify holds the checkout between its steps too: a run slipped in
         // there would take the slot its next step is about to be handed.
@@ -87,8 +94,9 @@ where
     pub(crate) async fn stop_checkout_rehearsal(
         &self,
         id: String,
+        served: crate::repositories::Served,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
-        let place = Place::of_checkout();
+        let place = Place::of_checkout(served);
         self.stopped_at(&place, id)
             .await
             .map(|record| record.of_checkout())
@@ -103,8 +111,9 @@ where
     pub(crate) async fn undo_checkout_rehearsal(
         &self,
         id: String,
+        served: crate::repositories::Served,
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
-        let place = Place::of_checkout();
+        let place = Place::of_checkout(served);
         if self.rehearsals().verifies().underway() {
             return Err(self.refused_run(&place.owner, Unrehearsable::VerifyUnderway));
         }
@@ -122,8 +131,9 @@ where
     pub(crate) async fn checkout_rehearsal_diff(
         &self,
         id: String,
+        served: crate::repositories::Served,
     ) -> Result<ipc::CheckoutRunDiff, Refusal> {
-        let place = Place::of_checkout();
+        let place = Place::of_checkout(served);
         let refused = |why| self.refused_run(&place.owner, why);
         if self
             .rehearsals()
@@ -132,7 +142,7 @@ where
         {
             return Err(refused(Unrehearsable::StillRunning { id }));
         }
-        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let (root, handle) = (place.served.records_root(), place.handle.as_str());
         let record = match records::read(root, handle, &id) {
             Some(Ok(record)) => record,
             Some(Err(why)) => return Err(refused(Unrehearsable::DiffUnreadable { why })),
@@ -156,7 +166,7 @@ where
                     .unwrap_or("no snapshot was taken before this run"),
             ));
         };
-        let path = std::path::PathBuf::from(&self.host().repo_root);
+        let path = std::path::PathBuf::from(place.served.root());
         let read =
             tokio::task::spawn_blocking(move || adapters::snapshot::patch(&path, &reference)).await;
         match read {
@@ -177,8 +187,11 @@ where
     }
 
     /// The checkout's earlier runs, newest first.
-    pub(crate) async fn checkout_rehearsal_history(&self) -> Result<ipc::CheckoutRunList, Refusal> {
-        let (kept, unreadable) = self.history_at(&Place::of_checkout());
+    pub(crate) async fn checkout_rehearsal_history(
+        &self,
+        served: crate::repositories::Served,
+    ) -> Result<ipc::CheckoutRunList, Refusal> {
+        let (kept, unreadable) = self.history_at(&Place::of_checkout(served));
         Ok(ipc::CheckoutRunList {
             runs: kept.iter().map(Record::of_checkout).collect(),
             unreadable,
@@ -190,8 +203,9 @@ where
     pub(crate) async fn checkout_rehearsal_output(
         &self,
         id: String,
+        served: crate::repositories::Served,
     ) -> Result<ipc::RunOutput, Refusal> {
-        let place = Place::of_checkout();
+        let place = Place::of_checkout(served);
         self.output_at(&place, &id)
             .ok_or_else(|| self.no_such_run(&place, id))
     }
@@ -200,8 +214,9 @@ where
     pub(crate) async fn observe_checkout_rehearsal(
         &self,
         id: String,
+        served: crate::repositories::Served,
     ) -> Result<api::ObservedCheckoutRun, Refusal> {
-        let place = Place::of_checkout();
+        let place = Place::of_checkout(served);
         let seen = self
             .observed_at(&place, &id)
             .ok_or_else(|| self.no_such_run(&place, id))?;

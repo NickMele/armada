@@ -6,6 +6,7 @@
 //! rules are its own rather than any one Job's.
 
 use axum::body::Bytes;
+use axum::extract::Query;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -13,13 +14,19 @@ use ipc::RemoveRepositoryAllowedCommand;
 
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::{Commands, Queries};
+use crate::scoped::InManifest;
 use crate::served::Served;
 
 /// Every rule a person always-allowed for this Manifest's repository.
 pub(crate) async fn get_repository_allowed_commands<D: Queries>(
     State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
 ) -> Response {
-    match served.daemon().get_repository_allowed_commands().await {
+    match served
+        .daemon()
+        .get_repository_allowed_commands(scope.manifest())
+        .await
+    {
         Ok(allowed) => answer(StatusCode::OK, &allowed, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -29,6 +36,7 @@ pub(crate) async fn get_repository_allowed_commands<D: Queries>(
 /// and answer with what remains.
 pub(crate) async fn remove_repository_allowed_command<D: Commands>(
     State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
     body: Bytes,
 ) -> Response {
     let removing: RemoveRepositoryAllowedCommand = match ipc::decode("a rule to take back", &body) {
@@ -37,7 +45,7 @@ pub(crate) async fn remove_repository_allowed_command<D: Commands>(
     };
     match served
         .daemon()
-        .remove_repository_allowed_command(removing)
+        .remove_repository_allowed_command(removing, scope.manifest())
         .await
     {
         Ok(allowed) => answer(StatusCode::OK, &allowed, served.run_id()),

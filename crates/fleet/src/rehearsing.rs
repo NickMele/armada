@@ -37,7 +37,6 @@ use core_model::{JobId, JobStatus};
 use crate::daemon::Fleet;
 use in_flight::Held;
 pub(crate) use in_flight::Rehearsals;
-use owner::Place;
 use record::Record;
 pub use unrehearsable::{Unrehearsable, Whose};
 pub use verifying::verify_steps;
@@ -76,7 +75,7 @@ where
     /// What the run sheet lists for this Job, and the facts beside it.
     pub(crate) async fn run_sheet(&self, job_id: &JobId) -> Result<ipc::RunSheet, Refusal> {
         let loaded = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let place = Place::of_job(loaded.clone());
+        let place = self.job_place(loaded.clone())?;
         let tree = self.tree_at(&place);
         let (manifest, has_snapshot) = self.manifest_at(&place).await;
         let listed = entries::frozen(&loaded, &manifest, has_snapshot);
@@ -84,11 +83,12 @@ where
             .as_ref()
             .map(|tree| self.changed_in(tree))
             .unwrap_or_default();
-        let (worktree_differs, worktree_unreadable) = match tree.as_ref().map(|t| self.theirs(t)) {
-            None => (false, None),
-            Some(Ok(theirs)) => (!listed.same_as(&entries::declared(&theirs)), None),
-            Some(Err(why)) => (false, Some(why)),
-        };
+        let (worktree_differs, worktree_unreadable) =
+            match tree.as_ref().map(|t| self.theirs(&place, t)) {
+                None => (false, None),
+                Some(Ok(theirs)) => (!listed.same_as(&entries::declared(&theirs)), None),
+                Some(Err(why)) => (false, Some(why)),
+            };
         let (setup, checks, commands) = listed.sheet(&changed);
         let wired = ipc::JobId::from(job_id);
         Ok(ipc::RunSheet {
@@ -96,7 +96,7 @@ where
             setup,
             checks,
             commands,
-            manifest_edited_at: self.edited_before(loaded.created_at(), tree.as_ref()),
+            manifest_edited_at: self.edited_before(&place, loaded.created_at(), tree.as_ref()),
             worktree_on_disk: tree.is_some(),
             worktree_differs,
             worktree_unreadable,
@@ -117,7 +117,7 @@ where
         asked: ipc::StartRun,
     ) -> Result<ipc::RunUnderway, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let place = Place::of_job(job);
+        let place = self.job_place(job)?;
         let owner = place.owner.clone();
         let (entry, tree) = self
             .entry_at(&place, &asked.name, asked.worktree_version)
@@ -151,7 +151,7 @@ where
         id: String,
     ) -> Result<ipc::RunRecord, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let place = Place::of_job(job);
+        let place = self.job_place(job)?;
         let record = self
             .stopped_at(&place, id)
             .await
@@ -166,7 +166,7 @@ where
         id: String,
     ) -> Result<ipc::RunRecord, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let place = Place::of_job(job);
+        let place = self.job_place(job)?;
         // **First**: a Drone's work is uncommitted until delivery, and nothing
         // below can tell its edits from the run's.
         if place
@@ -186,7 +186,7 @@ where
     /// This Job's earlier runs, newest first.
     pub(crate) async fn rehearsal_history(&self, job_id: &JobId) -> Result<ipc::RunList, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let place = Place::of_job(job);
+        let place = self.job_place(job)?;
         let (kept, unreadable) = self.history_at(&place);
         Ok(ipc::RunList {
             job_id: ipc::JobId::from(job_id),
@@ -203,7 +203,7 @@ where
         id: String,
     ) -> Result<ipc::RunOutput, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let place = Place::of_job(job);
+        let place = self.job_place(job)?;
         self.output_at(&place, &id)
             .ok_or_else(|| self.no_such_run(&place, id))
     }
@@ -217,7 +217,7 @@ where
         id: String,
     ) -> Result<api::ObservedRun, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let place = Place::of_job(job);
+        let place = self.job_place(job)?;
         let seen = self
             .observed_at(&place, &id)
             .ok_or_else(|| self.no_such_run(&place, id))?;

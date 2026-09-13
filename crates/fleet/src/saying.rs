@@ -499,8 +499,13 @@ impl fmt::Display for Adrift {
             ),
             Adrift::NoSuchManifest { named, held } => write!(
                 out,
-                "no Manifest is named `{named}`. This Fleet holds `{held}`, the one declared by \
-                 the `armada.yml` it was started against, and `list_manifests` says where"
+                "no Manifest is named `{named}`. This Fleet holds `{held}`, and `list_manifests` \
+                 says which repository declares each"
+            ),
+            Adrift::NotServed { manifest, .. } => write!(
+                out,
+                "this Job belongs to Manifest `{manifest}`, which no repository this Fleet serves \
+                 declares. Add that repository and its Jobs are served again"
             ),
             Adrift::ManifestUnreadable { path, cause } => write!(
                 out,
@@ -627,7 +632,8 @@ impl Adrift {
             // Both name the Job whose command was being decided about, so a
             // reading that failed is readable from the Job it was asked on.
             | Adrift::NothingToExplain { job, .. }
-            | Adrift::NotExplained { job, .. } => Some(job),
+            | Adrift::NotExplained { job, .. }
+            | Adrift::NotServed { job, .. } => Some(job),
             Adrift::CommandTimedOut { job, .. } => job.as_ref(),
             Adrift::BootRead(_)
             | Adrift::Reading(_)
@@ -713,6 +719,7 @@ impl Error for Adrift {
             | Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
+            | Adrift::NotServed { .. }
             | Adrift::NoSuchPeer { .. }
             | Adrift::NoSuchCall { .. }
             | Adrift::NoSuchDrone { .. }

@@ -51,13 +51,18 @@ where
     /// [`effective_manifest`](Fleet::effective_manifest) reads that the same
     /// way it reads a Job written before this column existed.
     pub(crate) async fn manifest_snapshotted(&self, store: &mut store::Store, job: &Job) {
-        let read = std::fs::read_to_string(self.manifest().path());
+        let read = self
+            .served_by(job)
+            .map_err(|why| why.to_string())
+            .and_then(|served| {
+                std::fs::read_to_string(served.manifest().path()).map_err(|why| why.to_string())
+            });
         let why = match read {
             Ok(text) => match store.set_manifest_snapshot(job.id(), &text) {
                 Ok(()) => return,
                 Err(why) => why.to_string(),
             },
-            Err(why) => why.to_string(),
+            Err(why) => why,
         };
         self.noted_in_the_log(
             job.id(),
@@ -88,7 +93,21 @@ where
     /// `false` too, for [`manifest_snapshotted`](Fleet::manifest_snapshotted)'s
     /// reason: a Job already dispatched must not stop working over this, and
     /// a caller that cannot trust what it read must not claim it as frozen.
-    pub(crate) async fn effective_manifest(&self, job: &Job) -> (Manifest, bool) {
+    pub(crate) async fn effective_manifest(
+        &self,
+        job: &Job,
+    ) -> Result<(Manifest, bool), crate::adrift::Adrift> {
+        let served = self.served_by(job)?;
+        Ok(self.effective_manifest_in(&served, job).await)
+    }
+
+    /// [`effective_manifest`](Fleet::effective_manifest), for a caller already
+    /// holding the Job's repository.
+    pub(crate) async fn effective_manifest_in(
+        &self,
+        served: &crate::repositories::Served,
+        job: &Job,
+    ) -> (Manifest, bool) {
         let snapshot = self
             .store()
             .lock()
@@ -96,9 +115,9 @@ where
             .manifest_snapshot(job.id())
             .ok()
             .flatten();
-        match snapshot.and_then(|text| Manifest::parse(self.manifest().path(), &text).ok()) {
+        match snapshot.and_then(|text| Manifest::parse(served.manifest().path(), &text).ok()) {
             Some(parsed) => (parsed, true),
-            None => (self.manifest().clone(), false),
+            None => (served.manifest().clone(), false),
         }
     }
 }

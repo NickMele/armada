@@ -112,6 +112,8 @@ mod rehearsal;
 mod remarks;
 /// What a person says went wrong, with the Job's own record attached.
 mod report;
+/// The repositories one Fleet serves, and adding one by folder.
+mod repositories;
 /// What one Job holds on this machine, and what came of asking whether it is
 /// working. **The other axis from `spend`**, which answers the model's cost.
 mod resources;
@@ -219,6 +221,7 @@ pub use rehearsal::{
 pub use rehearsal::{CheckoutVerify, VerifyGroup, VerifyStep, VerifyStepState};
 pub use remarks::{InlineContext, JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
+pub use repositories::{AddRepository, RepositoryList, RepositorySummary};
 pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
 };

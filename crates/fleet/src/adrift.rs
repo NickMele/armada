@@ -518,6 +518,9 @@ pub enum Adrift {
     /// A proposal named a Manifest this Fleet does not hold. The same fault as
     /// [`Adrift::NoSuchWorkflow`], for the other id a proposal carries.
     NoSuchManifest { named: String, held: String },
+    /// A Job whose Manifest no repository this Fleet serves declares. One store
+    /// serves the machine, so the Job is real and is left where it stands.
+    NotServed { job: JobId, manifest: String },
     /// `armada.yml` would not open for the file view that edits it.
     ///
     /// **Not a refused parse.** That one is `config::LoadError` and reaches a

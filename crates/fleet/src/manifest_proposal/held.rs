@@ -50,11 +50,14 @@ where
     W::Error: std::error::Error + Send + Sync + 'static,
 {
     /// `get_manifest_proposals`. A workspace already held is not rebuilt over.
-    pub(crate) fn manifest_proposals(&self) -> ManifestProposals {
-        let checkout = self.host().repo_root.clone();
+    pub(crate) fn manifest_proposals(
+        &self,
+        repository: &crate::repositories::Repository,
+    ) -> ManifestProposals {
+        let checkout = repository.root().to_string();
         let ci = &**self.ci_configuration();
         let found = scan(&checkout, &Checkout::at(&checkout), ci);
-        let mut held = self.held_proposals().lock();
+        let mut held = repository.proposals().lock();
         for draft in propose(&found) {
             held.entry(draft.dir.clone()).or_insert(draft);
         }
@@ -77,8 +80,9 @@ where
     pub(crate) fn edit_manifest_proposal(
         &self,
         asked: EditManifestProposal,
+        repository: &crate::repositories::Repository,
     ) -> Result<ManifestProposal, Refusal> {
-        self.with_draft(&asked.dir, |draft| {
+        self.with_draft(repository, &asked.dir, |draft| {
             draft.amend(asked.edit).map_err(|why| {
                 let (code, refusal): (_, fn(WireError) -> Refusal) = match why {
                     NotAmended::Written { .. } => (PROPOSAL_WRITTEN, Refusal::IllegalMove),
@@ -94,9 +98,11 @@ where
     pub(crate) fn write_manifest_proposal(
         &self,
         asked: WriteManifestProposal,
+        repository: &crate::repositories::Repository,
     ) -> Result<ManifestProposal, Refusal> {
         let at = Instant::from(&self.now());
-        self.with_draft(&asked.dir, |draft| {
+        let at_the_root = asked.dir == ".";
+        let written = self.with_draft(repository, &asked.dir, |draft| {
             let path = draft.path.display().to_string();
             let raised = |code, said: String| WireError::raised(code, said, self.run_id());
             draft.write(at).map_err(|why| match why {
@@ -138,24 +144,30 @@ where
                 )),
             })?;
             Ok(draft.answer())
-        })
+        })?;
+        // The root's `armada.yml` is the repository's Manifest once it loads.
+        if at_the_root {
+            self.set_up_after_write(repository);
+        }
+        Ok(written)
     }
 
     /// Act on `dir`'s proposal, building every proposal first where it was never asked about.
     fn with_draft(
         &self,
+        repository: &crate::repositories::Repository,
         dir: &str,
         act: impl FnOnce(&mut Draft) -> Result<ManifestProposal, Refusal>,
     ) -> Result<ManifestProposal, Refusal> {
-        if !self.held_proposals().lock().contains_key(dir) {
-            self.manifest_proposals();
+        if !repository.proposals().lock().contains_key(dir) {
+            self.manifest_proposals(repository);
         }
-        let mut held = self.held_proposals().lock();
+        let mut held = repository.proposals().lock();
         let Some(draft) = held.get_mut(dir) else {
             let said = format!(
                 "Scan found no workspace `{dir}` in {}. A proposal is named by the `dir` \
                  `get_manifest_proposals` answers with, `.` for the root",
-                self.host().repo_root
+                repository.root()
             );
             return Err(Refusal::Unacceptable(WireError::raised(
                 NO_SUCH_WORKSPACE,

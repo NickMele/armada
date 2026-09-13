@@ -26,7 +26,8 @@ pub(crate) const CHECKOUT_HANDLE: &str = "main";
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Owner {
     Job(JobId),
-    Checkout,
+    /// The main checkout of the repository at this root.
+    Checkout(String),
 }
 
 /// A tree a run happens in, as a path and — where there is one — as what
@@ -48,22 +49,26 @@ pub(crate) struct Place {
     pub(crate) job: Option<Job>,
     /// The directory under `.armada/runs/` this owner's runs are kept in.
     pub(crate) handle: String,
+    /// The repository the tree is in.
+    pub(crate) served: crate::repositories::Served,
 }
 
 impl Place {
-    pub(crate) fn of_job(job: Job) -> Place {
+    pub(crate) fn of_job(job: Job, served: crate::repositories::Served) -> Place {
         Place {
             owner: Owner::Job(job.id().clone()),
             handle: job.handle(),
             job: Some(job),
+            served,
         }
     }
 
-    pub(crate) fn of_checkout() -> Place {
+    pub(crate) fn of_checkout(served: crate::repositories::Served) -> Place {
         Place {
-            owner: Owner::Checkout,
+            owner: Owner::Checkout(served.root().to_string()),
             job: None,
             handle: String::from(CHECKOUT_HANDLE),
+            served,
         }
     }
 
@@ -98,17 +103,20 @@ where
     pub(crate) fn tree_at(&self, place: &Place) -> Option<Tree> {
         let Some(job) = place.job.as_ref() else {
             return Some(Tree {
-                path: PathBuf::from(&self.host().repo_root),
+                path: PathBuf::from(place.served.root()),
                 worktree: None,
             });
         };
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).ok()?;
+        let spec = WorktreeSpec::for_job(place.served.root(), &job.handle()).ok()?;
         let path = PathBuf::from(spec.worktree_path());
         path.is_dir().then(|| Tree {
             // Measured from the Manifest's base like every other reading of a
             // Job's work, so the narrowing the sheet offers names the files
             // the diff beside it draws.
-            worktree: Some(self.based(Worktree::at(spec.worktree_path(), spec.branch()))),
+            worktree: Some(self.based(
+                &place.served,
+                Worktree::at(spec.worktree_path(), spec.branch()),
+            )),
             path,
         })
     }
@@ -118,8 +126,14 @@ where
     /// Fleet holds — `crate::servers::hold_server`'s own split.
     pub(crate) async fn manifest_at(&self, place: &Place) -> (config::Manifest, bool) {
         match place.job.as_ref() {
-            Some(job) => self.effective_manifest(job).await,
-            None => (self.manifest().clone(), false),
+            Some(job) => self.effective_manifest_in(&place.served, job).await,
+            None => (place.served.manifest().clone(), false),
         }
+    }
+
+    /// A Job's place, in the repository it was created in.
+    pub(crate) fn job_place(&self, job: Job) -> Result<Place, api::Refusal> {
+        let served = self.served_by(&job).map_err(|why| self.refusal(why))?;
+        Ok(Place::of_job(job, served))
     }
 }

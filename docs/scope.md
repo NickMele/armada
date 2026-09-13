@@ -72,7 +72,7 @@ proposal that reintroduces one of them is answering a question already settled.
 
 | Attempt | Why it was abandoned | What it became |
 |---|---|---|
-| Skills in a repository | Worked, but was not portable to other projects | The Manifest. A repository carries its own setup, and Fleet is pointed at a repository rather than configured per project |
+| Skills in a repository | Worked, but was not portable to other projects | The Manifest. A repository carries its own setup, and one Fleet serves every repository a person adds rather than being configured per project |
 | A CLI | Did not surface the information he needed | Bridge, and why it is a board that is scanned rather than output that is read |
 | Orchestrator agents with sub agents | **Having a conversation was not the tool he was looking for** | Armada has no chat. You dispatch, and it reports. The only conversational surface is Helm, and it is not built |
 | Armada v1 | Close | This |

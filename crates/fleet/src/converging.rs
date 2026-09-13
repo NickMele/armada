@@ -374,7 +374,7 @@ where
         // kept under — `asked::briefs_dir`.
         let record = self.load(job).await?;
         let judging = self
-            .judging(&record)
+            .judging(&record, &self.served_by(&record)?)
             .map_err(|cause| Adrift::NotConfigurable {
                 job: job.clone(),
                 cause,

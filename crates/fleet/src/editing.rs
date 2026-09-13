@@ -133,8 +133,11 @@ where
     /// **The path is spelled as `ManifestReading` spells it** and never
     /// canonicalised, so the two answers a surface draws together agree about
     /// which file they are about.
-    pub(crate) fn read_manifest_file(&self) -> Result<ManifestFile, Refusal> {
-        let file = self.manifest().path();
+    pub(crate) fn read_manifest_file(
+        &self,
+        served: &crate::repositories::Served,
+    ) -> Result<ManifestFile, Refusal> {
+        let file = served.manifest().path();
         let text = fs::read_to_string(file).map_err(|cause| {
             self.refusal(Adrift::ManifestUnreadable {
                 path: file.display().to_string(),
@@ -164,8 +167,9 @@ where
     pub(crate) fn write_manifest_file(
         &self,
         asked: SaveManifestFile,
+        served: &crate::repositories::Served,
     ) -> Result<ManifestSaved, Refusal> {
-        let file = self.manifest().path();
+        let file = served.manifest().path();
         let path = file.display().to_string();
         save(file, &asked.read, &asked.text).map_err(|why| {
             self.refusal(match why {

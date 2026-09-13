@@ -177,8 +177,8 @@ where
         let (ports, env) = match plan.place.job.as_ref() {
             Some(job) => (self.port_map(job).await, self.port_env(job).await),
             None => (
-                self.main_checkout_ports().await,
-                self.main_checkout_port_env().await,
+                self.main_checkout_ports(&plan.place.served).await,
+                self.main_checkout_port_env(&plan.place.served).await,
             ),
         };
         let mut required = Vec::new();

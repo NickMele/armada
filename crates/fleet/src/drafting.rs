@@ -107,8 +107,9 @@ where
             .write_targets
             .take()
             .map(|paths| WriteTargets::of(paths.into_iter().map(RepoPath::new).collect()));
-        let workflow = self.the_workflow_named(&proposal.workflow_id)?;
-        let owner_manifest_id = self.the_manifest_named(&proposal.owner_manifest_id)?;
+        let served = self.the_repository_named(&proposal.owner_manifest_id)?;
+        let workflow = self.the_workflow_named(&served, &proposal.workflow_id)?;
+        let owner_manifest_id = served.manifest().id().clone();
         let model = self.the_model_named(proposal.model.as_deref())?;
         let origin = proposal.origin.domain();
         let id = JobId::carried(self.mint().ulid());
@@ -223,13 +224,14 @@ where
     /// the definition carries `workflow_id` beside `name`.
     fn the_workflow_named(
         &self,
+        served: &crate::repositories::Served,
         named: &ipc::WorkflowId,
     ) -> Result<core_model::FrozenWorkflow, Adrift> {
-        match self.workflow_named(&named.to_domain()) {
+        match served.workflows().get(&named.to_domain()) {
             Some(held) => Ok(held.frozen().clone()),
             None => Err(Adrift::NoSuchWorkflow {
                 named: named.as_str().to_string(),
-                held: self
+                held: served
                     .workflows()
                     .keys()
                     .map(|id| id.as_str().to_string())
@@ -238,21 +240,18 @@ where
         }
     }
 
-    /// The proposal's Manifest, if it is the one this Fleet was started
-    /// against. One at M1 — Fleet is pointed at a repository and reads the
-    /// `armada.yml` at its root — so there is one value this can be.
-    pub(crate) fn the_manifest_named(
+    /// The repository a proposal's Manifest names, among every one this Fleet
+    /// serves — the Job is created there, against its Checks and workflows.
+    pub(crate) fn the_repository_named(
         &self,
         named: &ipc::ManifestId,
-    ) -> Result<core_model::ManifestId, Adrift> {
-        let held = self.manifest().id();
-        if named.as_str() != held.as_str() {
-            return Err(Adrift::NoSuchManifest {
+    ) -> Result<crate::repositories::Served, Adrift> {
+        self.repositories()
+            .serving(named.as_str())
+            .ok_or_else(|| Adrift::NoSuchManifest {
                 named: named.as_str().to_string(),
-                held: held.as_str().to_string(),
-            });
-        }
-        Ok(held.clone())
+                held: self.held_manifests(),
+            })
     }
 
     /// The model the Drone will be spawned as: the proposal's, or the

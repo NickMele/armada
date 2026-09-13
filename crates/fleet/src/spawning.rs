@@ -218,7 +218,8 @@ where
             // started with, what this repository's `armada.yml` says, and what
             // the step declared — the last off `job`, which is the record the
             // Job froze and the one place a step's own declaration exists.
-            self.liveness().at(self.manifest(), job, step),
+            self.liveness()
+                .at(self.served_by(job)?.manifest(), job, step),
             self.now(),
         ));
         // The first row of this step's record, written by Armada, before the
@@ -294,7 +295,9 @@ where
         step: &StepId,
     ) -> Result<Taps, std::io::Error> {
         Taps::opening(
-            &self.host().records_root,
+            self.served_by(job)
+                .map_err(|why| std::io::Error::other(why.to_string()))?
+                .records_root(),
             Spine {
                 job: job.id().clone(),
                 handle: job.handle(),
@@ -373,7 +376,10 @@ where
     /// Manifest** — a Drone that could write itself a Command could grant
     /// itself one.
     async fn toolbelt(&self, job: &Job, step: &StepId) -> Toolbelt {
-        let (manifest, _) = self.effective_manifest(job).await;
+        let Ok(served) = self.served_by(job) else {
+            return Toolbelt::evidence_only();
+        };
+        let (manifest, _) = self.effective_manifest_in(&served, job).await;
         let mut belt = Toolbelt::evidence_only()
             .and(Grant::ReadTheWorktree)
             .and(Grant::ReadTheRepository)
@@ -390,7 +396,7 @@ where
         // same way `armada.yml` grants a declared Command.** `#836`: it is
         // kept in Fleet's own store, per Manifest, rather than a line in the
         // file, so it is read here rather than off `manifest.command_names()`.
-        for allowed in self.repository_allowed_commands().await {
+        for allowed in self.repository_allowed_commands(&served).await {
             belt = belt.and(Grant::RunADeclaredCommand(allowed.run));
         }
         // **Read off the step Fleet is about to put a Drone on, not off the

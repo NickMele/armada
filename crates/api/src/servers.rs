@@ -8,6 +8,7 @@
 
 use axum::body::Bytes;
 use axum::extract::ws::WebSocketUpgrade;
+use axum::extract::Query;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -16,6 +17,7 @@ use serde::Deserialize;
 
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::{Commands, Queries};
+use crate::scoped::InManifest;
 use crate::served::Served;
 
 /// The segment before `observe` on `observe_server`.
@@ -49,13 +51,14 @@ pub(crate) async fn observe_server<D: Queries>(
 /// 202: starting, or already up — a second request gets the running one.
 pub(crate) async fn start_server<D: Commands>(
     State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
     body: Bytes,
 ) -> Response {
     let asked: StartServer = match ipc::decode("a server to start", &body) {
         Ok(asked) => asked,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served.shared().start_server(asked).await {
+    match served.shared().start_server(asked, scope.manifest()).await {
         Ok(state) => answer(StatusCode::ACCEPTED, &state, served.run_id()),
         Err(refusal) => refused(refusal),
     }

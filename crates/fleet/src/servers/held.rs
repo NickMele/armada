@@ -17,7 +17,8 @@ use tokio::sync::watch;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Holder {
     Job(JobId),
-    MainCheckout,
+    /// The main checkout of the repository at this root.
+    MainCheckout(String),
 }
 
 type Key = (Holder, String);

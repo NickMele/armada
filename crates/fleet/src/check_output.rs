@@ -72,8 +72,9 @@ where
             .iter()
             .map(|kept| (kept.check.clone(), kept.output.clone()))
             .collect();
+        let served = self.served_by_id(job_id)?;
         let checks = kept(
-            &self.host().records_root,
+            served.records_root(),
             handle,
             step,
             attempt,

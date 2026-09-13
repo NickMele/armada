@@ -65,7 +65,9 @@ where
                 .filter(|plan| Some(&plan.step_id) == job.current_step_id())
                 .next_back();
             let (turns, older) = crate::transcript::one_drones_rows(
-                &self.host().records_root,
+                self.served_by(&job)
+                    .map_err(|why| self.refusal(why))?
+                    .records_root(),
                 &job.handle(),
                 &wanted,
                 TURNS,

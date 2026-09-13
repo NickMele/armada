@@ -732,7 +732,8 @@ where
         // no longer refuses a captured step for lacking `evidence:`, so a
         // repository that never declared one reaches here on every captured
         // step, the same as one whose section vanished mid-Job.
-        let Some(harness) = self.manifest().harness() else {
+        let served = self.served_by(job)?;
+        let Some(harness) = served.manifest().harness() else {
             return Ok(Some(NotShown::NoHarness));
         };
         let spec = submission.shown_by();
@@ -769,7 +770,7 @@ where
             Shown::Nothing => (Vec::new(), None),
             Shown::Frames(frames) => {
                 let copied = kept(
-                    &self.host().records_root,
+                    served.records_root(),
                     handle,
                     step,
                     attempt,
@@ -815,7 +816,15 @@ where
         handle: &str,
         budget: Duration,
     ) -> Before {
-        let checkout = match self.base_to_show_from(job).await {
+        let served = match self.served_by(job) {
+            Ok(served) => served,
+            Err(why) => {
+                return Before::instead(WhyNoPair::NoBase(crate::basing::NoBase::NotCheckedOut {
+                    why: why.to_string(),
+                }))
+            }
+        };
+        let checkout = match self.base_to_show_from(&served, job).await {
             Ok(checkout) => checkout,
             Err(why) => return Before::instead(WhyNoPair::NoBase(why)),
         };
@@ -838,7 +847,7 @@ where
             Shown::NotShown(why) => return Before::instead(WhyNoPair::NotShown(why)),
         };
         let kept = kept(
-            &self.host().records_root,
+            served.records_root(),
             handle,
             step,
             attempt,
