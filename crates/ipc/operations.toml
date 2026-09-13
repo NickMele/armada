@@ -334,7 +334,7 @@ The evidence sits inside the verdict rather than beside it, so `gone` with nothi
 [operations.get_repository_scan]
 kind = "query"
 transport = "HTTP"
-agent_access = "Yes"
+agent_access = "No"
 description = "Scan: every workspace in the checkout, what each one's files declare, and the file each finding came from"
 notes = """
 The first thing Setup does, and a read of the repository rather than of `armada.yml` — it is for a repository nobody has written one for, so it reads no Manifest and needs none. `docs/concepts/manifest.md`, *Setup*.
@@ -343,7 +343,7 @@ Evidence, never a proposal. Every finding carries its file because every line of
 
 It writes nothing and runs nothing, and the first is a fact about the type: Fleet hands it a tree that reads a file and lists a directory, with no write on it. Served against the checkout Fleet was started in until Locate (#821) names another.
 
-`agent_access` is `Yes` because Proposal's agent help works from exactly this answer, in Helm, and reading a repository's own files decides nothing. It is larger than drift's answer on a big monorepo; the door's 64 KiB cut applies and names this route.
+`agent_access` is `No` on the checkout-run operations' terms, the reads among them included: the main checkout is the tree a Drone is confined out of, and Scan reads that same tree, uncommitted edits and all. The column is one set shared by Helm and every Drone, so `Yes` would let any agent read the owner's working tree through Fleet. Proposal's agent help needs another way to this answer, and that is #823's to settle.
 """
 
 [operations.get_manifest_file]
