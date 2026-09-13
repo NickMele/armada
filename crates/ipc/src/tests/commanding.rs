@@ -201,7 +201,9 @@ fn an_allowed_command_crosses_whole_from_the_record() {
 }
 
 /// **Always stated on an 11.0 detail, and read as empty where it is not.** A
-/// detail with no key is a Job nobody allowed anything on, never a parse error.
+/// detail with no key is a Job nobody allowed anything on, never a parse
+/// error. `repository_allowed_commands` is the same shape, since `#836`, and
+/// the two are stripped together — one's key is a substring of the other's.
 #[test]
 fn the_allowed_commands_are_stated_and_an_older_detail_reads_as_none() {
     use crate::tests::{detail_of, job};
@@ -209,7 +211,13 @@ fn the_allowed_commands_are_stated_and_an_older_detail_reads_as_none() {
     let mut detail = detail_of(&job(), &[]);
     let json = encode(&detail).expect("a detail is plain data");
     assert!(json.contains("\"allowed_commands\":[]"), "{json}");
-    let older = json.replace(",\"allowed_commands\":[]", "");
+    assert!(
+        json.contains("\"repository_allowed_commands\":[]"),
+        "{json}"
+    );
+    let older = json
+        .replace(",\"repository_allowed_commands\":[]", "")
+        .replace(",\"allowed_commands\":[]", "");
     assert!(!older.contains("allowed_commands"), "{older}");
     assert_eq!(
         decode::<crate::JobDetail>("a detail", older.as_bytes()).expect("an older detail reads"),
@@ -229,6 +237,15 @@ fn the_allowed_commands_are_stated_and_an_older_detail_reads_as_none() {
         at("cargo nextest run -p ipc") < at("touch x"),
         "oldest first, as Fleet listed them: {json}"
     );
+    assert_eq!(
+        decode::<crate::JobDetail>("a detail", json.as_bytes()).expect("it reads back"),
+        detail
+    );
+
+    // The repository-wide list, `#836`: apart from the Job's own, and round
+    // trips the same way.
+    detail.repository_allowed_commands = vec![crate::AllowedCommandRow::from(&allowed())];
+    let json = encode(&detail).expect("a detail is plain data");
     assert_eq!(
         decode::<crate::JobDetail>("a detail", json.as_bytes()).expect("it reads back"),
         detail

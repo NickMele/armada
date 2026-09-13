@@ -202,15 +202,26 @@ export type JobDetail = {
    */
   when_refused?: WhenRefused;
   /**
-   * The commands a person allowed for this job, oldest first. Since protocol
-   * 11.0.
+   * The commands a person allowed for this job alone, oldest first. Since
+   * protocol 11.0.
    *
    * **Empty is a job nobody allowed anything on.** Optional for `offers`'
    * reason: fleet reads an absent list as empty, and a reader here does the
-   * same rather than drawing a gap. A `repository` allow is listed too — the
-   * job holds it whichever way it was allowed.
+   * same rather than drawing a gap. **Since protocol 13.5, a `repository`
+   * allow is never added here** — see `repository_allowed_commands` — and a
+   * row at that reach is one an older fleet wrote.
    */
   allowed_commands?: AllowedCommandRow[];
+  /**
+   * Every rule a person always-allowed for this manifest's repository,
+   * oldest first — read-only here, and covering every job against this
+   * manifest rather than this one alone. Since protocol 13.5.
+   *
+   * **Empty is a repository nobody always-allowed anything for**, and a
+   * detail from a fleet older than 13.5 reads the same way. Removing one is
+   * `remove_repository_allowed_command`, not a route under a job.
+   */
+  repository_allowed_commands?: AllowedCommandRow[];
   /**
    * The model a person chose for this job's later steps. Since protocol 11.0.
    *
