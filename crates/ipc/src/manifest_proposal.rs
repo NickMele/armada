@@ -1,20 +1,15 @@
 //! A possible `armada.yml` per workspace, built from what Scan read — the
-//! *Proposal* step of the Setup journey.
+//! *Proposal* step of the Setup journey. Not [`ProposeJob`](crate::ProposeJob):
+//! no Job exists.
 //!
 //! **Every line says where it came from, and a person cannot say otherwise.**
 //! [`Provenance`] is on each line and on no edit: an edit moves it to
-//! `edited_during_setup` or `added_during_setup`, and nothing on this wire sets
-//! it directly. A record, not a value.
+//! `edited_during_setup` or `added_during_setup`. A record, not a value.
 //!
-//! **Placement is a guess; a port is not.** A compose file proves a port, so a
-//! port line is `read`. Nothing proves a script gates code, so every script
-//! line is `convention`, whichever registry it landed in.
+//! **Placement is a guess; a port is not.** A port a file declares is `read`;
+//! every script is `convention`, whichever registry it landed in.
 //!
-//! **Lines, not text.** The file a proposal becomes is written by `config`'s
-//! one writer of `armada.yml`, and arrives with Write.
-//!
-//! **Not the Job proposer's.** [`ProposeJob`](crate::ProposeJob) is a Job on its
-//! way to the gate; this is a file on its way to disk, and no Job exists.
+//! **Lines, not text.** The file comes with Write, from `config`'s one writer.
 
 use serde::{Deserialize, Serialize};
 

@@ -1,21 +1,17 @@
 //! A possible `armada.yml` per workspace, from what Scan read, iterated before
-//! anything is written — the *Proposal* step of the Setup journey.
-//!
-//! **Not [`crate::proposing`]**, which proposes Jobs. Nothing here makes a Job,
-//! calls a model or reaches the gate; it turns files into the lines of a file.
+//! anything is written — Setup's *Proposal* step. Not [`crate::proposing`],
+//! which proposes Jobs.
 //!
 //! **Every line carries where it came from**, and only this module moves it:
-//! [`building`] cites the file, [`amending`] moves a line a person touched to
-//! *edited* or *added*. No edit on the wire names a provenance.
+//! [`building`] cites the file, [`amending`] moves a touched line to *edited*
+//! or *added*. No edit on the wire names a provenance.
 //!
 //! **No text is produced here.** `config`'s writer (#721) is the one writer of
-//! `armada.yml`; Write expresses a proposal as edits to an empty text through
-//! it and puts the result down through `crate::editing::create`.
+//! `armada.yml`; Write goes through it and `crate::editing::create`.
 //!
-//! **Held in Fleet's memory for the Fleet's life, and never written down.** A
-//! proposal is a draft nobody has committed to; a store row would outlive the
-//! Scan it was built from, and a restart costs one more Scan. Where a proposal
-//! lives between edits was left open by the journey — [`held`] is the choice.
+//! **Held in Fleet's memory for its life, never written down**: a store row
+//! would outlive the Scan it came from, and a restart costs one Scan. The
+//! journey left where a proposal lives open — [`held`] is the choice.
 
 use ipc::{
     ManifestProposal, PolicyKey, ProposedCheck, ProposedCommand, ProposedId, ProposedPolicy,

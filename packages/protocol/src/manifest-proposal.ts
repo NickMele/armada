@@ -4,13 +4,9 @@
 // **Every line says where it came from, and nothing here sets that.** An edit
 // carries no provenance; Fleet moves a touched line to `edited_during_setup` or
 // `added_during_setup`. A port a file declares is `read`; every script is
-// `convention`, because which registry it landed in is a guess.
+// `convention`. Not `proposing.ts`, which is a Job on its way to the gate.
 //
-// **Lines, not text.** The file a proposal becomes arrives with Write, written
-// by `config`'s one writer of `armada.yml`.
-//
-// **Not the Job proposer's.** `proposing.ts` is a Job on its way to the gate;
-// this is a file on its way to disk.
+// **Lines, not text**: the file comes with Write, from `config`'s one writer.
 //
 // The header rules in `protocol.ts` hold here: hand-written, and every closed
 // set is left as `string`.
