@@ -113,6 +113,12 @@ test("the band names the trigger and Fleet's own reason for it, sentence-cased",
   await expect.element(page.getByText(UNDECIDED_SAID, { exact: false })).toBeVisible();
 });
 
+// #1129: the callout repeated the header's own Awaiting review badge.
+test("reviewing draws no notice of its own", () => {
+  const showing = step();
+  expect(noticeOf(job(), whole(showing), "reviewing", showing, opens())).toBeUndefined();
+});
+
 test("no `undecided` sentence where the wire sent none", async () => {
   const showing = step();
   const bare = whole(showing, { undecided: undefined });

@@ -262,7 +262,9 @@ function OneJob({
       ? recorded.handed.moment
       : undefined;
   const run =
-    whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? [], handed);
+    whole === null
+      ? []
+      : runOf(whole, now, selected ?? undefined, watching?.rows ?? [], handed, render === "reviewing");
   // The strip's rows carry the three records a person reads because a verdict
   // went against them, and each opens. The Job id and the toast are the panel's,
   // so they are handed down rather than reached for; `phases.tsx` says why.

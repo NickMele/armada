@@ -45,7 +45,7 @@ import type {
   Submitted,
 } from "@armada/protocol";
 
-import { hostLabel, money, pullRequestNumber } from "./facts";
+import { money, pullRequestNumber } from "./facts";
 import { elapsedSince } from "./duration";
 import { sitting } from "./held";
 import { checkRow, judgeRow, saidOf, iconOf } from "./checks";
@@ -632,20 +632,16 @@ export function verdictSlotAtGate({
   const never = neverDelivers(whole?.steps ?? []);
   // Never `auto_merge`: approving here never merges regardless of that
   // policy, which holds a later, separate gate (`fleet::gate`, `reviewing`).
+  //
+  // **Absent where there is a pull request to decide on.** What each act does
+  // used to be a paragraph here, above the buttons it described; each sentence
+  // is on its own button's tooltip now, in `ReviewDecision`. #1129.
   const note: ReactNode =
-    never === true ? (
-      "Approving ends the Job here. Nothing is merged, and no pull request is waiting on it."
-    ) : address !== undefined ? (
-      <>
-        <strong>Merge and take the work</strong> merges this pull request on{" "}
-        {hostLabel(address)}, then runs the repository&rsquo;s after-merge Checks on what landed.{" "}
-        <strong>Approve the work</strong> takes it without merging — the pull request stays open.{" "}
-        <strong>Request changes</strong> sends your note to the Drone, which keeps working on this
-        same branch.
-      </>
-    ) : (
-      "The run tree on the left is where each step's own evidence is. This reads the Job."
-    );
+    never === true
+      ? "Approving ends the Job here. Nothing is merged, and no pull request is waiting on it."
+      : address === undefined
+        ? "The run tree on the left is where each step's own evidence is. This reads the Job."
+        : undefined;
   const sheetWith = (pending?: PendingChanges, folded = false) => (
     <VerdictSheet
       folded={folded}
