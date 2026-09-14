@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
 /**
@@ -29,6 +30,13 @@ export type SplitButtonItem = {
 export type SplitButtonProps = {
   /** The act the state calls for. */
   children: string;
+  /**
+   * A leading glyph on the label segment, from `packages/icons/icons.toml`
+   * only. Absent draws none — most callers have no icon to lead with, since a
+   * list row's label already carries the act. The title row's Dispatch is the
+   * one caller today (#1107).
+   */
+  icon?: ReactNode;
   /** What the row could also do. Destructive last. */
   items: SplitButtonItem[];
   /**
@@ -65,6 +73,7 @@ export type SplitButtonProps = {
 
 export function SplitButton({
   children,
+  icon,
   items,
   variant = "secondary",
   ground = "card",
@@ -95,6 +104,7 @@ export function SplitButton({
           disabled={disabled}
           onClick={onAction}
         >
+          {icon}
           {children}
         </button>
         <button

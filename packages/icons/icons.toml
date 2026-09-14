@@ -365,6 +365,14 @@
   status = "Specified"
   notes = "Two bars, the most legible glyph in the set. snowflake rejected as decorative."
 
+[icons.plus]
+  means = "Compose a new job"
+  group = "Action"
+  size = "16px"
+  status = "Specified"
+  reserved = "The title row's Dispatch segment only. Never dispatched, which is send's — this marks opening the composer, not the act the composed request performs once sent."
+  notes = "#1107. The shell mock leads Dispatch's label with a plus; a bare cross is the smallest departure from send's silhouette in the Action group, and the two read as compose versus commit rather than as duplicates."
+
 [icons.power]
   means = "A broken ring with an ascender rising through the gap"
   group = "Job state"

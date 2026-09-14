@@ -295,13 +295,12 @@ notes = "Shifted `x`, because kill is `x` and this is the same act carried furth
 kind = "Action"
 tier = "Contextual"
 verb = "Dispatch"
-icon = ""
-icon_absent = "undecided"
+icon = "plus"
 shortcut = "n"
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "The one contextual key that acts on nothing on screen, which is why its scope is anywhere rather than the list it is pressed on. Renamed from `New job` on 2026-09-14 (#1087): the owner put this act in the title row and wanted it called Dispatch there, which means it now shares its verb with the dispatch card's own submit — this row opens the card, the card's own button sends what it read. The id stays `new_job`; only the rendered word moved."
+notes = "The one contextual key that acts on nothing on screen, which is why its scope is anywhere rather than the list it is pressed on. Renamed from `New job` on 2026-09-14 (#1087): the owner put this act in the title row and wanted it called Dispatch there, which means it now shares its verb with the dispatch card's own submit — this row opens the card, the card's own button sends what it read. The id stays `new_job`; only the rendered word moved. Icon decided 2026-09-14 (#1107): `plus`, newly registered in `packages/icons/icons.toml` for this row."
 
 [actions.search]
 kind = "Action"
