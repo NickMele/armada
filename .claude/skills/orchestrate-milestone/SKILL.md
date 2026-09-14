@@ -119,6 +119,12 @@ they touch none of the branch's files, no gate rule under `xtask/`, no
 branches outlasted every gap, so neither landed; on 13 Sep the whole bar after
 every rebase made the owner's machine unusable.
 
+**A stacked branch rebases with `--onto` once its base has merged.** Its history
+still carries the base's pre-rebase commits, and a plain `git rebase origin/main`
+replays them against their merged copies. Confirmed 14 Sep 2026: #1071, stacked
+on #1070, conflicted in `checking.rs` on one of #1070's own commits; `git rebase
+--onto origin/main <the base's old head>` replayed #1071's three with none.
+
 **Re-read `main`'s protocol minor after every rebase.** Two branches bumping to
 the same number merge without a conflict. Confirmed 13 Sep 2026: #993 took 13.36
 while the agent door's branch also bumped to 13.36, and the rebase dropped the
