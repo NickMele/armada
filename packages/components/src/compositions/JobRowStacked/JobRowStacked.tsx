@@ -133,16 +133,18 @@ export type JobRowStackedProps = {
    * Which arrangement this row is drawn in.
    *
    * `card` stacks the headline over its field run; `table` puts them on one
-   * line under a header that names each column. **The markup is the same
-   * either way** — the table view drops the wrappers out of the layout so the
-   * headline and every field land in the row's own columns, so nothing here
-   * branches and no field set has to be rewritten to switch.
+   * line under a header that names each column; `panel` is the same one line
+   * without a header — Overview's own row, where the handle moves under the
+   * title and the facts read by glyph and value rather than by a caption.
+   * **The markup is the same in all three** — each view only drops or moves
+   * wrappers in CSS, so nothing here branches and no field set is rewritten to
+   * switch.
    *
    * **A row inside a list takes the list's view and not this**, which is what
    * makes a list of rows in two arrangements impossible. Set it only on a row
    * standing on its own, which is what a story does.
    */
-  view?: "card" | "table";
+  view?: "card" | "table" | "panel";
   /** The one secondary control. Never a primary, and never more than one. */
   action?: ReactNode;
   /**

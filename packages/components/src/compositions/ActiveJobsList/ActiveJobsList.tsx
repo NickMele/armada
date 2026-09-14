@@ -94,14 +94,15 @@ export type ActiveJobsListProps = {
   label?: string;
   /**
    * Which arrangement every row is drawn in. `card` stacks each row's headline
-   * over its facts; `table` puts them on one line beneath `columns`.
+   * over its facts; `table` puts them on one line beneath `columns`; `panel`
+   * is Overview's own row — one line, no header, the handle under the title.
    *
    * **The list decides, never the row.** A list holding rows in two
    * arrangements is not a thing anybody wants and the tracks could not be
    * shared across it, so the view is set once here and the rows read it off
    * the frame.
    */
-  view?: "card" | "table";
+  view?: "card" | "table" | "panel";
   /**
    * What each column is called, in order, drawn once above the rows. Table
    * view only; a card labels its facts by where they sit in a run.
@@ -215,7 +216,7 @@ export function ActiveJobsList({
       <div
         ref={frame}
         className={`armada-active-jobs__frame ${JOB_ROW_LIST}`}
-        data-view={view === "table" ? "table" : undefined}
+        data-view={view === "card" ? undefined : view}
         data-columns={columns?.length}
         role={roving ? "listbox" : "list"}
         aria-label={label}

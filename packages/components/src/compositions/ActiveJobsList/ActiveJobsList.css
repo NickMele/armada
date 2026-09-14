@@ -192,8 +192,16 @@
   grid-template-columns: var(--armada-job-table-tracks-3);
 }
 
-.armada-active-jobs__frame[data-columns="3"]:not([data-view="table"]) {
+.armada-active-jobs__frame[data-columns="3"]:not([data-view="table"], [data-view="panel"]) {
   grid-template-columns: var(--armada-job-row-tracks-3);
+}
+
+/* `panel` reserves no fact tracks at all — a row's own facts are flex chips
+   now, sized to their content rather than to a floor the Board's full-width
+   pane can afford and a narrower one cannot (Overview's own finding). One
+   column, the frame's real width, and the row does the rest. */
+.armada-active-jobs__frame[data-view="panel"] {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The column names, once, above the rows. `--bg-sunken` rather than the row's

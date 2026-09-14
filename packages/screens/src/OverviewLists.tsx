@@ -61,8 +61,8 @@ export function OverviewLists({
   const pickedRepository = repositories.find((one) => one.root === picked) ?? null;
   const all = picked === null;
   const { sections, dispatch, undrawable } = overviewListsOf(jobs, pickedRepository);
-  // Named, not drawn: `view` stays `card`, so this narrows the panel's own grid to the facts these
-  // rows actually carry rather than reserving a track nothing fills — `Jobs.tsx`'s own call.
+  // Named, not drawn: `columns` still narrows the panel's own grid to the facts these rows carry,
+  // `Jobs.tsx`'s own call — `panel` view drops the reserved-track system it named the tracks for.
   const columns = columnsFor(jobs, repositories, all);
 
   const rowOf = (job: JobSummary) => (
@@ -87,6 +87,7 @@ export function OverviewLists({
       {sections.length === 0 ? (
         <ActiveJobsList
           variant="panel"
+          view="panel"
           selectable
           label="Overview"
           empty={
@@ -104,6 +105,7 @@ export function OverviewLists({
           <ActiveJobsList
             key={section.id}
             variant="panel"
+            view="panel"
             heading={section.label}
             count={section.jobs.length}
             selectable
