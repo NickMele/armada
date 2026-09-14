@@ -51,11 +51,9 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  *
  * **Merge can be drawn and disabled at once.** `#663`: a branch behind main
  * with conflicts is a pull request Fleet would refuse to merge, and
- * `mergeBlockedReason` says so under the row rather than hiding it —
- * `aria-describedby` is what keeps it read as Merge's own reason, since a
- * sentence this long sizes whatever box holds it, `#1131`. Fleet already
- * sends a Drone to clear it on its own, and nothing on this surface presses
- * anything to do the same.
+ * `mergeBlockedReason` says so under the row rather than hiding it. Fleet
+ * sends a Drone to clear the conflicts on its own, so nothing here presses
+ * anything.
  *
  * **No glyph on any of them.** Primary and secondary are label-only by
  * contract, and a mark on the destructive one alone would make the difference
@@ -157,10 +155,6 @@ export function ReviewDecision({
   // and a boolean beside a handler would let a surface offer an act with
   // nothing behind it.
   const merging = onMerge !== undefined;
-  // `mergeBlockedReason` reads as long as a sentence, and a flex item sized by
-  // its own content stretches the row that holds it — the defect a short
-  // "Resolve the conflicts first." never surfaced. `aria-describedby` is what
-  // keeps it Merge's own reason once it is no longer inside the same box.
   const mergeReasonId = useId();
 
   return (
@@ -206,9 +200,7 @@ export function ReviewDecision({
         {/* The one accent fill on this surface, and it moves. A job with a pull
             request open has one ordinary ending and it is this one; a job with
             none never draws this control at all. `mergeBlockedReason` present
-            is a third case — drawn, disabled either way. Its sentence sits
-            under the whole row, below, rather than beside this control: a
-            flex item sized by a sentence stretches the row that holds it. */}
+            is a third case — drawn, disabled either way. */}
         {merging ? (
           <Tooltip label={mergeNote}>
             <Button
@@ -242,9 +234,8 @@ export function ReviewDecision({
         </Tooltip>
       </div>
 
-      {/* Under the row, never inside it — `aria-describedby` on Merge is what
-          keeps this read as its reason rather than the group's, now that
-          nothing here sizes a button's column. */}
+      {/* Under the row so a long sentence never widens Merge's column;
+          `aria-describedby` keeps it read as Merge's reason. */}
       {mergeBlockedReason === undefined ? null : (
         <p id={mergeReasonId} className="armada-decision__said" role="note">
           {mergeBlockedReason}
