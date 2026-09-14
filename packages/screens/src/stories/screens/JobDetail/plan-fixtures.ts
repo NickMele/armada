@@ -4,9 +4,9 @@
 // one-story-per-directory rule reads every file with that suffix, and this is
 // data rather than a story.
 
-import type { WorkPlan } from "@armada/protocol";
+import type { DeclaredCheck, WorkPlan } from "@armada/protocol";
 import type { JobFixture } from "../../../fixtures/fixture";
-import { running } from "../../../fixtures/build/index";
+import { awaitingApproval, running } from "../../../fixtures/build/index";
 import { watchedRead } from "../../../fixtures/build/base";
 
 const PLAN_APPROACH =
@@ -44,4 +44,32 @@ export function withPlan(work_plan: WorkPlan): JobFixture {
   const fixture = running();
   if (fixture.watched.state !== "read") return fixture;
   return { ...fixture, watched: watchedRead({ ...fixture.watched.detail, work_plan }) };
+}
+
+/** The Check `awaitingApprovalPlanPending`'s recast lead step declares. */
+const PLAN_RECORDED: DeclaredCheck = { kind: "plan_recorded" };
+
+/**
+ * `awaitingApproval()`, with its lead step recast as the one that will
+ * record the plan — a Bug Job at the approval gate, before that step has
+ * run. `#1007`.
+ */
+export function awaitingApprovalPlanPending(): JobFixture {
+  const fixture = awaitingApproval();
+  if (fixture.watched.state !== "read") return fixture;
+  const whole = fixture.watched.detail;
+  const steps = whole.steps.map((step) =>
+    step.step_id === "repro"
+      ? { ...step, step_id: "plan", label: "Plan the change", checks: [PLAN_RECORDED] }
+      : step,
+  );
+  return {
+    ...fixture,
+    job: { ...fixture.job, current_step_id: "plan" },
+    watched: watchedRead({
+      ...whole,
+      job: { ...whole.job, current_step_id: "plan" },
+      steps,
+    }),
+  };
 }

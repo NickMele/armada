@@ -237,6 +237,29 @@ function TaskRow({
 }
 
 /**
+ * The Plan region before a plan is recorded — a step on the workflow declares
+ * `plan_recorded` and has not run yet. One muted line naming that step, and
+ * nothing else: no task bar, no figure, no approach, no `Add task`. `#1007`;
+ * `docs/journeys/monitor-active-work.md`, Plan.
+ *
+ * **The same wrapper `PlanWell` opens with.** Reusing `.armada-inside__pulse-head`
+ * keeps the eyebrow at the region's usual place rather than drawing a second
+ * shape a reader has to recognise as the same region.
+ */
+export function PlanPending({ stepLabel }: { stepLabel: string }) {
+  return (
+    <>
+      <div className="armada-inside__pulse-head">
+        <Eyebrow>Plan</Eyebrow>
+      </div>
+      <p className="armada-inside__absent" role="note">
+        No plan yet — {stepLabel} records it.
+      </p>
+    </>
+  );
+}
+
+/**
  * The Plan region's well — the task bar, the figure, the approach and one row
  * per task. `StepBar`'s segment grammar, extended to draw tasks rather than
  * steps; `docs/journeys/monitor-active-work.md`, Plan.

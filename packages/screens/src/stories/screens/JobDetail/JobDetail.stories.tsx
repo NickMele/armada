@@ -42,7 +42,12 @@ import { JOB_ID, repository, spend, watchedRead } from "../../../fixtures/build/
 import { WAITING_CALL } from "../../../fixtures/build/running";
 import { recorded } from "../../../fixtures/recorded";
 import { JobDetailFrom } from "./JobDetail";
-import { PLAN_PARTWAY, PLAN_WITH_A_DROPPED_TASK, withPlan } from "./plan-fixtures";
+import {
+  awaitingApprovalPlanPending,
+  PLAN_PARTWAY,
+  PLAN_WITH_A_DROPPED_TASK,
+  withPlan,
+} from "./plan-fixtures";
 
 /**
  * Job detail in every state a Job can be in, drawn by the app's own screen from
@@ -152,6 +157,21 @@ export const BeforeThePlanStepHasRecordedOne: Story = {
   render: () => <JobDetailFrom fixture={preparing()} />,
   play: async ({ canvas }) => {
     await expect(canvas.queryByText("Plan")).toBeNull();
+  },
+};
+
+/**
+ * A step declares `plan_recorded` and has not run yet — a Bug Job at the
+ * approval gate, its plan step still ahead. The quiet placeholder, and no
+ * task bar, figure, approach or `Add task` until a plan exists. `#1007`.
+ */
+export const PlanPending: Story = {
+  name: "Plan, before it's recorded",
+  render: () => <JobDetailFrom fixture={awaitingApprovalPlanPending()} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Plan")).toBeVisible();
+    await expect(canvas.getByText("No plan yet — Plan the change records it.")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Add task" })).toBeNull();
   },
 };
 

@@ -42,13 +42,19 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 ### Plan
 
-**A Plan region sits in the rail, between The run and Pulse.** Designed
-against a screenshot of a running Job on 13 Sep, not yet built — #896 draws
-it. It is shown whichever step is selected, because the plan belongs to the
-Job rather than the step, and the panel stays the selected step's own.
+**A Plan region sits in the rail, between The run and Pulse.** It is shown
+whichever step is selected, because the plan belongs to the Job rather than
+the step, and the panel stays the selected step's own.
 
-- The eyebrow `Plan`, with an `Add task` eyebrow act — live once #897 lands,
-  absent until then.
+**Before a plan is recorded, the region still draws — quietly.** When the
+workflow declares the step that will record it, and that step has not run
+yet, the region shows one muted line naming it: "No plan yet — Plan the
+change records it." No task bar, no figure, no approach and no `Add task`
+until the plan exists — adding a task needs a plan to add it to.
+
+Once a plan is recorded:
+
+- The eyebrow `Plan`, with an `Add task` eyebrow act.
 - A task bar using `StepBar`'s segment grammar, one segment per task not
   dropped: done `--step-advanced`, working `--step-running`, open
   `--border-default`.
@@ -63,8 +69,8 @@ carries no state word and no step name. The pulse stays scoped to one mark
 per screen — the running step's own, in The run above — so a working task's
 mark does not pulse.
 
-**A Job whose workflow has no plan step draws no Plan region.** Nothing on
-this screen is drawn empty.
+**A workflow that declares no step recording a plan draws no Plan region at
+all.** Nothing on this screen is drawn empty.
 
 **Where things are collapses to its header line by default, showing the
 branch.** Why: the Plan region makes an already-dense rail denser on a
