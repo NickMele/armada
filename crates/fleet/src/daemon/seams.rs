@@ -404,6 +404,51 @@ where
             self.headroom(),
         )
     }
+    /// [`Fleet::room`], knowing how long this Job's repository's Checks took
+    /// before. A store that will not read starts them in Manifest order. #1062.
+    pub(crate) async fn checks_room_for(&self, job: &Job) -> crate::checking::Room {
+        let past = self
+            .store()
+            .lock()
+            .await
+            .check_timings(job.owner_manifest_id())
+            .unwrap_or_default();
+        self.room().knowing(crate::ordering::Past::of(past))
+    }
+    /// Keep how long each Check of one of this Job's runs took. A row that will
+    /// not write fails nothing: the run's own answer is already out.
+    pub(crate) async fn kept_timings(&self, job: &Job, timed: Vec<(String, std::time::Duration)>) {
+        if timed.is_empty() {
+            return;
+        }
+        let at = self.now();
+        let mut store = self.store().lock().await;
+        for (check, took) in timed {
+            let _ = store.record_check_took(job.owner_manifest_id(), &check, took, &at);
+        }
+    }
+    /// Where a Drone's own run says what each of its Checks is doing: shown
+    /// beside the gate's and never as it, and heard as each result lands.
+    /// `whole` is whether it ran every Check whole, which is when it is timed.
+    pub(crate) fn announcing_dry_run(
+        &self,
+        job: &Job,
+        step: &core_model::StepId,
+        attempt: core_model::Attempt,
+        hearing: tokio::sync::mpsc::UnboundedSender<crate::underway::Landed>,
+        whole: bool,
+    ) -> Announcing {
+        Announcing::dry_run(
+            job.id().into(),
+            step.clone(),
+            attempt,
+            self.underway.clone(),
+            self.events.clone(),
+            Arc::clone(&self.clock),
+            hearing,
+            whole,
+        )
+    }
     /// The headroom in force, **by value**: a save replaces it, so a borrow
     /// would be a lock held across whatever the caller did next.
     pub(crate) fn headroom(&self) -> Headroom {

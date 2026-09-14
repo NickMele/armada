@@ -285,6 +285,9 @@ pub(crate) struct Working {
     /// column here would outlive the one thing that could ever tell it apart
     /// from a stale reading — `#1014`.
     dry_run_kept: Option<crate::reuse::KeptDryRun>,
+    /// What the step's latest dry run shows a person, held so its results stay
+    /// on Job detail once it is over. Dropped, the view comes down. #1062.
+    dry_run_shown: Option<crate::underway::Announcing>,
 }
 
 /// A Drone that has been ended, and everything the slot that held it was
@@ -385,6 +388,7 @@ impl Working {
             in_flight: None,
             fixes: 0,
             dry_run_kept: None,
+            dry_run_shown: None,
         }
     }
 
@@ -453,6 +457,7 @@ impl Working {
             in_flight: None,
             fixes: 0,
             dry_run_kept: None,
+            dry_run_shown: None,
         }
     }
 

@@ -109,6 +109,8 @@ pub enum Event {
     JobJudging(JobJudging),
     #[serde(rename = "job.checking")]
     JobChecking(JobChecking),
+    #[serde(rename = "job.dry_run")]
+    JobDryRun(JobDryRun),
     #[serde(rename = "evidence.submitted")]
     EvidenceSubmitted(EvidenceSubmitted),
     #[serde(rename = "job.asking")]
@@ -622,6 +624,25 @@ pub struct JobChecking {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checking: Option<ChecksUnderway>,
     /// Always Fleet. A Check is Fleet's own run, never a Drone's.
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+/// One of the Checks a Drone asked for mid-step started or finished, or its
+/// run is no longer shown. #1062.
+///
+/// **[`JobChecking`]'s shape, as a kind of its own.** A flag on that event
+/// would have a Bridge that does not know the flag draw a Drone's run as the
+/// gate's.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobDryRun {
+    pub job_id: JobId,
+    pub step_id: StepId,
+    /// The run's Checks as they now stand. **Absent once it is no longer
+    /// shown**: the Drone asked again, submitted, or the step ended.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dry_run: Option<ChecksUnderway>,
+    /// Always Fleet, which runs the Checks a Drone asks for.
     pub actor: Actor,
     pub at: Instant,
 }

@@ -415,3 +415,41 @@ async fn a_check_against_no_claimed_port_gets_neither_channel() {
         vec![("asks_for_nothing", CheckOutcome::Passed)]
     );
 }
+
+/// **The gate never stops early** (#1062). A build that fails first still
+/// leaves the slower Check to run and be recorded, so the Judge reads the
+/// whole run — the second definition of done.
+#[tokio::test]
+async fn a_gate_whose_build_fails_first_still_runs_and_records_every_check() {
+    let dir = crate::tests::tmp::TempDir::new();
+    let marker = dir.path().join("slow-finished");
+    let slow = format!(
+        "/bin/sh -c '/bin/sleep 1 && /usr/bin/touch {}'",
+        marker.display()
+    );
+    let gates = [
+        Gate::Check {
+            name: "build",
+            run: "/usr/bin/false",
+            expect_exit_code: 0,
+            when: &[],
+        },
+        Gate::Check {
+            name: "slow",
+            run: &slow,
+            expect_exit_code: 0,
+            when: &[],
+        },
+    ];
+
+    let ruling = ruled(&gates, Duration::from_secs(30), &["src/lib.rs"]).await;
+
+    assert!(
+        marker.exists(),
+        "the gate stopped a Check when the build failed"
+    );
+    assert_eq!(
+        recorded(&ruling),
+        vec![("build", CheckOutcome::Failed), ("slow", CheckOutcome::Passed)]
+    );
+}

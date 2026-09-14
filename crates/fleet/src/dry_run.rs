@@ -13,6 +13,12 @@
 //! | A refusal while one runs | Two builds in one worktree |
 //! | [`DryRuns`], per step | Ask, change a line, ask again, for the whole step |
 //! | A step that ends mid-run | A report on whatever follows; its Checks stop |
+//! | A Check that fails | The rest of the run; the Drone hears the failure at once |
+//!
+//! **A turn per result, and the report is the last** (#1062). [`landed`] tells
+//! each one that lands while others still run.
+
+mod landed;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -26,11 +32,13 @@ use core_model::{
     Attempt, Component, Envelope, FieldValue, Job, JobId, Level, ResolvedCheck, StepId, TaskCounts,
 };
 use ipc::mcp::{CheckRan, CheckReport};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
 use verification::Ran;
 
 use crate::check_output;
 use crate::checking::Stop;
+use crate::underway::{stopped_by, Announcing, Landed};
 use crate::daemon::Fleet;
 use crate::session::{LiveSession, Occasion};
 use crate::working::Working;
@@ -145,17 +153,27 @@ impl ChecksRunning {
     }
 }
 
-/// The later turn a run's report arrives as, built from the run and nothing else.
+/// What every turn about the Checks a Drone asked for opens with.
+const HEADING: &str = "THE CHECKS YOU ASKED FOR";
+
+/// A later turn about a run, built from the run and nothing else: a result
+/// that landed, or the report that ends it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChecksReported(String);
 
 impl ChecksReported {
     fn of(ran: &Result<CheckReport, String>) -> ChecksReported {
-        const HEADING: &str = "THE CHECKS YOU ASKED FOR";
         ChecksReported(match ran {
-            Ok(report) => {
-                format!("{HEADING}\n\nThey have finished. This is what each one did:\n\n{report}")
-            }
+            Ok(report) => match report.ran.iter().find_map(|row| row.stopped.as_deref()) {
+                None => {
+                    format!("{HEADING}\n\nThe run is over. This is what each one did:\n\n{report}")
+                }
+                Some(failed) => format!(
+                    "{HEADING}\n\nThe run is over: `{failed}` did not pass, so the checks still \
+                     going were stopped rather than finished. Fix it and ask again. This is \
+                     what each one did:\n\n{report}"
+                ),
+            },
             Err(cause) => format!(
                 "{HEADING}\n\nThey ran, and no report could be made of them: {cause}. \
                  This is a fault in Fleet and not in your work. Ask again, or submit \
@@ -365,13 +383,24 @@ where
             return Err(why);
         }
         let run = RUNS.fetch_add(1, Ordering::Relaxed);
-        let (going, stop) = Stop::when_dropped();
+        let (going, stop) = Stop::when_dropped_or_one_fails();
         at_work.checking(self.now(), run, going);
         let fleet = Arc::clone(self);
         let caller = caller.clone();
         Ok(ChecksRunning(tokio::spawn(async move {
-            let ran = fleet.dry_run(&plan, &read, &stop).await;
-            fleet.dry_run_ends(&caller, &plan, run, ran).await
+            let (heard, hearing) = tokio::sync::mpsc::unbounded_channel();
+            // A narrowed run's durations are its narrower commands', not the Checks'.
+            let showing = fleet.announcing_dry_run(
+                &plan.record,
+                &plan.step,
+                read.attempt,
+                heard,
+                !read.narrow,
+            );
+            let ran = fleet
+                .dry_run(&caller, run, &plan, &read, &stop, &showing, hearing)
+                .await;
+            fleet.dry_run_ends(&caller, &plan, run, ran, showing).await
         })))
     }
 
@@ -381,16 +410,19 @@ where
     /// **What the run found is kept here too, on the same guard, and nowhere
     /// else.** `at_work.checked(now, run)` is the one place this run is known
     /// to be the one the slot is still waiting on: a submission, a kill or a
-    /// step boundary already cleared it and answers `false`, and a stopped
-    /// run's own `ran` is an `Err` in any case — `crate::checking::Stop`
-    /// cannot finish a batch it cut short. Neither road keeps anything.
+    /// step boundary already cleared it and answers `false`, and keeps nothing.
+    /// A run its own first failure stopped does finish, and `KeptDryRun::of`
+    /// keeps only what passed, so a Check it stopped is never reused (#1014).
     async fn dry_run_ends(
         &self,
         caller: &JobId,
         plan: &Plan,
         run: u64,
         ran: Result<(CheckReport, crate::reuse::KeptDryRun), String>,
+        showing: Announcing,
     ) -> Option<Result<CheckReport, String>> {
+        // Whether or not the step still waits: what ran to a code was measured.
+        self.kept_timings(&plan.record, showing.timings()).await;
         let now = self.now();
         let slot = self.slot_of(caller).await?;
         let mut working = slot.lock().await;
@@ -407,6 +439,7 @@ where
         if let Some(kept) = kept {
             at_work.kept_dry_run(kept);
         }
+        at_work.show_dry_run(showing);
         let told = ChecksReported::of(&ran);
         // Written down before the send, `Fleet::tell`'s order.
         at_work.instructed(Occasion::Checks, told.text());
@@ -425,11 +458,16 @@ where
     /// Drone's; [`crate::reuse::KeptDryRun`] is Fleet's own, and
     /// [`dry_run_ends`](Fleet::dry_run_ends) is what puts it where the gate
     /// can find it — never here, which has no slot to write into.
+    #[allow(clippy::too_many_arguments)]
     async fn dry_run(
         &self,
+        caller: &JobId,
+        run: u64,
         plan: &Plan,
         read: &Readings,
         stop: &Stop,
+        showing: &Announcing,
+        hearing: UnboundedReceiver<Landed>,
     ) -> Result<(CheckReport, crate::reuse::KeptDryRun), String> {
         let Some(declared) = plan.record.workflow().step(&plan.step) else {
             return Err(format!(
@@ -442,16 +480,19 @@ where
         let mut printed = Vec::new();
         let mut took = Vec::with_capacity(declared.checks().len());
         let mut narrowed_to = Vec::with_capacity(declared.checks().len());
-        for done in crate::checking::ran(
+        let mut stopped = Vec::with_capacity(declared.checks().len());
+        // Fastest first, by this repository's past runs. #1062.
+        let room = self.checks_room_for(&plan.record).await;
+        let running = crate::checking::ran(
             declared.checks(),
             &read.touched,
             read.moved,
             read.narrow,
             Path::new(plan.worktree.path()),
             self.budget().duration(),
-            &self.room(),
-            // Not a gate a person is watching, so no live log beside the gate's.
-            &crate::underway::Announcing::nowhere(),
+            &room,
+            // Shown as the Drone's own run, with no live log beside the gate's.
+            showing,
             &read.ports,
             &read.port_env,
             read.tasks,
@@ -463,12 +504,12 @@ where
             None,
             read.attempt,
             None,
-        )
-        .await
-        {
+        );
+        for done in self.heard_while(caller, run, running, hearing).await {
             observed.push(done.observed);
             took.push(done.took);
             narrowed_to.push(done.narrowed_to);
+            stopped.push(done.stopped);
             if let Some(pair) = done.printed {
                 printed.push(pair);
             }
@@ -504,20 +545,23 @@ where
                 .into_iter()
                 .enumerate()
                 .map(|(at, row)| {
-                    // `#737`: the tail rides on a row that did not advance.
-                    let output = (!row.outcome.advances())
+                    let stopped = stopped.get(at).cloned().flatten();
+                    // `#737`: the tail rides on a row that did not advance, and
+                    // not on one a failure stopped, which has nothing to explain.
+                    let output = (stopped.is_none() && !row.outcome.advances())
                         .then(|| printed.iter().find(|(name, _)| *name == row.name))
                         .flatten()
                         .map(|(_, printed)| check_output::excerpt(printed));
                     CheckRan {
                         name: row.name,
                         outcome: row.outcome.into(),
-                        detail: row.produced,
+                        detail: stopped.as_deref().map(stopped_by).or(row.produced),
                         took: took.get(at).copied().unwrap_or(Duration::ZERO),
                         log: row.output_path,
                         // The command that ran, where it was not the Check's own.
                         narrowed_to: narrowed_to.get(at).cloned().flatten(),
                         output,
+                        stopped,
                     }
                 })
                 .collect(),

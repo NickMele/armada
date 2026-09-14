@@ -525,27 +525,39 @@ more". `fleet::PeersChanged` is the one constructor. Its own `Occasion`,
 
 ## The checks report
 
-Fires when the Checks a Drone asked for have finished (#1020). The call that
-asked answers at once, because a build outlasts what the agent CLI waits on one
-tool call, and what each Check did arrives as this turn.
+Fires as the Checks a Drone asked for land (#1020, #1062). The call that asked
+answers at once, because a build outlasts what the agent CLI waits on one tool
+call. A result that lands while others still run is a short turn of its own;
+the last turn is the report, and says the run is over. The first command that
+fails stops the rest, and the report names it.
 
 **Only while the part is still going.** A submission, a kill or a Drone gone
 stops the run, and whatever follows is told nothing about it.
 
-**Fleet's own report.** `fleet::ChecksReported` is the one constructor, built
-from the run and nothing else. Its own `Occasion`, `Checks`.
+**Fleet's own report.** `fleet::ChecksReported` is the one constructor for both
+turns, built from the run and nothing else. Its own `Occasion`, `Checks`.
 
 **Drafted wording. Not sanctioned.**
 
 ```
 ┌─ THE CHECKS YOU ASKED FOR ─────────────────────
-│ They have finished. This is what each one did:
+│ `build` passed in 12.3s. Still going: `test`,
+│ `storybook`. Each result arrives as its own
+│ turn, and the last one says the run is over.
+└────────────────────────────────────────────────
+
+┌─ THE CHECKS YOU ASKED FOR ─────────────────────
+│ The run is over. This is what each one did:
 │
 │ (one row per Check: what it did, how long it
 │ took, and where its Check log is — then the
 │ sentence saying this is not a verdict)
 └────────────────────────────────────────────────
 ```
+
+**Stopped at a failure**, the report opens by naming the Check that did not
+pass and saying the ones still going were stopped rather than finished, and
+each stopped row says which Check stopped it.
 
 ## The fix report
 

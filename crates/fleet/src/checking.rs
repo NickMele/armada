@@ -9,12 +9,16 @@
 //! written into its own slot, skips included, which makes the order of the
 //! report a property of the type rather than of the scheduler.
 //!
-//! # Each Check keeps its own budget, and nothing stops early
+//! # Each Check keeps its own budget, and only a Drone's run stops early
 //!
 //! `checks_runner::run` holds the timeout, given whole per call rather than
-//! shared over the batch — a false failure moves when the machine is busy. A
-//! failing Check cancels none of the others; the second failure often explains
-//! the first.
+//! shared over the batch — a false failure moves when the machine is busy. At
+//! the gate a failing Check cancels none of the others; the second failure
+//! often explains the first. A Drone's own run stops at its first failed
+//! command, because the Drone will fix that and ask again (#1062).
+//!
+//! **Started fastest first, reported in the step's order.** [`Room`] carries
+//! the repository's past durations; each result still lands in its own slot.
 //!
 //! **Over 500 lines.** `ports` and `env` thread through both halves already
 //! here, for `docs/concepts/manifest.md`'s Ports section: it reaches every
@@ -34,6 +38,7 @@ use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
 
 use crate::headroom::{Bytes, Headroom, Machine, Reading, Spare};
+use crate::ordering::Past;
 use crate::ports::resolve_ports;
 use crate::reuse::{self, KeptDryRun};
 use crate::underway::Announcing;
@@ -41,7 +46,12 @@ use crate::underway::Announcing;
 /// What ends a batch's commands before their budget does: each one's whole
 /// group, through the runner's own stop. The gate's and a proof's never fire.
 #[derive(Clone, Debug)]
-pub(crate) struct Stop(Option<tokio::sync::watch::Receiver<()>>);
+pub(crate) struct Stop {
+    watched: Option<tokio::sync::watch::Receiver<()>>,
+    /// Whether the batch's first failed command stops the rest. **Only
+    /// [`Stop::when_dropped_or_one_fails`] sets it**, and no gate builds one.
+    at_first_failure: bool,
+}
 
 /// Holding this keeps a batch going. Dropped, every command in it is stopped.
 #[derive(Debug)]
@@ -51,17 +61,35 @@ pub(crate) struct Going {
 
 impl Stop {
     pub(crate) fn never() -> Stop {
-        Stop(None)
+        Stop {
+            watched: None,
+            at_first_failure: false,
+        }
     }
 
     /// A stop that fires when the [`Going`] beside it is dropped. #1020.
     pub(crate) fn when_dropped() -> (Going, Stop) {
         let (going, watched) = tokio::sync::watch::channel(());
-        (Going { _going: going }, Stop(Some(watched)))
+        let stop = Stop {
+            watched: Some(watched),
+            at_first_failure: false,
+        };
+        (Going { _going: going }, stop)
+    }
+
+    /// [`Stop::when_dropped`], and the first failed command stops the rest too:
+    /// a Drone's own run, which will fix that and ask again. #1062.
+    pub(crate) fn when_dropped_or_one_fails() -> (Going, Stop) {
+        let (going, stop) = Stop::when_dropped();
+        let stop = Stop {
+            at_first_failure: true,
+            ..stop
+        };
+        (going, stop)
     }
 
     async fn stopped(mut self) {
-        match &mut self.0 {
+        match &mut self.watched {
             None => std::future::pending().await,
             // Nothing is ever sent, so this returns only once the sender is gone.
             Some(watched) => while watched.changed().await.is_ok() {},
@@ -100,6 +128,8 @@ pub struct Room {
     at_once: ChecksAtOnce,
     machine: Arc<dyn Machine>,
     headroom: Headroom,
+    /// How long each Check took before, which decides which starts first.
+    past: Past,
 }
 
 impl Room {
@@ -108,7 +138,14 @@ impl Room {
             at_once,
             machine,
             headroom,
+            past: Past::default(),
         }
+    }
+
+    /// The same room, starting the Checks this repository has timed fastest
+    /// first. #1062.
+    pub(crate) fn knowing(self, past: Past) -> Room {
+        Room { past, ..self }
     }
 
     /// Bounded by `at_once` and nothing else: the machine is never read. For a
@@ -245,6 +282,9 @@ pub(crate) struct Completed {
     pub printed: Option<(String, Output)>,
     /// How long this Check took on its own — not its share of the batch.
     pub took: Duration,
+    /// The command whose failure stopped this Check before it finished, on a
+    /// Drone's run. `None` for every Check that ran its course.
+    pub stopped: Option<String>,
 }
 
 /// What is known about one Check before anything is spawned.
@@ -524,7 +564,7 @@ pub(crate) async fn ran(
     }
 
     let mut done: Vec<Option<(RunAttempt, Duration)>> = planned.iter().map(|_| None).collect();
-    let mut queued = planned
+    let queued = planned
         .iter()
         .enumerate()
         .filter_map(|(at, plan)| match plan {
@@ -539,7 +579,8 @@ pub(crate) async fn ran(
             )),
             Planned::Already(_) | Planned::Blocked { .. } => None,
         })
-        .collect::<VecDeque<(usize, String)>>();
+        .collect::<Vec<(usize, String)>>();
+    let mut queued: VecDeque<(usize, String)> = room.past.fastest_first(queued, checks);
     let worktree = worktree.to_path_buf();
     // Owned, so each spawned Check can move its own copy — the env slice this
     // function borrows does not outlive the batch, and a spawned future must.
@@ -548,9 +589,22 @@ pub(crate) async fn ran(
     // the slowest member of it, and a step whose Checks are 17s and 1s would
     // spend the fast slot idle for sixteen of them. **Room is asked before each
     // one after the first**, so a short machine waits for a finish, not a batch.
+    // **A Drone's run drops `halting` at its first failure**, which stops every
+    // command still running, and nothing queued starts after it. A
+    // prerequisite that broke is that failure before anything spawns.
+    let (halting, halted) = Stop::when_dropped();
+    let mut halting = Some(halting);
+    let mut failed_first = stop
+        .at_first_failure
+        .then(|| not_met.as_ref().map(|failed| failed.command.clone()))
+        .flatten();
+    if failed_first.is_some() {
+        halting = None;
+    }
+    let mut stopped = vec![false; planned.len()];
     let mut running: JoinSet<(usize, RunAttempt, Duration)> = JoinSet::new();
     loop {
-        while !queued.is_empty() && room.for_another(running.len()).await {
+        while halting.is_some() && !queued.is_empty() && room.for_another(running.len()).await {
             let Some((at, run)) = queued.pop_front() else {
                 break;
             };
@@ -559,15 +613,22 @@ pub(crate) async fn ran(
             let log = announcing.log_for(at);
             let writing = log.clone();
             let stop = stop.clone();
+            let halted = halted.clone();
             running.spawn(async move {
                 let began = Instant::now();
+                let ended = async move {
+                    tokio::select! {
+                        () = stop.stopped() => {}
+                        () = halted.stopped() => {}
+                    }
+                };
                 let attempt = checks_runner::run_until(
                     &run,
                     &worktree,
                     budget,
                     writing.as_deref().map_or(Writing::Nowhere, Writing::Fresh),
                     &env,
-                    stop.stopped(),
+                    ended,
                 )
                 .await;
                 (at, attempt, began.elapsed())
@@ -578,13 +639,48 @@ pub(crate) async fn ran(
             break;
         };
         if let Ok((at, attempt, took)) = joined {
-            announcing.finished(
-                at,
-                &checks[at],
-                &Observed::Command(attempt.exit.clone()),
-                took,
-            );
+            let observed = Observed::Command(attempt.exit.clone());
+            // Ended by the halt rather than by its own answer.
+            let cut = failed_first
+                .clone()
+                .filter(|_| matches!(attempt.exit, Exit::Signalled { .. }));
+            match cut {
+                Some(first) => {
+                    stopped[at] = true;
+                    announcing.stopped(at, &checks[at], &observed, took, &first);
+                }
+                None => {
+                    announcing.finished(at, &checks[at], &observed, took);
+                    if stop.at_first_failure
+                        && failed_first.is_none()
+                        && !advances(&checks[at], &observed)
+                    {
+                        failed_first = Some(checks[at].label().to_string());
+                        halting = None;
+                    }
+                }
+            }
             done[at] = Some((attempt, took));
+            // A result that does not end the run is heard now; the last is the report.
+            if failed_first.is_none() && !(queued.is_empty() && running.is_empty()) {
+                announcing.landed(at);
+            }
+        }
+    }
+    // What a failure stopped before it ever started.
+    if let Some(first) = &failed_first {
+        for (at, run) in queued.drain(..) {
+            let attempt = RunAttempt {
+                exit: Exit::NeverRan(NeverRan::NotSpawned {
+                    program: run,
+                    kind: std::io::ErrorKind::Interrupted,
+                }),
+                output: Output::default(),
+            };
+            let observed = Observed::Command(attempt.exit.clone());
+            announcing.stopped(at, &checks[at], &observed, Duration::ZERO, first);
+            stopped[at] = true;
+            done[at] = Some((attempt, Duration::ZERO));
         }
     }
 
@@ -596,6 +692,7 @@ pub(crate) async fn ran(
                 narrowed_to: None,
                 printed: None,
                 took: Duration::ZERO,
+                stopped: None,
             },
             // **The prerequisite's output, filed under the Check's name.** It
             // is the only output there is — the Check ran nothing — and the
@@ -608,6 +705,7 @@ pub(crate) async fn ran(
                 narrowed_to: None,
                 printed: not_met.as_ref().map(|failed| (name, failed.output.clone())),
                 took: Duration::ZERO,
+                stopped: None,
             },
             Planned::Command {
                 name,
@@ -619,6 +717,7 @@ pub(crate) async fn ran(
                     narrowed_to,
                     printed: Some((name, attempt.output)),
                     took,
+                    stopped: stopped[at].then(|| failed_first.clone()).flatten(),
                 },
                 // The task was cancelled or it panicked, and neither is a
                 // reachable state for a runner that returns an `Exit` for every
@@ -639,10 +738,19 @@ pub(crate) async fn ran(
                         narrowed_to,
                         printed: Some((name, Output::default())),
                         took: Duration::ZERO,
+                        stopped: None,
                     }
                 }
             },
         });
     }
     completed
+}
+
+/// Whether this answer lets a step through, as the gate would record it.
+fn advances(check: &ResolvedCheck, observed: &Observed) -> bool {
+    verification::Ran::against(std::slice::from_ref(check), std::slice::from_ref(observed))
+        .ok()
+        .and_then(|ran| ran.recorded().first().map(|row| row.outcome.advances()))
+        .unwrap_or(false)
 }

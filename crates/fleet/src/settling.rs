@@ -272,7 +272,7 @@ where
             &recorded,
             self.work(),
             self.budget(),
-            &self.room(),
+            &self.checks_room_for(&job).await,
             &judging,
             &Keeping::of(served.records_root(), &job.handle()),
             self.gating_policies(&served),
@@ -299,6 +299,7 @@ where
         // never written down is a verdict with no trace.
         self.recorded_checks(&job_id, &job.handle(), &step, attempt, &ruling)
             .await?;
+        self.kept_timings(&job, announcing.timings()).await;
         drop(announcing);
         // And into the step's own transcript, in Fleet's voice. **A Drone never
         // runs a Check** — that is the point of them — so nothing mechanical

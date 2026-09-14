@@ -31,6 +31,7 @@ mod narrowing;
 mod offering;
 mod refusing;
 mod report;
+mod streaming;
 mod waiting;
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -235,7 +236,13 @@ async fn asking(app: &Router, fleet: &Fixture, home: &TempDir, only_what_changed
     );
     for _ in 0..2_000 {
         let told = told_checks(fleet, home, &job, &drone).await;
-        if let Some(text) = told.into_iter().nth(before) {
+        // The report is the run's last turn; a result that landed while others
+        // still ran is a turn of its own before it (#1062).
+        if let Some(text) = told
+            .into_iter()
+            .skip(before)
+            .find(|turn| !turn.contains("Still going: "))
+        {
             return Said {
                 text,
                 is_error: false,

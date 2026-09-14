@@ -2252,6 +2252,21 @@ It names which call of how many, because one step is several calls: criteria tim
 Unlike `job.files_changed` it does not ask whether anybody is watching. That one declines because producing the value is a repository read; this value is already in hand when the call goes out, so there is nothing to decline and a publish nobody is subscribed to is a free drop.
 """
 
+[operations."job.dry_run"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "One of the Checks a Drone asked for mid-step starts or finishes, or its run is no longer shown"
+notes = """
+A Drone's own run was invisible: a build and a test suite ran for minutes on its behalf, and Job detail showed nothing until the Drone said what they came to. `#1062` is that.
+
+`job.checking`'s shape exactly, as a kind of its own rather than a flag on that one, so a Bridge that does not know it keeps drawing the gate as the gate. The set rides beside the state as `StepDetail.dry_run`, and `checking` stays the gate's alone.
+
+Shown from the run's start until the Drone asks again, submits or the step ends, so a result that landed is still there to read once the run is over. The last message carries nothing.
+
+**A view of the run, not a record of it.** Nothing published here is stored, and the gate reads none of it.
+"""
+
 [operations."job.checking"]
 kind = "event"
 transport = "WebSocket"

@@ -87,6 +87,9 @@ pub struct CheckRan {
     /// The tail of what this Check printed, where it did not advance. See
     /// [`CheckExcerpt`] for why a pass never carries one.
     pub output: Option<CheckExcerpt>,
+    /// The Check whose failure stopped this one before it finished. `None` for
+    /// a Check that ran its course. #1062.
+    pub stopped: Option<String>,
 }
 
 /// Every Check the step declares, with what each one did.
@@ -106,18 +109,20 @@ pub struct CheckReport {
     pub narrowed: bool,
 }
 
-/// That the Checks have started, which is all `run_checks` answers. The
-/// [`CheckReport`] arrives as a later turn, once they finish. `#1020`.
+/// That the Checks have started, which is all `run_checks` answers. Each result
+/// is a later turn as it lands, and the [`CheckReport`] is the last. `#1020`,
+/// `#1062`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ChecksStarted;
 
 impl ChecksStarted {
     /// What the Drone reads as the tool's answer.
     pub fn said(&self) -> &'static str {
-        "started. The checks are running, and what each one did arrives as a later \
-         turn once they finish, however long they take. Wait for it rather than \
-         running the checks yourself. Submitting before it arrives stops them, and \
-         then no report comes."
+        "started. The checks are running, and each one's result arrives as a later \
+         turn as it finishes, however long they take; the last turn says the run is \
+         over. The first check that fails stops the rest, so a broken build reaches \
+         you at once. Wait for the turns rather than running the checks yourself. \
+         Submitting before the last one arrives stops them, and then no report comes."
     }
 }
 
@@ -131,7 +136,16 @@ impl CheckReport {
     pub fn failed(&self) -> usize {
         self.ran
             .iter()
-            .filter(|check| !check.outcome.domain().advances())
+            .filter(|check| check.stopped.is_none() && !check.outcome.domain().advances())
+            .count()
+    }
+
+    /// How many a failure stopped before they finished. **Not among the
+    /// failed**: nothing is known of them yet.
+    pub fn stopped(&self) -> usize {
+        self.ran
+            .iter()
+            .filter(|check| check.stopped.is_some())
             .count()
     }
 
@@ -248,6 +262,13 @@ impl fmt::Display for CheckReport {
                 "{failed} of {total} did not pass. {skipped} cover paths this step \
                  did not touch and were not run."
             )?,
+        }
+        let stopped = self.stopped();
+        if stopped > 0 {
+            writeln!(
+                out,
+                "{stopped} were stopped before they finished, and say nothing either way."
+            )?;
         }
         match self.narrowed {
             true => write!(out, "\n{NARROWED}"),

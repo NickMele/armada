@@ -177,7 +177,7 @@ where
             &recorded,
             self.work(),
             self.budget(),
-            &self.room(),
+            &self.checks_room_for(&job).await,
             &judging,
             &Keeping::of(served.records_root(), &job.handle()),
             // Read now rather than carried from the first gating: a re-gate is
@@ -196,6 +196,7 @@ where
 
         self.recorded_checks(job_id, &job.handle(), &step, attempt, &ruling)
             .await?;
+        self.kept_timings(&job, announcing.timings()).await;
         drop(announcing);
         self.recorded_judgments(job_id, &step, &ruling).await?;
         self.recorded_evidence(job_id, &step, &submission, &ruling)

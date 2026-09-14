@@ -24,11 +24,13 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use core_model::{Attempt, ResolvedCheck};
-use verification::{Observed, Ran};
+use tokio::sync::mpsc::UnboundedSender;
+use verification::{Exit, Observed, Ran};
 
 use crate::clock::Clock;
 
@@ -41,9 +43,41 @@ use crate::clock::Clock;
 /// A `std::sync::Mutex`: it is never held across an `.await`, and what it
 /// guards is written twice per Check.
 #[derive(Clone, Default)]
-pub struct Underway(Arc<Mutex<BTreeMap<ipc::JobId, Running>>>);
+pub struct Underway(Arc<Mutex<Held>>);
 
-/// One gate's Checks, and the file each is writing its log to.
+/// Gates and Drones' own runs apart, so neither's entry takes the other's down
+/// and a Drone's run never reads as the gate's. #1062.
+#[derive(Default)]
+struct Held {
+    gates: BTreeMap<ipc::JobId, Running>,
+    dry_runs: BTreeMap<ipc::JobId, Running>,
+}
+
+impl Held {
+    fn whose(&self, whose: Whose) -> &BTreeMap<ipc::JobId, Running> {
+        match whose {
+            Whose::Gate => &self.gates,
+            Whose::DryRun => &self.dry_runs,
+        }
+    }
+
+    fn whose_mut(&mut self, whose: Whose) -> &mut BTreeMap<ipc::JobId, Running> {
+        match whose {
+            Whose::Gate => &mut self.gates,
+            Whose::DryRun => &mut self.dry_runs,
+        }
+    }
+}
+
+/// Whose run an entry is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Whose {
+    Gate,
+    /// A Drone's own mid-step run, which writes no live log and rules nothing.
+    DryRun,
+}
+
+/// One run's Checks, and the file each is writing its log to.
 #[derive(Clone)]
 struct Running {
     step: ipc::StepId,
@@ -51,7 +85,21 @@ struct Running {
     /// By position in the step's declaration. **The allowlist for a live
     /// log**: a name resolves to a file only through an entry here.
     files: Vec<Option<PathBuf>>,
+    /// Which writer put this entry up, so one dropped late takes down only its own.
+    token: u64,
 }
+
+/// One Check's result, landed while a Drone's run still has others going. #1062.
+#[derive(Clone, Debug)]
+pub(crate) struct Landed {
+    pub name: String,
+    pub ran: Option<ipc::CheckRun>,
+    pub took: Duration,
+    /// Every Check still running or waiting, in the step's order.
+    pub still: Vec<String>,
+}
+
+static TOKENS: AtomicU64 = AtomicU64::new(0);
 
 /// A live log a name resolved to, and whose it is.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -70,7 +118,19 @@ impl Underway {
     /// `Aloft::on`'s reason.
     pub(crate) fn on(&self, job: &ipc::JobId, step: &ipc::StepId) -> Option<ipc::ChecksUnderway> {
         let held = self.0.lock().ok()?;
-        let running = held.get(job)?;
+        let running = held.gates.get(job)?;
+        (&running.step == step).then(|| running.checks.clone())
+    }
+
+    /// The Drone's own run of this step's Checks, from its start until the
+    /// step moves on or the Drone asks again. `on`'s terms otherwise. #1062.
+    pub(crate) fn dry_run_on(
+        &self,
+        job: &ipc::JobId,
+        step: &ipc::StepId,
+    ) -> Option<ipc::ChecksUnderway> {
+        let held = self.0.lock().ok()?;
+        let running = held.dry_runs.get(job)?;
         (&running.step == step).then(|| running.checks.clone())
     }
 
@@ -79,7 +139,7 @@ impl Underway {
     /// what keeps a caller's word from reaching any other file.
     pub(crate) fn log(&self, job: &ipc::JobId, kept: &str) -> Option<LiveLog> {
         let held = self.0.lock().ok()?;
-        let running = held.get(job)?;
+        let running = held.gates.get(job)?;
         let at = running.checks.checks.iter().position(|check| {
             check
                 .output_path
@@ -103,7 +163,7 @@ impl Underway {
         let Ok(held) = self.0.lock() else {
             return false;
         };
-        held.get(job).is_some_and(|running| {
+        held.gates.get(job).is_some_and(|running| {
             running.checks.checks.iter().any(|check| {
                 check.ran.is_none()
                     && check
@@ -136,6 +196,13 @@ struct Bound {
     /// artifact) and the Job's handle. `None` writes no log and still reports
     /// every start and finish.
     logs: Option<(String, String)>,
+    whose: Whose,
+    token: u64,
+    /// Told each result that lands while a Drone's run goes on. `None` at a gate.
+    hearing: Option<UnboundedSender<Landed>>,
+    /// Each command that ran to an exit code, and how long it took. `None`
+    /// where the run's durations are not the Checks' own, as a narrowed run's.
+    timed: Option<Mutex<Vec<(String, Duration)>>>,
 }
 
 impl Announcing {
@@ -160,6 +227,39 @@ impl Announcing {
             events,
             clock,
             logs: Some((records_root.to_string(), handle.to_string())),
+            whose: Whose::Gate,
+            token: TOKENS.fetch_add(1, Ordering::Relaxed),
+            hearing: None,
+            timed: Some(Mutex::new(Vec::new())),
+        }))
+    }
+
+    /// A Drone's own run: its own entry and event, never the gate's, with no
+    /// live logs, and `hearing` told each result that lands while others go
+    /// on. `whole` is whether its durations are kept. #1062.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn dry_run(
+        job: ipc::JobId,
+        step: core_model::StepId,
+        attempt: Attempt,
+        underway: Underway,
+        events: api::Broadcaster,
+        clock: Arc<dyn Clock>,
+        hearing: UnboundedSender<Landed>,
+        whole: bool,
+    ) -> Announcing {
+        Announcing(Some(Bound {
+            job,
+            step,
+            attempt,
+            underway,
+            events,
+            clock,
+            logs: None,
+            whose: Whose::DryRun,
+            token: TOKENS.fetch_add(1, Ordering::Relaxed),
+            hearing: Some(hearing),
+            timed: whole.then(|| Mutex::new(Vec::new())),
         }))
     }
 
@@ -198,10 +298,12 @@ impl Announcing {
                 checks: entries,
             },
             files: vec![None; checks.len()],
+            token: bound.token,
         };
         let checking = running.checks.clone();
         if let Ok(mut held) = bound.underway.0.lock() {
-            held.insert(bound.job.clone(), running);
+            held.whose_mut(bound.whose)
+                .insert(bound.job.clone(), running);
         }
         published(bound, Some(checking));
     }
@@ -246,11 +348,84 @@ impl Announcing {
         took: Duration,
     ) {
         let Some(bound) = self.0.as_ref() else { return };
+        if let (Some(timed), Observed::Command(Exit::Code(_))) = (&bound.timed, observed) {
+            if let Ok(mut timed) = timed.lock() {
+                timed.push((check.label().to_string(), took));
+            }
+        }
         let ran = row(bound.attempt.number(), check, observed);
         self.moved(bound, at, |held, _| {
             held.took_ms = Some(took.as_millis() as u64);
             held.ran = ran;
         });
+    }
+
+    /// The Check at `at` was stopped because `because` failed first, so its
+    /// row says that rather than how the stop ended it. #1062.
+    pub(crate) fn stopped(
+        &self,
+        at: usize,
+        check: &ResolvedCheck,
+        observed: &Observed,
+        took: Duration,
+        because: &str,
+    ) {
+        let Some(bound) = self.0.as_ref() else { return };
+        let ran = row(bound.attempt.number(), check, observed).map(|run| ipc::CheckRun {
+            produced: Some(stopped_by(because)),
+            ..run
+        });
+        self.moved(bound, at, |held, _| {
+            held.took_ms = Some(took.as_millis() as u64);
+            held.ran = ran;
+        });
+    }
+
+    /// The Check at `at` has finished and the run goes on: tell whoever is
+    /// hearing, with what is still going. Nothing at a gate.
+    pub(crate) fn landed(&self, at: usize) {
+        let Some(bound) = self.0.as_ref() else { return };
+        let Some(hearing) = bound.hearing.as_ref() else {
+            return;
+        };
+        let landed = {
+            let Ok(held) = bound.underway.0.lock() else {
+                return;
+            };
+            let Some(running) = held
+                .whose(bound.whose)
+                .get(&bound.job)
+                .filter(|running| running.token == bound.token)
+            else {
+                return;
+            };
+            let Some(check) = running.checks.checks.get(at) else {
+                return;
+            };
+            Landed {
+                name: check.name.clone(),
+                ran: check.ran.clone(),
+                took: Duration::from_millis(check.took_ms.unwrap_or(0)),
+                still: running
+                    .checks
+                    .checks
+                    .iter()
+                    .filter(|one| one.ran.is_none())
+                    .map(|one| one.name.clone())
+                    .collect(),
+            }
+        };
+        let _ = hearing.send(landed);
+    }
+
+    /// Each command that ran to an exit code and how long it took, in the
+    /// order they finished. Empty where this run's durations are not kept.
+    pub(crate) fn timings(&self) -> Vec<(String, Duration)> {
+        self.0
+            .as_ref()
+            .and_then(|bound| bound.timed.as_ref())
+            .and_then(|timed| timed.lock().ok().map(|held| held.clone()))
+            .unwrap_or_default()
     }
 
     /// Change one entry under the lock, then say so with the lock released.
@@ -264,7 +439,11 @@ impl Announcing {
             let Ok(mut held) = bound.underway.0.lock() else {
                 return;
             };
-            let Some(running) = held.get_mut(&bound.job) else {
+            let Some(running) = held
+                .whose_mut(bound.whose)
+                .get_mut(&bound.job)
+                .filter(|running| running.token == bound.token)
+            else {
                 return;
             };
             let Some(check) = running.checks.checks.get_mut(at) else {
@@ -283,12 +462,13 @@ impl Drop for Announcing {
     /// reaching a Check published nothing going up.
     fn drop(&mut self) {
         let Some(bound) = self.0.as_ref() else { return };
-        let was = bound
-            .underway
-            .0
-            .lock()
-            .ok()
-            .and_then(|mut held| held.remove(&bound.job));
+        let was = bound.underway.0.lock().ok().and_then(|mut held| {
+            let entries = held.whose_mut(bound.whose);
+            let mine = entries
+                .get(&bound.job)
+                .is_some_and(|running| running.token == bound.token);
+            mine.then(|| entries.remove(&bound.job)).flatten()
+        });
         if was.is_some() {
             published(bound, None);
         }
@@ -305,14 +485,30 @@ fn row(attempt: u32, check: &ResolvedCheck, observed: &Observed) -> Option<ipc::
         .map(|recorded| ipc::CheckRun::of(attempt, recorded))
 }
 
+/// What a Check a failure stopped says in place of how it ended. #1062.
+pub(crate) fn stopped_by(because: &str) -> String {
+    format!("stopped when `{because}` did not pass")
+}
+
 fn published(bound: &Bound, checking: Option<ipc::ChecksUnderway>) {
-    bound
-        .events
-        .publish(ipc::Event::JobChecking(ipc::JobChecking {
-            job_id: bound.job.clone(),
-            step_id: ipc::StepId::from(&bound.step),
+    let job_id = bound.job.clone();
+    let step_id = ipc::StepId::from(&bound.step);
+    let actor = core_model::Actor::Fleet.into();
+    let at = (&bound.clock.now()).into();
+    bound.events.publish(match bound.whose {
+        Whose::Gate => ipc::Event::JobChecking(ipc::JobChecking {
+            job_id,
+            step_id,
             checking,
-            actor: core_model::Actor::Fleet.into(),
-            at: (&bound.clock.now()).into(),
-        }));
+            actor,
+            at,
+        }),
+        Whose::DryRun => ipc::Event::JobDryRun(ipc::JobDryRun {
+            job_id,
+            step_id,
+            dry_run: checking,
+            actor,
+            at,
+        }),
+    });
 }

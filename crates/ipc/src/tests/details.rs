@@ -36,6 +36,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            dry_run: None,
             returns: 0,
         }],
     );
@@ -57,6 +58,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            dry_run: None,
             returns: 0,
         }],
     );
@@ -91,6 +93,7 @@ fn a_step_with_no_label_reads_as_its_id() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            dry_run: None,
             returns: 0,
         }],
     );
@@ -132,6 +135,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            dry_run: None,
             returns: 0,
         }],
     );
@@ -207,6 +211,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
             verdicts: Vec::new(),
             judging: None,
             checking: None,
+            dry_run: None,
             returns: 0,
         }],
     );
@@ -579,6 +584,7 @@ fn a_gate_running_its_checks_rides_beside_the_state() {
         verdicts: Vec::new(),
         judging: None,
         checking,
+        dry_run: None,
         returns: 0,
     };
 
@@ -631,6 +637,61 @@ fn a_gate_running_its_checks_rides_beside_the_state() {
     });
     let wire = encode(&told).expect("plain data");
     assert!(wire.contains("\"kind\":\"job.checking\""), "{wire}");
+    assert_eq!(
+        decode::<Event>("an event", wire.as_bytes()).expect("it reads back"),
+        told
+    );
+}
+
+/// **A Drone's own run rides as its own field and its own event** (#1062), so a
+/// Bridge that knows only `checking` keeps reading the gate as the gate.
+#[test]
+fn a_drones_own_run_rides_apart_from_the_gates() {
+    use crate::{CheckUnderway, ChecksUnderway, Event, Instant, JobDryRun};
+
+    let job = job();
+    let underway = ChecksUnderway {
+        attempt: 1,
+        checks: vec![CheckUnderway {
+            name: "build".to_string(),
+            started_at: Some(Instant::carried("2026-09-14T09:00:00.000Z")),
+            took_ms: None,
+            ran: None,
+            output_path: None,
+        }],
+    };
+    let facts = StepFacts {
+        step_id: crate::StepId::carried("repro"),
+        label: None,
+        declares: Some(Vec::new()),
+        ran: Vec::new(),
+        judged: Vec::new(),
+        flagged: Vec::new(),
+        deliverables: Vec::new(),
+        frames: Vec::new(),
+        attempts: Vec::new(),
+        verdicts: Vec::new(),
+        judging: None,
+        checking: None,
+        dry_run: Some(underway.clone()),
+        returns: 0,
+    };
+    let detail = encode(&detail_of(&job, &[facts])).expect("plain data");
+    assert!(detail.contains("\"dry_run\":{\"attempt\":1"), "{detail}");
+    assert!(
+        !detail.contains("\"checking\""),
+        "a Drone's run read as the gate's: {detail}"
+    );
+
+    let told = Event::JobDryRun(JobDryRun {
+        job_id: crate::JobId::carried("01JOB"),
+        step_id: crate::StepId::carried("repro"),
+        dry_run: Some(underway),
+        actor: core_model::Actor::Fleet.into(),
+        at: Instant::carried("2026-09-14T09:00:01.000Z"),
+    });
+    let wire = encode(&told).expect("plain data");
+    assert!(wire.contains("\"kind\":\"job.dry_run\""), "{wire}");
     assert_eq!(
         decode::<Event>("an event", wire.as_bytes()).expect("it reads back"),
         told

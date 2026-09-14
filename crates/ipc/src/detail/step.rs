@@ -101,6 +101,9 @@ pub struct StepFacts {
     /// reason and from the same kind of slot. `None` on every step whose gate
     /// is not between starting its Checks and writing its ruling down.
     pub checking: Option<ChecksUnderway>,
+    /// A Drone's own run of the step's Checks, from its start until the Drone
+    /// asks again, submits or the step ends. `checking` stays the gate's. #1062.
+    pub dry_run: Option<ChecksUnderway>,
     /// How many times this step has sent the work back, counted off the log's
     /// `returned_by` column — `store::step_iteration`'s reading, less its one.
     /// Zero on every step of every linear workflow.
@@ -294,6 +297,11 @@ pub struct StepDetail {
     /// "nothing has run it" until they all flipped at once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checking: Option<ChecksUnderway>,
+    /// The Checks the Drone asked for mid-step, **its own run and never the
+    /// gate's**, from their start until it asks again, submits or the step
+    /// ends. Absent is the ordinary case. #1062.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dry_run: Option<ChecksUnderway>,
     /// When the step was entered. Stamped at creation and moved on entering
     /// `running`, so `entered_at` to `updated_at` is how long the step took.
     pub entered_at: Instant,
@@ -433,6 +441,7 @@ impl StepDetail {
                 .unwrap_or_default(),
             judging: facts.and_then(|facts| facts.judging.clone()),
             checking: facts.and_then(|facts| facts.checking.clone()),
+            dry_run: facts.and_then(|facts| facts.dry_run.clone()),
             entered_at: step.entered_at().into(),
             updated_at: step.updated_at().into(),
         }

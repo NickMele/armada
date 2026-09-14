@@ -782,6 +782,11 @@ pub const SERVED: &[Route] = &[
         path: "/events",
     },
     Route {
+        operation: "job.dry_run",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
         operation: "evidence.submitted",
         method: "GET",
         path: "/events",

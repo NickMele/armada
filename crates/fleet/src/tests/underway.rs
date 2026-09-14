@@ -256,3 +256,90 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
     };
     assert_eq!(read(&told), read(&untold));
 }
+
+/// **A Drone's run is its own entry and its own event** (#1062). The gate's
+/// slot stays empty, a Check the first failure stopped says so, only what ran
+/// to a code is timed, and the entry comes down with its writer.
+#[tokio::test]
+async fn a_drones_run_is_shown_apart_from_the_gate_and_stops_at_its_first_failure() {
+    let repo = TempDir::new();
+    let underway = Underway::default();
+    let events = api::Broadcaster::new();
+    let mut heard = events.subscribe();
+    let (hearing, _landed) = tokio::sync::mpsc::unbounded_channel();
+    let announcing = Announcing::dry_run(
+        ipc::JobId::carried(JOB),
+        StepId::new(STEP),
+        Attempt::FIRST,
+        underway.clone(),
+        events.clone(),
+        Arc::new(Stopped),
+        hearing,
+        true,
+    );
+    let (_going, stop) = crate::checking::Stop::when_dropped_or_one_fails();
+    let checks = [named("fails", "/usr/bin/false"), named("slow", "/bin/sleep 5")];
+
+    let began = std::time::Instant::now();
+    let completed = ran(
+        &checks,
+        &[],
+        false,
+        false,
+        repo.path(),
+        Duration::from_secs(30),
+        &Room::ignoring_the_machine(ChecksAtOnce::of(AT_ONCE)),
+        &announcing,
+        &std::collections::BTreeMap::new(),
+        &[],
+        None,
+        &stop,
+        None,
+        Attempt::FIRST,
+        None,
+    )
+    .await;
+    assert!(
+        began.elapsed() < Duration::from_secs(4),
+        "the slow Check was not stopped"
+    );
+    assert!(completed[0].stopped.is_none());
+    assert_eq!(completed[1].stopped.as_deref(), Some("fails"));
+
+    let (job, step) = (ipc::JobId::carried(JOB), ipc::StepId::carried(STEP));
+    assert!(
+        underway.on(&job, &step).is_none(),
+        "a Drone's run read as the gate's"
+    );
+    let shown = underway
+        .dry_run_on(&job, &step)
+        .expect("the Drone's run is shown");
+    assert_eq!(
+        shown.checks[1]
+            .ran
+            .as_ref()
+            .and_then(|run| run.produced.as_deref()),
+        Some("stopped when `fails` did not pass")
+    );
+    let timed: Vec<String> = announcing
+        .timings()
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(timed, ["fails"], "a stopped Check was timed");
+
+    drop(announcing);
+    drop(events);
+    let mut published = Vec::new();
+    while let Some(api::Next::Send(delivered)) = heard.next().await {
+        published.push(matches!(delivered.event, ipc::Event::JobDryRun(_)));
+    }
+    assert!(
+        !published.is_empty() && published.iter().all(|dry| *dry),
+        "a Drone's run was published as the gate's"
+    );
+    assert!(
+        underway.dry_run_on(&job, &step).is_none(),
+        "dropping the writer left the entry up"
+    );
+}
