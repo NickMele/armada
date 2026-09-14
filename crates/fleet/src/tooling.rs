@@ -93,6 +93,20 @@ where
         })
     }
 
+    /// The working Drone leaving another Job's Drone a note. Who may be
+    /// addressed, and how often, are `Fleet::leave_note`'s — `crate::peers`.
+    async fn leave_note(
+        &self,
+        caller: api::Caller,
+        note: ipc::mcp::LeaveNote,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        Fleet::leave_note(self, &job, &note).await?;
+        Ok(Receipt {
+            word: "left".to_string(),
+        })
+    }
+
     /// The Evidence tool, which is what a step's claim arrives through.
     ///
     /// The binding — which Job, which step, which evidence type — is

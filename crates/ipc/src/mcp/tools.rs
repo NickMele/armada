@@ -28,6 +28,7 @@ use serde_json::{json, Map, Value};
 
 use super::ask::{ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 use super::dispatch::{DISPATCH_FIELDS, DISPATCH_TOOL};
+use super::noting::NOTE_TOOL;
 use super::permission::{PERMISSION_FIELDS, PERMISSION_TOOL};
 use super::planning::{
     ADD_TASK_FIELDS, ADD_TASK_TOOL, RECORD_PLAN_FIELDS, RECORD_PLAN_TOOL, UPDATE_TASK_FIELDS,
@@ -160,6 +161,11 @@ pub enum NotAnArgument {
     Blank {
         field: &'static str,
     },
+    /// A text field longer than the tool takes. Refused rather than cut. #1000.
+    TooLong {
+        field: &'static str,
+        most: usize,
+    },
     /// A request for more scope that named no paths. **Refused rather than
     /// taken as a call that did nothing**: the call costs a Judge call and one
     /// is allowed per part, so a request for nothing would spend the only ask
@@ -181,7 +187,7 @@ impl core::fmt::Display for NotAnArgument {
                 out,
                 "there is no tool called `{named}`. The tools are `{TOOL}`, \
                  `{SCOPE_TOOL}`, `{WIDEN_TOOL}`, `{CHECKS_TOOL}`, \
-                 `{SERVER_TOOL}`, `{DISPATCH_TOOL}`, `{ASK_TOOL}`, \
+                 `{SERVER_TOOL}`, `{DISPATCH_TOOL}`, `{ASK_TOOL}`, `{NOTE_TOOL}`, \
                  `{RECORD_PLAN_TOOL}`, `{ADD_TASK_TOOL}` and `{UPDATE_TASK_TOOL}`"
             ),
             NotAnArgument::NoArguments { tool, takes } => write!(
@@ -283,6 +289,11 @@ impl core::fmt::Display for NotAnArgument {
                 out,
                 "`{field}` is empty. It has to say something — call again with \
                  it filled in"
+            ),
+            NotAnArgument::TooLong { field, most } => write!(
+                out,
+                "`{field}` is longer than {most} characters. Say only what the \
+                 reader needs, and call again"
             ),
             NotAnArgument::AskedForNothing => out.write_str(
                 "you asked for no paths. Name the ones the work needs that the \
@@ -415,6 +426,7 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
         SERVER_TOOL => Ok(SERVER_TOOL),
         DISPATCH_TOOL => Ok(DISPATCH_TOOL),
         ASK_TOOL => Ok(ASK_TOOL),
+        NOTE_TOOL => Ok(NOTE_TOOL),
         PERMISSION_TOOL => Ok(PERMISSION_TOOL),
         RECORD_PLAN_TOOL => Ok(RECORD_PLAN_TOOL),
         ADD_TASK_TOOL => Ok(ADD_TASK_TOOL),
@@ -524,6 +536,7 @@ pub(crate) fn listed() -> Vec<Value> {
         super::widening::widen_tool(),
         super::dispatch::dispatch_tool(),
         super::ask::ask_tool(),
+        super::noting::note_tool(),
         super::permission::permission_tool(),
         super::planning::record_plan_tool(),
         super::planning::add_task_tool(),

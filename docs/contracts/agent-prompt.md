@@ -467,9 +467,10 @@ transcript back.
 ## The peer turn
 
 Fires when another unfinished Job in the same repository first claims a path
-this Job claims, or lands a change to one (#998). Either side's claim counts:
-a step's declared plan, or the Job's `write_targets`. A path already
-announced for a pair is not said again.
+this Job claims, lands a change to one (#998), or its Drone leaves this Job a
+note through `leave_note` (#1000). Either side's claim counts: a step's
+declared plan, or the Job's `write_targets`. A path already announced for a
+pair is not said again.
 
 **Queued, then spaced.** News waits until the Drone has gone `fleet::peers::SPACING`
 without a peer turn, and one turn names at most `fleet::peers::AT_MOST` items. Where no
@@ -479,9 +480,14 @@ line says the rebase has already run.
 **It informs and never holds.** Nothing on the dispatch path reads it, for the
 reason `docs/concepts/fleet.md`, Write-scope overlap, gives.
 
-**Fleet's own sentence.** Titles and paths are the only words from elsewhere,
-and both are Armada's record. `fleet::PeersChanged` is the one constructor.
-Its own `Occasion`, `Peers`.
+**Fleet's own sentence, around one kind of outside words.** Titles, handles
+and paths are Armada's record. A note is another Drone's words: every line
+sits behind the `> ` prefix `fleet::remarks::fenced` writes, and the line
+before it says whose words they are. A note is capped at
+`ipc::mcp::MOST_NOTE_CHARS`, one per pair of Jobs per `SPACING`, may only be
+left for a Job sharing a claimed path, and is never counted away into "And N
+more". `fleet::PeersChanged` is the one constructor. Its own `Occasion`,
+`Peers`.
 
 **Drafted wording. Not sanctioned.**
 
@@ -491,17 +497,23 @@ Its own `Occasion`, `Peers`.
 │ this Job changes too. Nothing is stopped, and
 │ nobody waits on you.
 │
-│ - "renumber migrations" has said it will change
+│ - "renumber migrations" (14-renumber-migrations)
+│   has said it will change
 │   `crates/store/src/migrations.rs`.
-│ - "fix the writer" landed, changing
-│   `crates/store/src/write.rs`.
+│ - "fix the writer" (12-fix-the-writer) landed,
+│   changing `crates/store/src/write.rs`.
+│ - "renumber migrations" (14-renumber-migrations)
+│   left this Job a note. These are its Drone's
+│   words, not Armada's:
+│ > I am renumbering migrations, take V64 after me.
 │
 │ What landed reaches your branch when your next
 │ part starts, not now. Where a shared file hands
 │ out the next number or name, such as a migration
 │ or a version, assume theirs takes it first and
-│ take the one after. Carry on with the part you
-│ were given.
+│ take the one after. To tell one of these Jobs
+│ something, call `leave_note` with its handle.
+│ Carry on with the part you were given.
 └────────────────────────────────────────────────
 ```
 

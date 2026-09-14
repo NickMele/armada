@@ -136,6 +136,7 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
         "start_server",
         "dispatch_job",
         "ask_question",
+        "leave_note",
         "permission",
         "record_plan",
         "add_task",
@@ -156,7 +157,7 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
     // nests an object for its options and `dispatch_job`'s nests one for its
     // edges; neither adds an `inputSchema`, because the nested shapes are
     // `items` and `properties`.
-    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 11);
+    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 12);
     assert_eq!(
         answered
             .body
@@ -278,6 +279,25 @@ async fn a_question_is_taken_and_the_receipt_is_not_the_answer() {
     assert_eq!(answered.status, StatusCode::OK);
     assert!(!answered.is_error());
     assert_eq!(answered.text(), "asked");
+}
+
+/// A note arrives with who it is for, and what comes back is a receipt. Who may
+/// be addressed is `fleet::peers`' and is asserted there. #1000.
+#[tokio::test]
+async fn a_note_is_taken_and_names_who_it_was_for() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"leave_note",
+           "arguments":{"to":"12-fix-the-writer","note":"take V64 after me"}}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(!answered.is_error(), "{}", answered.body);
+    assert_eq!(answered.text(), "left for 12-fix-the-writer");
 }
 
 /// **The structure is the requirement, so a shapeless question is refused by

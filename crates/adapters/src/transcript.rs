@@ -229,6 +229,10 @@ fn detail(input: &ToolInput) -> CallDetail {
             None => CallDetail::of(pattern),
         };
     }
+    // `leave_note`: who it was for, then what it said. #1000.
+    if let (Some(to), Some(note)) = (&input.to, &input.note) {
+        return CallDetail::of(&format!("to {to}: {note}"));
+    }
     if let Some(declared) = &input.context_paths {
         return CallDetail::of(&declared_as(declared));
     }
@@ -503,6 +507,11 @@ struct ToolInput {
     /// runs cost very different amounts of a machine**, and a row that named
     /// neither could not tell them apart.
     only_what_changed: Option<bool>,
+    /// `leave_note`: which Job it was left for. #1000.
+    to: Option<String>,
+    /// `leave_note`: what it said. Carried because nothing else keeps a note
+    /// once it has been delivered, so this row is the sender's record of it.
+    note: Option<String>,
 }
 
 #[derive(Deserialize)]

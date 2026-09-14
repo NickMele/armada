@@ -103,6 +103,20 @@ impl Tools for FakeDaemon {
         })
     }
 
+    /// A note taken while a Job is running, answering with who it was for so a
+    /// router test can tell the argument arrived. **Who may be addressed** is
+    /// `fleet::peers`' and is tested there.
+    async fn leave_note(
+        &self,
+        _caller: crate::Caller,
+        note: ipc::mcp::LeaveNote,
+    ) -> Result<Receipt, NotRecorded> {
+        self.while_working("note to be from")?;
+        Ok(Receipt {
+            word: format!("left for {}", note.to),
+        })
+    }
+
     async fn run_checks(
         &self,
         _caller: crate::Caller,

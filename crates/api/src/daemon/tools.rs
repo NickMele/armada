@@ -77,6 +77,19 @@ pub trait Tools: Send + Sync + 'static {
         asking: AskQuestion,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 
+    /// `leave_note` — the working Drone leaves a short note for another Job's
+    /// Drone in the same repository. #1000.
+    ///
+    /// **The receipt says taken**, and the note reaches the other Drone with
+    /// its next peer turn. Bound to a Job the caller never names, for
+    /// [`submit_evidence`](Tools::submit_evidence)'s reason: only the
+    /// addressee is named, and whether it may be is the implementation's.
+    fn leave_note(
+        &self,
+        caller: Caller,
+        note: ipc::mcp::LeaveNote,
+    ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
+
     /// `submit_evidence` — the Evidence tool, called by the Drone that is
     /// working. **Not an inventory operation and not Bridge's**: its caller is
     /// a Drone rather than Bridge, which is why its refusal is [`NotRecorded`]

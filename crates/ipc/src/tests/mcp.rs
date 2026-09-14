@@ -310,6 +310,45 @@ fn a_checks_call_carries_which_of_the_two_runs_was_asked_for() {
     }
 }
 
+/// A note names its addressee and its words, and a note too long to read in one
+/// glance is refused rather than cut. #1000.
+#[test]
+fn a_note_carries_who_it_is_for_and_a_long_one_is_refused() {
+    use crate::mcp::{read, Incoming, LeaveNote, NotAnArgument, MOST_NOTE_CHARS};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"leave_note",
+            "arguments":{"to":" 12-fix-the-writer ","note":"take V64 after me"}}}"#,
+    );
+    assert!(
+        matches!(
+            &called,
+            Incoming::Note { note: LeaveNote { to, note }, .. }
+                if to == "12-fix-the-writer" && note == "take V64 after me"
+        ),
+        "{called:?}"
+    );
+
+    let long = "x".repeat(MOST_NOTE_CHARS + 1);
+    let refused = read(
+        format!(
+            r#"{{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{{"name":"leave_note",
+                "arguments":{{"to":"12-fix-the-writer","note":"{long}"}}}}}}"#
+        )
+        .as_bytes(),
+    );
+    assert!(
+        matches!(
+            refused,
+            Incoming::NotASubmission {
+                why: NotAnArgument::TooLong { field: "note", .. },
+                ..
+            }
+        ),
+        "{refused:?}"
+    );
+}
+
 /// **A value that is not one of the two is refused rather than read as false.**
 /// A Drone that sent `"true"` as a string meant `true`, and running it whole
 /// would spend minutes answering a question it did not ask.

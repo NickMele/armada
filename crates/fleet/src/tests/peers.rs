@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use core_model::JobId;
-use ipc::mcp::DeclareScope;
+use ipc::mcp::{DeclareScope, LeaveNote};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::{Fittings, Fleet};
@@ -186,8 +186,11 @@ async fn a_drone_is_told_which_job_landed_and_what_it_changed_in_its_files() {
 
     let heard = told_more_than(&fleet, &home, &writer, 0).await;
     assert!(
-        heard.contains("\\\"fix the reader\\\" landed"),
-        "names who landed: {heard}"
+        heard.contains(&format!(
+            "\\\"fix the reader\\\" ({}) landed",
+            record.handle()
+        )),
+        "names who landed, by the handle a note would be addressed to: {heard}"
     );
     assert!(
         heard.contains("src/log.rs"),
@@ -215,22 +218,157 @@ async fn a_job_writing_elsewhere_hears_nothing_of_a_landing() {
     );
 }
 
-/// A long list is cut, and a landing in an opening brief says the rebase ran.
+/// Two overlapping Jobs, both told of each other, with the spacing already run
+/// out so the next turn delivers whatever is queued.
+async fn overlapping(
+    fleet: &Fixture,
+    peers: &Placing,
+    home: &TempDir,
+    clock: &Held,
+    ports: (u16, u16),
+) -> (JobId, JobId) {
+    let (reader, writer) = two_jobs(fleet, peers, home, ports).await;
+    declares(fleet, ports.0, &["crates/store/src/migrations.rs"]).await;
+    declares(fleet, ports.1, &["crates/store"]).await;
+    fleet.turn().await.expect("a turn");
+    told_more_than(fleet, home, &reader, 0).await;
+    clock.on(SPACING.as_secs());
+    (reader, writer)
+}
+
+fn a_note(to: &str, said: &str) -> LeaveNote {
+    LeaveNote {
+        to: to.to_string(),
+        note: said.to_string(),
+    }
+}
+
+/// **The definition of done.** One Drone leaves another a note, and the other
+/// hears it behind the marker, named as that Drone's words.
+#[tokio::test]
+async fn a_note_reaches_the_other_jobs_drone_fenced_as_its_senders_words() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let (fleet, peers) = two_at_once_on(&home, &clock);
+    let (reader, writer) = overlapping(&fleet, &peers, &home, &clock, (51209, 51210)).await;
+    let before = told_more_than(&fleet, &home, &reader, 0)
+        .await
+        .matches(HEADING)
+        .count();
+    let handle = fleet.load(&reader).await.expect("the reader").handle();
+
+    fleet
+        .leave_note(
+            &writer,
+            &a_note(&handle, "I am renumbering migrations, take V64 after me"),
+        )
+        .await
+        .expect("a note to a Job sharing a path is taken");
+    fleet.turn().await.expect("a turn");
+
+    let heard = told_more_than(&fleet, &home, &reader, before).await;
+    let last = &heard[heard.rfind(HEADING).expect("a peer turn")..];
+    assert!(
+        last.contains("> I am renumbering migrations, take V64 after me"),
+        "the words, behind the marker: {last}"
+    );
+    assert!(
+        last.contains("fix the writer") && last.contains("not Armada's"),
+        "named as the other Drone's words: {last}"
+    );
+}
+
+#[tokio::test]
+async fn a_note_is_refused_where_it_has_nothing_to_warn_about_or_nobody_to_reach() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let (fleet, peers) = two_at_once_on(&home, &clock);
+    let (reader, writer) = two_jobs(&fleet, &peers, &home, (51211, 51212)).await;
+    declares(&fleet, 51211, &["crates/store"]).await;
+    declares(&fleet, 51212, &["apps/desktop"]).await;
+    let handle = fleet.load(&reader).await.expect("the reader").handle();
+
+    let apart = fleet
+        .leave_note(&writer, &a_note(&handle, "take V64"))
+        .await
+        .expect_err("the two Jobs share no path");
+    assert!(
+        apart.because.contains("claims no path"),
+        "{}",
+        apart.because
+    );
+
+    let nobody = fleet
+        .leave_note(&writer, &a_note("99-nobody", "take V64"))
+        .await
+        .expect_err("no such Job");
+    assert!(
+        nobody.because.contains("no unfinished Job"),
+        "{}",
+        nobody.because
+    );
+
+    let own = fleet.load(&writer).await.expect("the writer").handle();
+    let itself = fleet
+        .leave_note(&writer, &a_note(&own, "take V64"))
+        .await
+        .expect_err("a note to itself");
+    assert!(itself.because.contains("own"), "{}", itself.because);
+}
+
+#[tokio::test]
+async fn a_second_note_to_the_same_job_inside_the_spacing_is_refused() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let (fleet, peers) = two_at_once_on(&home, &clock);
+    let (reader, writer) = overlapping(&fleet, &peers, &home, &clock, (51213, 51214)).await;
+    let handle = fleet.load(&reader).await.expect("the reader").handle();
+
+    fleet
+        .leave_note(&writer, &a_note(&handle, "take V64"))
+        .await
+        .expect("the first note");
+    let again = fleet
+        .leave_note(&writer, &a_note(&handle, "and V65"))
+        .await
+        .expect_err("a second inside the spacing");
+    assert!(again.because.contains("one note"), "{}", again.because);
+
+    clock.on(SPACING.as_secs());
+    fleet
+        .leave_note(&writer, &a_note(&handle, "and V65"))
+        .await
+        .expect("taken once the spacing has passed");
+}
+
+/// A long list is cut, a note is never cut into the count, and a landing in an
+/// opening brief says the rebase ran.
 #[test]
 fn the_turn_names_five_and_counts_the_rest() {
     use crate::peers::News;
-    let news: Vec<News> = (0..7)
+    let mut news: Vec<News> = (0..7)
         .map(|at| News::Claimed {
             title: format!("job {at}"),
+            handle: format!("{at}-job"),
             paths: vec![format!("src/{at}.rs")],
         })
         .collect();
+    news.push(News::Note {
+        title: "job 9".to_string(),
+        handle: "9-job".to_string(),
+        said: "one\nline two".to_string(),
+    });
     let text = PeersChanged::injected(&news).text().to_string();
     assert!(text.contains("job 4") && !text.contains("job 5"), "{text}");
     assert!(text.contains("And 2 more."), "{text}");
+    assert!(
+        text.contains("> one\n> line two"),
+        "every line of a note is fenced, and none is counted away: {text}"
+    );
 
     let landed = [News::Landed {
         title: "renumber migrations".to_string(),
+        handle: "14-renumber-migrations".to_string(),
         paths: vec!["crates/store/src/migrations.rs".to_string()],
     }];
     assert!(PeersChanged::opening(&landed)
