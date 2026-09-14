@@ -406,7 +406,7 @@ impl Redeclaring {
     /// Drone told to call a tool it was never asked to call goes looking for
     /// one.
     ///
-    /// **`drifted` is what was seen for the first time**, which
+    /// **`drifted` is what was just confirmed on a second reading**, which
     /// [`Working::drifting`](crate::working::Working::drifting) already
     /// answers. Passing everything seen so far would say the same thing every
     /// turn, and a notice a Drone has already acted on is one it reads as
