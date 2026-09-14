@@ -1756,6 +1756,8 @@ notes = """
 
 `worktree_differs` compares the worktree's own `armada.yml` against these lists; `start_run` runs that version only when asked. `manifest_edited_at` is read from git: the newest commit at or before the Job's creation that changed the file.
 
+`seeding` is what the worktree's build directories started from, read from what Fleet wrote beside the Job's log when it cut the worktree, and absent where the Job's Manifest declares no `setup.seed` (#1064).
+
 `agent_access` is `Yes` since `#697`. `start_run` has read `Yes` since `#695`, so the refusal here left an agent able to run something in a worktree and unable to see what there was to run — which is the shape of a guess. The sheet is a list of entries rather than a payload, so the door's cap is not what makes it safe to open.
 """
 
@@ -1837,6 +1839,8 @@ notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning. With no root Manifest the three lists and `servers` are empty, and `verify` is still the checkout's. `workspaces` lists each directory Scan finds holding its own `armada.yml` that loads, with the Commands that file declares, pressed with `StartCheckoutRun.workspace`; it is listed with or without a root Manifest, so a root's own page can run a workspace's Command too. Which directories hold one is found once per repository, by Scan's walk, and found again when its root Manifest is re-read, the served repositories change, or Setup writes a file; each file is read afresh.
 
 **It needs no Job and reads no store.** This is the `armada.yml` Fleet is already running on and watching, which is why it answers on a repository that has never had a Job in it. Nothing here is frozen: there is one file and it is the one that runs.
+
+`seed` is the `setup.seed` the Manifest declares, with whether the seed at the current base commit is warm, warming or cold — read from git and the base checkout's own marker, never the store (#1064).
 
 Under `/manifest` beside `get_manifest_reading`, for that operation's reason — a Fleet serves one repository, and this reads it before any Job exists to read one from instead.
 

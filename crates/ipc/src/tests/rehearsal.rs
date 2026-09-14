@@ -12,6 +12,41 @@ fn at(text: &str) -> Instant {
     Instant::from(&Timestamp::from_rfc3339(text))
 }
 
+/// #1064: both seed readings are spelled by `state`, as a Verify step is.
+#[test]
+fn a_worktrees_seeding_and_a_declared_seed_are_spelled_by_state() {
+    use crate::{DeclaredSeed, SeedWarmth, WorktreeSeeding};
+
+    let seeded = WorktreeSeeding::Seeded {
+        commit: "a787".to_string(),
+        paths: vec!["target".to_string()],
+    };
+    assert_eq!(
+        encode(&seeded).expect("plain data"),
+        r#"{"state":"seeded","commit":"a787","paths":["target"]}"#
+    );
+    assert_eq!(
+        encode(&WorktreeSeeding::Unrecorded).expect("plain data"),
+        r#"{"state":"unrecorded"}"#
+    );
+    let declared = DeclaredSeed {
+        paths: vec!["target".to_string()],
+        warmed_by: vec!["warm_build".to_string()],
+        warmth: SeedWarmth::Warming {
+            commit: "a787".to_string(),
+        },
+    };
+    let spelled = encode(&declared).expect("plain data");
+    assert_eq!(
+        spelled,
+        r#"{"paths":["target"],"warmed_by":["warm_build"],"warmth":{"state":"warming","commit":"a787"}}"#
+    );
+    assert_eq!(
+        decode::<DeclaredSeed>("a seed", spelled.as_bytes()).expect("reads back"),
+        declared
+    );
+}
+
 fn a_record() -> RunRecord {
     RunRecord {
         id: "01RUN".to_string(),

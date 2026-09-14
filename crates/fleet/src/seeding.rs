@@ -15,6 +15,7 @@
 //! column holds it.
 
 mod cloning;
+mod reading;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

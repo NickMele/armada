@@ -249,6 +249,7 @@ pub use rehearsal::{
 pub use rehearsal::{
     CheckoutVerify, StartCheckoutVerify, VerifyGroup, VerifyStep, VerifyStepState,
 };
+pub use rehearsal::{DeclaredSeed, SeedWarmth, WorktreeSeeding};
 pub use remarks::{InlineContext, JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use repositories::{AddRepository, CloneRepository, RepositoryList, RepositorySummary};

@@ -180,6 +180,20 @@ async fn a_new_worktree_starts_from_the_warm_seed_before_setup_requires_runs() {
         })
     );
     assert!(log(&fleet, &job).contains("the worktree was seeded from the base checkout's warm build"));
+    assert_eq!(
+        fleet.run_sheet(job.id()).await.expect("a run sheet").seeding,
+        Some(ipc::WorktreeSeeding::Seeded {
+            commit: COMMIT.to_string(),
+            paths: vec![String::from("target")],
+        }),
+        "the Job's Setup group reads what was written down"
+    );
+    assert_eq!(
+        fleet.declared_seed(&fleet.first()).expect("declared").warmth,
+        ipc::SeedWarmth::Warm {
+            commit: COMMIT.to_string()
+        }
+    );
 }
 
 /// **Definition of done, second line.** No `setup.seed`: no clone, no record,
@@ -202,6 +216,8 @@ async fn a_repository_that_declares_no_seed_is_cut_exactly_as_before() {
         "{log}"
     );
     assert!(fleet.vcs().bases().is_empty(), "no base checkout was made for it");
+    assert_eq!(fleet.run_sheet(job.id()).await.expect("a run sheet").seeding, None);
+    assert_eq!(fleet.declared_seed(&fleet.first()), None);
     assert!(fleet.warm_seeds().is_none(), "and nothing warms");
 }
 
@@ -223,6 +239,13 @@ async fn a_job_cut_while_the_seed_is_warming_starts_cold_and_says_so() {
     let why = cold_because(&fleet, &job);
     assert!(why.contains("still warming"), "{why}");
     assert!(log(&fleet, &job).contains("the worktree starts cold, with no seed"));
+    assert_eq!(
+        fleet.declared_seed(&fleet.first()).expect("declared").warmth,
+        ipc::SeedWarmth::Warming {
+            commit: COMMIT.to_string()
+        },
+        "the Manifest's Setup says a warm-up is running"
+    );
 
     warming.await.expect("the warm-up ends");
     assert!(Path::new(&spec.seed_marker()).exists(), "marked once it succeeded");

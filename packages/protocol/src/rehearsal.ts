@@ -34,7 +34,24 @@ export type RunSheet = {
    * `commands`: a server is started with `start_server`. Since protocol 10.10.
    */
   servers?: ServerEntry[];
+  /** What the worktree's build directories started from. Absent where the Job's Manifest declares no `setup.seed`. Since protocol 13.46. */
+  seeding?: WorktreeSeeding;
 };
+
+/** What a Job's worktree was seeded with, or why it started cold. `crates/ipc/src/rehearsal.rs`. */
+export type WorktreeSeeding =
+  | { state: "seeded"; commit: string; paths: string[] }
+  | { state: "cold"; why: string }
+  | { state: "unrecorded" };
+
+/** `setup.seed` as the Manifest declares it, and where its warm-up stands. Since protocol 13.46. */
+export type DeclaredSeed = { paths: string[]; warmed_by: string[]; warmth: SeedWarmth };
+
+/** Whether the seed at the current base commit may be cloned. */
+export type SeedWarmth =
+  | { state: "warm"; commit: string }
+  | { state: "warming"; commit: string }
+  | { state: "cold"; why: string };
 
 export type RunEntry = {
   name: string;
@@ -220,6 +237,8 @@ export type CheckoutRunSheet = {
   verify?: CheckoutVerify;
   /** Each workspace below the root with its own `armada.yml`, and the Commands it declares. */
   workspaces?: WorkspaceCommands[];
+  /** The seed `setup.seed` declares, and how warm it is. Absent where the Manifest declares none. Since protocol 13.46. */
+  seed?: DeclaredSeed;
 };
 
 /** One workspace's own Commands. `dir` is relative to the repository root. */

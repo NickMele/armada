@@ -112,6 +112,9 @@ where
                 .in_flight(&place.owner)
                 .map(|out| out.of_job(&wired)),
             servers: self.declared_servers(&crate::servers::Holder::Job(job_id.clone()), &manifest),
+            seeding: self.served_by(&loaded).ok().and_then(|served| {
+                self.worktree_seeding(served.records_root(), &loaded.handle(), &manifest)
+            }),
         })
     }
 

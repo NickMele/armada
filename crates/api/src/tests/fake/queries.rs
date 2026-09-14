@@ -545,6 +545,7 @@ impl Queries for FakeDaemon {
             servers: Vec::new(),
             verify: None,
             workspaces: Vec::new(),
+            seed: None,
         })
     }
 

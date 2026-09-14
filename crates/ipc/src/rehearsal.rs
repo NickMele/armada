@@ -45,6 +45,42 @@ pub struct RunSheet {
     /// `start_run`. Since protocol 10.10.
     #[serde(default)]
     pub servers: Vec<crate::servers::ServerEntry>,
+    /// What the worktree's build directories started from. **Absent where the
+    /// Job's Manifest declares no `setup.seed`.** Since protocol 13.46.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seeding: Option<WorktreeSeeding>,
+}
+
+/// What a Job's worktree was seeded with, or why it started cold. #1064.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum WorktreeSeeding {
+    /// Cloned from the base checkout's warm seed at `commit`.
+    Seeded { commit: String, paths: Vec<String> },
+    /// Nothing was cloned, and why, in a sentence.
+    Cold { why: String },
+    /// Nothing was written down: a worktree cut before seeding existed.
+    Unrecorded,
+}
+
+/// `setup.seed` as the Manifest declares it, and where its warm-up stands.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeclaredSeed {
+    pub paths: Vec<String>,
+    /// The Commands `setup.seed.warm` names, in order.
+    pub warmed_by: Vec<String>,
+    pub warmth: SeedWarmth,
+}
+
+/// Whether the seed at the current base commit may be cloned.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum SeedWarmth {
+    Warm { commit: String },
+    /// A warm-up is running. A Job cut now starts cold.
+    Warming { commit: String },
+    /// Not warm, and why, in a sentence.
+    Cold { why: String },
 }
 
 /// One Check or Command, as the sheet lists it.
@@ -255,6 +291,10 @@ pub struct CheckoutRunSheet {
     /// Commands that file declares — pressed with `StartCheckoutRun.workspace`.
     #[serde(default)]
     pub workspaces: Vec<WorkspaceCommands>,
+    /// The seed `setup.seed` declares, and how warm it is. **Absent where the
+    /// Manifest declares none.** Since protocol 13.46.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<DeclaredSeed>,
 }
 
 /// One workspace's own Commands, as `CheckoutRunSheet::workspaces` lists them.
