@@ -119,6 +119,12 @@ they touch none of the branch's files, no gate rule under `xtask/`, no
 branches outlasted every gap, so neither landed; on 13 Sep the whole bar after
 every rebase made the owner's machine unusable.
 
+**Re-read `main`'s protocol minor after every rebase.** Two branches bumping to
+the same number merge without a conflict. Confirmed 13 Sep 2026: #993 took 13.36
+while the agent door's branch also bumped to 13.36, and the rebase dropped the
+door's bump as already applied. Only re-reading `protocol-version.toml` caught
+two wire changes about to share one version; the door took 13.37.
+
 **Then give the worktree back** — see `agent-worktrees`. At the merge, not later.
 
 **Restart Fleet when the protocol moves**, and after a store migration. A running

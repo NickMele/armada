@@ -60,6 +60,12 @@ written files but not committed is on a branch with *no commits ahead of `main`*
 so it reads as fully merged, and removing it destroys work that was never
 anywhere else.
 
+**Never `git stash` in a worktree; set work aside with a WIP commit.** The stash
+is one ref shared by every worktree and every session. Confirmed 13 Sep 2026: an
+agent and another session pushed to `refs/stash` at the same moment, the
+agent's pop applied the other session's changes into its tree, and its own work
+came back only through `git fsck --unreachable`.
+
 ## An agent that cuts no worktree takes somebody else's
 
 **A brief that says to cut one is not evidence that one was cut.** Confirmed
