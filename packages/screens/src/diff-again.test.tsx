@@ -91,9 +91,23 @@ test("and pays nothing on a job with no drone on it", async () => {
   vi.useFakeTimers();
   try {
     const fixture = running();
+    // Both readings agree the drone is gone — `JobDetail` now reads
+    // `assigned_drone` off the fetched detail once it has arrived, `whole.job`'s
+    // own terms, so a fixture that dropped it from the board row alone would
+    // still read as a job with a drone.
     const stopped: JobFixture = {
       ...fixture,
       job: { ...fixture.job, assigned_drone: undefined },
+      watched:
+        fixture.watched.state === "read"
+          ? {
+              ...fixture.watched,
+              detail: {
+                ...fixture.watched.detail,
+                job: { ...fixture.watched.detail.job, assigned_drone: undefined },
+              },
+            }
+          : fixture.watched,
     };
     const onReadDiff = vi.fn<(jobId: string | null) => void>();
     mount(<JobDetail {...propsFor(stopped)} onReadDiff={onReadDiff} />);
