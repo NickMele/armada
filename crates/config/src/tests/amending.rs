@@ -200,7 +200,9 @@ fn every_edit_a_form_makes_round_trips_this_repositorys_manifest_byte_for_byte()
     let comments = OWN
         .lines()
         .filter(|line| line.trim_start().starts_with('#'));
-    assert!(comments.count() > 200, "the fixture is the commented file");
+    // A floor under the file's own count, which shrank when #849 split the
+    // Bridge's tests into one Check per package.
+    assert!(comments.count() > 150, "the fixture is the commented file");
 
     let edited = amended(OWN, &forward());
     // The three lines an edit rewrites in place; every other line stays.

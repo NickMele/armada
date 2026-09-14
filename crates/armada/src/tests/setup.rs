@@ -72,23 +72,20 @@ fn this_repositorys_own_setup_loads_and_resolves() {
         setup.manifest().check_names(),
         vec![
             "bridge_build".to_string(),
-            "bridge_test".to_string(),
             "build".to_string(),
+            "components_test".to_string(),
+            "desktop_test".to_string(),
             "format".to_string(),
+            "screens_test".to_string(),
             "storybook".to_string(),
             "test".to_string(),
             "typecheck".to_string(),
         ],
-        "the seven Checks this workspace is built and tested with — two for the \
-         Rust half and four for the Bridge, which is #200: every Check used to \
-         compile Rust, so a Job that changed only `apps/` was verified entirely \
-         on the code it had not touched. `format` is the seventh and is the same \
-         defect one lint over: PR #199 also merged nine unformatted files, \
-         because `cargo fmt --check` was not a Check. `bridge_test` is the \
-         newest and closes the other half of #200's gap: the three Bridge \
-         Checks before it were all compilers, so nothing ran a line of \
-         TypeScript. There is no `clippy` — `[clippy-as-a-check]` in \
-         `docs/OPEN.md` says why"
+        "the Checks this workspace is built and tested with — Rust, the Bridge \
+         (#200: every Check used to compile Rust), `format` (PR #199 merged \
+         unformatted files), and the Bridge's tests one per package, so the \
+         story tests can stay out of a Drone's run (#849). There is no `clippy` \
+         — `[clippy-as-a-check]` in `docs/OPEN.md` says why"
     );
     assert_eq!(bug(&setup).name(), "bug");
     assert_eq!(
@@ -154,10 +151,10 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("typecheck", "pnpm typecheck"),
             ("bridge_build", "pnpm -C apps/desktop build"),
             ("storybook", "pnpm -C packages/components build-storybook"),
-            // The one Check that runs TypeScript rather than compiling it. A
-            // script again, and for the same reason: it chains two runners —
-            // the screens' pure modules in node, then every story in a browser.
-            ("bridge_test", "pnpm bridge-test"),
+            // The Bridge's tests, one Check per package since #849.
+            ("desktop_test", "pnpm -C apps/desktop test"),
+            ("screens_test", "pnpm -C packages/screens test"),
+            ("components_test", "pnpm -C packages/components test"),
             // **Last, where `armada.yml` put it, not for any claim this test
             // makes about scheduling.** `#387` once gave this `requires:
             // [fmt]`, so a gate evaluation reformatted the tree before
@@ -165,6 +162,39 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             // merged unnoticed until that line was found and removed.
             ("format", "cargo fmt --all --check"),
         ]
+    );
+}
+
+/// **#849 in this repository.** A Drone's own run on `bug`'s `implement` leaves
+/// out `storybook` and the story tests, and the gate still runs both.
+#[test]
+fn a_drones_run_here_skips_storybook_and_the_story_tests_and_the_gate_does_not() {
+    let setup =
+        Setup::at(&repository(), TempDir::new().path(), &roster()).expect("a setup that loads");
+    let implement = &bug(&setup).steps()[1];
+    let mid_step: Vec<String> = implement
+        .mid_step_checks()
+        .iter()
+        .filter_map(|check| check.name().map(str::to_string))
+        .collect();
+    let gated: Vec<&str> = implement
+        .checks()
+        .iter()
+        .filter_map(ResolvedCheck::name)
+        .collect();
+    for slow in ["storybook", "components_test"] {
+        assert!(
+            !mid_step.iter().any(|name| name == slow),
+            "`{slow}` is not in a Drone's run: {mid_step:?}"
+        );
+        assert!(
+            gated.contains(&slow),
+            "the gate still runs `{slow}`: {gated:?}"
+        );
+    }
+    assert!(
+        mid_step.iter().any(|name| name == "screens_test"),
+        "the fast Bridge tests stay in it: {mid_step:?}"
     );
 }
 
@@ -214,7 +244,9 @@ fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
             "typecheck",
             "bridge_build",
             "storybook",
-            "bridge_test",
+            "desktop_test",
+            "screens_test",
+            "components_test",
             "format",
         ],
         "the order `armada.yml` declares them in, which is the order they answer \
