@@ -109,6 +109,7 @@ flowchart LR
 
   R -->|retries spent| REP["awaiting_repair"]
   REP -->|restart| Q
+  REP -->|"run Checks again, and they rule"| R
 
   Q -->|dependency_failed| ESC["escalated"]
   R -->|escalation trigger| ESC
@@ -186,7 +187,11 @@ So a restart is the act: it re-queues, and admission puts a fresh Drone on the
 step that failed, opening it with the verdict, the Judge's answers and the
 gaming flags off the record. Every earlier step's work is on the branch, which
 is what separates it from a redispatch. A Pilot and a redispatch reach the
-status too, and none of the three is new. The act that does *not* reach it is
+status too, and none of the three is new. **Running the Checks again needs no
+Drone** (#1105): `rerun_checks` asks the stopped step's gate again on the
+worktree as it stands, spends no retry, and takes the Job straight back to
+`running` only where the reading goes somewhere. A Check that still fails moves
+nothing. The act that does *not* reach it is
 the override: `Stuck` reads whether the step's Checks passed out of the record
 rather than inferring the tier from the trigger, and they did not pass here.
 `build` failing is still not a matter of opinion.
