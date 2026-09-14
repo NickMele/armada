@@ -240,7 +240,7 @@ async fn an_override_records_the_verdict_now_and_waits_for_a_place() {
     let after = fleet
         .override_verdict(
             &stopped,
-            &Overruling::saying("the criterion is mis-stated").expect("a reason"),
+            Some(&Overruling::saying("the criterion is mis-stated").expect("a reason")),
         )
         .await
         .expect("the act lands whatever the cap holds");
@@ -277,7 +277,7 @@ async fn the_step_after_an_override_runs_once_the_place_frees() {
     fleet
         .override_verdict(
             &stopped,
-            &Overruling::saying("the criterion is mis-stated").expect("a reason"),
+            Some(&Overruling::saying("the criterion is mis-stated").expect("a reason")),
         )
         .await
         .expect("the act lands");

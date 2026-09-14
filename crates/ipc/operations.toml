@@ -1604,9 +1604,12 @@ read once at this boundary rather than by every surface that draws a rail. A rat
 is countable off `job_events` alone: step moves from `stopped` to `advanced`,
 against refusals. #154 is what does the counting and is not this.
 
-**The reason is required and does not reach the Drone.** A person who overrules a
-Judge is the best evidence there is that a criterion is mis-stated, and a count
-with no reasons beside it gives the rate and never the cause. The Drone is told
+**The reason is required on `gate_failure`, optional on `evidence_suspect`, and
+never reaches the Drone.** A person who overrules a Judge is the best evidence
+there is that a criterion is mis-stated, and a count with no reasons beside it
+gives the rate and never the cause. A gaming flag's own record already names the
+pattern, the question and the brief a person disagreed with, so carrying on past
+one takes no typing (#1079). The Drone is told
 only that the step was accepted, because it did nothing wrong.
 
 It needs no Drone and refuses on neither presence nor absence, which is what

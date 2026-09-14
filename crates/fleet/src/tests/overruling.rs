@@ -197,7 +197,7 @@ async fn a_refused_step_advances_when_a_person_overrules_the_judge() {
     let job_id = refused(&fleet, &home).await;
 
     let job = fleet
-        .override_verdict(&job_id, &a_reason())
+        .override_verdict(&job_id, Some(&a_reason()))
         .await
         .expect("the person overrules the verdict");
 
@@ -258,7 +258,7 @@ async fn an_overruled_step_catches_the_branch_up_like_any_other_boundary() {
     let before = fleet.vcs().delivered().len();
 
     fleet
-        .override_verdict(&job_id, &a_reason())
+        .override_verdict(&job_id, Some(&a_reason()))
         .await
         .expect("the person overrules the verdict");
     // The catch-up is the spawn's, and since `#456` the spawn is the turn's.
@@ -297,7 +297,7 @@ async fn the_record_says_the_judge_refused_and_a_person_disagreed() {
     );
     let job_id = refused(&fleet, &home).await;
     fleet
-        .override_verdict(&job_id, &a_reason())
+        .override_verdict(&job_id, Some(&a_reason()))
         .await
         .expect("the person overrules the verdict");
 
@@ -346,7 +346,7 @@ async fn the_log_carries_one_row_an_override_can_be_counted_from() {
     );
     let job_id = refused(&fleet, &home).await;
     fleet
-        .override_verdict(&job_id, &a_reason())
+        .override_verdict(&job_id, Some(&a_reason()))
         .await
         .expect("the person overrules the verdict");
 
@@ -413,7 +413,7 @@ async fn a_gaming_flag_is_overruled_and_the_step_advances_still_carrying_it() {
     let job_id = flagged(&fleet, &home).await;
 
     fleet
-        .override_verdict(&job_id, &a_reason())
+        .override_verdict(&job_id, Some(&a_reason()))
         .await
         .expect("the person overrules the gaming flag");
 
@@ -495,7 +495,7 @@ async fn a_failed_mechanical_check_cannot_be_overruled() {
         turned.ruled()
     );
 
-    match fleet.override_verdict(&job_id, &a_reason()).await {
+    match fleet.override_verdict(&job_id, Some(&a_reason())).await {
         Err(Adrift::NotResumable { status, .. }) => assert_eq!(
             status,
             JobStatus::AwaitingRepair,
@@ -556,7 +556,7 @@ async fn a_gate_that_could_not_decide_has_no_verdict_to_overrule() {
         turned.ruled()
     );
 
-    match fleet.override_verdict(&job_id, &a_reason()).await {
+    match fleet.override_verdict(&job_id, Some(&a_reason())).await {
         Err(Adrift::NotTheJudges { trigger, .. }) => {
             assert_eq!(trigger, EscalationTrigger::GateUndecided)
         }
@@ -604,6 +604,35 @@ async fn an_override_with_no_reason_is_refused() {
     );
 }
 
+/// **A gaming flag is carried on past without a word.** Its record already names
+/// what a person disagreed with, and the held card's Carry on sends no text; a
+/// refusal, above, still needs one.
+#[tokio::test]
+async fn a_gaming_flag_is_overruled_with_no_reason_given() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["jest.config.js"]).showing(GAMED),
+        gaming_then_summarised(),
+        FakeJudge::saying("flag: no"),
+    );
+    let job_id = flagged(&fleet, &home).await;
+
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/jobs/{}/override_verdict", job_id.as_str()),
+        r#"{"reason":"   "}"#,
+    )
+    .await;
+    assert_eq!(status.as_u16(), 200, "{}", String::from_utf8_lossy(&body));
+    let (_, body) = call(&app, "GET", &format!("/jobs/{}", job_id.as_str()), "").await;
+    let detail: JobDetail = ipc::decode("a Job in full", &body).expect("a JobDetail");
+    assert!(detail.steps[0].overridden, "overruled, with nothing typed");
+}
+
 // ------------------------------------------------- and the Drone that is gone
 
 /// **The Drone having ended does not make the verdict unappealable.**
@@ -636,7 +665,7 @@ async fn a_job_whose_drone_has_gone_gets_a_fresh_one_at_the_next_step() {
     );
 
     fleet
-        .override_verdict(&job_id, &a_reason())
+        .override_verdict(&job_id, Some(&a_reason()))
         .await
         .expect("the person overrules the verdict");
     // **The fresh Drone is the turn's**, since `#456`. It is the whole of what
@@ -678,7 +707,7 @@ async fn a_fresh_drone_at_the_next_step_is_told_what_the_overruled_one_produced(
     let job_id = refused(&fleet, &home).await;
     fleet.kill_drone(&job_id).await.expect("the Drone ends");
     fleet
-        .override_verdict(&job_id, &a_reason())
+        .override_verdict(&job_id, Some(&a_reason()))
         .await
         .expect("the person overrules the verdict");
     started(&fleet, &job_id)

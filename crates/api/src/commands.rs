@@ -295,14 +295,15 @@ pub(crate) async fn reject_job<D: Commands>(
     }
 }
 
-/// The Judge refused, a person disagrees, and the step advances anyway. **The
-/// Job comes back `running`** at the step that follows, with everything the
-/// refused Drone did still on the branch.
+/// A machine stopped a step, a person disagrees, and the step advances anyway.
+/// **The Job comes back `running`** at the step that follows, with everything
+/// the stopped Drone did still on the branch.
 ///
-/// 409 anywhere but an `escalated` Job stopped on `gate_failure`: a gate that
-/// never weighed the work and a gaming flag are not opinions to be overruled,
-/// and a failed mechanical Check is terminal and reaches this route as a Job
-/// with no stopped step. 422 on a blank reason.
+/// 409 anywhere but an `escalated` Job stopped on `gate_failure` or
+/// `evidence_suspect`: a gate that never weighed the work has no opinion to
+/// overrule, and a failed mechanical Check reaches this route as a Job that is
+/// not escalated. 422 on a blank reason, except on `evidence_suspect`, where a
+/// person carrying on past a gaming flag need not type one.
 pub(crate) async fn override_verdict<D: Commands>(
     State(served): State<Served<D>>,
     job: Resolved,
