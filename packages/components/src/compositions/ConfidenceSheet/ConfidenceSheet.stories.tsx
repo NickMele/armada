@@ -204,7 +204,10 @@ export const WithADismissal: Story = {
   },
 };
 
-/** A pull request whose CI failed: Investigate on the face, Re-run the failed runs under the caret. #905. */
+/**
+ * A pull request whose CI failed: What the verdict rests on opens itself on that row, with
+ * Investigate under it and Re-run the failed runs under the caret. #905.
+ */
 export const WithFailedCi: Story = {
   args: {
     confidence: {
@@ -215,9 +218,15 @@ export const WithFailedCi: Story = {
       small_fixes: [],
       for_context: [],
     },
+    grounds: {
+      checks: { result: "7 of 7 passed", tone: "met", detail: "build, format, tests" },
+      judge: { result: "3 of 3 criteria met", tone: "met" },
+      evidence: { result: "Within scope", tone: "met" },
+      plan: { result: "1 file outside the plan", tone: "quiet", detail: "`setup.rs`" },
+    },
     ci: {
       kind: "some_failed",
-      said: "1 of 3 failed.",
+      said: "1 of 3 failed",
       failed: ["unit tests"],
       conflicted: false,
       onInvestigate: fn(),
@@ -225,12 +234,63 @@ export const WithFailedCi: Story = {
     },
   },
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByRole("list", { name: "Failed checks" })).toHaveTextContent("unit tests");
+    await expect(canvas.getByRole("button", { name: /What the verdict rests on/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(canvas.getByRole("note")).toHaveTextContent("Pull request CI: 1 of 3 failed");
+    const row = canvas.getByRole("row", { name: /Pull request CI/ });
+    await expect(row).toHaveTextContent("unit tests");
     await userEvent.click(canvas.getByRole("button", { name: "Investigate" }));
     await expect(args.ci?.onInvestigate).toHaveBeenCalled();
     await userEvent.click(canvas.getByRole("button", { name: "More about CI" }));
     await userEvent.click(await canvas.findByRole("menuitem", { name: "Re-run the failed runs" }));
     await expect(args.ci?.onRerun).toHaveBeenCalled();
+  },
+};
+
+/**
+ * Everything the verdict rests on held, so the section stays folded and says so in one line.
+ * What the Job captured opens on the frames and the Drone's claim.
+ */
+export const WhatTheJobCaptured: Story = {
+  args: {
+    confidence: {
+      says: "confident",
+      reasons: ["Every Check passed and the Judge met every criterion."],
+      areas: [],
+      needs_you: [],
+      small_fixes: [],
+      for_context: [],
+    },
+    grounds: {
+      checks: { result: "7 of 7 passed", tone: "met", detail: "build, format, tests" },
+      judge: { result: "4 of 4 criteria met", tone: "met" },
+      evidence: { result: "Within scope", tone: "met" },
+      plan: { result: "Inside the plan", tone: "met" },
+    },
+    ci: { kind: "all_passed", said: "4 of 4 passed", failed: [], conflicted: false },
+    captured: {
+      frames: [{ kept: "k1", name: "fleet-settings.png", attempt: 1, weight: "84 KB" }],
+      claim: {
+        claimed: "Fleet settings opens from the Board's menu and saves a limit.",
+        shownBy: "`fleet-settings.png`",
+        notClaimed: "The status bar's own way in.",
+      },
+    },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const rests = canvas.getByRole("button", { name: /What the verdict rests on/ });
+    await expect(rests).toHaveAttribute("aria-expanded", "false");
+    await expect(rests).toHaveTextContent(
+      "Checks 7 of 7 passed · CI 4 of 4 passed · Judge 4 of 4 criteria met · Evidence within scope · Plan inside the plan",
+    );
+    await expect(canvas.queryByRole("note")).toBeNull();
+    const captured = canvas.getByRole("button", { name: /What the Job captured/ });
+    await expect(captured).toHaveTextContent("1 captured · the Drone's claim");
+    await userEvent.click(captured);
+    await expect(canvas.getByText("Fleet settings opens from the Board's menu and saves a limit.")).toBeVisible();
+    await expect(canvas.getByText("The status bar's own way in.")).toBeVisible();
   },
 };
 

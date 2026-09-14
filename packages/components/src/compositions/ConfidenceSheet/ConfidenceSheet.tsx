@@ -12,19 +12,37 @@ import type {
 } from "@armada/protocol";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
+import {
+  Captured,
+  capturedSummary,
+  Grounds,
+  groundLines,
+  groundsOpened,
+  groundsSummary,
+  type ConfidenceCaptured,
+  type ConfidenceGrounds,
+} from "./Grounds";
+import { withCode } from "./withCode";
+
+export type { ConfidenceCaptured, ConfidenceGrounds, GroundRow } from "./Grounds";
 
 /**
  * Armada's review of a change, drawn above the verdict sheet at the gate. #903.
  *
  * **The verdict and Needs you are always open**, because they are what a person is here for.
  * Every other section folds to one summary line. Tests in the change opens itself when a test
- * was removed or loosened with no reason, under a callout naming it, with its row marked.
+ * was removed or loosened with no reason, under a callout naming it, with its row marked, and
+ * What the verdict rests on opens itself on a row that did not hold.
  */
 export type ConfidenceSheetProps = {
   confidence: JobConfidence;
   /** Opens a row's View. #904. Absent leaves every View button out. */
   onView?: (view: ConfidenceView) => void;
-  /** The pull request's CI, and what a person can do about it. #905. Absent draws no row. */
+  /** The Checks, Judge, evidence and plan the verdict rests on. Absent rows are left out. */
+  grounds?: ConfidenceGrounds;
+  /** The frames the Job kept and the Drone's claim. Absent draws no section. */
+  captured?: ConfidenceCaptured;
+  /** The pull request's CI, a row of What the verdict rests on. #905. Absent draws no row. */
   ci?: ConfidenceCi;
   /** What a For context finding can become. #906. Absent leaves its buttons out. */
   followUp?: ConfidenceFollowUp;
@@ -64,9 +82,11 @@ export type ConfidenceView = {
 
 type OnView = ConfidenceSheetProps["onView"];
 
-export function ConfidenceSheet({ confidence, onView, ci, followUp }: ConfidenceSheetProps) {
+export function ConfidenceSheet({ confidence, onView, grounds, captured, ci, followUp }: ConfidenceSheetProps) {
   const { says, reasons, areas, tests, needs_you, small_fixes, for_context } = confidence;
   const dismissed = confidence.dismissed ?? [];
+  const lines = groundLines(grounds, ci);
+  const opened = groundsOpened(lines);
   return (
     <section className="armada-confidence" aria-label="Armada's review">
       <div className="armada-confidence__block">
@@ -82,42 +102,19 @@ export function ConfidenceSheet({ confidence, onView, ci, followUp }: Confidence
           </ul>
         )}
       </div>
-      {ci === undefined ? null : (
-        <div className="armada-confidence__block">
-          <span className="armada-confidence__label">Pull request CI</span>
-          <div className="armada-confidence__ci">
-            <span className="armada-confidence__said" data-ci={ci.kind}>
-              {ci.said}
-            </span>
-            {ci.conflicted && ci.onResolve !== undefined ? (
-              <Button size="sm" disabled={ci.disabled} onClick={ci.onResolve}>
-                Resolve conflicts
-              </Button>
-            ) : ci.failed.length > 0 && ci.onInvestigate !== undefined ? (
-              <SplitButton
-                items={
-                  ci.onRerun === undefined
-                    ? []
-                    : [{ label: "Re-run the failed runs", onSelect: ci.onRerun }]
-                }
-                disabled={ci.disabled}
-                onAction={ci.onInvestigate}
-                menuLabel="More about CI"
-              >
-                Investigate
-              </SplitButton>
-            ) : null}
-          </div>
-          {ci.failed.length === 0 ? null : (
-            <ul className="armada-confidence__failed" aria-label="Failed checks">
-              {ci.failed.map((name) => (
-                <li key={name}>
-                  <code className="armada-confidence__path">{name}</code>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      {lines.length > 0 && (
+        <Fold
+          title="What the verdict rests on"
+          summary={groundsSummary(lines)}
+          {...(opened === undefined ? {} : { opened })}
+        >
+          <Grounds lines={lines} />
+        </Fold>
+      )}
+      {captured !== undefined && (
+        <Fold title="What the Job captured" summary={capturedSummary(captured)}>
+          <Captured captured={captured} />
+        </Fold>
       )}
       {areas.length > 0 && (
         <Fold title="Shape of the change" summary={areaCount(areas)}>
@@ -458,19 +455,6 @@ function FollowUp({
         )}
       </span>
     </div>
-  );
-}
-
-/** A reviewer writes a name in backticks. Every second piece between them is code. */
-function withCode(text: string): ReactNode {
-  return text.split("`").map((piece, at) =>
-    at % 2 === 1 ? (
-      <code key={at} className="armada-confidence__path">
-        {piece}
-      </code>
-    ) : (
-      piece
-    ),
   );
 }
 

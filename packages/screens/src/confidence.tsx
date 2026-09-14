@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ConfidenceSheet,
   ViewSheet,
+  type ConfidenceCaptured,
   type ConfidenceCi,
+  type ConfidenceGrounds,
   type ConfidenceView,
   type DecisionChange,
 } from "@armada/components";
@@ -22,6 +24,10 @@ export type ReviewAtGateProps = {
   onAddNote?: (view: string, note: string) => void;
   /** Dismisses a finding with the reason written in its View. #907. */
   onDismissFinding?: (finding: string, reason: string) => void;
+  /** What the verdict rests on, besides the pull request's CI. */
+  grounds?: ConfidenceGrounds;
+  /** The frames the Job kept and the Drone's claim. */
+  captured?: ConfidenceCaptured;
   /** The pull request's CI, and what a person can do about it. #905. */
   ci?: ConfidenceCi;
   /** What a For context finding can become. #906. */
@@ -44,6 +50,8 @@ export function ReviewAtGate({
   onOpenDiff,
   onAddNote,
   onDismissFinding,
+  grounds,
+  captured,
   ci,
   acts,
 }: ReviewAtGateProps) {
@@ -54,6 +62,8 @@ export function ReviewAtGate({
       <ConfidenceSheet
         confidence={confidence}
         onView={setViewing}
+        {...(grounds === undefined ? {} : { grounds })}
+        {...(captured === undefined ? {} : { captured })}
         {...(ci === undefined ? {} : { ci })}
         {...(acts === undefined
           ? {}

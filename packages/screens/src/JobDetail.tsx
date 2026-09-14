@@ -499,6 +499,7 @@ function OneJob({
     opensRecords,
     now,
     claimed,
+    frames,
     onNeedMaterial,
     onNeedRemarks,
     stale,
