@@ -1,4 +1,4 @@
-import { MessageSquare, Search } from "lucide-react";
+import { MessageSquare, Plus, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { ArmadaLockupHorizontal } from "@armada/brand";
 import { Kbd } from "../../primitives/Kbd/Kbd";
@@ -74,6 +74,7 @@ export function TitleBar({
           <SplitButton
             variant="tonal"
             size="sm"
+            icon={<Plus size={16} strokeWidth={2} aria-hidden />}
             items={[]}
             onAction={onDispatch}
             disabled={dispatchDisabled}

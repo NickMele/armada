@@ -163,6 +163,17 @@ where
                 step: Some(step),
             });
         };
+        // Off the log, so a restart mid-pass rules the same way. `crate::clearing`.
+        let events = self
+            .store()
+            .lock()
+            .await
+            .events_for(&job_id)
+            .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
+        let at = match crate::clearing::clearing(&events, &job, &step) {
+            Some(_) => at.clearing_conflicts(),
+            None => at,
+        };
         // Assembled here rather than inside the gate: a Judge call
         // authenticates as Fleet, and a value that could not be built is a
         // configuration failure against this Job rather than a verdict.

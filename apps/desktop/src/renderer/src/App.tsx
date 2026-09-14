@@ -552,7 +552,7 @@ export function App() {
           onOpenChange: setStatsOpen,
         }}
         fleet={{
-          ...fleetPanelOf(state.connection, statement, state.health),
+          ...fleetPanelOf(state.connection, statement, state.health, now),
           open: fleetOpen,
           onOpenChange: setFleetOpen,
         }}

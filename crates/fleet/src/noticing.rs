@@ -224,8 +224,8 @@ where
             // question this call answers does. `#427`/`#663`: the forge pins
             // the comparison at the commit the pull request was opened from,
             // and a base that has moved since renders other people's commits
-            // as this Job's work — so the branch is rebased onto it, once per
-            // base. `crate::currency`.
+            // as this Job's work — so the base is merged into the branch, once
+            // per base. `crate::currency`.
             Landing::Open { url, .. } => {
                 self.kept_current(&asking.job_id, &read).await;
                 // **The one state in which the second question means

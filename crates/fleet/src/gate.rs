@@ -370,7 +370,10 @@ where
     // mechanical tier held and either the step declares a criterion or the step
     // drifted — the second being the one look `judge.md` calls mandatory, which
     // fires on a step that declares no criterion of its own.
-    let asked = step.asks_the_judge() || !off_plan.is_empty();
+    // No criterion or drift look on a pass clearing conflicts: the change was
+    // judged already. The gaming look below still runs, so a conflict settled by
+    // weakening a test is stopped.
+    let asked = at.asks_the_judge() && (step.asks_the_judge() || !off_plan.is_empty());
     let (judged, verdict) = match mechanical.advanced() && asked {
         false => (Vec::new(), mechanical),
         true => {

@@ -38,8 +38,7 @@ async fn finished_through(home: &TempDir, vcs: FakeVcs) -> (Scripted, Job) {
 fn went_out(vcs: &FakeVcs) -> (bool, bool) {
     let did = vcs.delivered();
     (
-        did.iter()
-            .any(|it| matches!(it, Delivered::PushedForcing { .. })),
+        did.iter().any(|it| matches!(it, Delivered::Pushed { .. })),
         did.iter()
             .any(|it| matches!(it, Delivered::OpenedForReview { .. })),
     )

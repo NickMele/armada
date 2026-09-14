@@ -640,7 +640,24 @@ impl Reconciling {
 /// its definition declares. **Drafted wording** — `docs/contracts/agent-prompt.md`
 /// has no copy for it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SentBack(Produced);
+pub struct SentBack(Why);
+
+/// What the part was sent back for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Why {
+    Found(Produced),
+    /// Fleet's own send-back: the base moved and the branch conflicts with it.
+    Conflicts,
+}
+
+/// **Drafted wording.** It says nothing was found, because a Drone told only
+/// "sent back" reads the step's definition as work to redo.
+const CLEARING_CONFLICTS: &str = "WHAT SENT THIS PART BACK\n\nThe base branch moved on after \
+     this work was read, and the branch now conflicts with it. Nothing was found wrong with \
+     the work: this pass is for the conflicts alone, and the block about the branch at the end \
+     of this brief names them. Keep what each side meant, remove every marker, and change \
+     nothing else. Where both sides raised a version to the same number, take the next number \
+     neither used. The checks that gate this part run again on the merged code.";
 
 impl SentBack {
     /// What `by` produced, or `None` where the frozen workflow does not have it.
@@ -655,12 +672,18 @@ impl SentBack {
             .iter()
             .find(|(step, _)| step == by)
             .map(|(_, evidence)| evidence.claimed.clone());
-        Some(SentBack(Produced {
+        Some(SentBack(Why::Found(Produced {
             part: at + 1,
             claimed,
             not_claimed: None,
             at: steps[at].deliverable().map(str::to_string),
-        }))
+        })))
+    }
+
+    /// Fleet sent the work back because the base moved and the two conflict,
+    /// and nothing was found wrong with it. `#1131`.
+    pub fn to_clear_conflicts() -> SentBack {
+        SentBack(Why::Conflicts)
     }
 
     /// The block, as it reaches a Drone.
@@ -669,9 +692,12 @@ impl SentBack {
     /// its gate; what the later part found is narrower than the step, and a
     /// Drone told to redo the step would redo what nobody asked about.
     pub(crate) fn text(&self) -> String {
-        let Produced {
+        let Why::Found(Produced {
             part, claimed, at, ..
-        } = &self.0;
+        }) = &self.0
+        else {
+            return String::from(CLEARING_CONFLICTS);
+        };
         let mut block = format!(
             "WHAT SENT THIS PART BACK\n\nPart {part} read the work after this part passed, \
              and sent it back to be worked again. It found:\n\n"

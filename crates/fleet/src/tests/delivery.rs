@@ -286,7 +286,7 @@ async fn entering_the_delivering_step_pushes_and_opens_for_review() {
     let branch = format!("armada/{}", job.handle());
     assert_eq!(
         fleet.vcs().delivered().first(),
-        Some(&Delivered::PushedForcing {
+        Some(&Delivered::Pushed {
             branch: branch.clone()
         }),
         "the push came before the pull request, and after the commit"
@@ -547,7 +547,7 @@ async fn a_job_on_a_repository_with_no_remote_completes_without_a_push() {
             .vcs()
             .delivered()
             .iter()
-            .any(|did| matches!(did, Delivered::PushedForcing { .. })),
+            .any(|did| matches!(did, Delivered::Pushed { .. })),
         "and nothing was pushed"
     );
 }

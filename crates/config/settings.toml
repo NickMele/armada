@@ -1157,3 +1157,20 @@ read_by = "fleet"
 notes = """
 How long an interrupted Job may hold a port span before Fleet surfaces it. Crossing it releases nothing and changes no state — it only stops the hold being silent, because the alternative is discovering the accumulation at exhaustion. A reminder rather than a lease: releasing a span whose process may still be bound is the collision the bind-and-connect probe exists to prevent, and a timer would also put Fleet in the business of deciding an interrupted Job is over. Where the reminder renders is governed by How does a person learn the port range is degrading?, and the Doctor precedent argues it is a standing condition rather than a queued decision — a health strip rather than an Alerts row.
 """
+
+[settings.conflict-clearing-send-cap]
+name = "Conflict-clearing send cap"
+scope = "Machine"
+default = "3 passes in a row"
+lifetime = "Daemon start"
+merge_strategy = "n/a — single layer"
+peer_polarity = "Lower is stricter"
+owner = "Fleet"
+read_by = "fleet"
+notes = """
+How many times in a row Fleet sends a Job back from its review gate to clear its pull request's conflicts with the base before a person decides; the conflict after that many escalates as `loop_cap`. #1131.
+
+**Only passes that came back unpushed count.** A pass whose delivery pushed a clean merge starts the count again, so a Job that cleared one conflict and waits at review while main moves is sent again; a base that keeps conflicting pass after pass is not. The count is a column on the Job's delivery record, raised by each send and zeroed by a delivery that pushed.
+
+**Not `iteration_cap`**, which bounds a verdict's loop and reads zero where a step declares none. `crates/fleet/src/conflict_resolution.rs` hard-codes this as `CLEARING_SENDS` and carries the argument for the number: three passes that each still conflicted is a base moving faster than a Drone can follow.
+"""

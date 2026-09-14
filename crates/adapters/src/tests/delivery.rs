@@ -225,10 +225,12 @@ fn work_that_will_not_come_back_across_is_left_as_a_conflict_to_resolve() {
     );
 }
 
+/// **`#1131`: the base is merged in, and a conflict is left for the Drone.**
+/// The last-step shape — Fleet has committed, and that commit conflicts with
+/// what moved. The markers stay, the merge stays in progress for Fleet's commit
+/// to finish, and the branch itself has not moved.
 #[test]
-fn a_committed_branch_that_will_not_replay_is_put_back_exactly_as_it_was() {
-    // The last-step shape: Fleet has committed, so the branch has a commit of
-    // its own to replay, and replaying it is what conflicts.
+fn a_committed_branch_that_conflicts_is_left_mid_merge_with_its_markers() {
     let repo = TempRepo::with_a_commit();
     repo.write("shared.txt", "the original\n");
     repo.commit_everything("a file both sides touch");
@@ -253,21 +255,49 @@ fn a_committed_branch_that_will_not_replay_is_put_back_exactly_as_it_was() {
     let base = Base::Inferred(String::from("main"));
     let moved = GitVcs::new()
         .bring_up_to_date(&worktree, &base)
-        .expect("a rebase that conflicts is still an answer");
+        .expect("a merge that conflicts is still an answer");
 
-    let BroughtUpToDate::PutBack { files, .. } = &moved else {
-        panic!("a replayed commit that conflicts puts the branch back: {moved:?}");
+    let BroughtUpToDate::Conflicted { files, .. } = &moved else {
+        panic!("a committed branch that conflicts is left with its markers: {moved:?}");
     };
     assert_eq!(files, &["shared.txt"]);
+    let held = read(&worktree, "shared.txt");
+    assert!(
+        held.contains("<<<<<<<")
+            && held.contains("what the Drone wrote")
+            && held.contains("what somebody else merged"),
+        "both sides are in the file, between markers: {held}"
+    );
     assert_eq!(
         repo.git(&["rev-parse", &format!("armada/{JOB}")]),
         tip_before,
-        "the branch is exactly where it was — nothing is half-rebased"
+        "nothing is committed over the conflict"
     );
+    let merging = std::process::Command::new("git")
+        .args([
+            "-C",
+            worktree.path(),
+            "rev-parse",
+            "-q",
+            "--verify",
+            "MERGE_HEAD",
+        ])
+        .status()
+        .expect("git on PATH");
+    assert!(merging.success(), "the merge is left in progress");
+
     assert!(
-        repo.git(&["status", "--porcelain"]).is_empty()
-            || !std::path::Path::new(&format!("{}/.git", worktree.path())).is_dir(),
-        "and no rebase is left in progress"
+        matches!(
+            GitVcs::new().standing(&worktree, &base),
+            Ok(Standing::Behind { .. })
+        ),
+        "behind while a marker is left, so the Drone put on it is told"
+    );
+    wrote(&worktree, "shared.txt", "both, reconciled\n");
+    assert_eq!(
+        GitVcs::new().standing(&worktree, &base).expect("a reading"),
+        Standing::UpToDate,
+        "cleared, it stands where it is merging to, so the next Drone is not"
     );
 }
 
@@ -378,13 +408,11 @@ fn the_branch_reaches_the_remote_under_its_own_name() {
     );
 }
 
-/// **`#663`'s own reason `push_forcing` exists.** A branch pushed once, then
-/// rebased — main moved under it and the rebase replayed clean — is pushed
-/// again by `crate::fleet::delivery::deliver` on a redelivery, and the
-/// ordinary push git refuses over rewritten history is not that call's push to
-/// take. This is the one it takes instead, over exactly that shape.
+/// **`#1131`: a merge rewrites nothing.** A branch pushed once, then brought up
+/// to a base that moved, is a fast-forward to the remote — so a redelivery takes
+/// the ordinary push, which cannot overwrite anybody's commits.
 #[test]
-fn the_ordinary_push_is_refused_over_rewritten_history_and_the_forcing_one_is_not() {
+fn a_merged_branch_is_carried_by_the_ordinary_push() {
     let repo = TempRepo::with_a_commit();
     repo.with_a_bare_remote();
     let worktree = worktree_for(&repo);
@@ -398,27 +426,16 @@ fn the_ordinary_push_is_refused_over_rewritten_history_and_the_forcing_one_is_no
         .expect("a commit");
     GitVcs::new().push(&worktree).expect("the first push");
 
-    // Main moves, and the branch is rebased onto it — the shape a resolved
-    // conflict leaves behind.
     main_moves_on(&repo, "elsewhere.txt", "one");
     let base = Base::Inferred(String::from("main"));
     let moved = GitVcs::new()
         .bring_up_to_date(&worktree, &base)
-        .expect("a clean rebase");
-    assert!(matches!(moved, BroughtUpToDate::Clean { .. }));
-
-    let refused = GitVcs::new()
-        .push(&worktree)
-        .expect_err("git refuses a push behind what the remote now disagrees with");
-    let NotDelivered { said, .. } = &refused;
-    assert!(
-        said.to_lowercase().contains("reject") || said.to_lowercase().contains("non-fast-forward"),
-        "the ordinary push failed for a different reason: {said}"
-    );
+        .expect("a clean merge");
+    assert!(matches!(moved, BroughtUpToDate::Clean { commits: 1, .. }));
 
     let pushed = GitVcs::new()
-        .push_forcing(&worktree)
-        .expect("the forcing push takes rewritten history");
+        .push(&worktree)
+        .expect("a fast-forward for the remote");
     assert_eq!(
         pushed,
         Pushed::ToTheRemote {

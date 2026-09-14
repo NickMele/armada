@@ -23,7 +23,7 @@
 // person presses and gets nothing from, which is worse than one that is
 // absent.
 
-import { ChevronRight, CornerUpRight, Eye, FileDiff, Filter, MessageSquare, Power, RotateCw, Search, Stamp, Terminal, X } from "lucide-react";
+import { ChevronRight, CornerUpRight, Eye, FileDiff, Filter, MessageSquare, Plus, Power, RotateCw, Search, Stamp, Terminal, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** Whether the row is an act or a movement of the cursor. */
@@ -340,8 +340,8 @@ export const ACTIONS: readonly Action[] = [
     kind: "Action",
     tier: "Contextual",
     verb: "Dispatch",
-    icon: null,
-    iconAbsent: "undecided",
+    icon: Plus,
+    iconAbsent: null,
     shortcut: "n",
     scope: "anywhere",
     destructive: false,
