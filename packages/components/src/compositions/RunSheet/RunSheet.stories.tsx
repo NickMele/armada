@@ -128,6 +128,31 @@ export const AtRest: Story = {
   },
 };
 
+const setupSays = (says: string): RunSheetGroup[] =>
+  GROUPS.map((group) => (group.kind === "setup" ? { ...group, says } : group));
+
+/** The repository declares `setup.seed`, and this worktree's `target/` was cloned from it. #1064. */
+export const SetupSaysTheWorktreeWasSeeded: Story = {
+  args: {
+    open: true,
+    ...HEADER,
+    groups: setupSays("This worktree was seeded with target from base a787ffc2c1d0."),
+    onSelect: fn(),
+  },
+};
+
+/** Cut while the seed was warming: Setup says so rather than leaving a slow first build unexplained. */
+export const SetupSaysTheWorktreeStartedCold: Story = {
+  args: {
+    open: true,
+    ...HEADER,
+    groups: setupSays(
+      "This worktree started cold: the seed at base a787ffc2c1d0 is still warming, and a seed is never cloned mid-warm-up.",
+    ),
+    onSelect: fn(),
+  },
+};
+
 // Cut mid-build, not at a result — a running Job has not finished, and a
 // streamed reading that already showed `test result: ok` would say otherwise.
 const RUNNING_ROWS: ConsoleRow[] = [

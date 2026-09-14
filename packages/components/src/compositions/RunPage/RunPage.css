@@ -81,6 +81,15 @@
 /* A group with nothing in it says so. The three groups are always drawn — a
    Manifest declaring no Commands is a fact about the file, and a group that
    vanished would read as a surface that failed to list them. */
+.armada-run-page__group-says {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0 var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
 .armada-run-page__group-empty {
   margin: 0;
   padding: var(--space-2) var(--space-4) 0 var(--space-4);

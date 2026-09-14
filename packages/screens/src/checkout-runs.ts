@@ -54,7 +54,8 @@ import {
 export { checkoutResultRunOf, runningEntryOf };
 import { absoluteOf, clockOf, span } from "./duration";
 import { openServerLink } from "./opening";
-import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
+import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, saying, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
+import { seedSaid } from "./seed";
 
 /** What the Manifest surface asks of the host. One prop, `rehearsal`'s precedent. */
 export type ManifestSlice = {
@@ -97,7 +98,7 @@ export function checkoutGroupsOf(sheet: CheckoutRunSheet, rootless = false): Run
   // No root file declares Setup or Checks, so empty groups would claim one did.
   if (rootless) return [commands];
   return [
-    { kind: "setup", label: "Setup", entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e)) },
+    { kind: "setup", label: "Setup", ...saying(seedSaid(sheet.seed)), entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e)) },
     { kind: "checks", label: "Checks", entries: sheet.checks.map((e) => entryOf(CHECK_PREFIX, e)) },
     commands,
   ];

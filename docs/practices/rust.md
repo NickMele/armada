@@ -388,6 +388,11 @@ decommissioned on 2026-08-23 and the files deleted. **Do not reintroduce a hook
 that rebuilds on merge.** If v2 wants the binary installed after a merge, that is
 a thing you run when you want it, not a thing that happens to you.
 
+**`setup.seed` is the one build that follows a merge, and a repository opts into
+it by declaring one.** Fleet warms the seed in its base checkout when the base
+moves, off the turn loop and one at a time, so a new worktree's first build
+starts from it — #1064, and `docs/concepts/manifest.md`.
+
 **If cold builds become painful again, measure before reaching for a tool.** v1
 never established how much of the four minutes was compilation versus linking
 versus the forced reinstall, which is why nobody could say whether `sccache`
