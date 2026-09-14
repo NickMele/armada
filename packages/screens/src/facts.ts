@@ -33,7 +33,11 @@
 // **A Job with no pull request draws neither**, and that is most Jobs: one
 // still running, one in a repository with no remote, one that stopped before
 // it delivered. The rule `branchFact` and `landedFact` already keep.
+//
+// **Repository leads and dispatched-by closes the line, since #1115** — the
+// mock's own order, and the registry `Row.tsx` names the gap in.
 
+import { ORIGIN } from "@armada/components";
 import type { JobDetailField } from "@armada/components";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
@@ -57,6 +61,7 @@ import { LANDED } from "./Row";
 export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): JobDetailField[] {
   const address = whole?.delivery?.pull_request;
   return [
+    ...repositoryFact(job),
     ...freezeFact(job),
     ...branchFact(job),
     ...pullRequestFact(address),
@@ -64,7 +69,37 @@ export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): J
     ...elapsedFact(job, now),
     ...spendFact(whole),
     ...turnsFact(whole),
+    ...dispatchedByFact(job),
   ];
+}
+
+/**
+ * The repository this Job's Manifest was read from, by the Manifest id.
+ *
+ * **Reads `owner_manifest_id` and nothing else.** `manifestLabel` gives a
+ * Board row the same answer for a served Manifest, off a `RepositorySummary[]`
+ * this header does not hold — a Job's own Manifest is served by construction,
+ * so threading that list in here would answer a question this field already
+ * answers.
+ */
+function repositoryFact(job: JobSummary): JobDetailField[] {
+  return [{ value: job.owner_manifest_id, mono: true }];
+}
+
+/**
+ * Who or what dispatched this Job, in the registry's own words —
+ * `enum-verbs.toml`'s `origin` table, carried to Bridge as `ORIGIN` since
+ * #1115 closed the gap `Row.tsx` names.
+ *
+ * **`sub_dispatched` draws nothing.** Its sentence needs the parent Job's id,
+ * and `dispatched_by` is the field `crates/ipc/src/job.rs` deliberately leaves
+ * off the wire at M1 — filling the template with nothing would state a fact
+ * this build cannot back.
+ */
+function dispatchedByFact(job: JobSummary): JobDetailField[] {
+  const verb = ORIGIN[job.origin]?.verb;
+  if (verb === null || verb === undefined || verb.includes("{")) return [];
+  return [{ value: verb }];
 }
 
 /** Where a workflow came from, in Fleet's own words for `WorkflowSource` — #425. */

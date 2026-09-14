@@ -100,6 +100,14 @@ const WANTED = [
   "movement_kind",
   "drone_presence",
   "silence",
+  // Job detail's facts line names who or what dispatched a Job — #1115.
+  // `Row.tsx` documents the gap this closes: the table was already complete in
+  // `enum-verbs.toml`, but nothing asked for it, so `ORIGIN` did not exist for
+  // a screen to read. Every row renders as plain text rather than a badge —
+  // `enum-verbs.toml`'s own note on the vocabulary — so all six land in `GAPS`
+  // as missing an icon and a token, which is accurate rather than a gap left
+  // open: a fact run carries no glyphs and the badge hue does not apply to it.
+  "origin",
 ];
 
 // `admission_hold` is here because the status bar says which of the three things
