@@ -451,8 +451,8 @@ pub struct ProposeJob {
     pub title: String,
     pub workflow_id: WorkflowId,
     pub owner_manifest_id: ManifestId,
-    /// Which of the four top-level origins the proposer claims. `sub_dispatched`
-    /// does not deserialise.
+    /// Which top-level origin the proposer claims. `sub_dispatched` does not
+    /// deserialise.
     pub origin: TopLevelOrigin,
     pub urgency: Urgency,
     pub atomic: bool,

@@ -1043,3 +1043,11 @@ status_token = ""
 vocabulary = "Origin"
 in_code = ""
 notes = "The registry carries the form rather than the word. The row reads `Sub-dispatched by job_2d90bb`, and the parent's id is the fact that says why that row is read-only — the approval already happened at its parent, so no control on it offers a decision. Composing the sentence in Bridge from a word plus the field would put `Sub-dispatched by` in a second place nothing checks, which is what this file exists to prevent. Neither glyph nor token, for `auto_detected`'s reason."
+
+[verbs.origin.drone_drafted]
+verb = "Drafted by a Drone"
+icon = ""
+status_token = ""
+vocabulary = "Origin"
+in_code = ""
+notes = "A working Drone reported a test broken on main, Fleet ran that test against main and it failed, and the Drone drafted the fix. Drafted rather than dispatched, for `helm_drafted`'s reason: it still takes your approval. No slot for which Job reported it — `dispatched_by` would mark the fix as already approved and `subject` is neither sequencing nor provenance — so the breakage the fix claims says that on Job detail. #999. Neither glyph nor token, for `auto_detected`'s reason."

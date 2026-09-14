@@ -297,7 +297,7 @@ table = "jobs"
 storage = "Column"
 nullable = "No"
 frozen_at = "Creation"
-purpose = "auto_detected / manual / helm_drafted / sub_dispatched / workflow_triggered."
+purpose = "auto_detected / manual / helm_drafted / sub_dispatched / workflow_triggered / drone_drafted."
 in_code = "Not yet"
 notes = "A denormalized label, not an independent fact: written from `dispatched_by` at creation, and where they disagree, `dispatched_by` wins. Walking the `dispatched_by` chain recovers root provenance. `workflow_triggered` is the one value not written from `dispatched_by` — the Job that named it is over; it links back through `subject` and does not consume the fan-out cap."
 

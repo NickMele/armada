@@ -40,7 +40,7 @@ import { TheListSixStatesOneRowShape } from "./TheList";
  *
  * **The five origin sentences here are literals, and Bridge draws nothing in
  * that track on a real row.** `origin` is on `JobSummary` and `enum-verbs.toml`
- * carries a row for each of its five values, `sub_dispatched` included — that
+ * carries a row for each of its values, `sub_dispatched` included — that
  * one as the form `Sub-dispatched by {dispatched_by.job_id}` rather than a
  * word, which #234 settled before it closed. What no generator emits is a map
  * carrying any of them into Bridge, and `JobSummary` carries no
@@ -92,7 +92,7 @@ type Job = {
   step: string;
   /** Absent on a Job that has not started, which is not the same as zero. */
   runTime?: string;
-  /** Where the Job came from, one of `enum-verbs.toml`'s five origin rows. */
+  /** Where the Job came from, one of `enum-verbs.toml`'s origin rows. */
   origin: string;
   action: ReactNode;
 };
@@ -125,13 +125,13 @@ function factsOf(job: Job): JobRowField[] {
       mono: true,
       quiet: job.runTime === undefined || undefined,
     },
-    // **Origin, not "Dispatched by".** Only one of the five origin rows is a
-    // dispatch: the others read `Found by Fleet`, `Drafted in Helm` and
-    // `Workflow-triggered`, and none of them is something a person did. The
-    // registry's verbs are whole sentences by design — `auto_detected`'s notes
-    // say the row draws the string as written — so a label saying `Dispatched
-    // by` over a value saying `Found by Fleet` contradicts itself on four rows
-    // out of five.
+    // **Origin, not "Dispatched by".** Only one of the origin rows is a
+    // dispatch: the others read `Found by Fleet`, `Drafted in Helm`,
+    // `Workflow-triggered` and `Drafted by a Drone`, and none of them is
+    // something a person did. The registry's verbs are whole sentences by
+    // design — `auto_detected`'s notes say the row draws the string as written —
+    // so a label saying `Dispatched by` over a value saying `Found by Fleet`
+    // contradicts itself on every row but one.
     { label: "Origin", value: job.origin },
   ];
 }

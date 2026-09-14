@@ -234,8 +234,11 @@ Every Job shows a visible tag for where it came from.
 | Drafted in Helm | Proposed by a Helm session |
 | Workflow-triggered | Created by a finished Job's `on_complete` |
 | Sub-dispatched | Spawned by a step of another Job, carrying `dispatched_by` |
+| Drafted by a Drone | A working Drone reported a test broken on main, Fleet ran that test against main and it failed, and the Drone drafted the fix |
 
 A Job drafted in Helm still requires your explicit approval, like any other Job dispatch — see [Helm](helm.md).
+
+A Job drafted by a Drone does too. It carries no `dispatched_by`, which would mark it as already approved, and no `subject`, which is what a Job is about rather than where it came from. Which Job reported the breakage, and which test, is on the breakage the fix claims.
 
 ### A Workflow-triggered Job takes the ordinary gate
 

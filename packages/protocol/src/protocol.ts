@@ -374,7 +374,7 @@ export type ProposeJob = {
   title: string;
   workflow_id: string;
   owner_manifest_id: string;
-  /** One of the four top-level origins. `sub_dispatched` does not deserialise. */
+  /** One of the top-level origins. `sub_dispatched` does not deserialise. */
   origin: string;
   urgency: string;
   atomic: boolean;
