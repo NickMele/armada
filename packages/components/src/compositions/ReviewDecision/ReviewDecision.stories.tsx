@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { expect, fn } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 import { ReviewDecision, type DecisionAct } from "./ReviewDecision";
 
 /**
@@ -42,6 +42,23 @@ type Story = StoryObj<typeof ReviewDecision>;
  */
 export const NothingWrittenYet: Story = {
   args: { note: "" },
+  // What each act does is each button's own tooltip.
+  play: async ({ canvas, userEvent }) => {
+    const approve = canvas.getByRole("button", { name: "Approve the work" });
+    await userEvent.hover(approve);
+    await waitFor(() =>
+      expect(canvas.getByText("Takes the work as the drone left it.")).toBeVisible(),
+    );
+    await userEvent.unhover(approve);
+
+    const reject = canvas.getByRole("button", { name: "Reject the work" });
+    await userEvent.hover(reject);
+    await waitFor(() =>
+      expect(
+        canvas.getByText("A verdict on the work, and the job ends there.", { exact: false }),
+      ).toBeVisible(),
+    );
+  },
 };
 
 /** A note written, so the reply is live and all three answers are available. */
@@ -74,6 +91,9 @@ export const ChangesListed: Story = {
     ],
   },
   play: async ({ args, canvas, userEvent }) => {
+    // No count beside the label — it read as part of the sentence.
+    await expect(canvas.getByText("What should change")).toBeVisible();
+
     const send = canvas.getByRole("button", { name: "Request changes" });
     await expect(send).toBeEnabled();
     await userEvent.click(send);

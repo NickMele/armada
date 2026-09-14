@@ -129,10 +129,10 @@ export type PaletteHands = {
   copyDebugInfo: () => void;
   confirm: (act: "kill_job" | "redispatch" | "restart_step", jobId: string) => void;
   /**
-   * Open the settings row's own screen, by the id `settings` was given.
+   * Go to the settings row's own screen, by the id `settings` was given.
    *
-   * **One row today, so one id.** `fleet_settings` opens the Fleet settings
-   * sheet; the switch lives with the app that owns the sheet rather than
+   * **One row today, so one id.** `fleet_settings` goes to the Settings
+   * screen; the switch lives with the app that owns navigation rather than
    * here, the way `surface` and `run` already read their id against the
    * screen that answers for it.
    */

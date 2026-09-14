@@ -71,7 +71,7 @@ export function OverviewTilesFrom({
   repositories = [ARMADA, STOREFRONT],
   picked = null,
   drifts = { state: "held", repositories: [{ root: ARMADA.root, drift: drift(8, 0) }, { root: STOREFRONT.root, drift: drift(6, 2) }] },
-  onOpenFleetSettings = noop,
+  onOpenSettings = noop,
   onOpenQueued = noop,
   onOpenManifest = noop,
 }: {
@@ -84,7 +84,7 @@ export function OverviewTilesFrom({
   /** The rail's pick, by root. `null` is All repositories. */
   picked?: string | null;
   drifts?: DriftsRead;
-  onOpenFleetSettings?: () => void;
+  onOpenSettings?: () => void;
   onOpenQueued?: () => void;
   onOpenManifest?: () => void;
 }) {
@@ -99,7 +99,7 @@ export function OverviewTilesFrom({
       repositories={repositories}
       picked={picked}
       drifts={drifts}
-      onOpenFleetSettings={onOpenFleetSettings}
+      onOpenSettings={onOpenSettings}
       onOpenQueued={onOpenQueued}
       onOpenManifest={onOpenManifest}
     />

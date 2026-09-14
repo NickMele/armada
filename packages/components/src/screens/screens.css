@@ -86,7 +86,18 @@
 /* Navigation, Stats and Fleet, stacked — the left column Bridge/1088 built to
    replace the rail and the status bar. Margined on three sides the way the
    dock already is, because the panel beside it stays flush by design — "the
-   panel *is* the ground", below. */
+   panel *is* the ground", below.
+
+   **A shared width, not three siblings fighting over intrinsic sizing.**
+   Sidebar carries its own resting width inline (`--sidebar-default`,
+   collapsed to `--sidebar-rail`), but StatsPanel and FleetPanel (`.armada-panel`)
+   set none — with no width here either, this column resolved to whichever
+   panel's own content ran widest (a pid/port line, a Manifest advisory
+   sentence), and `align-items: stretch` grew the panels to that figure while
+   Sidebar sat at its own inline width, narrower than both. One width, read by
+   all three: Sidebar's own default when the column matches it, and its own
+   rail width when Sidebar is collapsed — `:has()` is what lets this rule
+   follow a child's own state without a prop crossing the two files. */
 .armada-shell__left {
   display: flex;
   flex-direction: column;
@@ -95,6 +106,11 @@
   min-height: 0;
   margin: var(--space-4) 0 var(--space-4) var(--space-4);
   overflow-y: auto;
+  width: var(--sidebar-default);
+}
+
+.armada-shell__left:has(.armada-sidebar[data-collapsed]) {
+  width: var(--sidebar-rail);
 }
 
 .armada-shell__panel {

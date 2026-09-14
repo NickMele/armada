@@ -324,7 +324,7 @@ export function SetupFrom({
   const head = headOf({
     reading: false, composing: false, auditing: false, clearing: false, manifest: editing.view, live: true,
     refreshing: false, onCloseComposer: noop, onCompose: noop, onCloseReports: noop, onReadReports: noop,
-    onCloseWorktrees: noop, onReadWorktrees: noop, onOpenLimits: noop, onRefresh: noop, jobs: [],
+    onCloseWorktrees: noop, onReadWorktrees: noop, onOpenSettings: noop, onRefresh: noop, jobs: [],
     onClearTerminal: noop, onForgetTerminal: noop, sweeping: null,
   });
 

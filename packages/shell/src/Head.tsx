@@ -69,6 +69,9 @@ export type HeadProps = {
    * so.** Every existing story head was built before Overview existed.
    */
   overviewing?: boolean;
+  /** Settings, the same shape as `overviewing` — Fleet's four limits and this
+   *  machine's own settings, and the rail is the one way out. */
+  settingsShowing?: boolean;
   /** A live connection. What stops a new Job being proposed into nothing. */
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
@@ -79,9 +82,9 @@ export type HeadProps = {
   onReadReports: () => void;
   onCloseWorktrees: () => void;
   onReadWorktrees: () => void;
-  /** Opens Fleet settings. Board's own menu row; the sheet itself is the
-   *  App's, since it opens over any screen, not just the Board's. */
-  onOpenLimits: () => void;
+  /** Goes to Settings. Board's own menu row; the screen itself is a rail
+   *  destination, not the Board's to draw. */
+  onOpenSettings: () => void;
   onRefresh: () => void;
   /** Every Job Bridge holds, for the counts on the Board's two bulk acts. */
   jobs: readonly JobSummary[];
@@ -101,6 +104,7 @@ export function headOf({
   clearing,
   manifest,
   overviewing,
+  settingsShowing,
   live,
   refreshing,
   onCloseComposer,
@@ -109,13 +113,14 @@ export function headOf({
   onReadReports,
   onCloseWorktrees,
   onReadWorktrees,
-  onOpenLimits,
+  onOpenSettings,
   onRefresh,
   jobs,
   onClearTerminal,
   onForgetTerminal,
   sweeping,
 }: HeadProps): Head | null {
+  if (settingsShowing === true) return { title: "Settings", actions: null };
   if (manifest !== false) {
     return {
       title: "Manifest",
@@ -201,7 +206,7 @@ export function headOf({
         onRefresh={onRefresh}
         onReadReports={onReadReports}
         onReadWorktrees={onReadWorktrees}
-        onOpenLimits={onOpenLimits}
+        onOpenSettings={onOpenSettings}
         onClearTerminal={onClearTerminal}
         onForgetTerminal={onForgetTerminal}
         sweeping={sweeping}

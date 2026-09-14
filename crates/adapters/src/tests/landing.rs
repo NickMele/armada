@@ -128,7 +128,13 @@ fn a_repository_behind_its_remote() -> TempRepo {
         ])
         .output()
         .expect("git on PATH");
-    assert!(run.status.success());
+    assert!(
+        run.status.success(),
+        "git clone {} {} failed: {}",
+        bare.to_string_lossy(),
+        elsewhere.to_string_lossy(),
+        String::from_utf8_lossy(&run.stderr)
+    );
     for args in [
         vec!["-C", "", "commit", "--allow-empty", "-m", "what merged"],
         vec!["-C", "", "push", "origin", "main"],
@@ -140,7 +146,11 @@ fn a_repository_behind_its_remote() -> TempRepo {
             .args(&args)
             .output()
             .expect("git on PATH");
-        assert!(run.status.success(), "{args:?}");
+        assert!(
+            run.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
     }
     repo
 }

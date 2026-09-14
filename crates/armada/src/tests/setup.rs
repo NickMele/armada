@@ -71,6 +71,7 @@ fn this_repositorys_own_setup_loads_and_resolves() {
     assert_eq!(
         setup.manifest().check_names(),
         vec![
+            "acceptance".to_string(),
             "bridge_build".to_string(),
             "build".to_string(),
             "components_test".to_string(),
@@ -81,11 +82,13 @@ fn this_repositorys_own_setup_loads_and_resolves() {
             "test".to_string(),
             "typecheck".to_string(),
         ],
-        "the Checks this workspace is built and tested with — Rust, the Bridge \
-         (#200: every Check used to compile Rust), `format` (PR #199 merged \
-         unformatted files), and the Bridge's tests one per package, so the \
-         story tests can stay out of a Drone's run (#849). There is no `clippy` \
-         — `[clippy-as-a-check]` in `docs/OPEN.md` says why"
+        "the Checks this workspace is built and tested with — Rust, `acceptance` \
+         on its own so a red one names a broken milestone claim rather than a \
+         unit test (#1130), the Bridge (#200: every Check used to compile \
+         Rust), `format` (PR #199 merged unformatted files), and the Bridge's \
+         tests one per package, so the story tests can stay out of a Drone's \
+         run (#849). There is no `clippy` — `[clippy-as-a-check]` in \
+         `docs/OPEN.md` says why"
     );
     assert_eq!(bug(&setup).name(), "bug");
     assert_eq!(
@@ -144,6 +147,7 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
         vec![
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
+            ("acceptance", "cargo nextest run -p acceptance"),
             // **One name, not a chain.** A `run` gets no shell, so the `&&`
             // this used to hold was passed to `tsc` as an argument and the
             // Check could never pass. The chain lives in a `package.json`
@@ -240,6 +244,7 @@ fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
         vec![
             "build",
             "test",
+            "acceptance",
             "typecheck",
             "bridge_build",
             "storybook",
@@ -261,14 +266,12 @@ fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
     assert!(resolved.steps()[0].gates_on_every_check());
 }
 
-/// **`--exclude acceptance` is load-bearing and is asserted as such.**
-///
-/// The acceptance test is required to fail for the whole of M1, so a plain
-/// `--workspace` test command would report red for the one reason that is
-/// deliberate. Dropping the exclusion would leave a Manifest that still parses
-/// and a `verify` step that can never pass.
+/// **`test` excludes `acceptance`, and `acceptance` runs it on its own** —
+/// #1130. A milestone's claim is checked by its own Check, so a red `test`
+/// always names a unit test and a red `acceptance` always names a broken
+/// claim, never the two folded into one line.
 #[test]
-fn the_test_check_excludes_the_crate_that_must_not_compile() {
+fn the_test_check_excludes_acceptance_and_a_separate_check_runs_it() {
     let setup =
         Setup::at(&repository(), TempDir::new().path(), &roster()).expect("a setup that loads");
     let test = setup.manifest().check("test").expect("a `test` Check");
@@ -276,6 +279,15 @@ fn the_test_check_excludes_the_crate_that_must_not_compile() {
         test.run().contains("--exclude acceptance"),
         "the test Check must not run the acceptance crate: {}",
         test.run()
+    );
+    let acceptance = setup
+        .manifest()
+        .check("acceptance")
+        .expect("a separate `acceptance` Check");
+    assert!(
+        acceptance.run().contains("-p acceptance"),
+        "the acceptance Check must run the acceptance crate: {}",
+        acceptance.run()
     );
 }
 

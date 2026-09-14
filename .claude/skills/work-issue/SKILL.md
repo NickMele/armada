@@ -161,6 +161,13 @@ unnecessary caveats, tables over paragraphs for anything comparative, label ever
 finding and table row with who acts on it, and surface any question as a single
 `**QUESTION:**` line at the end rather than burying it in prose.
 
+**Tell every agent to wait for its own runs in the foreground.** An agent is
+woken only by a message, never by its background build finishing. Confirmed
+14 Sep 2026: the Fleet agent for #1105 ended its turn three times with nextest or
+`cargo build` still running, and sat idle with nothing committed until it was
+watched and woken by hand each time. Put *"run heavy commands in the foreground
+and wait; never end your turn while a run is in the background"* in the brief.
+
 ## Give the worktree back
 
 **The merge is the moment.** A branch that is in `main` has a worktree holding

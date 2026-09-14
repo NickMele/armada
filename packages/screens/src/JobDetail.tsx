@@ -721,6 +721,7 @@ function OneJob({
               timeline,
               openRow: keys.openChapterId,
               onOpenRow: keys.onOpenChapter,
+              timelineFolded: atGate,
               // A finished Job's verdict sheet is a record, read after the story.
               after: atGate ? undefined : verdictSlot,
             }

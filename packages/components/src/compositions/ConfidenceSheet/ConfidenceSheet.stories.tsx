@@ -66,6 +66,8 @@ export const ARemovedTest: Story = {
     },
   },
   play: async ({ canvas, userEvent }) => {
+    // The verdict is the heading; no label repeats it above.
+    await expect(canvas.queryByText("Armada's review")).toBeNull();
     const callout = canvas.getByRole("note");
     await expect(callout).toHaveTextContent("A test was removed");
     await expect(callout).toHaveTextContent(REMOVED);
@@ -207,6 +209,9 @@ export const WithADismissal: Story = {
 /**
  * A pull request whose CI failed: What the verdict rests on opens itself on that row, with
  * Investigate under it and Re-run the failed runs under the caret. #905.
+ *
+ * **No callout above the table.** The row it would have named is right there once the
+ * section is open, which the auto-open already does.
  */
 export const WithFailedCi: Story = {
   args: {
@@ -238,7 +243,8 @@ export const WithFailedCi: Story = {
       "aria-expanded",
       "true",
     );
-    await expect(canvas.getByRole("note")).toHaveTextContent("Pull request CI: 1 of 3 failed");
+    // The section opened itself on the failing row; no callout repeats it.
+    await expect(canvas.queryByRole("note")).toBeNull();
     const row = canvas.getByRole("row", { name: /Pull request CI/ });
     await expect(row).toHaveTextContent("unit tests");
     await userEvent.click(canvas.getByRole("button", { name: "Investigate" }));

@@ -101,6 +101,12 @@
   white-space: nowrap;
 }
 
+/* Same slot a kbd would take; never both on one item. */
+.armada-dropdown-menu__check {
+  flex: none;
+  color: var(--fg-default);
+}
+
 .armada-dropdown-menu__separator {
   height: var(--border-width);
   margin: var(--space-1) 0;

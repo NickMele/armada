@@ -14,7 +14,7 @@ const repositories: HelmRepositoryOption[] = [
 const meta: Meta<typeof HelmComposer> = {
   title: "Compositions/Helm composer",
   component: HelmComposer,
-  args: { value: "", onChange: fn(), onSend: fn() },
+  args: { value: "", onChange: fn(), onSend: fn(), location: "Job Board" },
   render: (args) => (
     <div style={{ width: "var(--w-dock)", background: "var(--bg-sunken)", padding: "var(--space-4)" }}>
       <HelmComposer {...args} />
@@ -89,6 +89,33 @@ export const NoChipOffAJob: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.queryByText(/^Job \d/)).not.toBeInTheDocument();
+  },
+};
+
+/** The footer names the screen and the cursor row — no lead-in. #1094. */
+export const FooterNamesTheCursorRow: Story = {
+  args: {
+    current: repositories[0]!.id,
+    repositories: [repositories[0]!],
+    location: "Overview · cursor on Job 16",
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Overview · cursor on Job 16")).toBeInTheDocument();
+    await expect(canvas.queryByText(/Helm reads/i)).not.toBeInTheDocument();
+  },
+};
+
+/** A Job's detail, chipped: the footer agrees with the chip above it. #1094. */
+export const FooterNamesAJobsDetail: Story = {
+  args: {
+    current: repositories[0]!.id,
+    repositories: [repositories[0]!],
+    chip: { jobHandle: "16", title: "Preserve job metadata during resource cleanup" },
+    onRemoveChip: fn(),
+    location: "Job 16's detail (in context)",
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Job 16's detail (in context)")).toBeInTheDocument();
   },
 };
 

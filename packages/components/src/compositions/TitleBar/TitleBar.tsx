@@ -1,7 +1,8 @@
-import { ChevronDown, MessageSquare, Search } from "lucide-react";
+import { MessageSquare, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { ArmadaLockupHorizontal } from "@armada/brand";
 import { Kbd } from "../../primitives/Kbd/Kbd";
+import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 
 /**
  * The title row — what used to be macOS's grey bar saying only "Armada".
@@ -9,9 +10,10 @@ import { Kbd } from "../../primitives/Kbd/Kbd";
  * rather than over the sidebar; the whole row is a drag region, and every
  * control in it opts out with its own no-drag rule. #1087.
  *
- * **Left to right, the owner's own order**: the repository picker (moved out
- * of the rail), the search field that opens the palette, Dispatch, a spacer,
- * Helm's own reopen control while its dock is closed, and the logo.
+ * **Three regions, not one flex row with a trailing spacer.** Left carries the
+ * repository picker, centered carries search and Dispatch as a group, right
+ * carries Helm's reopen control and the logo — `TitleBar.css`'s grid keeps the
+ * center group on the bar's true midpoint however wide the two sides measure.
  *
  * **A slot, not a decision.** `repositoryPicker` arrives built: the Select and
  * its options are Bridge's own reading of what Fleet serves, and this row only
@@ -25,12 +27,11 @@ export type TitleBarProps = {
   /**
    * Opens the composer. **Both segments of Dispatch call this.**
    *
-   * The drawing splits a label from a caret, but nothing here belongs behind
-   * one yet — the Board's own menu (Refresh, Reported, Held disk, Fleet
-   * settings, the two bulk acts) stays on the Board's own head, and Fleet
-   * settings gets a screen of its own in #1089. A caret with nothing under it
-   * is still drawn, matching the mock, and it opens the same form the label
-   * does rather than a menu with nothing in it.
+   * The Board's own menu (Refresh, Reported, Held disk, Settings, the
+   * two bulk acts) stays on the Board's own head — nothing here belongs behind
+   * a caret yet. `SplitButton`'s empty-`items` mode is what draws a caret with
+   * nothing behind it: it calls `onDispatch` directly rather than opening a
+   * menu with nothing in it.
    */
   onDispatch?: () => void;
   /** Disabled while nothing is connected to dispatch into. */
@@ -54,58 +55,53 @@ export function TitleBar({
 }: TitleBarProps) {
   return (
     <div className="armada-title-bar">
-      {repositoryPicker === undefined ? null : (
-        <div className="armada-title-bar__picker">{repositoryPicker}</div>
-      )}
+      <div className="armada-title-bar__start">
+        {repositoryPicker === undefined ? null : (
+          <div className="armada-title-bar__picker">{repositoryPicker}</div>
+        )}
+      </div>
 
-      {onSearch === undefined ? null : (
-        <button type="button" className="armada-title-bar__search" onClick={onSearch}>
-          <Search size={16} strokeWidth={2} aria-hidden />
-          <span className="armada-title-bar__search-label">Search jobs, commands, settings…</span>
-          <Kbd>⌘K</Kbd>
-        </button>
-      )}
+      <div className="armada-title-bar__center">
+        {onSearch === undefined ? null : (
+          <button type="button" className="armada-title-bar__search" onClick={onSearch}>
+            <Search size={16} strokeWidth={2} aria-hidden />
+            <span className="armada-title-bar__search-label">Search jobs, commands, settings…</span>
+            <Kbd>⌘K</Kbd>
+          </button>
+        )}
 
-      {onDispatch === undefined ? null : (
-        <div className="armada-title-bar__dispatch">
-          <button
-            type="button"
-            className="armada-title-bar__dispatch-action"
+        {onDispatch === undefined ? null : (
+          <SplitButton
+            variant="tonal"
+            size="sm"
+            items={[]}
+            onAction={onDispatch}
             disabled={dispatchDisabled}
-            onClick={onDispatch}
+            menuLabel="Dispatch a job"
           >
             Dispatch
-          </button>
+          </SplitButton>
+        )}
+      </div>
+
+      <div className="armada-title-bar__end">
+        {helm === undefined ? null : (
           <button
             type="button"
-            className="armada-title-bar__dispatch-caret"
-            aria-label="Dispatch a job"
-            disabled={dispatchDisabled}
-            onClick={onDispatch}
+            className="armada-title-bar__helm"
+            onClick={helm.onOpen}
+            title={helm.binding === undefined ? "Open Helm" : `Open Helm — ${helm.binding}`}
           >
-            <ChevronDown size={16} strokeWidth={2} aria-hidden />
+            <MessageSquare size={16} strokeWidth={2} aria-hidden />
+            <span>Helm</span>
+            {helm.questions > 0 ? (
+              <span className="armada-title-bar__helm-count">{helm.questions}</span>
+            ) : null}
           </button>
-        </div>
-      )}
+        )}
 
-      <div className="armada-title-bar__spacer" />
-
-      {helm === undefined ? null : (
-        <button
-          type="button"
-          className="armada-title-bar__helm"
-          onClick={helm.onOpen}
-          title={helm.binding === undefined ? "Open Helm" : `Open Helm — ${helm.binding}`}
-        >
-          <MessageSquare size={16} strokeWidth={2} aria-hidden />
-          <span>Helm</span>
-          {helm.questions > 0 ? (
-            <span className="armada-title-bar__helm-count">{helm.questions}</span>
-          ) : null}
-        </button>
-      )}
-
-      <ArmadaLockupHorizontal height={20} title="Armada" />
+        <ArmadaLockupHorizontal height={20} title="Armada" />
+      </div>
     </div>
   );
 }

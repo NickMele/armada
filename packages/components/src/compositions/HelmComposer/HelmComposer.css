@@ -27,5 +27,21 @@
 
 .armada-helm-composer__actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Where the person is — #1094. `margin-right: auto` rather than
+   `justify-content: space-between` on the row, so Send still sits at the
+   trailing edge on its own once a caller draws no footer. */
+.armada-helm-composer__location {
+  margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
 }

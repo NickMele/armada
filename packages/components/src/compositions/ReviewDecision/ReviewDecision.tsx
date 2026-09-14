@@ -178,25 +178,25 @@ export function ReviewDecision({
     <div className="armada-decision">
       {listed ? (
         <div className="armada-decision__changes">
-          <span className="armada-decision__label">
-            {noteLabel} <span className="armada-decision__count">{changes.length}</span>
-          </span>
+          <span className="armada-decision__label">{noteLabel}</span>
           <ul className="armada-decision__list" aria-label={noteLabel}>
             {changes.map((change) => (
               <li key={change.id} className="armada-decision__change">
-                <span className="armada-decision__from">{change.from}</span>
+                <div className="armada-decision__change-head">
+                  <span className="armada-decision__from">{change.from}</span>
+                  {onRemoveChange === undefined ? null : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={disabled}
+                      aria-label={`Remove ${change.text}`}
+                      onClick={() => onRemoveChange(change.id)}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
                 <span className="armada-decision__text">{change.text}</span>
-                {onRemoveChange === undefined ? null : (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={disabled}
-                    aria-label={`Remove ${change.text}`}
-                    onClick={() => onRemoveChange(change.id)}
-                  >
-                    Remove
-                  </Button>
-                )}
               </li>
             ))}
           </ul>

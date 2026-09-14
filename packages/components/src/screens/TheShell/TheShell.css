@@ -9,6 +9,16 @@
   min-height: 0;
 }
 
+/* Closed at width, #1094's `Dock` renders nothing, so the panel is this
+   container's only child and there is no sibling left for a gap to apply
+   against — the panel ran flush to the window's own right edge, unlike
+   every other edge of the shell. Every other arrangement here (the dock
+   open, or the folded strip) still supplies its own right-side margin, so
+   this only fires when nothing else will. #1125. */
+.armada-shell__work > .armada-shell__panel:only-child {
+  margin-right: var(--space-4);
+}
+
 /* A fixed width; the panel takes the slack.
 
    **A panel beside the content, not chrome flush to it.** It was the rail's

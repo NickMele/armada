@@ -44,11 +44,11 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ACTION,
   JOB_LIFECYCLE,
-  Button,
   DockQuestions,
-  Select,
+  DropdownMenu,
   TheShell,
   type DockQuestion,
+  type DropdownMenuEntry,
   type FleetPanelProps,
   type StatsPanelProps,
 } from "@armada/components";
@@ -56,7 +56,8 @@ import {
 import type { Connection } from "@armada/protocol";
 import type { JobSummary } from "@armada/protocol";
 import type { RepositorySummary } from "@armada/protocol";
-import { ALL_REPOSITORIES, RepositoryOptions } from "./RepositoryOptions";
+import { ALL_REPOSITORIES } from "./RepositoryOptions";
+import { repositoryLabel } from "./repository-label";
 import { SURFACE, SURFACES } from "./surfaces";
 
 export type ShellProps = {
@@ -163,32 +164,15 @@ export function Shell({
       onSelect={onSurface}
       collapsed={collapsed}
       repositoryPicker={
-        <>
-        <Select
-          aria-label="Project"
-          value={scope ?? ALL_REPOSITORIES}
-          onChange={(event) => onScope(event.target.value === ALL_REPOSITORIES ? null : event.target.value)}
-          // A picker over what Fleet serves. Empty until the connection answers,
-          // and the option says so rather than showing a blank control.
-          disabled={repositories.length === 0}
-        >
-          {repositories.length === 0 ? (
-            <option value={ALL_REPOSITORIES}>{listed ? "Nothing set up yet" : "No repository read yet"}</option>
-          ) : (
-            // First, and where Bridge opens: the Board and Overview list every repository's Jobs.
-            <option value={ALL_REPOSITORIES}>All repositories</option>
-          )}
-          <RepositoryOptions repositories={repositories} />
-        </Select>
-        {/* Beside the picker rather than in it: an option that opened a dialog
-            would be a pick that picked nothing. Moved out of the rail and into
-            the title row with the picker itself — #1087. */}
-        {onAddRepository === undefined ? null : (
-          <Button variant="ghost" size="sm" onClick={onAddRepository}>
-            Add a repository
-          </Button>
-        )}
-        </>
+        <DropdownMenu
+          triggerLabel={repositoryTriggerLabel(repositories, scope, listed)}
+          entries={repositoryEntries(repositories, listed, onAddRepository !== undefined, scope)}
+          // Disabled only where nothing behind it is actionable — Add a
+          // repository stays reachable on an empty Fleet, which is when it
+          // matters most, so its presence keeps the trigger live.
+          disabled={repositories.length === 0 && onAddRepository === undefined}
+          onSelect={(id) => (id === ADD_REPOSITORY ? onAddRepository?.() : onScope(id === ALL_REPOSITORIES ? null : id))}
+        />
       }
       onSearch={onSearch}
       onDispatch={onCompose}
@@ -202,6 +186,70 @@ export function Shell({
       {children}
     </TheShell>
   );
+}
+
+/** No root is ever this, so it cannot collide with one. */
+const ADD_REPOSITORY = "add-repository";
+
+/** The trigger's own label: the picked repository, All, or why there is nothing to pick yet. */
+function repositoryTriggerLabel(
+  repositories: readonly RepositorySummary[],
+  scope: string | null,
+  listed: boolean,
+): string {
+  if (repositories.length === 0) return listed ? "Nothing set up yet" : "No repository read yet";
+  if (scope === null) return "All repositories";
+  const repository = repositories.find((one) => one.root === scope);
+  return repository === undefined ? scope : repositoryLabel(repository, repositories);
+}
+
+/**
+ * The picker's menu: All first, set up repositories, then a `Not set up`
+ * group — `RepositoryOptions`'s own order, read here instead of rendered
+ * there since a `<select>` groups with `optgroup` and a menu with a `label`
+ * entry. Add a repository sits last, below a separator: not destructive, but
+ * a different kind of row from the list above it, which is the separator's
+ * established use here. All is a reset, so it gets the same separator above
+ * the specific choices, and whichever entry matches `scope` carries the
+ * checkmark.
+ */
+function repositoryEntries(
+  repositories: readonly RepositorySummary[],
+  listed: boolean,
+  hasAdd: boolean,
+  scope: string | null,
+): DropdownMenuEntry[] {
+  const setUp = repositories.filter((one) => one.manifest !== undefined);
+  const loose = repositories.filter((one) => one.manifest === undefined);
+  const item = (repo: RepositorySummary) => ({
+    kind: "item" as const,
+    id: repo.root,
+    label: repositoryLabel(repo, repositories),
+    selected: repo.root === scope,
+  });
+  const entries: DropdownMenuEntry[] = [
+    {
+      kind: "item",
+      id: ALL_REPOSITORIES,
+      label: repositories.length === 0
+        ? (listed ? "Nothing set up yet" : "No repository read yet")
+        : "All repositories",
+      selected: scope === null,
+    },
+  ];
+  if (setUp.length > 0) {
+    entries.push({ kind: "separator", id: "all-repositories-rule" });
+    entries.push(...setUp.map(item));
+  }
+  if (loose.length > 0) {
+    entries.push({ kind: "label", id: "not-set-up", label: "Not set up" });
+    entries.push(...loose.map(item));
+  }
+  if (hasAdd) {
+    entries.push({ kind: "separator", id: "add-repository-rule" });
+    entries.push({ kind: "item", id: ADD_REPOSITORY, label: "Add a repository" });
+  }
+  return entries;
 }
 
 /**

@@ -347,7 +347,7 @@ export function ManifestFrom({
     onReadReports: noop,
     onCloseWorktrees: noop,
     onReadWorktrees: noop,
-    onOpenLimits: noop,
+    onOpenSettings: noop,
     onRefresh: noop,
     jobs: [],
     onClearTerminal: noop,

@@ -9,7 +9,8 @@
 // `×` (`dismissed`) drops it early, for a question that isn't about this Job,
 // and reopening the same Job (`opened` again) restores it.
 
-import type { HelmContext, HelmScreen } from "@armada/protocol";
+import type { HelmContext, HelmScreen, JobSummary } from "@armada/protocol";
+import { jobNumber } from "@armada/screens";
 
 /** The chip's own state: which Job opened it, and whether its `×` was pressed since. */
 export type ChipState = { openJobId: string | null; dismissed: boolean };
@@ -85,4 +86,33 @@ export function contextOf(where: {
     ...(where.chip !== null ? { chip: where.chip } : {}),
     ...(where.cursor !== null ? { cursor: where.cursor } : {}),
   };
+}
+
+/** Every screen but `job_detail`, which names itself off the Job it is reading rather than off this. */
+const SCREEN_LABEL: Record<Exclude<HelmScreen, "job_detail">, string> = {
+  overview: "Overview",
+  board: "Job Board",
+  manifest: "Manifest",
+  cleanup: "Cleanup",
+};
+
+/**
+ * The composer footer's one sentence — #1094. **Read off `context` itself**,
+ * the same shape `contextOf` just built for the wire, so the words on screen
+ * can never name a screen or a row other than the one actually sent. `jobs`
+ * turns `cursor` and `chip`'s bare ids into the number Fleet's handle carries,
+ * off the Board's own `jobNumber`.
+ */
+export function locationOf(context: HelmContext, jobs: readonly JobSummary[]): string {
+  const numberOf = (jobId: string): string | undefined => {
+    const job = jobs.find((one) => one.id === jobId);
+    return job === undefined ? undefined : jobNumber(job);
+  };
+  if (context.screen === "job_detail") {
+    const number = context.chip === undefined ? undefined : numberOf(context.chip);
+    return number === undefined ? "Job's detail" : `Job ${number}'s detail (in context)`;
+  }
+  const label = SCREEN_LABEL[context.screen];
+  const number = context.cursor === undefined ? undefined : numberOf(context.cursor);
+  return number === undefined ? label : `${label} · cursor on Job ${number}`;
 }

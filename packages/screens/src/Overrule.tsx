@@ -41,8 +41,8 @@ const OVERRULING_UNDERWAY = "Overruling…";
  * person is recording that a verifier was wrong and that they took
  * responsibility for going past it, and `#154` will read those reasons to learn
  * whether the Judge or the criterion was at fault — so the send control stays
- * off while the field is blank, matching the 422 Fleet would answer, and there
- * is no path through this that produces an unexplained override.
+ * off while the field is blank. A gaming flag's Carry on is the one exception:
+ * Fleet takes no reason there, as the flag and its second reading are on record.
  *
  * **Neutral tone, not destructive.** Nothing is destroyed: the work the gate
  * refused is exactly what survives. What the dialog owes instead is the cost —

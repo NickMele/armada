@@ -1,7 +1,10 @@
 // Helm's context, on its own — no window, no Fleet.
 
 import { expect, test } from "vitest";
-import { chippedJobId, contextOf, cursorRowFor, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
+import type { JobSummary } from "@armada/protocol";
+import { chippedJobId, contextOf, cursorRowFor, dismissed, locationOf, NO_CHIP, opened, screenOf } from "./helm-context";
+
+const JOBS = [{ id: "j16", handle: "16-preserve-job-metadata" }] as unknown as readonly JobSummary[];
 
 test("opening a Job chips it and points Helm at its repository", () => {
   const { state, point } = opened(NO_CHIP, { id: "12", manifestId: "M-armada" });
@@ -67,4 +70,24 @@ test("contextOf leaves an absent field off the wire", () => {
     chip: "12",
     cursor: "14",
   });
+});
+
+test("locationOf names the screen and the cursor row, off the wire's own job number", () => {
+  expect(locationOf({ screen: "overview", cursor: "j16" }, JOBS)).toBe("Overview · cursor on Job 16");
+});
+
+test("locationOf names the screen alone with no cursor to report", () => {
+  expect(locationOf({ screen: "board" }, JOBS)).toBe("Job Board");
+});
+
+test("locationOf names the Job's detail as read, in context while the chip stands", () => {
+  expect(locationOf({ screen: "job_detail", chip: "j16" }, JOBS)).toBe("Job 16's detail (in context)");
+});
+
+test("locationOf reports the Job's detail generically once the wire carries no chip for it", () => {
+  expect(locationOf({ screen: "job_detail" }, JOBS)).toBe("Job's detail");
+});
+
+test("locationOf never invents a number for an id the Board does not hold", () => {
+  expect(locationOf({ screen: "overview", cursor: "missing" }, JOBS)).toBe("Overview");
 });

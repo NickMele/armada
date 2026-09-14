@@ -161,6 +161,16 @@ test("approve and request changes send on the press, with no dialog", async () =
   await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
 });
 
+test("Approve's tooltip says the pull request stays open, with one open", async () => {
+  gate();
+
+  await userEvent.hover(page.getByRole("button", { name: "Approve the work" }));
+
+  await expect
+    .element(page.getByText("Takes the work without merging — the pull request stays open."))
+    .toBeVisible();
+});
+
 /**
  * `#661`: `job.remarks_changed` re-reads the comments and this screen is
  * handed the fresh list as an ordinary prop change — the same one Refresh and

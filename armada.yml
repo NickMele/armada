@@ -51,15 +51,15 @@ checks:
       under: crates
 
   test:
-    # `--exclude acceptance`: a milestone's claim is read on its own. See
-    # docs/practices/acceptance-tests.md. `nextest` measured 3x `cargo test`.
+    # `--exclude acceptance`: `acceptance` below reads a milestone's claim on
+    # its own, so a red `test` always names a unit test and never a milestone
+    # claim breaking. See docs/practices/acceptance-tests.md. `nextest`
+    # measured 3x `cargo test`.
     run: cargo nextest run --workspace --exclude acceptance
     # `--exclude` goes with `--workspace`, and cargo refuses it without one —
     # so the exclusion is restated as `except`, and it is the same exclusion
-    # for the same reason. A milestone's claim is read on its own, so a
-    # narrowed run that pulled `acceptance` back in would show a Drone a bar
-    # the gate deliberately does not apply to it, and a Drone shown a red test
-    # chases it green.
+    # for the same reason: a narrowed run that pulled `acceptance` back in
+    # would blur the line `test` and `acceptance` keep between them.
     narrow:
       run: cargo nextest run
       each: "-p {}"
@@ -71,6 +71,23 @@ checks:
     # test this Check never runs cannot be named. #999.
     one_test:
       run: cargo nextest run --workspace --exclude acceptance -E test(={})
+
+  acceptance:
+    # A milestone's own claim, checked on its own so a red `acceptance` names
+    # a broken claim and a red `test` never does. See
+    # docs/practices/acceptance-tests.md and #1130.
+    run: cargo nextest run -p acceptance
+    # No `narrow`: `-p acceptance` already is the narrowest run a change could
+    # ask for, unlike `build` and `test` above which narrow to whichever
+    # workspace member changed.
+    one_test:
+      run: cargo nextest run -p acceptance -E test(={})
+    # Rust only. `build` and `test` above run unconditionally; this one is
+    # scoped so a Bridge-only change does not pay for the acceptance suite.
+    when:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
 
   # The Bridge half — `build` and `test` say nothing about `apps/` or
   # `packages/`. Three, because none subsumes another. All need `node_modules`,

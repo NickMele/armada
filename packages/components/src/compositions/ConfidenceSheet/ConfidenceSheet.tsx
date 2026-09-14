@@ -90,7 +90,6 @@ export function ConfidenceSheet({ confidence, onView, grounds, captured, ci, fol
   return (
     <section className="armada-confidence" aria-label="Armada's review">
       <div className="armada-confidence__block">
-        <span className="armada-confidence__label">Armada&rsquo;s review</span>
         <span className="armada-confidence__says" data-says={says}>
           {says === "confident" ? "Confident" : "Not confident"}
         </span>
@@ -106,6 +105,7 @@ export function ConfidenceSheet({ confidence, onView, grounds, captured, ci, fol
         <Fold
           title="What the verdict rests on"
           summary={groundsSummary(lines)}
+          hideCallout
           {...(opened === undefined ? {} : { opened })}
         >
           <Grounds lines={lines} />
@@ -193,11 +193,14 @@ function Fold({
   title,
   summary,
   opened,
+  hideCallout,
   children,
 }: {
   title: string;
   summary: ReactNode;
   opened?: ReactNode;
+  /** The row `opened` names is already in the table this section holds. */
+  hideCallout?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(opened !== undefined);
@@ -214,7 +217,7 @@ function Fold({
         <span className="armada-confidence__label">{title}</span>
         <span className="armada-confidence__summary">{summary}</span>
       </button>
-      {opened !== undefined && (
+      {opened !== undefined && !hideCallout && (
         <p className="armada-confidence__callout" role="note">
           <Eye size={12} aria-hidden="true" className="armada-confidence__eye" />
           <span>{opened}</span>

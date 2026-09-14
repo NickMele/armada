@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 
 import { Button } from "../../primitives/Button/Button";
 import { StepTimeline, StepTimelineSkeleton } from "./StepTimeline";
@@ -54,6 +55,24 @@ export const Working: Story = {
         ],
       },
     ],
+  },
+};
+
+/**
+ * At the review gate. The live row would open on its own everywhere else —
+ * `folded` is what keeps every row closed until a person presses one.
+ */
+export const FoldedAtTheGate: Story = {
+  name: "Folded at the gate",
+  args: { ...Working.args, folded: true },
+  play: async ({ canvas, userEvent }) => {
+    const working = canvas.getByRole("button", { name: /Working/ });
+    await expect(working).toHaveAttribute("aria-expanded", "false");
+    await expect(canvas.getByText("The activity log.")).not.toBeVisible();
+
+    await userEvent.click(working);
+    await expect(working).toHaveAttribute("aria-expanded", "true");
+    await expect(canvas.getByText("The activity log.")).toBeVisible();
   },
 };
 
