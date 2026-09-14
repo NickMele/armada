@@ -18,6 +18,7 @@ import { page } from "vitest/browser";
 import type { JobDetail as JobWhole, JobSummary, StepDetail, Stuck } from "@armada/protocol";
 import { ACT_LABEL } from "./copy";
 import { mount, unmount } from "./mounted";
+import type { ActingAct } from "./pending";
 import { StepActs } from "./StepActs";
 
 afterEach(unmount);
@@ -118,7 +119,7 @@ function awaitingRepair(): JobWhole {
 }
 
 /** The stopped step header, on a Job a failed Check left at `awaiting_repair`. */
-function stopped(rerunningChecks: boolean): void {
+function stopped(rerunningChecks: boolean, acting = rerunningChecks, actingAct?: ActingAct): void {
   const whole = awaitingRepair();
   mount(
     <StepActs
@@ -126,7 +127,8 @@ function stopped(rerunningChecks: boolean): void {
       whole={whole}
       opens={{ jobId: whole.job.id, open: async () => ({ ok: true }), onSaid: () => {} }}
       render="stopped"
-      acting={rerunningChecks}
+      acting={acting}
+      actingAct={actingAct}
       rerunningChecks={rerunningChecks}
       stale={false}
       onAct={() => {}}
@@ -147,5 +149,36 @@ test("a step stopped on a failed check is offered run checks again", async () =>
 
 test("the press says the Checks are running while its own request is out", async () => {
   stopped(true);
-  await expect.element(page.getByRole("button", { name: "Running Checks" })).toBeDisabled();
+  // Pending, not disabled: the control that sent the press stays focusable —
+  // `aria-busy` carries the wait, `toBeDisabled` would be `Button`'s sibling
+  // reading rather than this one's own. #1117.
+  await expect
+    .element(page.getByRole("button", { name: "Running Checks" }))
+    .toHaveAttribute("aria-busy", "true");
+});
+
+// `awaitingRepair`'s own fixture offers `rerun_checks` and `restart_step`
+// together — `recovery.ts` offers a Checks re-run beside whichever resume act
+// applies rather than replacing it — so one fixture proves both readings:
+// each button waits on its own name and nothing else's.
+
+test("run checks again is not busy for a different act, and stays disabled", async () => {
+  stopped(false, true, "restart_step");
+  const button = page.getByRole("button", { name: ACT_LABEL.rerun_checks });
+  await expect.element(button).not.toHaveAttribute("aria-busy", "true");
+  await expect.element(button).toBeDisabled();
+});
+
+test("restart step is busy while its own act is out", async () => {
+  stopped(false, true, "restart_step");
+  await expect
+    .element(page.getByRole("button", { name: "Restarting the step…" }))
+    .toHaveAttribute("aria-busy", "true");
+});
+
+test("restart step is not busy for a different act, and stays disabled", async () => {
+  stopped(false, true, "rerun_checks");
+  const restart = page.getByRole("button", { name: ACT_LABEL.restart_step });
+  await expect.element(restart).not.toHaveAttribute("aria-busy");
+  await expect.element(restart).toBeDisabled();
 });

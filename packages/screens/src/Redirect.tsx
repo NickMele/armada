@@ -31,6 +31,7 @@ export function RedirectControl({
   jobId,
   drone,
   disabled,
+  pending = false,
   onRedirect,
 }: {
   jobId: string;
@@ -46,6 +47,12 @@ export function RedirectControl({
    */
   drone: "holding" | "working";
   disabled: boolean;
+  /**
+   * This is the control that opened the dialog, and `redirect` is out. The
+   * dialog has already closed on its own confirm — this is what still shows
+   * the wait. #1117.
+   */
+  pending?: boolean;
   onRedirect: (jobId: string, instruction: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -58,8 +65,8 @@ export function RedirectControl({
 
   return (
     <>
-      <Button variant="secondary" disabled={disabled} onClick={() => setOpen(true)}>
-        {ACT_LABEL.redirect}
+      <Button variant="secondary" pending={pending} disabled={disabled} onClick={() => setOpen(true)}>
+        {pending ? "Redirecting…" : ACT_LABEL.redirect}
       </Button>
       <Dialog
         open={open}

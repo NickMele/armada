@@ -111,6 +111,26 @@ test("cents survive the conversion, because a cap may be set in them", async () 
   expect(sent).toEqual([["job_2d90bb", 7_250_000]]);
 });
 
+/**
+ * `raise_cost_cap` is out and the dialog it opened has already closed on its
+ * own confirm — the button that opened it is what still shows the wait. #1117.
+ */
+test("the opening button is busy while its own raise is out", async () => {
+  mount(
+    <RaiseCapControl
+      jobId="job_2d90bb"
+      spend={SPENT}
+      disabled={false}
+      pending
+      open={false}
+      onOpen={() => {}}
+      onRaise={() => {}}
+    />,
+  );
+  const button = page.getByRole("button", { name: "Raising the cost cap…" });
+  await expect.element(button).toHaveAttribute("aria-busy", "true");
+});
+
 test("it names both figures the new one is decided against", async () => {
   opened();
   // The spend hedged and the cap exact, which is the distinction those two draw

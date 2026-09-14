@@ -45,6 +45,7 @@ export function RaiseTurnCapControl({
   jobId,
   spend,
   disabled,
+  pending = false,
   open,
   onOpen,
   onRaise,
@@ -60,6 +61,12 @@ export function RaiseTurnCapControl({
    */
   spend: JobSpend;
   disabled: boolean;
+  /**
+   * This is the control that opened the dialog, and `raise_turn_cap` is out,
+   * `RaiseCapControl`'s own reason. Read only where `trigger` draws a
+   * button. #1117.
+   */
+  pending?: boolean;
   /**
    * Whether the dialog is up. **Held by the screen and not here**: `T` opens it
    * too, and the keyboard is bound one level up — see `detail-keys.ts`.
@@ -96,8 +103,8 @@ export function RaiseTurnCapControl({
   return (
     <>
       {trigger ? (
-        <Button variant="secondary" disabled={disabled} onClick={() => onOpen(true)}>
-          {RAISE_TURN_CAP_LABEL}
+        <Button variant="secondary" pending={pending} disabled={disabled} onClick={() => onOpen(true)}>
+          {pending ? "Raising the turn cap…" : RAISE_TURN_CAP_LABEL}
         </Button>
       ) : null}
       <Dialog

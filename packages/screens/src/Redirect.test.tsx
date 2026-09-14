@@ -72,6 +72,34 @@ test("whitespace is blank", async () => {
   expect(sent, "spaces counted as an instruction").toEqual([]);
 });
 
+/**
+ * `redirect` is out and the dialog it opened has already closed on its own
+ * confirm — the button that opened it is what still shows the wait. #1117.
+ */
+test("the opening button is busy while its own redirect is out", async () => {
+  mount(
+    <RedirectControl jobId="job_2d90bb" drone="holding" disabled={false} pending onRedirect={() => {}} />,
+  );
+  const button = page.getByRole("button", { name: "Redirecting…" });
+  await expect.element(button).toHaveAttribute("aria-busy", "true");
+  // Refuses a second press: `Enter` on the focused, still-focusable button is
+  // what proves the press itself is swallowed rather than reopening the
+  // dialog Fleet has not answered for.
+  (button.element() as HTMLElement).focus();
+  await userEvent.keyboard("{Enter}");
+  await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+});
+
+/** A different act at the gate disables this button plainly — no bar, no busy word. */
+test("the opening button is only disabled, not busy, for a different act", async () => {
+  mount(
+    <RedirectControl jobId="job_2d90bb" drone="holding" disabled onRedirect={() => {}} />,
+  );
+  const button = page.getByRole("button", { name: ACT_LABEL.redirect });
+  await expect.element(button).toBeDisabled();
+  await expect.element(button).not.toHaveAttribute("aria-busy");
+});
+
 test("an instruction satisfies it, and Enter then sends", async () => {
   const { sent } = opened();
   await userEvent.click(page.getByRole("button", { name: ACT_LABEL.redirect }));

@@ -27,6 +27,14 @@ import { onwards, OVERRULING, type Overrule } from "./recovery";
 const WHAT_IT_FLAGGED = "What it flagged";
 
 /**
+ * The button's own face while its press is out. **One word for both
+ * triggers** — `OVERRULING[trigger].label` differs by what is being
+ * overruled ("the verdict" or "the flag"), and the wait is the one word both
+ * readings share. #1117.
+ */
+const OVERRULING_UNDERWAY = "Overruling…";
+
+/**
  * The button that opens the override dialog, and the dialog itself.
  *
  * **The dialog is the confirmation, and the reason is why there is one.** A
@@ -62,6 +70,7 @@ export function OverruleControl({
   overrule,
   opens,
   disabled,
+  pending = false,
   onOverrule,
 }: {
   jobId: string;
@@ -74,6 +83,12 @@ export function OverruleControl({
    */
   opens: Opens;
   disabled: boolean;
+  /**
+   * This is the control that opened the dialog, and `override_verdict` is
+   * out. The dialog has already closed on its own confirm — this is what
+   * still shows the wait. #1117.
+   */
+  pending?: boolean;
   onOverrule: (jobId: string, reason: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -92,8 +107,8 @@ export function OverruleControl({
 
   return (
     <>
-      <Button variant="secondary" disabled={disabled} onClick={() => setOpen(true)}>
-        {words.label}
+      <Button variant="secondary" pending={pending} disabled={disabled} onClick={() => setOpen(true)}>
+        {pending ? OVERRULING_UNDERWAY : words.label}
       </Button>
       <Dialog
         open={open}
