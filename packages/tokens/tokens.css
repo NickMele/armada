@@ -5,10 +5,54 @@
 
 /* ── fonts.css ─────────────────────────────── */
 /* Armada uses IBM Plex Sans for interface and IBM Plex Mono for anything
-   machine-derived. Served from Google Fonts here; the app pins the binaries.
-   SUBSTITUTION FLAG: no font binaries were supplied with the design document,
-   so these are the upstream IBM Plex webfonts rather than vendored files. */
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+   machine-derived. Vendored as local woff2 in packages/tokens/fonts, with the
+   SIL Open Font Licence beside them — this replaced a Google Fonts @import
+   that the renderer's `default-src 'self'` always refused, so the app drew in
+   the system font while Storybook, which reaches the network, drew real Plex.
+   The fix is the binaries, not a widened policy: Bridge has to draw offline.
+
+   Only the weights something actually draws are vendored: Sans 400/500/600,
+   Mono 400/500. No selector pairs --font-mono with --weight-heading (600), so
+   there is no Mono 600 file to keep in step with one that never renders.
+
+   This file is never loaded on its own — `verify-tokens` concatenates it into
+   packages/tokens/tokens.css, so these paths resolve from that file's
+   location, not from this one. */
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSans-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSans-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSans-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/IBMPlexMono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/IBMPlexMono-500.woff2") format("woff2");
+}
 
 :root {
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
