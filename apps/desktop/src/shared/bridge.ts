@@ -85,16 +85,21 @@ export function identifying(state: BridgeState): BridgeState {
 export type Summons = { jobId: string | null };
 
 /**
- * What one window's own pick decides: the root and the Manifest reading under it.
+ * What one window's own pick decides, and what is read against its own scope — the root, the
+ * Manifest reading under it, and Overview's health and drift, which span every repository in
+ * the scope: every one on All, or the one picked.
  *
  * **Every window keeps its own** — `main/picked.ts`'s `PickedByWindow` holds one `Picked`
  * per window, and `main/index.ts` overlays this shape onto the shared state each window
  * receives, so a pick made in one window never moves what another window reads back. A
- * fresh window's is `{ repository: null, manifestReading: null }`, which is All.
+ * fresh window's is `{ repository: null, manifestReading: null, health: { state: "none" },
+ * drifts: { state: "none" } }`, which is All with Overview closed.
  */
 export type PickedView = {
   repository: string | null;
   manifestReading: ManifestReading | null;
+  health: HealthRead;
+  drifts: DriftsRead;
 };
 
 /** Everything the renderer draws, published by main and never assembled twice. */
@@ -365,11 +370,15 @@ export type BridgeState = {
   /**
    * `GET /health` — what Fleet can say of its own health, and what it did not probe. Overview's
    * Doctor tile. **Held open by that surface alone**, `held`'s terms: Doctor's health is a pull.
+   *
+   * **This window's own** — `PickedView` — held open only where this window's Overview is.
    */
   health: HealthRead;
   /**
    * Drift for every repository in the scope — each served on All, or the one picked — beside
    * `manifestDrift`, which is the Manifest surface's one. Overview's drift tile, held open by it.
+   *
+   * **This window's own**, `health`'s reason: the scope is this window's own pick.
    */
   drifts: DriftsRead;
   /**

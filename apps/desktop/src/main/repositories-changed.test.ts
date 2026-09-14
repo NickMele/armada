@@ -16,7 +16,12 @@ import type { BridgeState, PickedView } from "../shared/bridge";
 import { FleetConnection } from "./connection";
 import { holderOf } from "./runtime-file";
 
-const NO_PICK: PickedView = { repository: null, manifestReading: null };
+const NO_PICK: PickedView = {
+  repository: null,
+  manifestReading: null,
+  health: { state: "none" },
+  drifts: { state: "none" },
+};
 
 const ARMADA: RepositorySummary = {
   root: "/Users/user/armada",
@@ -24,6 +29,11 @@ const ARMADA: RepositorySummary = {
   manifest: { id: "armada", repository: "armada", path: "/Users/user/armada/armada.yml", records_root: "/records/armada", version: 1, checks: [] },
 };
 const SCRATCH: RepositorySummary = { root: "/Users/user/scratch", records_root: "/records/scratch" };
+const STOREFRONT: RepositorySummary = {
+  root: "/Users/user/storefront",
+  records_root: "/records/storefront",
+  manifest: { id: "storefront", repository: "storefront", path: "/Users/user/storefront/armada.yml", records_root: "/records/storefront", version: 1, checks: [] },
+};
 
 const opened: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
@@ -33,17 +43,22 @@ afterEach(async () => {
 /** A Fleet serving `listing` over HTTP and `/events`, counting each route read. */
 async function fleetServing(listing: RepositorySummary[]) {
   const reads = new Map<string, number>();
+  const urls: string[] = [];
   const stream = new WebSocketServer({ noServer: true });
   const server: Server = createServer((request, answer) => {
     const route = request.url ?? "";
     reads.set(route, (reads.get(route) ?? 0) + 1);
+    urls.push(route);
     const body: Record<string, unknown> = {
       "/repositories": { repositories: listing },
       "/workflows": [],
       "/manifests": [],
       "/models": { choices: [] },
     };
-    const found = body[route];
+    // Setup and the Manifest file: any query answers, so the test below reads back which
+    // `manifest_id` or `repository` each window's own call named.
+    const scoped = route.startsWith("/manifest/file") || route.startsWith("/repository/scan");
+    const found = body[route] ?? (scoped ? {} : undefined);
     answer.writeHead(found === undefined ? 404 : 200, { "content-type": "application/json" });
     answer.end(JSON.stringify(found ?? {}));
   });
@@ -54,7 +69,13 @@ async function fleetServing(listing: RepositorySummary[]) {
   await once(server, "listening");
   opened.push(() => new Promise<void>((done) => server.close(() => done())));
   const port = (server.address() as AddressInfo).port;
-  return { port, socket: once(stream, "connection").then(([client]) => client as WebSocket), read: (route: string) => reads.get(route) ?? 0 };
+  return {
+    port,
+    socket: once(stream, "connection").then(([client]) => client as WebSocket),
+    read: (route: string) => reads.get(route) ?? 0,
+    /** Every URL asked so far that starts with `prefix`, in arrival order. */
+    urlsFrom: (prefix: string) => urls.filter((url) => url.startsWith(prefix)),
+  };
 }
 
 /**
@@ -105,6 +126,8 @@ async function bridgeOn(port: number) {
     viewOf: (windowId: number) => views.get(windowId) ?? NO_PICK,
     open: (windowId: number) => windows.add(windowId),
     pick: (windowId: number, root: string | null) => connection.repositories.pick(windowId, root),
+    /** This window's own Manifest file and Setup commands — `connection.ts`'s `editingFor`. */
+    editingFor: (windowId: number) => connection.editingFor(windowId),
   };
 }
 
@@ -168,4 +191,38 @@ it("moves only the window that picks — Open Setup in one leaves another's pick
   await bridge.untilView(2, (view) => view.repository === ARMADA.root);
   expect(bridge.viewOf(1).repository).toBe(SCRATCH.root);
   expect(bridge.viewOf(2).repository).toBe(ARMADA.root);
+});
+
+it("Setup and a Manifest read act on the window's own pick — Open Setup in one leaves the other's", async () => {
+  const fleet = await fleetServing([ARMADA, STOREFRONT]);
+  const bridge = await bridgeOn(fleet.port);
+  bridge.open(2);
+  (await fleet.socket).send(resync);
+  await bridge.until((state) => rootsOf(state).length === 2);
+
+  // Window B (2) sits on armada, the way a person on the rail would before A's clone lands.
+  await bridge.pick(2, ARMADA.root);
+  await bridge.untilView(2, (view) => view.repository === ARMADA.root);
+
+  // Window A (1) presses Open Setup for storefront: it picks and its own view moves.
+  await bridge.pick(1, STOREFRONT.root);
+  await bridge.untilView(1, (view) => view.repository === STOREFRONT.root);
+
+  // B's own Setup and Manifest read still name armada, not the repository A just opened.
+  await bridge.editingFor(2).readFile();
+  await bridge.editingFor(2).setup.readScan();
+  expect(fleet.urlsFrom("/manifest/file")).toEqual(["/manifest/file?manifest_id=armada"]);
+  expect(fleet.urlsFrom("/repository/scan")).toEqual([`/repository/scan?repository=${encodeURIComponent(ARMADA.root)}`]);
+
+  // A's own Setup and Manifest read name storefront, exactly where it opened Setup.
+  await bridge.editingFor(1).readFile();
+  await bridge.editingFor(1).setup.readScan();
+  expect(fleet.urlsFrom("/manifest/file")).toEqual([
+    "/manifest/file?manifest_id=armada",
+    "/manifest/file?manifest_id=storefront",
+  ]);
+  expect(fleet.urlsFrom("/repository/scan")).toEqual([
+    `/repository/scan?repository=${encodeURIComponent(ARMADA.root)}`,
+    `/repository/scan?repository=${encodeURIComponent(STOREFRONT.root)}`,
+  ]);
 });

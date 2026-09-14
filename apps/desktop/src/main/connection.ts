@@ -79,22 +79,22 @@ export class FleetConnection {
    * One field for both, `commands`' reason: they are one feature. */
   readonly rehearsal: RehearsalConnection;
   /**
-   * The Manifest file and repository-wide always-allows, one of each per window — see
-   * `editing.ts` and `repository-allows.ts`. **Constructed on first ask, off that window's own
-   * `Picked`** — `RepositoryReads.pickedByWindow` — so two windows on two repositories never
-   * share one route builder. Neither class holds mutable state of its own, which is what makes
-   * one instance per window cheap rather than a second place for each to drift.
+   * The Manifest file, repository-wide always-allows and Overview, one of each per window — see
+   * `editing.ts`, `repository-allows.ts` and `overview.ts`. **Constructed on first ask, off that
+   * window's own `Picked`** — `RepositoryReads.pickedByWindow` — so two windows on two
+   * repositories never share one route builder or one Overview scope. `editing` and
+   * `repositoryAllows` hold no mutable state of their own, which is what makes one instance per
+   * window cheap; `overview` does — its own `open` and `asked` — which is exactly why a window's
+   * Helm dock closing must not close another's.
    */
   private readonly windowFacades = new Map<
     number,
-    { editing: ManifestFileCommands; repositoryAllows: RepositoryAllowsCommands }
+    { editing: ManifestFileCommands; repositoryAllows: RepositoryAllowsCommands; overview: OverviewReads }
   >();
   /** A person's own add or drop of a task — see `plan-edits.ts`. */
   readonly planEdits: PlanEdits;
   /** What Fleet serves and which repository each window picked — see `repositories.ts`. */
   readonly repositories: RepositoryReads;
-  /** Overview's health and per-repository drift, held while it is open — see `overview.ts`. */
-  readonly overview: OverviewReads;
   /** Every question waiting on a person, from every repository — see `questions.ts`. */
   private readonly questions = new Questions({
     current: () => this.current,
@@ -183,8 +183,7 @@ export class FleetConnection {
     this.planEdits = new PlanEdits({ port, foldPlan: (jobId, plan) => this.jobFocus.foldPlan(jobId, plan) });
     const [publish, picked] = [(change: Partial<BridgeState>) => this.publish(change), new Picked()];
     this.rehearsal = new RehearsalConnection({ publish, port, picked });
-    this.overview = new OverviewReads({ publish, picked, port });
-    const [holds, overview] = [() => this.current.holds, this.overview];
+    const holds = () => this.current.holds;
     this.repositories = new RepositoryReads({
       picked,
       pickedByWindow: new PickedByWindow(),
@@ -193,7 +192,7 @@ export class FleetConnection {
       windowIds: wiring.windowIds,
       holds,
       rehearsal: this.rehearsal,
-      overview,
+      overviewAgain: (at) => this.overviewAgainForEveryWindow(at),
       port,
     });
     this.commands = new JobCommands({
@@ -240,7 +239,7 @@ export class FleetConnection {
       watchedJobId: () => this.jobFocus.watchedJobId(),
       repositories: this.repositories,
       rehearsal: this.rehearsal,
-      overview: this.overview,
+      overviewAgain: (at) => this.overviewAgainForEveryWindow(at),
       questions: this.questions,
       material: this.material,
       socket: this.socket,
@@ -263,7 +262,14 @@ export class FleetConnection {
     return this.facadesFor(windowId).repositoryAllows;
   }
 
-  private facadesFor(windowId: number): { editing: ManifestFileCommands; repositoryAllows: RepositoryAllowsCommands } {
+  /** This window's own Overview reads — see `windowFacades`. */
+  overviewFor(windowId: number): OverviewReads {
+    return this.facadesFor(windowId).overview;
+  }
+
+  private facadesFor(
+    windowId: number,
+  ): { editing: ManifestFileCommands; repositoryAllows: RepositoryAllowsCommands; overview: OverviewReads } {
     let found = this.windowFacades.get(windowId);
     if (found === undefined) {
       const picked = this.repositories.pickedByWindow.of(windowId);
@@ -271,14 +277,25 @@ export class FleetConnection {
       found = {
         editing: new ManifestFileCommands(port, picked, (at) => this.repositories.readHoldings(at)),
         repositoryAllows: new RepositoryAllowsCommands(port, picked),
+        overview: new OverviewReads({
+          publish: (change) => this.wiring.publishToWindow(windowId, change),
+          picked,
+          port,
+        }),
       };
       this.windowFacades.set(windowId, found);
     }
     return found;
   }
 
-  /** The window closed. Its own pick and its Manifest and always-allow commands go with it. */
+  /** Every open window's own Overview read again, off its own pick — `repositories.ts`'s `overviewAgain`. */
+  private async overviewAgainForEveryWindow(port: number): Promise<void> {
+    await Promise.all(this.wiring.windowIds().map((windowId) => this.facadesFor(windowId).overview.again(port)));
+  }
+
+  /** The window closed. Its own pick and its Manifest, always-allow and Overview commands go with it. */
   dropWindow(windowId: number): void {
+    this.windowFacades.get(windowId)?.overview.close();
     this.windowFacades.delete(windowId);
     this.repositories.pickedByWindow.drop(windowId);
   }
@@ -331,7 +348,7 @@ export class FleetConnection {
     this.material.close();
     this.reports.close();
     this.held.close();
-    this.overview.close();
+    for (const facades of this.windowFacades.values()) facades.overview.close();
   }
 
   // --------------------------------------------------------------- arrivals

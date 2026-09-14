@@ -4,7 +4,6 @@
 
 import type { BridgeState, PickedView } from "../shared/bridge";
 import type { Holdings, ManifestReading, RepositoryList } from "@armada/protocol";
-import type { OverviewReads } from "./overview";
 import { PickedByWindow, type Picked } from "./picked";
 import type { RehearsalConnection } from "./rehearsal";
 import { Locating } from "./locating";
@@ -13,22 +12,22 @@ import { holdingsOf, manifestReadingOf, repositoriesOf } from "./request";
 export type RepositoryWiring = {
   /**
    * The one pick shared across every window, kept exactly as it was before this file went
-   * per-window. **Verify, Overview's drift and `holdingsOf`'s `leftOut` still read this** — none
-   * of the three take a window yet, so a pick made anywhere is still what they answer against,
-   * `checkout-runs.ts`'s own terms until it does too.
+   * per-window. **Verify and `holdingsOf`'s `leftOut` still read this** — `checkout-runs.ts` is
+   * mid-flight in a sibling change and does not take a window yet, so a pick made anywhere is
+   * still what the one and what New job's own answer on All reads.
    */
   picked: Picked;
   /** Every window's own pick, apart from the shared one above and from each other. */
   pickedByWindow: PickedByWindow;
   publish: (change: Partial<BridgeState>) => void;
-  /** One window's own `repository` and `manifestReading`, overlaid onto what it alone receives. */
+  /** One window's own `repository`, `manifestReading`, `health` and `drifts`, overlaid onto what it alone receives. */
   publishToWindow: (windowId: number, change: Partial<PickedView>) => void;
   /** Every window open right now, so a listing that moved reconciles every one of their picks. */
   windowIds: () => readonly number[];
   holds: () => Holdings;
   rehearsal: RehearsalConnection;
-  /** Overview's reads, whose scope a listing or the shared pick moves. */
-  overview: OverviewReads;
+  /** Every open window's own Overview read again — `connection.ts`'s `windowFacades`. */
+  overviewAgain: (port: number) => Promise<void>;
   port: () => number | null;
 };
 
@@ -84,9 +83,9 @@ export class RepositoryReads {
     const kept = listed === null ? held : { ...held, repositories: listed.repositories };
     this.wiring.publish({ holds: await holdingsOf(port, kept, this.picked) });
     if (moved || legacyShifted) {
-      await Promise.all([this.wiring.rehearsal.onRepositoryMoved(port), this.wiring.overview.again(port)]);
+      await Promise.all([this.wiring.rehearsal.onRepositoryMoved(port), this.wiring.overviewAgain(port)]);
     } else {
-      await this.wiring.overview.again(port);
+      await this.wiring.overviewAgain(port);
     }
     await Promise.all(
       [...shifted.entries()].map(([windowId, one]) => (moved || one ? this.readManifestOf(windowId, port) : null)),

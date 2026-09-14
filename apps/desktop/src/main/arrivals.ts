@@ -18,7 +18,6 @@ import { connectedTo } from "@armada/protocol";
 import { connects, PROTOCOL_VERSION, skew } from "@armada/protocol";
 import type { Connection, JobSummary, ServerState, StreamMessage } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
-import type { OverviewReads } from "./overview";
 import type { Questions } from "./questions";
 import type { RehearsalConnection } from "./rehearsal";
 import { ask, capacityOf, limitsOf, preferencesOf } from "./request";
@@ -38,7 +37,8 @@ export interface ArrivalHost {
   watchedJobId(): string | null;
   readonly repositories: RepositoryReads;
   readonly rehearsal: RehearsalConnection;
-  readonly overview: OverviewReads;
+  /** Every open window's own Overview read again — `connection.ts`'s `windowFacades`. */
+  overviewAgain(port: number): Promise<void>;
   readonly questions: Questions;
   readonly material: ReviewMaterial;
   readonly socket: { close(): void; resetUnreachable(): void };
@@ -374,7 +374,7 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // refusal standing, and a merge would keep the old fault on screen
     // beside the news that the file is now fine.
     // Overview's drift spans every repository on All, so it reads whichever file this was.
-    void host.overview.again(fleet.port);
+    void host.overviewAgain(fleet.port);
     host.publish({ connection });
     // Every window whose own pick reads this file draws it — `RepositoryReads.manifestReread`.
     host.repositories.manifestReread(event);

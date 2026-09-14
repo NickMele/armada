@@ -304,13 +304,17 @@ export class JobCommands {
    *
    * `repository` is the root New job's ask answered on All, where the Board
    * stays and the pick cannot carry it — #959. `null` for every other caller.
+   *
+   * `picked` is this window's own — `main/index.ts` names it; `this.board.picked` only where a
+   * caller (`picked.test.ts`) supplies none.
    */
   async proposeFromRequest(
     request: string,
     attachments: StagedAttachment[],
     repository: string | null = null,
+    picked: Picked = this.board.picked,
   ): Promise<Proposed> {
-    return propose(this.board, request, attachments, repository);
+    return propose(this.board, request, attachments, repository, picked);
   }
 
   /**
@@ -362,10 +366,13 @@ export class JobCommands {
    * popup nobody has to have open. `search_files` itself never refuses — see
    * `Queries::search_files` — so what is left to answer empty for is Bridge
    * having nowhere to ask at all.
+   *
+   * `picked` is this window's own — `main/index.ts` names it; `this.board.picked` only where a
+   * caller (`picked.test.ts`) supplies none.
    */
-  async searchFiles(query: string): Promise<string[]> {
+  async searchFiles(query: string, picked: Picked = this.board.picked): Promise<string[]> {
     const port = this.board.port();
-    const path = this.board.picked.manifest(`/manifest/files?q=${encodeURIComponent(query)}`);
+    const path = picked.manifest(`/manifest/files?q=${encodeURIComponent(query)}`);
     if (port === null || path === null) return [];
     const answer = await ask(port, "GET", path);
     return answer.ok === true ? (answer.body as FilesFound).paths : [];

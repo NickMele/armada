@@ -227,8 +227,15 @@ const remarksPoll = new RemarksPoll({
  */
 const pickedViews = new Map<number, PickedView>();
 
+const NO_PICK: PickedView = {
+  repository: null,
+  manifestReading: null,
+  health: { state: "none" },
+  drifts: { state: "none" },
+};
+
 function viewFor(windowId: number): PickedView {
-  return pickedViews.get(windowId) ?? { repository: null, manifestReading: null };
+  return pickedViews.get(windowId) ?? NO_PICK;
 }
 
 /** Every window sees the same state, save its own pick — `pickedViews`, overlaid here. */
@@ -374,8 +381,13 @@ void app.whenReady().then(() => {
   // make the model call a flag.
   ipcMain.handle(
     CHANNELS.proposeFromRequest,
-    (_event, request: string, attachments: StagedAttachment[], repository: string | null) =>
-      connection?.commands.proposeFromRequest(request, attachments, repository),
+    (event, request: string, attachments: StagedAttachment[], repository: string | null) =>
+      connection?.commands.proposeFromRequest(
+        request,
+        attachments,
+        repository,
+        connection.repositories.pickedByWindow.of(windowIdOf(event)),
+      ),
   );
   // No argument: what may be stopped is what this window started. See
   // `JobCommands.stopProposal`.
@@ -388,8 +400,8 @@ void app.whenReady().then(() => {
     (_event, bytes: ArrayBuffer, filename: string, mimeType: string) =>
       stageAttachment(bytes, filename, mimeType),
   );
-  ipcMain.handle(CHANNELS.searchFiles, (_event, query: string) =>
-    connection?.commands.searchFiles(query),
+  ipcMain.handle(CHANNELS.searchFiles, (event, query: string) =>
+    connection?.commands.searchFiles(query, connection.repositories.pickedByWindow.of(windowIdOf(event))),
   );
   ipcMain.handle(CHANNELS.approveDispatch, (_event, jobId: string) =>
     connection?.commands.approveDispatch(jobId),
@@ -650,7 +662,9 @@ void app.whenReady().then(() => {
     connection?.rehearsal.watchManifestDrift(want),
   );
   // Overview's health and per-repository drift, held open by that surface.
-  ipcMain.handle(CHANNELS.watchOverview, (_event, want: unknown) => connection?.overview.watch(want === true));
+  ipcMain.handle(CHANNELS.watchOverview, (event, want: unknown) =>
+    connection?.overviewFor(windowIdOf(event)).watch(want === true),
+  );
   ipcMain.handle(CHANNELS.startCheckoutVerify, (_event, workspace: unknown) =>
     connection?.rehearsal.startCheckoutVerify(typeof workspace === "string" ? workspace : undefined),
   );
