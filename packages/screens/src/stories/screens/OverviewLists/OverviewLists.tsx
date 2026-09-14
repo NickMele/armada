@@ -68,6 +68,7 @@ export function OverviewListsFrom({
   disconnected = null,
   stale = false,
   now = NOW,
+  onCursor,
 }: {
   jobs?: readonly JobSummary[];
   workflows?: readonly WorkflowSummary[];
@@ -77,6 +78,7 @@ export function OverviewListsFrom({
   disconnected?: string | null;
   stale?: boolean;
   now?: number;
+  onCursor?: (jobId: string | null) => void;
 }) {
   return (
     <OverviewLists
@@ -91,6 +93,7 @@ export function OverviewListsFrom({
       onOpen={noop}
       onKill={noop}
       onCopied={noop}
+      onCursor={onCursor}
     />
   );
 }

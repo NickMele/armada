@@ -1,7 +1,7 @@
 // Helm's context, on its own — no window, no Fleet.
 
 import { expect, test } from "vitest";
-import { chippedJobId, contextOf, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
+import { chippedJobId, contextOf, cursorRowFor, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
 
 test("opening a Job chips it and points Helm at its repository", () => {
   const { state, point } = opened(NO_CHIP, { id: "12", manifestId: "M-armada" });
@@ -44,6 +44,19 @@ test("screenOf follows the precedence App.tsx draws by", () => {
   expect(screenOf({ reading: false, clearing: false, manifesting: true, overviewing: true })).toBe("manifest");
   expect(screenOf({ reading: false, clearing: false, manifesting: false, overviewing: true })).toBe("overview");
   expect(screenOf({ reading: false, clearing: false, manifesting: false, overviewing: false })).toBe("board");
+});
+
+test("cursorRowFor sends the Board's cursor on the Board and Overview's on Overview", () => {
+  const rows = { board: "12", overview: "14" };
+  expect(cursorRowFor({ screen: "board", ...rows })).toBe("12");
+  expect(cursorRowFor({ screen: "overview", ...rows })).toBe("14");
+});
+
+test("cursorRowFor sends neither off the Board and Overview — a stale row is worse than none", () => {
+  const rows = { board: "12", overview: "14" };
+  expect(cursorRowFor({ screen: "manifest", ...rows })).toBeNull();
+  expect(cursorRowFor({ screen: "cleanup", ...rows })).toBeNull();
+  expect(cursorRowFor({ screen: "job_detail", ...rows })).toBeNull();
 });
 
 test("contextOf leaves an absent field off the wire", () => {

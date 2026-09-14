@@ -22,7 +22,7 @@ import type { Outstanding } from "@armada/screens";
 import type { HelmContext, JobSummary } from "@armada/protocol";
 import { useDockAnswering } from "./dock-answering";
 import { HelmDock } from "./HelmDock";
-import { chippedJobId, contextOf, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
+import { chippedJobId, contextOf, cursorRowFor, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
 import type { ChipState } from "./helm-context";
 import { Dialog, Textarea } from "@armada/components";
 
@@ -205,6 +205,9 @@ export function App() {
   // on. Two cursors would drift.
   const palette = useCommandPalette();
   const [cursor, setCursor] = useState<string | null>(null);
+  // Overview's own cursor, mirrored the same way — `OverviewLists` holds it
+  // and reports it up. #1075.
+  const [overviewCursor, setOverviewCursor] = useState<string | null>(null);
   // The Job chipped above Helm's message box — #1075. Opening a Job's detail
   // chips it and points Helm at its repository; leaving the Job or its own ×
   // drops the chip, and reopening the Job restores it. `helm-context.ts` is
@@ -460,16 +463,16 @@ export function App() {
   const all = pickedRepository === null && repositories.length > 0;
   // The Board's Jobs follow the pick. The status bar, the palette and held worktrees read every Job.
   const boardJobs = useMemo(() => ofPicked(state.jobs, pickedRepository), [state.jobs, pickedRepository]);
-  // Where the person is, for Helm — #1075. `cursor` is the Board's own row
-  // and stale off it, so only the Board sends it; Overview has no roving row
-  // of its own to send in its place.
+  // Where the person is, for Helm — #1075. `cursorRowFor` picks the Board's
+  // or Overview's row by which screen is showing, so neither's stale row
+  // reaches an ask made on the other.
   const helmScreen = screenOf({ reading: reading !== null, clearing, manifesting, overviewing });
   const chippedJob = state.jobs.find((job) => job.id === chippedJobId(chip));
   const helmContext: HelmContext = contextOf({
     screen: helmScreen,
     picked: scoped?.id ?? null,
     chip: chippedJob?.id ?? null,
-    cursor: helmScreen === "board" ? cursor : null,
+    cursor: cursorRowFor({ screen: helmScreen, board: cursor, overview: overviewCursor }),
   });
   // Helm's dock lists every repository's questions, whatever the pick. Answering is #936, Helm #944.
   const dockAnswering = useDockAnswering(commands);
@@ -825,6 +828,7 @@ export function App() {
               }}
               onOpenManifest={() => goTo(SURFACE.manifest)}
               onCopied={setCopied}
+              onCursor={setOverviewCursor}
             />
           ) : (
             <>

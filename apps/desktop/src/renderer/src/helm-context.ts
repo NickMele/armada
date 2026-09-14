@@ -55,6 +55,23 @@ export function screenOf(where: {
   return "board";
 }
 
+/**
+ * Which cursor `AskHelm.context` carries — the Board's or Overview's,
+ * whichever screen is showing. Neither is a fact off the other: the Board's
+ * `cursor` is stale once Overview is what's on screen, and Overview has its
+ * own roving row (`OverviewLists`, reported the same way `Jobs.tsx` reports
+ * the Board's).
+ */
+export function cursorRowFor(where: {
+  screen: HelmScreen;
+  board: string | null;
+  overview: string | null;
+}): string | null {
+  if (where.screen === "board") return where.board;
+  if (where.screen === "overview") return where.overview;
+  return null;
+}
+
 /** `AskHelm.context`, sent with every ask. Absent fields are left off the wire rather than sent `null`. */
 export function contextOf(where: {
   screen: HelmScreen;
