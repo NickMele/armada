@@ -1,0 +1,81 @@
+/* A rounded panel in the left column. Same recipe as DriftPanel and
+   VerifyPanel: bordered on every side, radius-lg, held off its neighbours by
+   the column's own gap rather than by margin here. */
+.armada-panel {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-width: 0;
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.armada-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  /* 40px, off the height scale — no token between --h-control-sm (32) and
+     --h-control (36) reaches it. --space-8 + --space-2. */
+  min-height: calc(var(--space-8) + var(--space-2));
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.armada-panel[data-open] .armada-panel__head {
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-panel__head:hover {
+  color: var(--fg-default);
+}
+
+.armada-panel__head:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--border-width) * -2);
+}
+
+.armada-panel__trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+.armada-panel__body {
+  padding: var(--space-2);
+}
+
+/* Below --layout-breakpoint: the head centres on one dot, and nothing else draws. */
+.armada-panel[data-narrow] .armada-panel__head {
+  justify-content: center;
+  padding: var(--space-2) 0;
+}
+
+.armada-panel__dot {
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--fg-muted);
+}
+
+.armada-panel__dot[data-tone="success"] {
+  background: var(--status-completed-success);
+}
+
+.armada-panel__dot[data-tone="warn"] {
+  background: var(--status-awaiting-review);
+}
+
+.armada-panel__dot[data-tone="escalated"] {
+  background: var(--status-escalated);
+}

@@ -357,20 +357,29 @@ export function ManifestFrom({
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <Shell
         connection={CONNECTED}
-        statement={statement}
         repositories={[repository()]}
         scope={repository().root}
         onScope={noop}
         onCompose={noop}
         onSearch={noop}
-        jobs={[]}
         boardJobs={[]}
-        capacity={{ bound: 4, occupied: 0 }}
+        stats={{
+          rows: [
+            { id: "approval", label: "Awaiting approval", value: 0 },
+            { id: "review", label: "Needs review", value: 0 },
+            { id: "escalated", label: "Escalated", value: 0 },
+            { id: "jobs", label: "Jobs", value: 0 },
+            { id: "drones", label: "Drones", value: "0 of 4" },
+            { id: "manifest", label: "Manifest", value: "Current" },
+          ],
+          open: true,
+          onOpenChange: noop,
+        }}
+        fleet={{ state: "running", label: "Running", detail: statement.detail, open: true, onOpenChange: noop }}
         title={head?.title}
         summary={head?.summary}
         actions={head?.actions}
         showing={SURFACE.manifest}
-        onOpenLimits={noop}
       >
         <div className="armada-screen__mounted">
           <Manifest

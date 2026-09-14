@@ -1,4 +1,7 @@
-/* Sidebar — the rail that never disappears.
+/* Sidebar — Navigation, the left column's first panel. Bridge/1088 moved it
+   off the frameless rail and into the same rounded-panel recipe as Stats and
+   Fleet beneath it: bordered on every side, radius-lg, held off its
+   neighbours by the column's own gap.
 
    Widths are all tokens: --sidebar-default, --sidebar-min, --sidebar-max and
    --sidebar-rail. Persistence of the resting width and the collapsed state is
@@ -10,16 +13,10 @@
   flex: none;
   min-width: var(--sidebar-rail);
   max-width: var(--sidebar-max);
-  padding: var(--space-3);
-  /* **Sunken, where this was raised.** The rail is chrome: it frames the
-     working area rather than sitting on it, and chrome reads as chrome by
-     being *behind* the work rather than in front of it. Raised put it a step
-     above the panel it borders, so the window read as a list of links floating
-     beside a page instead of a frame around one. `--bg-sunken` is the same
-     ground the status bar takes, which is what makes the two read as one
-     frame around the middle. */
-  background: var(--bg-sunken);
-  border-right: var(--border-width) solid var(--border-subtle);
+  padding: var(--space-2);
+  background: var(--bg-raised);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
 }
 
 /* The drag region. Frameless `hiddenInset` chrome insets the macOS traffic
@@ -67,19 +64,22 @@
 .armada-sidebar__group {
   display: flex;
   flex-direction: column;
-  gap: var(--border-width);
+  /* 2px — off the 4px grid, half of --space-1. No token sits between
+     --border-width and --space-1. */
+  gap: calc(var(--space-1) / 2);
   min-width: 0;
 }
 
-/* A nav item. 28px — one step under the menu-item height, because a rail item
-   is quieter than a menu row and the drawing sizes it there. No token spells
-   28px. Reported. */
+/* A nav row, sized off the shell mock: 15px text, 12px icon-to-label gap,
+   7px/12px padding — the vertical figure is off the grid (--space-2 less a
+   quarter of --space-1), the horizontal is --space-3. Height is
+   padding-driven rather than fixed, the same reasoning --h-row-stacked
+   documents. */
 .armada-sidebar__item {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  height: calc(var(--h-menu-item) - var(--space-1));
-  padding: 0 var(--space-2);
+  gap: var(--space-3);
+  padding: calc(var(--space-2) - var(--space-1) / 4) var(--space-3);
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;

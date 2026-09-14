@@ -24,12 +24,13 @@
 // answers it now, from the roster admission itself counts against, so the
 // contract's `pid, port, drone count` is finally all three.
 //
-// # The bar names Fleet's state; the panel head carries the controls
+// # The status bar is gone; Fleet's state lives in the left column
 //
-// `Refresh` used to live in the bar. The design contract is explicit that the
-// bar carries no icons and that its only colour is the dot and the two counts,
-// so the control moved up beside `Dispatch` (`New job` until #1087 renamed
-// it) and the bar is what it is specified to be.
+// Bridge/1088 replaced the rail and the status bar with three rounded
+// panels — Navigation, Stats and Fleet. **Their rows arrive built**, from
+// `apps/desktop`'s `left-column.ts`, which reads the same arithmetic
+// Overview's own tiles do. Not built here: `@armada/screens` already depends
+// on this package for `statementOf`, and the reverse import would be a cycle.
 //
 // # The picker and Dispatch live in the title row, not here
 //
@@ -43,29 +44,23 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ACTION,
   JOB_LIFECYCLE,
-  plural,
   Button,
   DockQuestions,
   Select,
   TheShell,
-  Tooltip,
   type DockQuestion,
-  type FleetState,
-  type StatusBarProps,
+  type FleetPanelProps,
+  type StatsPanelProps,
 } from "@armada/components";
 
 import type { Connection } from "@armada/protocol";
-import type { FleetCapacity, JobSummary } from "@armada/protocol";
+import type { JobSummary } from "@armada/protocol";
 import type { RepositorySummary } from "@armada/protocol";
-import type { Statement } from "./fleet";
 import { ALL_REPOSITORIES, RepositoryOptions } from "./RepositoryOptions";
-import { ADMISSION_HOLD } from "@armada/components";
 import { SURFACE, SURFACES } from "./surfaces";
 
 export type ShellProps = {
   connection: Connection;
-  /** Fleet's state in the words the design contract settles. */
-  statement: Statement;
   /** Every repository Fleet serves, set up or not. One entry is why the drawing shows the control. */
   repositories: readonly RepositorySummary[];
   /** Whether Fleet has answered the listing, so an empty one says nothing is set up rather than not read. */
@@ -76,12 +71,15 @@ export type ShellProps = {
   onScope: (root: string | null) => void;
   /** Opens Locate. Absent draws no control. */
   onAddRepository?: () => void;
-  /** Every Job, for the bar's counts. They span every repository. */
-  jobs: readonly JobSummary[];
   /** The Board's Jobs, for the rail's count. They follow the pick. */
   boardJobs: readonly JobSummary[];
-  /** How full the fleet is. `null` is a Fleet that has not answered yet. */
-  capacity: FleetCapacity | null;
+  /**
+   * The left column's Stats panel, built by the caller from the same
+   * arithmetic Overview's own tiles read — `apps/desktop`'s `left-column.ts`.
+   */
+  stats: Omit<StatsPanelProps, "narrow">;
+  /** The left column's Fleet panel — what the status bar used to draw. */
+  fleet: Omit<FleetPanelProps, "narrow">;
   /** Absent draws no head — see `TheShell`. One Job read whole passes none. */
   title?: string;
   summary?: string;
@@ -93,10 +91,6 @@ export type ShellProps = {
   onSearch: () => void;
   /** Which surface is up, by its id in `surfaces.ts`. The rail marks it. */
   showing: string;
-  /** Opens Fleet settings. The status bar's own held reason is one click from
-   *  the control that would clear it, where the reason is one Fleet settings
-   *  answers for. */
-  onOpenLimits: () => void;
   /** Selecting a rail row goes to that surface, from wherever you are. The
    *  rail is the one thing present on every view, so it is where a person
    *  looks to get back — Escape and Cancel both work and neither is what they
@@ -112,15 +106,14 @@ export type ShellProps = {
 
 export function Shell({
   connection,
-  statement,
   repositories,
   listed = false,
   scope,
   onScope,
   onAddRepository,
-  jobs,
   boardJobs,
-  capacity,
+  stats,
+  fleet,
   title,
   summary,
   actions,
@@ -128,7 +121,6 @@ export function Shell({
   onSearch,
   showing,
   onSurface,
-  onOpenLimits,
   questions = [],
   helm,
   children,
@@ -204,149 +196,12 @@ export function Shell({
       title={title}
       summary={summary}
       actions={actions}
-      status={statusOf(connection, statement, jobs, capacity, onOpenLimits)}
+      stats={stats}
+      fleet={fleet}
     >
       {children}
     </TheShell>
   );
-}
-
-/**
- * The bar, from what Bridge holds.
- *
- * **No spend**, for the reason at the top of this file. The job count is the
- * contract's own middle segment — "Fleet running · 3 jobs" — and the two
- * waiting counts appear only when non-zero.
- */
-function statusOf(
-  connection: Connection,
-  statement: Statement,
-  jobs: readonly JobSummary[],
-  capacity: FleetCapacity | null,
-  onOpenLimits: () => void,
-): StatusBarProps {
-  const detailParts: ReactNode[] = [];
-  if (statement.detail !== "") detailParts.push(statement.detail);
-  const droneCount = drones(capacity);
-  if (droneCount !== null) detailParts.push(droneCount);
-  return {
-    fleet: fleetOf(connection),
-    fleetLabel: statement.headline,
-    detail: detailParts.length === 0 ? undefined : interleave(detailParts, " · "),
-    advice: statement.next ?? undefined,
-    items: [plural(jobs.length), ...held(jobs, capacity, onOpenLimits)],
-    escalations: jobs.filter((job) => job.status === "escalated").length,
-    approvals: jobs.filter((job) => job.status === "awaiting_approval").length,
-  };
-}
-
-/** The admission holds Fleet settings answers for. `cpu` has no control:
- *  Fleet no longer holds a Job back for CPU, so only an older Fleet sends
- *  `cpu`, and it gets no control. */
-const SETTABLE_HOLD = new Set(["concurrency_bound", "memory", "disk"]);
-
-/** `parts` with `separator` between each, as one array `detail` can render. */
-function interleave(parts: readonly ReactNode[], separator: string): ReactNode[] {
-  return parts.flatMap((part, i) =>
-    i === 0 ? [part] : [<span key={`sep-${i}`}>{separator}</span>, part],
-  );
-}
-
-/**
- * "2 of 2 drones", the contract's third mono value, and absent where Fleet has
- * not answered.
- *
- * **Absent rather than "0 of 0"**, because a Fleet that has not been asked and
- * a Fleet with nothing running are different facts and one of them is not
- * known.
- *
- * **Carries a tooltip naming `bound` a ceiling.** "1 of 2" reads as one drone
- * missing rather than as one of two slots in use — `bound` is
- * `settings.concurrency-cap`, not a census, and nothing else on the bar says
- * so.
- */
-function drones(capacity: FleetCapacity | null): ReactNode {
-  if (capacity === null) return null;
-  const { occupied, bound } = capacity;
-  const label = `${occupied} of ${bound} ${bound === 1 ? "drone" : "drones"}`;
-  const hint = `Fleet runs up to ${bound} ${bound === 1 ? "drone" : "drones"} at once. ${occupied} ${
-    occupied === 1 ? "is" : "are"
-  } working now.`;
-  return (
-    <Tooltip key="drones" label={hint}>
-      {label}
-    </Tooltip>
-  );
-}
-
-/**
- * Which of the four things is holding the next drone back, **and only while
- * something is waiting on it**.
- *
- * Fleet answers this whenever admission would refuse, which includes a fleet
- * with nothing queued at all. Drawn then it is a warning about a situation
- * nobody is in, and the contract is explicit that the bar must not become a
- * second alert surface. So it appears when there is a Job it is an answer for.
- *
- * **The word is the registry's.** An unknown key is a newer Fleet naming a
- * reason this build has never heard of — additive by design — and it renders as
- * its own wire spelling, which is the fallback every other surface takes rather
- * than inventing a second vocabulary.
- *
- * **Carries a tooltip where the registry has one.** The verb alone names which
- * of the four is short; `ADMISSION_HOLD[hold]?.hint` says why, and is absent
- * for a wire spelling this build has never heard of.
- *
- * **One click from the control that would clear it**, for the three of the
- * four Fleet settings answers for.
- */
-function held(
-  jobs: readonly JobSummary[],
-  capacity: FleetCapacity | null,
-  onOpenLimits: () => void,
-): ReactNode[] {
-  const hold = capacity?.held_by;
-  if (hold === undefined) return [];
-  if (!jobs.some((job) => job.status === "queued")) return [];
-  const rendering = ADMISSION_HOLD[hold];
-  const verb = rendering?.verb ?? hold;
-  const content = SETTABLE_HOLD.has(hold) ? (
-    <button type="button" className="armada-status-bar__link" onClick={onOpenLimits}>
-      {verb}
-    </button>
-  ) : (
-    verb
-  );
-  if (rendering?.hint) {
-    return [
-      <Tooltip key="held" label={rendering.hint}>
-        {content}
-      </Tooltip>,
-    ];
-  }
-  return [content];
-}
-
-/**
- * Which of the dot's hues this reading takes.
- *
- * Four of Bridge's seven connection states are none of the contract's three —
- * reading, connecting, a refused runtime file and a protocol Bridge does not
- * speak. They keep the neutral dot rather than borrowing a fourth hue; the
- * sentence beside it names each one, and the failure notice on the board
- * carries the whole reading.
- */
-function fleetOf(connection: Connection): FleetState {
-  switch (connection.state) {
-    case "connected":
-      return "running";
-    case "not_running":
-      return "not-running";
-    case "unreachable":
-      return "unreachable";
-    default:
-      return "unknown";
-  }
 }
 
 /**

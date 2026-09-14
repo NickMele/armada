@@ -28,13 +28,19 @@ export function OverviewSurfaceFrom({ jobs }: { jobs?: readonly JobSummary[] } =
         ]}
         title="Overview"
         summary="Everything in flight for armada."
-        status={{
-          fleet: "running",
-          fleetLabel: "Fleet running",
-          detail: "pid 4417 · port 7411",
-          items: ["6 jobs"],
-          approvals: 1,
+        stats={{
+          rows: [
+            { id: "approval", label: "Awaiting approval", value: 1, tone: "warn" },
+            { id: "review", label: "Needs review", value: 0 },
+            { id: "escalated", label: "Escalated", value: 0 },
+            { id: "jobs", label: "Jobs", value: 6 },
+            { id: "drones", label: "Drones", value: "2 of 4" },
+            { id: "manifest", label: "Manifest", value: "Current" },
+          ],
+          open: true,
+          onOpenChange: noop,
         }}
+        fleet={{ state: "running", label: "Running", detail: "pid 4417 · port 7411", open: true, onOpenChange: noop }}
         dock={{
           open: true,
           binding: "⌘J",

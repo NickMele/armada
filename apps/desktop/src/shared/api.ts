@@ -532,8 +532,9 @@ export type BridgeApi = {
    */
   watchManifestDrift: (want: boolean) => Promise<void>;
   /**
-   * Overview's health and per-repository drift, or `false` to stop. **Reads, and held open by that
-   * surface**: nothing is asked while it is closed.
+   * Fleet's health and per-repository drift, or `false` to stop. **Reads.** `App.tsx` holds this
+   * open for the life of the window: Overview's own tiles and the left column's Stats and Fleet
+   * panels (Bridge/1088) all draw it.
    */
   watchOverview: (want: boolean) => Promise<void>;
   /**

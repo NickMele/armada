@@ -332,7 +332,6 @@ export function SetupFrom({
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <Shell
         connection={CONNECTED}
-        statement={statementOf(CONNECTED, NOW, NOW)}
         repositories={listed}
         listed
         scope={scope}
@@ -347,14 +346,24 @@ export function SetupFrom({
         }}
         onCompose={noop}
         onSearch={noop}
-        jobs={[]}
         boardJobs={[]}
-        capacity={{ bound: 4, occupied: 0 }}
+        stats={{
+          rows: [
+            { id: "approval", label: "Awaiting approval", value: 0 },
+            { id: "review", label: "Needs review", value: 0 },
+            { id: "escalated", label: "Escalated", value: 0 },
+            { id: "jobs", label: "Jobs", value: 0 },
+            { id: "drones", label: "Drones", value: "0 of 4" },
+            { id: "manifest", label: "Manifest", value: "Not set up" },
+          ],
+          open: true,
+          onOpenChange: noop,
+        }}
+        fleet={{ state: "running", label: "Running", detail: statementOf(CONNECTED, NOW, NOW).detail, open: true, onOpenChange: noop }}
         title={head?.title}
         summary="Set up a Manifest for each workspace in this checkout. Write puts one file down and stops, without staging or committing it."
         actions={head?.actions}
         showing={SURFACE.manifest}
-        onOpenLimits={noop}
         onAddRepository={locate.onOpen}
       >
         <div className="armada-screen__mounted">

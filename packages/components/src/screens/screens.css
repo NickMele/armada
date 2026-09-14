@@ -61,9 +61,8 @@
   overflow: hidden;
 }
 
-/* The shell itself: rail and panel side by side, the status bar beneath both.
-   Beneath both rather than inside the panel, because the bar is app-level and
-   appears on Helm too — the drawing insets it and the contract does not. */
+/* The shell itself: the left column and the panel side by side. Bridge/1088
+   removed the status bar that used to span beneath both. */
 .armada-shell {
   display: flex;
   flex: 1;
@@ -80,7 +79,22 @@
 .armada-shell__body {
   display: flex;
   flex: 1;
+  gap: var(--space-4);
   min-height: 0;
+}
+
+/* Navigation, Stats and Fleet, stacked — the left column Bridge/1088 built to
+   replace the rail and the status bar. Margined on three sides the way the
+   dock already is, because the panel beside it stays flush by design — "the
+   panel *is* the ground", below. */
+.armada-shell__left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: none;
+  min-height: 0;
+  margin: var(--space-4) 0 var(--space-4) var(--space-4);
+  overflow-y: auto;
 }
 
 .armada-shell__panel {
