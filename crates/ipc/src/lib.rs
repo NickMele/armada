@@ -237,7 +237,7 @@ pub use rehearsal::{
     CheckoutRunDiff, CheckoutRunList, CheckoutRunMessage, CheckoutRunOpened, CheckoutRunRecord,
     CheckoutRunSheet, CheckoutRunUnderway, DiffAgainst, NamedRun, RunDiffReading, RunEntry,
     RunList, RunMessage, RunOpened, RunOutput, RunRecord, RunSheet, RunUnderway, StartCheckoutRun,
-    StartRun, UnreadableRun,
+    StartRun, UnreadableRun, WorkspaceCommands,
 };
 pub use rehearsal::{
     CheckoutVerify, StartCheckoutVerify, VerifyGroup, VerifyStep, VerifyStepState,

@@ -80,6 +80,22 @@ pub(crate) fn resolved(
     Ok(Some(Workspace { dir, manifest }))
 }
 
+/// Each workspace below `root` whose own `armada.yml` loads, with its Commands.
+/// A file that will not load lists nothing; Verify is where it says why.
+pub(crate) fn listed(root: &str) -> Vec<ipc::WorkspaceCommands> {
+    crate::scanning::manifested(&crate::scanning::Checkout::at(root))
+        .into_iter()
+        .filter_map(|dir| {
+            let one = resolved(root, Some(&dir)).ok().flatten()?;
+            let (_, _, commands) = super::entries::declared(&one.manifest).sheet(&[]);
+            Some(ipc::WorkspaceCommands {
+                dir: one.dir,
+                commands,
+            })
+        })
+        .collect()
+}
+
 /// A workspace a Verify runs in: its directory, and the ports its own file
 /// declares, resolved from the span claimed for that Verify.
 #[derive(Clone)]

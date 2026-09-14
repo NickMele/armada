@@ -21,6 +21,23 @@ async fn a_workspace_command_runs_and_undoes_by_repository_where_the_root_has_no
     let app = routed(&fleet);
     let scope = format!("?repository={root}");
 
+    let (status, body) = call(&app, "GET", &format!("/manifest/run_sheet{scope}"), "").await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let sheet: ipc::CheckoutRunSheet = ipc::decode("a sheet", &body).expect("a sheet");
+    let listed: Vec<(&str, Vec<&str>)> = sheet
+        .workspaces
+        .iter()
+        .map(|one| {
+            let names = one.commands.iter().map(|e| e.name.as_str()).collect();
+            (one.dir.as_str(), names)
+        })
+        .collect();
+    assert_eq!(
+        listed,
+        [("apps/web", vec!["say"])],
+        "its own Commands, setup's `prepare` aside"
+    );
+
     let (status, body) = call(
         &app,
         "POST",
@@ -31,6 +48,7 @@ async fn a_workspace_command_runs_and_undoes_by_repository_where_the_root_has_no
     let said = String::from_utf8_lossy(&body);
     assert_eq!(status, StatusCode::ACCEPTED, "{said}");
     let underway: ipc::CheckoutRunUnderway = ipc::decode("underway", &body).expect("underway");
+    assert_eq!(underway.workspace.as_deref(), Some("apps/web"));
 
     let record = tokio::time::timeout(Duration::from_secs(30), async {
         loop {
@@ -46,6 +64,11 @@ async fn a_workspace_command_runs_and_undoes_by_repository_where_the_root_has_no
     .await
     .expect("the run wrote its record");
     assert_eq!(record.exit_code, Some(0), "{}", record.ended);
+    assert_eq!(
+        record.workspace.as_deref(),
+        Some("apps/web"),
+        "the history row names it"
+    );
     let web = Path::new(&root).join("apps/web");
     assert!(web.join("said.txt").is_file(), "it ran in the workspace");
     assert!(record.undoable);

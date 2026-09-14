@@ -251,6 +251,19 @@ pub struct CheckoutRunSheet {
     /// on disk under `.armada/runs/` like any other run's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verify: Option<CheckoutVerify>,
+    /// Each workspace below the root with its own `armada.yml`, and the
+    /// Commands that file declares — pressed with `StartCheckoutRun.workspace`.
+    #[serde(default)]
+    pub workspaces: Vec<WorkspaceCommands>,
+}
+
+/// One workspace's own Commands, as `CheckoutRunSheet::workspaces` lists them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceCommands {
+    /// Relative to the repository root, `/`-separated.
+    pub dir: String,
+    /// Every Command its `setup.requires` does not name, servers aside.
+    pub commands: Vec<RunEntry>,
 }
 
 /// `start_checkout_run`'s body: a name, and the workspace whose file declares it.
@@ -279,6 +292,9 @@ pub struct CheckoutRunUnderway {
     pub command: String,
     /// Elapsed time is counted from here; nothing ticks on the wire.
     pub started_at: Instant,
+    /// The workspace whose own file declared it. Absent is the root's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
 }
 
 /// One finished checkout run, as its directory under `.armada` records it.
@@ -286,6 +302,9 @@ pub struct CheckoutRunUnderway {
 pub struct CheckoutRunRecord {
     pub id: String,
     pub name: String,
+    /// The workspace whose own file declared it. Absent is the root's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
     pub command: String,
     /// The Commands that ran first, in order.
     pub required: Vec<String>,

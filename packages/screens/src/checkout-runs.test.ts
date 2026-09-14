@@ -18,6 +18,7 @@ import {
   exitedOf,
   runningEntryOf,
 } from "./checkout-runs";
+import { checkoutStartOf } from "./checkout-workspace";
 
 function entry(name: string, run: string, over: Partial<RunEntry> = {}): RunEntry {
   return {
@@ -140,5 +141,41 @@ describe("an ended server", () => {
 
   it("carries its code where it exited on its own", () => {
     expect(exitedOf({ ...ENDED, exit_code: 1 })).toEqual({ phase: "exited", stopped: false, exitCode: 1 });
+  });
+});
+
+describe("a workspace's own Commands", () => {
+  const ROOTLESS: CheckoutRunSheet = {
+    setup: [],
+    checks: [],
+    commands: [],
+    workspaces: [
+      { dir: "apps/web", commands: [entry("dev", "pnpm dev")] },
+      { dir: "apps/api", commands: [entry("dev", "cargo run")] },
+    ],
+  };
+  const groups = checkoutGroupsOf(ROOTLESS, true);
+
+  it("lists only Commands where there is no root file, each saying where it runs", () => {
+    expect(groups.map((group) => group.label)).toEqual(["Commands"]);
+    expect(groups[0]?.entries.map((row) => row.note)).toEqual(["In apps/web.", "In apps/api."]);
+  });
+
+  it("starts a row with its workspace named", () => {
+    expect(checkoutStartOf(groups[0]!.entries[1]!.id)).toEqual({ name: "dev", workspace: "apps/api" });
+    expect(checkoutStartOf("command:fmt")).toEqual({ name: "fmt" });
+  });
+
+  it("keeps two of one name apart, in flight and in Earlier runs", () => {
+    expect(runningEntryOf(groups, "dev", "apps/api")).toBe(groups[0]!.entries[1]!.id);
+    const runs = [
+      { id: "r2", name: "dev", workspace: "apps/api" },
+      { id: "r1", name: "dev", workspace: "apps/web" },
+    ] as CheckoutRunRecord[];
+    expect(checkoutResultRunOf(runs, groups[0]!.entries[0]!.id, undefined)?.id).toBe("r1");
+    expect(checkoutRunnablesOf({ state: "read", sheet: ROOTLESS }).map((row) => row.label)).toEqual([
+      "dev in apps/web",
+      "dev in apps/api",
+    ]);
   });
 });

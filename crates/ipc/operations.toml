@@ -1820,7 +1820,7 @@ transport = "HTTP"
 agent_access = "No"
 description = "What a person can run in the main checkout - its Setup, Checks and Commands - off the Manifest Fleet holds"
 notes = """
-**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning. With no root Manifest the three lists and `servers` are empty, and `verify` is still the checkout's.
+**`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning. With no root Manifest the three lists and `servers` are empty, and `verify` is still the checkout's. `workspaces` lists each directory Scan finds holding its own `armada.yml` that loads, with the Commands that file declares, pressed with `StartCheckoutRun.workspace`; it is listed with or without a root Manifest.
 
 **It needs no Job and reads no store.** This is the `armada.yml` Fleet is already running on and watching, which is why it answers on a repository that has never had a Job in it. Nothing here is frozen: there is one file and it is the one that runs.
 
@@ -1836,6 +1836,8 @@ agent_access = "No"
 description = "The main checkout's earlier runs: name, exit code, when, how long, what changed, and the log"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
+
+A run of a workspace's own entry names it in `workspace`, so two of one name stay apart; a record from before the field reads as the root's.
 
 `list_runs` read off `.armada/runs/main/` rather than `.armada/runs/<job>/`. A Job handle always begins with the Job's own number, so no Job can be called `main` and the two cannot collide.
 

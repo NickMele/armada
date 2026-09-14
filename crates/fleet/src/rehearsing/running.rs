@@ -138,6 +138,7 @@ where
             snapshot: reference,
             undone_at: None,
             log: records::relative_log(&plan.place.handle, &plan.underway.id),
+            workspace: plan.underway.workspace.clone(),
         };
         let kept = records::write(&plan.dir, &record);
         self.noted_rehearsal(plan.place.job.as_ref(), &record, kept.err());

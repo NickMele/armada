@@ -251,6 +251,8 @@ pub(super) fn only_a_workspace(home: &TempDir, fleet: &Fixture) -> String {
     let root = home.path().join("alone");
     std::fs::create_dir_all(root.join("apps/web")).expect("a workspace");
     std::fs::write(root.join("apps/web/armada.yml"), WEB).expect("its Manifest");
+    // Scan finds a workspace by its package file; the sheet lists what Scan finds.
+    std::fs::write(root.join("apps/web/package.json"), "{}").expect("its package");
     let git = |args: &[&str]| {
         let run = Command::new("git")
             .arg("-C")

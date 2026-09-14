@@ -218,7 +218,12 @@ export type CheckoutRunSheet = {
    * own record is a run like any other.
    */
   verify?: CheckoutVerify;
+  /** Each workspace below the root with its own `armada.yml`, and the Commands it declares. */
+  workspaces?: WorkspaceCommands[];
 };
+
+/** One workspace's own Commands. `dir` is relative to the repository root. */
+export type WorkspaceCommands = { dir: string; commands: RunEntry[] };
 
 /**
  * `POST /manifest/start_run`'s body. A name and nothing else — there is no
@@ -234,12 +239,16 @@ export type CheckoutRunUnderway = {
   command: string;
   /** Elapsed time is counted from here; nothing ticks on the wire. */
   started_at: string;
+  /** The workspace whose own file declared it. Absent is the root's. */
+  workspace?: string;
 };
 
 /** One finished checkout run. `GET /manifest/runs`'s row. */
 export type CheckoutRunRecord = {
   id: string;
   name: string;
+  /** The workspace whose own file declared it. Absent is the root's. */
+  workspace?: string;
   command: string;
   required: string[];
   started_at: string;

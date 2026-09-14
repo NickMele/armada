@@ -95,6 +95,10 @@ where
             command,
             narrowed,
             started_at: ipc::Instant::from(&self.now()),
+            workspace: tree
+                .within
+                .as_ref()
+                .map(|within| within.dir.to_string_lossy().into_owned()),
         };
         let (stop, stopped) = watch::channel(false);
         let (done, ended) = watch::channel(None);

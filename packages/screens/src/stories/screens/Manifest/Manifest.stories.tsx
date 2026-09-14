@@ -3,7 +3,7 @@ import type {
   CheckoutRunDiff,
   CheckoutRunRecord,
 } from "@armada/protocol";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import {
   BUILD_FOLLOWED,
   BUILD_OUT,
@@ -17,6 +17,7 @@ import {
   VERIFY_ENDED,
   VERIFY_UNDERWAY,
 } from "./Manifest";
+import { rootlessSheet, WEB_DEV_RUN } from "./rootless";
 
 /**
  * Bridge's Manifest surface, at `⌘5` — Journey 9's *Running one*, with no Job
@@ -468,5 +469,30 @@ export const AFrozenRepository: Story = {
     await expect(freeze.getByRole("switch", { name: /Freeze this repository/ })).toBeChecked();
     await expect(canvas.getByText("This repository is frozen")).toBeVisible();
     await expect(canvas.queryByRole("button", { name: "Unfreeze on the form" })).toBeNull();
+  },
+};
+
+/**
+ * A repository with no root `armada.yml`: `apps/web` declares `dev` in its own
+ * file, so the page lists that alone. There is no root file to edit, drift or
+ * verify, so none of those is offered, and Run names the workspace.
+ */
+export const AWorkspacesCommandWithNoRootManifest: Story = {
+  name: "A workspace's Command, with no root Manifest",
+  args: {
+    sheet: { state: "read", sheet: rootlessSheet() },
+    setUp: false,
+    runs: { runs: [WEB_DEV_RUN], unreadable: [] },
+    onStartRun: fn(() => Promise.resolve({ ok: true as const })),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("In apps/web.")).toBeVisible();
+    await expect(canvas.queryByRole("tab", { name: "Edit" })).toBeNull();
+    await expect(canvas.queryByText("Setup")).toBeNull();
+    await expect(await canvas.findByText("dev in apps/web")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: /^dev/ }));
+    await userEvent.click(canvas.getByRole("button", { name: "Run" }));
+    await expect(args.onStartRun).toHaveBeenCalledWith({ name: "dev", workspace: "apps/web" });
   },
 };

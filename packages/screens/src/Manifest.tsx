@@ -110,9 +110,12 @@ export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
 export function Manifest(props: ManifestProps) {
   // Before the branches: a hook cannot be called conditionally, and the states
   // below are branches on what was read rather than on what this holds.
-  const slot = useManifestRuns(props);
+  // No root file, but a workspace declares Commands: those alone are listed, and nothing of the root's.
+  const workspaced = props.sheet.state === "read" && (props.sheet.sheet.workspaces ?? []).length > 0;
+  const rootless = props.setUp === false && workspaced;
+  const slot = useManifestRuns({ ...props, rootless });
   const { editing } = props;
-  const onlySetup = props.setUp === false && props.setup !== undefined;
+  const onlySetup = props.setUp === false && props.setup !== undefined && !workspaced;
   const [dismissedVerify, setDismissedVerify] = useState<string | null>(null);
   const [verifyRefused, setVerifyRefused] = useState<string | null>(null);
   const verify = verifyPanelOf({
@@ -137,7 +140,7 @@ export function Manifest(props: ManifestProps) {
   return (
     <div className="armada-screen__stack">
       {/* Above every view, so a freeze left on is seen wherever the page opens. */}
-      {props.form.state !== "open" || !props.form.frozen || onlySetup ? null : (
+      {props.form.state !== "open" || !props.form.frozen || onlySetup || rootless ? null : (
         <Alert
           tone="neutral"
           title="This repository is frozen"
@@ -165,14 +168,16 @@ export function Manifest(props: ManifestProps) {
         items={[
           ...(onlySetup
             ? []
-            : [
+            : rootless
+              ? [{ id: "run", label: "Checks and Commands" }]
+              : [
                 { id: "run", label: "Checks and Commands" },
                 { id: "form", label: "Edit" },
                 { id: "file", label: editing.named },
               ]),
           ...(props.setup === undefined ? [] : [{ id: "setup", label: "Set up workspaces" }]),
         ]}
-        value={props.settingUp || onlySetup ? "setup" : editing.view}
+        value={props.settingUp || onlySetup ? "setup" : rootless ? "run" : editing.view}
         onChange={(id) => {
           props.onSettingUp?.(id === "setup");
           if (id !== "setup") editing.onView(id === "file" || id === "form" ? id : "run");
@@ -180,6 +185,8 @@ export function Manifest(props: ManifestProps) {
       />
       {(props.settingUp || onlySetup) && props.setup !== undefined ? (
         props.setup
+      ) : rootless ? (
+        <RunPage {...slot} />
       ) : editing.view === "file" ? (
         <FileView file={editing.file} />
       ) : editing.view === "form" ? (

@@ -41,6 +41,7 @@ import type {
   StartCheckoutRun,
 } from "@armada/protocol";
 import { checkoutChangedOf, checkoutRunDiffReadingOf } from "./checkout-run-diff";
+import { checkoutEntryOf, checkoutRunLabelOf, checkoutStartOf, sameCheckoutEntry, workspaceEntryOf } from "./checkout-workspace";
 import { absoluteOf, clockOf, span } from "./duration";
 import { openServerLink } from "./opening";
 import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
@@ -73,20 +74,25 @@ export type ManifestSlice = {
  * Commands is a fact about the file; a group that vanished would read as a
  * surface that failed to list them.
  */
-export function checkoutGroupsOf(sheet: CheckoutRunSheet): RunPageGroup[] {
+export function checkoutGroupsOf(sheet: CheckoutRunSheet, rootless = false): RunPageGroup[] {
+  const commands: RunPageGroup = {
+    kind: "commands",
+    label: "Commands",
+    entries: [
+      ...sheet.commands.map((e) => entryOf(COMMAND_PREFIX, e)),
+      ...(sheet.workspaces ?? []).flatMap((one) => one.commands.map((e) => workspaceEntryOf(one.dir, e))),
+      ...(sheet.servers ?? []).map(serverEntryOf),
+    ],
+  };
+  // No root file declares Setup or Checks, so empty groups would claim one did.
+  if (rootless) return [commands];
   return [
     { kind: "setup", label: "Setup", entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e)) },
     { kind: "checks", label: "Checks", entries: sheet.checks.map((e) => entryOf(CHECK_PREFIX, e)) },
-    {
-      kind: "commands",
-      label: "Commands",
-      entries: [
-        ...sheet.commands.map((e) => entryOf(COMMAND_PREFIX, e)),
-        ...(sheet.servers ?? []).map(serverEntryOf),
-      ],
-    },
+    commands,
   ];
 }
+
 
 /**
  * One row. **`narrow_run` is never read**, and that is not an oversight: Fleet
@@ -181,7 +187,7 @@ export function checkoutPastRunOf(
 ): RunPagePastRun {
   return {
     id: record.id,
-    name: record.name,
+    name: checkoutRunLabelOf(record),
     result:
       record.exit_code === undefined
         ? record.ended
@@ -218,7 +224,7 @@ export function checkoutRunnablesOf(
   return checkoutGroupsOf(read.sheet).flatMap((group) =>
     group.entries.map((entry) => ({
       id: entry.id,
-      label: String(entry.name),
+      label: checkoutRunLabelOf(checkoutEntryOf(entry.id)),
       value: entry.run,
     })),
   );
@@ -238,6 +244,8 @@ export function useManifestRuns(
     now: number;
     /** Says why a server's link did not open. The app's own toast. */
     onSaid: (sentence: string) => void;
+    /** No root Manifest: only the workspaces' Commands are listed. */
+    rootless?: boolean;
   },
 ): RunPageProps {
   const {
@@ -317,17 +325,17 @@ export function useManifestRuns(
     if (runningId === undefined) refreshRuns();
   }, [runningId]);
 
-  const groups = data === undefined ? [] : checkoutGroupsOf(data);
+  const groups = data === undefined ? [] : checkoutGroupsOf(data, slice.rootless === true);
   // **Nothing picked and a run in flight reads as the running entry picked.**
   // Opening the surface onto a run already underway drew its output under
   // "Pick a Check or a Command" with no row lit — the page describing the run
   // and the list denying one was going.
-  const shown = selected ?? runningEntryOf(groups, data?.running?.name) ?? null;
+  const shown = selected ?? runningEntryOf(groups, data?.running?.name, data?.running?.workspace) ?? null;
 
   const runningNow = checkoutRunningOf(data, now);
   const diffRun = diffOpen === null ? undefined : runs.find((record) => record.id === diffOpen.runId);
   const server = checkoutServerStatusOf(data, shown, now);
-  const live = checkoutOutputOf(followed, shown === null ? undefined : nameOf(shown));
+  const live = checkoutOutputOf(followed, shown === null ? undefined : checkoutEntryOf(shown).name);
   const output = dismissed ? undefined : (viewing?.output ?? live);
   // Which run the result line is about: the one opened from *Earlier runs*, or
   // the newest finished one while the live pane is what is showing. **Never
@@ -351,7 +359,7 @@ export function useManifestRuns(
       setDismissed(false);
       setViewing(null);
       if (isServerEntry(id)) void onStartServer(nameOf(id));
-      else void onStartRun({ name: nameOf(id) });
+      else void onStartRun(checkoutStartOf(id));
     },
     ...(output === undefined ? {} : { output }),
     onDismiss: () => {
@@ -389,7 +397,7 @@ export function useManifestRuns(
           diff: {
             // The record is on the list the page drew the button from. Where
             // retention swept it while the sheet was open, the id stands in.
-            name: diffRun?.name ?? diffOpen.runId,
+            name: diffRun === undefined ? diffOpen.runId : checkoutRunLabelOf(diffRun),
             ranAt: diffRun === undefined ? "—" : clockOf(diffRun.started_at),
             reading: diffReading,
             ...(diffRun?.undone_at === undefined ? {} : { undone: `Undone at ${clockOf(diffRun.undone_at)}.` }),
@@ -445,11 +453,13 @@ export function useManifestRuns(
 export function runningEntryOf(
   groups: readonly RunPageGroup[],
   runningName: string | undefined,
+  workspace?: string,
 ): string | undefined {
   if (runningName === undefined) return undefined;
+  const run = workspace === undefined ? { name: runningName } : { name: runningName, workspace };
   return groups
     .flatMap((group) => group.entries)
-    .find((entry) => !isServerEntry(entry.id) && nameOf(entry.id) === runningName)?.id;
+    .find((entry) => !isServerEntry(entry.id) && sameCheckoutEntry(entry.id, run))?.id;
 }
 
 /**
@@ -464,7 +474,7 @@ export function checkoutResultRunOf(
   if (viewing !== undefined) return runs.find((record) => record.id === viewing);
   if (shown === null) return runs[0];
   if (isServerEntry(shown)) return undefined;
-  return runs.find((record) => record.name === nameOf(shown));
+  return runs.find((record) => sameCheckoutEntry(shown, record));
 }
 
 /** An ended server. A stop somebody pressed is not "on its own", and no code is not `exit 0`. */
@@ -479,7 +489,7 @@ export function exitedOf(instance: ServerState): RunPageServerStatus {
 /** The result line for a finished run. Unhued: a rehearsal is not a verdict. */
 function resultOf(record: CheckoutRunRecord): RunPageResult {
   return {
-    name: record.name,
+    name: checkoutRunLabelOf(record),
     ...(record.exit_code === undefined ? {} : { exitCode: record.exit_code }),
     expected: record.expect_exit_code,
     ended: record.ended,

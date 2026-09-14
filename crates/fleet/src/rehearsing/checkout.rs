@@ -53,6 +53,10 @@ where
             }
             None => Default::default(),
         };
+        let root = place.checkout.root().to_string();
+        let workspaces = tokio::task::spawn_blocking(move || workspace::listed(&root))
+            .await
+            .unwrap_or_default();
         Ok(ipc::CheckoutRunSheet {
             setup,
             checks,
@@ -64,6 +68,7 @@ where
                 .map(|out| out.of_checkout()),
             servers,
             verify: self.rehearsals().verifies().seen(place.checkout.root()),
+            workspaces,
         })
     }
 
