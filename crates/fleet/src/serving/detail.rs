@@ -50,7 +50,16 @@ where
             .last_reason(job.id())
             .await
             .map_err(|why| self.refusal(why))?;
-        let (ran, flagged, moves, ran_every_attempt, judged_every_attempt, frames, started_at) = {
+        let (
+            ran,
+            flagged,
+            moves,
+            ran_every_attempt,
+            judged_every_attempt,
+            frames,
+            started_at,
+            ended_at,
+        ) = {
             let store = self.store().lock().await;
             let ran = store
                 .step_checks(job.id())
@@ -86,6 +95,10 @@ where
             // arrival at `running`, beside the step moves above.
             let started_at = crate::wire::job_started_at(&store, job.id())
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            // And its one arrival at a terminal status, where it has ended —
+            // `started_at`'s own reason, and `JobSummary::ended_at`'s.
+            let ended_at = crate::wire::job_ended_at(&store, job.id())
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
             (
                 ran,
                 flagged,
@@ -94,6 +107,7 @@ where
                 judged_every_attempt,
                 frames,
                 started_at,
+                ended_at,
             )
         };
         // The plans are read with the footprint and only with it: they are what
@@ -221,6 +235,7 @@ where
             queued.budget,
             self.resumption(&job),
             started_at,
+            ended_at,
             &step_facts(
                 self.aloft(),
                 self.underway(),

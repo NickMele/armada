@@ -153,6 +153,15 @@ export type JobSummary = {
    * to `queued` on a restart — only the very first arrival counts.
    */
   started_at?: string;
+  /**
+   * When the Job arrived at a terminal status. Since protocol 14.1.
+   *
+   * **Absent is a Job still going**, never `null`. Overview 28 (#1092): a Job
+   * killed, failed or rejected has nowhere to stand once it is over — the
+   * Board's own Done section is collapsed and Overview drops it outright —
+   * so this is the fact a **Recently ended** list reads to say when.
+   */
+  ended_at?: string;
   /** Absent until a worktree exists. A Job at the approval gate has none. */
   branch?: string;
   /**

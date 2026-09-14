@@ -159,6 +159,7 @@ pub fn detail_of(job: &Job, asking: Option<QuestionInFlight>) -> JobDetail {
         None,
         None,
         None,
+        None,
         &[],
         None,
         None,

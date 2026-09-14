@@ -99,6 +99,8 @@ export function OverviewListsFrom({
       onSectionOpenChange={onSectionOpenChange}
       onOpen={noop}
       onKill={noop}
+      onRedispatch={noop}
+      onClear={noop}
       onCopied={noop}
       onCursor={onCursor}
     />

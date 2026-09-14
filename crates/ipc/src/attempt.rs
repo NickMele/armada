@@ -217,6 +217,24 @@ pub fn first_started_at<'a>(moves: impl Iterator<Item = Move<'a>>) -> Option<Ins
         .next()
 }
 
+/// The instant this Job arrived at a status the registry marks terminal — off
+/// the same Job-level log [`first_started_at`] reads, and
+/// [`JobSummary::of`](crate::JobSummary::of)'s own rule for `ended_at`.
+///
+/// **Any arrival, not the first.** A terminal status carries no outbound edge
+/// — `job-statuses.toml`'s own `transitions_out` says so, and
+/// `JobStatus::is_terminal` agrees — so a Job-level log holds at most one, and
+/// `first_started_at`'s "match by spelling" is borrowed for the search, not
+/// for a choice between several arrivals there is never more than one of.
+pub fn ended_at<'a>(moves: impl Iterator<Item = Move<'a>>) -> Option<Instant> {
+    moves
+        .filter(|moved| {
+            core_model::JobStatus::from_wire(moved.to).is_some_and(|status| status.is_terminal())
+        })
+        .map(|moved| moved.at.clone())
+        .next()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{first_started_at, Move, StepAttempt};

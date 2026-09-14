@@ -59,6 +59,10 @@ export type OverviewListsProps = {
   onOpen: (jobId: string) => void;
   /** Ask to kill the Job a row's own control names. It asks; it never kills — `Jobs.tsx`'s rule. */
   onKill: (jobId: string) => void;
+  /** Ask to redispatch — Recently ended's own control, Overview 28 (#1092). Asks; never redispatches. */
+  onRedispatch: (jobId: string) => void;
+  /** Ask to clear — Recently ended's caret, beside Redispatch. Asks; never clears. */
+  onClear: (jobId: string) => void;
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
   /**
@@ -84,6 +88,8 @@ export function OverviewLists({
   onSectionOpenChange,
   onOpen,
   onKill,
+  onRedispatch,
+  onClear,
   onCopied,
   onCursor,
 }: OverviewListsProps) {
@@ -110,6 +116,8 @@ export function OverviewLists({
       focused={job.id === cursor}
       onOpen={onOpen}
       onKill={onKill}
+      onRedispatch={onRedispatch}
+      onClear={onClear}
       onCopied={onCopied}
     />
   );

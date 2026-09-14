@@ -320,6 +320,33 @@ describe("the All tab's sections", () => {
     );
   });
 
+  // Overview 28 (#1092): a Job that ended without succeeding stood nowhere to be found —
+  // Done collapsed by default, and Overview dropped it outright. Recently ended is the fix.
+  it.each(["killed", "completed_failed", "rejected"])(
+    "puts a %s job under Recently ended rather than Done",
+    (status) => {
+      expect(sectionOf(job({ status }))).toBe("recently-ended");
+    },
+  );
+
+  it("leaves a job that succeeded, or that nothing is owed on, under Done", () => {
+    expect(sectionOf(job({ status: "completed_success" }))).toBe("done");
+    expect(sectionOf(job({ status: "superseded" }))).toBe("done");
+  });
+
+  it("moves a Recently ended job back under Done once it is cleared", () => {
+    expect(sectionOf(job({ status: "killed", reclaimed_at: "2026-09-01T00:00:00Z" }))).toBe("done");
+  });
+
+  it("draws Recently ended above Done and below Queued", () => {
+    const rows = [
+      job({ id: "a", status: "killed" }),
+      job({ id: "b", status: "completed_success" }),
+      job({ id: "c", status: "queued" }),
+    ];
+    expect(sectionsOf(rows).map((section) => section.id)).toEqual(["queued", "recently-ended", "done"]);
+  });
+
   it("draws no section with nothing in it", () => {
     expect(sectionsOf([job({ status: "running" })]).map((section) => section.id)).toEqual(["running"]);
   });

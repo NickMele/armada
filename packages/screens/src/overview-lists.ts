@@ -22,7 +22,12 @@ import { readingOf } from "./reading";
 export type OverviewSection = { id: BoardSection; label: string; jobs: JobSummary[] };
 
 export type OverviewListsRead = {
-  /** Needs you, Running, Queued and Other — Done left off, and a section with nothing in it left off too. */
+  /**
+   * Needs you, Running, Queued, Recently ended and Other — Done left off, and
+   * a section with nothing in it left off too. Recently ended joined the set
+   * in Overview 28 (#1092): `sectionsOf` already carves it out of Done, so
+   * excluding only `"done"` here is what lets it through without a second rule.
+   */
   sections: OverviewSection[];
   /** Which dispatch of its lineage each folded-in Job is, keyed by id — `headlineOf`'s second argument. */
   dispatch: ReadonlyMap<string, Dispatch>;

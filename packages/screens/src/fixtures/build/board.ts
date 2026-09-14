@@ -50,13 +50,24 @@ export function boardJobs(): JobSummary[] {
     }),
     row(8, "refuse-a-merge-press", "Refuse a merge press whose chosen comments won't fit the brief", "completed_failed", {
       current_step_id: "regression_verify",
+      ended_at: "2026-09-10T19:40:00Z",
     }),
     row(9, "rename-session-token", "Rename the session token field", "killed", {
       current_step_id: "root_cause",
+      ended_at: "2026-09-10T20:05:00Z",
     }),
     row(10, "fold-the-two-sockets", "Fold a Job's two sockets in the wire package", "completed_success", {
       current_step_id: "land",
       reclaimed_at: "2026-09-10T20:00:00Z",
+    }),
+    // Never ran — approval denied at the gate — so it carries neither a
+    // branch nor a Drone, and Recently ended's row offers Open rather than
+    // Redispatch for it: `crates/fleet/src/redispatch.rs` refuses a rejected
+    // Job by name.
+    row(11, "widen-the-search-index", "Widen the search index past titles alone", "rejected", {
+      branch: undefined,
+      assigned_drone: undefined,
+      ended_at: "2026-09-10T18:20:00Z",
     }),
   ];
 }

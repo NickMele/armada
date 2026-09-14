@@ -100,6 +100,8 @@ export function BoardFrom({
             selected={null}
             onOpen={noop}
             onKill={noop}
+            onRedispatch={noop}
+            onClear={noop}
             onCompose={noop}
             actions={boardActions}
             onCopied={noop}

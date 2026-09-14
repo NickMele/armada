@@ -22,7 +22,7 @@ export type OverviewSummaryStripItem = {
 };
 
 export type OverviewSummaryStripProps = {
-  /** Three today; Overview 28 (#1092) adds Recently ended as the fourth. */
+  /** Four, since Overview 28 (#1092) added Recently ended. */
   items: OverviewSummaryStripItem[];
 };
 

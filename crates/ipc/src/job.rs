@@ -90,6 +90,22 @@ pub struct JobSummary {
     /// only the log does.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started_at: Option<Instant>,
+    /// When the Job arrived at a terminal status. **Absent is a Job still
+    /// going**, never `null`. Since 14.1.
+    ///
+    /// Overview 28 (#1092): a Job killed, failed or rejected has nowhere to
+    /// stand once it is over — the Board's own Done section is collapsed and
+    /// Overview drops it outright — so this is the fact that lets a
+    /// **Recently ended** list say when. Filled from the log the way
+    /// [`started_at`](JobSummary::started_at) is, and for the same reason:
+    /// `core_model::Job` carries no instant for either, only the log does.
+    ///
+    /// **Read off the log rather than worked out from the row.** `status`
+    /// alone says a Job is over, not when — and the log already answers that
+    /// for `started_at`'s own first arrival at `running`. A terminal status
+    /// has no outbound edge, so at most one arrival exists to read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<Instant>,
     /// The branch the Job's worktree is on. **Absent until a worktree exists**
     /// — a Job at the approval gate has no branch and does not claim one, and
     /// absent is never `null`.
@@ -255,9 +271,10 @@ impl JobSummary {
     /// alternative and was rejected — a summary built without the call would say
     /// `false` silently, which is the redaction decision nobody made.
     ///
-    /// `started_at` is last and for the same reason as the rest: the first
-    /// dated arrival at `running` is in `job_events`, not on `core_model::Job`,
-    /// so only a caller holding the log can supply it.
+    /// `started_at` and `ended_at` are last, for the same reason as each
+    /// other: the first dated arrival at `running`, and the one arrival at a
+    /// terminal status, are both in `job_events`, not on `core_model::Job`, so
+    /// only a caller holding the log can supply either.
     #[allow(clippy::too_many_arguments)]
     pub fn of(
         job: &core_model::Job,
@@ -267,6 +284,7 @@ impl JobSummary {
         asking: bool,
         resumption: Option<core_model::Resumption>,
         started_at: Option<core_model::Timestamp>,
+        ended_at: Option<core_model::Timestamp>,
     ) -> JobSummary {
         JobSummary {
             id: job.id().into(),
@@ -275,6 +293,7 @@ impl JobSummary {
             status: job.status().into(),
             created_at: job.created_at().into(),
             started_at: started_at.as_ref().map(Instant::from),
+            ended_at: ended_at.as_ref().map(Instant::from),
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             reason: reason.and_then(Reason::of),
             queued_reason: queued_reason.map(QueuedReason::from),
@@ -390,12 +409,13 @@ pub struct RestartRequested {
 /// all carry a Job in some other status. A publish that did would need the
 /// board, which is exactly what this conversion does not have.
 ///
-/// **`started_at` is `None` here too, and that is only ever right for a Job
-/// just created** — the one caller left on this conversion, every one of
-/// which mints a fresh Job at its approval gate or its sub-dispatch entry,
-/// neither of which has run. A caller publishing about a Job that has already
-/// run must call [`JobSummary::of`] instead, with the log's own answer: this
-/// conversion holds no log to ask.
+/// **`started_at` and `ended_at` are `None` here too, and that is only ever
+/// right for a Job just created** — the one caller left on this conversion,
+/// every one of which mints a fresh Job at its approval gate or its
+/// sub-dispatch entry, neither of which has run, let alone ended. A caller
+/// publishing about a Job that has already run — or ended — must call
+/// [`JobSummary::of`] instead, with the log's own answer: this conversion
+/// holds no log to ask.
 impl From<&core_model::Job> for JobSummary {
     fn from(job: &core_model::Job) -> JobSummary {
         // **`asking` is `false` here and that is the answer, not a default.**
@@ -407,7 +427,7 @@ impl From<&core_model::Job> for JobSummary {
         // `budget_hold` is `None` for the same reason `queued_reason` is: both
         // are read off the board rather than off the record, and this
         // conversion holds only the record.
-        JobSummary::of(job, None, None, None, false, None, None)
+        JobSummary::of(job, None, None, None, false, None, None, None)
     }
 }
 
