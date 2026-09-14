@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CircleCheck, CircleX, GitPullRequest, Minus, ShieldCheck } from "lucide-react";
+import { expect } from "storybook/test";
 import { VerdictSheet } from "./VerdictSheet";
 import { Button } from "../../primitives/Button/Button";
 import { CheckRuns } from "../CheckRuns/CheckRuns";
@@ -440,5 +441,21 @@ export const FinishedAfterYouAnswered: Story = {
         </p>
       </>
     ),
+  },
+};
+
+/**
+ * **Under Armada's review, the record folds** behind one line, because the review
+ * already says what it found. The buttons below it stay open.
+ */
+export const UnderAReview: Story = {
+  name: "Under a review",
+  args: { ...AtAGate.args, folded: true },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText("What you asked for")).not.toBeVisible();
+    const fold = canvas.getByRole("button", { name: "The Job's record" });
+    await expect(fold).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(fold);
+    await expect(canvas.getByText("What you asked for")).toBeVisible();
   },
 };

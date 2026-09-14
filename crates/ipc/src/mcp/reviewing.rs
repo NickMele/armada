@@ -272,7 +272,9 @@ pub(super) fn review_property() -> Value {
             "reasons": {
                 "type": "array",
                 "items": { "type": "string" },
-                "description": "At most three short reasons for the verdict.",
+                "description":
+                    "At most three reasons for the verdict, one plain sentence each, for a \
+                     person who has not read the code. No function, type or file names.",
             },
             "areas": {
                 "type": "array",
@@ -280,8 +282,15 @@ pub(super) fn review_property() -> Value {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "name": { "type": "string" },
-                        "what": { "type": "string" },
+                        "name": {
+                            "type": "string",
+                            "description":
+                                "That part of the product as a person would call it. Never a file or function name.",
+                        },
+                        "what": {
+                            "type": "string",
+                            "description": "What changed there, in one plain sentence.",
+                        },
                         "files": { "type": "array", "items": { "type": "string" } },
                         "view": view_property(),
                     },
@@ -326,7 +335,10 @@ pub(super) fn review_property() -> Value {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "code": { "type": "string" },
+                                "code": {
+                                    "type": "string",
+                                    "description": "What no test reaches, in one plain sentence.",
+                                },
                                 "why": { "type": "string" },
                             },
                             "required": ["code", "why"],
@@ -343,8 +355,15 @@ pub(super) fn review_property() -> Value {
                     "type": "object",
                     "properties": {
                         "bucket": { "type": "string", "enum": ["needs_you", "small_fix", "for_context"] },
-                        "finding": { "type": "string" },
-                        "why": { "type": "string" },
+                        "finding": {
+                            "type": "string",
+                            "description":
+                                "What a person should know, in one or two plain sentences. Name code only in the view.",
+                        },
+                        "why": {
+                            "type": "string",
+                            "description": "Why it is in this bucket, in one sentence.",
+                        },
                         "view": view_property(),
                     },
                     "required": ["bucket", "finding", "why"],
