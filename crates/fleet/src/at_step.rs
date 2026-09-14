@@ -93,7 +93,8 @@ impl<'a> AtStep<'a> {
     }
 
     /// The same position, on a pass Fleet opened to clear conflicts with the
-    /// base: the change was judged already, so only its Checks gate it.
+    /// base: the change was judged already, so its Checks and the gaming look
+    /// gate it and the Judge's criteria do not.
     pub fn clearing_conflicts(self) -> AtStep<'a> {
         AtStep {
             looks: Looks::NotThisPass,
@@ -101,8 +102,8 @@ impl<'a> AtStep<'a> {
         }
     }
 
-    /// Whether this pass may put the work to the Judge — a criterion, the drift
-    /// look and the gaming look alike.
+    /// Whether this pass asks the Judge its criteria and the drift look. The
+    /// gaming look is not this question's: it runs on every pass.
     pub fn asks_the_judge(&self) -> bool {
         self.looks == Looks::Asked
     }

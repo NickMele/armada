@@ -8,9 +8,9 @@
 //! updates the pull request. Not the delivering step itself: it commits on
 //! entry, and would commit the markers.
 //!
-//! **Fleet sends it where the sweep finds a conflict** — `crate::currency` — as
-//! often as the gate's `iteration_cap` allows and at least once. A person's press
-//! is the other road, until Bridge drops it.
+//! **Fleet sends it where the sweep finds a conflict** — `crate::currency` — up
+//! to [`CLEARING_SENDS`] times in a row. A person's press is the other road,
+//! until Bridge drops it.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
@@ -20,6 +20,11 @@ use core_model::{
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+
+/// Passes in a row Fleet sends back before a person decides: three that each
+/// still conflicted is a base moving faster than a Drone can follow.
+/// `conflict-clearing-send-cap` in `crates/config/settings.toml`.
+pub(crate) const CLEARING_SENDS: u32 = 3;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -46,9 +51,9 @@ where
     /// The same act, with the actor named.
     ///
     /// **Fleet's sends are bounded and a person's are not.** A base that keeps
-    /// moving while a Drone clears it would send the Job round for ever, so a
-    /// send past the gate's `iteration_cap` — or past one, where the gate closes
-    /// no loop — escalates as `loop_cap` instead.
+    /// moving while a Drone clears it would send the Job round for ever, so
+    /// once [`CLEARING_SENDS`] passes have come back unpushed, the next
+    /// conflict escalates as `loop_cap` instead — `crate::clearing::sends_in_a_row`.
     ///
     /// **Fleet does not read the branch before moving the Job.** The merge
     /// happens where every catch-up on this Job happens — inside
@@ -98,15 +103,9 @@ where
                 .await
                 .events_for(job_id)
                 .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
-            let allowed = job
-                .workflow()
-                .step(&gate)
-                .map_or(0, |step| step.iteration_cap())
-                .max(1);
+            let in_a_row = crate::clearing::sends_in_a_row(&events, &gate, &delivery);
             let spent = StepLevelTrigger::of(EscalationTrigger::LoopCap);
-            if let Some(spent) =
-                spent.filter(|_| crate::clearing::times_sent(&events, &gate) >= allowed)
-            {
+            if let Some(spent) = spent.filter(|_| in_a_row >= CLEARING_SENDS) {
                 self.logged(
                     job_id,
                     Envelope::new(
@@ -114,8 +113,8 @@ where
                         Level::Warn,
                         Component::Fleet,
                         self.run().clone(),
-                        "the pull request's branch conflicts with its base again, and Fleet has \
-                         already sent it back to clear conflicts as often as this gate allows",
+                        "the pull request's branch conflicts with its base again, after Fleet's \
+                         last passes to clear it came back without pushing",
                     )
                     .in_job(job_id.as_ulid().clone())
                     .at_step(gate.as_str()),

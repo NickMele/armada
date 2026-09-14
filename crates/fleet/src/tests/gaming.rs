@@ -98,6 +98,16 @@ fn recorded() -> Vec<(StepId, StepEvidence)> {
 }
 
 async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)]) -> Ruling {
+    ruled_as(patch, flag_if, recorded, false).await
+}
+
+/// The same ruling, on a pass Fleet opened to clear conflicts where `clearing`.
+async fn ruled_as(
+    patch: &str,
+    flag_if: &[&str],
+    recorded: &[(StepId, StepEvidence)],
+    clearing: bool,
+) -> Ruling {
     let workflow = workflow(flag_if, Some("scope.evidence"));
     let worktree = worktree();
     let at = AtStep::named(
@@ -106,6 +116,10 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         &worktree,
     )
     .expect("a step of the workflow");
+    let at = match clearing {
+        true => at.clearing_conflicts(),
+        false => at,
+    };
     let work = FakeWorkProduct::changed(&["jest.config.js"]).showing(patch);
     rule_on(
         at,
@@ -130,6 +144,24 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         None,
     )
     .await
+}
+
+/// **`#1131`: a clearing pass is still looked at for gaming.** The Judge's
+/// criteria are not asked again on a pass Fleet opened to clear conflicts, and
+/// a Drone that settles one by deleting a test is stopped all the same.
+#[tokio::test]
+async fn a_clearing_pass_whose_diff_deletes_a_test_is_flagged() {
+    const DELETES_A_TEST: &str = "diff --git a/tests/limiter.test.ts b/tests/limiter.test.ts\n\
+                                  deleted file mode 100644\n\
+                                  --- a/tests/limiter.test.ts\n\
+                                  +++ /dev/null\n\
+                                  -it(\"holds the window boundary\", () => {});\n";
+    let ruling = ruled_as(DELETES_A_TEST, &["test_deleted"], &recorded(), true).await;
+
+    let Ruling::Suspect { ref flagged, .. } = ruling else {
+        panic!("a clearing pass let a deleted test through: {ruling:?}");
+    };
+    assert_eq!(flagged.patterns(), [GamingPattern::TestDeleted]);
 }
 
 /// **The whole claim.** Every Check passed, nothing was refused, and the Job

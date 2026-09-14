@@ -131,23 +131,27 @@ fn main_moved_with_a_conflict(fleet: &Fixture, onto: &str) {
     );
 }
 
-/// Turn until the sweep has sent the Job back and a Drone is on `implement`.
-async fn until_back_on_implement(fleet: &Fixture, job_id: &JobId) {
-    for _ in 0..4 {
+/// Turn until a Drone is on `step`. **Turned for, not assumed**: under a full
+/// suite's load one turn does not always see the spawn through.
+async fn until_a_drone_is_on(fleet: &Fixture, job_id: &JobId, step: &str) {
+    for _ in 0..8 {
         fleet.turn().await.expect("a turn");
         let job = fleet.load(job_id).await.expect("the Job reads");
-        let implement = job.step(&StepId::new("implement")).map(JobStep::state);
-        if job.status() == JobStatus::Running && implement == Some(StepState::Running) {
+        let on = job.step(&StepId::new(step));
+        if job.status() == JobStatus::Running
+            && on.map(JobStep::state) == Some(StepState::Running)
+            && on.and_then(JobStep::assigned_drone).is_some()
+        {
             return;
         }
     }
     let status = fleet.load(job_id).await.ok().map(|job| job.status());
-    panic!("the sweep never sent the Job back to implement: {status:?}");
+    panic!("no Drone reached `{step}`: {status:?}");
 }
 
 /// The Drone clears the markers, `implement`'s gate passes, and the walk
 /// forward holds at `summarise` again.
-async fn cleared_and_back_at_review(fleet: &Fixture) {
+async fn cleared_and_back_at_review(fleet: &Fixture, job_id: &JobId) {
     fleet.vcs().now_behind(Standing::UpToDate, None);
     submitted_by_the_one(fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.expect("implement's gate runs again");
@@ -156,7 +160,7 @@ async fn cleared_and_back_at_review(fleet: &Fixture) {
         "the markers are cleared, so the Checks pass: {:?}",
         turned.ruled()
     );
-    fleet.turn().await.expect("summarise is re-entered");
+    until_a_drone_is_on(fleet, job_id, "summarise").await;
     submitted_by_the_one(fleet, note_evidence()).await.unwrap();
     let turned = fleet.turn().await.expect("summarise's gate runs again");
     assert!(
@@ -204,7 +208,7 @@ async fn the_sweep_sends_a_conflicted_job_at_its_gate_back_as_fleet_once_per_bas
     assert!(judged_before > 0, "implement's Judge ran on the first pass");
 
     main_moved_with_a_conflict(&fleet, FIRST_BASE);
-    until_back_on_implement(&fleet, &job_id).await;
+    until_a_drone_is_on(&fleet, &job_id, "implement").await;
     assert_eq!(
         returns_by(&fleet, &job_id).await,
         vec![Actor::Fleet],
@@ -231,7 +235,7 @@ async fn the_sweep_sends_a_conflicted_job_at_its_gate_back_as_fleet_once_per_bas
         "never told to leave it, nor handed the gate's findings to redo: {said}"
     );
 
-    cleared_and_back_at_review(&fleet).await;
+    cleared_and_back_at_review(&fleet, &job_id).await;
     assert_eq!(
         judge.asked().len(),
         judged_before,
@@ -261,25 +265,72 @@ async fn the_sweep_sends_a_conflicted_job_at_its_gate_back_as_fleet_once_per_bas
     );
 }
 
-/// **The loop ends.** The base moves again after a pass, and the fixture's gate
-/// closes no loop, so Fleet's one send is spent: the Job escalates as
-/// `loop_cap` rather than going round again.
+/// **A second conflict is sent again.** A Job that cleared one conflict waits at
+/// review while main moves again — two branches bumping one protocol number is
+/// the common case — and Fleet sends it round a second time.
 #[tokio::test]
-async fn a_conflict_after_the_gate_has_spent_its_sends_escalates() {
+async fn a_second_conflict_after_a_cleared_one_is_sent_again() {
     let home = TempDir::new();
     let judge = Arc::new(FakeJudge::with_no_objection());
     let fleet = a_fleet_sweeping(&home, &judge);
     let job_id = a_job_at_its_handoff_gate(&home, &fleet).await;
 
     main_moved_with_a_conflict(&fleet, FIRST_BASE);
-    until_back_on_implement(&fleet, &job_id).await;
-    cleared_and_back_at_review(&fleet).await;
+    until_a_drone_is_on(&fleet, &job_id, "implement").await;
+    cleared_and_back_at_review(&fleet, &job_id).await;
 
     main_moved_with_a_conflict(&fleet, SECOND_BASE);
+    until_a_drone_is_on(&fleet, &job_id, "implement").await;
+    assert_eq!(
+        returns_by(&fleet, &job_id).await,
+        vec![Actor::Fleet, Actor::Fleet],
+        "sent back a second time, not escalated"
+    );
+}
+
+/// The same pass, but the base moved again while it ran: the delivering step's
+/// own catch-up conflicts, so nothing is pushed and the pull request still
+/// conflicts when the Job holds at review.
+async fn still_conflicting_back_at_review(fleet: &Fixture, job_id: &JobId) {
+    submitted_by_the_one(fleet, diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.expect("implement's gate runs again");
+    assert!(
+        matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
+        "{:?}",
+        turned.ruled()
+    );
+    until_a_drone_is_on(fleet, job_id, "summarise").await;
+    submitted_by_the_one(fleet, note_evidence()).await.unwrap();
+    let turned = fleet.turn().await.expect("summarise's gate runs again");
+    assert!(
+        matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })),
+        "{:?}",
+        turned.ruled()
+    );
+}
+
+/// **The loop ends.** Each pass comes back unpushed, so the count never starts
+/// again, and the conflict after the third such pass escalates as `loop_cap`
+/// rather than going round again.
+#[tokio::test]
+async fn a_third_pass_that_still_conflicts_escalates() {
+    let home = TempDir::new();
+    let judge = Arc::new(FakeJudge::with_no_objection());
+    let fleet = a_fleet_sweeping(&home, &judge);
+    let job_id = a_job_at_its_handoff_gate(&home, &fleet).await;
+    let base = |n: u32| format!("{n:040x}");
+
+    for n in 1..=crate::conflict_resolution::CLEARING_SENDS {
+        main_moved_with_a_conflict(&fleet, &base(n));
+        until_a_drone_is_on(&fleet, &job_id, "implement").await;
+        still_conflicting_back_at_review(&fleet, &job_id).await;
+    }
+
+    main_moved_with_a_conflict(&fleet, &base(0xff));
     fleet
         .turn()
         .await
-        .expect("the sweep reads the second conflict");
+        .expect("the sweep reads the conflict past the last send");
 
     let job = fleet.load(&job_id).await.expect("the Job reads");
     assert_eq!(job.status(), JobStatus::Escalated, "a person decides now");
@@ -288,10 +339,11 @@ async fn a_conflict_after_the_gate_has_spent_its_sends_escalates() {
         Some(StepState::Stopped),
         "stopped at the gate it was waiting at"
     );
+    let fleet_sends = crate::conflict_resolution::CLEARING_SENDS as usize;
     assert_eq!(
         returns_by(&fleet, &job_id).await,
-        vec![Actor::Fleet],
-        "and not sent back a second time"
+        vec![Actor::Fleet; fleet_sends],
+        "and not sent back past the bound"
     );
 }
 
@@ -363,7 +415,7 @@ async fn a_conflicted_pull_request_at_the_handoff_gate_is_resolved_without_reach
         turned.ruled()
     );
 
-    fleet.turn().await.expect("summarise is re-entered");
+    until_a_drone_is_on(&fleet, &job_id, "summarise").await;
     let re_entered_drone = on_it(&fleet, &job_id).await;
     submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
     let turned = fleet

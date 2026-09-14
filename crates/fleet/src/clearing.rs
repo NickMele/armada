@@ -1,13 +1,13 @@
 //! A pass Fleet opened to clear a pull request's conflicts with its base.
 //! `#1131`.
 //!
-//! **Read off the Job's own log, never remembered**, so a restart mid-pass reads
-//! the same answer. The pass is open where the latest loop return on the Job was
-//! Fleet's and the gate it named has not held again since. Nothing else of
-//! Fleet's walks a return: a verdict routed back is always a person's answer.
+//! **Read off the Job's own record, never remembered**, so a restart mid-pass
+//! reads the same answer. The pass is open where the latest loop return on the
+//! Job was Fleet's and the gate it named has not held again since. Nothing else
+//! of Fleet's walks a return: a verdict routed back is always a person's answer.
 
 use core_model::{Actor, Job, StepId, StepState};
-use store::{Moved, RecordedEvent};
+use store::{Delivery, Moved, RecordedEvent};
 
 /// Where a conflict-clearing pass stands.
 pub(crate) struct Clearing<'a> {
@@ -52,8 +52,16 @@ pub(crate) fn clearing<'a>(
     (!held_again && on_it).then_some(Clearing { redoing })
 }
 
-/// How many times Fleet has sent the work back past `gate` to clear conflicts.
-pub(crate) fn times_sent(events: &[RecordedEvent], gate: &StepId) -> u32 {
+/// Fleet's clearing sends past `gate` that count toward its cap.
+///
+/// **Zero where the latest delivery pushed**: a clean push starts the count
+/// again. Otherwise every send of Fleet's counts, because no record says which
+/// earlier pass pushed — so a run broken by an older clean push counts in full,
+/// and escalates sooner rather than going round longer.
+pub(crate) fn sends_in_a_row(events: &[RecordedEvent], gate: &StepId, latest: &Delivery) -> u32 {
+    if latest.unpushed.is_none() {
+        return 0;
+    }
     let sent = events
         .iter()
         .filter(|event| {
