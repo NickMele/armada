@@ -124,3 +124,7 @@ The following settings (see `../contracts/configuration.md`) directly affect thi
 | Helm budget soft-warning threshold | Machine |
 | Helm session retention / expiry | Machine |
 | Voice/tone | Machine — may adjust length and formality, never override Voice & conduct |
+
+## Open questions
+
+- **[helm-target-per-window]** Should each Bridge window keep its own Helm target, or does the most recent explicit act in any window set it for all? Today there is one conversation target for the whole Bridge: a pick or a "Discuss with Helm" in one window moves Helm in every open window, because since #1022 picks are per window while `HelmConnection` in `apps/desktop/src/main/helm.ts` holds one target. Two windows open at once is rare, and the rule as built is consistent with "the most recent explicit act wins". A per-window target would need one Helm socket per window in main, and the dock's switch and chip to read their own window's target.
