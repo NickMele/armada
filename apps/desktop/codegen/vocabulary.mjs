@@ -327,7 +327,22 @@ for (const [header, table] of verbs) {
         `enum-verbs.toml — [verbs.gaming_pattern.${variant}] names no headline or no explanation`,
       );
     }
-    meanings.push({ variant, headline, explanation });
+    // Three reasons a person may give for carrying on past the flag, as a
+    // one-line array of basic strings, which JSON reads as it is written.
+    let presets = null;
+    try {
+      presets = JSON.parse(table.presets ?? "");
+    } catch {
+      presets = null;
+    }
+    if (
+      !Array.isArray(presets) ||
+      presets.length !== 3 ||
+      presets.some((one) => typeof one !== "string" || one === "")
+    ) {
+      throw new Error(`enum-verbs.toml — [verbs.gaming_pattern.${variant}] names no three presets`);
+    }
+    meanings.push({ variant, headline, explanation, presets });
   }
   const missing = [];
   if (verb === "") missing.push("verb");
@@ -438,12 +453,13 @@ lines.push(" * beside the verb, so all nine read the same on every surface. #107
 lines.push(" */");
 lines.push(
   "export const GAMING_PATTERN_MEANING: Readonly<Record<string, " +
-    "{ readonly headline: string; readonly explanation: string } | undefined>> = {",
+    "{ readonly headline: string; readonly explanation: string; readonly presets: readonly string[] } " +
+    "| undefined>> = {",
 );
 for (const row of meanings) {
   lines.push(
     `  ${JSON.stringify(row.variant)}: { headline: ${JSON.stringify(row.headline)}, ` +
-      `explanation: ${JSON.stringify(row.explanation)} },`,
+      `explanation: ${JSON.stringify(row.explanation)}, presets: ${JSON.stringify(row.presets)} },`,
   );
 }
 lines.push("};");
