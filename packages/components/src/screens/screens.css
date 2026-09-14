@@ -358,6 +358,36 @@
   min-height: var(--armada-screen-empty);
 }
 
+/* ---- overview ------------------------------------------------------------
+
+   The tile band and the lists beneath it, held off the window's edge and
+   spaced by the same rule that separates every region on the surface — the
+   panels here, and the dock beside them. `--gap-section` throughout, so a
+   reader's eye travels the same distance between the tiles and the first
+   list as it does between two lists. */
+.armada-screen__overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+}
+
+/* Overview's own lists: `Needs you`, `Running` and `Queued`, each a panel in
+   `ActiveJobsList`'s `panel` variant. The gap between them is the surface's
+   own rule above, not the Board's `--space-2` — three bordered cards read as
+   one list wearing a hairline, and the drawing gives them the same room the
+   tile band gets. */
+.armada-screen__overview-lists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+  min-width: 0;
+}
+
 /* ---- job detail --------------------------------------------------------- */
 
 .armada-screen__detail {

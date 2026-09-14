@@ -49,6 +49,21 @@ export type ActiveJobsListProps = {
    */
   action?: ReactNode;
   /**
+   * A row count, drawn at the head's trailing edge opposite the heading —
+   * Overview's own panels, one per section, each naming how many rows it
+   * holds. `undefined` draws none; the Board passes nothing and is unchanged.
+   */
+  count?: ReactNode;
+  /**
+   * `flat` is the Board's own list: the rows are the pane, drawn with no edge
+   * of their own — see the frame's rule in `ActiveJobsList.css`. `panel` is a
+   * bordered, rounded card with its own padding, for a list that stands beside
+   * others rather than filling the region alone — Overview's `Needs you`,
+   * `Running` and `Queued`. It does not scroll itself; the surface around it
+   * does.
+   */
+  variant?: "flat" | "panel";
+  /**
    * Where a surface's filter set mounts — `Board controls` on the Job Board.
    *
    * **Between the heading and the frame, and never inside it.** A control that
@@ -115,6 +130,8 @@ export function ActiveJobsList({
   heading,
   summary,
   action,
+  count,
+  variant = "flat",
   controls,
   children,
   sections,
@@ -180,13 +197,14 @@ export function ActiveJobsList({
   const roving = selectable && !isEmpty;
 
   return (
-    <section className="armada-active-jobs">
-      {heading || summary || action ? (
+    <section className="armada-active-jobs" data-variant={variant === "panel" ? "panel" : undefined}>
+      {heading || summary || action || count !== undefined ? (
         <header className="armada-active-jobs__header">
           <div className="armada-active-jobs__titles">
             {heading ? <h2 className="armada-active-jobs__heading">{heading}</h2> : null}
             {summary ? <p className="armada-active-jobs__summary">{summary}</p> : null}
           </div>
+          {count !== undefined ? <span className="armada-active-jobs__count">{count}</span> : null}
           {action ? <div className="armada-active-jobs__action">{action}</div> : null}
         </header>
       ) : null}

@@ -6,6 +6,9 @@
 // **Rows are the Board's own `Row`** — same field run, same act, and on All with more than one
 // repository served the row names it, exactly as `Jobs.tsx` does.
 //
+// **Each section is its own panel** — `ActiveJobsList`'s `panel` variant. The Board's own flat,
+// single-frame list is unchanged.
+//
 // **Disconnected reads exactly as `BoardEmpty`'s own fault state.** Overview holds whatever Bridge
 // last received, so a Needs you row from before an outage stays on screen; only a board with
 // nothing on it at all draws the disconnected message.
@@ -78,26 +81,36 @@ export function OverviewLists({
   );
 
   return (
-    <div className="armada-screen__stack">
-      <ActiveJobsList
-        sections={sections.map((section) => ({
-          id: section.id,
-          label: section.label,
-          count: section.jobs.length,
-          rows: section.jobs.map(rowOf),
-        }))}
-        selectable
-        label="Overview"
-        empty={
-          <BoardEmpty
-            disconnected={disconnected}
-            why={null}
-            suspended={false}
-            nothingServed={repositories.length === 0}
-            onClear={() => {}}
-          />
-        }
-      />
+    <div className="armada-screen__overview-lists">
+      {sections.length === 0 ? (
+        <ActiveJobsList
+          variant="panel"
+          selectable
+          label="Overview"
+          empty={
+            <BoardEmpty
+              disconnected={disconnected}
+              why={null}
+              suspended={false}
+              nothingServed={repositories.length === 0}
+              onClear={() => {}}
+            />
+          }
+        />
+      ) : (
+        sections.map((section) => (
+          <ActiveJobsList
+            key={section.id}
+            variant="panel"
+            heading={section.label}
+            count={section.jobs.length}
+            selectable
+            label={section.label}
+          >
+            {section.jobs.map(rowOf)}
+          </ActiveJobsList>
+        ))
+      )}
 
       {/* The registry has no glyph for this state, so the row shape cannot draw it — named
           rather than dropped, `Jobs.tsx`'s own choice for the same case. */}
