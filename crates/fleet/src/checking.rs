@@ -536,38 +536,38 @@ pub(crate) async fn ran(
         let own = running.len();
         tokio::select! {
             place = next_place(room, ask.as_mut(), own, announcing), if wants => {
-            ask = None;
-            announcing.behind(0);
-            let Some((at, run)) = queued.pop_front() else {
-                continue;
-            };
-            let worktree: PathBuf = worktree.clone();
-            let env = env.clone();
-            let log = announcing.log_for(at);
-            let writing = log.clone();
-            let stop = stop.clone();
-            let halted = halted.clone();
-            running.spawn(async move {
-                let _held: Place = place;
-                let began = Instant::now();
-                let ended = async move {
-                    tokio::select! {
-                        () = stop.stopped() => {}
-                        () = halted.stopped() => {}
-                    }
+                ask = None;
+                announcing.behind(0);
+                let Some((at, run)) = queued.pop_front() else {
+                    continue;
                 };
-                let attempt = checks_runner::run_until(
-                    &run,
-                    &worktree,
-                    budget,
-                    writing.as_deref().map_or(Writing::Nowhere, Writing::Fresh),
-                    &env,
-                    ended,
-                )
-                .await;
-                (at, attempt, began.elapsed())
-            });
-            announcing.started(at, log.as_deref());
+                let worktree: PathBuf = worktree.clone();
+                let env = env.clone();
+                let log = announcing.log_for(at);
+                let writing = log.clone();
+                let stop = stop.clone();
+                let halted = halted.clone();
+                running.spawn(async move {
+                    let _held: Place = place;
+                    let began = Instant::now();
+                    let ended = async move {
+                        tokio::select! {
+                            () = stop.stopped() => {}
+                            () = halted.stopped() => {}
+                        }
+                    };
+                    let attempt = checks_runner::run_until(
+                        &run,
+                        &worktree,
+                        budget,
+                        writing.as_deref().map_or(Writing::Nowhere, Writing::Fresh),
+                        &env,
+                        ended,
+                    )
+                    .await;
+                    (at, attempt, began.elapsed())
+                });
+                announcing.started(at, log.as_deref());
             }
             // Stopped while waiting for room: what has not started never will.
             () = &mut stopping, if wants => {
@@ -580,34 +580,35 @@ pub(crate) async fn ran(
                 }
             }
             Some(joined) = running.join_next(), if !running.is_empty() => {
-        if let Ok((at, attempt, took)) = joined {
-            let observed = Observed::Command(attempt.exit.clone());
-            // Ended by the halt rather than by its own answer.
-            let cut = failed_first
-                .clone()
-                .filter(|_| matches!(attempt.exit, Exit::Signalled { .. }));
-            match cut {
-                Some(first) => {
-                    stopped[at] = true;
-                    announcing.stopped(at, &checks[at], &observed, took, &first);
-                }
-                None => {
-                    announcing.finished(at, &checks[at], &observed, took);
-                    if stop.at_first_failure
-                        && failed_first.is_none()
-                        && !advances(&checks[at], &observed)
-                    {
-                        failed_first = Some(checks[at].label().to_string());
-                        halting = None;
+                let Ok((at, attempt, took)) = joined else {
+                    continue;
+                };
+                let observed = Observed::Command(attempt.exit.clone());
+                // Ended by the halt rather than by its own answer.
+                let cut = failed_first
+                    .clone()
+                    .filter(|_| matches!(attempt.exit, Exit::Signalled { .. }));
+                match cut {
+                    Some(first) => {
+                        stopped[at] = true;
+                        announcing.stopped(at, &checks[at], &observed, took, &first);
+                    }
+                    None => {
+                        announcing.finished(at, &checks[at], &observed, took);
+                        if stop.at_first_failure
+                            && failed_first.is_none()
+                            && !advances(&checks[at], &observed)
+                        {
+                            failed_first = Some(checks[at].label().to_string());
+                            halting = None;
+                        }
                     }
                 }
-            }
-            done[at] = Some((attempt, took));
-            // A result that does not end the run is heard now; the last is the report.
-            if failed_first.is_none() && !(queued.is_empty() && running.is_empty()) {
-                announcing.landed(at);
-            }
-        }
+                done[at] = Some((attempt, took));
+                // A result that does not end the run is heard now; the last is the report.
+                if failed_first.is_none() && !(queued.is_empty() && running.is_empty()) {
+                    announcing.landed(at);
+                }
             }
         }
     }
