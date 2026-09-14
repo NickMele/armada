@@ -1,6 +1,6 @@
-/* Fleet settings — the three admission limits, on the trailing sheet Job
-   settings already draws from. The layer, its header and the body's padding
-   are `Sheet`'s; what lives here is how the rows inside it are spaced. */
+/* Fleet settings — the four admission limits, a section on the Settings
+   screen (#1089). The layer, its header and its padding are `Card`'s now;
+   what lives here is how the rows inside it are spaced. */
 
 .armada-fleet-settings {
   display: flex;

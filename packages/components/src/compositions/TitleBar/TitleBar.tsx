@@ -27,7 +27,7 @@ export type TitleBarProps = {
   /**
    * Opens the composer. **Both segments of Dispatch call this.**
    *
-   * The Board's own menu (Refresh, Reported, Held disk, Fleet settings, the
+   * The Board's own menu (Refresh, Reported, Held disk, Settings, the
    * two bulk acts) stays on the Board's own head — nothing here belongs behind
    * a caret yet. `SplitButton`'s empty-`items` mode is what draws a caret with
    * nothing behind it: it calls `onDispatch` directly rather than opening a

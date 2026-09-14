@@ -1,23 +1,19 @@
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
 import { Input } from "../../primitives/Input/Input";
-import { Sheet } from "../../primitives/Sheet/Sheet";
 
 /**
  * Fleet's four limits, changeable from Bridge — how many drones run at once,
  * the memory and the disk Fleet keeps free before starting another, and how
  * many of a job's checks run at once.
  *
- * **Fleet-wide, and its own sheet rather than a section on Job settings.** A
- * Job's own settings answer for one Job; these answer for every drone Fleet
- * will ever start — folding the two together would read as one Job's control
- * turning every other Job's engine too. Window-fixed rather than `contained`,
- * for the same reason: it opens from the status bar and the rail, not from one
- * screen.
+ * **Fleet-wide, and its own section rather than a section on Job settings.**
+ * A Job's own settings answer for one Job; these answer for every drone Fleet
+ * will ever start. **A plain section, not a layer of its own** — until #1089
+ * this drew inside `Sheet`; Settings is a rail screen now, and `Card` on
+ * `packages/screens/src/BridgeSettings.tsx` draws the chrome instead.
  */
 export type FleetSettingsProps = {
-  open: boolean;
-  floor?: boolean;
   concurrency: FleetSettingsRow;
   memorySparePercent: FleetSettingsRow;
   diskFloorGib: FleetSettingsRow;
@@ -26,7 +22,6 @@ export type FleetSettingsProps = {
   disabled?: boolean;
   /** Why, said once under the lead rather than left for each row to repeat. */
   disabledNote?: ReactNode;
-  onClose?: () => void;
 };
 
 /** One limit: the value in force, what Armada ships, and its own bound. */
@@ -52,67 +47,55 @@ export type FleetSettingsRow = {
 };
 
 export function FleetSettings({
-  open,
-  floor = false,
   concurrency,
   memorySparePercent,
   diskFloorGib,
   checksAtOnce,
   disabled = false,
   disabledNote,
-  onClose,
 }: FleetSettingsProps) {
   const group = useId();
   return (
-    <Sheet
-      open={open}
-      floor={floor}
-      title="Fleet settings"
-      closeLabel="Close"
-      closeBinding="Esc"
-      onClose={onClose}
-    >
-      <div className="armada-fleet-settings">
-        <div className="armada-fleet-settings__opening">
-          <p className="armada-fleet-settings__lead">
-            These apply to every job. A change counts from the next time a job is ready to start,
-            and nothing already running stops.
-          </p>
-          {disabled && disabledNote !== undefined ? (
-            <p className="armada-fleet-settings__means">{disabledNote}</p>
-          ) : null}
-        </div>
-
-        <Row
-          id={`${group}-concurrency`}
-          label="Drones at once"
-          means="How many drones Fleet runs at the same time. A job past this waits, queued, for one to finish."
-          row={concurrency}
-          disabled={disabled}
-        />
-        <Row
-          id={`${group}-memory`}
-          label="Memory to keep free"
-          means="The share of memory Fleet leaves free before it starts another drone."
-          row={memorySparePercent}
-          disabled={disabled}
-        />
-        <Row
-          id={`${group}-disk`}
-          label="Disk to keep free"
-          means="The disk space Fleet leaves free before it starts another drone."
-          row={diskFloorGib}
-          disabled={disabled}
-        />
-        <Row
-          id={`${group}-checks`}
-          label="Checks at once"
-          means="How many of a job's checks Fleet runs at the same time. Some checks take more than one place — a heavy one waits until enough are free. When memory or disk runs short, the next check waits for one to finish."
-          row={checksAtOnce}
-          disabled={disabled}
-        />
+    <div className="armada-fleet-settings">
+      <div className="armada-fleet-settings__opening">
+        <p className="armada-fleet-settings__lead">
+          These apply to every job. A change counts from the next time a job is ready to start,
+          and nothing already running stops.
+        </p>
+        {disabled && disabledNote !== undefined ? (
+          <p className="armada-fleet-settings__means">{disabledNote}</p>
+        ) : null}
       </div>
-    </Sheet>
+
+      <Row
+        id={`${group}-concurrency`}
+        label="Drones at once"
+        means="How many drones Fleet runs at the same time. A job past this waits, queued, for one to finish."
+        row={concurrency}
+        disabled={disabled}
+      />
+      <Row
+        id={`${group}-memory`}
+        label="Memory to keep free"
+        means="The share of memory Fleet leaves free before it starts another drone."
+        row={memorySparePercent}
+        disabled={disabled}
+      />
+      <Row
+        id={`${group}-disk`}
+        label="Disk to keep free"
+        means="The disk space Fleet leaves free before it starts another drone."
+        row={diskFloorGib}
+        disabled={disabled}
+      />
+      <Row
+        id={`${group}-checks`}
+        label="Checks at once"
+        means="How many of a job's checks Fleet runs at the same time. Some checks take more than one place — a heavy one waits until enough are free. When memory or disk runs short, the next check waits for one to finish."
+        row={checksAtOnce}
+        disabled={disabled}
+      />
+    </div>
   );
 }
 

@@ -20,7 +20,7 @@ export function Overview({
   selected,
   onOpen,
   onKill,
-  onOpenFleetSettings,
+  onOpenSettings,
   onOpenQueued,
   onOpenManifest,
   onCopied,
@@ -37,7 +37,7 @@ export function Overview({
   selected: string | null;
   onOpen: (jobId: string) => void;
   onKill: (jobId: string) => void;
-  onOpenFleetSettings: () => void;
+  onOpenSettings: () => void;
   onOpenQueued: () => void;
   onOpenManifest: () => void;
   onCopied: (value: string) => void;
@@ -58,7 +58,7 @@ export function Overview({
           repositories={repositories}
           picked={state.repository}
           drifts={state.drifts}
-          onOpenFleetSettings={onOpenFleetSettings}
+          onOpenSettings={onOpenSettings}
           onOpenQueued={onOpenQueued}
           onOpenManifest={onOpenManifest}
         />

@@ -19,7 +19,7 @@ type Story = StoryObj<typeof meta>;
 /** All repositories, where Bridge opens: everything reads, and one repository is behind. */
 export const OnAll: Story = {
   name: "On All repositories",
-  args: { onOpenFleetSettings: fn(), onOpenQueued: fn(), onOpenManifest: fn() },
+  args: { onOpenSettings: fn(), onOpenQueued: fn(), onOpenManifest: fn() },
   play: async ({ args, canvas, userEvent }) => {
     // Fleet and Doctor open nothing until Doctor ships, so neither is a control.
     await expect(canvas.getByRole("group", { name: "Fleet" })).toBeVisible();
@@ -27,8 +27,8 @@ export const OnAll: Story = {
     await expect(canvas.getAllByRole("button")).toHaveLength(3);
     await userEvent.click(canvas.getByRole("button", { name: /Open Queued on the Board/ }));
     await expect(args.onOpenQueued).toHaveBeenCalledOnce();
-    await userEvent.click(canvas.getByRole("button", { name: /Open Fleet settings/ }));
-    await expect(args.onOpenFleetSettings).toHaveBeenCalledOnce();
+    await userEvent.click(canvas.getByRole("button", { name: /Open Settings/ }));
+    await expect(args.onOpenSettings).toHaveBeenCalledOnce();
     await userEvent.click(canvas.getByRole("button", { name: /Open Manifest/ }));
     await expect(args.onOpenManifest).toHaveBeenCalledOnce();
   },
