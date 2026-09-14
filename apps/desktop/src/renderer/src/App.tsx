@@ -658,7 +658,7 @@ export function App() {
                The half of the reclaim rule that is a person's: Fleet has
                already taken back everything it could prove nobody needs, and
                this is where the rest is chosen from, item by item. */
-            <Boundary region="the held worktrees" {...guarded}>
+            <Boundary region="Cleanup" {...guarded}>
               <Worktrees
                 held={state.held}
                 // Read for the handle a `depended_on` reason names its

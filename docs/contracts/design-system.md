@@ -781,15 +781,15 @@ Three reversals against what stood before, each with a reason:
 in play, and the destructive-key rule is what kept `x` off `k`.
 
 **`⌘1`–`⌘6` follow the rail** — Overview, Job Board, Alerts, Doctor,
-Manifest, Held worktrees — since Active Jobs, Reviews and the Activity
-Feed folded into the Board and Held worktrees joined at the end of it.
+Manifest, Cleanup — since Active Jobs, Reviews and the Activity
+Feed folded into the Board and Cleanup joined at the end of it.
 The digits shift if the rail does; the rule is rail order, not the
 numbers.
 
 **Helm moved from `⌘6` to `⌘J` on 2026-09-13**, when it left the rail
 for a dock on every Bridge surface (#948). A digit is a place in the rail,
 and Helm no longer has one; `⌘J` toggles the dock instead. It had moved
-once before, from `⌘5` on 2026-09-03, when Held worktrees took that
+once before, from `⌘5` on 2026-09-03, when Held worktrees, now Cleanup, took that
 digit. The palette displays the binding beside every entry — which is
 where a person finds out. A learned key does not move quietly, and this
 paragraph is the noise.
