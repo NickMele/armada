@@ -24,16 +24,12 @@
     flex: 1 0 100%;
   }
 
-  .armada-job-row[data-badge-wide] > .armada-job-row__body,
-  .armada-job-row-list[data-view="table"] > .armada-job-row[data-badge-wide] > .armada-job-row__body {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
+  /* Table view already unwraps `__body` with `display: contents` (#984's own
+     specificity note above), so headline and fields are the row's own flex
+     items here — headline takes the second line whole, leaving fields to
+     share the third with the action rather than wrapping under it. */
   .armada-job-row[data-badge-wide] .armada-job-row__headline {
+    flex: 1 0 100%;
     flex-wrap: wrap;
   }
 
@@ -41,6 +37,8 @@
   .armada-job-row-list[data-view="table"] > .armada-job-row[data-badge-wide] .armada-job-row__fields {
     display: flex;
     flex-wrap: wrap;
+    flex: 1 1 auto;
+    min-width: 0;
     gap: var(--space-3);
   }
 
