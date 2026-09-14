@@ -50,13 +50,9 @@ impl Working {
     /// Add paths seen outside the plan **twice in a row**, and answer with the
     /// ones just confirmed.
     ///
-    /// A path seen once and gone by the next reading is a build tool's own
-    /// temporary file, not drift — electron-vite's bundled config is the one
-    /// that was caught writing and removing one inside a single turn — and it
-    /// is dropped rather than carried: `#1049`. A path already in `drifted`
-    /// has been told once, which stays true here for
-    /// [`Working::drifting`](Working::drifting)'s caller's reason: the Drone
-    /// is not told twice.
+    /// A path gone by the next reading is a build tool's temporary file, not
+    /// drift, and is dropped (#1049). A path already in `drifted` is never
+    /// answered again, so the Drone is told once.
     pub(crate) fn drifting(&mut self, seen: Vec<RepoPath>) -> Vec<RepoPath> {
         let waiting = std::mem::take(&mut self.pending);
         let confirmed: Vec<RepoPath> = waiting
