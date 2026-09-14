@@ -60,6 +60,7 @@ export function BoardFrom({
       onOpenSettings={noop}
       onClearTerminal={noop}
       onForgetTerminal={noop}
+      sweeping={null}
     />
   );
   return (

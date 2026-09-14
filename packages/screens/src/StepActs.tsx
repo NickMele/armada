@@ -17,6 +17,7 @@ import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ConfirmableAct } from "./Acts";
 import { ACT_LABEL } from "./copy";
 import { OverruleControl } from "./Overrule";
+import type { ActingAct } from "./pending";
 import type { Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { RedirectControl } from "./Redirect";
@@ -65,6 +66,7 @@ export function StepActs({
   opens,
   render,
   acting,
+  actingAct,
   rerunningChecks,
   stale,
   onAct,
@@ -84,6 +86,8 @@ export function StepActs({
   opens: Opens;
   render: Render;
   acting: boolean;
+  /** Which act `acting` is, so the control that sent it is the one that waits. #1117. */
+  actingAct?: ActingAct | undefined;
   /**
    * This Job's stopped step is having its Checks run again. **A wait worth
    * saying**: the press can run for minutes, and the button stays legible
@@ -151,6 +155,7 @@ export function StepActs({
             overrule={overrule}
             opens={opens}
             disabled={acting || stale}
+            pending={acting && actingAct === "override_verdict"}
             onOverrule={onOverrule}
           />
         </Tooltip>
@@ -162,8 +167,13 @@ export function StepActs({
           charge. */}
       {reread === undefined ? null : (
         <Tooltip label={recourse?.says.rerun_gate ?? ACT_LABEL.rerun_gate}>
-          <Button variant="secondary" disabled={acting || stale} onClick={() => onRerun(job.id)}>
-            {ACT_LABEL.rerun_gate}
+          <Button
+            variant="secondary"
+            pending={acting && actingAct === "rerun_gate"}
+            disabled={acting || stale}
+            onClick={() => onRerun(job.id)}
+          >
+            {acting && actingAct === "rerun_gate" ? ASKING_AGAIN : ACT_LABEL.rerun_gate}
           </Button>
         </Tooltip>
       )}
@@ -176,6 +186,7 @@ export function StepActs({
             jobId={job.id}
             drone={redirect.drone}
             disabled={acting || stale}
+            pending={acting && actingAct === "redirect"}
             onRedirect={onRedirect}
           />
         </Tooltip>
@@ -183,11 +194,15 @@ export function StepActs({
       {/* Ahead of restart, because it takes nothing away — no Drone spawns and
           no retry is spent, where a restart spends both. While it runs, the
           button says so rather than reading as a dead end: this can take
-          minutes, `CHECKS_MS`'s reason. */}
+          minutes, `CHECKS_MS`'s reason. **`pending` covers both waits**: the
+          initial send, where `actingAct` names it, and the run itself, where
+          `rerunningChecks` does once Fleet has taken it up — one bar for a
+          wait that changes which flag is carrying it partway through. */}
       {rerunChecks === undefined ? null : (
         <Tooltip label={rerunningChecks ? CHECKS_RUNNING : (recourse?.says.rerun_checks ?? ACT_LABEL.rerun_checks)}>
           <Button
             variant="secondary"
+            pending={(acting && actingAct === "rerun_checks") || rerunningChecks}
             disabled={acting || stale}
             onClick={() => onRerunChecks(job.id)}
           >
@@ -199,10 +214,11 @@ export function StepActs({
         <Tooltip label={recourse?.says.restart_step ?? ACT_LABEL.restart_step} shortcut={RESTART_KEY}>
           <Button
             variant="secondary"
+            pending={acting && actingAct === "restart_step"}
             disabled={acting || stale}
             onClick={() => onAct("restart_step", job.id)}
           >
-            {ACT_LABEL.restart_step}
+            {acting && actingAct === "restart_step" ? RESTARTING : ACT_LABEL.restart_step}
           </Button>
         </Tooltip>
       ) : null}
@@ -224,6 +240,12 @@ const RUNNING_CHECKS = "Running Checks";
 
 /** The tooltip while its own press is out — said rather than only greyed, `CHECKS_MS`'s reason. */
 const CHECKS_RUNNING = "The Checks are running now. This can take a few minutes.";
+
+/** `ACT_LABEL.rerun_gate`'s verb, in flight. #1117. */
+const ASKING_AGAIN = "Asking the gate again…";
+
+/** `ACT_LABEL.restart_step`'s verb, in flight. #1117. */
+const RESTARTING = "Restarting the step…";
 
 /**
  * The redirect on offer, and which job it is about. **Which reading produced it

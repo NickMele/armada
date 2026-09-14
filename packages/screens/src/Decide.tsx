@@ -53,6 +53,7 @@ import {
   type DecisionChange,
   type UnifiedDiffProps,
 } from "@armada/components";
+import { isDecision, type DecidingAct } from "./pending";
 import { noteWithChanges } from "./changes";
 
 import type { Diff, Evidence, Remarks } from "@armada/protocol";
@@ -102,6 +103,12 @@ export type DecideProps = {
   stale: boolean;
   /** A decision on this Job already in flight. */
   deciding: boolean;
+  /**
+   * Which of the four answers it is, when it is one of them. That control waits
+   * and says so; `deciding` without it is another act at this gate, and the
+   * group is off with the sentence. #1117.
+   */
+  decidingAct?: DecidingAct | undefined;
   /**
    * The address of the pull request this Job's branch went out on, where it
    * has one. **Absent is a Job with nothing to merge**, and it is what decides
@@ -159,6 +166,7 @@ export function Decide({
   remarks,
   stale,
   deciding,
+  decidingAct,
   pullRequest,
   onMerge,
   conflicted = false,
@@ -208,6 +216,10 @@ export function Decide({
 
   const off = stale || deciding;
   const why = stale ? NOT_LIVE : deciding ? IN_FLIGHT : undefined;
+  // The answer pressed, drawn on its own control. Not while stale: nothing live can answer it.
+  const waiting = !stale && deciding && isDecision(decidingAct) ? decidingAct : undefined;
+  // Whether the comments block's own press — `take_up_remarks` — is what is out. #1117.
+  const takingUp = !stale && deciding && decidingAct === "take_up_remarks";
 
   // **Read off the same address the merge control's own presence is decided
   // from.** `pullRequest` is undefined exactly where `onMerge` is absent below,
@@ -246,8 +258,9 @@ export function Decide({
         onApprove={() => (changes.length > 0 ? setAsking("approve") : onApprove(job.id))}
         onRequestChanges={() => onRequestChanges(job.id, noteWithChanges(changes, note))}
         onReject={() => setAsking("reject")}
-        disabled={off}
-        {...(why === undefined ? {} : { disabledNote: why })}
+        {...(waiting === undefined
+          ? { disabled: off, ...(why === undefined ? {} : { disabledNote: why }) }
+          : { pending: waiting })}
       />
 
       <Dialog
@@ -322,8 +335,16 @@ export function Decide({
           onTakeUp={(ids) => onTakeUpRemarks(job.id, ids)}
           onOpenLink={(remarkId) => onOpenRemarkLink(job.id, remarkId)}
           {...(host === undefined ? {} : { hostLabel: host })}
-          disabled={off}
-          {...(why === undefined ? {} : { disabledNote: why })}
+          // **Pending while this block's own press is out**, never `IN_FLIGHT`:
+          // `take_up_remarks` is this control's own `DecidingAct`, so the block
+          // marks the button that sent it rather than greying every control
+          // with one sentence for whichever of the gate's several acts is out.
+          // A different act at the gate still disables this block — stale's
+          // sentence is the one that survives, since nothing here is this
+          // block's own wait. #1117.
+          {...(takingUp
+            ? { pending: true }
+            : { disabled: off, ...(stale ? { disabledNote: NOT_LIVE } : {}) })}
         />
       )}
 

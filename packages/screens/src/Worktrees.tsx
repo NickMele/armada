@@ -312,12 +312,15 @@ export function Worktrees({
             </ul>
             <Button
               variant="secondary"
-              disabled={picked.length === 0 || sending}
+              pending={sending}
+              disabled={picked.length === 0}
               onClick={() => setConfirming(true)}
             >
-              {picked.length === 0
-                ? "Clean up what you choose"
-                : `Clean up ${picked.length === 1 ? "1 row" : `${picked.length} rows`}`}
+              {sending
+                ? "Cleaning up…"
+                : picked.length === 0
+                  ? "Clean up what you choose"
+                  : `Clean up ${picked.length === 1 ? "1 row" : `${picked.length} rows`}`}
             </Button>
           </CardContent>
         </Card>

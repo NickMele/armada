@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, waitFor } from "storybook/test";
-import { ReviewDecision } from "./ReviewDecision";
+import { ReviewDecision, type DecisionAct } from "./ReviewDecision";
 
 /**
  * The answers to a job waiting at a human gate, and the note one of them
@@ -200,6 +201,90 @@ export const ADecisionAlreadySent: Story = {
     note: "Add the arm in config's loader and a test that loads one.",
     disabled: true,
     disabledNote: "A decision on this job is already in flight. It was not sent twice.",
+  },
+};
+
+const NOTE = "Add the arm in config's loader and a test that loads one.";
+
+/**
+ * Request changes pressed, and Fleet has not answered. The pressed control
+ * waits and says so; the others are off, with no sentence about a second press
+ * because the control already shows the first. #1117.
+ */
+export const WaitingOnFleet: Story = {
+  args: { note: NOTE, pending: "changes" },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Requesting changes…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(canvas.getByRole("button", { name: "Approve the work" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Reject the work" })).toBeDisabled();
+    await expect(canvas.queryByRole("status")).toBeNull();
+  },
+};
+
+/** Five seconds on and Fleet still has not answered, so the group says so. */
+export const StillWaitingOnFleet: Story = {
+  args: { note: NOTE, pending: "changes" },
+  play: async ({ canvas }) => {
+    const said = await canvas.findByRole("status", {}, { timeout: 7000 });
+    await expect(said).toHaveTextContent("Still waiting on Fleet.");
+  },
+};
+
+/** Stands in for the app: a press goes out, and Fleet answers or refuses it. */
+function Pressing({ answer }: { answer: "answered" | "refused" }) {
+  const [note, setNote] = useState(NOTE);
+  const [pending, setPending] = useState<DecisionAct | undefined>(undefined);
+  const [moved, setMoved] = useState(false);
+  if (moved) return <p>Changes requested. The job is running again.</p>;
+  return (
+    <ReviewDecision
+      note={note}
+      onNote={setNote}
+      onApprove={() => {}}
+      onReject={() => {}}
+      onRequestChanges={() => {
+        setPending("changes");
+        setTimeout(() => {
+          setPending(undefined);
+          setMoved(answer === "answered");
+        }, 600);
+      }}
+      {...(pending === undefined ? {} : { pending })}
+    />
+  );
+}
+
+/** Fleet takes it. The Job moves on Fleet's word, so the decision goes with it. */
+export const FleetAnswered: Story = {
+  render: () => <Pressing answer="answered" />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Request changes" }));
+    await expect(canvas.getByRole("button", { name: "Requesting changes…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(await canvas.findByText("Changes requested. The job is running again.")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: /Request/ })).toBeNull();
+  },
+};
+
+/**
+ * Fleet refuses it. Nothing moved, so nothing snaps back: the controls are
+ * live again and the note is still there. The refusal itself is the app's
+ * failure notice, not this block's.
+ */
+export const FleetRefused: Story = {
+  render: () => <Pressing answer="refused" />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Request changes" }));
+    await expect(canvas.getByRole("button", { name: "Requesting changes…" })).toBeVisible();
+    const again = await canvas.findByRole("button", { name: "Request changes" });
+    await expect(again).toBeEnabled();
+    await expect(again).not.toHaveAttribute("aria-busy");
+    await expect(canvas.getByRole("textbox")).toHaveValue(NOTE);
   },
 };
 

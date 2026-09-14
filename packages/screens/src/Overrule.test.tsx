@@ -93,6 +93,31 @@ function confirm(trigger: Overruled) {
   return page.getByRole("dialog").getByRole("button", { name: OVERRULING[trigger].label });
 }
 
+/**
+ * `override_verdict` is out and the dialog it opened has already closed on its
+ * own confirm — the button that opened it is what still shows the wait, on
+ * one word for both triggers. #1117.
+ */
+test("the opening button is busy while its own override is out, and only disabled for another act", async () => {
+  mount(
+    <OverruleControl
+      jobId="job_2d90bb"
+      overrule={{ step: step(), trigger: "gate_failure", commits: false }}
+      opens={{ jobId: "job_2d90bb", open: async () => ({ ok: true }), onSaid: () => {} }}
+      disabled={false}
+      pending
+      onOverrule={() => {}}
+    />,
+  );
+  const button = page.getByRole("button", { name: "Overruling…" });
+  await expect.element(button).toHaveAttribute("aria-busy", "true");
+  // `Enter` on the focused, still-focusable button is what proves the press
+  // itself is swallowed rather than sent twice.
+  (button.element() as HTMLElement).focus();
+  await userEvent.keyboard("{Enter}");
+  await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+});
+
 const TRIGGERS: Overruled[] = ["gate_failure", "evidence_suspect"];
 
 for (const trigger of TRIGGERS) {

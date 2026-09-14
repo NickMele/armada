@@ -22,7 +22,7 @@ export type HelmRowActor = "you" | "helm";
  * Job id the caller could not resolve at all, drawn in words rather than a
  * card missing the facts a card promises.
  */
-export type HelmApprovalCardState = "ready" | "approved" | "dismissed" | "elsewhere" | "unknown";
+export type HelmApprovalCardState = "ready" | "pending" | "approved" | "dismissed" | "elsewhere" | "unknown";
 
 export type HelmApprovalCard = {
   /** Stable across re-renders — the call's own id. */
@@ -32,8 +32,13 @@ export type HelmApprovalCard = {
   /** Absent where the workflow is not known — drawn without it rather than blocking the card. */
   workflow?: string;
   stepCount?: number;
+  /**
+   * `"pending"` is Approve pressed and Fleet not yet answered — read off the
+   * Job leaving `awaiting_approval`, since the press itself is fire-and-forget.
+   * The card does not claim `"approved"` before that lands. #1117.
+   */
   state: HelmApprovalCardState;
-  /** Present only where `state` is `"ready"`. */
+  /** Present where `state` is `"ready"` or `"pending"` — pending keeps Approve's own handler bound, though `Button`'s own pending guard is what actually refuses the second press. */
   onApprove?: () => void;
   onDismiss?: () => void;
 };
@@ -57,15 +62,16 @@ function ApprovalCard({ jobHandle, workflow, stepCount, state, onApprove, onDism
   const named = [jobHandle, workflow, stepCount === undefined ? undefined : plural(stepCount)]
     .filter((part): part is string => part !== undefined)
     .join(" · ");
+  const pending = state === "pending";
   return (
     <div className="armada-helm-approval-card" data-state={state}>
       <p className="armada-helm-approval-card__job">{named}</p>
-      {state === "ready" ? (
+      {state === "ready" || pending ? (
         <div className="armada-helm-approval-card__actions">
-          <Button variant="primary" size="sm" ground="sunken" onClick={onApprove}>
-            Approve
+          <Button variant="primary" size="sm" ground="sunken" pending={pending} onClick={onApprove}>
+            {pending ? "Approving…" : "Approve"}
           </Button>
-          <Button variant="secondary" size="sm" ground="sunken" onClick={onDismiss}>
+          <Button variant="secondary" size="sm" ground="sunken" disabled={pending} onClick={onDismiss}>
             Not now
           </Button>
         </div>
@@ -76,7 +82,7 @@ function ApprovalCard({ jobHandle, workflow, stepCount, state, onApprove, onDism
   );
 }
 
-const STATE_SAID: Record<Exclude<HelmApprovalCardState, "ready">, string> = {
+const STATE_SAID: Record<Exclude<HelmApprovalCardState, "ready" | "pending">, string> = {
   approved: "Approved.",
   dismissed: "Dismissed.",
   elsewhere: "No longer awaiting approval.",

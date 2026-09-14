@@ -78,9 +78,11 @@ function AddTaskControl({
         open={open}
         tone="neutral"
         title="Add a task to this job's plan?"
-        confirmLabel={ADD_TASK_LABEL}
+        confirmLabel={adding ? "Adding…" : ADD_TASK_LABEL}
         confirmDisabled={title.trim() === "" || adding}
-        onCancel={close}
+        // Refuses a second press: the confirm is already out, so nothing
+        // here abandons it. #1117.
+        onCancel={adding ? undefined : close}
         onConfirm={() => void add()}
       >
         {/* One column at the dialog's own rhythm — `--space-4`, `.armada-dialog`'s
@@ -218,10 +220,11 @@ function TaskRow({
                 variant="secondary"
                 size="sm"
                 ground="sunken"
-                disabled={dropping || blank}
+                pending={dropping}
+                disabled={blank}
                 onClick={() => void drop()}
               >
-                {DROP_TASK_LABEL}
+                {dropping ? "Dropping…" : DROP_TASK_LABEL}
               </Button>
             </span>
           </span>

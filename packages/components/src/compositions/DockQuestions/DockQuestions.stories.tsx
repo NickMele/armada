@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn } from "storybook/test";
 
 import { DockQuestions, type DockQuestion } from "./DockQuestions";
@@ -108,6 +109,60 @@ export const CardAnswered: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Only running" }));
     await expect(args.questions[0]?.onAnswer).toHaveBeenCalledWith("Only running");
+  },
+};
+
+/**
+ * Stands in for the dock: a press goes out and `answering` follows on the
+ * next render, the way `commands.acting` actually arrives.
+ */
+function Pressing() {
+  const [answering, setAnswering] = useState(false);
+  return (
+    <DockQuestions
+      questions={[
+        {
+          ...droneQuestion,
+          answering,
+          onAnswer: (answer) => {
+            droneQuestion.onAnswer?.(answer);
+            setAnswering(true);
+          },
+        },
+      ]}
+    />
+  );
+}
+
+/**
+ * Pressed, and Fleet has not answered. The pressed answer waits and the rest
+ * of the group is off — `answering` alone cannot say which one was pressed,
+ * so the card remembers it locally. #1117.
+ */
+export const CardPending: Story = {
+  render: () => <Pressing />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Only running" }));
+    await expect(canvas.getByRole("button", { name: "Only running" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(canvas.getByRole("button", { name: "Include exited" })).toBeDisabled();
+  },
+};
+
+/**
+ * Reloaded mid-answer: the card mounts already `answering`, with no local
+ * press to mark. Every answer is off and none carries the bar — the block
+ * has nothing of its own to point at. #1117.
+ */
+export const CardAnsweringElsewhere: Story = {
+  args: { questions: [{ ...droneQuestion, answering: true }] },
+  play: async ({ canvas }) => {
+    const only = canvas.getByRole("button", { name: "Only running" });
+    await expect(only).toBeDisabled();
+    await expect(only).not.toHaveAttribute("aria-busy", "true");
+    await expect(canvas.getByRole("button", { name: "Include exited" })).toBeDisabled();
   },
 };
 

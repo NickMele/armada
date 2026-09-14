@@ -196,6 +196,10 @@
      mark is quieter rather than a different loudness of the same thing. */
   --degraded-edge: 2px;
 
+  /* The bar a control waiting on Fleet sweeps along its bottom edge. #1117.
+     Its own name: it is neither a tab's "you are here" nor a degraded edge. */
+  --pending-bar: 2px;
+
   /* The status dot. Off the 4px grid deliberately: a 4px dot disappears at
      desk distance and an 8px one reads as a badge that lost its label. */
   --dot: 6px;

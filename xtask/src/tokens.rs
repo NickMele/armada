@@ -144,6 +144,10 @@ pub const THEME: &[(&str, Slot)] = &[
         "--degraded-edge",
         Slot::CssOnly("a degraded edge's width, read beside --degraded"),
     ),
+    (
+        "--pending-bar",
+        Slot::CssOnly("the height of the bar a control waiting on Fleet sweeps"),
+    ),
     // A caution notice — an alias of --status-awaiting-review, not a new
     // value. Below Job level, so it is declared in status.css rather than
     // picked at a component, same as --degraded-dot above.

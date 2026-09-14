@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn } from "storybook/test";
 
-import { ReviewComments } from "./ReviewComments";
+import { ReviewComments, type ReviewCommentsProps } from "./ReviewComments";
 
 /**
  * Somebody reviewed the pull request. This is where their comments reach a
@@ -233,5 +234,69 @@ export const NothingToSendItOver: Story = {
     onTakeUp: () => {},
     disabled: true,
     disabledNote: "Fleet is not connected, so nothing here can be sent.",
+  },
+};
+
+const ONE_COMMENT = [
+  {
+    id: "IC_kwDOfirst",
+    by: "a-reviewer",
+    at: "2026-09-08 10:00",
+    said: "The empty-list case still has no test.",
+    takenUp: false,
+  },
+];
+
+/** Stands in for the app: a press goes out, and Fleet answers or refuses it. #1117. */
+function Pressing({ answer }: { answer: "answered" | "refused" }) {
+  const [pending, setPending] = useState(false);
+  const [moved, setMoved] = useState(false);
+  if (moved) return <p>Sent. The drone picks it up on its next turn.</p>;
+  return (
+    <ReviewComments
+      comments={ONE_COMMENT}
+      pending={pending}
+      onTakeUp={() => {
+        setPending(true);
+        setTimeout(() => {
+          setPending(false);
+          setMoved(answer === "answered");
+        }, 600);
+      }}
+    />
+  );
+}
+
+/** The send waits and says so; the picks go off with it. #1117. */
+export const WaitingOnFleet: Story = {
+  render: () => <Pressing answer="answered" />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("checkbox", { name: "Act on this" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Send to a drone" }));
+    const button = canvas.getByRole("button", { name: "Sending to a drone…" });
+    await expect(button).toHaveAttribute("aria-busy", "true");
+    await expect(canvas.getByRole("checkbox", { name: "Act on this" })).toBeDisabled();
+    await expect(await canvas.findByText("Sent. The drone picks it up on its next turn.")).toBeVisible();
+  },
+};
+
+/** Fleet refuses it. The pick survives, because nothing moved. */
+export const FleetRefused: Story = {
+  render: () => <Pressing answer="refused" />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("checkbox", { name: "Act on this" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Send to a drone" }));
+    const again = await canvas.findByRole("button", { name: "Send to a drone" });
+    await expect(again).toBeEnabled();
+    await expect(canvas.getByRole("checkbox", { name: "Act on this" })).toBeChecked();
+  },
+};
+
+/** Five seconds on and Fleet still has not answered, so the block says so. */
+export const StillWaitingOnFleet: Story = {
+  args: { comments: ONE_COMMENT, onTakeUp: () => {}, pending: true } as ReviewCommentsProps,
+  play: async ({ canvas }) => {
+    const said = await canvas.findByRole("status", {}, { timeout: 7000 });
+    await expect(said).toHaveTextContent("Still waiting on Fleet.");
   },
 };

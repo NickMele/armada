@@ -30,11 +30,15 @@ export type HelmDockProps = {
   context: HelmContext;
   onStartFresh: () => void;
   onSwitch: (manifestId: string) => void;
-  onApprove: (jobId: string) => void;
+  /** Approve, answered: the card waits on this, and a refusal puts it back to ready. #1117. */
+  onApprove: (jobId: string) => Promise<{ ok: boolean }>;
 };
 
-/** A card's own press, held for this dock's lifetime alone — a reload starts over. #1041. */
-type Pressed = "approved" | "dismissed";
+/**
+ * A card's own press, held for this dock's lifetime alone — a reload starts
+ * over. #1041. `"pending"` is Approve pressed and Fleet not yet answered. #1117.
+ */
+type Pressed = "pending" | "approved" | "dismissed";
 
 export function HelmDock({
   helm,
@@ -116,7 +120,7 @@ function withCards(
   jobs: readonly JobSummary[],
   workflows: readonly WorkflowSummary[],
   pressed: Record<string, Pressed>,
-  onApprove: (jobId: string) => void,
+  onApprove: (jobId: string) => Promise<{ ok: boolean }>,
   setPressed: (update: (was: Record<string, Pressed>) => Record<string, Pressed>) => void,
 ): HelmThreadRow {
   const { asks, ...rest } = row;
@@ -132,7 +136,7 @@ function cardOf(
   jobs: readonly JobSummary[],
   workflows: readonly WorkflowSummary[],
   pressed: Record<string, Pressed>,
-  onApprove: (jobId: string) => void,
+  onApprove: (jobId: string) => Promise<{ ok: boolean }>,
   setPressed: (update: (was: Record<string, Pressed>) => Record<string, Pressed>) => void,
 ): HelmApprovalCard {
   const job = jobs.find((one) => one.id === ask.jobId);
@@ -144,11 +148,16 @@ function cardOf(
     workflow: workflow?.name,
     stepCount: workflow?.steps.length,
     state,
-    ...(state === "ready"
+    ...(state === "ready" || state === "pending"
       ? {
           onApprove: () => {
-            setPressed((was) => ({ ...was, [ask.id]: "approved" }));
-            onApprove(ask.jobId);
+            setPressed((was) => ({ ...was, [ask.id]: "pending" }));
+            // Refused: drop the press, so the card reads the Board again and can be pressed again.
+            void onApprove(ask.jobId).then((answer) =>
+              setPressed(({ [ask.id]: _pending, ...rest }) =>
+                answer.ok ? { ...rest, [ask.id]: "approved" } : rest,
+              ),
+            );
           },
           onDismiss: () => setPressed((was) => ({ ...was, [ask.id]: "dismissed" })),
         }
@@ -164,10 +173,11 @@ function matching(job: JobSummary): (workflow: WorkflowSummary) => boolean {
  * **A local press wins over the Board once it has been made** — so a card
  * this dock approved reads "Approved." rather than snapping straight to
  * `elsewhere` the instant the Job leaves `awaiting_approval` because the
- * press worked. Absent any press, the Board's own status decides: a Job no
- * longer there, or one this card never moved, reads `elsewhere`; a Job this
- * dock has never heard of reads `unknown`, in words rather than a broken
- * card.
+ * press worked, and one still waiting on Fleet reads `pending`.
+ *
+ * Absent any press, the Board's own status decides: a Job no longer there, or
+ * one this card never moved, reads `elsewhere`; a Job this dock has never
+ * heard of reads `unknown`, in words rather than a broken card.
  */
 function stateOf(id: string, job: JobSummary | undefined, pressed: Record<string, Pressed>): HelmApprovalCardState {
   const local = pressed[id];

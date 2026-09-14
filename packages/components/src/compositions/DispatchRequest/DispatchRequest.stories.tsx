@@ -298,11 +298,11 @@ export const Reading: Story = {
     await expect(canvas.getByRole("textbox", { name: "Request" })).toBeDisabled();
     await expect(canvas.getByRole("button", { name: "Enter by hand" })).toBeDisabled();
 
+    // Pending, not disabled: this is the control being waited on, so it
+    // stays focusable and sweeps a bar rather than greying out. #1117.
     const dispatch = canvas.getByRole("button", { name: "Reading the request" });
-    await expect(dispatch).toBeDisabled();
-    // Dispatched rather than clicked. The app's base styles take a disabled
-    // control out of pointer reach, so a pointer cannot press it at all; the
-    // event still arrives here to prove the handler is not bound either.
+    await expect(dispatch).toHaveAttribute("aria-busy", "true");
+    await expect(dispatch).not.toBeDisabled();
     fireEvent.click(dispatch);
     await expect(args.onDispatch).not.toHaveBeenCalled();
   },
@@ -464,9 +464,11 @@ export const OneJob: Story = {
 };
 
 /**
- * The approval is out. **The control says so and is dead** — approving twice
+ * The approval is out. **The control says so and waits** — approving twice
  * does not spawn twice, but a control that looks unpressed invites the second
- * press and then says nothing about the first.
+ * press and then says nothing about the first. Pending rather than disabled,
+ * per `#1117`: it is the one control in the row Fleet has not answered, so it
+ * stays focusable and sweeps a bar instead of greying out with the rest.
  */
 export const Approving: Story = {
   args: {
@@ -479,7 +481,8 @@ export const Approving: Story = {
   },
   play: async ({ args, canvas }) => {
     const approving = canvas.getByRole("button", { name: /Approving/ });
-    await expect(approving).toBeDisabled();
+    await expect(approving).toHaveAttribute("aria-busy", "true");
+    await expect(approving).not.toBeDisabled();
     // Dispatched rather than clicked. The app's base styles take a disabled
     // control out of pointer reach, so a pointer cannot press it at all; the
     // event still arrives here to prove the handler is not bound either.

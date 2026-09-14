@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, within } from "storybook/test";
 
 import { DroneQuestion } from "./DroneQuestion";
@@ -327,6 +328,51 @@ export const ACommandThatWouldNotRead: Story = {
     await userEvent.click(canvas.getByRole("radio", { name: "Allow for this job" }));
     await userEvent.click(canvas.getByRole("button", { name: "Send this answer" }));
     await expect(args.onAnswer).toHaveBeenCalledWith("Allow for this job");
+  },
+};
+
+/**
+ * The Send just pressed, and Fleet has not answered. **Only that control
+ * marks itself busy** — the other radio is off like everything else, and
+ * nothing says "already sending" until the five-second mark. #1117.
+ */
+function Pressing() {
+  const [pending, setPending] = useState(false);
+  return (
+    <DroneQuestion
+      question="The store schema needs a column before three of these jobs can run. Should that be its own job?"
+      options={[
+        {
+          label: "Its own job",
+          consequence:
+            "Dispatch a migration job first and make the other three depend on it. Nothing else starts until it lands.",
+        },
+        {
+          label: "Fold it in",
+          consequence:
+            "The first job that needs the column adds it. The other two may race it and one of them will have to wait anyway.",
+        },
+      ]}
+      disabled={pending}
+      pending={pending}
+      onAnswer={() => setPending(true)}
+    />
+  );
+}
+
+export const WaitingOnFleet: Story = {
+  render: () => <Pressing />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("radio", { name: "Its own job" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Send this answer" }));
+    await expect(canvas.getByRole("button", { name: "Sending…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(canvas.getByRole("radio", { name: "Its own job" })).toBeDisabled();
+    await expect(canvas.getByRole("radio", { name: "Fold it in" })).toBeDisabled();
+    // Nothing said yet — the sentence is for the five-second mark, not the press.
+    await expect(canvas.queryByRole("status")).toBeNull();
   },
 };
 

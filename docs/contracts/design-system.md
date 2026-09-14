@@ -370,7 +370,7 @@ only on floating layers (dialog, popover, dropdown).
 ```
 --duration-fast   120ms    hover, focus
 --duration-base   180ms    panel and dropdown transitions
---duration-pulse  1600ms   the running step mark, and nothing else
+--duration-pulse  1600ms   a loop that says still working
 --ease            cubic-bezier(0.2, 0, 0, 1)
 ```
 
@@ -378,13 +378,28 @@ No entrance animations on data. A Job Board that animates rows in on
 every poll is unusable. Live-updating values may pulse once on change —
 nothing more. Respect `prefers-reduced-motion`.
 
-**One carve-out: the running mark animates continuously.** A hue says
-which step is current; only motion says it is still working, and that
-is the reading a static rail cannot give — it matters most on the step
-that has been running for nine minutes.
+**What animates on a loop is what is still working**, because a hue or a
+label can say *which* and only motion says *still*. Two things do: the
+running mark, and a control waiting on Fleet. There was a rule that one
+thing animates per screen; it was retired on 2026-09-14, #1117.
 
-**Scope is one animated mark per screen, on the most specific mark
-present, and on the thing being read.** Job detail has a rail, so the
+**A control waiting on Fleet sweeps a bar along its bottom edge**, from
+the press until Fleet answers or refuses. Its label says what it is
+doing — *Request changes* reads *Requesting changes…* — and the rest of
+its group is disabled. The bar is `--status-running`, 2px, travelling at
+`--duration-pulse`; under `prefers-reduced-motion` it holds still at full
+width and the label carries the reading. A person who pressed it and has
+waited five seconds is told under the group that Fleet is still on it.
+The Job itself does not move until Fleet says so — a refused act would
+otherwise have to snap back.
+
+**The running mark animates continuously.** A hue says which step is
+current; only motion says it is still working, and that is the reading
+a static rail cannot give — it matters most on the step that has been
+running for nine minutes.
+
+**It pulses in one place per screen, on the most specific mark present,
+and on the thing being read.** Job detail has a rail, so the
 rail's current step pulses and the header's Running badge stays static —
 the rail names *which* step is working, the badge one line above only
 names the Job's state. A list has no rail, so the Running badge pulses
@@ -401,8 +416,7 @@ rail, then the focused Job, then this — and the reading survived each
 time because the pulse never carried *which* step is current. Hue does
 that, unchanged on every running row. The pulse carries *still working*,
 and that is only asked of the thing being read, which is why it follows
-focus rather than status. Nothing else on a data surface animates on a
-loop. Under `prefers-reduced-motion` the pulse stops and
+focus rather than status. Under `prefers-reduced-motion` the pulse stops and
 `--step-running` carries the reading alone.
 
 ---
@@ -1093,6 +1107,13 @@ match exactly.
 Destructive stays outlined because a solid red button reads as an error
 state rather than an action, and `--status-completed-failed` is already
 spoken for as a *status*. Kill is deliberate, not alarming.
+
+**Pending is the pressed control, and only that one.** Every variant
+collapses onto one pending rendering — `--bg-sunken`, `--border-strong`,
+`--fg-default` text, and the bar under Motion — so the button a person
+pressed is the one control in its group that is not greyed out. It stays
+focusable and refuses a second press. Disabling alone was the treatment
+before, and it drew the pressed control exactly like its siblings.
 
 ### Input
 

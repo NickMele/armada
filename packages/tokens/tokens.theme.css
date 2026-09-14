@@ -187,6 +187,7 @@
    --edge-active — a border width read beside --edge-* colours
    --error-edge — a fault's edge width, read beside --error
    --degraded-edge — a degraded edge's width, read beside --degraded
+   --pending-bar — the height of the bar a control waiting on Fleet sweeps
    --duration-fast — v4 has no --duration-* namespace; read it in CSS
    --duration-base — v4 has no --duration-* namespace; read it in CSS
    --tooltip-delay — v4 has no --delay-* namespace; read it in CSS

@@ -6,16 +6,21 @@
 // wire actually calls "cannot say".
 
 import { describe, expect, it, test } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import type {
+  Diff,
+  Evidence,
   JobDetail as JobWhole,
   JobSummary,
   PullRequestDetail,
+  Remarks,
   StepDetail,
   Submitted,
 } from "@armada/protocol";
+import type { ActingAct } from "./pending";
+import { verdictSlotAtGate } from "./verdict";
 
-import { mount, unmount } from "./mounted";
+import { mount, rerender, unmount } from "./mounted";
 import {
   briefOf,
   cameBackOf,
@@ -437,6 +442,90 @@ describe("the pull request block draws no resolve-conflicts control", () => {
     await expect
       .element(page.getByRole("button", { name: "Resolve conflicts" }))
       .not.toBeInTheDocument();
+    unmount();
+  });
+});
+
+// #1117: `answerJudge` sends under `acting` — `answer_judge` is an
+// `ActingAct`, never a `DecidingAct` — so the question's own buttons have to
+// gate on `acting`, not `deciding`.
+describe("the judge question at the gate", () => {
+  const NO_DIFF: Diff = { state: "none" };
+  const NO_EVIDENCE: Evidence = { state: "none" };
+  const NO_REMARKS: Remarks = { state: "none" };
+
+  function openStep(): StepDetail {
+    return step({ step_id: "land" });
+  }
+
+  function whole(): JobWhole {
+    return {
+      job: job(),
+      created_at: "2026-09-14T08:00:00Z",
+      steps: [openStep()],
+      acceptance_criteria: [],
+      dependencies: [],
+      judge_question: {
+        step_id: "land",
+        criterion_id: "matches_brief",
+        question: "Does the fix address the cause the note names?",
+        expected: "The root cause is fixed.",
+        produced: "A symptom is patched.",
+        consequence: "The bug recurs under load.",
+        asked_at: "2026-09-14T08:55:00Z",
+      },
+    };
+  }
+
+  function slot(args: { acting: boolean; actingAct?: ActingAct; deciding?: boolean }) {
+    return (
+      <>
+        {verdictSlotAtGate({
+          job: job(),
+          whole: whole(),
+          open: openStep(),
+          render: "reviewing",
+          recorded: { diff: NO_DIFF, evidence: NO_EVIDENCE, remarks: NO_REMARKS },
+          opensRecords: { jobId: job().id, open: async () => ({ ok: true }), onSaid: () => {} },
+          now: NOW,
+          claimed: undefined,
+          onNeedMaterial: () => {},
+          onNeedRemarks: () => {},
+          stale: false,
+          acting: args.acting,
+          actingAct: args.actingAct,
+          deciding: args.deciding ?? false,
+          onMergePullRequest: () => {},
+          onApproveReview: () => {},
+          onRequestChanges: () => {},
+          onReject: () => {},
+          onTakeUpRemarks: () => {},
+          onOpenRemarkLink: () => {},
+          onOpenPullRequest: async () => ({ ok: true }),
+          onSaid: () => {},
+          onAnswerJudge: () => {},
+        })}
+      </>
+    );
+  }
+
+  test("a decision elsewhere at the gate leaves the answers live", async () => {
+    mount(slot({ acting: false, deciding: true }));
+    await expect
+      .element(page.getByRole("button", { name: "Disagree, just this step" }))
+      .toBeEnabled();
+    unmount();
+  });
+
+  test("the pressed answer waits while answer_judge is out, and the rest go off", async () => {
+    mount(slot({ acting: false }));
+    await userEvent.click(page.getByRole("button", { name: "Disagree, just this step" }));
+    rerender(slot({ acting: true, actingAct: "answer_judge" }));
+    const pressed = page.getByRole("button", { name: "Disagreeing, just this step…" });
+    await expect.element(pressed).toHaveAttribute("aria-busy", "true");
+    await expect
+      .element(page.getByRole("button", { name: "Agree with the refusal" }))
+      .toBeDisabled();
     unmount();
   });
 });

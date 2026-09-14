@@ -78,6 +78,33 @@ export const ApprovalReady: Story = {
   },
 };
 
+/**
+ * Approve pressed, and Fleet has not answered — the Job is still
+ * `awaiting_approval`. Approve waits and says so; `Not now` is off, because
+ * this card has already committed to one answer. #1117.
+ */
+export const ApprovalPending: Story = {
+  args: {
+    rows: [
+      { id: "1", at: "14:29:40", actor: "you", message: "Approve job 9" },
+      {
+        id: "2",
+        at: "14:29:52",
+        actor: "helm",
+        message: "Here it is.",
+        cards: [
+          { id: "c1", jobHandle: "9-fix-801-unanswered-permission-ask", workflow: "bug", stepCount: 4, state: "pending" },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    const approving = canvas.getByRole("button", { name: "Approving…" });
+    await expect(approving).toHaveAttribute("aria-busy", "true");
+    await expect(canvas.getByRole("button", { name: "Not now" })).toBeDisabled();
+  },
+};
+
 /** The press landed: the card says so and offers nothing further. */
 export const ApprovalApproved: Story = {
   args: {

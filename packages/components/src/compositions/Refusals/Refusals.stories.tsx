@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, within } from "storybook/test";
 import { Refusals, type RefusedAnswer } from "./Refusals";
 
@@ -357,6 +358,45 @@ export const AlwaysAllowPicksARule: Story = {
     await userEvent.click(canvas.getByRole("radio", { name: "gh issue" }));
     await userEvent.click(within(group).getByRole("button", { name: "Always allow in this repository" }));
     await expect(args.onAnswer).toHaveBeenCalledWith("call_gh_1", "always_allow", "gh issue");
+  },
+};
+
+/**
+ * One row's press, and Fleet has not answered. **Only that row's button
+ * marks itself busy** — the other answers on the same row are off like
+ * everything else, and the call another row's box could share this act with
+ * is exactly why the row remembers its own press rather than trusting
+ * `pending` alone. #1117.
+ */
+function Pressing() {
+  const [pending, setPending] = useState(false);
+  return (
+    <Refusals
+      said={SAID}
+      refused={[
+        { tool: "Bash", detail: "npm publish --access public", call: "call_npm_1", answers: ANSWERS },
+      ]}
+      disabled={pending}
+      pending={pending}
+      onAnswer={() => setPending(true)}
+    />
+  );
+}
+
+export const WaitingOnFleet: Story = {
+  render: () => <Pressing />,
+  play: async ({ canvas, userEvent }) => {
+    const group = canvas.getByRole("group", { name: "Answers for npm publish --access public" });
+    await userEvent.click(within(group).getByRole("button", { name: "Allow for this job" }));
+    await expect(within(group).getByRole("button", { name: "Sending…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(
+      within(group).getByRole("button", { name: "Always allow in this repository" }),
+    ).toBeDisabled();
+    await expect(within(group).getByRole("button", { name: "Reject" })).toBeDisabled();
+    await expect(canvas.queryByRole("status")).toBeNull();
   },
 };
 

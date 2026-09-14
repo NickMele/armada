@@ -66,6 +66,7 @@ export function RaiseCapControl({
   jobId,
   spend,
   disabled,
+  pending = false,
   open,
   onOpen,
   onRaise,
@@ -81,6 +82,12 @@ export function RaiseCapControl({
    */
   spend: JobSpend;
   disabled: boolean;
+  /**
+   * This is the control that opened the dialog, and `raise_cost_cap` is out.
+   * The dialog has already closed on its own confirm — this is what still
+   * shows the wait. Read only where `trigger` draws a button. #1117.
+   */
+  pending?: boolean;
   /**
    * Whether the dialog is up. **Held by the screen and not here**, for
    * `ReportControl`'s reason: `B` opens it too, and the keyboard is bound one
@@ -119,8 +126,8 @@ export function RaiseCapControl({
   return (
     <>
       {trigger ? (
-        <Button variant="secondary" disabled={disabled} onClick={() => onOpen(true)}>
-          {RAISE_CAP_LABEL}
+        <Button variant="secondary" pending={pending} disabled={disabled} onClick={() => onOpen(true)}>
+          {pending ? "Raising the cost cap…" : RAISE_CAP_LABEL}
         </Button>
       ) : null}
       <Dialog

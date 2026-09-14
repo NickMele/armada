@@ -67,6 +67,26 @@ function confirm() {
   return page.getByRole("dialog").getByRole("button", { name: RAISE_TURN_CAP_LABEL });
 }
 
+/**
+ * `raise_turn_cap` is out and the dialog it opened has already closed on its
+ * own confirm — the button that opened it is what still shows the wait. #1117.
+ */
+test("the opening button is busy while its own raise is out", async () => {
+  mount(
+    <RaiseTurnCapControl
+      jobId="job_2d90bb"
+      spend={TAKEN}
+      disabled={false}
+      pending
+      open={false}
+      onOpen={() => {}}
+      onRaise={() => {}}
+    />,
+  );
+  const button = page.getByRole("button", { name: "Raising the turn cap…" });
+  await expect.element(button).toHaveAttribute("aria-busy", "true");
+});
+
 function figure() {
   return page.getByRole("textbox", { name: "New cap, in turns" });
 }

@@ -129,3 +129,46 @@
   color: var(--fg-subtle);
   cursor: default;
 }
+
+/* Pending — the pressed control while Fleet has not answered. Every variant
+   collapses onto one rendering, as disabled does, but with --fg-default text so
+   it is the one control in its group that is not greyed out. The bar moves on
+   transform alone, never opacity. #1117. */
+.armada-button[data-pending] {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-sunken);
+  border-color: var(--border-strong);
+  color: var(--fg-default);
+  cursor: default;
+}
+
+.armada-button[data-pending]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 40%;
+  height: var(--pending-bar);
+  background: var(--status-running);
+  /* Linear, not --ease: a fast-out curve parks the bar past the right edge for
+     most of the loop, and a screenshot showed no bar at all. */
+  animation: armada-button-waiting var(--duration-pulse) linear infinite;
+}
+
+@keyframes armada-button-waiting {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+/* Still, at full width: the label carries the reading. */
+@media (prefers-reduced-motion: reduce) {
+  .armada-button[data-pending]::after {
+    width: 100%;
+    animation: none;
+  }
+}

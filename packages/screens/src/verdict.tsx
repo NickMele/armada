@@ -51,6 +51,7 @@ import { Decide } from "./Decide";
 import { checksOf, didNotPass, mechanicalRunsOf, panelsOf } from "./gates";
 import { basename, keptOf, type Opens } from "./phases";
 import type { Render } from "./render";
+import type { ActingAct, DecidingAct } from "./pending";
 
 /**
  * Whether this Job's frozen workflow ever opens a pull request.
@@ -510,7 +511,13 @@ export type VerdictSlotAtGateArgs = {
   onNeedMaterial: (jobId: string | null) => void;
   onNeedRemarks: (jobId: string | null) => void;
   stale: boolean;
+  /** Something sent under `acting` is out on this Job. #1117. */
+  acting: boolean;
   deciding: boolean;
+  /** Which act at this gate is out, where `deciding` is set. #1117. */
+  decidingAct?: DecidingAct | undefined;
+  /** Which act `acting` is. #1117. */
+  actingAct?: ActingAct | undefined;
   onMergePullRequest: (jobId: string) => void;
   /** Start the pull request's failed CI runs again. #905. */
   onRerunFailedChecks?: (jobId: string) => void;
@@ -556,7 +563,10 @@ export function verdictSlotAtGate({
   onNeedMaterial,
   onNeedRemarks,
   stale,
+  acting,
+  actingAct,
   deciding,
+  decidingAct,
   onMergePullRequest,
   onRerunFailedChecks,
   onInvestigateFailedChecks,
@@ -578,20 +588,25 @@ export function verdictSlotAtGate({
   // boundary either way, but this step is answered before it is reviewed.
   const question = whole?.judge_question;
   if (question !== undefined && question.step_id === open.step_id) {
+    // **`acting`, not `deciding`.** `onAnswerJudge` sends under `acting` —
+    // `pending.ts`'s `answer_judge` is an `ActingAct`, never a `DecidingAct` —
+    // so gating this on `deciding` left its own buttons live for the whole of
+    // the press they had just sent. #1117.
     return (
       <JudgeQuestion
         question={question.question}
         expected={question.expected}
         produced={question.produced}
         consequence={question.consequence}
-        disabled={stale || deciding}
+        disabled={stale || acting}
         disabledNote={
           stale
             ? "This job is not live, so nothing can be sent."
-            : deciding
+            : acting
               ? "Something sent to this job is still on its way to Fleet."
               : undefined
         }
+        pending={acting && actingAct === "answer_judge"}
         onAnswer={(answer, note) => onAnswerJudge(job.id, question.asked_at, answer, note)}
       />
     );
@@ -645,6 +660,7 @@ export function verdictSlotAtGate({
           remarks={recorded.remarks}
           stale={stale}
           deciding={deciding}
+          decidingAct={decidingAct}
           {...(address === undefined ? {} : { pullRequest: address, conflicted })}
           onMerge={onMergePullRequest}
           onApprove={onApproveReview}
@@ -675,6 +691,11 @@ export function verdictSlotAtGate({
             onDismissFinding: (finding: string, reason: string) =>
               onDismissFinding(job.id, finding, reason),
           })}
+      // `dismiss_finding` is a `DecidingAct`, and the View it opens closes on
+      // its own press before Fleet answers — so what this guards is a second
+      // decision going out while another one at this gate is already on its
+      // way, not this control's own wait. #1117.
+      deciding={deciding}
       {...(!ciShown(detail?.checks, conflicted)
         ? {}
         : {

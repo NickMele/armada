@@ -2,7 +2,7 @@ import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import { Button } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Checkbox } from "../../primitives/Checkbox/Checkbox";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
@@ -66,6 +66,11 @@ export type ReviewCommentsProps = {
   disabled?: boolean;
   /** Why the controls are off, where they are. */
   disabledNote?: ReactNode;
+  /**
+   * The send that was pressed and Fleet has not answered. Every control is off
+   * while it holds; `false` is nothing out. #1117.
+   */
+  pending?: boolean;
   /** The line over the list. Sentence case, no Wh- opener. */
   label?: ReactNode;
   /** What picking commits to, on hover over the line above the list. */
@@ -135,6 +140,7 @@ export function ReviewComments({
   onTakeUp,
   disabled = false,
   disabledNote,
+  pending = false,
   label = "Comments on the pull request",
   note = "Pick the ones a drone should act on. It works on the same branch, so the pull request updates in place.",
   emptyNote = "No comments",
@@ -148,6 +154,8 @@ export function ReviewComments({
   const [picked, setPicked] = useState<readonly string[]>([]);
   const choosable = comments.filter((comment) => !comment.takenUp);
   const chosen = picked.filter((id) => choosable.some((comment) => comment.id === id));
+  const off = disabled || pending;
+  const stillWaiting = useStillWaiting(pending);
 
   return (
     <section className="armada-remarks" aria-label="Comments on the pull request">
@@ -201,7 +209,7 @@ export function ReviewComments({
                 ) : (
                   <Checkbox
                     checked={chosen.includes(comment.id)}
-                    disabled={disabled}
+                    disabled={off}
                     onChange={(event) =>
                       setPicked((held) =>
                         event.target.checked
@@ -222,15 +230,20 @@ export function ReviewComments({
               nothing was chosen is a refusal that reads as a failure. */}
           <Button
             variant="primary"
-            disabled={disabled || chosen.length === 0}
+            pending={pending}
+            disabled={off || chosen.length === 0}
             onClick={() => chosen.length > 0 && onTakeUp([...chosen])}
           >
-            {takeUpLabel}
+            {pending ? "Sending to a drone…" : takeUpLabel}
           </Button>
         </>
       )}
 
-      {disabled && disabledNote !== undefined ? (
+      {stillWaiting ? (
+        <p className="armada-remarks__said" role="status">
+          {STILL_WAITING}
+        </p>
+      ) : disabled && disabledNote !== undefined ? (
         <p className="armada-remarks__said" role="note">
           {disabledNote}
         </p>

@@ -1,10 +1,17 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import type { JudgeAnswer } from "@armada/protocol";
 import { JUDGE_FINDING, JUDGE_FINDING_LABEL, JUDGE_FINDING_SAID } from "../../judge-record";
-import { Button } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
+
+/** What each answer's button says while it is out and Fleet has not answered. #1117. */
+const UNDERWAY: Record<JudgeAnswer, string> = {
+  agree: "Agreeing…",
+  disagree_once: "Disagreeing, just this step…",
+  disagree_always: "Standing this criterion down…",
+};
 
 /**
  * The Judge's three answers, named once. **The one source** — the dock draws
@@ -65,6 +72,11 @@ export type JudgeQuestionProps = {
   disabled?: boolean;
   /** Why the controls are off, where they are. */
   disabledNote?: string;
+  /**
+   * The answer that was pressed and Fleet has not answered. That control waits
+   * and every other one is off; `false` is nothing out. #1117.
+   */
+  pending?: boolean;
 };
 
 export function JudgeQuestion({
@@ -75,12 +87,22 @@ export function JudgeQuestion({
   onAnswer,
   disabled = false,
   disabledNote,
+  pending = false,
 }: JudgeQuestionProps) {
   const [note, setNote] = useState("");
   const noteId = useId();
   const finding = { expected, produced, consequence };
+  // Which of the three was pressed. Local, and cleared once `pending` clears —
+  // the caller only ever says an answer from this block is out, not which.
+  const [pressed, setPressed] = useState<JudgeAnswer | null>(null);
+  useEffect(() => {
+    if (!pending) setPressed(null);
+  }, [pending]);
+  const stillWaiting = useStillWaiting(pending);
+  const off = disabled || pending;
 
   const send = (answer: "agree" | "disagree_once" | "disagree_always") => {
+    setPressed(answer);
     const trimmed = note.trim();
     onAnswer(answer, trimmed === "" ? undefined : trimmed);
   };
@@ -107,23 +129,44 @@ export function JudgeQuestion({
         label="Note (optional)"
         rows={2}
         value={note}
-        disabled={disabled}
+        disabled={off}
         onChange={(event) => setNote(event.target.value)}
       />
 
       <div className="armada-judge-question__answers" role="group" aria-label="Your answer">
-        <Button variant="secondary" disabled={disabled} onClick={() => send("agree")}>
-          {JUDGE_ANSWER.agree.label}
+        <Button
+          variant="secondary"
+          pending={pressed === "agree" && pending}
+          disabled={off}
+          onClick={() => send("agree")}
+        >
+          {pressed === "agree" && pending ? UNDERWAY.agree : JUDGE_ANSWER.agree.label}
         </Button>
-        <Button variant="primary" disabled={disabled} onClick={() => send("disagree_once")}>
-          {JUDGE_ANSWER.disagree_once.label}
+        <Button
+          variant="primary"
+          pending={pressed === "disagree_once" && pending}
+          disabled={off}
+          onClick={() => send("disagree_once")}
+        >
+          {pressed === "disagree_once" && pending ? UNDERWAY.disagree_once : JUDGE_ANSWER.disagree_once.label}
         </Button>
-        <Button variant="secondary" disabled={disabled} onClick={() => send("disagree_always")}>
-          {JUDGE_ANSWER.disagree_always.label}
+        <Button
+          variant="secondary"
+          pending={pressed === "disagree_always" && pending}
+          disabled={off}
+          onClick={() => send("disagree_always")}
+        >
+          {pressed === "disagree_always" && pending
+            ? UNDERWAY.disagree_always
+            : JUDGE_ANSWER.disagree_always.label}
         </Button>
       </div>
 
-      {disabled && disabledNote !== undefined ? (
+      {stillWaiting ? (
+        <p className="armada-judge-question__said" role="status">
+          {STILL_WAITING}
+        </p>
+      ) : disabled && disabledNote !== undefined ? (
         <p className="armada-judge-question__said" role="note">
           {disabledNote}
         </p>

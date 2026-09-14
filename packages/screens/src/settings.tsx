@@ -27,6 +27,7 @@ import {
   WHEN_REFUSED_MEANS,
 } from "./copy";
 import { money } from "./facts";
+import type { ActingAct } from "./pending";
 import { cap, RaiseCapControl } from "./RaiseCap";
 import { RaiseTurnCapControl } from "./RaiseTurnCap";
 
@@ -95,12 +96,25 @@ export type SettingsSheetProps = SettingsCalls & {
   models: ModelChoices | null;
   stale: boolean;
   acting: boolean;
+  /** Which act, where `acting` is true — `remove_allowed_command` is this panel's own row press. #1117. */
+  actingAct?: ActingAct;
   floor: boolean;
   onClose: () => void;
 };
 
 /** A row a change was sent from. */
 type Row = "cost" | "turns" | "model" | "review-model" | "blocked" | "refused" | "allowed";
+
+/** The rows with no button of their own, and the act each sends. Raise and Remove wait on their buttons. */
+const SENT_BY: Partial<Record<Row, ActingAct>> = {
+  model: "set_model",
+  "review-model": "set_review_model",
+  blocked: "set_when_blocked",
+  refused: "set_when_refused",
+};
+
+/** What such a row says while its change is out. */
+const SAVING = "Saving…";
 
 /** What a row says once its change took, and how to tell that it did. */
 type Told = { row: Row; says: ReactNode; took: (whole: JobWhole) => boolean };
@@ -124,6 +138,7 @@ export function SettingsSheet({
   models,
   stale,
   acting,
+  actingAct,
   floor,
   onClose,
   onSetWhenBlocked,
@@ -145,7 +160,10 @@ export function SettingsSheet({
     setTold((was) => [...was.filter((one) => one.row !== row), { row, says, took }]);
   const saidOf = (row: Row): ReactNode => {
     const one = told.find((each) => each.row === row);
-    return one !== undefined && one.took(whole) ? one.says : undefined;
+    if (one === undefined) return undefined;
+    if (one.took(whole)) return one.says;
+    // A choice or a picker has no control to wait on, so its line does until Fleet answers. #1117.
+    return acting && actingAct !== undefined && actingAct === SENT_BY[row] ? SAVING : undefined;
   };
 
   const off = stale || acting;
@@ -163,6 +181,7 @@ export function SettingsSheet({
                 cap: cap(spend.cost_cap_micros),
                 used: money(spend.cost_micros),
                 onRaise: () => setRaising("cost"),
+                pending: acting && actingAct === "raise_cost_cap",
                 said: saidOf("cost"),
               }
         }
@@ -173,6 +192,7 @@ export function SettingsSheet({
                 cap: String(spend.turn_cap),
                 used: String(spend.turns),
                 onRaise: () => setRaising("turns"),
+                pending: acting && actingAct === "raise_turn_cap",
                 said: saidOf("turns"),
               }
         }
@@ -216,7 +236,8 @@ export function SettingsSheet({
         allowedSaid={saidOf("allowed")}
         repositoryAllowed={(whole.repository_allowed_commands ?? []).map((row) => row.run)}
         disabled={off}
-        disabledNote={stale ? NOT_LIVE : acting ? SENDING : undefined}
+        disabledNote={stale ? NOT_LIVE : undefined}
+        pending={acting && actingAct === "remove_allowed_command"}
         onWhenBlocked={(chose) => {
           tell("blocked", BLOCKED_TOOK, (next) => next.when_blocked === chose);
           onSetWhenBlocked(job.id, chose);
@@ -269,9 +290,6 @@ export function SettingsSheet({
 
 /** Why every control is off, where the reading is not live. */
 const NOT_LIVE = "This job is not live, so nothing can be changed.";
-
-/** Why they are off, where something sent to this Job has not come back. */
-const SENDING = "Something sent to this job is still on its way to Fleet.";
 
 /** A new choice for a command the drone was not given, once it took. */
 const BLOCKED_TOOK = "Changed. Applies the next time it reaches for a command.";

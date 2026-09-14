@@ -66,6 +66,17 @@ export type SplitButtonProps = {
   /** Render with the menu open. Uncontrolled otherwise. */
   defaultOpen?: boolean;
   disabled?: boolean;
+  /**
+   * The act this control opened a dialog for is out, and Fleet has not
+   * answered — the same reading as `Button`'s own `pending`, on the one
+   * visible surface a split button still has once its menu has closed. The
+   * face sweeps a bar and stays focusable; the caret goes off and the menu
+   * will not open, since there is nothing else to disclose while a press is
+   * already on its way. #1117.
+   */
+  pending?: boolean;
+  /** The face's label while `pending` holds. Falls back to `children`. */
+  pendingLabel?: string;
   onAction?: () => void;
   /** Names the menu for a reader who cannot see the caret. Also the caret's own name where `items` is empty. */
   menuLabel?: string;
@@ -80,6 +91,8 @@ export function SplitButton({
   size = "default",
   defaultOpen = false,
   disabled = false,
+  pending = false,
+  pendingLabel,
   onAction,
   menuLabel = "More actions",
 }: SplitButtonProps) {
@@ -101,25 +114,31 @@ export function SplitButton({
         <button
           type="button"
           className="armada-split-button__action"
-          disabled={disabled}
-          onClick={onAction}
+          data-pending={pending || undefined}
+          // Not `disabled`, on `Button`'s own reasoning: a disabled control
+          // drops focus and is skipped by a screen reader, and this is the one
+          // still standing for the press that is out.
+          disabled={pending ? undefined : disabled}
+          aria-disabled={pending || undefined}
+          aria-busy={pending || undefined}
+          onClick={pending ? undefined : onAction}
         >
           {icon}
-          {children}
+          {pending ? (pendingLabel ?? children) : children}
         </button>
         <button
           type="button"
           className="armada-split-button__caret"
           aria-haspopup={noMenu ? undefined : "menu"}
-          aria-expanded={noMenu ? undefined : open}
+          aria-expanded={noMenu ? undefined : pending ? false : open}
           aria-label={menuLabel}
-          disabled={disabled}
+          disabled={disabled || pending}
           onClick={() => (noMenu ? onAction?.() : setOpen((was) => !was))}
         >
           <ChevronDown size={16} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
-      {!noMenu && open && (
+      {!noMenu && open && !pending && (
         <div className="armada-split-button__menu" role="menu" aria-label={menuLabel}>
           {items.map((item) => (
             <button

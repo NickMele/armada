@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn } from "storybook/test";
 
 import { JobSettings, JobSettingsButton, type JobSettingsChoice } from "./JobSettings";
@@ -230,6 +231,69 @@ export const ControlsOff: Story = {
     allowed: [{ run: "pnpm add -D reselect@5.1.1", reach: "job" }],
     disabled: true,
     disabledNote: "This job is not live, so nothing can be changed.",
+  },
+};
+
+/**
+ * **A row's own Remove just pressed, and Fleet has not answered.** Only that
+ * row marks itself busy — the model select is off like every other control,
+ * and nothing this panel sends says which command a removal was for, which is
+ * why the row remembers its own press rather than trusting `pending` alone.
+ * #1117.
+ */
+function Pressing() {
+  const [pending, setPending] = useState(false);
+  return (
+    <JobSettings
+      open
+      jobId="77-split-the-settings-reducer"
+      models={MODELS}
+      model={null}
+      choices={CHOICES}
+      whenBlocked="ask_me"
+      allowed={[{ run: "pnpm add -D reselect@5.1.1", reach: "job" }]}
+      disabled={pending}
+      pending={pending}
+      onModel={() => {}}
+      onWhenBlocked={() => {}}
+      onRemove={() => setPending(true)}
+      onClose={() => {}}
+    />
+  );
+}
+
+export const WaitingOnFleet: Story = {
+  name: "Waiting on Fleet",
+  render: () => <Pressing />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Remove pnpm add -D reselect@5.1.1" }),
+    );
+    await expect(
+      canvas.getByRole("button", { name: "Removing pnpm add -D reselect@5.1.1" }),
+    ).toHaveAttribute("aria-busy", "true");
+    await expect(canvas.getByLabelText("Model for the next step")).toBeDisabled();
+    await expect(canvas.queryByRole("status")).toBeNull();
+  },
+};
+
+/** A raise of the cost cap sent, and Fleet has not answered. Its own Raise waits; the other is off. #1117. */
+export const RaisingTheCostCap: Story = {
+  args: {
+    costCap: { ...COST, pending: true },
+    turnCap: TURNS,
+    choices: CHOICES,
+    whenBlocked: "refuse_and_hold",
+    models: MODELS,
+    model: null,
+    allowed: [],
+    disabled: true,
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole("button", { name: "Raise the cost cap, waiting on Fleet" }),
+    ).toHaveAttribute("aria-busy", "true");
+    await expect(canvas.getByRole("button", { name: "Raise the turn cap" })).toBeDisabled();
   },
 };
 

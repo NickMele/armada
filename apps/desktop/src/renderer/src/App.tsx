@@ -506,6 +506,7 @@ export function App() {
       onOpenSettings={() => goTo(SURFACE.settings)}
       onClearTerminal={(jobIds) => void commands.clearTerminal(jobIds)}
       onForgetTerminal={(jobIds) => void commands.forgetTerminal(jobIds)}
+      sweeping={commands.sweeping}
     />
   );
 
@@ -535,7 +536,7 @@ export function App() {
             context={helmContext}
             onStartFresh={() => void startHelmFresh()}
             onSwitch={(manifestId) => pointHelm(manifestId)}
-            onApprove={(jobId) => void commands.approve(jobId)}
+            onApprove={commands.approve}
           />
         }
         stats={{
@@ -619,9 +620,13 @@ export function App() {
                 stale={!live}
                 now={now}
                 acting={commands.acting === reading.id}
+                actingAct={commands.acting === reading.id ? (commands.actingAct ?? undefined) : undefined}
                 rerunningChecks={commands.rerunningChecks === reading.id}
                 approving={state.approving.includes(reading.id)}
                 deciding={commands.deciding === reading.id}
+                decidingAct={
+                  commands.deciding === reading.id ? (commands.decidingAct ?? undefined) : undefined
+                }
                 observed={state.observed}
                 journalled={state.journalled}
                 followed={state.followed}

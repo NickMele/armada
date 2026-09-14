@@ -17,6 +17,7 @@ import { JOB_LIFECYCLE } from "@armada/components";
 import type { Outcome } from "@armada/protocol";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import { ACT_LABEL, MENU_LABEL, RAISE_CAP_LABEL, RAISE_TURN_CAP_LABEL, REPORT_LABEL } from "./copy";
+import type { ActingAct } from "./pending";
 import { RaiseCapControl } from "./RaiseCap";
 import { RaiseTurnCapControl } from "./RaiseTurnCap";
 import { recourseOf } from "./recovery";
@@ -169,6 +170,7 @@ export function Acts({
   whole,
   render,
   acting,
+  actingAct,
   approving,
   stale,
   onAct,
@@ -194,6 +196,8 @@ export function Acts({
   whole: JobWhole | null;
   render: Render;
   acting: boolean;
+  /** Which act `acting` is, so the control that sent it is the one that waits. #1117. */
+  actingAct?: ActingAct | undefined;
   approving: boolean;
   stale: boolean;
   onAct: (act: ConfirmableAct, jobId: string) => void;
@@ -282,6 +286,7 @@ export function Acts({
     face: ACT_LABEL[name],
     label: MENU_LABEL[name],
     danger: true,
+    actName: name,
     onSelect: () => onAct(name, job.id),
   });
   const entries: Entry[] = [
@@ -293,9 +298,25 @@ export function Acts({
       ? [{ face: REPORT_LABEL, label: REPORT_LABEL, shortcut: REPORT_KEY, onSelect: () => onReporting(true) }]
       : []),
     ...acts.filter((name) => name !== "redispatch").map(act),
-    ...(forMoney ? [{ face: RAISE_CAP_LABEL, label: RAISE_CAP_LABEL, onSelect: () => onRaising(true) }] : []),
+    ...(forMoney
+      ? [
+          {
+            face: RAISE_CAP_LABEL,
+            label: RAISE_CAP_LABEL,
+            actName: "raise_cost_cap" as const,
+            onSelect: () => onRaising(true),
+          },
+        ]
+      : []),
     ...(forTurns
-      ? [{ face: RAISE_TURN_CAP_LABEL, label: RAISE_TURN_CAP_LABEL, onSelect: () => onRaisingTurns(true) }]
+      ? [
+          {
+            face: RAISE_TURN_CAP_LABEL,
+            label: RAISE_TURN_CAP_LABEL,
+            actName: "raise_turn_cap" as const,
+            onSelect: () => onRaisingTurns(true),
+          },
+        ]
       : []),
   ];
   const [lead, ...behind] = entries;
@@ -303,6 +324,19 @@ export function Acts({
   // Job's control is quiet, because there is nobody it is waiting for.
   const variant = job.status === "awaiting_approval" || life?.whoIsActing === "Person" ? "primary" : "secondary";
   const busy = acting || stale || approving;
+  // The act this header's own press sent, where one of these seven is out —
+  // `answer`, `set_model` and everything else `ActingAct` names belongs to a
+  // control somewhere else on this screen, and only a name in `ACTING_LABEL`
+  // is one this header ever opened. #1117.
+  const rawPendingAct =
+    acting && actingAct !== undefined && isHeaderActingAct(actingAct) ? actingAct : undefined;
+  // **And named on this render.** `acting` and `actingAct` are the whole
+  // Job's, so a press this header sent a moment ago and one another region
+  // sent a moment later can overlap by a tick — only a name this render is
+  // actually offering a control for is this header's own to mark.
+  const pendingAct = entries.some((entry) => entry.actName === rawPendingAct) ? rawPendingAct : undefined;
+  const pendingHere = (name: ActingAct | undefined): boolean =>
+    pendingAct !== undefined && name === pendingAct;
   return (
     <>
       {/* The ceilings' dialogs, on a job held for money or for turns. Their
@@ -344,14 +378,21 @@ export function Acts({
       {/* A split button with nothing in its menu is a button: a caret over an
           empty menu is a control that does not answer. */}
       {lead === undefined ? null : behind.length === 0 ? (
-        <Button variant={variant} disabled={busy} onClick={lead.onSelect}>
-          {lead.face}
+        <Button
+          variant={variant}
+          pending={pendingHere(lead.actName)}
+          disabled={busy}
+          onClick={lead.onSelect}
+        >
+          {pendingHere(lead.actName) && pendingAct !== undefined ? ACTING_LABEL[pendingAct] : lead.face}
         </Button>
       ) : (
         <SplitButton
           variant={variant}
-          items={behind.map(({ face: _face, ...item }) => item)}
+          items={behind.map(({ face: _face, actName: _actName, ...item }) => item)}
           disabled={busy}
+          pending={pendingAct !== undefined}
+          pendingLabel={pendingAct === undefined ? undefined : ACTING_LABEL[pendingAct]}
           menuLabel="Everything else this job can do"
           onAction={lead.onSelect}
         >
@@ -435,9 +476,42 @@ export function heldForTurns(job: JobSummary): boolean {
   return overBudget(job) && job.budget_hold === TURN_CAP;
 }
 
-/** One act the header offers: its face as the lead, its line in the menu. */
-type Entry = SplitButtonItem & { face: string };
+/**
+ * One act the header offers: its face as the lead, its line in the menu, and
+ * — where sending it goes through `acting` — the name that marks it pending.
+ * **Absent on Approve and Report**, which are not `ActingAct`s this header
+ * waits on the same way: Approve already draws its own "Approving" face and
+ * Report opens its own dialog that is not one of the seven `ACTING_LABEL`
+ * names below. #1117.
+ */
+type Entry = SplitButtonItem & { face: string; actName?: ActingAct };
 
 /** The approval act, which is the screen's own and not a `JobAct`. */
 const APPROVE_LABEL = "Approve dispatch";
+
+/**
+ * What each act this header can open a dialog for says on its own control
+ * while it is out and Fleet has not answered. **The seven this header ever
+ * sends** — `kill_drone`, `kill_job`, `redispatch`, `reclaim_worktree`,
+ * `forget_job`, `raise_cost_cap`, `raise_turn_cap` — read as `ActingAct`
+ * because every one of the eleven `JobAct`s that never reaches this header
+ * (`redirect`, `restart_step`, `override_verdict`, `rerun_gate`,
+ * `rerun_checks`) is `StepActs.tsx`'s. #1117.
+ */
+const ACTING_LABEL: Record<
+  "kill_drone" | "kill_job" | "redispatch" | "reclaim_worktree" | "forget_job" | "raise_cost_cap" | "raise_turn_cap",
+  string
+> = {
+  kill_drone: "Killing drone…",
+  kill_job: "Killing job…",
+  redispatch: "Redispatching…",
+  reclaim_worktree: "Reclaiming the worktree…",
+  forget_job: "Deleting the record…",
+  raise_cost_cap: "Raising the cost cap…",
+  raise_turn_cap: "Raising the turn cap…",
+};
+
+function isHeaderActingAct(act: ActingAct): act is keyof typeof ACTING_LABEL {
+  return Object.hasOwn(ACTING_LABEL, act);
+}
 

@@ -116,6 +116,44 @@ export const Disabled: Story = {
 };
 
 /**
+ * The act this control opened a dialog for is out, and Fleet has not
+ * answered. The face sweeps a bar and stays focusable — `aria-busy`, not
+ * `disabled` — and swallows a second press; the caret goes off and offers
+ * no menu, since there is nothing else to disclose while one press is
+ * already on its way. #1117.
+ */
+export const Pending: Story = {
+  args: {
+    items: reviewActions,
+    ground: "sunken",
+    pending: true,
+    pendingLabel: "Killing job…",
+    onAction: fn(),
+    children: "Kill job",
+  } as Story["args"],
+  render: (args) => (
+    <Row>
+      <SplitButton {...args} />
+    </Row>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    const face = canvas.getByRole("button", { name: "Killing job…" });
+    await expect(face).toHaveAttribute("aria-busy", "true");
+    await expect(face).not.toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "More actions" })).toBeDisabled();
+
+    // `[aria-disabled="true"]` carries `pointer-events: none` — the global
+    // rule refuses the pointer before a click ever reaches this control's own
+    // guard. Keyboard activation does not go through that rule, so `Enter` on
+    // the focused, still-focusable face is what proves the second press is
+    // swallowed rather than sent twice.
+    face.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onAction).not.toHaveBeenCalled();
+  },
+};
+
+/**
  * On job detail there is one Job and one primary, so the control may take the
  * accent. A list row never does.
  */
