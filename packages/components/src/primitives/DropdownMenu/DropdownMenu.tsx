@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -7,15 +8,16 @@ import { useEffect, useRef, useState } from "react";
  *
  * Items carry a right-aligned kbd where the action has a binding, and item
  * height is unchanged by it. The destructive item sits last and below a
- * separator.
+ * separator. `selected` takes that same slot as a checkmark, and
+ * `aria-current` carries the fact for anyone not reading the glyph — a chosen
+ * item never also has a shortcut.
  *
- * No glyphs on items. Iconography puts icons on ghost and icon-only row
- * actions, in confirmation dialogs and in toolbars — a menu item is none of
- * those, and the component sheet's own annotation on the split button says the
- * same. One drawing in the sheet disagrees; see the report.
+ * No glyphs otherwise: icons stay on ghost/icon-only row actions, confirmation
+ * dialogs and toolbars, per iconography; one drawing in the sheet disagrees,
+ * see the report.
  */
 export type DropdownMenuEntry =
-  | { kind: "item"; id: string; label: string; shortcut?: string; danger?: boolean }
+  | { kind: "item"; id: string; label: string; shortcut?: string; danger?: boolean; selected?: boolean }
   | { kind: "separator"; id: string }
   | { kind: "label"; id: string; label: string };
 
@@ -93,6 +95,7 @@ export function DropdownMenu({
                 key={entry.id}
                 type="button"
                 role="menuitem"
+                aria-current={entry.selected || undefined}
                 className={
                   entry.danger
                     ? "armada-dropdown-menu__item armada-dropdown-menu__item--danger"
@@ -104,7 +107,9 @@ export function DropdownMenu({
                 }}
               >
                 <span className="armada-dropdown-menu__text">{entry.label}</span>
-                {entry.shortcut ? (
+                {entry.selected ? (
+                  <Check className="armada-dropdown-menu__check" size={16} strokeWidth={2} aria-hidden />
+                ) : entry.shortcut ? (
                   <kbd className="armada-dropdown-menu__kbd">{entry.shortcut}</kbd>
                 ) : null}
               </button>

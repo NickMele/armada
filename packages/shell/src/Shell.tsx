@@ -166,7 +166,7 @@ export function Shell({
       repositoryPicker={
         <DropdownMenu
           triggerLabel={repositoryTriggerLabel(repositories, scope, listed)}
-          entries={repositoryEntries(repositories, listed, onAddRepository !== undefined)}
+          entries={repositoryEntries(repositories, listed, onAddRepository !== undefined, scope)}
           // Disabled only where nothing behind it is actionable — Add a
           // repository stays reachable on an empty Fleet, which is when it
           // matters most, so its presence keeps the trigger live.
@@ -209,15 +209,24 @@ function repositoryTriggerLabel(
  * there since a `<select>` groups with `optgroup` and a menu with a `label`
  * entry. Add a repository sits last, below a separator: not destructive, but
  * a different kind of row from the list above it, which is the separator's
- * established use here.
+ * established use here. All is a reset, so it gets the same separator above
+ * the specific choices, and whichever entry matches `scope` carries the
+ * checkmark.
  */
 function repositoryEntries(
   repositories: readonly RepositorySummary[],
   listed: boolean,
   hasAdd: boolean,
+  scope: string | null,
 ): DropdownMenuEntry[] {
   const setUp = repositories.filter((one) => one.manifest !== undefined);
   const loose = repositories.filter((one) => one.manifest === undefined);
+  const item = (repo: RepositorySummary) => ({
+    kind: "item" as const,
+    id: repo.root,
+    label: repositoryLabel(repo, repositories),
+    selected: repo.root === scope,
+  });
   const entries: DropdownMenuEntry[] = [
     {
       kind: "item",
@@ -225,12 +234,16 @@ function repositoryEntries(
       label: repositories.length === 0
         ? (listed ? "Nothing set up yet" : "No repository read yet")
         : "All repositories",
+      selected: scope === null,
     },
-    ...setUp.map((repo) => ({ kind: "item" as const, id: repo.root, label: repositoryLabel(repo, repositories) })),
   ];
+  if (setUp.length > 0) {
+    entries.push({ kind: "separator", id: "all-repositories-rule" });
+    entries.push(...setUp.map(item));
+  }
   if (loose.length > 0) {
     entries.push({ kind: "label", id: "not-set-up", label: "Not set up" });
-    entries.push(...loose.map((repo) => ({ kind: "item" as const, id: repo.root, label: repositoryLabel(repo, repositories) })));
+    entries.push(...loose.map(item));
   }
   if (hasAdd) {
     entries.push({ kind: "separator", id: "add-repository-rule" });
