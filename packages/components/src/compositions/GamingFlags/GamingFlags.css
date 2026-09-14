@@ -233,3 +233,26 @@
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
 }
+
+/* --- A flag a second reading cleared -------------------------------------- */
+
+/* Why it did not stop the step. Sans, because it is a sentence the second
+   reading wrote; no hue, because clearing is not a pass any more than the flag
+   was a failure. */
+.armada-gaming-flags__cleared {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--space-1) / 2);
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-gaming-flags__cleared-of {
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}

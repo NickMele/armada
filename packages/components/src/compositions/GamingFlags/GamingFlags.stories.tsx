@@ -308,3 +308,36 @@ export const OverrulingTwoFlags: Story = {
     </Dialog>
   ),
 };
+
+/**
+ * **A flag a second reading cleared.** #1080: the first look flagged a
+ * reworded doc comment, and a second reading on a stronger model disagreed —
+ * so the step advanced, and the flag is kept, with why.
+ *
+ * It is drawn in the step panel's Gaming check section and nowhere else. It
+ * never holds a step, and a row that vanished would hide the only record of
+ * how often the first look is wrong.
+ */
+export const ClearedByASecondReading: Story = {
+  args: {
+    citation: "whole",
+    onOpenBrief: fn(),
+    flags: [
+      {
+        pattern: "assertion_weakened",
+        verb: "an assertion now asserts less",
+        asked:
+          "Does this change alter an existing assertion so that it asserts less than it did, " +
+          "and is that assertion made nowhere else in this change?",
+        cited: "`crates/fleet/src/permission.rs` — the `//!` sentence now says less than it did.",
+        at: { file: "crates/fleet/src/permission.rs" },
+        cleared: {
+          why:
+            "The line is a module doc comment, not a check that can fail, and the plan called for " +
+            "narrowing it.",
+          brief: ".armada/briefs/16-fix-801/implement.1.gaming.assertion_weakened.second.txt",
+        },
+      },
+    ],
+  },
+};

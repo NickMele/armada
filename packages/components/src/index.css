@@ -261,3 +261,6 @@
   gap: var(--space-3);
   min-width: 0;
 }
+
+/* The card a gaming flag holds a step with. #1079. */
+@import "./compositions/HeldFlag/HeldFlag.css";

@@ -154,6 +154,16 @@ export type RefusalsProps = {
    * control with no sentence beside it reads as broken rather than busy.
    */
   disabledNote?: ReactNode;
+  /**
+   * The list as a card of its own, folded until a person asks for the rows —
+   * *3 commands were refused during Implement · not why it stopped · Show
+   * them*.
+   *
+   * **For a step something else stopped.** On a gaming flag the refusals are
+   * worth keeping and are not the reason, and drawn in the band beside the
+   * flag they read as a second cause. #1079. Absent draws the rows as always.
+   */
+  folded?: { summary: ReactNode; aside?: ReactNode; showLabel: string; hideLabel: string };
 };
 
 /**
@@ -197,6 +207,7 @@ export function Refusals({
   onAnswer,
   disabled = false,
   disabledNote,
+  folded,
 }: RefusalsProps) {
   // Which row's answer is mid-pick, and what it is pointed at right now. An
   // answer with no rules never sets this — it sends on the press, as it always
@@ -205,9 +216,11 @@ export function Refusals({
     null,
   );
   const group = useId();
+  // Whether a folded card shows its rows. Closed until somebody asks.
+  const [shown, setShown] = useState(false);
   if (refused.length === 0) return null;
-  return (
-    <div className="armada-refusals">
+  const drawn = (
+    <>
       {said === undefined ? null : <span className="armada-refusals__said">{said}</span>}
       <ul className="armada-refusals__list">
         {refused.map((one, at) => {
@@ -334,6 +347,26 @@ export function Refusals({
         </span>
       ) : null}
       {again === undefined ? null : <span className="armada-refusals__again">{again}</span>}
+    </>
+  );
+  if (folded === undefined) return <div className="armada-refusals">{drawn}</div>;
+  return (
+    <div className="armada-refusals" data-folded="true">
+      <div className="armada-refusals__fold">
+        <span className="armada-refusals__summary">{folded.summary}</span>
+        {folded.aside === undefined ? null : (
+          <span className="armada-refusals__aside">{folded.aside}</span>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-expanded={shown}
+          onClick={() => setShown((was) => !was)}
+        >
+          {shown ? folded.hideLabel : folded.showLabel}
+        </Button>
+      </div>
+      {shown ? drawn : null}
     </div>
   );
 }

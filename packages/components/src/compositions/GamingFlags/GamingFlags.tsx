@@ -95,6 +95,15 @@ export type GamingFlag = {
    * it was not, for `at`'s reason.
    */
   brief?: string;
+  /**
+   * That a second reading disagreed with this flag, and why — so it did not
+   * stop the step. #1080.
+   *
+   * **Still drawn, and never as a held flag.** A cleared flag is the only
+   * record of how often the first look is wrong, and a row that vanished would
+   * hide it. `brief` here is the second reading's own exchange.
+   */
+  cleared?: { why: string; brief?: string };
 };
 
 /** Where in the change a flag points. */
@@ -206,12 +215,24 @@ export function GamingFlags({
             {flag.brief === undefined ? null : (
               <Brief path={flag.brief} onOpen={onOpenBrief} />
             )}
+            {flag.cleared === undefined ? null : (
+              <div className="armada-gaming-flags__cleared">
+                <span className="armada-gaming-flags__cleared-of">{CLEARED}</span>
+                <span>{flag.cleared.why}</span>
+                {flag.cleared.brief === undefined ? null : (
+                  <Brief path={flag.cleared.brief} onOpen={onOpenBrief} />
+                )}
+              </div>
+            )}
           </li>
         ))}
       </ul>
     </div>
   );
 }
+
+/** What a flag a second reading disagreed with says over why. #1080. */
+const CLEARED = "Cleared by a second reading";
 
 /**
  * Where the flag is — `src/report.ts:41`, or the file alone.
