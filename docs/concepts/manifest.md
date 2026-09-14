@@ -259,7 +259,7 @@ Rules that follow:
 
 - **A Drone's run leaves out a `gate` or `handoff` Check**, and its brief names each one and where it runs instead, so a clean run does not read as the whole bar.
 - **A `handoff` Check runs on one step only**, the last one gating on every Check before handoff, and starts only once every other Check there has passed. A failure goes back to that step's Drone under its retry budget.
-- **A narrowed run still gates nothing**, and neither does this: the gate runs every Check it holds, whatever a Drone asked for.
+- **A narrowed run still gates nothing**, and neither does this: the gate settles every Check it holds, whatever a Drone asked for. It reuses a Check only from a whole dry run that passed it on the same attempt, with nothing changed since, and runs the rest fresh.
 
 ### Running one test by name
 
