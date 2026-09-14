@@ -418,6 +418,14 @@ vocabulary = "Escalation reason"
 in_code = "In code"
 notes = "Filed as a trigger Aug 2026 with neither a verb nor a glyph, and unreachable until `crates/fleet/src/coupling.rs` began raising it. The verb names what happened to the Job this one waited on rather than anything this Job did, because it did nothing — which is the whole of what a person needs to read here. The article follows `a check timed out`. No glyph: the `shield-*` family is reserved to gates and Checks, so the natural candidate is not this row's to take, and the glyph stays owed beside `blocked_by_policy` and `check_timeout`."
 
+[verbs.escalation_reason.drone_gone]
+verb = "the Drone was already gone"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = ""
+notes = "**Not \"by hand\", which is `drone_killed`'s whole verb and is not true here.** That row reads by a person who has just ended a live process; this one is a person restarting a step whose Drone had already left on its own, or been lost to a Fleet restart, before anybody pressed anything — the restart is what stops the step, over a Drone that was gone before the press. `run_ended`'s sibling in the sense `drone_killed` is: both name what became of the step rather than why the Job stopped, and `stalled` is what the Job's own escalation reason keeps regardless of which of the three later took the step. No glyph, for `drone_killed`'s reason — nothing in `packages/icons/icons.toml` claims a person restarting a step nobody is on, and the glyph is filed open as `[drone-gone-glyph]` on `docs/contracts/iconography.md` rather than borrowed. It ships drawing its verb alone beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `drone_killed`, `evidence_too_large`, `no_report`, `no_worktree`, `not_configurable`, `not_prepared`, `resource_exhausted`, `run_ended`, `scope_refused`, `unheard` and `would_not_start`."
+
 [verbs.escalation_reason.drone_killed]
 verb = "the Drone was ended by hand"
 icon = ""

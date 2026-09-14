@@ -306,6 +306,61 @@ async fn ending_a_drone_leaves_a_step_a_restart_can_land_on() {
     );
 }
 
+/// **#1034.** The same shape #313 fixed, reached without a person's kill: the
+/// Drone that was there when the Job escalated `stalled` leaves on its own —
+/// or is lost to a Fleet restart, which reads identically here — and the step
+/// it left running is still one `Stuck` can name, once the classification
+/// reads the Job's own trigger rather than the four facts alone.
+#[tokio::test]
+async fn a_stalled_drones_own_exit_leaves_a_step_a_restart_can_land_on() {
+    let (mut run, bench) = a_job_stalled_with_its_drone_still_there().await;
+    let reason = bench.reasons().last().cloned();
+
+    // The Drone leaves on its own rather than being killed — the same
+    // `Standing` a kill leaves, reached a different way, and the one the
+    // shape alone cannot tell from `would_not_start` or `no_worktree`.
+    let gone = Standing {
+        drone: DroneStanding::Gone,
+        ..everything_still_there()
+    };
+    let before = received_detail(&opened(&run.job, reason.as_ref(), gone, &[]));
+    assert_eq!(
+        acts(&before),
+        vec!["restart_step", "redispatch_job"],
+        "the Drone that was there when the Job escalated has since gone, and \
+         the step it left running is what a restart lands on"
+    );
+
+    // The restart's own move: nothing ended a live process, so the row it
+    // writes names `drone_gone` and not `drone_killed`.
+    step_moved_by(
+        &bench,
+        &mut run,
+        &bench.step(1),
+        StepTarget::Stopped(step_level(EscalationTrigger::DroneGone)),
+        Actor::Human,
+    );
+
+    let after = received_detail(&opened(&run.job, reason.as_ref(), gone, &[]));
+    let stuck = after.stuck.as_ref().expect("an escalated Job has stopped");
+    assert_eq!(
+        stuck.step_id.as_ref().map(ipc::StepId::as_str),
+        Some("fix"),
+        "the step the Drone was on, so a restart has something to run again"
+    );
+    assert_eq!(stuck.stopped_by.as_deref(), Some("drone_gone"));
+    assert_eq!(acts(&after), vec!["restart_step", "redispatch_job"]);
+    assert_eq!(
+        after
+            .steps
+            .iter()
+            .map(|step| (step.step_id.as_str(), step.state.as_wire()))
+            .collect::<Vec<_>>(),
+        vec![("root_cause", "advanced"), ("fix", "stopped")],
+        "the step that already passed survives"
+    );
+}
+
 /// **#297.** What the worktree decides, and which Jobs a reclaim reaches.
 ///
 /// `worktree_on_disk` is the fact no surface can compute, and on an escalated

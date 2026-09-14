@@ -350,7 +350,9 @@ impl Stuck {
             if standing.drone == DroneStanding::Speakable {
                 recourse.push(Recourse::Redirect);
             } else if standing.worktree_on_disk
-                && (stopped.is_some() || unheard_mid_step(job, &standing))
+                && (stopped.is_some()
+                    || unheard_mid_step(job, &standing)
+                    || abandoned_mid_step(job, reason, &standing))
             {
                 recourse.push(Recourse::RestartStep);
             }
@@ -480,6 +482,24 @@ impl Stuck {
 fn unheard_mid_step(job: &Job, standing: &Standing) -> bool {
     standing.drone == DroneStanding::Unheard
         && job.status() == JobStatus::Escalated
+        && job
+            .current_step()
+            .is_some_and(|step| step.state() == StepState::Running)
+}
+
+/// A step still `running`, with nothing standing in the slot, on a Job
+/// escalated specifically as `stalled` — the Drone that was there when the
+/// Job escalated has since gone, ended on its own or lost to a Fleet restart.
+///
+/// **`stalled` and not the shape alone**, because `would_not_start`,
+/// `not_configurable`, one path of `no_worktree` and `resource_exhausted`
+/// reach the identical four facts with no Drone ever having existed.
+/// `fleet::resume::restart_step` reads this same predicate and stops the step
+/// under `EscalationTrigger::DroneGone`. `#1034`.
+fn abandoned_mid_step(job: &Job, reason: Option<&TransitionReason>, standing: &Standing) -> bool {
+    standing.drone == DroneStanding::Gone
+        && job.status() == JobStatus::Escalated
+        && escalated_by(reason) == Some(EscalationTrigger::Stalled)
         && job
             .current_step()
             .is_some_and(|step| step.state() == StepState::Running)

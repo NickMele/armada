@@ -66,12 +66,13 @@ async fn a_stalled_job_with_a_live_drone_admits_a_redirect() {
 }
 
 /// `stalled` can fire with the Drone dead too, and the answer there is the one
-/// `adrift` already draws rather than a new one. **And nothing else applies
-/// either**: a restart wants a stopped step and a Job-level escalation named
-/// none, so what is left is a redispatch or Pilot. Unchanged by this act, and
-/// asserted here so the pair is visible in one place.
+/// `adrift` already draws rather than a new one for the redirect: a Drone
+/// that is gone cannot be spoken to. **A restart now admits this shape**,
+/// `#1034` — the Drone that was there when the Job escalated has since gone,
+/// and the step it left running is what a restart lands on, rather than the
+/// dead end a redispatch used to be.
 #[tokio::test]
-async fn a_stalled_job_whose_drone_is_gone_refuses_a_redirect() {
+async fn a_stalled_job_whose_drone_is_gone_refuses_a_redirect_and_admits_a_restart() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_leaves());
     let job = stalled(&fleet, &home).await;
@@ -86,16 +87,14 @@ async fn a_stalled_job_whose_drone_is_gone_refuses_a_redirect() {
         ),
         "a redirect needs a session, and there is none"
     );
-    assert!(
-        matches!(
-            fleet.restart_step(&job, None).await,
-            Err(Adrift::NoStepStopped { .. })
-        ),
-        "and a restart needs a stopped step, which a Job-level escalation never named"
-    );
+    fleet
+        .restart_step(&job, None)
+        .await
+        .expect("the Drone that was there when the Job escalated has since gone");
     assert_eq!(
         fleet.load(&job).await.unwrap().status(),
-        JobStatus::Escalated
+        JobStatus::Queued,
+        "the restart takes the Job out of escalated"
     );
 }
 

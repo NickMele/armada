@@ -97,6 +97,28 @@ Cascading the failure would write `completed_failed` onto work that never ran, a
 Leaving the Job queued under a new readiness reason fails differently: memory and disk headroom self-clear, but a failed upstream never does, so the Job would wait indefinitely behind a label with no action attached. Every escalation trigger names a malfunction, and a failed upstream is one — which is why `awaiting_attestation` has no home under `escalated` and this trigger does.
 """
 
+[triggers.drone_gone]
+kind = "Trigger"
+level = "Step"
+meaning = "A person restarted a step whose Drone had already gone — ended on its own, or lost to a Fleet restart — before anybody acted on the stall it was raised for. The restart itself is what stops the step; nothing else does."
+in_code = ""
+notes = """
+**`drone_killed` and `run_ended`'s third sibling.** All three answer "what became of the step underneath" rather than "why did the Job stop", so all three are step-level and none is overrulable — nothing weighed the work. What tells them apart is who ended the process and on what word: `drone_killed` is a person acting on a process still there, `run_ended` is Fleet acting on the Drone's own word that its run was over, and this is a person acting on a process that was already gone by the time they acted.
+
+**Not `drone_killed`, and the difference is the whole reason this row exists.** That trigger's own verb is "the Drone was ended by hand", true only where a person's press is what ends a live process. Here the Drone left on its own — its run ended, or a Fleet restart's reconciliation found no matching process — between the Job escalating and the person acting on it; nobody killed anything. Writing `drone_killed` over either would claim a person killed a Drone that had already left, which `crates/fleet/src/dispatch.rs`'s `Aftermath::AlreadyStopped` arm and `crates/fleet/src/daemon/answering.rs`'s restart reconciliation both already know is false: both clear the pointer the moment they find the process gone, and neither stops the step, because stopping it is not a fact either is in a position to record — nobody has yet decided to restart, and `escalated` freezes the inner machine against everything but a person's own act.
+
+**It names a step and never a Job, which `drone_killed`'s own row explains.** What the Job stopped *for* is `stalled`, the ending's own classification from when the Drone was still there, and stays on the Job's transition; `job_transitions` is absent for that reason rather than the usual one — there is no Job edge for this trigger to declare at all.
+
+**The road in is narrower than the four facts alone say.** `crates/core-model/src/job/stuck.rs`'s `abandoned_mid_step` is where the reading is made, and it reads the Job's own escalation trigger rather than the shape alone: a step still `running` with nothing in the slot and a worktree on disk is also true of `would_not_start`, `not_configurable` and one path of `no_worktree` immediately on escalation, with no Drone ever having existed, and of `resource_exhausted` if it fires over a Drone that later leaves. Only `stalled` is raised while a Drone is genuinely occupying the step and later disappears, so the reading is gated on that trigger rather than on the facts a Drone that never existed can also produce.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+`#1034`: an escalated Job whose Drone left before a person acted could only be redispatched, discarding every step that had already advanced — `drone_killed`'s own defect, `#313`'s, arriving a Fleet restart or a quiet exit later than a kill does. `restart_step` and `Stuck::of` already read a stopped step or an unheard Drone; a Drone that is simply gone was neither, so both refused the one act that fits.
+
+Reusing `drone_killed` was the alternative and is refused on that row's own argument: its verb is "by hand" because a person reads it having just acted, and nobody had. Leaving `crates/fleet/src/dispatch.rs`'s `Aftermath::AlreadyStopped` arm or the restart reconciliation stop the step silently was the other, and it is `#792`'s decision, now made: Fleet stopping a step beneath a Job parked for a person is exactly what the freeze exists to keep out, so the stop waits for the person's own act and this trigger is what names it honestly.
+"""
+
 [triggers.drone_killed]
 kind = "Trigger"
 level = "Step"

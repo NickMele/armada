@@ -270,6 +270,66 @@ async fn a_running_job_with_no_drone_is_interrupted_at_startup() {
     );
 }
 
+/// **#1034, the Fleet-restart half.** A Job escalates `stalled` over a Drone
+/// that is genuinely there, and this Fleet is dropped and a new one boots
+/// before anybody acts. Reconciliation finds no matching process for a Job
+/// already `escalated` and clears the pointer without stopping the step —
+/// `daemon::answering`'s reconciliation loop, the second site the gap in
+/// `#1034` names — so the new Fleet is where a person's restart lands.
+#[tokio::test]
+async fn a_fleet_restart_over_a_stalled_jobs_drone_turns_the_redirect_into_a_restart() {
+    let home = TempDir::new();
+    let job_id = {
+        let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+        let job = fleet
+            .propose(a_proposal("stalled across a restart"))
+            .await
+            .unwrap();
+        worktree_directory(&home, &job);
+        dispatched(&fleet, job.id()).await.unwrap();
+        let record = fleet.load(job.id()).await.unwrap();
+        fleet
+            .move_job(
+                &record,
+                core_model::Target::Escalated(EscalationTrigger::Stalled),
+                core_model::Actor::Fleet,
+            )
+            .await
+            .unwrap();
+        the_drone_it_holds_is_gone(&fleet).await;
+        job.id().clone()
+    };
+
+    let restarted = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let reconciled = restarted.reconcile().await.unwrap();
+
+    assert!(
+        reconciled.interrupted.is_empty(),
+        "a Job already escalated does not escalate again"
+    );
+    let record = restarted.load(&job_id).await.unwrap();
+    assert_eq!(record.status(), JobStatus::Escalated);
+    assert_eq!(
+        record.current_step().map(|row| row.state()),
+        Some(StepState::Running),
+        "the pointer was cleared and the step was not stopped"
+    );
+
+    restarted
+        .restart_step(&job_id, None)
+        .await
+        .expect("a person's restart is what this Fleet now offers");
+
+    let record = restarted.load(&job_id).await.unwrap();
+    let (_, stopped_by) = record.stopped_on().expect("the restart stopped the step");
+    assert_eq!(
+        stopped_by.trigger(),
+        EscalationTrigger::DroneGone,
+        "the row says the Drone was already gone, not that a person ended it"
+    );
+    assert_eq!(record.status(), JobStatus::Queued);
+}
+
 /// The wrong kind of evidence spends no Check and moves nothing.
 #[tokio::test]
 async fn a_submission_of_the_wrong_kind_moves_nothing() {

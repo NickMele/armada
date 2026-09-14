@@ -930,6 +930,15 @@ cannot work.
 
 `DeclaredCheck.runs_at`, `StepDetail.held_for_handoff` and `WorkflowStep.held_for_handoff`, additive (#849). `runs_at` is `gate` for a Check a Drone's own run never asks and `handoff` for one that runs last, on the step before handoff, once every other Check there passes; absent is everywhere. `held_for_handoff` names the handoff-only Checks a step's gate leaves to a later step, so a step that passed is not read as having run them. A handoff-only Check that was not reached records `skipped`, with its own sentence in `produced`.
 
+## Protocol 13.50: an abandoned step's restart names a new trigger
+
+`#1034`. `EscalationTrigger` gains `drone_gone`, the step-level trigger a
+person's restart writes over a step whose Drone left before anybody acted —
+`drone_killed`'s and `run_ended`'s third sibling. **Minor, on `queued_reason`'s
+precedent**: `escalation_reason` carries no `wire_enum!` in `crates/ipc`, so
+Bridge reads it as an opaque string through the generated vocabulary rather
+than matching on it, and a new value is additive while nothing branches on it.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

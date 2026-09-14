@@ -54,6 +54,15 @@ pub enum EscalationTrigger {
     /// An upstream Job this one depends on reached a terminal status other than
     /// `completed_success`. `superseded` is the exception.
     DependencyFailed,
+    /// A person restarted a step whose Drone had already gone — ended on its
+    /// own, or lost to a Fleet restart — before anybody acted. The restart
+    /// itself is what stops the step.
+    ///
+    /// **Not [`DroneKilled`](Self::DroneKilled)**, whose verb is "by hand" and
+    /// is true only where a person's press ends a process still there; here
+    /// the Drone left on its own first. `domain/escalation-triggers.toml` has
+    /// the argument.
+    DroneGone,
     /// A person ended the Drone working this step, so the step stopped where it
     /// stood.
     ///
@@ -350,6 +359,7 @@ impl StepLevelTrigger {
             | EscalationTrigger::GateUndecided
             | EscalationTrigger::BlockedByPolicy
             | EscalationTrigger::CheckTimeout
+            | EscalationTrigger::DroneGone
             | EscalationTrigger::DroneKilled
             | EscalationTrigger::EvidenceTooLarge
             | EscalationTrigger::LoopCap
@@ -386,6 +396,7 @@ impl EscalationTrigger {
         EscalationTrigger::BlockedByPolicy,
         EscalationTrigger::CheckTimeout,
         EscalationTrigger::DependencyFailed,
+        EscalationTrigger::DroneGone,
         EscalationTrigger::DroneKilled,
         EscalationTrigger::EvidenceSuspect,
         EscalationTrigger::EvidenceTooLarge,
@@ -416,6 +427,7 @@ impl EscalationTrigger {
             EscalationTrigger::BlockedByPolicy => "blocked_by_policy",
             EscalationTrigger::CheckTimeout => "check_timeout",
             EscalationTrigger::DependencyFailed => "dependency_failed",
+            EscalationTrigger::DroneGone => "drone_gone",
             EscalationTrigger::DroneKilled => "drone_killed",
             EscalationTrigger::EvidenceSuspect => "evidence_suspect",
             EscalationTrigger::EvidenceTooLarge => "evidence_too_large",
@@ -478,6 +490,7 @@ impl EscalationTrigger {
             | EscalationTrigger::CheckTimeout
             | EscalationTrigger::EvidenceSuspect
             | EscalationTrigger::EvidenceTooLarge
+            | EscalationTrigger::DroneGone
             | EscalationTrigger::DroneKilled
             | EscalationTrigger::GateFailure
             | EscalationTrigger::GateUndecided

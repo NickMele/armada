@@ -522,10 +522,12 @@ where
             // the only fact, and it is what turns a redirect into a restart.
             //
             // **Not `stopped_at_rest`, unlike `kill_drone`'s arm.**
-            // `taken_from_a_person` admits `Stopped(DroneKilled)` past the
-            // freeze and not `Stopped(RunEnded)` — that call refuses
-            // `StepsAreFrozen` on `stalled`'s ordinary case. `#792`'s "In"
-            // leaves this one a decision.
+            // `taken_from_a_person` admits `Stopped(DroneKilled)` and
+            // `Stopped(DroneGone)` past the freeze and not `Stopped(RunEnded)`
+            // — that call refuses `StepsAreFrozen` on `stalled`'s ordinary
+            // case. `#792`'s "In", decided by `#1034`: the step stays
+            // `running` here too, and a restart is what stops it, under
+            // `drone_gone` rather than a Fleet-authored `run_ended`.
             Aftermath::AlreadyStopped => {
                 self.drone_left(&job_id, &spawned_on).await?;
                 working.take();
