@@ -406,12 +406,14 @@ pub(crate) fn job_started_at(
             Moved::Step { .. } | Moved::Drone { .. } => None,
         })
         .collect();
-    Ok(ipc::first_started_at(job_moves.iter().map(|entry| ipc::Move {
-        to: entry.0,
-        why: None,
-        at: &entry.1,
-    }))
-    .map(|instant| instant.to_domain()))
+    Ok(
+        ipc::first_started_at(job_moves.iter().map(|entry| ipc::Move {
+            to: entry.0,
+            why: None,
+            at: &entry.1,
+        }))
+        .map(|instant| instant.to_domain()),
+    )
 }
 
 /// What Fleet knows about a Job's steps beyond the `job_steps` rows.
