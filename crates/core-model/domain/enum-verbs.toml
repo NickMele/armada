@@ -724,7 +724,7 @@ notes = "Both halves are a comparison, because that is what the check makes: the
 
 [verbs.gaming_pattern.tautological_test]
 verb = "a test that passes whatever the code does"
-headline = "A test may pass whatever the code does"
+headline = "A test may not be able to fail"
 presets = ["The test can fail", "It's not a test", "The code under it is checked elsewhere"]
 explanation = "The gaming check thinks this change leaves a test that cannot fail, because what it checks does not depend on the code under it. A green run of that test proves nothing, so a person has to look at the lines below."
 icon = ""
@@ -768,9 +768,9 @@ notes = "Names what the file does rather than the file, which is already in the 
 
 [verbs.gaming_pattern.no_findings_on_substantial_diff]
 verb = "a review that found nothing in a substantial change"
-headline = "A review found nothing in a large change"
-presets = ["Most of the change is moved or generated code", "Nothing in it needed raising", "The review's own reasoning shows it read the change"]
-explanation = "The gaming check thinks a change this size is unlikely to hold nothing worth raising, so the review may not have read it. A person has to read the change before trusting the clean review."
+headline = "The review found nothing in a big change"
+presets = ["Most of it is moved or generated code", "There was nothing to raise", "The review shows it read the change"]
+explanation = "The gaming check thinks a change this big should have had something to raise, so the review may not have read it. A person has to read the change before trusting the review."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -779,9 +779,9 @@ notes = "The one pattern whose finding is an absence, which is also why it is th
 
 [verbs.gaming_pattern.findings_not_tied_to_changed_lines]
 verb = "findings that name nothing this change touched"
-headline = "A review's findings may not be about this change"
-presets = ["The findings name lines this change touched", "The findings are about code this change depends on", "The review was asked about more than the change"]
-explanation = "The gaming check thinks the findings name nothing this change touched, so they may have been written without reading it. A person has to check the findings against the change."
+headline = "The review's findings may be about other code"
+presets = ["They name lines this change touched", "They're about code this change depends on", "The review covered more than this change"]
+explanation = "The gaming check thinks the findings name nothing this change touched, so the review may not have read it. A person has to check the findings against the change."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
