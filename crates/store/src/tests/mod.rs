@@ -48,6 +48,7 @@ mod revision;
 mod roundtrip;
 mod showing;
 mod spend;
+mod timings;
 mod tmp;
 mod work_plan;
 

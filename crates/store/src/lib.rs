@@ -104,6 +104,8 @@ mod showing;
 mod shown_again;
 /// What a Job's Drones have cost it: one row per Drone, summed per Job.
 mod spend;
+/// How long each of a repository's Checks has taken.
+mod timings;
 /// A Job's plan and its tasks, kept as every change made to them. Not
 /// [`plan`](mod@plan), which is a step's declared scope.
 mod work_plan;
