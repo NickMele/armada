@@ -631,6 +631,7 @@ export function App() {
                 stale={!live}
                 now={now}
                 acting={commands.acting === reading.id}
+                rerunningChecks={commands.rerunningChecks === reading.id}
                 approving={state.approving.includes(reading.id)}
                 deciding={commands.deciding === reading.id}
                 observed={state.observed}
@@ -684,6 +685,7 @@ export function App() {
                 onRaiseCap={(jobId, micros) => void commands.raiseCap(jobId, micros)}
                 onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}
                 onRerun={(jobId) => void commands.rerun(jobId)}
+                onRerunChecks={(jobId) => void commands.rerunChecks(jobId)}
                 onReport={commands.report}
                 onAddTask={commands.addTask}
                 onDropTask={commands.dropTask}

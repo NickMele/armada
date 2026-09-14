@@ -485,6 +485,7 @@ export const CHANNELS = {
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
   rerunGate: "bridge:rerun-gate",
+  rerunChecks: "bridge:rerun-checks",
   showAgain: "bridge:show-again",
   raiseCostCap: "bridge:raise-cost-cap",
   raiseTurnCap: "bridge:raise-turn-cap",

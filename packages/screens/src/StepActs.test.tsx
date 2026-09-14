@@ -15,7 +15,7 @@
 import { afterEach, expect, test } from "vitest";
 import { page } from "vitest/browser";
 
-import type { JobSummary } from "@armada/protocol";
+import type { JobDetail as JobWhole, JobSummary, StepDetail, Stuck } from "@armada/protocol";
 import { ACT_LABEL } from "./copy";
 import { mount, unmount } from "./mounted";
 import { StepActs } from "./StepActs";
@@ -53,11 +53,13 @@ function working(summary: JobSummary): void {
       opens={{ jobId: summary.id, open: async () => ({ ok: true }), onSaid: () => {} }}
       render="working"
       acting={false}
+      rerunningChecks={false}
       stale={false}
       onAct={() => {}}
       onRedirect={() => {}}
       onOverrule={() => {}}
       onRerun={() => {}}
+      onRerunChecks={() => {}}
     />,
   );
 }
@@ -75,4 +77,75 @@ test("a working job with no drone on it is offered nothing", async () => {
   // than refused on the press.
   working(job({ assigned_drone: undefined }));
   expect(page.getByRole("button").elements()).toEqual([]);
+});
+
+/** A step that stopped on a failed Check, `#1105`'s fixture. */
+function checkStoppedStep(): StepDetail {
+  return {
+    step_id: "verify",
+    label: "Verify",
+    ordinal: 3,
+    state: "stopped",
+    check_runs: [],
+    overridden: false,
+    judged: [],
+    flagged: [],
+    attempts: [],
+    verdicts: [],
+    entered_at: "2026-09-14T09:00:00Z",
+    updated_at: "2026-09-14T09:10:00Z",
+  };
+}
+
+function awaitingRepair(): JobWhole {
+  const stuck: Stuck = {
+    stopped_by: "gate_failure",
+    step_id: "verify",
+    recourse: ["rerun_checks", "restart_step", "redispatch_job"],
+    worktree_on_disk: true,
+    drone_unheard: false,
+    refused: [],
+    refusals: 0,
+  };
+  return {
+    job: job({ status: "awaiting_repair", assigned_drone: undefined }),
+    created_at: "2026-09-14T09:00:00Z",
+    steps: [checkStoppedStep()],
+    acceptance_criteria: [],
+    dependencies: [],
+    stuck,
+  };
+}
+
+/** The stopped step header, on a Job a failed Check left at `awaiting_repair`. */
+function stopped(rerunningChecks: boolean): void {
+  const whole = awaitingRepair();
+  mount(
+    <StepActs
+      job={whole.job}
+      whole={whole}
+      opens={{ jobId: whole.job.id, open: async () => ({ ok: true }), onSaid: () => {} }}
+      render="stopped"
+      acting={rerunningChecks}
+      rerunningChecks={rerunningChecks}
+      stale={false}
+      onAct={() => {}}
+      onRedirect={() => {}}
+      onOverrule={() => {}}
+      onRerun={() => {}}
+      onRerunChecks={() => {}}
+    />,
+  );
+}
+
+test("a step stopped on a failed check is offered run checks again", async () => {
+  stopped(false);
+  await expect
+    .element(page.getByRole("button", { name: ACT_LABEL.rerun_checks }))
+    .toBeInTheDocument();
+});
+
+test("the press says the checks are running while its own request is out", async () => {
+  stopped(true);
+  await expect.element(page.getByRole("button", { name: "Running checks" })).toBeDisabled();
 });

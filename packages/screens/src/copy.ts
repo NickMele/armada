@@ -56,6 +56,8 @@ export function said(outcome: Outcome): string {
       return "That override is already in flight. It was not sent twice.";
     case "already_rereading":
       return "That gate is already being re-run. It was not asked twice.";
+    case "already_rerunning_checks":
+      return "Those checks are already running again. It was not asked twice.";
     case "already_raising":
       return "That cost cap is already being raised. It was not sent twice.";
     case "already_raising_turns":
@@ -423,6 +425,7 @@ export const ACT_LABEL: Record<JobAct, string> = {
   restart_step: "Restart step",
   override_verdict: "Overrule the verdict",
   rerun_gate: "Ask the gate again",
+  rerun_checks: "Run Checks again",
   reclaim_worktree: "Reclaim worktree",
   forget_job: "Delete record",
 };
@@ -432,9 +435,10 @@ export const ACT_LABEL: Record<JobAct, string> = {
  * the consequence that a button's own position states, so the label has to carry
  * it — `Kill drone` and `Kill job` differ by everything and by three characters.
  *
- * **Redirect, restart, the override and the re-run never reach a menu** — none
- * of them joins the split button, so those four entries exist only to keep the
- * record total over `JobAct` rather than for anything that reads them today.
+ * **Redirect, restart, the override and the two re-runs never reach a menu**
+ * — none of them joins the split button, so those five entries exist only to
+ * keep the record total over `JobAct` rather than for anything that reads
+ * them today.
  */
 export const MENU_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone, the job stays open",
@@ -444,6 +448,7 @@ export const MENU_LABEL: Record<JobAct, string> = {
   restart_step: "Restart the step, on the same worktree",
   override_verdict: "Overrule the verdict, the refused work stands",
   rerun_gate: "Ask the gate again, on the evidence already submitted",
+  rerun_checks: "Run Checks again, on the work already here",
   reclaim_worktree: "Reclaim worktree, the job stays on the board",
   forget_job: "Delete record, there is no undo",
 };

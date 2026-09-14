@@ -88,6 +88,21 @@ export const COMMAND_MS = 20_000;
 export const MODEL_CALL_MS = 150_000;
 
 /**
+ * What `POST /jobs/:id/rerun_checks` waits. **Sized off Fleet's own ceiling on
+ * the work it re-runs, not off `PROVISIONAL_CHECK_BUDGET` alone.**
+ * `PROVISIONAL_STEP_NORMS` in `crates/armada/src/serve.rs` gives a step's own
+ * wall clock as fifteen hundred seconds — one over-budget Check plus a p90
+ * step's own work — and this route starts no Drone and does none of that
+ * work, only the Checks and the gate behind them. So nothing it waits on can
+ * outlast the clock Fleet already runs the same work inside. Five minutes on
+ * top, `COMMAND_MS`'s margin at this route's scale, so a Job stuck past its
+ * own ceiling answers with Fleet's own coded refusal rather than Bridge's
+ * abort — `MODEL_CALL_MS`'s reason. Nothing generates this from the Rust
+ * constant; the two are coupled by this comment.
+ */
+export const CHECKS_MS = 1_800_000;
+
+/**
  * No wait at all. **What `POST /jobs/from_request` takes**, and the only route
  * that does.
  *

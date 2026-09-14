@@ -405,6 +405,7 @@ export type Outcome =
   | { ok: false; why: "already_restarting" }
   | { ok: false; why: "already_overruling" }
   | { ok: false; why: "already_rereading" }
+  | { ok: false; why: "already_rerunning_checks" }
   | { ok: false; why: "already_raising" }
   | { ok: false; why: "already_raising_turns" }
   | { ok: false; why: "already_reporting" }
