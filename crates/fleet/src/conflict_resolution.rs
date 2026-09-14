@@ -1,5 +1,6 @@
 //! Sending a Job at its review gate back for a Drone to clear its pull
-//! request's conflicts with the base. `#663`, and Fleet's own act since `#1131`.
+//! request's conflicts with the base. `#663`, and Fleet's own act, with no
+//! press left to take it, since `#1131`.
 //!
 //! **The step before the delivering one is redone**, on the `Returned` edge
 //! `crate::reviewing::route_back` takes too. Its spawn merges the base in and
@@ -9,8 +10,9 @@
 //! entry, and would commit the markers.
 //!
 //! **Fleet sends it where the sweep finds a conflict** — `crate::currency` — up
-//! to [`CLEARING_SENDS`] times in a row. A person's press is the other road,
-//! until Bridge drops it.
+//! to [`CLEARING_SENDS`] times in a row. Nobody presses anything: the route
+//! Bridge once sent a person's press through is gone, and [`sent_to_clear_conflicts`]
+//! is reached from the sweep alone.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
@@ -38,17 +40,6 @@ where
 {
     /// Send a Job's branch back for a Drone that can edit files to bring it
     /// current with main, from the human gate its pull request is waiting at.
-    ///
-    /// **Refuses off the gate.** [`crate::reviewing::at_the_gate`] is the same
-    /// read [`approve_review`](Fleet::approve_review) and
-    /// [`request_changes`](Fleet::request_changes) refuse from, because this is
-    /// a third answer at the same gate and not a fourth act with its own
-    /// entry.
-    pub async fn resolve_pull_request_conflict(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        self.sent_to_clear_conflicts(job_id, Actor::Human).await
-    }
-
-    /// The same act, with the actor named.
     ///
     /// **Fleet's sends are bounded and a person's are not.** A base that keeps
     /// moving while a Drone clears it would send the Job round for ever, so once

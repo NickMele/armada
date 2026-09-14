@@ -405,15 +405,6 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/merge",
     },
-    // A sixth thing to do at the review gate, `#663`: the branch is behind
-    // main or conflicts with it, and this is Fleet's own rebase, never a
-    // Drone's — its own route for `take_up_remarks`'s reason, a body that
-    // took a flag here would mean two things.
-    Route {
-        operation: "resolve_pull_request_conflict",
-        method: "POST",
-        path: "/jobs/:job_id/resolve_pull_request_conflict",
-    },
     Route {
         operation: "rerun_failed_checks",
         method: "POST",
