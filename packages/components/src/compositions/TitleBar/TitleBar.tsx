@@ -73,6 +73,7 @@ export function TitleBar({
         {onDispatch === undefined ? null : (
           <SplitButton
             variant="tonal"
+            size="sm"
             items={[]}
             onAction={onDispatch}
             disabled={dispatchDisabled}

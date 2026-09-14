@@ -39,6 +39,14 @@
   background: var(--bg-sunken);
 }
 
+/* `sm` sits beside a control that already binds the row's height — the title
+   row's search field is `--h-control-sm`, and a Dispatch a full step taller
+   beside it reads as two rows rather than one group. Every other caller wants
+   the default; this is the one exception. */
+.armada-split-button__control[data-size="sm"] {
+  height: var(--h-control-sm);
+}
+
 /* A secondary is filled one surface step from its ground. On a sunken or
  * overlay row that step is --bg-raised, not --bg-sunken. */
 .armada-split-button__control[data-ground="sunken"] {
@@ -97,6 +105,11 @@
   color: var(--fg-muted);
   border-start-end-radius: calc(var(--radius-sm) - var(--border-width));
   border-end-end-radius: calc(var(--radius-sm) - var(--border-width));
+}
+
+/* The caret segment is one control minus one step, `sm`'s own step included. */
+.armada-split-button__control[data-size="sm"] .armada-split-button__caret {
+  width: calc(var(--h-control-sm) - var(--space-2));
 }
 
 .armada-split-button__caret:hover,

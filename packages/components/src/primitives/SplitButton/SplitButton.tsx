@@ -48,6 +48,13 @@ export type SplitButtonProps = {
   variant?: "secondary" | "primary" | "destructive" | "tonal";
   /** The surface underneath: `card` fills `--bg-sunken`, `sunken` `--bg-raised`. Read by `secondary` only. */
   ground?: "card" | "sunken";
+  /**
+   * `default` is `--h-control` (36px), every list row and Job detail's own
+   * header. `sm` is `--h-control-sm` (32px), for a control sitting beside a
+   * field that height already binds — the title row's search field is the one
+   * caller.
+   */
+  size?: "default" | "sm";
   /** Render with the menu open. Uncontrolled otherwise. */
   defaultOpen?: boolean;
   disabled?: boolean;
@@ -61,6 +68,7 @@ export function SplitButton({
   items,
   variant = "secondary",
   ground = "card",
+  size = "default",
   defaultOpen = false,
   disabled = false,
   onAction,
@@ -75,7 +83,12 @@ export function SplitButton({
 
   return (
     <div className="armada-split-button">
-      <div className="armada-split-button__control" data-variant={variant} data-ground={ground}>
+      <div
+        className="armada-split-button__control"
+        data-variant={variant}
+        data-ground={ground}
+        data-size={size === "default" ? undefined : size}
+      >
         <button
           type="button"
           className="armada-split-button__action"
