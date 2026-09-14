@@ -151,7 +151,9 @@
   width: 40%;
   height: var(--pending-bar);
   background: var(--status-running);
-  animation: armada-button-waiting var(--duration-pulse) var(--ease) infinite;
+  /* Linear, not --ease: a fast-out curve parks the bar past the right edge for
+     most of the loop, and a screenshot showed no bar at all. */
+  animation: armada-button-waiting var(--duration-pulse) linear infinite;
 }
 
 @keyframes armada-button-waiting {
