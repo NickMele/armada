@@ -102,6 +102,7 @@ mod paying;
 mod peer;
 mod peers;
 mod permitting;
+mod places;
 mod plan_person;
 mod plan_person_told;
 mod plan_tools;

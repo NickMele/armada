@@ -326,7 +326,7 @@ where
             false,
             Path::new(checkout.path()),
             self.budget().duration(),
-            &self.room(),
+            &self.room(crate::places::Asking::FixDraft),
             &crate::underway::Announcing::nowhere(),
             &ports,
             &env,

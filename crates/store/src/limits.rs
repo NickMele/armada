@@ -1,5 +1,5 @@
 //! The four Fleet limits a person changed while it ran: Drones at once, the
-//! memory share, the disk floor, and how many of a step's Checks run at once.
+//! memory share, the disk floor, and how many Checks run at once on the machine.
 //!
 //! **One row or none, and a `NULL` is the shipped value.** A column nobody set
 //! stays `NULL` rather than being written as today's constant, so a later build

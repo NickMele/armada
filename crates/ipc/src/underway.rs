@@ -82,6 +82,11 @@ pub struct CheckUnderway {
     /// early. #1062.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stopped_by: Option<String>,
+    /// How many Checks from other work hold the machine's places while this
+    /// one waits for room. **Absent while it waits on nothing but its own run**,
+    /// and once it starts. Since 13.47, #1063.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting_behind: Option<u32>,
 }
 
 /// One message on a running Check's log socket.

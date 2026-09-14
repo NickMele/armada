@@ -145,6 +145,8 @@ pub mod peer;
 /// What a working Drone is told about other Jobs writing where it writes. #998.
 pub mod peers;
 pub mod permitting;
+/// The machine's places for Checks, one line for every Job and repository. #1063.
+pub mod places;
 pub mod policy;
 pub mod ports;
 mod precedent;
@@ -251,7 +253,6 @@ pub use adrift::Adrift;
 pub use allowance::{Allowance, Micros, Overspent};
 pub use asked::Asked;
 pub use at_step::AtStep;
-pub use checking::{ChecksAtOnce, Room};
 pub use clock::{Clock, SystemClock};
 pub use commanding::CommandBudget;
 pub use converging::{NoReport, ReportNow, Stage, StepNorms, Tripwire, Wandering, FORCED_REPORT};
@@ -276,6 +277,7 @@ pub use mint::{Mint, UlidMint};
 pub use noticing::{Noticed, Noticing};
 pub use overruling::Overruling;
 pub use peer::{NotACaller, PeerOf};
+pub use places::{Asking, ChecksAtOnce, Place, Places, Room, OVERTAKEN_AT_MOST};
 pub use policy::{HeldBecause, Policies};
 pub use ports::{detect_ceiling, BindConnectProbe, PortRange, PortsRefused};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};

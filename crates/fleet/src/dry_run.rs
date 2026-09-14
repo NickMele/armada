@@ -478,7 +478,9 @@ where
         let mut narrowed_to = Vec::with_capacity(declared.checks().len());
         let mut stopped = Vec::with_capacity(declared.checks().len());
         // Fastest first, by this repository's past runs. #1062.
-        let room = self.checks_room_for(&plan.record).await;
+        let room = self
+            .checks_room_for(&plan.record, crate::places::Asking::DronesRun)
+            .await;
         let running = crate::checking::ran(
             declared.checks(),
             &read.touched,

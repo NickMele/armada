@@ -119,7 +119,7 @@ pub async fn rule_on<W>(
     recorded: &[(StepId, StepEvidence)],
     work: &W,
     budget: CheckBudget,
-    room: &crate::checking::Room,
+    room: &crate::places::Room,
     judging: &Judging,
     keeping: &Keeping,
     policies: Policies,

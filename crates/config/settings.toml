@@ -49,9 +49,9 @@ peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
-**Enforced.** How many of one step's Checks run at once — `fleet::checking::Room`, which a gate, a Drone's own run and a proof after a merge each ask before every Check after the first. It reads the machine against the memory and disk rows here, so a short machine makes the next Check wait for a running one to finish. The first always starts: a short machine slows a gate and never stops one.
+**Enforced, for the whole machine.** How many Checks run at once across every Job and every repository this Fleet serves — `fleet::places::Places`, one line that a gate, a Drone's own run, a fix draft and a proof after a merge each wait in before a command starts. A Drone's own run takes the next free place ahead of a gate, and nothing waiting is passed over more than `fleet::places::OVERTAKEN_AT_MOST` times. It reads the machine against the memory and disk rows here, so a short machine makes the next Check wait for a running one to finish. The first on the machine always starts: a short machine slows Checks and never stops them.
 
-**Machine, not Manifest.** How many Checks a repository declares is the Manifest's; how many one machine can host is not. Shipped at four, measured under one Job — `armada::serve::PROVISIONAL_CHECKS_AT_ONCE` says what was measured.
+**Machine, not Manifest.** How many Checks a repository declares is the Manifest's; how many one machine can host is not. Shipped at half the cores, from one to eight — `armada::serve::provisional_checks_at_once` says why.
 """
 
 [settings.disk-headroom-floor-for-spawning]

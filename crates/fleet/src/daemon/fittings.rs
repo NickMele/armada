@@ -169,10 +169,10 @@ pub struct Fittings<H, V, W> {
     /// `settings.disk-headroom-floor-for-spawning` rows, enforced — see
     /// [`Headroom`], which has no default for [`Concurrency`]'s reason.
     pub headroom: Headroom,
-    /// How many of a step's Checks may run at once, **where nobody has saved
-    /// another**. The `settings.checks-at-once` row, enforced — see
+    /// How many Checks may run at once on this machine, **where nobody has
+    /// saved another**. The `settings.checks-at-once` row, enforced — see
     /// [`ChecksAtOnce`](crate::ChecksAtOnce), which has no default for
-    /// [`Concurrency`]'s reason. #284.
+    /// [`Concurrency`]'s reason. #284, #1063.
     pub checks_at_once: crate::ChecksAtOnce,
     /// How stale a machine reading may be. **The
     /// `settings.fleet-health-check-resource-poll-interval` row** — see
@@ -338,7 +338,7 @@ where
             seeds: Arc::new(std::sync::Mutex::new(crate::seeding::Seeds::default())),
             base_preparing: Arc::new(tokio::sync::Mutex::new(())),
             headroom: std::sync::Mutex::new(in_force.headroom),
-            checks_at_once: std::sync::Mutex::new(in_force.checks_at_once),
+            places: crate::places::Places::of(in_force.checks_at_once),
             shipped,
             polling: fittings.polling,
             noticing: fittings.noticing,

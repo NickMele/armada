@@ -380,40 +380,38 @@ where
     pub(crate) fn machine(&self) -> &Arc<dyn Machine> {
         &self.machine
     }
-    /// How many of a step's Checks run at once, in force, **by value** for
-    /// `headroom`'s reason. #284.
-    pub(crate) fn checks_at_once(&self) -> crate::checking::ChecksAtOnce {
-        *self
-            .checks_at_once
-            .lock()
-            .expect("the checks-at-once lock is not poisoned")
+    /// How many Checks run at once on this machine, in force. #284.
+    pub(crate) fn checks_at_once(&self) -> crate::places::ChecksAtOnce {
+        self.places.at_once()
     }
     /// Put a saved Checks-at-once in force. `crate::limits`' alone.
-    pub(crate) fn rechecked(&self, at_once: crate::checking::ChecksAtOnce) {
-        *self
-            .checks_at_once
-            .lock()
-            .expect("the checks-at-once lock is not poisoned") = at_once;
+    pub(crate) fn rechecked(&self, at_once: crate::places::ChecksAtOnce) {
+        self.places.limit(at_once);
     }
-    /// What a gate, a dry run or a proof asks before starting another Check, as
-    /// the limits stand now. #284.
-    pub(crate) fn room(&self) -> crate::checking::Room {
-        crate::checking::Room::of(
-            self.checks_at_once(),
+    /// A room in the machine's one line of places, for whoever is `asking`,
+    /// with the headroom as it stands now. #284, #1063.
+    pub(crate) fn room(&self, asking: crate::places::Asking) -> crate::places::Room {
+        crate::places::Room::sharing(
+            &self.places,
+            asking,
             Arc::clone(&self.machine),
             self.headroom(),
         )
     }
     /// [`Fleet::room`], knowing how long this Job's repository's Checks took
     /// before. A store that will not read starts them in Manifest order. #1062.
-    pub(crate) async fn checks_room_for(&self, job: &Job) -> crate::checking::Room {
+    pub(crate) async fn checks_room_for(
+        &self,
+        job: &Job,
+        asking: crate::places::Asking,
+    ) -> crate::places::Room {
         let past = self
             .store()
             .lock()
             .await
             .check_timings(job.owner_manifest_id())
             .unwrap_or_default();
-        self.room().knowing(crate::ordering::Past::of(past))
+        self.room(asking).knowing(crate::ordering::Past::of(past))
     }
     /// Keep how long each Check of one of this Job's runs took. A row that will
     /// not write fails nothing: the run's own answer is already out.

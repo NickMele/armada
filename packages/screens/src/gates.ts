@@ -140,6 +140,14 @@ export function isWaiting(read: CheckRead): boolean {
 }
 
 /**
+ * How many Checks from other work hold the machine's places while this one
+ * waits for room. `undefined` where it is not waiting, or waits only on its own run. #1063.
+ */
+export function waitingBehind(read: CheckRead): number | undefined {
+  return isWaiting(read) ? read.live?.waiting_behind : undefined;
+}
+
+/**
  * Runs on the current attempt that no declared Check accounts for.
  *
  * **What `checksOf` cannot surface.** It joins from `step.checks`, the
@@ -199,7 +207,10 @@ export function checksStand(reads: readonly CheckRead[]): string {
   const running = reads.filter(isRunning).length;
   const waiting = reads.filter(isWaiting).length;
   if (running > 0 || waiting > 0) {
-    const moving = running > 0 ? `${running} running` : `${waiting} waiting`;
+    // Waiting behind other work reads as queued, not as a gate that is stuck. #1063.
+    const forRoom = reads.some((read) => waitingBehind(read) !== undefined);
+    const moving =
+      running > 0 ? `${running} running` : forRoom ? `${waiting} waiting for room` : `${waiting} waiting`;
     return ran.length === 0 ? moving : `${moving} · ${counted}`;
   }
   if (ran.length === 0) return NOT_REACHED;

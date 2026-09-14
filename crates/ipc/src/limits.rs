@@ -1,6 +1,6 @@
 //! The four limits a person changes while Fleet runs: how many Drones at
 //! once, how much memory must be free, how much disk must be free, and how many
-//! of a step's Checks run at once.
+//! Checks run at once on this machine.
 //!
 //! **A value out of range cannot be decoded**, so it never becomes a request.
 //! [`SaveLimits`] holds each field as a [`Within`], whose deserializer refuses
@@ -52,7 +52,8 @@ pub type MemorySparePercent = Within<0, 50>;
 /// The gibibytes that must be free on the worktree volume.
 /// `settings.disk-headroom-floor-for-spawning`.
 pub type DiskFloorGib = Within<0, 100>;
-/// How many of one step's Checks run at once. `settings.checks-at-once`. Since 13.40, #284.
+/// How many Checks run at once on this machine, across every Job.
+/// `settings.checks-at-once`. Since 13.40, #284; the machine's since 13.47, #1063.
 pub type ChecksAtOnce = Within<1, 8>;
 
 /// One value for each of the four limits.

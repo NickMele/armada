@@ -98,6 +98,43 @@ describe("a step whose gate is running its Checks", () => {
   });
 });
 
+// #1063 — Checks waiting for room other work holds on the machine read as
+// queued behind it, so a slow gate does not read as a stuck one.
+describe("a gate waiting for room on the machine", () => {
+  const queued = gating({
+    checking: {
+      attempt: 1,
+      checks: [
+        { name: "build", waiting_behind: 3 },
+        { name: "test", waiting_behind: 3 },
+        { name: "format", waiting_behind: 3 },
+      ],
+    },
+  });
+
+  it("says each Check waits behind other work, and how much", () => {
+    const build = rowsOf(queued).find((row) => row.id === "build");
+    expect(build?.says).toBe("Waiting for room behind 3 other Checks on this machine.");
+    expect(build?.result).toBe("waiting");
+    expect(build?.named).toBe("queued");
+  });
+
+  it("says it waits for room in the summary", () => {
+    expect(checksChapter(queued, [], OPENS, NOW)?.summary).toBe("3 waiting for room");
+  });
+
+  it("names one other Check in the singular", () => {
+    const one = gating({ checking: { attempt: 1, checks: [{ name: "format", waiting_behind: 1 }] } });
+    expect(rowsOf(one).find((row) => row.id === "format")?.says).toBe(
+      "Waiting for room behind 1 other Check on this machine.",
+    );
+  });
+
+  it("says a Check waiting only on its own run is waiting to start", () => {
+    expect(rowsOf(gating()).find((row) => row.id === "format")?.says).toBe("Waiting to start.");
+  });
+});
+
 // #1021 — a press names the Check, and the sheet is what decides live or
 // kept. This file draws the chapter, not the sheet, so what is proved here is
 // narrower: pressing a row reports the pressed Check and nothing more, and

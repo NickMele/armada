@@ -106,7 +106,7 @@ async fn ruled_with_ports(
         &[],
         &work,
         CheckBudget::of(Duration::from_secs(20)),
-        &crate::checking::Room::ignoring_the_machine(crate::checking::ChecksAtOnce::of(4)),
+        &crate::places::Room::ignoring_the_machine(crate::places::ChecksAtOnce::of(4)),
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
