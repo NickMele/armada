@@ -15,13 +15,14 @@
 
 import { identifying, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, PickedView } from "../shared/bridge";
-import type { Connection, JobSummary } from "@armada/protocol";
+import type { Connection, JobSummary, Outcome } from "@armada/protocol";
 import type { CallRead, CheckOutputRead, FrameRead } from "@armada/protocol";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import { applyArrival, readCapacity, reread } from "./arrivals";
 import type { ArrivalHost } from "./arrivals";
 import { JobCommands } from "./command";
 import { FollowSocket } from "./following";
+import { HelmConnection } from "./helm";
 import { JournalSocket } from "./journal";
 import { JobFocus } from "./job-focus";
 import { JobReads } from "./job-reads";
@@ -126,6 +127,8 @@ export class FleetConnection {
   private readonly notes: JournalSocket;
   /** One running Check's log, as it is written — a fourth socket. `following.ts`. */
   private readonly follow: FollowSocket;
+  /** One repository's Helm conversation — a fifth socket, and the only one that sends. `helm.ts`. */
+  private readonly helm: HelmConnection;
   /** Not `private`, `commands`' reason: `remarks-poll.ts` (`#667`) reaches `remarksChanged` from `index.ts`. */
   readonly material: ReviewMaterial;
   /**
@@ -169,6 +172,7 @@ export class FleetConnection {
     this.follow = new FollowSocket((followed) => this.publish({ followed }));
     this.material = new ReviewMaterial((change) => this.publish(change));
     const port = (): number | null => this.connected()?.port ?? null;
+    this.helm = new HelmConnection({ publish: (change) => this.publish(change), port });
     this.jobFocus = new JobFocus({
       port,
       current: () => this.current,
@@ -195,6 +199,10 @@ export class FleetConnection {
       holds,
       rehearsal: this.rehearsal,
       overviewAgain: (at) => this.overviewAgainForEveryWindow(at),
+      // Helm follows whichever window's pick most recently moved — one
+      // conversation per repository, not one per window, so there is one
+      // target to keep current rather than one per `windowFacades` entry.
+      onPicked: (root) => this.helm.onPicked(root),
       port,
     });
     this.commands = new JobCommands({
@@ -244,6 +252,7 @@ export class FleetConnection {
       rehearsal: this.rehearsal,
       overviewAgain: (at) => this.overviewAgainForEveryWindow(at),
       questions: this.questions,
+      helm: this.helm,
       material: this.material,
       socket: this.socket,
       publish: (change) => this.publish(change),
@@ -353,6 +362,23 @@ export class FleetConnection {
     this.reports.close();
     this.held.close();
     for (const facades of this.windowFacades.values()) facades.overview.close();
+    this.helm.close();
+  }
+
+  // ------------------------------------------------------------------- Helm
+  /** Say something to Helm, about whichever repository it currently answers for. */
+  askHelm(text: string): Promise<Outcome> {
+    return this.helm.askHelm(text);
+  }
+
+  /** Forget Helm's stored session and the thread. Refused while a reply is being written. */
+  startHelmFresh(): Promise<Outcome> {
+    return this.helm.startFresh();
+  }
+
+  /** "Discuss with Helm" on a card, or the dock's own switch. The rail's pick does not move. */
+  pointHelm(manifestId: string): void {
+    this.helm.point(manifestId);
   }
 
   // --------------------------------------------------------------- arrivals
@@ -489,6 +515,12 @@ export class FleetConnection {
     // Fleet's version rides on the identity, so it is brought current in the
     // one funnel every change passes through. `shared/bridge.ts` owns the rule.
     this.current = identifying({ ...this.current, ...change });
+    // Every repository Fleet serves is still shared through this funnel;
+    // which one a window picked is not — `repository` moved onto `PickedView`
+    // when picks went per-window, so that half of Helm's own targeting is
+    // wired at `RepositoryReads`'s own `onPicked`, the one place a pick
+    // actually changes.
+    if (change.holds !== undefined) this.helm.onRepositoriesChanged(this.current.holds.repositories ?? []);
     this.wiring.publish(this.current);
   }
 }

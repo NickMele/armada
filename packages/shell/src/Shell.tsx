@@ -93,6 +93,8 @@ export type ShellProps = {
   onSurface?: (surfaceId: string) => void;
   /** Every question waiting on a person, from every repository, as the dock's cards. Oldest first. */
   questions?: readonly DockQuestion[];
+  /** Helm's own conversation, under the questions — #944. Bridge builds it; the dock only mounts it. */
+  helm?: ReactNode;
   children: ReactNode;
 };
 
@@ -114,6 +116,7 @@ export function Shell({
   onSurface,
   onOpenLimits,
   questions = [],
+  helm,
   children,
 }: ShellProps) {
   const collapsed = useNarrow();
@@ -126,8 +129,12 @@ export function Shell({
         folded: collapsed,
         binding: HELM_KEY,
         questions: questions.length,
-        // None draws the dock's own quiet line, until Helm's conversation (#944) sits under them.
-        children: questions.length === 0 ? undefined : <DockQuestions questions={questions} />,
+        children: (
+          <>
+            {questions.length === 0 ? null : <DockQuestions questions={questions} />}
+            {helm}
+          </>
+        ),
       }}
       surfaces={SURFACES.map((surface) => ({
         id: surface.id,

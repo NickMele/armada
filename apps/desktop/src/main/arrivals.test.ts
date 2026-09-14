@@ -85,6 +85,7 @@ function fakeHost(
     rehearsal: {} as unknown as RehearsalConnection,
     overviewAgain: async () => {},
     questions,
+    helm: { reconnected: () => {} },
     material: {} as unknown as ReviewMaterial,
     socket: { close: () => {}, resetUnreachable: () => {} },
     publish: (change) => (state = { ...state, ...change }),

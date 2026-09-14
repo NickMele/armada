@@ -556,6 +556,10 @@ const api: BridgeApi = {
       ipcRenderer.removeListener(CHANNELS.summoned, handler);
     };
   },
+
+  askHelm: (text: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.askHelm, text),
+  startHelmFresh: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.startHelmFresh),
+  pointHelm: (manifestId: string): Promise<void> => ipcRenderer.invoke(CHANNELS.pointHelm, manifestId),
 };
 
 contextBridge.exposeInMainWorld("armada", api);

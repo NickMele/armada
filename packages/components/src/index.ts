@@ -40,6 +40,8 @@ export * from "./compositions/ChangedFiles/ChangedFiles";
 export * from "./compositions/CriterionVerdicts/CriterionVerdicts";
 export * from "./compositions/DroneQuestion/DroneQuestion";
 export * from "./compositions/DockQuestions/DockQuestions";
+export * from "./compositions/HelmThread/HelmThread";
+export * from "./compositions/HelmComposer/HelmComposer";
 export * from "./compositions/JudgeQuestion/JudgeQuestion";
 export * from "./compositions/EvidenceCard/EvidenceCard";
 export * from "./compositions/DroneTurns/DroneTurns";
