@@ -107,7 +107,7 @@ export function FleetSettings({
         <Row
           id={`${group}-checks`}
           label="Checks at once"
-          means="How many of a job's checks Fleet runs at the same time. When memory or disk runs short, the next check waits for one to finish."
+          means="How many of a job's checks Fleet runs at the same time. Some checks take more than one place — a heavy one waits until enough are free. When memory or disk runs short, the next check waits for one to finish."
           row={checksAtOnce}
           disabled={disabled}
         />

@@ -23,6 +23,7 @@ import {
   outputRunOf,
   panelSizeOf,
   panelsOf,
+  placesOf,
 } from "./gates";
 import { noteFor, regionOf, rowsOf } from "./outputs";
 
@@ -104,6 +105,30 @@ describe("the Checks a step declares", () => {
       }),
     );
     expect(reads[0]?.run?.outcome).toBe("passed");
+  });
+});
+
+// #1102 — a waiting Check says how many places it takes, where it takes more
+// than one.
+describe("how many places a waiting Check takes", () => {
+  it("reads the wire's places while the Check waits", () => {
+    const reads = checksOf(
+      step({
+        checks: [{ kind: "manifest_check", name: "screens_test" }],
+        checking: { attempt: 1, checks: [{ name: "screens_test", places: 3 }] },
+      }),
+    );
+    expect(placesOf(reads[0]!)).toBe(3);
+  });
+
+  it("is undefined once the Check is no longer waiting", () => {
+    const reads = checksOf(
+      step({
+        checks: [{ kind: "manifest_check", name: "screens_test" }],
+        check_runs: [{ attempt: 1, name: "screens_test", outcome: "passed" }],
+      }),
+    );
+    expect(placesOf(reads[0]!)).toBeUndefined();
   });
 });
 

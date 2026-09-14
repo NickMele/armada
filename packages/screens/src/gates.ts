@@ -155,6 +155,11 @@ export function waitingBehind(read: CheckRead): number | undefined {
   return isWaiting(read) ? read.live?.waiting_behind : undefined;
 }
 
+/** How many places this Check takes. `undefined` at one, or not waiting. #1102. */
+export function placesOf(read: CheckRead): number | undefined {
+  return isWaiting(read) ? read.live?.places : undefined;
+}
+
 /**
  * Runs on the current attempt that no declared Check accounts for.
  *

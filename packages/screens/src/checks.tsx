@@ -41,6 +41,7 @@ import {
   notedFrom,
   notInTheDronesRun,
   outputRunOf,
+  placesOf,
   runEnded,
   sentenceOf,
   stoppedUndecided,
@@ -204,9 +205,11 @@ export function checkRow(
   const { name, run, live } = read;
   if (isWaiting(read)) {
     const behind = waitingBehind(read);
+    const base = behind === undefined ? WAITING_TO_START : waitingForRoom(behind);
+    const places = placesOf(read);
     return {
       id: name,
-      says: behind === undefined ? WAITING_TO_START : waitingForRoom(behind),
+      says: places === undefined || places <= 1 ? base : `${base} ${needsPlaces(places)}`,
       identifier: name,
       named: "queued",
       icon: iconOf(undefined),
@@ -432,6 +435,11 @@ const WAITING_TO_START = "Waiting to start.";
 /** What a Check waiting for room other work holds on the machine says. #1063. */
 function waitingForRoom(behind: number): string {
   return `Waiting for room behind ${behind} other ${behind === 1 ? "Check" : "Checks"} on this machine.`;
+}
+
+/** What a Check wider than one place says it needs, beside why it waits. #1102. */
+function needsPlaces(places: number): string {
+  return `It takes ${places} places.`;
 }
 
 /** What a running Check says where its start will not parse. */
