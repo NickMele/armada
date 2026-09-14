@@ -938,6 +938,10 @@ cannot work.
 
 `rerun_checks`, additive: a new command, `POST /jobs/:job_id/rerun_checks`, with no body, answering `JobSummary` (#1105). `Stuck.recourse` gains `rerun_checks`, offered on a Job at `awaiting_repair` whose stopped step failed a mechanical Check. Bridge reads `recourse` as strings, so a Bridge that predates the value draws nothing for it. The request waits for the Checks, which Fleet runs on a task of its own.
 
+## Protocol 13.53: what Fleet resolved Helm's action authority to
+
+`FleetHealth.helm_action_authority`, additive (#1127). `settings.helm-action-authority-tier-1-redirect-enabled-vs-read-only` resolves once when Fleet starts, and until now nothing on the wire carried the answer — Settings' "This machine" section could only describe what the setting does, not say what Fleet actually decided. `GET /health` answers it now, alongside the probes it already carried.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

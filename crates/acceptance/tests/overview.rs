@@ -19,8 +19,9 @@ mod bench;
 use core_model::AdmissionHold;
 use ipc::{
     AnswerCommand, AskedOption, ChosenAnswer, CommandAnswer, CommandInFlight, Declaration, Drift,
-    FleetCapacity, FleetHealth, JobList, JobSummary, JudgeAnswer, JudgeAnswered, JudgeQuestion,
-    ManifestDrift, Probe, QuestionId, QuestionInFlight, Unfollowed, Unprobed,
+    FleetCapacity, FleetHealth, HelmActionAuthority, JobList, JobSummary, JudgeAnswer,
+    JudgeAnswered, JudgeQuestion, ManifestDrift, Probe, QuestionId, QuestionInFlight, Unfollowed,
+    Unprobed,
 };
 
 use bench::overview::{
@@ -223,6 +224,7 @@ fn health_survives_the_wire_with_the_unprobed_half_still_on_it() {
             owner: "adapters".to_string(),
             because: "Doctor's grid is not built".to_string(),
         }],
+        helm_action_authority: HelmActionAuthority::Acting,
     };
     let received: FleetHealth = round_trip_health(&health);
     assert_eq!(received.probes.len(), 1);
@@ -231,6 +233,12 @@ fn health_survives_the_wire_with_the_unprobed_half_still_on_it() {
         received.not_probed[0].because, "Doctor's grid is not built",
         "a report with rows and nothing beside them reads as a healthy \
          machine, which is the failure `not_probed` exists to name"
+    );
+    assert_eq!(
+        received.helm_action_authority,
+        HelmActionAuthority::Acting,
+        "`#1127` — Bridge's Settings screen reads this alone, with no probe \
+         row of its own"
     );
 }
 

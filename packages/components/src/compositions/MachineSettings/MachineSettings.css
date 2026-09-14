@@ -29,6 +29,16 @@
   color: var(--fg-muted);
 }
 
+/* What Fleet resolved, not what the setting means — mono, `HeldWorktree`'s
+   reason: it is a machine's own answer. */
+.armada-machine-settings__value {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
 .armada-machine-settings__means {
   margin: 0;
   min-width: 0;

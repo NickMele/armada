@@ -17,7 +17,11 @@ const ARMADA: RepositorySummary = { root: "/Users/user/armada", records_root: "/
 const SHOP: RepositorySummary = { root: "/Users/user/shop", records_root: "/records/shop", manifest: manifest("shop-01", "/Users/user/shop") };
 const SCRATCH: RepositorySummary = { root: "/Users/user/scratch", records_root: "/records/scratch" };
 
-const HEALTH = { probes: [{ module: "Fleet", outcome: "pass", detail: "answering" }], not_probed: [] };
+const HEALTH = {
+  probes: [{ module: "Fleet", outcome: "pass", detail: "answering" }],
+  not_probed: [],
+  helm_action_authority: "acting",
+};
 const DRIFT = { path: "armada.yml", checkout: "/Users/user/armada", declarations: [] };
 
 let listening: Server | null = null;

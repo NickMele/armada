@@ -2,6 +2,7 @@ import { ClipboardList, HardDrive, Settings as SettingsIcon } from "lucide-react
 import type { FleetLimits, Outcome } from "@armada/protocol";
 import { DockQuestions, TheShell } from "@armada/components";
 import { BridgeSettings } from "../../../BridgeSettings";
+import type { HealthRead } from "../../../overview-reads";
 
 const noop = () => {};
 
@@ -11,6 +12,15 @@ const LIMITS: FleetLimits = {
   disk_floor_gib: 10,
   checks_at_once: 4,
   shipped: { concurrency: 2, memory_spare_percent: 15, disk_floor_gib: 10, checks_at_once: 4 },
+};
+
+const HEALTH: HealthRead = {
+  state: "read",
+  health: {
+    probes: [{ module: "Fleet", outcome: "pass", detail: "answering" }],
+    not_probed: [],
+    helm_action_authority: "acting",
+  },
 };
 
 /**
@@ -64,7 +74,12 @@ export function SettingsSurfaceFrom() {
         }}
       >
         <div className="armada-screen__mounted">
-          <BridgeSettings limits={LIMITS} live onSave={(): Promise<Outcome> => Promise.resolve({ ok: true })} />
+          <BridgeSettings
+            limits={LIMITS}
+            live
+            health={HEALTH}
+            onSave={(): Promise<Outcome> => Promise.resolve({ ok: true })}
+          />
         </div>
       </TheShell>
     </div>
