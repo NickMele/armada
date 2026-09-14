@@ -11,6 +11,10 @@ dist/
 out/
 .vite/
 
+# electron-vite bundles its config to a timestamped copy beside the original and
+# deletes it once loaded. A scope check that reads the worktree mid-build sees it.
+electron.vite.config.*.mjs
+
 # What `pnpm --filter @armada/desktop package` builds: `apps/desktop/release/`
 # holds an Electron runtime and a copy of the app, a couple of hundred MB of it,
 # rebuilt from `out/` in a minute. Not `dist/` above, deliberately — a name that
