@@ -13,7 +13,6 @@ import { PROTOCOL_VERSION } from "@armada/protocol";
 import type { CommandInFlight, JobSummary, JudgeQuestion, QuestionInFlight } from "@armada/protocol";
 import { NOTHING_YET, type BridgeState } from "../shared/bridge";
 import { applyArrival, type ArrivalHost } from "./arrivals";
-import type { OverviewReads } from "./overview";
 import type { RehearsalConnection } from "./rehearsal";
 import type { RepositoryReads } from "./repositories";
 import { Questions } from "./questions";
@@ -84,7 +83,7 @@ function fakeHost(
     watchedJobId: () => null,
     repositories: {} as unknown as RepositoryReads,
     rehearsal: {} as unknown as RehearsalConnection,
-    overview: {} as unknown as OverviewReads,
+    overviewAgain: async () => {},
     questions,
     material: {} as unknown as ReviewMaterial,
     socket: { close: () => {}, resetUnreachable: () => {} },
