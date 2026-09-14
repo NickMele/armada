@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Bell, ClipboardList, FileCog, HardDrive, LayoutDashboard, Settings, Stethoscope } from "lucide-react";
-import { expect } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { actsIn, ALIASES, globalActs, type Action } from "../../actions";
 import { Dialog } from "../Dialog/Dialog";
+import { Sheet } from "../Sheet/Sheet";
 import {
   CommandPalette,
   type PaletteEntry,
@@ -391,5 +392,98 @@ export const DestructiveEntryConfirms: Story = {
 
     await expect(canvas.getByRole("dialog", { name: "Kill the drone on job 12?" })).toBeVisible();
     await expect(canvas.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+
+    // `Esc` answers the top layer: the confirmation goes, and the list chosen from stays.
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog", { name: "Kill the drone on job 12?" })).toBeNull();
+    await expect(canvas.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+  },
+};
+
+/** A palette its host can close, over whatever else the story puts under it. */
+function Closable({ children }: { children?: ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <>
+      {children}
+      <CommandPalette {...board} open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/**
+ * Job detail's own exit: `Esc` on `window`, which returns to the list. It does not read
+ * `defaultPrevented`, so the story holds the palette to stopping the press rather than marking it.
+ */
+const leaveJob = fn();
+
+function JobDetail() {
+  useEffect(() => {
+    const pressed = (event: KeyboardEvent) => {
+      if (event.key === "Escape") leaveJob();
+    };
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
+  }, []);
+  return null;
+}
+
+/**
+ * **One `Esc`, one layer.** Opened over a Job, the palette closes and the Job stays — the detail's
+ * own `Esc` listener is on `window` too, and a press that reached it would throw the person out of
+ * the Job they were reading (#1013).
+ */
+export const EscapeClosesOnlyThePalette: Story = {
+  render: () => (
+    <Closable>
+      <JobDetail />
+    </Closable>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    leaveJob.mockClear();
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    await expect(leaveJob).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * **Focus is not the condition.** A click on a section head moves focus off the field, and `Esc`
+ * still closes the palette — it used to go nowhere (#1013).
+ */
+export const EscapeClosesAfterAClickInside: Story = {
+  render: () => <Closable />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByText("Navigation"));
+    await expect(canvas.getByRole("combobox")).not.toHaveFocus();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+  },
+};
+
+/**
+ * **Over a sheet, the palette goes first.** The sheet catches `Esc` in the capture phase, and
+ * without yielding it closed underneath while the palette stayed up (#1013). The second press is
+ * the sheet's.
+ */
+export const EscapeOverASheet: Story = {
+  render: () => {
+    const [sheet, setSheet] = useState(true);
+    return (
+      <Closable>
+        <Sheet open={sheet} title="Activity log" onClose={() => setSheet(false)}>
+          1676 entries.
+        </Sheet>
+      </Closable>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    await expect(canvas.getByText("1676 entries.")).toBeVisible();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByText("1676 entries.")).toBeNull();
   },
 };
