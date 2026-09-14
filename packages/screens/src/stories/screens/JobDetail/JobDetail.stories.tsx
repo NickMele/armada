@@ -764,8 +764,14 @@ export const CheckOutputRowOpensSheet: Story = {
   render: drawing(escalatedGateFailure),
   play: async ({ canvas, userEvent }) => {
     await expect(canvas.queryByRole("dialog")).toBeNull();
+    // `aria-pressed` is `CheckRuns`' own row control, so this is the one that
+    // opens the sheet rather than the run tree's gate row, which names the
+    // same file for copying into a shell and carries no pressed state at all.
     await userEvent.click(
-      await canvas.findByRole("button", { name: "regression_verify.3.cargo_nextest.log" }),
+      await canvas.findByRole("button", {
+        name: "regression_verify.3.cargo_nextest.log",
+        pressed: false,
+      }),
     );
     const body = within(document.body);
     const dialog = within(await body.findByRole("dialog", { name: "Console output" }));
@@ -791,9 +797,9 @@ export const CheckOutputRowOpensSheetLive: Story = {
     <JobDetailFrom fixture={gateChecksStreaming()} on={{ onFollowCheckOutput: fn() }} />
   ),
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(
-      await canvas.findByRole("button", { name: "regression_verify.1.cargo_nextest.live.log" }),
-    );
+    // No recorded run for this Check yet, so there is no second control on
+    // the screen naming the same file — one button, found by its text.
+    await userEvent.click(await canvas.findByText("regression_verify.1.cargo_nextest.live.log"));
     const body = within(document.body);
     const dialog = within(await body.findByRole("dialog", { name: "Console output" }));
     // No `followed` state was wired for this story, so main has not answered
