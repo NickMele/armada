@@ -240,7 +240,15 @@ where
     /// taken away.** `drone_killed` is a person's decision and says so;
     /// `run_ended` is Fleet acting on the Drone's own last word, and a reader
     /// who opens it finds nobody to ask about it.
-    async fn stopped_at_rest(&self, job: &Job) -> Result<Job, Adrift> {
+    ///
+    /// **`crate::dispatch::reap` and `crate::daemon::answering`'s restart
+    /// reconciliation call this too**, for `#792`'s reason: a Drone that ends
+    /// its own run without `drone_at_rest` ever seeing it — because the
+    /// process was already gone by the time Fleet asked, on a live turn or
+    /// across a restart — used to leave its step `running` under a Job that
+    /// had already moved past it. Both call this before `move_job`, in the
+    /// order this method's own doc above already argues for.
+    pub(crate) async fn stopped_at_rest(&self, job: &Job) -> Result<Job, Adrift> {
         let why = StepLevelTrigger::of(EscalationTrigger::RunEnded)
             .expect("`run_ended` is step-level in the registry");
         self.stopped_step_under(job, why, Actor::Fleet).await

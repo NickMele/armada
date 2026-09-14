@@ -142,11 +142,11 @@ async fn a_restart_with_the_drone_still_there_answers_409_over_the_wire() {
     assert_eq!(refusal.status(), 409);
 }
 
-/// **The refusal that had to survive the split.** `interrupted` and
-/// `resource_exhausted` have no stopped step *and* no live Drone; loosening the
-/// predicate for the act that needed it must not have loosened it for them.
+/// **`#792`: a Drone that vanishes on its own now stops the step it was on**,
+/// so `interrupted` joins `drone_killed` as a restartable escalation. Redirect
+/// still refuses — there is no session left to send anything down.
 #[tokio::test]
-async fn a_job_escalated_with_its_drone_gone_still_refuses_both_acts() {
+async fn a_job_escalated_with_its_drone_gone_can_still_be_restarted() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_leaves());
     let job = started(&fleet, &home).await;
@@ -162,10 +162,11 @@ async fn a_job_escalated_with_its_drone_gone_still_refuses_both_acts() {
             .await,
         Err(Adrift::NoDroneToRedirect { .. })
     ));
-    assert!(matches!(
-        fleet.restart_step(&job, None).await,
-        Err(Adrift::NoStepStopped { .. })
-    ));
+    let restarted = fleet
+        .restart_step(&job, None)
+        .await
+        .expect("the step the vanished Drone was on stopped under `run_ended`");
+    assert_ne!(restarted.status(), JobStatus::Escalated);
 }
 
 /// **`#145`, as a case.** A healthy Drone working normally takes a redirect,

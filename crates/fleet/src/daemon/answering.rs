@@ -163,6 +163,13 @@ where
             if let Aftermath::JobMoves(target) =
                 aftermath(job.status(), &Ending::Vanished, self.left(job.id()))
             {
+                // **The step, then the Job — `Fleet::kill_drone`'s order.** A
+                // restart that finds the Drone gone used to move the Job
+                // straight to `escalated` and leave its step `running`
+                // underneath, which is `#792`: the inner machine freezes the
+                // moment the Job leaves `running`, so the step has to stop
+                // first or not at all.
+                let job = self.stopped_at_rest(&job).await?;
                 self.move_job(&job, target, Actor::Fleet).await?;
                 reconciled.interrupted.push(job.id().clone());
             }

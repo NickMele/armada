@@ -345,6 +345,53 @@ async fn a_drone_whose_process_is_gone_still_interrupts_its_job() {
     );
 }
 
+/// **`#792`, reached the way a Fleet restart reaches it.** The Drone found
+/// gone above interrupts the Job through `reconciled_jobs`'s `JobMoves` arm.
+/// Before the fix that arm moved the Job to `escalated` and never stopped the
+/// step the vanished Drone was on, so it stayed `running` underneath — and a
+/// `running` step is one `restart_step` refuses, leaving redispatch as the
+/// only way a person could recover the Job.
+#[tokio::test]
+async fn a_drone_found_gone_on_restart_leaves_a_step_restart_step_accepts() {
+    let home = TempDir::new();
+    let first = a_fleet(
+        &home,
+        FakeHarness::running("/bin/sh", &["-c", "echo CALLED; cat >/dev/null"])
+            .reading("CALLED", vec![called()]),
+    );
+    let job = started(&first, &home).await;
+    assert!(spoke(&first, 1).await, "the Drone never said anything");
+    let pid = pid_of(&first).await;
+    drop(first);
+    reap(pid).await;
+    assert!(!alive(pid), "the Drone was meant to have finished");
+
+    let second = a_fleet(&home, a_drone_that_keeps_working());
+    let reconciled = second.reconcile().await.expect("the boot read");
+    assert_eq!(reconciled.interrupted, vec![job.clone()]);
+
+    let escalated = second.load(&job).await.unwrap();
+    assert_eq!(escalated.status(), JobStatus::Escalated);
+    let (_, trigger) = escalated
+        .stopped_on()
+        .expect("the step the vanished Drone was on stopped on the restart");
+    assert_eq!(
+        trigger.trigger(),
+        EscalationTrigger::RunEnded,
+        "Fleet acted on the Drone being gone, not a person's decision"
+    );
+
+    let restarted = second
+        .restart_step(&job, None)
+        .await
+        .expect("a step stopped under `run_ended` is one `restart_step` accepts");
+    assert_ne!(
+        restarted.status(),
+        JobStatus::Escalated,
+        "restarting put the Job back to work rather than leaving it stuck"
+    );
+}
+
 /// **The recycled pid, which is the case a bare pid column could not tell from
 /// an adoption.** The store's row names a live process that is not this Drone,
 /// and the reading refuses it rather than adopting somebody else's work.
