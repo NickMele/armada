@@ -450,6 +450,9 @@ async fn a_gate_whose_build_fails_first_still_runs_and_records_every_check() {
     );
     assert_eq!(
         recorded(&ruling),
-        vec![("build", CheckOutcome::Failed), ("slow", CheckOutcome::Passed)]
+        vec![
+            ("build", CheckOutcome::Failed),
+            ("slow", CheckOutcome::Passed)
+        ]
     );
 }

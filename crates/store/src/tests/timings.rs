@@ -49,7 +49,11 @@ fn the_latest_runs_are_averaged_per_check_and_per_repository() {
     let timed = store.check_timings(&mine).expect("reads");
     assert_eq!(timed.get("build"), Some(&Duration::from_millis(2_000)));
     assert_eq!(timed.get("format"), Some(&Duration::from_millis(200)));
-    assert_eq!(timed.len(), 2, "another repository's Check leaked in: {timed:?}");
+    assert_eq!(
+        timed.len(),
+        2,
+        "another repository's Check leaked in: {timed:?}"
+    );
 }
 
 /// Only the latest few count, so a Check that got faster reorders soon.

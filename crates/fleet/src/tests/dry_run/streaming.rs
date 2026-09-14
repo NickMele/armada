@@ -164,7 +164,10 @@ async fn a_build_that_fails_reaches_the_drone_at_once_and_stops_the_slower_check
 #[tokio::test]
 async fn each_result_that_lands_while_others_run_is_its_own_turn() {
     let home = TempDir::new();
-    let gates = [check("quick", "/usr/bin/true"), check("slow", "/bin/sleep 1")];
+    let gates = [
+        check("quick", "/usr/bin/true"),
+        check("slow", "/bin/sleep 1"),
+    ];
     let fleet = Arc::new(a_fleet_at_once(&home, checked_by(&gates), 2));
     started(&fleet, &home).await;
     let (job, drone) = the_one_drone(&fleet).await.expect("a Drone at work");
@@ -172,7 +175,11 @@ async fn each_result_that_lands_while_others_run_is_its_own_turn() {
     let underway = fleet.run_checks(&job, false).await.expect("the run starts");
     assert!(matches!(underway.finished().await, Some(Ok(_))));
     let told = told_until_over(&fleet, &home, &job, &drone, 1).await;
-    assert_eq!(told.len(), 2, "one turn per result, then the report: {told:?}");
+    assert_eq!(
+        told.len(),
+        2,
+        "one turn per result, then the report: {told:?}"
+    );
     assert!(
         told[0].contains("`quick` passed") && told[0].contains("Still going: `slow`"),
         "{}",
@@ -191,7 +198,10 @@ async fn each_result_that_lands_while_others_run_is_its_own_turn() {
 #[tokio::test]
 async fn once_the_repository_has_history_the_fastest_check_starts_first() {
     let home = TempDir::new();
-    let gates = [check("slow", "/bin/sleep 0.5"), check("quick", "/usr/bin/true")];
+    let gates = [
+        check("slow", "/bin/sleep 0.5"),
+        check("quick", "/usr/bin/true"),
+    ];
     let fleet = Arc::new(a_fleet_at_once(&home, checked_by(&gates), 1));
     started(&fleet, &home).await;
     let (job, drone) = the_one_drone(&fleet).await.expect("a Drone at work");

@@ -38,9 +38,9 @@ use verification::Ran;
 
 use crate::check_output;
 use crate::checking::Stop;
-use crate::underway::{stopped_by, Announcing, Landed};
 use crate::daemon::Fleet;
 use crate::session::{LiveSession, Occasion};
+use crate::underway::{stopped_by, Announcing, Landed};
 use crate::working::Working;
 
 /// How many times one step may ask. **One constructor and no `Default`**, for

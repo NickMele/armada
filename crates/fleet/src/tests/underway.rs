@@ -278,7 +278,10 @@ async fn a_drones_run_is_shown_apart_from_the_gate_and_stops_at_its_first_failur
         true,
     );
     let (_going, stop) = crate::checking::Stop::when_dropped_or_one_fails();
-    let checks = [named("fails", "/usr/bin/false"), named("slow", "/bin/sleep 5")];
+    let checks = [
+        named("fails", "/usr/bin/false"),
+        named("slow", "/bin/sleep 5"),
+    ];
 
     let began = std::time::Instant::now();
     let completed = ran(
