@@ -24,7 +24,7 @@ use std::time::Duration;
 use adapter_traits::{Ask, CallProgress, Environment, Model};
 use testkit::FakeJudge;
 
-use crate::judging::{watched, CallFailed, JudgeBudget};
+use crate::judging::{said, watched, CallFailed, JudgeBudget};
 
 /// A budget nothing in here is meant to reach. The scripted call takes about
 /// two hundred milliseconds; anything approaching this is the test hanging.
@@ -170,6 +170,43 @@ async fn a_call_somebody_stops_ends_at_stopped() {
         "stopping is its own outcome and never a fault: a surface drawing it \
          as one would tell somebody Armada broke when they decided"
     );
+}
+
+/// A call that reaches for a tool and spends its one turn on that used to say
+/// only "code 1". **What it printed rides the refusal now.** `#1047`.
+#[tokio::test]
+async fn a_failed_call_keeps_what_it_printed() {
+    let judge =
+        FakeJudge::that_fails_after_printing("Error: Reached max turns (1)", "a tool was denied");
+
+    let failed = watched(&judge, &ask(), generous(), &|_| {}, nobody_stops())
+        .await
+        .expect_err("the call failed");
+
+    let said = failed.to_string();
+    assert!(
+        said.contains("Reached max turns"),
+        "what the call printed on stdout has to reach the sentence a person \
+         reads: {said}"
+    );
+    assert!(
+        said.contains("a tool was denied"),
+        "and what it printed on stderr, since a CLI's own refusal lands on \
+         whichever stream the vendor chose: {said}"
+    );
+}
+
+/// The unwatched runner keeps the same tail. **The proposer's own call, and
+/// every criterion's** — both run through [`said`], never [`watched`].
+#[tokio::test]
+async fn an_unwatched_failed_call_keeps_what_it_printed_too() {
+    let judge = FakeJudge::that_fails_after_printing("out of quota", "");
+
+    let failed = said(&judge, &ask(), generous())
+        .await
+        .expect_err("the call failed");
+
+    assert!(failed.to_string().contains("out of quota"), "{failed}");
 }
 
 /// A budget that expires is still `TimedOut`, and stopping did not replace it.

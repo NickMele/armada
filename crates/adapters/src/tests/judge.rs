@@ -38,6 +38,17 @@ fn a_judge_call_takes_one_turn_and_holds_no_tool() {
     assert!(!args.iter().any(|arg| arg == "--mcp-config"));
 }
 
+/// `--allowedTools ""` denies each use and leaves the toolset standing; a
+/// single denied use still spends `--max-turns 1` and the call exits 1. Only
+/// `--tools ""` disables the toolset itself, and both renders carry it. `#1047`.
+#[test]
+fn both_renders_carry_no_tools_at_all() {
+    let plain = HeadlessAgent::on_path().render(&ask());
+    let watched = HeadlessAgent::on_path().render_watched(&ask());
+    assert_eq!(arg_after(plain.args(), "--tools").as_deref(), Some(""));
+    assert_eq!(arg_after(watched.args(), "--tools").as_deref(), Some(""));
+}
+
 /// It is not a session. A Drone's stdin carries one JSON object per line for
 /// the life of the Job; this one carries a question and then closes.
 #[test]

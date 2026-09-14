@@ -3,10 +3,10 @@
 //! # It is not a Drone, and the argument list is where that is true
 //!
 //! No `--input-format stream-json`, so stdin is one prompt and then EOF rather
-//! than a session. `--max-turns 1`, so the model answers once. An empty
-//! `--allowedTools`, so nothing is permitted. `--strict-mcp-config` with no
-//! `--mcp-config`, so no server at all is reachable — not even the Evidence
-//! tool a Drone always holds.
+//! than a session. `--max-turns 1`, so the model answers once. `--tools ""`,
+//! so it holds none. `--strict-mcp-config` with no `--mcp-config`, so no
+//! server at all is reachable — not even the Evidence tool a Drone always
+//! holds.
 //!
 //! # A Judge cannot reach the repository because nothing points it at one
 //!
@@ -14,11 +14,10 @@
 //! list and none to inherit: Fleet runs it somewhere with no repository under
 //! it. The patch is text inside the question.
 //!
-//! # `--allowedTools ""` is a floor, not a fence
+//! # `--allowedTools ""` is a floor; `--tools ""` is the fence
 //!
-//! Measured in this crate's harness spike: the flag is a permission allowlist
-//! and removed none of the built-in tools. What actually bounds a Judge is
-//! having a single turn and a working directory with nothing in it.
+//! The first is a permission allowlist and leaves the toolset standing; a
+//! denied use still spends the one turn. `#1047`.
 
 use adapter_traits::{Ask, Heard, JudgeCall, ModelClient};
 
@@ -103,13 +102,10 @@ enum Watched {
 
 /// The argument list both renders use.
 ///
-/// **One builder, because the confinement is the argument list.** A Judge's
-/// bounds are `--max-turns 1`, an empty `--allowedTools` and a strict MCP
-/// config with no file — and this module's own note says the flag is a floor
-/// rather than a fence, so what actually holds is the shape of the argv. Two
-/// lists that happened to agree the day they were written would stop agreeing
-/// the first time one of them was edited, and the one that drifts is whichever
-/// is read less.
+/// **One builder, because the confinement is the argument list.** `--tools ""`
+/// is what actually holds a Judge to no toolset; two lists that happened to
+/// agree the day they were written would stop agreeing the first time one of
+/// them was edited.
 fn asking(ask: &Ask, watched: Watched) -> Vec<String> {
     let mut args: Vec<String> = vec!["-p".into(), "--output-format".into()];
     match watched {
@@ -142,6 +138,10 @@ fn asking(ask: &Ask, watched: Watched) -> Vec<String> {
         // No `--mcp-config` beside it, which is what makes the set empty.
         "--strict-mcp-config".into(),
         "--allowedTools".into(),
+        String::new(),
+        // The fence `--allowedTools` alone is not: it disables every tool
+        // rather than merely denying each use of one. `#1047`.
+        "--tools".into(),
         String::new(),
     ]);
     args

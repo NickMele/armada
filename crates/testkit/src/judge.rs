@@ -31,6 +31,9 @@ pub struct FakeJudge {
     default: Option<String>,
     by_criterion: BTreeMap<String, String>,
     failing: Option<&'static str>,
+    /// What a failing call printed before it exited, stdout and stderr —
+    /// `None` on every constructor but [`FakeJudge::that_fails_after_printing`].
+    printed: Option<(String, String)>,
     asked: Mutex<Vec<String>>,
     /// How long the rendered program takes before it answers. Zero on every
     /// judge but one a test asked for [`FakeJudge::taking`].
@@ -49,6 +52,7 @@ impl FakeJudge {
             default: Some(answer.to_string()),
             by_criterion: BTreeMap::new(),
             failing: None,
+            printed: None,
             asked: Mutex::new(Vec::new()),
             taking: Duration::ZERO,
             sequence: None,
@@ -79,6 +83,7 @@ impl FakeJudge {
                 .map(|(fragment, answer)| ((*fragment).to_string(), (*answer).to_string()))
                 .collect(),
             failing: None,
+            printed: None,
             asked: Mutex::new(Vec::new()),
             taking: Duration::ZERO,
             sequence: None,
@@ -92,6 +97,22 @@ impl FakeJudge {
             default: None,
             by_criterion: BTreeMap::new(),
             failing: Some(standing_in_for),
+            printed: None,
+            asked: Mutex::new(Vec::new()),
+            taking: Duration::ZERO,
+            sequence: None,
+        }
+    }
+
+    /// A call that reached for something it was refused and spent its one
+    /// turn on that — printing before it fails, the way a CLI denied a tool
+    /// prints its own refusal rather than an answer. `#1047`.
+    pub fn that_fails_after_printing(stdout: &str, stderr: &str) -> FakeJudge {
+        FakeJudge {
+            default: None,
+            by_criterion: BTreeMap::new(),
+            failing: Some("a tool the call was denied"),
+            printed: Some((stdout.to_string(), stderr.to_string())),
             asked: Mutex::new(Vec::new()),
             taking: Duration::ZERO,
             sequence: None,
@@ -109,6 +130,7 @@ impl FakeJudge {
             default: None,
             by_criterion: BTreeMap::new(),
             failing: None,
+            printed: None,
             asked: Mutex::new(Vec::new()),
             taking: Duration::ZERO,
             sequence: Some(Mutex::new((
@@ -132,6 +154,21 @@ impl FakeJudge {
         match self.taking.is_zero() {
             true => String::new(),
             false => format!("sleep {}; ", self.taking.as_secs_f32()),
+        }
+    }
+
+    /// The shell fragment that prints [`FakeJudge::that_fails_after_printing`]'s
+    /// two strings before the exit. Empty on every other fake.
+    fn printing(&self) -> String {
+        match &self.printed {
+            Some((stdout, stderr)) => {
+                format!(
+                    "printf %s {}; printf %s {} >&2; ",
+                    quoted(stdout),
+                    quoted(stderr)
+                )
+            }
+            None => String::new(),
         }
     }
 
@@ -177,7 +214,7 @@ impl ModelClient for FakeJudge {
         // read, and a second read here would spend that step on nothing.
         let answer = self.answer(ask.question());
         let script = match (self.failing, &answer) {
-            (Some(_), _) => String::from("cat >/dev/null; exit 3"),
+            (Some(_), _) => format!("cat >/dev/null; {}exit 3", self.printing()),
             (None, Some(_)) => String::from("cat >/dev/null; printf %s \"$0\""),
             (None, None) => String::from("cat >/dev/null"),
         };
@@ -229,6 +266,9 @@ impl ModelClient for FakeJudge {
         let mut script = format!("cat >/dev/null; {}", self.beat());
         for line in &lines {
             script.push_str(&format!("printf '%s\n' {}; sleep 0.05; ", quoted(line)));
+        }
+        if self.failing.is_some() {
+            script.push_str(&self.printing());
         }
         script.push_str(match self.failing {
             Some(_) => "exit 3",

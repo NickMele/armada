@@ -162,7 +162,12 @@ pub enum CallFailed {
     /// anybody can reach while it is out.
     Stopped,
     /// It ended badly — the network, the quota, an expired credential.
-    Refused { code: Option<i32> },
+    ///
+    /// `tail` is a capped record of what it printed on stdout and stderr
+    /// before it stopped — bounded so a runaway stream cannot fill a refusal
+    /// or a log line. `#1047`: it used to carry nothing, so a call that
+    /// reached for a tool and spent its one turn said only "code 1".
+    Refused { code: Option<i32>, tail: String },
     /// It ended well and printed nothing.
     SaidNothing,
     /// It answered something this cannot act on.
@@ -190,10 +195,16 @@ impl fmt::Display for CallFailed {
             }
             CallFailed::TimedOut => out.write_str("the Judge did not answer inside its budget"),
             CallFailed::Stopped => out.write_str("the call was stopped before it answered"),
-            CallFailed::Refused { code: Some(code) } => {
-                write!(out, "the Judge call ended with code {code}")
+            CallFailed::Refused { code, tail } => {
+                let ended = match code {
+                    Some(code) => format!("the Judge call ended with code {code}"),
+                    None => "a signal ended the Judge call".to_string(),
+                };
+                match tail.is_empty() {
+                    true => out.write_str(&ended),
+                    false => write!(out, "{ended}: {tail}"),
+                }
             }
-            CallFailed::Refused { code: None } => out.write_str("a signal ended the Judge call"),
             CallFailed::SaidNothing => out.write_str("the Judge answered with nothing at all"),
             CallFailed::Unreadable(why) => write!(out, "{why}"),
             CallFailed::NothingToJudge(why) => write!(out, "{why}"),

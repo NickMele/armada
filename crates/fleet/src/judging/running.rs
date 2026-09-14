@@ -13,10 +13,38 @@
 use std::process::Stdio;
 
 use adapter_traits::{Ask, CallProgress, Heard, ModelClient};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 
 use super::{CallFailed, JudgeBudget};
+
+/// How much of what a failed call printed is kept in [`CallFailed::Refused`].
+/// **Bounded**, so a runaway stream cannot fill a refusal or a log line —
+/// plenty for the one-line error a CLI's own refusal prints. `#1047`.
+const TAIL_CAP: usize = 4000;
+
+/// The last [`TAIL_CAP`] characters of `text`, marked where it was cut.
+fn capped(text: &str) -> String {
+    let text = text.trim();
+    let cut = text.chars().count().saturating_sub(TAIL_CAP);
+    match cut {
+        0 => text.to_string(),
+        cut => format!("…{}", text.chars().skip(cut).collect::<String>()),
+    }
+}
+
+/// What a failed call printed, stdout and stderr both — each capped on its
+/// own and labelled only where both are present, since a CLI's own refusal
+/// (`Error: Reached max turns (1)`) lands on whichever stream the vendor
+/// chose.
+fn tail_of(stdout: &str, stderr: &str) -> String {
+    match (capped(stdout), capped(stderr)) {
+        (out, err) if out.is_empty() && err.is_empty() => String::new(),
+        (out, err) if err.is_empty() => out,
+        (out, err) if out.is_empty() => err,
+        (out, err) => format!("stdout: {out}\nstderr: {err}"),
+    }
+}
 
 /// Run one rendered call, reporting on it, and answer with what it said.
 ///
@@ -48,6 +76,7 @@ pub(crate) async fn watched(
     // waits on. The pipe is `Stdio::piped()` on both runners; only this one
     // reads it a line at a time.
     let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
     if let Some(mut stdin) = child.stdin.take() {
         stdin
             .write_all(call.question().as_bytes())
@@ -58,6 +87,9 @@ pub(crate) async fn watched(
 
     let reading = async {
         let mut said: Option<String> = None;
+        // Raw text, kept beside the parsed events, for `tail_of`'s reason:
+        // a refused call still gets to say what it printed.
+        let mut printed = String::new();
         if let Some(stdout) = stdout {
             let mut lines = tokio::io::BufReader::new(stdout).lines();
             // A read that fails ends the reading rather than the call: the
@@ -65,6 +97,8 @@ pub(crate) async fn watched(
             // authority on whether this worked. Losing the tail of a stream
             // costs the progress surface and nothing else.
             while let Ok(Some(line)) = lines.next_line().await {
+                printed.push_str(&line);
+                printed.push('\n');
                 match client.heard(&line) {
                     // **Last one wins, and there is only ever one.** A turn
                     // prints its `assistant` line once; taking the last rather
@@ -76,25 +110,35 @@ pub(crate) async fn watched(
                 }
             }
         }
-        said
+        (said, printed)
+    };
+    // Drained alongside `reading`, never after it: a call that fills its
+    // stderr pipe before closing stdout would otherwise block on a reader
+    // that has not got there yet.
+    let draining = async {
+        let mut bytes = Vec::new();
+        if let Some(mut stderr) = stderr {
+            let _ = stderr.read_to_end(&mut bytes).await;
+        }
+        String::from_utf8_lossy(&bytes).into_owned()
     };
 
     tokio::pin!(stopping);
-    let said = tokio::select! {
+    let (said, out_text, err_text) = tokio::select! {
         // **The stop wins over the budget and over the reading**, which is the
         // point of it: a person who has decided not to wait is not made to wait
         // out the rest of Fleet's budget. Dropping `child` kills the process,
         // and `kill_on_drop` is what makes that true.
         () = &mut stopping => return Err(CallFailed::Stopped),
-        read = tokio::time::timeout(budget.duration(), reading) => match read {
-            Ok(said) => said,
+        read = tokio::time::timeout(budget.duration(), async { tokio::join!(reading, draining) }) => match read {
+            Ok(((said, out_text), err_text)) => (said, out_text, err_text),
             Err(_) => return Err(CallFailed::TimedOut),
         },
     };
 
-    // The stream is closed, so the process is finished or nearly. It is still
-    // the exit status that decides, for `said`'s reason: a call that printed an
-    // answer and then failed did not answer.
+    // The streams are closed, so the process is finished or nearly. It is
+    // still the exit status that decides, for `said`'s reason: a call that
+    // printed an answer and then failed did not answer.
     let status = child
         .wait()
         .await
@@ -102,6 +146,7 @@ pub(crate) async fn watched(
     if !status.success() {
         return Err(CallFailed::Refused {
             code: status.code(),
+            tail: tail_of(&out_text, &err_text),
         });
     }
     match said {
@@ -163,6 +208,10 @@ pub(crate) async fn said(
     if !output.status.success() {
         return Err(CallFailed::Refused {
             code: output.status.code(),
+            tail: tail_of(
+                &String::from_utf8_lossy(&output.stdout),
+                &String::from_utf8_lossy(&output.stderr),
+            ),
         });
     }
     let said = String::from_utf8_lossy(&output.stdout).into_owned();
