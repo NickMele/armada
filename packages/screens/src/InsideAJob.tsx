@@ -100,6 +100,8 @@ export type StepPanel = {
   /** Which row is open, held by the surface, so a keyboard map can name one. */
   openRow?: string | null;
   onOpenRow?: (rowId: string | null) => void;
+  /** Whether the timeline starts folded. `StepTimeline`'s own `folded`. */
+  timelineFolded?: boolean;
   /**
    * Anything above the timeline — the failure every attempt hit, what the Drone
    * tried, the box that drafts a redirect. **It comes before the story**
@@ -543,6 +545,7 @@ export function InsideAJob({
                   label="Where this step is"
                   openRow={step.openRow}
                   onOpenRow={step.onOpenRow}
+                  folded={step.timelineFolded}
                 />
               )}
 

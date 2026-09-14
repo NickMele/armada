@@ -383,15 +383,6 @@ export function noticeOf(
   /** How the card a gaming flag holds this step with draws its lines and answers. #1079. */
   deciding?: Deciding,
 ): StepNotice | undefined {
-  if (render === "reviewing") {
-    return {
-      tone: "waiting",
-      // **It opens on what is true, not on a denial.** "Nothing is wrong"
-      // answers a worry the reader had not had yet, and reads as reassurance
-      // that something is.
-      title: "This Job needs your review before it can go on.",
-    };
-  }
   // **The one thing a redirect into a healthy drone leaves behind.** That job
   // is `running` before the send and `running` after the answer, so nothing
   // else on the screen says a person spoke to it — and a press that changed
