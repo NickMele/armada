@@ -7,7 +7,13 @@
 
 import { describe, expect, it, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
-import type { JobDetail as JobWhole, PullRequestDetail, StepDetail, Submitted } from "@armada/protocol";
+import type {
+  JobDetail as JobWhole,
+  JobSummary,
+  PullRequestDetail,
+  StepDetail,
+  Submitted,
+} from "@armada/protocol";
 
 import { mount, unmount } from "./mounted";
 import {
@@ -21,7 +27,25 @@ import {
   provesItOf,
   pullRequestBlockOf,
   risksOf,
+  tookOf,
 } from "./verdict";
+
+function job(over: Partial<JobSummary> = {}): JobSummary {
+  return {
+    id: "01M130Y1380016YK5S0JXBXDQ5",
+    handle: "12-a-job",
+    title: "Coalesce concurrent token refreshes",
+    status: "running",
+    workflow_id: "bug",
+    owner_manifest_id: "01M1CNPKTV0018H2M1CXDNBK06",
+    origin: "dispatched",
+    urgency: "normal",
+    atomic: false,
+    model: "sonnet",
+    created_at: "2026-09-09T09:00:00Z",
+    ...over,
+  };
+}
 
 function step(over: Partial<StepDetail> = {}): StepDetail {
   return {
@@ -417,5 +441,19 @@ describe("the pull request block's own resolve-conflicts control", () => {
       .element(page.getByRole("button", { name: "Resolve conflicts" }))
       .not.toBeInTheDocument();
     unmount();
+  });
+});
+
+describe("tookOf", () => {
+  const now = Date.parse("2026-09-09T09:05:00Z");
+
+  it("says nothing for a Job that has never run", () => {
+    expect(tookOf(job({ status: "awaiting_approval", started_at: undefined }), null, now)).toBeUndefined();
+  });
+
+  it("spans from started_at once the Job's first Drone has started", () => {
+    expect(tookOf(job({ status: "running", started_at: "2026-09-09T09:00:00Z" }), null, now)).toBe(
+      "5m 00s",
+    );
   });
 });

@@ -44,7 +44,7 @@ import type {
 } from "@armada/protocol";
 
 import { hostLabel, money, pullRequestNumber } from "./facts";
-import { span } from "./duration";
+import { elapsedSince } from "./duration";
 import { sitting } from "./held";
 import { checkRow, judgeRow, saidOf, iconOf } from "./checks";
 import { Decide } from "./Decide";
@@ -282,11 +282,17 @@ function filesCountOf(diff: Diff, jobId: string): number | undefined {
   return mine.work.files.length;
 }
 
-/** How long the Job has run, and what it has spent, as one figure. */
-function tookOf(job: JobSummary, whole: JobWhole | null, now: number): string | undefined {
-  const elapsed = span(job.created_at, now);
+/**
+ * How long the Job has run, and what it has spent, as one figure.
+ *
+ * **`undefined` while `started_at` is absent** — a Job that has never run has
+ * nothing to report here, and `created_at` would count the wait for approval
+ * as run time.
+ */
+export function tookOf(job: JobSummary, whole: JobWhole | null, now: number): string | undefined {
+  const elapsed = elapsedSince(job.started_at, now);
+  if (elapsed === undefined) return undefined;
   const spend = whole?.spend;
-  if (elapsed === null) return undefined;
   return spend === undefined ? elapsed : `${elapsed} · ${money(spend.cost_micros)}`;
 }
 

@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import type { CheckRun as CheckRunRow, VerdictSheetProps } from "@armada/components";
 import type { Diff, Evidence, JobDetail as JobWhole, JobSummary, Noted, Remarks, StepDetail } from "@armada/protocol";
 
-import { humanGateStepOf, overruleReasonOf, verdictSlotAfterAnswer } from "./verdict-answered";
+import { humanGateStepOf, overruleReasonOf, tookOf, verdictSlotAfterAnswer } from "./verdict-answered";
 
 function step(over: Partial<StepDetail> = {}): StepDetail {
   return {
@@ -346,5 +346,38 @@ describe("the verdict sheet once a Job is done and a person answered it", () => 
   it("adds how many Drones ran to the figures", () => {
     const slot = slotFor({});
     expect(slot.props.figures.some((figure) => figure.label === "Drones" && figure.value === "5")).toBe(true);
+  });
+});
+
+describe("tookOf", () => {
+  function job(over: Partial<JobSummary> = {}): JobSummary {
+    return {
+      id: "01M27918MN0011N9KZEV9ZWHY3",
+      handle: "2-a-job",
+      title: "Refuse a merge press whose chosen comments won't fit the brief",
+      status: "completed_success",
+      workflow_id: "feature",
+      owner_manifest_id: "01M1CNPKTV0018H2M1CXDNBK06",
+      origin: "manual",
+      urgency: "normal",
+      atomic: true,
+      model: "sonnet",
+      created_at: "2026-09-11T03:43:58.613Z",
+      ...over,
+    };
+  }
+
+  const gate = step({ step_id: "handoff", updated_at: "2026-09-11T05:16:03.465Z" });
+
+  it("says nothing for a Job that never ran", () => {
+    expect(tookOf(job({ started_at: undefined }), null, gate)).toBeUndefined();
+  });
+
+  it("says nothing where there is no human gate step", () => {
+    expect(tookOf(job({ started_at: "2026-09-11T03:43:58.613Z" }), null, undefined)).toBeUndefined();
+  });
+
+  it("spans from started_at to the gate's own updated_at", () => {
+    expect(tookOf(job({ started_at: "2026-09-11T05:00:00.000Z" }), null, gate)).toBe("16m 03s");
   });
 });
