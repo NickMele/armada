@@ -52,7 +52,8 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * **Merge can be drawn and disabled at once.** `#663`: a branch behind main
  * with conflicts is a pull request Fleet would refuse to merge, and
  * `mergeBlockedReason` says so beside the control rather than hiding it —
- * the caller's own conflict control is what fixes the branch, not this one.
+ * Fleet already sends a Drone to clear it on its own, `#1131`, and nothing
+ * on this surface presses anything to do the same.
  *
  * **No glyph on any of them.** Primary and secondary are label-only by
  * contract, and a mark on the destructive one alone would make the difference

@@ -217,8 +217,6 @@ export type JobDetailProps = {
    * request, which `Decide` decides from the detail rather than from a flag.
    */
   onMergePullRequest: (jobId: string) => void;
-  /** Send the branch back for a Drone that can edit files. `#663`. */
-  onResolvePullRequestConflict: (jobId: string) => void;
   /** Start the pull request's failed CI runs again. #905. */
   onRerunFailedChecks: (jobId: string) => void;
   /** Send the branch back for a Drone to find out why CI failed. #905. */

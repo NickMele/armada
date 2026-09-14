@@ -111,10 +111,11 @@ export type DecideProps = {
   /** Merge that pull request, then take the work. */
   onMerge: (jobId: string) => void;
   /**
-   * The branch clashes with main and Fleet could not resolve it alone.
-   * `#663`. **Merge stays drawn and is disabled**, not hidden — a person who
-   * has not read the pull request block above should not wonder where the
-   * button went, and the reason sits right beside it.
+   * The branch clashes with main. `#663`, `#1131`. **Merge stays drawn and
+   * is disabled**, not hidden — a person who has not read the pull request
+   * block above should not wonder where the button went, and the reason
+   * sits right beside it: Fleet is already sending a Drone to clear it,
+   * nothing here presses anything.
    */
   conflicted?: boolean;
   onApprove: (jobId: string) => void;
@@ -232,7 +233,9 @@ export function Decide({
                     `repository's after-merge checks against what landed; merging it on ${host} ` +
                     "yourself skips them.",
               approveNote: "Takes the work without merging — the pull request stays open.",
-              ...(conflicted ? { mergeBlockedReason: "Resolve the conflicts first." } : {}),
+              ...(conflicted
+                ? { mergeBlockedReason: "Main clashes with this branch. Fleet already sent it back to clear the clash." }
+                : {}),
             })}
         changes={changes}
         {...(onRemoveChange === undefined ? {} : { onRemoveChange })}

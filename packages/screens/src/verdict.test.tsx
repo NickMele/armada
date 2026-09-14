@@ -6,7 +6,7 @@
 // wire actually calls "cannot say".
 
 import { describe, expect, it, test } from "vitest";
-import { page, userEvent } from "vitest/browser";
+import { page } from "vitest/browser";
 import type {
   JobDetail as JobWhole,
   JobSummary,
@@ -378,10 +378,11 @@ describe("the currency line a moved base leaves", () => {
   });
 });
 
-// `#663`: the control sits with the pull request block, directly under the
-// sentence naming the clash — never after the decision card, and never where
-// nothing has clashed.
-describe("the pull request block's own resolve-conflicts control", () => {
+// `#663`, `#1131`: the clash sentence still sits under the pull request
+// block, but nothing beside it is pressed any more — Fleet already sends a
+// Drone to clear it on its own, and this guards against the control coming
+// back.
+describe("the pull request block draws no resolve-conflicts control", () => {
   const ADDRESS = "https://forge.example/armada/pull/533";
   const now = Date.parse("2026-09-09T09:45:00Z");
 
@@ -389,8 +390,7 @@ describe("the pull request block's own resolve-conflicts control", () => {
     return { number: 533, reviews: [], currency };
   }
 
-  test("is offered under the clash sentence, and sends on the press", async () => {
-    const sent: string[] = [];
+  test("the clash sentence shows, and no button beside it", async () => {
     mount(
       <>
         {pullRequestBlockOf(
@@ -401,16 +401,15 @@ describe("the pull request block's own resolve-conflicts control", () => {
             conflict_files: ["src/parse.rs"],
           }),
           now,
-          undefined,
-          () => sent.push("resolved"),
         )}
       </>,
     );
     await expect
       .element(page.getByText("Main has changes that clash with this branch in src/parse.rs."))
       .toBeVisible();
-    await userEvent.click(page.getByRole("button", { name: "Resolve conflicts" }));
-    expect(sent).toEqual(["resolved"]);
+    await expect
+      .element(page.getByRole("button", { name: "Resolve conflicts" }))
+      .not.toBeInTheDocument();
     unmount();
   });
 
@@ -424,8 +423,6 @@ describe("the pull request block's own resolve-conflicts control", () => {
             rebased_at: "2026-09-09T09:40:00Z",
           }),
           now,
-          undefined,
-          () => {},
         )}
       </>,
     );
@@ -435,8 +432,8 @@ describe("the pull request block's own resolve-conflicts control", () => {
     unmount();
   });
 
-  test("is not offered where the base has never moved, even with a handler given", async () => {
-    mount(<>{pullRequestBlockOf(ADDRESS, detail(undefined), now, undefined, () => {})}</>);
+  test("is not offered where the base has never moved", async () => {
+    mount(<>{pullRequestBlockOf(ADDRESS, detail(undefined), now)}</>);
     await expect
       .element(page.getByRole("button", { name: "Resolve conflicts" }))
       .not.toBeInTheDocument();

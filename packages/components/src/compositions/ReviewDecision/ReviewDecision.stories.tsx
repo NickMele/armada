@@ -133,15 +133,15 @@ export const APullRequestToMerge: Story = {
  * **Merge stays drawn and takes no fill** — a disabled control has no variant
  * left to express — **with the reason beside it**, never folded into
  * `disabledNote`, which belongs to the whole group and is not in play here:
- * Approve, Request changes and Reject all still work. The caller's own
- * conflict control is what fixes the branch; this one only says why it
- * cannot be pressed yet.
+ * Approve, Request changes and Reject all still work. `#1131`: Fleet already
+ * sends a Drone to clear it on its own, so the reason names what is
+ * happening rather than something to press.
  */
 export const TheBranchConflicts: Story = {
   args: {
     note: "",
     onMerge: () => {},
-    mergeBlockedReason: "Resolve the conflicts first.",
+    mergeBlockedReason: "Main clashes with this branch. Fleet already sent it back to clear the clash.",
   },
 };
 
