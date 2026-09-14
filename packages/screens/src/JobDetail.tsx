@@ -106,7 +106,7 @@ function OneJob({
   onFrameSrc,
   onNeedMaterial,
   onNeedRemarks,
-  job,
+  job: jobProp,
   watched,
   workflows,
   manifests,
@@ -188,6 +188,16 @@ function OneJob({
   // Whether the turn-cap dialog is up. Its own state beside the cost cap's:
   // `budget_hold` offers one control or the other, never both.
   const [raisingTurns, setRaisingTurns] = useState(false);
+  // The Job whole, read for the id the prop carries — `mine.ts`'s own check,
+  // taken this early because what it answers is which Job this binding reads.
+  const whole = detailOf(watched, jobProp.id);
+  // **The one binding the rest of this file reads.** `whole.job` is Fleet's own
+  // answer to `GET /jobs/:job_id`, fetched and re-read for this exact Job — the
+  // same record `run.ts` already trusts for step state — so once it has
+  // arrived it stands in for the board row the prop carries, which can lag a
+  // `job.state_changed` event that missed or has not yet applied. Until then,
+  // the prop is what there is.
+  const job = whole?.job ?? jobProp;
   const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet: (which) => move({ move: "open", which }), onSaid });
 
   // The diff, for every Job that is open rather than only for one at review.
@@ -216,7 +226,7 @@ function OneJob({
   // that Job's steps under this Job's title, its turns under this Job's step,
   // its disk under this Job's panel. `mine.ts` is the one place the check is
   // written, and the counterpart to `main/reader.ts` on this side of the seam.
-  const whole = detailOf(watched, job.id);
+  // (`whole` itself was read above, before `job` was reconciled to it.)
   // What the Board's own row already answers, while this Job's read is out.
   const reading = whileReading(watched, job, workflow, selected);
   const watching = turnsOf(observed, job.id);
