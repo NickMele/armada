@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import type { Refusal, StepDetail } from "@armada/protocol";
+import type { DeclaredJudge, Refusal, StepDetail } from "@armada/protocol";
 import { escalatedEvidenceSuspect } from "../../../fixtures/build/index";
 import { diffRead, JOB_ID, watchedRead } from "../../../fixtures/build/base";
 import type { JobFixture } from "../../../fixtures/fixture";
-import type { DeclaredJudgeRead } from "../../../gaming";
 import { JobDetailFrom } from "./JobDetail";
 
 /** Job detail, split by group — #1044. Same `title` as the rest of this directory, so ids hold. */
@@ -37,8 +36,8 @@ function refusedCommand(call: string, detail: string): Refusal {
   return { tool: "Bash", call, detail, truncated: false, because: "", offers: [], rules: [] };
 }
 
-/** The step's gaming check as the Fleet half of #1079 serves it: every pattern it looks for. */
-const GAMING: DeclaredJudgeRead = {
+/** The step's gaming check, with every pattern it looks for. Since protocol 13.50. */
+const GAMING: DeclaredJudge = {
   criteria: 2,
   panel_size: 3,
   gaming_check: true,

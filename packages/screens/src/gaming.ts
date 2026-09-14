@@ -9,34 +9,18 @@
 // step: it is drawn in the panel as cleared, with why, and nowhere else.
 
 import { GAMING_PATTERN_MEANING, type DiffLine } from "@armada/components";
-import type { DeclaredJudge, Diff, Flagged, StepDetail } from "@armada/protocol";
+import type { Diff, Flagged, StepDetail } from "@armada/protocol";
 
 import { onlyCurrentAttempt } from "./facts";
 import { didNotPass, NOT_REACHED } from "./gates";
 import { drawnOf } from "./review";
 
-/**
- * `Flagged` as Fleet serves it once #1080 lands: a flag a second reading
- * disagreed with carries `cleared`, with why. **Replace with `Flagged` from
- * `@armada/protocol` once the generated type has the field** — this is that
- * shape exactly, and nothing more.
- */
-export type FlaggedRead = Flagged & { cleared?: { why: string; brief_path?: string } };
-
-/**
- * `DeclaredJudge` as Fleet serves it once its half of #1079 lands: the patterns
- * a step's gaming check looks for, in `flag_if` order, as wire spellings.
- * **Replace with `DeclaredJudge` from `@armada/protocol` once the generated
- * type has the field** — this is that shape exactly, and nothing more.
- */
-export type DeclaredJudgeRead = DeclaredJudge & { gaming_patterns?: string[] };
-
 /** One attempt's flags, split into those that hold the step and those cleared. */
-export type FlagsRead = { held: FlaggedRead[]; cleared: FlaggedRead[] };
+export type FlagsRead = { held: Flagged[]; cleared: Flagged[] };
 
 /** The newest attempt's flags, or the rows a caller already narrowed. */
-export function flagsOf(step: StepDetail, rows?: readonly FlaggedRead[]): FlagsRead {
-  const flags: readonly FlaggedRead[] = rows ?? onlyCurrentAttempt(step.flagged);
+export function flagsOf(step: StepDetail, rows?: readonly Flagged[]): FlagsRead {
+  const flags = rows ?? onlyCurrentAttempt(step.flagged);
   return {
     held: flags.filter((flag) => flag.cleared === undefined),
     cleared: flags.filter((flag) => flag.cleared !== undefined),
@@ -53,7 +37,7 @@ export function declaresGaming(step: StepDetail): boolean {
  * `undefined` from a Fleet that does not say — which reads as the flags alone.
  */
 export function declaredPatterns(step: StepDetail): string[] | undefined {
-  const judges: readonly DeclaredJudgeRead[] = step.judge_checks ?? [];
+  const judges = step.judge_checks ?? [];
   const spelled = judges.filter((judge) => judge.gaming_patterns !== undefined);
   if (spelled.length === 0) return undefined;
   return [...new Set(spelled.flatMap((judge) => judge.gaming_patterns ?? []))];

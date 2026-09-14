@@ -7,7 +7,7 @@
 // step, which is the defect this answers.
 
 import { GAMING_PATTERN, GamingFlags, type GamingFlag, type StepChapter } from "@armada/components";
-import type { StepDetail } from "@armada/protocol";
+import type { Flagged, StepDetail } from "@armada/protocol";
 
 import { onlyCurrentAttempt } from "./facts";
 import {
@@ -17,7 +17,6 @@ import {
   gamingReached,
   gamingSummary,
   NOT_SEEN,
-  type FlaggedRead,
 } from "./gaming";
 import { openKept, type Opens } from "./phases";
 
@@ -34,7 +33,7 @@ export const GAMING_CHAPTER = "gaming";
  * not say, the rows are the flags alone.
  */
 export function gamingChapter(step: StepDetail, opens: Opens): Omit<StepChapter, "ordinal"> | undefined {
-  const flags: FlaggedRead[] = onlyCurrentAttempt(step.flagged);
+  const flags = onlyCurrentAttempt(step.flagged);
   if (!declaresGaming(step) && flags.length === 0) return undefined;
   const read = flagsOf(step, flags);
   const reached = gamingReached(step);
@@ -75,7 +74,7 @@ function verbOf(pattern: string): string | undefined {
 }
 
 /** One flag as a row, with whether it stands flagged or cleared where rows say so. */
-function rowOf(flag: FlaggedRead, stands: boolean): GamingFlag {
+function rowOf(flag: Flagged, stands: boolean): GamingFlag {
   return {
     pattern: flag.pattern,
     verb: verbOf(flag.pattern),

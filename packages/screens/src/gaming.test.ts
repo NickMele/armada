@@ -2,7 +2,7 @@
 // the panel say about it. #1079.
 
 import { describe, expect, it } from "vitest";
-import type { Diff, Flagged } from "@armada/protocol";
+import type { DeclaredJudge, Diff, Flagged } from "@armada/protocol";
 
 import { freshStep } from "./fixtures/build/base";
 import {
@@ -12,8 +12,6 @@ import {
   gamingSummary,
   hunkFor,
   sentBackWords,
-  type DeclaredJudgeRead,
-  type FlaggedRead,
 } from "./gaming";
 
 const JOB = "01M22TYSAE0023MADDP5ZQEYGW";
@@ -74,7 +72,7 @@ describe("where a flag's lines are", () => {
 
 describe("what the rail and the panel say", () => {
   const held = flag();
-  const cleared: FlaggedRead = { ...flag(), cleared: { why: "a doc comment, not a check" } };
+  const cleared: Flagged = { ...flag(), cleared: { why: "a doc comment, not a check" } };
 
   it("splits the flags that hold the step from those a second reading cleared", () => {
     const read = flagsOf(freshStep("implement", "Implement", 2), [held, cleared]);
@@ -105,7 +103,7 @@ describe("what the rail and the panel say", () => {
   });
 
   it("reads the declared patterns in order, and nothing from a Fleet that does not name them", () => {
-    const naming: DeclaredJudgeRead = {
+    const naming: DeclaredJudge = {
       criteria: 0,
       gaming_check: true,
       gaming_patterns: ["test_deleted", "assertion_weakened"],
