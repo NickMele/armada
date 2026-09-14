@@ -586,10 +586,14 @@ impl Queries for FakeDaemon {
     /// nothing. What holding one means is `fleet::servers`', tested there.
     async fn list_servers(
         &self,
-        _manifest_id: Option<ManifestId>,
+        manifest_id: Option<ManifestId>,
     ) -> Result<ipc::ServerList, Refusal> {
+        let servers = self.servers.lock().expect("not poisoned").clone();
         Ok(ipc::ServerList {
-            servers: Vec::new(),
+            servers: servers
+                .into_iter()
+                .filter(|one| manifest_id.is_none() || one.manifest_id == manifest_id)
+                .collect(),
         })
     }
 

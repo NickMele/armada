@@ -66,6 +66,8 @@ pub struct FakeDaemon {
     /// has a repository to read a checkout out of — the derivation is Fleet's
     /// and the route only carries it.
     pub held: Mutex<Vec<ipc::WorktreeHeld>>,
+    /// What `list_servers` answers with, narrowed by Manifest. Set by a test.
+    pub servers: Mutex<Vec<ipc::ServerState>>,
     /// When set, every call answers with a fault. The stream closing on a
     /// daemon that cannot answer is a behaviour worth a test.
     pub mute: Mutex<bool>,
@@ -112,6 +114,7 @@ impl FakeDaemon {
             checked: AtomicU64::new(0),
             reports: Mutex::new(Vec::new()),
             held: Mutex::new(Vec::new()),
+            servers: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
             live: Mutex::new(None),
             limits: Mutex::new(shapes::limits()),

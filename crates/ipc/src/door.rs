@@ -87,6 +87,9 @@ pub struct Call {
     /// The Manifest the call's arguments named, as a segment or not. A door
     /// scoped to one compares it rather than letting a route choose.
     pub manifest_id: Option<String>,
+    /// The Drone the call's arguments named, which a scoped door checks the
+    /// owner of.
+    pub drone_id: Option<String>,
 }
 
 /// One message read off the door.
@@ -308,6 +311,7 @@ fn requested(shape: &Shape, arguments: &Map<String, Value>) -> Result<Call, Stri
         path,
         body,
         manifest_id: arguments.get("manifest_id").and_then(said),
+        drone_id: arguments.get("drone_id").and_then(said),
     })
 }
 
@@ -333,6 +337,12 @@ pub fn owned_by(body: &str, manifest_id: &str) -> Result<String, String> {
         Value::String(manifest_id.to_string()),
     );
     encode(&value).map_err(|why| why.to_string())
+}
+
+/// One top-level field of a JSON body, as text.
+pub fn named_in(body: &str, field: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(body).ok()?;
+    said(value.get(field)?)
 }
 
 /// One argument as text. A number or a boolean is taken as written, because a

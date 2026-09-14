@@ -278,6 +278,9 @@ impl<D: Queries> Doorway<D> {
     /// One tool call, made against the surface inside `scope`. `by_helm`
     /// marks it for the route that records who acted.
     async fn through(&self, call: &door::Call, by_helm: bool, scope: &Scope) -> Answer {
+        if let Some(why) = self.elsewhere(call, scope).await {
+            return refused_here(call, &why);
+        }
         let path = scoped_path(call, scope);
         let request = Request::builder()
             .method(call.method)
@@ -345,6 +348,53 @@ fn within_scope(call: &door::Call, scope: &Scope) -> Result<door::Call, String> 
         )?);
     }
     Ok(call)
+}
+
+impl<D: Queries> Doorway<D> {
+    /// Why a call naming a Drone or a server by id is not the session's to make:
+    /// another repository owns it. `None` lets the route answer, a miss included.
+    async fn elsewhere(&self, call: &door::Call, scope: &Scope) -> Option<String> {
+        let daemon = self.served.daemon();
+        let within = ManifestId::carried(scope.named());
+        let (what, id) = match call.operation {
+            "get_drone" => {
+                let id = call.drone_id.clone()?;
+                let drone = daemon
+                    .get_drone(ipc::DroneId::carried(id.clone()))
+                    .await
+                    .ok()?;
+                let job = drone.drone.job_id.as_str().to_string();
+                daemon.resolve_job(job, Some(within)).await.err()?;
+                ("Drone", id)
+            }
+            "stop_server" => {
+                let id = door::named_in(call.body.as_deref()?, "id")?;
+                let every = daemon.list_servers(None).await.ok()?;
+                let mine = daemon.list_servers(Some(within)).await.ok()?;
+                let held = |list: &ipc::ServerList| list.servers.iter().any(|one| one.id == id);
+                if !held(&every) || held(&mine) {
+                    return None;
+                }
+                ("server", id)
+            }
+            _ => return None,
+        };
+        Some(format!(
+            "{what} `{id}` belongs to another repository, and this session is answered only \
+             about Manifest `{}`, the one it stands in",
+            scope.named()
+        ))
+    }
+}
+
+/// A call the door refused before the surface saw it, answered as a tool error.
+fn refused_here(call: &door::Call, why: &str) -> Answer {
+    Answer {
+        status: 403,
+        media_type: "text/plain".to_string(),
+        body: why.as_bytes().to_vec(),
+        whole_at: call.path.clone(),
+    }
 }
 
 /// The call's path, with the session's Manifest named where the route reads
