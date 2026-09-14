@@ -220,10 +220,10 @@ const REDIRECT_KEY = "d";
 const RESTART_KEY = "s";
 
 /** The button's face while its own press is out. `ACT_LABEL.rerun_checks`'s verb, in flight. */
-const RUNNING_CHECKS = "Running checks";
+const RUNNING_CHECKS = "Running Checks";
 
 /** The tooltip while its own press is out — said rather than only greyed, `CHECKS_MS`'s reason. */
-const CHECKS_RUNNING = "The checks are running now. This can take a few minutes.";
+const CHECKS_RUNNING = "The Checks are running now. This can take a few minutes.";
 
 /**
  * The redirect on offer, and which job it is about. **Which reading produced it

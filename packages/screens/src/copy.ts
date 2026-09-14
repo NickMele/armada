@@ -57,7 +57,7 @@ export function said(outcome: Outcome): string {
     case "already_rereading":
       return "That gate is already being re-run. It was not asked twice.";
     case "already_rerunning_checks":
-      return "Those checks are already running again. It was not asked twice.";
+      return "Those Checks are already running again. They were not asked twice.";
     case "already_raising":
       return "That cost cap is already being raised. It was not sent twice.";
     case "already_raising_turns":

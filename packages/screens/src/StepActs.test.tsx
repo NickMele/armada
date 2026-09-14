@@ -145,7 +145,7 @@ test("a step stopped on a failed check is offered run checks again", async () =>
     .toBeInTheDocument();
 });
 
-test("the press says the checks are running while its own request is out", async () => {
+test("the press says the Checks are running while its own request is out", async () => {
   stopped(true);
-  await expect.element(page.getByRole("button", { name: "Running checks" })).toBeDisabled();
+  await expect.element(page.getByRole("button", { name: "Running Checks" })).toBeDisabled();
 });

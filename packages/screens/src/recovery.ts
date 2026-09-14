@@ -54,8 +54,9 @@
 // failed mechanical Check declines nothing — neither has a ruling to
 // overrule, so what is left for both is to ask again, on the worktree as it
 // stands: `crates/fleet/src/regating.rs` for the first, `#1105` for the
-// second. Both run out of the Job's own slot, so both co-occur with a
-// redirect rather than replacing it.
+// second. The gate's re-run needs the Drone still standing, so it sits beside a
+// redirect; a failed Check has already stood its Drone down, so the Checks'
+// re-run sits beside a restart.
 
 import { JOB_STATUS } from "@armada/components";
 import type { JobDetail as JobWhole, JobSummary, RedirectInFlight, StepDetail, Stuck } from "@armada/protocol";
@@ -588,7 +589,7 @@ const REREAD =
  * failed mechanical Check, not an undecided gate.
  */
 const RERUN_CHECKS_SAYS =
-  "A check on this step failed. Running the checks again runs them on the work already here — " +
+  "A Check on this step failed. Running the Checks again runs them on the work already here — " +
   "no drone works, and no retry is spent.";
 
 /** `DroneStillThere` stated as the act it points at rather than as a refusal. */
