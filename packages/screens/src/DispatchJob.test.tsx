@@ -112,8 +112,11 @@ test("two presses in one task are one call", async () => {
   button.click();
 
   expect(sent, "a second press fired a second model call").toEqual([REQUEST]);
-  // And the rendering caught up, which is the half a person sees.
-  await expect.element(page.getByRole("button", { name: "Reading the request" })).toBeDisabled();
+  // And the rendering caught up, which is the half a person sees. Pending
+  // rather than disabled: it is the control being waited on. #1117.
+  await expect
+    .element(page.getByRole("button", { name: "Reading the request" }))
+    .toHaveAttribute("aria-busy", "true");
 });
 
 /**

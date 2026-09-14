@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { ChangeEvent, ClipboardEvent, ReactNode } from "react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { AttachmentChip } from "../../primitives/AttachmentChip/AttachmentChip";
 import { Badge } from "../../primitives/Badge/Badge";
@@ -505,8 +505,9 @@ export function DispatchRequest({
             </Button>
             <Button
               variant="primary"
+              pending={reading}
               onClick={onDispatch}
-              disabled={reading || disabled || empty}
+              disabled={disabled || empty}
             >
               {reading
                 ? "Reading the request"
@@ -543,6 +544,10 @@ function Waiting({
   onStop?: () => void;
   slowAfterMs?: number;
 }) {
+  // The wait unmounts this the moment `reading` ends, whichever way it ends —
+  // so a fresh wait always starts unpressed. #1117.
+  const [stopping, setStopping] = useState(false);
+
   // No reading yet, and no mark to have passed. **The sentence that was here
   // before any of this**, kept for a Fleet that sends no progress and for the
   // moment before the first message lands.
@@ -595,8 +600,15 @@ function Waiting({
               notice would be worse again, hiding the only way out of the wait.
               */}
           {onStop === undefined ? null : (
-            <Button variant="secondary" onClick={onStop}>
-              Stop the proposer
+            <Button
+              variant="secondary"
+              pending={stopping}
+              onClick={() => {
+                setStopping(true);
+                onStop();
+              }}
+            >
+              {stopping ? "Stopping…" : "Stop the proposer"}
             </Button>
           )}
         </div>
@@ -749,7 +761,7 @@ function Releasing({
     <Button
       variant="primary"
       size="sm"
-      disabled={out}
+      pending={out}
       onClick={() => onApprove(job.id)}
       aria-label={`${says} ${job.title}`}
     >
