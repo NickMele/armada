@@ -215,6 +215,28 @@ export const TwoFlagsOnOneStep: Story = {
 };
 
 /**
+ * **Carry on just pressed, and Fleet has not answered.** Only that control
+ * marks itself busy; Send it back is off like every other control, and
+ * nothing says "already sending" until the five-second mark. #1117.
+ */
+export const WaitingOnFleet: Story = {
+  args: {
+    ...answers(presetsOf("assertion_weakened")),
+    findings: [ADDED_LINE],
+    disabled: true,
+    pending: "carryOn",
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Carrying on…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(canvas.getByRole("button", { name: "Send it back" })).toBeDisabled();
+    await expect(canvas.queryByRole("status")).toBeNull();
+  },
+};
+
+/**
  * **Send it back where Fleet offers neither a redirect nor a restart.** The
  * answer is drawn, off, with the reason under it, rather than left out.
  */

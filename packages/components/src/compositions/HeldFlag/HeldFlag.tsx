@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useId, useState } from "react";
 
-import { Button } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Prose } from "../../primitives/Prose/Prose";
 import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
 import { Textarea } from "../../primitives/Textarea/Textarea";
@@ -66,7 +66,15 @@ export type HeldFlagProps = {
   disabled?: boolean;
   /** Why both answers are off, where they are. */
   disabledNote?: ReactNode;
+  /**
+   * The answer that was pressed and Fleet has not answered. That control
+   * waits and the other is off; absent is nothing out. #1117.
+   */
+  pending?: HeldFlagAnswer;
 };
+
+/** Which of the two answers `HeldFlag` draws. */
+export type HeldFlagAnswer = "carryOn" | "sendBack";
 
 const IT_ASKED = "It asked";
 const OPEN_THE_BRIEF = "Open the brief";
@@ -98,11 +106,13 @@ export function HeldFlag({
   sendBack,
   disabled = false,
   disabledNote,
+  pending,
 }: HeldFlagProps) {
   const [preset, setPreset] = useState<string | null>(null);
   const [reasonNote, setReasonNote] = useState("");
   const [droneNote, setDroneNote] = useState("");
   const group = useId();
+  const stillWaiting = useStillWaiting(pending !== undefined);
   if (findings.length === 0) return null;
 
   function carry() {
@@ -195,10 +205,11 @@ export function HeldFlag({
           <div className="armada-held-flag__press">
             <Button
               variant="secondary"
+              pending={pending === "carryOn"}
               disabled={disabled || carryOn.withheld !== undefined}
               onClick={carry}
             >
-              {CARRY_ON}
+              {pending === "carryOn" ? "Carrying on…" : CARRY_ON}
             </Button>
           </div>
           {carryOn.withheld === undefined ? null : (
@@ -221,10 +232,11 @@ export function HeldFlag({
           <div className="armada-held-flag__press">
             <Button
               variant="secondary"
+              pending={pending === "sendBack"}
               disabled={disabled || sendBack.withheld !== undefined}
               onClick={sendIt}
             >
-              {SEND_IT_BACK}
+              {pending === "sendBack" ? "Sending it back…" : SEND_IT_BACK}
             </Button>
           </div>
           {sendBack.withheld === undefined ? null : (
@@ -234,7 +246,11 @@ export function HeldFlag({
           )}
         </div>
 
-        {disabled && disabledNote !== undefined ? (
+        {stillWaiting ? (
+          <p className="armada-held-flag__withheld" role="status">
+            {STILL_WAITING}
+          </p>
+        ) : disabled && pending === undefined && disabledNote !== undefined ? (
           <p className="armada-held-flag__withheld" role="note">
             {disabledNote}
           </p>

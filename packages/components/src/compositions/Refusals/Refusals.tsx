@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
-import { Button } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
 
 /** One answer a person may give about one refused command. */
@@ -155,6 +155,12 @@ export type RefusalsProps = {
    */
   disabledNote?: ReactNode;
   /**
+   * An answer from this list is out. **Not necessarily one of these rows'
+   * own press** — a live command's own box shares this act's name, so a row
+   * is only marked busy where its own press was the one made. #1117.
+   */
+  pending?: boolean;
+  /**
    * The list as a card of its own, folded until a person asks for the rows —
    * *3 commands were refused during Implement · not why it stopped · Show
    * them*.
@@ -207,6 +213,7 @@ export function Refusals({
   onAnswer,
   disabled = false,
   disabledNote,
+  pending = false,
   folded,
 }: RefusalsProps) {
   // Which row's answer is mid-pick, and what it is pointed at right now. An
@@ -218,6 +225,17 @@ export function Refusals({
   const group = useId();
   // Whether a folded card shows its rows. Closed until somebody asks.
   const [shown, setShown] = useState(false);
+
+  // Which row's own press `pending` is out for — remembered locally, since a
+  // live command's box can share this act's name and `pending` alone cannot
+  // say which control sent it. Cleared once Fleet has answered.
+  const [pressed, setPressed] = useState<{ call: string; answer: string } | null>(null);
+  useEffect(() => {
+    if (!pending) setPressed(null);
+  }, [pending]);
+  const mineAny = pending && pressed !== null;
+  const stillWaiting = useStillWaiting(mineAny);
+
   if (refused.length === 0) return null;
   const drawn = (
     <>
@@ -260,16 +278,22 @@ export function Refusals({
                   const rules = offered.rules ?? [];
                   const isPicking =
                     picking !== null && picking.call === call && picking.answer === offered.answer;
+                  const mine =
+                    pressed !== null && pressed.call === call && pressed.answer === offered.answer;
                   if (rules.length === 0) {
                     return (
                       <Button
                         key={offered.answer}
                         variant="ghost"
                         size="sm"
+                        pending={mine}
                         disabled={disabled}
-                        onClick={() => onAnswer?.(call, offered.answer)}
+                        onClick={() => {
+                          setPressed({ call, answer: offered.answer });
+                          onAnswer?.(call, offered.answer);
+                        }}
                       >
-                        {offered.label}
+                        {mine ? "Sending…" : offered.label}
                       </Button>
                     );
                   }
@@ -279,6 +303,7 @@ export function Refusals({
                         key={offered.answer}
                         variant="ghost"
                         size="sm"
+                        pending={mine}
                         disabled={disabled}
                         onClick={() =>
                           setPicking({
@@ -288,7 +313,7 @@ export function Refusals({
                           })
                         }
                       >
-                        {offered.label}
+                        {mine ? "Sending…" : offered.label}
                       </Button>
                     );
                   }
@@ -315,6 +340,7 @@ export function Refusals({
                             size="sm"
                             disabled={disabled}
                             onClick={() => {
+                              setPressed({ call, answer: offered.answer });
                               onAnswer?.(call, offered.answer, picking.rule);
                               setPicking(null);
                             }}
@@ -341,7 +367,11 @@ export function Refusals({
         })}
       </ul>
       {note === undefined ? null : <span className="armada-refusals__note">{note}</span>}
-      {disabled && disabledNote !== undefined ? (
+      {stillWaiting ? (
+        <span className="armada-refusals__off" role="status">
+          {STILL_WAITING}
+        </span>
+      ) : disabled && !mineAny && disabledNote !== undefined ? (
         <span className="armada-refusals__off" role="note">
           {disabledNote}
         </span>

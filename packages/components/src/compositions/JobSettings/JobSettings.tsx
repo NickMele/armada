@@ -1,6 +1,6 @@
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import type { Reach, WhenBlocked, WhenRefused } from "@armada/protocol";
-import { Button } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
 import { Select } from "../../primitives/Select/Select";
 import { Sheet } from "../../primitives/Sheet/Sheet";
@@ -83,6 +83,13 @@ export type JobSettingsProps = {
   disabled?: boolean;
   /** Why they are off, said once under the lead rather than left to be guessed. */
   disabledNote?: ReactNode;
+  /**
+   * A removal on this Job is out. **Not necessarily this panel's own row** —
+   * nothing here says which command, so a row is marked busy only where its
+   * own press was the one made; every other row and field just disables, the
+   * way `disabled` alone already does. #1117.
+   */
+  pending?: boolean;
   onModel: (model: string | null) => void;
   onWhenBlocked: (whenBlocked: WhenBlocked) => void;
   onRemove: (run: string) => void;
@@ -137,6 +144,7 @@ export function JobSettings({
   repositoryAllowed = [],
   disabled = false,
   disabledNote,
+  pending = false,
   onModel,
   onWhenBlocked,
   onWhenRefused,
@@ -144,6 +152,15 @@ export function JobSettings({
   onClose,
 }: JobSettingsProps) {
   const group = useId();
+  // Which row's own Remove `pending` is out for — remembered locally, since
+  // nothing here says which command a removal was for. Cleared once Fleet
+  // has answered.
+  const [pressedRun, setPressedRun] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pending) setPressedRun(null);
+  }, [pending]);
+  const mineAny = pending && pressedRun !== null;
+  const stillWaiting = useStillWaiting(mineAny);
   // A chosen model Fleet holds and `list_models` no longer offers is still the
   // one in force, so it stays an option rather than the select falling back to
   // a first entry that says something untrue.
@@ -173,7 +190,11 @@ export function JobSettings({
             For this job only. Each change applies from the next thing the drone does. Nothing
             restarts, and nothing already done is undone.
           </p>
-          {disabled && disabledNote !== undefined ? (
+          {stillWaiting ? (
+            <p className="armada-job-settings__means" role="status">
+              {STILL_WAITING}
+            </p>
+          ) : disabled && !mineAny && disabledNote !== undefined ? (
             <p className="armada-job-settings__means">{disabledNote}</p>
           ) : null}
         </div>
@@ -334,11 +355,21 @@ export function JobSettings({
                       variant="secondary"
                       size="sm"
                       ground="sunken"
+                      pending={pressedRun === row.run && pending}
                       disabled={disabled}
-                      aria-label={`Remove ${row.run}`}
-                      onClick={() => onRemove(row.run)}
+                      // `aria-label` wins the accessible name over the child
+                      // text, so it carries the same "…ing" swap the label
+                      // draws — otherwise a screen reader would never hear
+                      // that this exact row is the one out.
+                      aria-label={
+                        pressedRun === row.run && pending ? `Removing ${row.run}` : `Remove ${row.run}`
+                      }
+                      onClick={() => {
+                        setPressedRun(row.run);
+                        onRemove(row.run);
+                      }}
                     >
-                      Remove
+                      {pressedRun === row.run && pending ? "Removing…" : "Remove"}
                     </Button>
                   </li>
                 ))}

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
-import { Button } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 
@@ -49,6 +49,13 @@ export type DroneQuestionProps = {
   disabled?: boolean;
   /** Why the controls are off, where they are. */
   disabledNote?: ReactNode;
+  /**
+   * An answer from this box is out. **Not necessarily this box's own press** —
+   * a command's box and a refused row can share one act name, so this only
+   * marks the control busy where the press was made here; elsewhere it just
+   * disables, the way `disabled` alone already does. #1117.
+   */
+  pending?: boolean;
   /** The line over the question. Sentence case, no Wh- opener. */
   label?: ReactNode;
   /**
@@ -143,6 +150,7 @@ export function DroneQuestion({
   onAnswer,
   disabled = false,
   disabledNote,
+  pending = false,
   label = "The drone is waiting on you",
   redirectNote = "If none of these is right, redirect the drone instead — that is where your own words go.",
   answerLabel = "Send this answer",
@@ -163,12 +171,24 @@ export function DroneQuestion({
   // browser: picking in one would clear the other.
   const group = useId();
 
+  // Whether *this* box's own Send sent the answer `pending` is out for.
+  // `pending` alone cannot say that: a command's box and a refused row can
+  // share one act name, so the press is remembered locally. Cleared once
+  // Fleet has answered, so a later question in this same box starts fresh.
+  const [pressed, setPressed] = useState(false);
+  useEffect(() => {
+    if (!pending) setPressed(false);
+  }, [pending]);
+  const mine = pending && pressed;
+  const stillWaiting = useStillWaiting(mine);
+
   const picked = options.find((option) => option.label === chosen);
   const rules = picked?.rules ?? [];
   const activeRule = rule ?? picked?.suggestedRule;
 
   function send() {
     if (chosen === null) return;
+    setPressed(true);
     // An answer that picks a rule sends it in the note's place — the two never
     // coexist, since only Always allow offers rules and only Reject reads a
     // note.
@@ -304,12 +324,16 @@ export function DroneQuestion({
       {/* Off until something is picked, which is what fleet would answer — a
           round trip to learn nothing was chosen is a refusal that reads as a
           failure. */}
-      <Button variant="primary" disabled={disabled || chosen === null} onClick={send}>
-        {answerLabel}
+      <Button variant="primary" pending={mine} disabled={disabled || chosen === null} onClick={send}>
+        {mine ? "Sending…" : answerLabel}
       </Button>
 
       <p className="armada-question__said">{redirectNote}</p>
-      {disabled && disabledNote !== undefined ? (
+      {stillWaiting ? (
+        <p className="armada-question__said" role="status">
+          {STILL_WAITING}
+        </p>
+      ) : disabled && !mine && disabledNote !== undefined ? (
         <p className="armada-question__said" role="note">
           {disabledNote}
         </p>
