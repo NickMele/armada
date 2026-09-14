@@ -31,7 +31,7 @@ import { afterEach, expect, it } from "vitest";
 import { WebSocketServer, type WebSocket } from "ws";
 
 import { PROTOCOL_VERSION } from "@armada/protocol";
-import type { BridgeState } from "../shared/bridge";
+import type { BridgeState, PickedView } from "../shared/bridge";
 import { FleetConnection } from "./connection";
 import { holderOf } from "./runtime-file";
 
@@ -228,6 +228,11 @@ function publishing() {
         want.keep();
       }
     },
+    // Nothing here opens a real window, so there is nobody's pick to overlay.
+    publishToWindow(_windowId: number, _change: Partial<PickedView>): void {},
+    windowIds(): readonly number[] {
+      return [];
+    },
     until(holds: (state: BridgeState) => boolean): Promise<void> {
       if (seen.some(holds)) return Promise.resolve();
       return new Promise((keep) => wanted.push({ holds, keep }));
@@ -270,6 +275,8 @@ it("reopens a Job's transcript on the event that says its next step is running",
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -346,6 +353,8 @@ it("puts a Drone's question on the Board row, and takes it off again", async () 
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -398,6 +407,8 @@ it("puts a plan's task counts on the Board row, and re-reads the open Job", asyn
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -434,6 +445,8 @@ it("brings back every region of the open Job when Fleet comes back", async () =>
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -498,6 +511,8 @@ it("does not fetch the patch again when the stream drops events under a live soc
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -547,6 +562,8 @@ it("re-reads the open Job when a Drone comes on or off a step", async () => {
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -586,6 +603,8 @@ it("re-reads the comments on job.remarks_changed, only where a person asked for 
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -677,6 +696,8 @@ it("holds the moment a Drone submits, for the open Job, and re-reads its claims"
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -760,6 +781,8 @@ it("takes the patch again when a surface asks for the Job it already holds", asy
       drawn.push(state.diff.state);
       published.publish(state);
     },
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -801,6 +824,8 @@ it("publishes a person's Bridge preferences once Fleet answers the resync", asyn
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    windowIds: () => published.windowIds(),
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());
@@ -827,6 +852,11 @@ it("keeps drawing the shipped default when Fleet's preferences read fails", asyn
   const connection = new FleetConnection({
     home,
     publish: (state) => published.publish(state),
+    publishToWindow: (id, change) => published.publishToWindow(id, change),
+    // One open window, so the per-window reads a resync also fires keep this
+    // test's ordering the same as every other read here — an empty set skips
+    // them outright, which is correct but not what this race depends on.
+    windowIds: () => [1],
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());

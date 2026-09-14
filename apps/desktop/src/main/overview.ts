@@ -11,13 +11,14 @@
 
 import type { FleetHealth, ManifestDrift, ManifestDriftRead } from "@armada/protocol";
 import type { DriftsRead, HealthRead, RepositoryDrift } from "@armada/screens/src/overview-reads";
-import type { BridgeState } from "../shared/bridge";
+import type { PickedView } from "../shared/bridge";
 import type { Picked } from "./picked";
 import { ask, NOT_SET_UP } from "./request";
 import type { Answer } from "./request";
 
 export type OverviewWiring = {
-  publish: (change: Partial<BridgeState>) => void;
+  /** This window's own overlay — one `OverviewReads` per window, `connection.ts`'s `windowFacades`. */
+  publish: (change: Partial<PickedView>) => void;
   picked: Picked;
   port: () => number | null;
 };

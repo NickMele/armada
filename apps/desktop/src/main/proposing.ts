@@ -27,6 +27,7 @@ import { ask, isJobSummary, NOT_SET_UP, NO_WAIT } from "./request";
 // Type-only, and therefore not a cycle at runtime: `Board` is what an act needs
 // of the connection, and it is declared where the acts are.
 import type { Board } from "./command";
+import type { Picked } from "./picked";
 
 /**
  * Describe the work and let the Job proposer decide what it is: which workflow,
@@ -48,15 +49,16 @@ import type { Board } from "./command";
  *
  * `repository` is the root New job's ask answered, where the pick cannot
  * carry it: on All, #959 keeps the Board there rather than narrowing it, so
- * the request must name what was answered instead of reading `board.picked`.
+ * the request must name what was answered instead of reading `picked`.
  * `null`, the default, is every other caller — the pick still names it, as it
- * always did.
+ * always did. `picked` is that caller's own window; `board.picked` only where none is given.
  */
 export async function proposeFromRequest(
   board: Board,
   request: string,
   attachments: StagedAttachment[] = [],
   repository: string | null = null,
+  picked: Picked = board.picked,
 ): Promise<Proposed> {
   const said = request.trim();
   if (said === "") return { ok: false, why: "refused", outcome: { ok: false, why: "empty_brief" } };
@@ -66,8 +68,8 @@ export async function proposeFromRequest(
   }
   const path =
     repository === null
-      ? board.picked.manifest("/jobs/from_request")
-      : board.picked.manifestOf("/jobs/from_request", repository);
+      ? picked.manifest("/jobs/from_request")
+      : picked.manifestOf("/jobs/from_request", repository);
   if (path === null) return { ok: false, why: "refused", outcome: NOT_SET_UP };
 
   // The token this window recognises its own call by. Minted here because the
