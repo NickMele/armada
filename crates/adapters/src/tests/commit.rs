@@ -392,3 +392,57 @@ fn a_worktree_with_unmerged_paths_is_refused_before_anything_is_staged() {
         "nothing was staged over the conflict"
     );
 }
+
+/// **`#1131`: Fleet's commit finishes the merge.** The Drone cleared the
+/// markers and ran no git, so the index still holds the conflict; the commit
+/// stages what it resolved and records the base as the second parent.
+#[test]
+fn a_merge_whose_markers_were_cleared_commits_with_the_base_as_second_parent() {
+    let repo = TempRepo::with_a_commit();
+    repo.write("shared.txt", "the original\n");
+    repo.commit_everything("a file both sides touch");
+
+    let worktree = worktree_for(&repo);
+    wrote(&worktree, "shared.txt", "what the job wrote\n");
+    GitVcs::new()
+        .commit_all(&worktree, "the job's work", NINE)
+        .expect("a commit");
+    repo.commit_one(
+        "shared.txt",
+        "what somebody else merged\n",
+        "somebody else got there first",
+    );
+    let merge = std::process::Command::new("git")
+        .args(["-C", worktree.path(), "merge", "main"])
+        .output()
+        .expect("git on PATH");
+    assert!(!merge.status.success(), "the merge was meant to conflict");
+    let job_tip = tip(&worktree);
+    let base_tip = repo.git(&["rev-parse", "main"]);
+
+    wrote(&worktree, "shared.txt", "both, reconciled\n");
+    let made = GitVcs::new()
+        .commit_all(&worktree, "Merge main", NINE)
+        .expect("no marker is left, so the merge commits");
+    assert!(matches!(made, Committed::Made { .. }), "{made:?}");
+
+    let opened = Repository::open(worktree.path()).expect("the worktree");
+    let commit = opened.find_commit(tip(&worktree)).expect("the commit");
+    assert_eq!(commit.parent_count(), 2, "a merge, not a squash");
+    assert_eq!(
+        commit.parent_id(0).expect("a first parent"),
+        job_tip,
+        "the branch first"
+    );
+    assert_eq!(
+        commit.parent_id(1).expect("a second parent").to_string(),
+        base_tip,
+        "the base second"
+    );
+    assert_eq!(
+        opened.state(),
+        git2::RepositoryState::Clean,
+        "nothing is left mid-merge"
+    );
+    assert!(status(&worktree).is_empty(), "and nothing left unstaged");
+}
