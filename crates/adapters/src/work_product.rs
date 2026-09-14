@@ -210,6 +210,9 @@ fn base_of(worktree_repo: &Repository, worktree: &Worktree) -> Result<Base, Read
             branch: worktree.branch().to_string(),
             cause,
         })?;
+    // A merge part-way through is measured from what it merges in, so the base
+    // it brings is not read as this Job's work. `#1131`.
+    let tip = crate::merging_in::merge_head(worktree_repo).unwrap_or(tip);
 
     let common = Repository::open(shared_git_dir(worktree_repo)).map_err(|cause| {
         ReadWorkProductError::RepositoryUnreadable {

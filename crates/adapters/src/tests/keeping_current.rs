@@ -322,7 +322,7 @@ fn an_autostash_that_wont_reapply_leaves_the_branch_and_the_worktree_as_they_wer
     assert!(
         !repo
             .git(&["stash", "list", "--format=%gs"])
-            .contains(&format!("armada-kept-current:armada/{JOB}")),
+            .contains(&format!("armada-merging-in:armada/{JOB}")),
         "put back clean, so nothing is left stranded in the stash"
     );
 }
@@ -372,7 +372,84 @@ fn keeping_current_never_takes_another_worktrees_stash_entry() {
         "the other worktree's entry is untouched: {stash_list}"
     );
     assert!(
-        !stash_list.contains(&format!("armada-kept-current:armada/{JOB}")),
-        "this call's own entry was dropped once applied clean: {stash_list}"
+        !stash_list.contains("armada-merging-in:"),
+        "nothing of this call's was left on the list: {stash_list}"
+    );
+}
+
+// ------------------------------------------------- the remote's own commits
+
+/// **`#1131`'s watch-for.** A person pushed to the pull request's branch, so the
+/// remote holds a commit the worktree does not. It is merged in before the
+/// base, and the push after it is not refused.
+#[test]
+fn a_commit_pushed_to_the_branch_by_hand_is_taken_before_the_push() {
+    let repo = TempRepo::with_a_commit();
+    let bare = repo.with_a_bare_remote();
+    repo.git(&["push", "--set-upstream", "origin", "main"]);
+    let worktree = a_delivered_worktree(&repo);
+    let branch = format!("armada/{JOB}");
+
+    let elsewhere = repo.root().with_extension("elsewhere");
+    let (bare_str, elsewhere_str) = (
+        bare.to_string_lossy().into_owned(),
+        elsewhere.to_string_lossy().into_owned(),
+    );
+    for args in [
+        vec![
+            "clone",
+            "-q",
+            "--branch",
+            &branch,
+            &bare_str,
+            &elsewhere_str,
+        ],
+        vec![
+            "-C",
+            &elsewhere_str,
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "by hand",
+        ],
+        vec!["-C", &elsewhere_str, "push", "-q", "origin", &branch],
+    ] {
+        let run = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=someone",
+                "-c",
+                "user.email=someone@example.invalid",
+            ])
+            .args(&args)
+            .output()
+            .expect("git on PATH");
+        assert!(run.status.success(), "git {args:?}: {run:?}");
+    }
+    let by_hand = remote_tip(&bare, &branch);
+
+    repo.commit_one("elsewhere.txt", "moved on", "something else landed");
+    let outcome = GitVcs::new().kept_current(&repo.root_str(), JOB, "main");
+    assert!(
+        matches!(outcome, KeptCurrent::Rebased { .. }),
+        "{outcome:?}"
+    );
+    let contains = std::process::Command::new("git")
+        .args([
+            "-C",
+            worktree.path(),
+            "merge-base",
+            "--is-ancestor",
+            &by_hand,
+            "HEAD",
+        ])
+        .status()
+        .expect("git on PATH");
+    assert!(contains.success(), "the person's commit is on the branch");
+    assert_eq!(
+        remote_tip(&bare, &branch),
+        repo.git(&["rev-parse", &branch]),
+        "and the push over it reached the remote"
     );
 }

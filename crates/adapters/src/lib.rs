@@ -56,6 +56,7 @@ mod judge;
 mod keeping_current;
 mod landing;
 mod mcp;
+mod merging_in;
 mod pull_request_diff;
 mod reclaim;
 mod rerunning;
