@@ -1,26 +1,16 @@
 //! A finished Job's work, put on its branch.
 //!
-//! # The Drone did not do this, and could not have
+//! **Fleet commits, because a Drone cannot** — it is denied `git`, see
+//! `crate::git_guard`, and would otherwise leave verified work uncommitted.
 //!
-//! A Drone is denied `git` — at spawn, on `--disallowedTools`, see
-//! `crate::git_guard`. So a Job that ran every step and passed every Check
-//! left its work as an uncommitted modification in the worktree, on a branch
-//! still pointing at the commit it started from — correct, verified, and
-//! unmergeable. This is where that ends.
+//! **A merge part-way through is finished here**: `MERGE_HEAD` becomes the
+//! second parent once no conflicted file still holds a marker. `#1131`.
 //!
-//! # Nothing to commit is answered, not committed
+//! **Nothing to commit is answered, not committed** — except a merge, whose
+//! second parent is what makes the branch hold its base.
 //!
-//! The staged tree is compared with the branch tip's, and an equal one comes
-//! back as [`Committed::NothingToCommit`]. A Job whose work was a note wrote no
-//! file, and an empty commit would put a record of nothing onto the branch a
-//! person merges.
-//!
-//! # The identity is Armada's own, and it is not the operator's
-//!
-//! `repo.signature()` would read the machine's git config and attribute Fleet's
-//! commit to whoever is at the keyboard, which is the machine pretending to be
-//! a person. `.invalid` is reserved and resolves nowhere, so the address cannot
-//! be somebody's by accident.
+//! **The identity is Armada's own.** `repo.signature()` would attribute Fleet's
+//! commit to whoever is at the keyboard; `.invalid` resolves nowhere.
 
 use std::path::{Component, Path};
 
@@ -29,6 +19,7 @@ use git2::build::TreeUpdateBuilder;
 use git2::{Commit, FileMode, Index, IndexAddOption, Oid, Repository, Signature, Time, Tree};
 
 use crate::error::CommitWorkError;
+use crate::merging_in::{holds_a_marker, merge_head};
 
 pub(crate) const WHO: (&str, &str) = ("Armada Fleet", "fleet@armada.invalid");
 
@@ -38,13 +29,28 @@ pub(crate) fn commit_all(
     at: CommitTime,
 ) -> Result<Committed, CommitWorkError> {
     let repo = open(worktree)?;
-    refuse_unmerged(&repo, worktree)?;
+    let merging = merge_head(&repo)
+        .map(|oid| repo.find_commit(oid))
+        .transpose()
+        .map_err(|cause| refused(worktree, cause))?;
+    match merging {
+        None => refuse_unmerged(&repo, worktree)?,
+        Some(_) => refuse_marked(&repo, worktree)?,
+    }
     let tree_id = stage_everything(&repo, worktree.path())?;
     let parent = tip(&repo);
-    if parent.as_ref().is_some_and(|tip| tip.tree_id() == tree_id) {
+    if merging.is_none() && parent.as_ref().is_some_and(|tip| tip.tree_id() == tree_id) {
         return Ok(Committed::NothingToCommit);
     }
-    made(&repo, worktree, tree_id, parent.as_ref(), message, at)
+    let parents: Vec<&Commit<'_>> = parent.iter().chain(merging.iter()).collect();
+    let committed = made(&repo, worktree, tree_id, &parents, message, at)?;
+    // Only once the commit stands. Cleared first, a commit that then failed
+    // would leave the next one with no second parent and the base unmerged.
+    if merging.is_some() {
+        repo.cleanup_state()
+            .map_err(|cause| refused(worktree, cause))?;
+    }
+    Ok(committed)
 }
 
 /// Commit these paths as the working directory holds them, and nothing else.
@@ -92,20 +98,50 @@ pub(crate) fn commit_paths(
     if tree_id == base.id() {
         return Ok(Committed::NothingToCommit);
     }
-    made(&repo, worktree, tree_id, parent.as_ref(), message, at)
+    let parents: Vec<&Commit<'_>> = parent.iter().collect();
+    made(&repo, worktree, tree_id, &parents, message, at)
 }
 
 /// Refuse a worktree whose index still holds unmerged paths — a conflict a
-/// rebase or a stash pop left behind and nobody resolved. `add_all` and
-/// `git add` alike would stage the marker text as ordinary file content and
-/// call it resolved; this runs first so that never happens. `#1097`.
+/// stash pop left behind and nobody resolved. `add_all` and `git add` alike
+/// would stage the marker text as ordinary file content and call it resolved;
+/// this runs first so that never happens. `#1097`.
 fn refuse_unmerged(repo: &Repository, worktree: &Worktree) -> Result<(), CommitWorkError> {
+    let paths = conflicted(repo, worktree)?;
+    match paths.is_empty() {
+        true => Ok(()),
+        false => Err(CommitWorkError::UnmergedPaths {
+            worktree: worktree.path().to_string(),
+            paths,
+        }),
+    }
+}
+
+/// Refuse a merge while any conflicted file still holds a marker. **The marker
+/// is the gate, not the Drone's word** that it cleared them all.
+fn refuse_marked(repo: &Repository, worktree: &Worktree) -> Result<(), CommitWorkError> {
+    let root = Path::new(worktree.path());
+    let paths: Vec<String> = conflicted(repo, worktree)?
+        .into_iter()
+        .filter(|path| std::fs::read(root.join(path)).is_ok_and(|bytes| holds_a_marker(&bytes)))
+        .collect();
+    match paths.is_empty() {
+        true => Ok(()),
+        false => Err(CommitWorkError::UnmergedPaths {
+            worktree: worktree.path().to_string(),
+            paths,
+        }),
+    }
+}
+
+/// The paths the index holds as conflicted, sorted and once each.
+fn conflicted(repo: &Repository, worktree: &Worktree) -> Result<Vec<String>, CommitWorkError> {
     let index = repo.index().map_err(|cause| CommitWorkError::NotStaged {
         worktree: worktree.path().to_string(),
         cause,
     })?;
     if !index.has_conflicts() {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let mut paths: Vec<String> = index
         .conflicts()
@@ -117,10 +153,7 @@ fn refuse_unmerged(repo: &Repository, worktree: &Worktree) -> Result<(), CommitW
         .collect();
     paths.sort();
     paths.dedup();
-    Err(CommitWorkError::UnmergedPaths {
-        worktree: worktree.path().to_string(),
-        paths,
-    })
+    Ok(paths)
 }
 
 /// Stage everything git can see, and answer with the tree it makes.
@@ -208,7 +241,7 @@ fn made(
     repo: &Repository,
     worktree: &Worktree,
     tree_id: Oid,
-    parent: Option<&Commit<'_>>,
+    parents: &[&Commit<'_>],
     message: &str,
     at: CommitTime,
 ) -> Result<Committed, CommitWorkError> {
@@ -217,8 +250,7 @@ fn made(
         .map_err(|cause| refused(worktree, cause))?;
     let when = Time::new(at.seconds(), 0);
     let who = Signature::new(WHO.0, WHO.1, &when).map_err(|cause| refused(worktree, cause))?;
-    let parents: Vec<&Commit<'_>> = parent.into_iter().collect();
-    repo.commit(Some("HEAD"), &who, &who, message, &tree, &parents)
+    repo.commit(Some("HEAD"), &who, &who, message, &tree, parents)
         .map(|commit| Committed::Made {
             commit: commit.to_string(),
         })

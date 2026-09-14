@@ -1,30 +1,25 @@
-//! Keeping a Job's pull request current as main moves, without closing and
-//! reopening it. `#663`, in place of `#427`'s close-and-reopen — which moved
-//! what the forge compares against and not a single commit, so it never fixed
-//! a branch actually behind its base with conflicts. #660 sat in that twice.
+//! Keeping a Job's pull request current as its base moves, without closing and
+//! reopening it. `#663`, and a merge since `#1131`.
 //!
-//! **Once per base, remembered durably.** `crate::noticing::Sweep::nudged` —
-//! the map this replaces — lived in memory and lost the count on a restart,
-//! which is why #660 was nudged twice for the same base.
-//! [`Store::kept_current_for`] is read before every attempt and compared
-//! against the base's tip *now* ([`Delivery::base_tip`]): where they agree,
-//! nothing runs, clean or conflicted alike, and a restart mid-conflict reads
-//! the same answer back rather than retrying.
+//! **Once per base, remembered durably.** `Store::kept_current_for` is read
+//! before every attempt and compared with the base's tip now
+//! ([`Delivery::base_tip`]); where they agree nothing runs, clean or conflicted,
+//! and a restart reads the same answer back.
 //!
-//! **A conflict is told to a person, not resolved here.**
-//! [`KeptCurrent::Conflicted`] leaves the branch exactly as
-//! `adapters::keeping_current` found it and writes a `Warn` line into the
-//! Job's log; nothing here moves the Job. `ipc::PullRequestDetail::currency`
-//! is what a person reads, and `crate::conflict_resolution` is where they may
-//! act on it.
+//! **A conflict at the review gate sends a Drone.** Where the Job waits at its
+//! gate, Fleet sends it back to clear the conflicts — `crate::conflict_resolution`,
+//! bounded there. Anywhere else a conflict is a `Warn` line in the Job's log.
+//! **A Job being worked is left alone**: its own catch-up and delivery bring its
+//! branch current, and a merge under a live Drone changes the tree it is reading.
 
 use std::sync::Arc;
 
 use adapter_traits::{
     AgentHarness, Delivery, KeptCurrent, Landing, Rendering, Vcs, WhatBecameOfIt, WorkProduct,
 };
-use core_model::{Component, Envelope, FieldValue, JobId, Level};
+use core_model::{Actor, Component, Envelope, FieldValue, JobId, JobStatus, Level};
 
+use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -37,11 +32,10 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Rebase and push where the forge says this pull request's base has been
-    /// superseded, at most once per base. **Nothing is returned and nothing
-    /// raises** — the Job is finished and its record says everything it is
-    /// going to say about itself; what this changes is the branch a person
-    /// reviews, which is not a fact the Job's own record holds.
+    /// Merge the base in and push where the forge says this pull request's base
+    /// has been superseded, at most once per base. **Nothing is returned and
+    /// nothing raises**: what this changes is the branch a person reviews, and
+    /// where it conflicts at the gate, where the Job goes next.
     pub(crate) async fn kept_current(&self, job_id: &JobId, read: &WhatBecameOfIt) {
         let Landing::Open { rendering, .. } = &read.landing else {
             return;
@@ -51,7 +45,7 @@ where
         }
         // The forge named no base at all — [`Landing::Unknown`]'s territory
         // and unreachable beside `Open` in practice, but there is nothing to
-        // rebase onto without a name, so this is silence rather than a guess.
+        // merge in without a name, so this is silence rather than a guess.
         let Some(base) = read.base.as_deref() else {
             return;
         };
@@ -61,12 +55,15 @@ where
         let Ok(job) = self.load(job_id).await else {
             return;
         };
+        if matches!(job.status(), JobStatus::Queued | JobStatus::Running) {
+            return;
+        }
         let Ok(served) = self.served_by(&job) else {
             return;
         };
         // **The cheap read, asked first.** A local `git rev-parse` against no
         // worktree, so a base that has not moved past what was already tried
-        // costs one process rather than a scratch checkout and a rebase. Read
+        // costs one process rather than a scratch checkout and a merge. Read
         // failing is not a licence to skip — an unreadable tip is
         // indistinguishable from one nobody has seen, so this falls through
         // to attempting it.
@@ -91,7 +88,7 @@ where
             }
         }
         // **One Job at a time from here**, `caught_up_onto`'s own reason: a
-        // rebase writes into the one `.git` every worktree shares, and this
+        // merge writes into the one `.git` every worktree shares, and this
         // must never run beside a spawn's own catch-up or a delivery's commit
         // and push.
         let outcome = {
@@ -106,7 +103,13 @@ where
                 .await
                 .expect("git/gh panicked keeping the branch current")
         };
+        let conflicted = matches!(outcome, KeptCurrent::Conflicted { .. });
         self.recorded_currency(job_id, outcome).await;
+        if conflicted && job.status() == JobStatus::AwaitingReview {
+            if let Err(why) = self.sent_to_clear_conflicts(job_id, Actor::Fleet).await {
+                self.noted_not_sent_to_clear(job_id, &why);
+            }
+        }
     }
 
     /// Write what an attempt came to into the record, and a line into the
@@ -119,7 +122,7 @@ where
                 Level::Info,
                 format!(
                     "the pull request's branch was behind its base by {commits} commit(s); \
-                     it was rebased onto `{onto}` and pushed"
+                     `{onto}` was merged into it and pushed"
                 ),
             ),
             KeptCurrent::Conflicted { onto, files } => (
@@ -127,9 +130,9 @@ where
                 Some(files.clone()),
                 Level::Warn,
                 format!(
-                    "the pull request's branch is behind `{onto}` with conflicts a rebase \
-                     could not resolve on its own, and was left exactly as it was — \
-                     a person can send the Drone in to resolve them"
+                    "the pull request's branch conflicts with `{onto}` and was left exactly as \
+                     it was — where the Job waits at its review gate, Fleet sends a Drone to \
+                     clear the conflicts"
                 ),
             ),
             KeptCurrent::NoBranch => (
@@ -176,6 +179,23 @@ where
         if let Some(files) = &conflict_files {
             envelope = envelope.with_field("files", FieldValue::Str(files.join(", ")));
         }
+        self.logged(job_id, envelope);
+    }
+
+    /// Write into the Job's log that a conflict at the gate was found and the
+    /// Job could not be sent back — no worktree left, say, or a person got there
+    /// first. **Held, never raised**: the sweep has other Jobs to ask about.
+    fn noted_not_sent_to_clear(&self, job_id: &JobId, why: &Adrift) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "the pull request's branch conflicts with its base, and the Job could not be sent \
+             back to clear the conflicts",
+        )
+        .in_job(job_id.as_ulid().clone())
+        .with_field("cause", FieldValue::Str(why.to_string()));
         self.logged(job_id, envelope);
     }
 }

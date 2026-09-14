@@ -1,30 +1,15 @@
 //! A finished Job's work, brought up to its base and put where a person
 //! reviews it.
 //!
-//! # git's own rebase, not libgit2's
+//! **The base is merged in, never rebased onto** — `#1131`. One pass meets
+//! every conflict, reviewed commits keep their ids, and a plain push carries it;
+//! `crate::merging_in` is how. Every catch-up here comes before a Drone is put
+//! on the worktree, so a conflict's markers stay for that Drone to clear.
 //!
-//! libgit2 has a rebase API and it has no autostash, no conflict driver and no
-//! `--abort` that restores what it started from; every one of those would be
-//! reimplemented here, against the case where getting it wrong destroys a
-//! Drone's uncommitted work. `git` is on the machine already — every Check in
-//! this repository shells out to a toolchain — so the rebase is git's.
-//!
-//! # `--autostash`, which is what makes a mid-Job rebase safe at all
-//!
-//! Fleet commits once, on the step the workflow says delivers, so at every
-//! earlier boundary the branch has no commits of its own and the worktree is
-//! full of uncommitted work. A
-//! plain rebase over that either refuses or destroys it. `--autostash` puts the
-//! work aside, moves the branch, and puts it back — and where putting it back
-//! conflicts, git says so and keeps the stash, so nothing is lost either way.
-//!
-//! # Nothing here fetches
-//!
-//! The base is the local branch. A rebase that fetched first would put the
-//! network, and a credential, in the middle of a step boundary — and the branch
-//! a person merges into is the one on their machine.
+//! **Nothing here fetches.** The base is the local branch: a catch-up that
+//! fetched would put the network, and a credential, in the middle of a step
+//! boundary — and the branch a person merges into is the one on their machine.
 
-use std::path::Path;
 use std::process::{Command, Output};
 
 use adapter_traits::{
@@ -34,6 +19,7 @@ use adapter_traits::{
 use adapter_traits::{Standing, Worktree};
 use git2::{BranchType, Repository};
 
+use crate::merging_in::{self, MergedIn, OnConflict};
 use crate::worktree::GitVcs;
 
 /// The command that opens a pull request, and later says what became of it.
@@ -54,7 +40,14 @@ impl Delivery for GitVcs {
         let repo = open(worktree)?;
         let tip = head_of(&repo, worktree)?;
         let base_tip = tip_of(&repo, base.name())?;
-        match repo.graph_ahead_behind(tip, base_tip) {
+        // A merge part-way through stands where it is merging to once its
+        // markers are cleared, so the next Drone is not told of it again.
+        // Until then it reads behind, so the Drone put on it is.
+        let from = match merging_in::merge_head(&repo) {
+            Some(merging) if merging_in::still_marked(worktree).is_empty() => merging,
+            _ => tip,
+        };
+        match repo.graph_ahead_behind(from, base_tip) {
             Ok((_, 0)) => Ok(Standing::UpToDate),
             Ok((_, behind)) => Ok(Standing::Behind { commits: behind }),
             Err(cause) => Err(NotDelivered::of(
@@ -108,52 +101,26 @@ impl Delivery for GitVcs {
         worktree: &Worktree,
         base: &Base,
     ) -> Result<BroughtUpToDate, NotDelivered> {
-        let behind = match self.standing(worktree, base)? {
-            Standing::UpToDate => 0,
-            Standing::Behind { commits } => commits,
-        };
-        let run = git(worktree, &["rebase", "--autostash", base.name()])?;
-        // **Read whether it succeeded or not**, because a rebase can succeed
-        // and still leave conflicts: git fast-forwards the branch, fails to put
-        // the autostash back, says so and exits zero. Measured, not assumed.
-        let files = unmerged_files(worktree);
-        if run.status.success() {
-            return Ok(match files.is_empty() {
-                true => BroughtUpToDate::Clean {
-                    base: base.name().to_string(),
-                    commits: behind,
-                },
-                // The branch moved and the work came back with conflicts in it.
-                // The stash git kept is left alone: it says the changes are safe
-                // there, and dropping it would remove the only other copy.
-                false => BroughtUpToDate::Conflicted {
-                    base: base.name().to_string(),
-                    files,
-                },
-            });
-        }
-        // Nobody can be handed half a rebase — a Drone has no git and a person
-        // did not ask for one — so the branch goes back exactly as it was.
-        if rebase_in_progress(worktree) {
-            let _ = git(worktree, &["rebase", "--abort"]);
-            return Ok(BroughtUpToDate::PutBack {
-                base: base.name().to_string(),
+        let base_name = base.name().to_string();
+        let merged = merging_in::merged_in(worktree, base.name(), OnConflict::LeaveTheMarkers)?;
+        Ok(match merged {
+            MergedIn::Clean { commits } => BroughtUpToDate::Clean {
+                base: base_name,
+                commits,
+            },
+            MergedIn::Conflicted { files } => BroughtUpToDate::Conflicted {
+                base: base_name,
                 files,
-            });
-        }
-        Err(NotDelivered::of("the rebase", said(&run)))
+            },
+            MergedIn::PutBack { files } => BroughtUpToDate::PutBack {
+                base: base_name,
+                files,
+            },
+        })
     }
 
     fn push(&self, worktree: &Worktree) -> Result<Pushed, NotDelivered> {
-        let Some(remote) = a_remote(&open(worktree)?) else {
-            return Ok(Pushed::NoRemote);
-        };
-        let branch = worktree.branch().to_string();
-        let run = git(worktree, &["push", "--set-upstream", &remote, &branch])?;
-        match run.status.success() {
-            true => Ok(Pushed::ToTheRemote { remote, branch }),
-            false => Err(NotDelivered::of("the push", said(&run))),
-        }
+        pushed(worktree)
     }
 
     fn push_forcing(&self, worktree: &Worktree) -> Result<Pushed, NotDelivered> {
@@ -342,21 +309,19 @@ pub(crate) fn a_remote(repo: &Repository) -> Option<String> {
     }
 }
 
-/// Whether git is part-way through a rebase in this worktree.
-///
-/// Both directory names are asked for, because git uses one for the merge
-/// backend and the other for the apply backend and which is in play depends on
-/// the machine's configuration.
-pub(crate) fn rebase_in_progress(worktree: &Worktree) -> bool {
-    ["rebase-merge", "rebase-apply"].iter().any(|name| {
-        match git(worktree, &["rev-parse", "--git-path", name]) {
-            Ok(run) => {
-                let path = last_line(&run);
-                !path.is_empty() && Path::new(worktree.path()).join(path).exists()
-            }
-            Err(_) => false,
-        }
-    })
+/// The ordinary push. **The one Fleet takes**: a merge rewrites nothing, so
+/// the remote reads it as a fast-forward and git refuses only a branch that
+/// holds commits this one has not got — which a force would destroy.
+pub(crate) fn pushed(worktree: &Worktree) -> Result<Pushed, NotDelivered> {
+    let Some(remote) = a_remote(&open(worktree)?) else {
+        return Ok(Pushed::NoRemote);
+    };
+    let branch = worktree.branch().to_string();
+    let run = git(worktree, &["push", "--set-upstream", &remote, &branch])?;
+    match run.status.success() {
+        true => Ok(Pushed::ToTheRemote { remote, branch }),
+        false => Err(NotDelivered::of("the push", said(&run))),
+    }
 }
 
 /// The paths git is holding as unresolved, one per line.

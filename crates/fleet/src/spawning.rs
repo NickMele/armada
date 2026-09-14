@@ -10,7 +10,7 @@
 //! # Every spawn catches the branch up, and this is the one place it happens
 //!
 //! `crate::delivery` carries the rule. A spawn has no session to inject a turn
-//! into, so the rebase runs here and what it came to rides the opening brief —
+//! into, so the base is merged in here and what it came to rides the brief —
 //! which is why the brief is assembled inside
 //! [`put_a_drone_on`](Fleet::put_a_drone_on) rather than handed to it. **A
 //! conflict is the Drone's opening work and not a refusal**: refusing the
@@ -67,7 +67,7 @@ where
     /// **The branch is caught up first, and the brief is assembled after**, for
     /// the reason this module's header gives. A catch-up that will not run
     /// stops the Job with `no_worktree`: a Drone put on a tree Fleet could not
-    /// reconcile starts from a state nobody has read. A rebase that ran and
+    /// reconcile starts from a state nobody has read. A merge that ran and
     /// *conflicted* is not that — it is an answer, and it goes into the brief.
     ///
     /// **Each failure below names who fixes it and none says `interrupted`.**
@@ -99,7 +99,7 @@ where
         };
         // **The branch goes out here, where the step it is declared on is being
         // entered.** After the catch-up, because a commit over a tree the
-        // rebase has not touched publishes work that will not replay; before
+        // base was not merged into publishes work that conflicts; before
         // the Drone, because the step that sends the work out is the step that
         // then holds while a person reads what went out. Almost every spawn
         // asks this and answers no. `crate::landing` owns the rest, including
@@ -122,8 +122,20 @@ where
         // Asked of the record on every spawn and answered `None` unless a later
         // step still stands where it sent the work back. Its findings then go
         // to every Drone the walk forward puts on, not only the first.
-        let sent_back = match job.sent_back_past(step) {
-            Some(by) => {
+        // A pass Fleet opened to clear conflicts says so in place of the gate's
+        // findings, and only to the step the work went back to. `#1131`.
+        let events = self
+            .store()
+            .lock()
+            .await
+            .events_for(&job_id)
+            .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
+        let clearing =
+            crate::clearing::clearing(&events, job, step).map(|pass| pass.redoing == step);
+        let sent_back = match (clearing, job.sent_back_past(step)) {
+            (Some(true), _) => Some(crate::crossing::SentBack::to_clear_conflicts()),
+            (Some(false), _) | (None, None) => None,
+            (None, Some(by)) => {
                 let recorded = self
                     .store()
                     .lock()
@@ -132,7 +144,6 @@ where
                     .map_err(Adrift::Reading)?;
                 crate::crossing::SentBack::of(job.workflow(), by, &recorded)
             }
-            None => None,
         };
         // **Shown whenever this step follows the plan, whether or not it also
         // records it.** A step that only records — Bug's `plan` step — gets
