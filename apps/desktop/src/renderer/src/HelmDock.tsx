@@ -4,28 +4,48 @@
 
 import { useState } from "react";
 import { HelmComposer, HelmThread } from "@armada/components";
-import type { RepositorySummary } from "@armada/protocol";
-import { helmRowsOf } from "@armada/screens/src/helm-thread";
+import type { HelmApprovalCard, HelmApprovalCardState, HelmThreadRow } from "@armada/components";
+import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
+import { helmRowsOf, type HelmApprovalAsk, type HelmFoldedRow } from "@armada/screens/src/helm-thread";
 import type { BridgeState } from "../../shared/bridge";
 
 export type HelmDockProps = {
   helm: BridgeState["helm"];
   repositories: readonly RepositorySummary[];
+  /** Resolved into a card's Job facts — never anything the model itself said. #1041. */
+  jobs: readonly JobSummary[];
+  workflows: readonly WorkflowSummary[];
   live: boolean;
   onAsk: (text: string) => void;
   onStartFresh: () => void;
   onSwitch: (manifestId: string) => void;
+  onApprove: (jobId: string) => void;
 };
 
-export function HelmDock({ helm, repositories, live, onAsk, onStartFresh, onSwitch }: HelmDockProps) {
+/** A card's own press, held for this dock's lifetime alone — a reload starts over. #1041. */
+type Pressed = "approved" | "dismissed";
+
+export function HelmDock({
+  helm,
+  repositories,
+  jobs,
+  workflows,
+  live,
+  onAsk,
+  onStartFresh,
+  onSwitch,
+  onApprove,
+}: HelmDockProps) {
   const [draft, setDraft] = useState("");
+  const [pressed, setPressed] = useState<Record<string, Pressed>>({});
   const current = helm.state === "none" ? undefined : helm.manifestId;
   const options = repositories
     .filter((one): one is RepositorySummary & { manifest: NonNullable<RepositorySummary["manifest"]> } =>
       one.manifest !== undefined,
     )
     .map((one) => ({ id: one.manifest.id, label: one.manifest.repository }));
-  const rows = helm.state === "open" || helm.state === "failed" ? helmRowsOf(helm.items) : [];
+  const folded = helm.state === "open" || helm.state === "failed" ? helmRowsOf(helm.items) : [];
+  const rows = folded.map((row) => withCards(row, jobs, workflows, pressed, onApprove, setPressed));
   const replying = helm.state === "open" && helm.replying;
 
   const notice = !live
@@ -67,4 +87,74 @@ export function HelmDock({ helm, repositories, live, onAsk, onStartFresh, onSwit
       />
     </div>
   );
+}
+
+/**
+ * One folded row's bare `asks` resolved into drawable cards, off `jobs` and
+ * `workflows` — the app's own published state, never anything Helm's tool
+ * call said. `#1041`.
+ */
+function withCards(
+  row: HelmFoldedRow,
+  jobs: readonly JobSummary[],
+  workflows: readonly WorkflowSummary[],
+  pressed: Record<string, Pressed>,
+  onApprove: (jobId: string) => void,
+  setPressed: (update: (was: Record<string, Pressed>) => Record<string, Pressed>) => void,
+): HelmThreadRow {
+  const { asks, ...rest } = row;
+  if (asks === undefined || asks.length === 0) return rest;
+  return {
+    ...rest,
+    cards: asks.map((ask) => cardOf(ask, jobs, workflows, pressed, onApprove, setPressed)),
+  };
+}
+
+function cardOf(
+  ask: HelmApprovalAsk,
+  jobs: readonly JobSummary[],
+  workflows: readonly WorkflowSummary[],
+  pressed: Record<string, Pressed>,
+  onApprove: (jobId: string) => void,
+  setPressed: (update: (was: Record<string, Pressed>) => Record<string, Pressed>) => void,
+): HelmApprovalCard {
+  const job = jobs.find((one) => one.id === ask.jobId);
+  const workflow = job === undefined ? undefined : workflows.find(matching(job));
+  const state = stateOf(ask.id, job, pressed);
+  return {
+    id: ask.id,
+    jobHandle: job?.handle ?? ask.jobId,
+    workflow: workflow?.name,
+    stepCount: workflow?.steps.length,
+    state,
+    ...(state === "ready"
+      ? {
+          onApprove: () => {
+            setPressed((was) => ({ ...was, [ask.id]: "approved" }));
+            onApprove(ask.jobId);
+          },
+          onDismiss: () => setPressed((was) => ({ ...was, [ask.id]: "dismissed" })),
+        }
+      : {}),
+  };
+}
+
+function matching(job: JobSummary): (workflow: WorkflowSummary) => boolean {
+  return (workflow) => workflow.id === job.workflow_id && workflow.manifest_id === job.owner_manifest_id;
+}
+
+/**
+ * **A local press wins over the Board once it has been made** — so a card
+ * this dock approved reads "Approved." rather than snapping straight to
+ * `elsewhere` the instant the Job leaves `awaiting_approval` because the
+ * press worked. Absent any press, the Board's own status decides: a Job no
+ * longer there, or one this card never moved, reads `elsewhere`; a Job this
+ * dock has never heard of reads `unknown`, in words rather than a broken
+ * card.
+ */
+function stateOf(id: string, job: JobSummary | undefined, pressed: Record<string, Pressed>): HelmApprovalCardState {
+  const local = pressed[id];
+  if (local !== undefined) return local;
+  if (job === undefined) return "unknown";
+  return job.status === "awaiting_approval" ? "ready" : "elsewhere";
 }

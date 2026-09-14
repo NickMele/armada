@@ -12,6 +12,20 @@ import type { HelmThreadRow } from "@armada/components";
 import { clock } from "./duration";
 import { money } from "./facts";
 
+/** `ask_person_to_approve`'s name on the wire — the inventory's key and the door's tool, alike. `#1041`. */
+export const APPROVAL_ASK_TOOL = "ask_person_to_approve";
+
+/**
+ * One `ask_person_to_approve` call, read off its own `called` row: the call's
+ * id, for React's key, and the Job it named. Nothing else — resolving this
+ * into a drawable card, off `BridgeState.jobs`, is the caller's, never this
+ * fold's. `#1041`.
+ */
+export type HelmApprovalAsk = { id: string; jobId: string };
+
+/** `helmRowsOf`'s own row shape: `HelmThreadRow` with `cards` — which only a caller holding `BridgeState.jobs` can resolve — replaced by the bare asks it would resolve into. */
+export type HelmFoldedRow = Omit<HelmThreadRow, "cards"> & { asks?: HelmApprovalAsk[] };
+
 /**
  * Every item, folded to rows — or nothing, for what a chat has no use for.
  *
@@ -21,13 +35,15 @@ import { money } from "./facts";
  * person reading needs — Helm's own reply text says what it could or could
  * not do. So `said` text accumulates onto one open reply, `ended` closes it
  * with the cost as a quiet trailing line rather than a bubble of its own, and
- * every event between — `called`, `refused`, `started`, `answered`,
- * `background_work`, `unrecognised` and anything else the wire ever adds —
- * draws nothing and does not break the reply open.
+ * every event between — `refused`, `started`, `answered`, `background_work`,
+ * `unrecognised` and anything else the wire ever adds — draws nothing and
+ * does not break the reply open. `called` is the one exception: where the
+ * tool is `ask_person_to_approve`, its Job joins the open reply's `asks`
+ * rather than being dropped with the rest.
  */
-export function helmRowsOf(items: readonly HelmThreadItem[]): HelmThreadRow[] {
-  const rows: HelmThreadRow[] = [];
-  let open: { id: string; at: string; texts: string[] } | null = null;
+export function helmRowsOf(items: readonly HelmThreadItem[]): HelmFoldedRow[] {
+  const rows: HelmFoldedRow[] = [];
+  let open: { id: string; at: string; texts: string[]; asks: HelmApprovalAsk[] } | null = null;
 
   const flush = (meta?: string) => {
     if (open === null) return;
@@ -36,6 +52,7 @@ export function helmRowsOf(items: readonly HelmThreadItem[]): HelmThreadRow[] {
       at: open.at,
       actor: "helm",
       message: open.texts.join("\n\n"),
+      ...(open.asks.length === 0 ? {} : { asks: open.asks }),
       ...(meta === undefined ? {} : { meta }),
     });
     open = null;
@@ -65,16 +82,24 @@ export function helmRowsOf(items: readonly HelmThreadItem[]): HelmThreadRow[] {
     // item.kind === "row"
     const saw = item.turn.saw;
     if (saw.event === "said") {
-      open ??= { id: item.id, at: clock(item.turn.ts), texts: [] };
+      open ??= { id: item.id, at: clock(item.turn.ts), texts: [], asks: [] };
       open.texts.push(saw.text);
+      continue;
+    }
+    if (saw.event === "called" && saw.tool === APPROVAL_ASK_TOOL) {
+      const jobId = saw.detail.trim();
+      if (jobId !== "") {
+        open ??= { id: item.id, at: clock(item.turn.ts), texts: [], asks: [] };
+        open.asks.push({ id: saw.call, jobId });
+      }
       continue;
     }
     if (saw.event === "ended") {
       flush(costOf(saw.turns, saw.cost_micros));
       continue;
     }
-    // A tool call, a refusal, or a session event nobody watching a chat
-    // needs — leave the open reply as it is and read on.
+    // A tool call this fold has no use for, a refusal, or a session event
+    // nobody watching a chat needs — leave the open reply as it is and read on.
   }
   flush();
   return rows;

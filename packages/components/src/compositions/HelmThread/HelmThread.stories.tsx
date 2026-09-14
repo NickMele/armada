@@ -55,3 +55,88 @@ export const FleetUnreachable: Story = {
     await expect(canvas.getByRole("alert")).toHaveTextContent("Fleet is not connected");
   },
 };
+
+/** `#1041`. Asked to approve Job 9, and the card is waiting on a press. */
+export const ApprovalReady: Story = {
+  args: {
+    rows: [
+      { id: "1", at: "14:29:40", actor: "you", message: "Approve job 9" },
+      {
+        id: "2",
+        at: "14:29:52",
+        actor: "helm",
+        message: "Here it is.",
+        cards: [
+          { id: "c1", jobHandle: "9-fix-801-unanswered-permission-ask", workflow: "bug", stepCount: 4, state: "ready" },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: "Not now" })).toBeInTheDocument();
+  },
+};
+
+/** The press landed: the card says so and offers nothing further. */
+export const ApprovalApproved: Story = {
+  args: {
+    rows: [
+      { id: "1", at: "14:29:40", actor: "you", message: "Approve job 9" },
+      {
+        id: "2",
+        at: "14:29:52",
+        actor: "helm",
+        message: "Here it is.",
+        cards: [
+          { id: "c1", jobHandle: "9-fix-801-unanswered-permission-ask", workflow: "bug", stepCount: 4, state: "approved" },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Approved.")).toBeInTheDocument();
+  },
+};
+
+/** Not now, pressed. Nothing about the Job moved. */
+export const ApprovalDismissed: Story = {
+  args: {
+    rows: [
+      { id: "1", at: "14:29:40", actor: "you", message: "Approve job 9" },
+      {
+        id: "2",
+        at: "14:29:52",
+        actor: "helm",
+        message: "Here it is.",
+        cards: [
+          { id: "c1", jobHandle: "9-fix-801-unanswered-permission-ask", workflow: "bug", stepCount: 4, state: "dismissed" },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Dismissed.")).toBeInTheDocument();
+  },
+};
+
+/** The Job left the gate by another road — Bridge, or a second card — while this one sat unread. */
+export const ApprovalAlreadyMoved: Story = {
+  args: {
+    rows: [
+      { id: "1", at: "14:29:40", actor: "you", message: "Approve job 9" },
+      {
+        id: "2",
+        at: "14:29:52",
+        actor: "helm",
+        message: "Here it is.",
+        cards: [
+          { id: "c1", jobHandle: "9-fix-801-unanswered-permission-ask", workflow: "bug", stepCount: 4, state: "elsewhere" },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("No longer awaiting approval.")).toBeInTheDocument();
+  },
+};

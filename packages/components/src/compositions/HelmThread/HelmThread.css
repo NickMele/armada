@@ -92,6 +92,39 @@
   white-space: pre-wrap;
 }
 
+/* `#1041`. One `ask_person_to_approve` call, drawn within the reply that made
+   it — its own well, one step sunker than the message bubble it sits beside. */
+.armada-helm-approval-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-default);
+  background: var(--bg-raised);
+}
+
+.armada-helm-approval-card__job {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+.armada-helm-approval-card__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.armada-helm-approval-card__state {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
 .armada-helm-thread__meta {
   margin: 0;
   font-size: var(--text-2xs);

@@ -249,6 +249,9 @@ fn detail(input: &ToolInput) -> CallDetail {
             false => "the whole repository",
         });
     }
+    if let Some(job_id) = &input.job_id {
+        return CallDetail::of(job_id);
+    }
     match [&input.query, &input.url, &input.description, &input.claimed]
         .into_iter()
         .flatten()
@@ -522,6 +525,12 @@ struct ToolInput {
     /// `draft_fix`: the test the Drone said is broken on main. With `check`,
     /// the row is the Drone's own record of what it claimed.
     test: Option<String>,
+    /// Every door operation scoped to one Job — `examine_job`,
+    /// `raise_cost_cap`, `ask_person_to_approve` among them — sends this, the
+    /// segment `:job_id` names in its own path. `#1041` is the first of these
+    /// a viewer folds by it; the argument was already on the wire for the
+    /// rest, unread until now.
+    job_id: Option<String>,
 }
 
 #[derive(Deserialize)]

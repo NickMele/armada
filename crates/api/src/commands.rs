@@ -16,13 +16,13 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::Extension;
 use ipc::{
-    AddTask, AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, DropTask, FileReport,
-    JobRequest, JudgeAnswered, Overruled, ProposeJob, Redirection, RemarksTakenUp,
+    AddTask, AnswerCommand, AskedApproval, CapRaise, ChangesRequested, ChosenAnswer, DropTask,
+    FileReport, JobRequest, JudgeAnswered, Overruled, ProposeJob, Redirection, RemarksTakenUp,
     RestartRequested, SetWhenBlocked, SetWhenRefused, StopProposal, TurnRaise,
 };
 
 use crate::answers::{answer, refused, undecodable};
-use crate::daemon::{Commands, Redirector};
+use crate::daemon::{Commands, Queries, Redirector};
 use crate::door::HelmCalled;
 use crate::reference::Resolved;
 use crate::scoped::InManifest;
@@ -461,6 +461,29 @@ pub(crate) async fn examine_job<D: Commands>(
         Ok(examined) => answer(StatusCode::OK, &examined, served.run_id()),
         Err(refusal) => refused(refusal),
     }
+}
+
+/// `#1041`. A Helm session names one Job it was asked to approve, or has
+/// drafted and sees waiting at the gate, so its reply can carry an approval
+/// card for it.
+///
+/// **Writes nothing.** `Resolved` has already turned a Job id that names
+/// nothing into the 404 every job-scoped route answers with; past that, this
+/// hands the id and handle straight back. No log line, no event, no record —
+/// `approve_dispatch` is still the only thing that moves the Job, and it is
+/// still not Helm's to call.
+pub(crate) async fn ask_person_to_approve<D: Queries>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+) -> Response {
+    answer(
+        StatusCode::OK,
+        &AskedApproval {
+            job_id: job.id(),
+            handle: job.handle().to_string(),
+        },
+        served.run_id(),
+    )
 }
 
 /// Delete the Job's whole record. **Real deletion, not a status** — the row

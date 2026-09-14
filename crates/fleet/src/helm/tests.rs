@@ -57,8 +57,15 @@ and no others:
   stop_run
   start_server
   stop_server
+  ask_person_to_approve
   propose_job
   propose_from_request
+
+Approving a Job is never yours, whatever you are asked. Call \
+ask_person_to_approve instead, naming the Job, when you are asked to approve \
+one or a Job you drafted has reached the approval gate. It puts a card in \
+front of the person and decides nothing itself; only their own press on it \
+sends the Job on.
 
 Any other act is the person's, including a tool you have been given that is \
 not listed here. Where one would help, say which and why, and leave it to \
@@ -177,6 +184,36 @@ fn drafting_is_an_acting_helms_and_never_a_read_only_ones() {
         assert!(may(Authority::Acting, row), "`{}`", row.operation);
         assert!(!may(Authority::ReadOnly, row), "`{}`", row.operation);
     }
+}
+
+/// `#1041`. Helm's approval-card ask is one of its acts, and it moves nothing:
+/// there is no daemon method behind it to call, only `Resolved`'s own read of
+/// the Job named — the door route answers off the id and handle alone.
+#[test]
+fn a_helm_session_may_ask_for_approval() {
+    let row = DRAFTING
+        .iter()
+        .find(|row| row.operation == "ask_person_to_approve")
+        .expect("`ask_person_to_approve` reads `Drafts only` in the inventory");
+    assert_eq!(row.kind, "command");
+    assert!(may(Authority::Acting, row));
+    assert!(!may(Authority::ReadOnly, row));
+}
+
+/// `REACHABLE` is what the door offers any agent on the machine; `DRAFTING` is
+/// Helm's alone (`#941`). The approval ask names a person's own approval, so it
+/// must never reach the first list.
+#[test]
+fn no_other_agent_is_offered_the_approval_ask() {
+    assert!(
+        !REACHABLE
+            .iter()
+            .any(|row| row.operation == "ask_person_to_approve"),
+        "`ask_person_to_approve` must read `Drafts only`, never `Yes`"
+    );
+    assert!(DRAFTING
+        .iter()
+        .any(|row| row.operation == "ask_person_to_approve"));
 }
 
 #[test]

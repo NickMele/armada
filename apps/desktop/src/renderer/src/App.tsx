@@ -491,10 +491,13 @@ export function App() {
           <HelmDock
             helm={state.helm}
             repositories={repositories}
+            jobs={state.jobs}
+            workflows={state.holds.workflows}
             live={live}
             onAsk={(text) => void askHelm(text)}
             onStartFresh={() => void startHelmFresh()}
             onSwitch={(manifestId) => pointHelm(manifestId)}
+            onApprove={(jobId) => void commands.approve(jobId)}
           />
         }
         capacity={state.capacity}

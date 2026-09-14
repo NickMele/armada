@@ -20,9 +20,11 @@ pub enum Authority {
 
 /// The acts `#73` decided are Helm's, keyed as the inventory keys them.
 ///
-/// `propose_job` and `propose_from_request` read `Drafts only`, which the door
-/// offers a Helm session and no other agent (`#941`).
+/// `propose_job`, `propose_from_request` and `ask_person_to_approve` read
+/// `Drafts only`, which the door offers a Helm session and no other agent
+/// (`#941`).
 pub(super) const ACTS: &[&str] = &[
+    "ask_person_to_approve",
     "examine_job",
     "propose_job",
     "propose_from_request",
