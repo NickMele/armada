@@ -33,9 +33,8 @@ const WHAT_IT_FLAGGED = "What it flagged";
  * person is recording that a verifier was wrong and that they took
  * responsibility for going past it, and `#154` will read those reasons to learn
  * whether the Judge or the criterion was at fault — so the send control stays
- * off while the field is blank. A gaming flag is the one exception Fleet takes:
- * the held card's Carry on may send no reason, because the flag and its second
- * reading are already on the record. #1079.
+ * off while the field is blank. A gaming flag's Carry on is the one exception:
+ * Fleet takes no reason there, as the flag and its second reading are on record.
  *
  * **Neutral tone, not destructive.** Nothing is destroyed: the work the gate
  * refused is exactly what survives. What the dialog owes instead is the cost —
