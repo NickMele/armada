@@ -217,6 +217,8 @@ pub enum Adrift {
     NoIssueTitle { job: JobId },
     /// The forge would not file the issue, in its own words. #906.
     IssueNotFiled { job: JobId, said: String },
+    /// Queue after this lands was pressed on a finding that already has a queued Job. #906.
+    FindingAlreadyQueued { job: JobId, finding: String },
     /// A conflict resolution was asked for on a workflow whose delivering step
     /// has nothing before it — a single step that both writes the work and
     /// sends it out, which this cannot redo without redelivering onto its own

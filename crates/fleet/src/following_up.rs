@@ -39,6 +39,19 @@ where
             .for_context(&job_id, &queued.finding)
             .await
             .map_err(|why| self.refusal(why))?;
+        // Claimed in one write, never checked then proposed: two presses must not both pass.
+        let claimed = self
+            .store()
+            .lock()
+            .await
+            .claim_followup(&job_id, &finding, &self.now())
+            .map_err(|why| self.refusal(Adrift::Writing(why)))?;
+        if !claimed {
+            return Err(self.refusal(Adrift::FindingAlreadyQueued {
+                job: job_id,
+                finding,
+            }));
+        }
         let proposal = ipc::ProposeJob {
             title: finding.replace('`', ""),
             workflow_id: ipc::WorkflowId::from(job.workflow_id()),
@@ -58,10 +71,18 @@ where
             facts: queued_facts(&job, &finding, &why),
             attachments: Vec::new(),
         };
-        let created = self
-            .propose(proposal)
-            .await
-            .map_err(|why| self.refusal(why))?;
+        let created = match self.propose(proposal).await {
+            Ok(created) => created,
+            Err(why) => {
+                // Nothing was proposed, so the finding can be queued again.
+                let _released = self
+                    .store()
+                    .lock()
+                    .await
+                    .release_followup(&job_id, &finding);
+                return Err(self.refusal(why));
+            }
+        };
         self.followed(
             &job_id,
             &finding,

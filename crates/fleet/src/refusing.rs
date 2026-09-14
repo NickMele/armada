@@ -163,6 +163,8 @@ const FINDING_NOT_FOR_CONTEXT: &str = "fleet.finding_not_for_context";
 const NO_ISSUE_TITLE: &str = "fleet.no_issue_title";
 /// The forge would not file the issue. A 409, carrying what it said. #906.
 const ISSUE_NOT_FILED: &str = "fleet.issue_not_filed";
+/// Queue after this lands pressed on a finding that already has a queued Job. A 409. #906.
+const FINDING_ALREADY_QUEUED: &str = "fleet.finding_already_queued";
 /// A conflict resolution asked for on a workflow with no step before the one
 /// that delivers. `#663`.
 const NO_STEP_TO_REDO: &str = "fleet.no_step_to_redo";
@@ -556,6 +558,11 @@ where
             Adrift::NoIssueTitle { job } => Refusal::Unacceptable(
                 WireError::raised(NO_ISSUE_TITLE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::FindingAlreadyQueued { job, finding } => Refusal::IllegalMove(
+                WireError::raised(FINDING_ALREADY_QUEUED, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("finding", WireValue::Str(finding.clone())),
             ),
             Adrift::IssueNotFiled { job, said: forge } => Refusal::IllegalMove(
                 WireError::raised(ISSUE_NOT_FILED, said, self.run_id())
