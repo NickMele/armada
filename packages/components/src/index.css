@@ -38,6 +38,7 @@
 @import "./compositions/StepBar/StepBar.css";
 @import "./compositions/WorkflowRail/WorkflowRail.css";
 @import "./compositions/JobRowStacked/JobRowStacked.css";
+@import "./compositions/JobRowStacked/JobRowStacked.narrow.css";
 @import "./compositions/ActiveJobsList/ActiveJobsList.css";
 @import "./compositions/Sidebar/Sidebar.css";
 @import "./compositions/StatusBar/StatusBar.css";

@@ -480,6 +480,13 @@ async function workflowReveals(frame: DOMRect, row: HTMLElement) {
   await expect(value.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
 }
 
+/** At rest the name is in the accessibility tree but not painted — icon alone, never a clipped fragment (#984). */
+async function workflowHiddenAtRest(row: HTMLElement) {
+  const value = row.querySelector<HTMLElement>(".armada-job-row__field-value")!;
+  await expect(value).toHaveTextContent("Bug, 6 steps");
+  await expect(value.getBoundingClientRect().width).toBeLessThanOrEqual(1);
+}
+
 /** The table at the narrowest window, 768px less the rail: the facts give way, and the title, handle and action do not. */
 export const TableAtTheWidthFloor: StoryObj = {
   render: () => <TableAt width="calc(var(--window-floor) - var(--sidebar-rail))" />,
@@ -487,6 +494,7 @@ export const TableAtTheWidthFloor: StoryObj = {
     await everyRowReads(canvasElement);
     const frame = canvasElement.querySelector(".armada-active-jobs__frame")!.getBoundingClientRect();
     const rows = canvasElement.querySelectorAll<HTMLElement>('[role="option"]');
+    await workflowHiddenAtRest(rows[2]!);
     await userEvent.hover(rows[0]!);
     await workflowReveals(frame, rows[0]!);
     await userEvent.unhover(rows[0]!);

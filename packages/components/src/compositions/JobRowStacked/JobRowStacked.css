@@ -520,16 +520,20 @@
      floor a column never fills reads as a value that failed to load. So the
      count of fact columns picks the list rather than one list carrying a track
      for a fact the caller may not have: three today on the Board, where origin
-     has words but no carriage to Bridge, and four wherever it does. */
+     has words but no carriage to Bridge, and four wherever it does.
+
+     Badge is `max-content` alone, not `minmax(floor, max-content)`: the
+     floor put it in the same growth pass as every `auto` fact, and measured
+     at 1100px it lost that race and painted over the title (#984). */
   --armada-job-table-tracks-3:
-    minmax(var(--armada-track-badge), max-content)
+    max-content
     minmax(30%, 1fr)
     minmax(var(--space-3), auto)
     minmax(var(--armada-track-bar), auto)
     minmax(min-content, auto)
     max-content;
   --armada-job-table-tracks-4:
-    minmax(var(--armada-track-badge), max-content)
+    max-content
     minmax(30%, 1fr)
     minmax(var(--space-3), auto)
     minmax(var(--armada-track-bar), auto)
@@ -637,43 +641,5 @@
   white-space: nowrap;
 }
 
-/* ---- the longest badge in the registry -----------------------------------
-   `data-badge-wide` names a verb too long to fit beside a headline — no CSS
-   condition reads a badge's own overflow (#984).
-
-   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
-   720px is the window floor less the rail, with no token of its own — docs/contracts/design-system.md */
-@container (max-width: 720px) {
-  .armada-job-row[data-badge-wide] {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    row-gap: var(--space-2);
-  }
-
-  .armada-job-row[data-badge-wide] > .armada-job-row__badge {
-    flex: 1 0 100%;
-  }
-
-  .armada-job-row[data-badge-wide] > .armada-job-row__body {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .armada-job-row[data-badge-wide] .armada-job-row__headline {
-    flex-wrap: wrap;
-  }
-
-  .armada-job-row[data-badge-wide] .armada-job-row__fields {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-  }
-
-  .armada-job-row[data-badge-wide] > .armada-job-row__action {
-    flex: none;
-  }
-}
+/* The longest badge in the registry, past the point `--armada-track-badge`'s
+   own growth can rescue: `JobRowStacked.narrow.css` (#984). */
