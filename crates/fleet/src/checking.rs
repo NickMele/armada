@@ -376,7 +376,6 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 ///
 /// `plan` is the Job's plan counts off the store, handed in for `ports`' reason;
 /// `None` is a Job no plan was recorded for.
-///
 /// `room` is asked before every Check after the first starts — [`Room`].
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn ran(
