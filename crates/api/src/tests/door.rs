@@ -373,8 +373,7 @@ async fn a_proposal_from_helm_is_recorded_as_helm() {
     let propose = calling(
         "propose_job",
         r#"{"body":{"title":"read the failing test first","workflow_id":"bug",
-            "owner_manifest_id":"01MANIFEST","origin":"auto_detected",
-            "urgency":"normal","atomic":false}}"#,
+            "origin":"auto_detected","urgency":"normal","atomic":false}}"#,
     );
     from(&app, HELM, &propose).await;
     assert_eq!(
