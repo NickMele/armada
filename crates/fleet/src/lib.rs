@@ -187,6 +187,7 @@ mod rerunning;
 /// and the disk its worktree has taken. **Read on demand, never on the turn.**
 pub mod resources;
 pub mod resume;
+mod reuse;
 mod review;
 mod review_term;
 pub mod reviewing;
@@ -285,6 +286,7 @@ pub use redispatch::Replacement;
 pub use rehearsing::verify_steps;
 pub use reporting::{Counted, Filed, NotFiled};
 pub use resume::Roused;
+pub use reuse::KeptDryRun;
 pub use runtime::{
     listener_address, machine_path, Presence, PublishError, Published, ReadError, RuntimeFile,
     Staleness, Vacancy, FILE_NAME,

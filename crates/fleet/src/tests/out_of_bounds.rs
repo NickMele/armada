@@ -75,6 +75,7 @@ async fn a_step_that_declares_no_scope_still_cannot_write_a_secret() {
         core_model::WhenRefused::default(),
         &[],
         None,
+        None,
     )
     .await;
 
@@ -167,6 +168,7 @@ async fn a_step_that_declares_no_scope_gains_a_floor_and_not_a_drift_check() {
         core_model::WhenRefused::default(),
         &[],
         None,
+        None,
     )
     .await;
 
@@ -211,6 +213,7 @@ async fn the_deliverable_a_workflow_asks_for_is_not_a_boundary() {
         core_model::WhenRefused::default(),
         &[],
         None,
+        None,
     )
     .await;
 
@@ -249,6 +252,7 @@ async fn a_step_with_no_scope_whose_worktree_will_not_open_decides_nothing() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
         None,
     )
     .await;

@@ -49,6 +49,7 @@ pub(super) fn checks() -> Vec<StepCheck> {
         expected: None,
         produced: None,
         output_path: None,
+        reused_from_dry_run: None,
     }]
 }
 

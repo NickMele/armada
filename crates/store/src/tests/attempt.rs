@@ -91,6 +91,7 @@ pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when
                 expected: Some("exit 0".to_string()),
                 produced: Some(saying.to_string()),
                 output_path: Some(format!(".armada/checks/{id}/fix.0.log")),
+                reused_from_dry_run: None,
             }],
             &at(when),
         )

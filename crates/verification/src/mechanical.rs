@@ -163,6 +163,12 @@ pub enum Observed {
     /// the recorded row carries: the patterns, so a reader's first question is
     /// already answered.
     Skipped { covers: String },
+    /// The gate is answering this Check from a Drone's own dry run rather than
+    /// running it again. **The row, whole, and not re-derived** — `crate::gate`
+    /// decided this Check qualifies before this variant is ever built, and a
+    /// second derivation here would be a second place that answer could drift
+    /// from the first. `#1014`.
+    Reused(StepCheck),
 }
 
 impl Observed {
@@ -173,6 +179,7 @@ impl Observed {
             Observed::Artifact(_) => "a look for a file",
             Observed::Plan { .. } => "a reading of the plan",
             Observed::Skipped { .. } => "a skipped check",
+            Observed::Reused(_) => "a Drone's own dry run",
         }
     }
 }
@@ -399,6 +406,7 @@ impl CheckFailed {
                 expected: Some(self.expected()),
                 produced: Some(self.produced()),
                 output_path: None,
+                reused_from_dry_run: None,
             }),
             CheckFailed::OutOfScope(_) => Some(StepCheck {
                 name: EVIDENCE_SCOPE.to_string(),
@@ -406,6 +414,7 @@ impl CheckFailed {
                 expected: Some(self.expected()),
                 produced: Some(self.produced()),
                 output_path: None,
+                reused_from_dry_run: None,
             }),
             _ => None,
         }
@@ -490,6 +499,9 @@ enum Answer {
         covers: String,
     },
     Failed(CheckFailed),
+    /// Answered from a Drone's own dry run rather than run again. The row,
+    /// already whole — see [`Observed::Reused`].
+    Reused(StepCheck),
 }
 
 /// Why a set of observations is not a run of the step's checks.
@@ -584,7 +596,7 @@ impl Ran {
     pub fn all_passed(&self) -> bool {
         self.each
             .iter()
-            .all(|(_, answer)| matches!(answer, Answer::Passed))
+            .all(|(_, answer)| matches!(answer, Answer::Passed | Answer::Reused(_)))
     }
 
     /// Whether the step may advance on what its checks did. **No check
@@ -616,32 +628,45 @@ impl Ran {
     pub fn recorded(&self) -> Vec<StepCheck> {
         self.each
             .iter()
-            .map(|(name, answer)| StepCheck {
-                name: name.clone(),
-                outcome: match answer {
-                    Answer::Passed => CheckOutcome::Passed,
-                    Answer::Skipped { .. } => CheckOutcome::Skipped,
-                    Answer::Failed(failed) => failed.outcome(),
-                },
-                expected: match answer {
-                    Answer::Failed(failed) => Some(failed.expected()),
-                    _ => None,
-                },
-                // A skip carries the patterns and no `expected`, because
-                // nothing was measured against anything. It is the one outcome
-                // whose first question is "why not", and the sentence is the
-                // answer.
-                produced: match answer {
-                    Answer::Failed(failed) => Some(failed.produced()),
-                    Answer::Skipped { covers } => {
-                        Some(format!("no changed file is under {covers}"))
-                    }
-                    Answer::Passed => None,
-                },
-                // Absent here on purpose. This crate never touches a disk, so
-                // where a Check's output was written is filled in by whoever
-                // wrote it — see `fleet::check_output`.
-                output_path: None,
+            .map(|(name, answer)| {
+                // **Whole, and first.** A reused row already went through this
+                // same construction once, at the dry run that produced it —
+                // rebuilding it from `answer` here would be a second place
+                // that construction could disagree with the first, over the
+                // exact fields `crate::gate` is trusting unread.
+                if let Answer::Reused(row) = answer {
+                    return row.clone();
+                }
+                StepCheck {
+                    name: name.clone(),
+                    outcome: match answer {
+                        Answer::Passed => CheckOutcome::Passed,
+                        Answer::Skipped { .. } => CheckOutcome::Skipped,
+                        Answer::Failed(failed) => failed.outcome(),
+                        Answer::Reused(_) => unreachable!("returned above"),
+                    },
+                    expected: match answer {
+                        Answer::Failed(failed) => Some(failed.expected()),
+                        _ => None,
+                    },
+                    // A skip carries the patterns and no `expected`, because
+                    // nothing was measured against anything. It is the one
+                    // outcome whose first question is "why not", and the
+                    // sentence is the answer.
+                    produced: match answer {
+                        Answer::Failed(failed) => Some(failed.produced()),
+                        Answer::Skipped { covers } => {
+                            Some(format!("no changed file is under {covers}"))
+                        }
+                        Answer::Passed => None,
+                        Answer::Reused(_) => unreachable!("returned above"),
+                    },
+                    // Absent here on purpose. This crate never touches a disk,
+                    // so where a Check's output was written is filled in by
+                    // whoever wrote it — see `fleet::check_output`.
+                    output_path: None,
+                    reused_from_dry_run: None,
+                }
             })
             .collect()
     }
@@ -660,6 +685,11 @@ fn verdict(
         (_, Observed::Skipped { covers }) => Ok(Answer::Skipped {
             covers: covers.clone(),
         }),
+        // Second, and matching every check kind for the same reason a skip
+        // does: which kind of check this is was already settled when the row
+        // was first produced, and re-matching on it here would be asking a
+        // question the reuse decision already answered.
+        (_, Observed::Reused(row)) => Ok(Answer::Reused(row.clone())),
         (
             ResolvedCheck::ManifestCheck {
                 name,

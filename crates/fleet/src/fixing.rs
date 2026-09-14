@@ -332,6 +332,11 @@ where
             &env,
             None,
             stop,
+            // No Drone and no dry run: proving a fix against main is not
+            // anything a Drone asked about first.
+            None,
+            core_model::Attempt::FIRST,
+            None,
         )
         .await;
         let exit = completed

@@ -41,6 +41,7 @@ fn skipped(name: &str, covers: &str) -> StepCheck {
         expected: None,
         produced: Some(format!("no changed file is under {covers}")),
         output_path: None,
+        reused_from_dry_run: None,
     }
 }
 
@@ -51,6 +52,7 @@ fn passed(name: &str) -> StepCheck {
         expected: None,
         produced: None,
         output_path: None,
+        reused_from_dry_run: None,
     }
 }
 

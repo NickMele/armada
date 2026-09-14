@@ -228,9 +228,13 @@ export function checkRow(
 export function saidOf(run: CheckRun | undefined): string {
   if (run === undefined) return NOTHING_HAS_RUN_IT;
   const verb = CHECK_OUTCOME[run.outcome]?.verb ?? run.outcome;
-  return run.expected === undefined
-    ? asSentence(verb)
-    : `${asSentence(verb)}, expected ${run.expected}`;
+  const said =
+    run.expected === undefined ? asSentence(verb) : `${asSentence(verb)}, expected ${run.expected}`;
+  // **The gate ran nothing for this row.** `run.reused_from_dry_run` is only
+  // ever present on a pass — `#1014` — so a person reading a green row can
+  // tell one the gate measured itself from one it trusted off the Drone's own
+  // ask.
+  return run.reused_from_dry_run === undefined ? said : `${said} — ${REUSED_FROM_THE_DRONE}`;
 }
 
 /**
@@ -354,6 +358,9 @@ const JUDGE_ROW = "judge";
 
 /** What a declared Check with no run on this attempt says. */
 const NOTHING_HAS_RUN_IT = "Not run yet";
+
+/** What a Check the gate trusted off the Drone's own dry run says. */
+const REUSED_FROM_THE_DRONE = "reused from the drone's run";
 
 /** What the Judge's row says before a call has gone out. */
 const NOT_ASKED_YET = "Waiting on the Checks";

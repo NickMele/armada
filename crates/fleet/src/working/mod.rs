@@ -275,6 +275,16 @@ pub(crate) struct Working {
     in_flight: Option<(u64, crate::checking::Going)>,
     /// How many fixes this step has asked for, capped like `dry_runs`. #999.
     fixes: u32,
+    /// What the step's latest dry run found, for the gate to reuse instead of
+    /// asking again. `None` where the Drone has not called `run_checks` this
+    /// step, or where a fresh dry run has not yet landed to replace one that
+    /// no longer applies.
+    ///
+    /// **In memory only, like `entered_with`, and for the same reason.** A
+    /// `Footprint` is comparable only within the process that read it, so a
+    /// column here would outlive the one thing that could ever tell it apart
+    /// from a stale reading — `#1014`.
+    dry_run_kept: Option<crate::reuse::KeptDryRun>,
 }
 
 /// A Drone that has been ended, and everything the slot that held it was
@@ -374,6 +384,7 @@ impl Working {
             dry_runs: 0,
             in_flight: None,
             fixes: 0,
+            dry_run_kept: None,
         }
     }
 
@@ -441,6 +452,7 @@ impl Working {
             dry_runs: 0,
             in_flight: None,
             fixes: 0,
+            dry_run_kept: None,
         }
     }
 

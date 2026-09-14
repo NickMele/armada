@@ -93,7 +93,7 @@ where
     /// `job.checking` a surface could not answer. It is taken again to write
     /// the run into the Drone's transcript, and a third time for `act_on`.
     pub(crate) async fn settle(&self, slot: &Slot) -> Result<Settled, Adrift> {
-        let (job_id, step, worktree, declared, entered_with, landed) = {
+        let (job_id, step, worktree, declared, entered_with, dry_run, landed) = {
             let working = slot.lock().await;
             // A slot the turn walked to and found empty. The Drone has gone and
             // whatever it left is `stranded_submissions`'s to answer, outside
@@ -122,6 +122,7 @@ where
                 worktree,
                 at_work.declared().cloned(),
                 at_work.entered_with().cloned(),
+                at_work.dry_run_kept().cloned(),
                 landed,
             )
         };
@@ -281,6 +282,7 @@ where
             refusal_policy,
             &tolerated,
             plan.as_ref(),
+            dry_run.as_ref(),
         )
         .await;
         // **Before anything is recorded, and only for a delivering step.**

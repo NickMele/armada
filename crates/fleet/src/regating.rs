@@ -99,6 +99,7 @@ where
         }
         let declared = at_work.declared().cloned();
         let entered_with = at_work.entered_with().cloned();
+        let dry_run = at_work.dry_run_kept().cloned();
 
         let submission = self.submitted_already(&job, &step).await?;
         let Some(at) = AtStep::named(job.workflow(), &step, &worktree) else {
@@ -189,6 +190,7 @@ where
             refusal_policy,
             &tolerated,
             plan.as_ref(),
+            dry_run.as_ref(),
         )
         .await;
 

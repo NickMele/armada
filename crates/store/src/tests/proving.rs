@@ -26,6 +26,7 @@ fn passed(name: &str) -> StepCheck {
         expected: None,
         produced: None,
         output_path: None,
+        reused_from_dry_run: None,
     }
 }
 
@@ -36,6 +37,7 @@ fn failed(name: &str) -> StepCheck {
         expected: Some(String::from("exit 0")),
         produced: Some(String::from("exited 101")),
         output_path: Some(format!(".armada/checks/commits/{MERGED_INTO}/1.log")),
+        reused_from_dry_run: None,
     }
 }
 

@@ -129,6 +129,7 @@ fn once_failed(name: &str, produced: &str) -> StepCheck {
         expected: None,
         produced: Some(produced.to_string()),
         output_path: None,
+        reused_from_dry_run: None,
     }
 }
 

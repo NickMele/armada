@@ -70,6 +70,9 @@ async fn heard_over(checks: &[ResolvedCheck], repo: &TempDir) -> (Vec<ipc::JobCh
         &[],
         None,
         &crate::checking::Stop::never(),
+        None,
+        Attempt::FIRST,
+        None,
     )
     .await;
     drop(announcing);
@@ -221,6 +224,9 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
             &[],
             None,
             &crate::checking::Stop::never(),
+            None,
+            Attempt::FIRST,
+            None,
         )
         .await
     };
@@ -237,6 +243,9 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
         &[],
         None,
         &crate::checking::Stop::never(),
+        None,
+        Attempt::FIRST,
+        None,
     )
     .await;
 
