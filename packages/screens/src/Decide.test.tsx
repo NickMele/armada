@@ -23,7 +23,7 @@
 // be the gate in the wrong place, which is the thing the issue that asked for
 // this one warned against.
 
-import { afterEach, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
 import type { Evidence, JobSummary, Remarks } from "@armada/protocol";
@@ -255,6 +255,63 @@ test("reject still asks, and merging is not what it asks about", async () => {
 
   await userEvent.click(page.getByRole("dialog").getByRole("button", { name: "Reject the work" }));
   expect(sent.rejected).toEqual([JOB.id]);
+});
+
+/**
+ * `take_up_remarks` is its own `DecidingAct`, #1117 — so the comments block
+ * marks its own button pending instead of reading `IN_FLIGHT` and greying
+ * every control at the gate for whichever act is out. A different act at
+ * the gate still turns the block off, with no mark: nothing here was
+ * pressed.
+ */
+describe("the comments block's own wait", () => {
+  const address = "https://forge.example/armada/pull/533";
+  const read: Remarks = {
+    state: "read",
+    jobId: JOB.id,
+    review: {
+      job_id: JOB.id,
+      pull_request: address,
+      remarks: [
+        { id: "IC_1", by: "alice", at: "2026-08-31T09:05:00Z", said: "rename the flag", taken_up: false },
+      ],
+    },
+  };
+  const screen = (deciding: boolean, decidingAct?: "take_up_remarks" | "approve") => (
+    <Decide
+      onNeedMaterial={() => {}}
+      onNeedRemarks={() => {}}
+      job={JOB}
+      evidence={NO_EVIDENCE}
+      remarks={read}
+      stale={false}
+      deciding={deciding}
+      decidingAct={decidingAct}
+      pullRequest={address}
+      onMerge={() => {}}
+      onApprove={() => {}}
+      onRequestChanges={() => {}}
+      onReject={() => {}}
+      onTakeUpRemarks={() => {}}
+      onOpenRemarkLink={() => {}}
+    />
+  );
+
+  test("sending to a drone waits on its own button once pressed", async () => {
+    mount(screen(false));
+    await userEvent.click(page.getByRole("checkbox", { name: "Act on this" }));
+    await userEvent.click(page.getByRole("button", { name: "Send to a drone" }));
+    rerender(screen(true, "take_up_remarks"));
+    const button = page.getByRole("button", { name: "Sending to a drone…" });
+    await expect.element(button).toHaveAttribute("aria-busy", "true");
+  });
+
+  test("a different act at the gate disables the block with no mark", async () => {
+    mount(screen(true, "approve"));
+    const box = page.getByRole("checkbox", { name: "Act on this" });
+    await expect.element(box).toBeDisabled();
+    await expect.element(page.getByRole("button", { name: "Send to a drone" })).toBeDisabled();
+  });
 });
 
 test("a conversation comment an older Fleet sent with null fields still renders", async () => {

@@ -24,6 +24,13 @@ export type ReviewAtGateProps = {
   onAddNote?: (view: string, note: string) => void;
   /** Dismisses a finding with the reason written in its View. #907. */
   onDismissFinding?: (finding: string, reason: string) => void;
+  /**
+   * A decision on this Job's work is already in flight, from some other
+   * control at the gate. The View closes on its own press before Fleet
+   * answers, so this guards against a second decision going out while one is
+   * already on its way rather than showing this control's own wait. #1117.
+   */
+  deciding?: boolean;
   /** What the verdict rests on, besides the pull request's CI. */
   grounds?: ConfidenceGrounds;
   /** The frames the Job kept and the Drone's claim. */
@@ -50,6 +57,7 @@ export function ReviewAtGate({
   onOpenDiff,
   onAddNote,
   onDismissFinding,
+  deciding = false,
   grounds,
   captured,
   ci,
@@ -101,6 +109,7 @@ export function ReviewAtGate({
                   setViewing(null);
                 },
               })}
+          disabled={deciding}
           onClose={() => setViewing(null)}
         />
       )}

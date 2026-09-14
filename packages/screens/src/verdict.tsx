@@ -617,20 +617,25 @@ export function verdictSlotAtGate({
   // boundary either way, but this step is answered before it is reviewed.
   const question = whole?.judge_question;
   if (question !== undefined && question.step_id === open.step_id) {
+    // **`acting`, not `deciding`.** `onAnswerJudge` sends under `acting` —
+    // `pending.ts`'s `answer_judge` is an `ActingAct`, never a `DecidingAct` —
+    // so gating this on `deciding` left its own buttons live for the whole of
+    // the press they had just sent. #1117.
     return (
       <JudgeQuestion
         question={question.question}
         expected={question.expected}
         produced={question.produced}
         consequence={question.consequence}
-        disabled={stale || deciding}
+        disabled={stale || acting}
         disabledNote={
           stale
             ? "This job is not live, so nothing can be sent."
-            : deciding
+            : acting
               ? "Something sent to this job is still on its way to Fleet."
               : undefined
         }
+        pending={acting && actingAct === "answer_judge"}
         onAnswer={(answer, note) => onAnswerJudge(job.id, question.asked_at, answer, note)}
       />
     );
@@ -722,6 +727,11 @@ export function verdictSlotAtGate({
             onDismissFinding: (finding: string, reason: string) =>
               onDismissFinding(job.id, finding, reason),
           })}
+      // `dismiss_finding` is a `DecidingAct`, and the View it opens closes on
+      // its own press before Fleet answers — so what this guards is a second
+      // decision going out while another one at this gate is already on its
+      // way, not this control's own wait. #1117.
+      deciding={deciding}
       {...(!ciShown(detail?.checks, conflicted)
         ? {}
         : {

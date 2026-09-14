@@ -217,6 +217,8 @@ export function Decide({
   const why = stale ? NOT_LIVE : deciding ? IN_FLIGHT : undefined;
   // The answer pressed, drawn on its own control. Not while stale: nothing live can answer it.
   const waiting = !stale && deciding && isDecision(decidingAct) ? decidingAct : undefined;
+  // Whether the comments block's own press — `take_up_remarks` — is what is out. #1117.
+  const takingUp = !stale && deciding && decidingAct === "take_up_remarks";
 
   // **Read off the same address the merge control's own presence is decided
   // from.** `pullRequest` is undefined exactly where `onMerge` is absent below,
@@ -326,8 +328,16 @@ export function Decide({
           onTakeUp={(ids) => onTakeUpRemarks(job.id, ids)}
           onOpenLink={(remarkId) => onOpenRemarkLink(job.id, remarkId)}
           {...(host === undefined ? {} : { hostLabel: host })}
-          disabled={off}
-          {...(why === undefined ? {} : { disabledNote: why })}
+          // **Pending while this block's own press is out**, never `IN_FLIGHT`:
+          // `take_up_remarks` is this control's own `DecidingAct`, so the block
+          // marks the button that sent it rather than greying every control
+          // with one sentence for whichever of the gate's several acts is out.
+          // A different act at the gate still disables this block — stale's
+          // sentence is the one that survives, since nothing here is this
+          // block's own wait. #1117.
+          {...(takingUp
+            ? { pending: true }
+            : { disabled: off, ...(stale ? { disabledNote: NOT_LIVE } : {}) })}
         />
       )}
 
