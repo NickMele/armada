@@ -446,6 +446,11 @@ where
             }
             return Ok(None);
         }
+        // A Drone that ended its turn on its own dry run is waiting for the
+        // report, which is the turn that wakes it. Each Check's budget bounds it.
+        if at_work.is_checking() {
+            return Ok(None);
+        }
         // **`crate::aftermath`'s three answers, not a fourth.** The reaping
         // road folds the same events through the same function; what differs
         // is only that the process has not exited, which changes nothing about

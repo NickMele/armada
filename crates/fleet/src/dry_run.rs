@@ -67,6 +67,9 @@ pub enum NotRun {
     AlreadySubmitted,
     /// The step has spent its allowance.
     Spent { allowed: u32 },
+    /// Fleet holds no pipe into this Drone, adopted after a restart, so the
+    /// report could never arrive. Refused before anything is spent.
+    Unheard,
     /// A narrowed run of a worktree holding no change, refused before anything is spent.
     NothingChanged,
     /// A reading failed. Refused before anything is spent: every read precedes the mark.
@@ -108,6 +111,11 @@ impl fmt::Display for NotRun {
                 "this part has already asked for the checks {allowed} times, \
                  which is all it gets. Finish the work and submit — the checks \
                  are run again then, and that run is the one that decides"
+            ),
+            NotRun::Unheard => out.write_str(
+                "Fleet restarted while this part was going and can no longer send \
+                 you a later turn, so the checks were not run and nothing has been \
+                 spent. Finish the work and submit — the checks are run again then",
             ),
             NotRun::NothingChanged => out.write_str(
                 "you asked for the checks against what you have changed, and \
@@ -211,6 +219,9 @@ where
 
     /// The slot's refusals, asked when the call arrives and again at the mark.
     fn dry_run_refused(&self, caller: &JobId, at_work: &Working) -> Option<NotRun> {
+        if at_work.session().unheard() {
+            return Some(NotRun::Unheard);
+        }
         if at_work.is_checking() {
             return Some(NotRun::AlreadyRunning);
         }

@@ -152,3 +152,32 @@ async fn a_call_with_nothing_working_is_refused() {
         .expect_err("nothing is working");
     assert!(matches!(refused, NotRun::NothingIsWorking), "{refused:?}");
 }
+
+/// **An adopted Drone is refused up front**, rather than told the Checks
+/// started: its report would be a later turn, and Fleet holds no pipe into it.
+#[tokio::test]
+async fn an_adopted_drone_is_refused_the_checks_rather_than_told_they_started() {
+    let home = TempDir::new();
+    let (fleet, job, pid) =
+        crate::tests::adopting::adopted_on(&home, || one_step("/usr/bin/true")).await;
+    let fleet = Arc::new(fleet);
+
+    let refused = fleet.run_checks(&job, false).await;
+    assert!(matches!(refused, Err(NotRun::Unheard)), "{refused:?}");
+    let said = refused.err().map(|why| why.to_string()).unwrap_or_default();
+    assert!(said.contains("submit"), "told what to do instead: {said}");
+    assert!(
+        !fleet
+            .the_only_slot()
+            .await
+            .lock()
+            .await
+            .as_ref()
+            .is_some_and(|at_work| at_work.is_checking()),
+        "a refused ask put the mark on"
+    );
+    // The orphan this case adopted is its own to end.
+    let _ = std::process::Command::new("/bin/kill")
+        .arg(pid.to_string())
+        .status();
+}

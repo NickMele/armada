@@ -9,11 +9,12 @@
 //! would be the Drone marking its own work**, so most of what these prove is
 //! an absence.
 //!
-//! Why there are six modules: `report` is what comes back, `absence` is what
+//! Why there are seven modules: `report` is what comes back, `absence` is what
 //! it did not decide and did not cost, `refusing` is the calls that get no
 //! report at all, `offering` is what a Drone was told before it made one,
-//! `narrowing` is the second of the two runs it can ask for, and `later` is the
-//! report arriving as a turn, whatever the call did. The Fleet, the
+//! `narrowing` is the second of the two runs it can ask for, `later` is the
+//! report arriving as a turn whatever the call did, and `waiting` is a Drone
+//! at rest until it does. The Fleet, the
 //! Checks and the wire are here, because a run assembled differently between
 //! them would leave five modules answering about five different steps.
 //!
@@ -30,6 +31,7 @@ mod narrowing;
 mod offering;
 mod refusing;
 mod report;
+mod waiting;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -154,10 +156,22 @@ fn a_fleet_over(
     allowed: u32,
     changed: &[&str],
 ) -> Fixture {
+    a_fleet_driven(home, workflow, clock, allowed, changed, a_quiet_drone())
+}
+
+/// The same, with the Drone a case needs in place of the quiet one.
+fn a_fleet_driven(
+    home: &TempDir,
+    workflow: ResolvedWorkflow,
+    clock: Arc<Held>,
+    allowed: u32,
+    changed: &[&str],
+    drone: FakeHarness,
+) -> Fixture {
     let mut fittings = fitted_with(
         home,
         FakeWorkProduct::changed(changed).showing("+    let x = 1;\n"),
-        a_quiet_drone(),
+        drone,
     );
     fittings.starting().workflows = one(workflow);
     fittings.clock = clock;
