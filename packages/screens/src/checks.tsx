@@ -26,7 +26,7 @@ import { CHECK_OUTCOME, CRITERION_VERDICT_CHECK, CRITERION_VERDICT_JUDGE } from 
 import type { CheckRun, StepDetail } from "@armada/protocol";
 
 import { assertedIn, WHAT_THE_SUITE_ASSERTED } from "./asserted";
-import { judgeOf } from "./declared";
+import { HELD_FOR_HANDOFF, judgeOf, RUNS_LAST_BEFORE_HANDOFF, runsAtOf } from "./declared";
 import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import {
@@ -39,6 +39,7 @@ import {
   isRunning,
   isWaiting,
   notedFrom,
+  notInTheDronesRun,
   outputRunOf,
   runEnded,
   sentenceOf,
@@ -87,9 +88,21 @@ export function checksChapter(
   // the Drone's in the summary so it never reads as a ruling. #1062.
   const drone = droneRunOf(step);
   const reads = drone ?? checksOf(step);
-  if (reads.length === 0) return undefined;
+  const held = step.held_for_handoff ?? [];
+  if (reads.length === 0 && held.length === 0) return undefined;
 
   const rows = reads.map((read) => checkRow(read, now, onRunHere));
+  // What this reading did not run, so a green one never reads as the whole
+  // bar: Checks a Drone's run leaves out, and ones a later step runs. #849.
+  if (drone !== undefined) {
+    for (const check of notInTheDronesRun(step)) {
+      const name = check.name ?? check.kind;
+      rows.push({ id: name, says: runsAtOf(check), identifier: name });
+    }
+  }
+  for (const name of held) {
+    rows.push({ id: `held:${name}`, says: HELD_FOR_HANDOFF, identifier: name });
+  }
   const judge = judgeRow(step, panels, undecided);
   if (judge !== undefined) rows.push(judge);
 
@@ -217,6 +230,16 @@ export function checkRow(
   const stoppedBy = live?.stopped_by;
   if (stoppedBy !== undefined) {
     return { id: name, says: `Stopped when ${stoppedBy} did not pass.`, identifier: name, result: STOPPED };
+  }
+  // Not reached yet, and it will not start until everything else passes. #849.
+  if (run === undefined && read.check.runs_at === "handoff") {
+    return {
+      id: name,
+      says: RUNS_LAST_BEFORE_HANDOFF,
+      identifier: name,
+      named: "queued",
+      icon: iconOf(undefined),
+    };
   }
   const failed = run !== undefined && didNotPass(run);
   return {

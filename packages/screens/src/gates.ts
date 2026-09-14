@@ -100,12 +100,20 @@ export function droneRunOf(step: StepDetail): CheckRead[] | undefined {
   if (step.checking !== undefined || step.dry_run === undefined) return undefined;
   const underway = step.dry_run.checks;
   return (step.checks ?? [])
-    .filter((check) => !isSweepMarker(check))
+    .filter((check) => !isSweepMarker(check) && check.runs_at === undefined)
     .map((check) => {
       const name = nameOf(check);
       const live = underway.find((one) => one.name === name);
       return { name, check, run: live === undefined ? undefined : ranOf(live), live };
     });
+}
+
+/**
+ * The step's Checks a Drone's own run leaves out — declared `gate` or `handoff`
+ * — so the chapter can say so beside a run that passed. #849.
+ */
+export function notInTheDronesRun(step: StepDetail): DeclaredCheck[] {
+  return (step.checks ?? []).filter((check) => !isSweepMarker(check) && check.runs_at !== undefined);
 }
 
 /** What a Drone's own run is called wherever it is drawn where the gate's would be. */

@@ -683,6 +683,12 @@ export type StepDetail = {
    */
   checks?: DeclaredCheck[];
   /**
+   * Checks declared `runs_at: handoff` that this step's gate does not run,
+   * because a later step runs them once before handoff. Absent is none.
+   * Since 13.48, #849.
+   */
+  held_for_handoff?: string[];
+  /**
    * What every declared Check did, every run of the step, oldest first.
    * Empty until the gate has run them. Since 7.0 this was the latest run
    * alone; join to `attempts` by `attempt`.

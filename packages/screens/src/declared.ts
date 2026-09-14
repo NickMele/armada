@@ -76,6 +76,25 @@ export function coversOf(check: DeclaredCheck): string | undefined {
 }
 
 /**
+ * Where a Check runs, where that is not everywhere, as a row says it. #849.
+ *
+ * **A Drone's run leaves both out**, so a green run of it is never the whole
+ * bar; `gate` still runs at every gate, and `handoff` runs last on one step.
+ */
+export function runsAtOf(check: DeclaredCheck): string | undefined {
+  if (check.runs_at === "gate") return NOT_IN_THE_DRONES_RUN;
+  if (check.runs_at === "handoff") return NOT_IN_THE_DRONES_RUN_UNTIL_HANDOFF;
+  return undefined;
+}
+
+export const NOT_IN_THE_DRONES_RUN = "Not in the Drone's run. It runs when the Drone submits.";
+export const NOT_IN_THE_DRONES_RUN_UNTIL_HANDOFF = "Not in the Drone's run. It runs last, before handoff.";
+export const RUNS_LAST_BEFORE_HANDOFF =
+  "Runs last, before handoff, once every other Check here has passed.";
+/** A Check a later step runs once, before handoff, that this step never runs. */
+export const HELD_FOR_HANDOFF = "Not checked on this step. It runs once, before handoff.";
+
+/**
  * One declared `judge_checks[]` entry, in counts.
  *
  * `judge` is the verification source named in text, which the iconography
