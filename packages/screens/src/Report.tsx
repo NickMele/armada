@@ -266,9 +266,10 @@ export function ReportControl({
         open={open}
         tone="neutral"
         title={filed === null ? "Report this job as failed in error?" : "Filed"}
-        confirmLabel={filed === null ? "File the report" : "Copy the issue"}
+        confirmLabel={filing ? "Filing…" : filed === null ? "File the report" : "Copy the issue"}
         confirmDisabled={filed === null && (said.trim() === "" || filing)}
-        onCancel={close}
+        // Refuses a second press while the report is on its way. #1117.
+        onCancel={filing ? undefined : close}
         onConfirm={() => {
           if (filed === null) {
             void file();

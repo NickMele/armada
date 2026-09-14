@@ -101,7 +101,10 @@ test("a filing in flight refuses a second Enter", async () => {
   await userEvent.keyboard("{Enter}");
   expect(filings).toHaveLength(1);
 
-  await expect.element(fileIt()).toBeDisabled();
+  // The label says what it is doing while the filing is out. #1117.
+  await expect
+    .element(page.getByRole("dialog").getByRole("button", { name: "Filing…" }))
+    .toBeDisabled();
   await userEvent.keyboard("{Enter}");
   await userEvent.keyboard("{Enter}");
   expect(filings, "one Job was reported more than once").toHaveLength(1);
