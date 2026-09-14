@@ -253,6 +253,10 @@
 @import "./compositions/HelmThread/HelmThread.css";
 @import "./compositions/HelmComposer/HelmComposer.css";
 
+/* The card a gaming flag holds a step with. #1079. Above the rule below and
+   not after it: an `@import` that follows a rule is dropped by the browser. */
+@import "./compositions/HeldFlag/HeldFlag.css";
+
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */
 .armada-helm-dock {
@@ -261,6 +265,3 @@
   gap: var(--space-3);
   min-width: 0;
 }
-
-/* The card a gaming flag holds a step with. #1079. */
-@import "./compositions/HeldFlag/HeldFlag.css";

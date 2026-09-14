@@ -698,10 +698,8 @@ export class JobCommands {
    * would let a refusal be taken with the act built for work nobody objected
    * to.
    *
-   * **A blank reason is sent, not refused here.** Fleet refuses one on a
-   * Judge's refusal and takes one on a gaming flag, and which stopped the step
-   * is Fleet's record rather than this process's. The dialog for a refusal
-   * still holds its confirm off while the field is blank. #1079.
+   * **A blank reason is sent, not refused here**: Fleet takes one on a gaming
+   * flag and refuses one on a refusal, and only Fleet knows which stopped it.
    */
   async overrideVerdict(jobId: string, reason: string): Promise<Outcome> {
     const body: Overruled = { reason };
