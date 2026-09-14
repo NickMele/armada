@@ -6,9 +6,14 @@
 
 import type { StatRow, FleetPanelProps } from "@armada/components";
 import type { Connection, FleetCapacity, JobSummary, RepositorySummary } from "@armada/protocol";
+import { spoken } from "@armada/protocol";
 import { fleetStateOf, shortLabelOf, type Statement } from "@armada/shell";
 import { doctorReading, driftReading, dronesReading } from "@armada/screens/src/overview";
 import type { DriftsRead, HealthRead } from "@armada/screens/src/overview-reads";
+// `instant` and `lasting` are the Job elapsed-time figure's own parse-and-format
+// pair (`elapsedSince` above them). Reused rather than re-derived so a job's
+// "1h 30m" and Fleet's "up 1h 30m" cannot drift into two spellings of one span.
+import { instant, lasting } from "@armada/screens/src/duration";
 
 /** Stats — the six rows Overview's own tiles already read. No Queued: Overview's own Queued panel lists those Jobs. */
 export function statsOf(
@@ -68,6 +73,7 @@ export function fleetPanelOf(
   connection: Connection,
   statement: Statement,
   health: HealthRead,
+  now: number,
 ): Omit<FleetPanelProps, "open" | "onOpenChange"> {
   const reading = doctorReading(health);
   const outcome = asString(reading.value);
@@ -79,6 +85,24 @@ export function fleetPanelOf(
     state: fleetStateOf(connection),
     label: shortLabelOf(connection),
     detail: statement.detail === "" ? undefined : statement.detail,
+    meta: metaOf(connection, now),
     doctor,
   };
+}
+
+/**
+ * `protocol 13.49 · up 2h 14m` — only once a connection has one to read.
+ *
+ * **Ticks off the app's one `now`** (`App.tsx`'s `setInterval`, already
+ * running for every other elapsed figure on screen) rather than a second
+ * clock. The uptime is relative to `FleetIdentity.startedAt` — the instant
+ * `ps -o lstart=` gave Fleet's own process, the spelling `crates/fleet`
+ * chose specifically so Bridge could parse it too — not a static read taken
+ * once at connect time.
+ */
+function metaOf(connection: Connection, now: number): string | undefined {
+  if (connection.state !== "connected") return undefined;
+  const protocol = `protocol ${spoken(connection.fleet.protocolVersion)}`;
+  const startedMs = instant(connection.fleet.startedAt);
+  return startedMs === null ? protocol : `${protocol} · up ${lasting(now - startedMs)}`;
 }
