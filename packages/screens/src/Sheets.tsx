@@ -73,12 +73,7 @@ import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
  * row's `Run…`, and from a refused Check's `Run it here` — never from a
  * chapter, so it lands nowhere on close, `holds`'s way.
  *
- * **`check` is the sixth, #1021's.** A Check's log has no end while the gate
- * is running it and its kept file can run to thousands of lines once it has
- * ruled, so both left the Checks chapter for this layer — the same move #286
- * made for the activity log and the diff. It opens only from a press on a
- * Check's row, closes back onto the Checks chapter line the way `log` and
- * `diff` do, and follows the same one sheet, two exits rule.
+ * **`check` is the sixth**: one Check's output, from its row, closing onto the Checks chapter.
  */
 export type OpenSheet = "log" | "diff" | "holds" | "settings" | "run" | "check" | null;
 

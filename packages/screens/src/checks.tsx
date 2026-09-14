@@ -10,16 +10,8 @@
 // than the gate. It says what the grid below says, from the same reading of the
 // same rows, because it is the same panel.
 //
-// **The reading is `gates.ts`'s** — which attempt's runs count, and which
-// output a press opens. This file decides only what a row looks like.
-//
-// **Nobody's output is drawn here, live or kept.** It used to be: a press
-// picked which Check's log filled this chapter, in place, under the rows —
-// #1021. That broke the rule `StepChapter.act` states and `Sheets.tsx`
-// explains: a reading with no end opens as a sheet, because the panel cannot
-// hold it. A press now reports which Check through `onOpenCheck`, and
-// `checkSheetOf` is what the sheet reads to answer live or kept — this file
-// keeps deciding only what a row looks like.
+// **The reading is `gates.ts`'s** — which attempt's runs count. This file
+// decides only what a row looks like; a press opens its output on a sheet.
 
 import {
   AssertionSet,
