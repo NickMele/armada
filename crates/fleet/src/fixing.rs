@@ -12,7 +12,11 @@
 //! **Nothing here passes a gate.** A test that fails on main drafts a Job that
 //! waits for a person; the Drone's own step is still decided by its Checks.
 
-use std::fmt;
+mod claims;
+mod refusal;
+
+pub use refusal::NotFixed;
+
 use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -21,11 +25,10 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
     Actor, Breakage, BreakageClaim, Job, JobId, ManifestId, ResolvedCheck, StepId, Ulid,
 };
-use ipc::mcp::{DraftFix, NotRecorded};
+use ipc::mcp::DraftFix;
 use tokio::task::JoinHandle;
 use verification::{Exit, Observed};
 
-use crate::adrift::Adrift;
 use crate::checking::{Going, Stop};
 use crate::daemon::Fleet;
 use crate::drafting::StatedBy;
@@ -86,102 +89,6 @@ impl FixRunning {
 /// The fix Job a failure on main drafted.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Drafted(pub JobId);
-
-/// Why no fix was drafted. **Every one reaches the Drone as words it can act
-/// on**, and none of them stops or advances its step.
-#[derive(Debug)]
-pub enum NotFixed {
-    NothingIsWorking,
-    NoSuchCheck { check: String },
-    NoWayToRunOneTest { check: String },
-    NotOneArgument { test: String },
-    AlreadyRunning,
-    AlreadySubmitted,
-    Unheard,
-    MainIsBusy,
-    Spent { allowed: u32 },
-    NoMain { why: String },
-    NeverRan,
-    PassesOnMain { test: String },
-    NotDrafted { why: String },
-}
-
-impl fmt::Display for NotFixed {
-    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            NotFixed::NothingIsWorking => out.write_str(
-                "no Job is being worked, so there is no Check to say a test is broken under. \
-                 Stop — the Job this Drone was started for has already ended",
-            ),
-            NotFixed::NoSuchCheck { check } => write!(
-                out,
-                "`{check}` is not one of the Checks on the part you are on. Name the Check \
-                 the test failed under, as your part's Checks name it"
-            ),
-            NotFixed::NoWayToRunOneTest { check } => write!(
-                out,
-                "`{check}` does not say how to run one test by name, so Fleet cannot run \
-                 just that test on main and nothing is drafted. Say in your evidence what \
-                 you found"
-            ),
-            NotFixed::NotOneArgument { test } => write!(
-                out,
-                "`{test}` cannot be passed as one argument, so it cannot be run by name. \
-                 Copy the test's name without quotes"
-            ),
-            NotFixed::AlreadyRunning => out.write_str(
-                "Fleet is already running something for you — your checks, or a test on \
-                 main. Wait for its later turn, then ask again",
-            ),
-            NotFixed::AlreadySubmitted => out.write_str(
-                "you have submitted, and the checks are about to be run against your work, \
-                 so the test was not run on main. Say in your evidence what you found",
-            ),
-            NotFixed::Unheard => out.write_str(
-                "Fleet restarted while this part was going and can no longer send you a \
-                 later turn, so the test was not run on main and nothing is drafted. Say in \
-                 your evidence what you found",
-            ),
-            NotFixed::MainIsBusy => out.write_str(
-                "Fleet is already running a test against main for this repository. Carry on \
-                 with your part and ask again in a few minutes",
-            ),
-            NotFixed::Spent { allowed } => write!(
-                out,
-                "this part has already asked for {}. No more are drafted from this part — \
-                 say in your evidence what you found",
-                match allowed {
-                    1 => String::from("a fix"),
-                    n => format!("{n} fixes"),
-                }
-            ),
-            NotFixed::NoMain { why } => {
-                write!(
-                    out,
-                    "the test could not run on main: {why}. Nothing is drafted"
-                )
-            }
-            NotFixed::NeverRan => out.write_str(
-                "the test did not run on main, so nothing about main is known and nothing is \
-                 drafted",
-            ),
-            NotFixed::PassesOnMain { test } => write!(
-                out,
-                "`{test}` passes on main, so the failure is in your change. Nothing is \
-                 drafted; fix it on your branch"
-            ),
-            NotFixed::NotDrafted { why } => write!(out, "the fix Job could not be drafted: {why}"),
-        }
-    }
-}
-
-impl From<NotFixed> for NotRecorded {
-    fn from(why: NotFixed) -> NotRecorded {
-        NotRecorded {
-            because: why.to_string(),
-        }
-    }
-}
 
 /// The later turn a run against main arrives as, built from the run alone.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -261,46 +168,6 @@ where
                 .fix_ends(&caller, &request, run, ran, &fix, &test)
                 .await
         }))))
-    }
-
-    /// Every claimed fix a Job is part of, from either side, for its detail.
-    /// A reporter that has been forgotten keeps its id and loses its title.
-    pub(crate) async fn breakages_of(
-        &self,
-        job: &Job,
-    ) -> Result<Vec<ipc::ClaimedBreakage>, Adrift> {
-        let store = self.store().lock().await;
-        let mut claims = store
-            .breakages_claimed_by(job.id())
-            .map_err(Adrift::Reading)?;
-        claims.extend(
-            store
-                .breakages_reported_by(job.id())
-                .map_err(Adrift::Reading)?,
-        );
-        let title = |id: &JobId| {
-            store
-                .load_job(id)
-                .ok()
-                .map(|found| found.title().as_str().to_string())
-        };
-        Ok(claims
-            .into_iter()
-            .map(|claim| ipc::ClaimedBreakage {
-                fix_title: title(&claim.fix).unwrap_or_default(),
-                reported_by_title: title(&claim.reported_by),
-                fix: ipc::JobId::from(&claim.fix),
-                reported_by: ipc::JobId::from(&claim.reported_by),
-                check: claim.breakage.check,
-                test: claim.breakage.test,
-                failure: claim.breakage.failure,
-            })
-            .collect())
-    }
-
-    /// Give back every breakage a Job that just ended was claiming.
-    pub(crate) async fn released_breakages(&self, job: &Job) {
-        let _ = self.store().lock().await.release_breakages(job.id());
     }
 
     /// The Check the Drone named on its own part, and the command that runs
