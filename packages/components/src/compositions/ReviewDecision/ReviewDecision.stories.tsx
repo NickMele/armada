@@ -129,19 +129,19 @@ export const APullRequestToMerge: Story = {
 };
 
 /**
- * `#663`: the branch clashes with main, so Fleet would refuse the merge.
+ * `#663`: the branch conflicts with main, so Fleet would refuse the merge.
  * **Merge stays drawn and takes no fill** — a disabled control has no variant
  * left to express — **with the reason beside it**, never folded into
  * `disabledNote`, which belongs to the whole group and is not in play here:
- * Approve, Request changes and Reject all still work. `#1131`: Fleet already
- * sends a Drone to clear it on its own, so the reason names what is
- * happening rather than something to press.
+ * Approve, Request changes and Reject all still work. `#1131`: Fleet sends a
+ * Drone to clear it on its own, so the reason names what is happening
+ * rather than something to press.
  */
 export const TheBranchConflicts: Story = {
   args: {
     note: "",
     onMerge: () => {},
-    mergeBlockedReason: "Main clashes with this branch. Fleet already sent it back to clear the clash.",
+    mergeBlockedReason: "This branch conflicts with main. Fleet sends it back for a Drone to clear the conflicts.",
   },
 };
 

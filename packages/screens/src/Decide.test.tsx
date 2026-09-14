@@ -370,7 +370,7 @@ test("merge is drawn and disabled while the branch conflicts, and the other thre
   const merge = page.getByRole("button", { name: "Merge and take the work" });
   await expect.element(merge).toBeDisabled();
   await expect
-    .element(page.getByText("Main clashes with this branch. Fleet already sent it back to clear the clash."))
+    .element(page.getByText("This branch conflicts with main. Fleet sends it back for a Drone to clear the conflicts."))
     .toBeVisible();
 
   await userEvent.click(page.getByRole("button", { name: "Approve the work" }));
@@ -413,6 +413,6 @@ test("merge is the primary act again once the branch is no longer conflicted", a
     .element(page.getByRole("button", { name: "Merge and take the work" }))
     .not.toBeDisabled();
   await expect
-    .element(page.getByText("Main clashes with this branch. Fleet already sent it back to clear the clash."))
+    .element(page.getByText("This branch conflicts with main. Fleet sends it back for a Drone to clear the conflicts."))
     .not.toBeInTheDocument();
 });

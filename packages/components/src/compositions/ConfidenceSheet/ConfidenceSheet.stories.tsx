@@ -256,8 +256,8 @@ export const WithFailedCi: Story = {
 };
 
 /**
- * A pull request that conflicts with main: the row names the clash and draws
- * no act, `#1131`. Fleet already sends a Drone to clear it on its own — there
+ * A pull request that conflicts with main: the row names the conflict and
+ * draws no act, `#1131`. Fleet sends a Drone to clear it on its own — there
  * is nothing here to press, which is what this guards.
  */
 export const WithConflictedPullRequest: Story = {

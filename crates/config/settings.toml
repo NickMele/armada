@@ -975,7 +975,7 @@ Added by the Aug 2026 config review. Named in the crate design as a verification
 [settings.loop-iteration-cap-iteration-cap]
 name = "Loop iteration cap (iteration_cap)"
 scope = "Kit → Manifest"
-default = "0 (no cap) where a step declares none"
+default = "0 — no return permitted where a step declares none"
 lifetime = "Live"
 merge_strategy = "REPLACE"
 peer_polarity = "Lower is stricter"
