@@ -144,6 +144,33 @@ async fn a_test_failing_on_main_too_drafts_a_fix_and_claims_the_test() {
     assert!(told[0].contains("fails on main too"), "{}", told[0]);
 }
 
+/// **A fix draft's one-test run is timed apart from a whole run of the
+/// Check**, so it leaves `one_test_timings` a duration and leaves
+/// `check_timings` — what a step's order reads — untouched. #1072.
+#[tokio::test]
+async fn a_fix_drafts_one_test_run_is_timed_apart_from_a_whole_run() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, gated_on("/usr/bin/false {}"), 1);
+    let reporter = started(&fleet, &home).await;
+
+    came_to(&fleet, &reporter, TEST).await.expect("drafted");
+
+    let job = fleet.load(&reporter).await.expect("the reporter");
+    let repository = job.owner_manifest_id();
+    let store = fleet.store().lock().await;
+    let one_test = store.one_test_timings(repository).expect("reads");
+    assert!(
+        one_test.contains_key("suite"),
+        "the one-test run should be timed: {one_test:?}"
+    );
+    let whole = store.check_timings(repository).expect("reads");
+    assert!(
+        !whole.contains_key("suite"),
+        "a one-test run must not count toward the Check's own average, which \
+         is what the next run's order reads: {whole:?}"
+    );
+}
+
 /// **The call does not wait for main.** A test that takes a while there is
 /// answered before it finishes, and the Drone waits on it as on a dry run.
 #[tokio::test]

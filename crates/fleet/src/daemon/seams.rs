@@ -15,7 +15,7 @@ use std::sync::Arc;
 use adapter_traits::{
     AgentHarness, CiConfiguration, Delivery, LinkLookup, SpawnConfigRefused, Vcs, WorkProduct,
 };
-use core_model::{Job, JobId, Timestamp, Ulid};
+use core_model::{Job, JobId, ManifestId, Timestamp, Ulid};
 use store::Store;
 use tokio::sync::Mutex;
 
@@ -416,14 +416,36 @@ where
     /// Keep how long each Check of one of this Job's runs took. A row that will
     /// not write fails nothing: the run's own answer is already out.
     pub(crate) async fn kept_timings(&self, job: &Job, timed: Vec<(String, std::time::Duration)>) {
+        self.kept_repository_timings(job.owner_manifest_id(), timed)
+            .await;
+    }
+    /// [`Fleet::kept_timings`], against a repository rather than a Job. A
+    /// proof has no Job to key by — it runs against the commit that merged,
+    /// so it records against the repository the commit belongs to. #1072.
+    pub(crate) async fn kept_repository_timings(
+        &self,
+        repository: &ManifestId,
+        timed: Vec<(String, std::time::Duration)>,
+    ) {
         if timed.is_empty() {
             return;
         }
         let at = self.now();
         let mut store = self.store().lock().await;
         for (check, took) in timed {
-            let _ = store.record_check_took(job.owner_manifest_id(), &check, took, &at);
+            let _ = store.record_check_took(repository, &check, took, &at);
         }
+    }
+    /// A fix draft's one-test run, kept apart from a whole Check's. #1072.
+    pub(crate) async fn kept_one_test_timing(
+        &self,
+        repository: &ManifestId,
+        check: &str,
+        took: std::time::Duration,
+    ) {
+        let at = self.now();
+        let mut store = self.store().lock().await;
+        let _ = store.record_one_test_took(repository, check, took, &at);
     }
     /// Where a Drone's own run says what each of its Checks is doing: shown
     /// beside the gate's and never as it, and heard as each result lands.

@@ -20,9 +20,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, RepositoryStanding, Vcs, WorkProduct};
-use core_model::{Component, Envelope, FieldValue, JobId, Level, ResolvedCheck, StepCheck};
+use core_model::{
+    Component, Envelope, FieldValue, JobId, Level, ManifestId, ResolvedCheck, StepCheck,
+};
 use tokio::sync::Mutex;
-use verification::Ran;
+use verification::{Exit, Observed, Ran};
 
 use crate::adrift::Adrift;
 use crate::check_output::kept_for_a_commit;
@@ -38,9 +40,15 @@ pub(crate) struct Finished {
     /// Whose turn started the run. **The line's owner, not the record's** — the
     /// record is the commit's.
     pub(crate) job: JobId,
+    /// What durations are kept against — a proof has no Job of its own.
+    /// #1072.
+    pub(crate) repository: ManifestId,
     pub(crate) at_commit: String,
     pub(crate) base: String,
     pub(crate) checks: Vec<StepCheck>,
+    /// Each Check this proof ran whole to an exit code, and how long it
+    /// took — kept exactly like a gate's. #1072.
+    pub(crate) timed: Vec<(String, Duration)>,
 }
 
 /// Which commit is being proved right now, and what has finished.
@@ -135,6 +143,7 @@ where
         spawn_the_run(
             Arc::clone(self.proving()),
             job.clone(),
+            served.manifest().id().clone(),
             checks.to_vec(),
             served.root().to_string(),
             served.records_root().to_string(),
@@ -166,6 +175,10 @@ where
                 .await
                 .record_commit_checks(&proved)
                 .map_err(Adrift::Writing)?;
+            // A proof has no Job to key by — recorded against the repository
+            // it ran for, like a gate's own durations. #1072.
+            self.kept_repository_timings(&one.repository, one.timed)
+                .await;
             let unhappy = proved.unhappy();
             // **Warn and not Error on a red.** Nothing is broken about Armada;
             // what is broken is the repository, and the response is a person
@@ -234,6 +247,7 @@ where
 fn spawn_the_run(
     proving: Arc<Mutex<Proving>>,
     job: JobId,
+    repository: ManifestId,
     checks: Vec<ResolvedCheck>,
     repo_root: String,
     records_root: String,
@@ -277,8 +291,17 @@ fn spawn_the_run(
             None,
         )
         .await;
-        let observed: Vec<verification::Observed> =
-            completed.iter().map(|one| one.observed.clone()).collect();
+        let observed: Vec<Observed> = completed.iter().map(|one| one.observed.clone()).collect();
+        // Kept exactly like a gate's: only a Check that ran whole to an exit
+        // code, by the name it is declared under. #1072.
+        let timed: Vec<(String, Duration)> = checks
+            .iter()
+            .zip(completed.iter())
+            .filter_map(|(check, done)| match &done.observed {
+                Observed::Command(Exit::Code(_)) => Some((check.label().to_string(), done.took)),
+                _ => None,
+            })
+            .collect();
         let printed: Vec<(String, checks_runner::Output)> = completed
             .into_iter()
             .filter_map(|one| one.printed)
@@ -291,9 +314,11 @@ fn spawn_the_run(
         if let Some(checks) = rows {
             proving.done.push(Finished {
                 job,
+                repository,
                 at_commit,
                 base,
                 checks,
+                timed,
             });
         }
     });

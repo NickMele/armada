@@ -75,3 +75,29 @@ fn an_old_run_stops_counting_once_enough_newer_ones_are_kept() {
         Some(&Duration::from_secs(10))
     );
 }
+
+/// A fix draft's one-test runs are kept apart from whole runs of the same
+/// Check, in each direction. #1072.
+#[test]
+fn one_test_runs_are_kept_apart_from_whole_runs() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let mine = repository("01REPO");
+    store
+        .record_check_took(&mine, "test", Duration::from_secs(300), &at(0))
+        .expect("kept");
+    store
+        .record_one_test_took(&mine, "test", Duration::from_secs(2), &at(1))
+        .expect("kept");
+
+    assert_eq!(
+        store.check_timings(&mine).expect("reads").get("test"),
+        Some(&Duration::from_secs(300)),
+        "a one-test run must not move the whole Check's average"
+    );
+    assert_eq!(
+        store.one_test_timings(&mine).expect("reads").get("test"),
+        Some(&Duration::from_secs(2)),
+        "a whole run must not move the one-test average"
+    );
+}

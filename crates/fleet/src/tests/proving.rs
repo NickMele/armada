@@ -143,6 +143,40 @@ async fn a_merge_is_proved_against_the_commit_the_repository_ended_up_on() {
     );
 }
 
+/// **A proof leaves a duration for each Check it ran whole**, keyed by the
+/// repository since a proof has no Job of its own. `red` fails but still ran
+/// to an exit code, so it is timed exactly like `green`. #1072.
+#[tokio::test]
+async fn a_proof_leaves_a_duration_for_each_check_it_ran_whole() {
+    let home = TempDir::new();
+    let fleet = a_fleet_that_proves_a_merge(&home);
+    let job = a_finished_job(&fleet, &home).await;
+
+    fleet
+        .vcs()
+        .repository_standing(RepositoryStanding::MovedOn {
+            base: String::from("main"),
+            commits: 1,
+            head: String::from(MERGED_INTO),
+        });
+    fleet.vcs().now_landed(Landing::Merged {
+        url: String::from(PULL_REQUEST),
+    });
+    turned_until_proved(&fleet).await;
+
+    let record = fleet.load(&job).await.expect("the Job");
+    let timed = fleet
+        .store()
+        .lock()
+        .await
+        .check_timings(record.owner_manifest_id())
+        .expect("the timings read");
+    assert!(
+        timed.contains_key("green") && timed.contains_key("red"),
+        "both after-merge Checks ran whole and should be timed: {timed:?}"
+    );
+}
+
 /// **A merge Fleet declined to fast-forward proves nothing.**
 ///
 /// `caught_the_repository_up` declines on a dirty worktree and on a checkout
