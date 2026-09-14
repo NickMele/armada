@@ -43,6 +43,7 @@ import {
   runEnded,
   sentenceOf,
   stoppedUndecided,
+  waitingBehind,
   type CheckRead,
   type Panel,
 } from "./gates";
@@ -189,9 +190,10 @@ export function checkRow(
 ): CheckRunRow {
   const { name, run, live } = read;
   if (isWaiting(read)) {
+    const behind = waitingBehind(read);
     return {
       id: name,
-      says: WAITING_TO_START,
+      says: behind === undefined ? WAITING_TO_START : waitingForRoom(behind),
       identifier: name,
       named: "queued",
       icon: iconOf(undefined),
@@ -403,6 +405,11 @@ const OPENS_THE_OUTPUT = "Click to open this Check's output";
 
 /** What a Check the gate has reached and not started says. */
 const WAITING_TO_START = "Waiting to start.";
+
+/** What a Check waiting for room other work holds on the machine says. #1063. */
+function waitingForRoom(behind: number): string {
+  return `Waiting for room behind ${behind} other ${behind === 1 ? "Check" : "Checks"} on this machine.`;
+}
 
 /** What a running Check says where its start will not parse. */
 const RUNNING_NOW = "Running now.";
