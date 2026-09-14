@@ -214,6 +214,7 @@ async fn every_declared_check_gets_a_row_whatever_the_dry_run_names() {
             narrow: None,
             one_test: None,
             runs_at: core_model::RunsAt::Everywhere,
+            places: std::num::NonZeroU32::MIN,
         },
         ResolvedCheck::ManifestCheck {
             name: "test".to_string(),
@@ -224,6 +225,7 @@ async fn every_declared_check_gets_a_row_whatever_the_dry_run_names() {
             narrow: None,
             one_test: None,
             runs_at: core_model::RunsAt::Everywhere,
+            places: std::num::NonZeroU32::MIN,
         },
     ];
     let footprint = Footprint::nothing();

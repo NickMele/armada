@@ -41,6 +41,7 @@ fn a_check(name: &str) -> ResolvedCheck {
         narrow: None,
         one_test: None,
         runs_at: core_model::RunsAt::Everywhere,
+        places: std::num::NonZeroU32::MIN,
     }
 }
 

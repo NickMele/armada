@@ -149,6 +149,10 @@ pub(super) fn after_merge(
                 // Dropped for `when`'s reason: there is no step or handoff
                 // after a merge, only the whole tree.
                 runs_at: core_model::RunsAt::Everywhere,
+                // Kept, unlike `when` and `narrow`: a proof after a merge still
+                // spends the machine's places for real, and a browser suite
+                // costs what it always costs.
+                places: check.places(),
             }),
             None => out.push(Refusal::new(
                 key,
@@ -200,6 +204,7 @@ pub(super) fn required_by(
                 narrow: draft.narrow,
                 one_test: draft.one_test,
                 runs_at: draft.runs_at,
+                places: draft.places,
             },
         );
     }

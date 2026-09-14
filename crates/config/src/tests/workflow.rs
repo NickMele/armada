@@ -8,6 +8,7 @@
 //! of this milestone step: a definition met with a Manifest.
 
 mod mechanical;
+mod places;
 mod plan;
 mod resolving;
 mod runs_at;

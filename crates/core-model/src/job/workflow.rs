@@ -92,6 +92,12 @@ pub enum ResolvedCheck {
         /// Where the Manifest says this Check runs. Frozen for `narrow`'s
         /// reason. #849.
         runs_at: RunsAt,
+        /// How many of the machine's places this Check takes while it runs.
+        /// **One where the Manifest declares no `places`**, which is every
+        /// Check written before the key existed and most that will be written
+        /// after — a browser suite starting a dozen Chromium processes is not
+        /// the common case. Frozen for `narrow`'s reason. #1102.
+        places: NonZeroU32,
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -237,6 +243,17 @@ impl ResolvedCheck {
             ResolvedCheck::DiffNonempty
             | ResolvedCheck::ArtifactExists { .. }
             | ResolvedCheck::PlanRecorded { .. } => RunsAt::Everywhere,
+        }
+    }
+
+    /// How many of the machine's places this Check takes while it runs. **One
+    /// on a built-in**, which spends no process of its own. #1102.
+    pub fn places(&self) -> NonZeroU32 {
+        match self {
+            ResolvedCheck::ManifestCheck { places, .. } => *places,
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => NonZeroU32::MIN,
         }
     }
 
