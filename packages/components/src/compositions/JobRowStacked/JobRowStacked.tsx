@@ -133,18 +133,21 @@ export type JobRowStackedProps = {
    * Which arrangement this row is drawn in.
    *
    * `card` stacks the headline over its field run; `table` puts them on one
-   * line under a header that names each column; `panel` is the same one line
-   * without a header — Overview's own row, where the handle moves under the
-   * title and the facts read by glyph and value rather than by a caption.
-   * **The markup is the same in all three** — each view only drops or moves
-   * wrappers in CSS, so nothing here branches and no field set is rewritten to
-   * switch.
+   * line under a header that names each column. **The markup is the same in
+   * both** — each view only drops or moves wrappers in CSS, so nothing here
+   * branches and no field set is rewritten to switch.
+   *
+   * **Overview draws `card`, the same as the Board** — there was a third,
+   * `panel`, one line without a header for a list standing in a narrower box.
+   * Removed: two rows for the same fact read differently depending on which
+   * surface held them, and a panel too narrow for the card's own action was
+   * the card's bug to fix, not a reason to draw the fact a second way.
    *
    * **A row inside a list takes the list's view and not this**, which is what
    * makes a list of rows in two arrangements impossible. Set it only on a row
    * standing on its own, which is what a story does.
    */
-  view?: "card" | "table" | "panel";
+  view?: "card" | "table";
   /** The one secondary control. Never a primary, and never more than one. */
   action?: ReactNode;
   /**

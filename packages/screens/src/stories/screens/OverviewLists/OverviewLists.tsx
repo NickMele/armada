@@ -26,6 +26,34 @@ export const JOBS: JobSummary[] = [
 export const acrossTwo = (): JobSummary[] =>
   JOBS.map((row, at) => ({ ...row, owner_manifest_id: at % 2 === 0 ? "armada" : "storefront" }));
 
+/**
+ * Two running Jobs, one with a plan and one without — the owner's own report against the Running
+ * panel, that the step bar sat beside the title on one row and to its own right on the other. The
+ * row is the Board's own now, and its shared columns are what line the two up rather than a second
+ * arrangement of the row.
+ */
+export const RUNNING_ONE_WITH_A_PLAN: JobSummary[] = [
+  job("running", {
+    id: "01M2C1TJ8G00RUNNINGWITHTASK",
+    handle: "16-fix-801-unanswered-permission-ask-holds-dr",
+    title: "Fix #801 - Unanswered permission ask holds Drone slot, 2nd dispatch",
+    workflow_id: "implement",
+    owner_manifest_id: "armada",
+    current_step_id: "fix",
+    started_at: new Date(NOW - 476_000).toISOString(),
+    tasks: { done: 0, working: 0, open: 6, dropped: 0 },
+  }),
+  job("running", {
+    id: "01M2C1TJ8G00RUNNINGNOPLAN00",
+    handle: "17-job-details-view-shows-queued-while-fleet-r",
+    title: 'Job details view shows "queued" while Fleet reports job as running',
+    workflow_id: "plan",
+    owner_manifest_id: "armada",
+    current_step_id: "plan",
+    started_at: new Date(NOW - 138_000).toISOString(),
+  }),
+];
+
 const noop = () => {};
 
 /**

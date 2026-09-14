@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
+import { RUNNING_ONE_WITH_A_PLAN } from "../OverviewLists/OverviewLists";
 import { OverviewSurfaceFrom } from "./OverviewSurface";
 
 /**
@@ -27,5 +28,20 @@ export const WholeSurface: Story = {
     await expect(canvas.getByRole("heading", { name: "Running" })).toBeVisible();
     await expect(canvas.getByRole("heading", { name: "Queued" })).toBeVisible();
     await expect(canvas.getByRole("complementary", { name: "Helm" })).toBeVisible();
+  },
+};
+
+/**
+ * The Running panel beside Helm's open dock, at the shell's own width — one row with a plan and
+ * one without. The owner's own report: the action went missing at 1284px here, because the row's
+ * fixed-floor facts overflowed a box this narrow. The row keeps every fact and wraps rather than
+ * losing the action.
+ */
+export const RunningPanelBesideDock: Story = {
+  name: "Running panel beside Helm's dock",
+  args: { jobs: RUNNING_ONE_WITH_A_PLAN },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByRole("button", { name: /Redirect/ })[0]).toBeVisible();
   },
 };
