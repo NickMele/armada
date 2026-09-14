@@ -13,7 +13,7 @@
 
 import { Dialog, JOB_LIFECYCLE, SplitButton, type SplitButtonItem } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /** Which finished Jobs each bulk act would reach. */
 export function terminalOf(jobs: readonly JobSummary[]): {
@@ -42,6 +42,7 @@ export function BoardActions({
   onOpenLimits,
   onClearTerminal,
   onForgetTerminal,
+  sweeping,
 }: {
   /** Every Job Bridge holds, not just the rows drawn: clearing is Fleet's board. */
   jobs: readonly JobSummary[];
@@ -56,8 +57,17 @@ export function BoardActions({
   onOpenLimits: () => void;
   onClearTerminal: (jobIds: readonly string[]) => void;
   onForgetTerminal: (jobIds: readonly string[]) => void;
+  /** Which bulk sweep Fleet has not answered yet. #1117. */
+  sweeping: "clear" | "forget" | null;
 }) {
   const [asking, setAsking] = useState<"clear" | "forget" | null>(null);
+  // The dialog that asked stays up while the sweep it confirmed is out — its
+  // confirm is the one control still on screen once the menu that opened it
+  // has already closed, so it is what carries the wait. Closes once `sweeping`
+  // answers, whichever way. #1117.
+  useEffect(() => {
+    if (asking !== null && sweeping === null) setAsking(null);
+  }, [sweeping, asking]);
   const { reclaimable, forgettable } = terminalOf(jobs);
   const clearNoun = reclaimable.length === 1 ? "job" : "jobs";
   const forgetNoun = forgettable.length === 1 ? "job's" : "jobs'";
@@ -89,7 +99,7 @@ export function BoardActions({
         variant="primary"
         items={items}
         onAction={onCompose}
-        disabled={!live}
+        disabled={!live || sweeping !== null}
         menuLabel="Everything else on the Board"
       >
         Dispatch
@@ -98,12 +108,13 @@ export function BoardActions({
         open={asking === "clear"}
         tone="destructive"
         title={`Clear ${reclaimable.length} finished ${clearNoun}?`}
-        confirmLabel="Clear"
-        onCancel={() => setAsking(null)}
-        onConfirm={() => {
-          setAsking(null);
-          onClearTerminal(reclaimable);
-        }}
+        confirmLabel={sweeping === "clear" ? "Clearing…" : "Clear"}
+        confirmDisabled={sweeping !== null}
+        // Refuses a second press the way a pending Button does: the control
+        // stays put, the wait is still on it, and Cancel does nothing rather
+        // than abandoning a sweep already sent. #1117.
+        onCancel={sweeping === null ? () => setAsking(null) : undefined}
+        onConfirm={() => onClearTerminal(reclaimable)}
       >
         <p>
           {`Every job that is done, failed, killed, rejected or superseded, ${reclaimable.length} right now, has `}
@@ -119,12 +130,10 @@ export function BoardActions({
         open={asking === "forget"}
         tone="destructive"
         title={`Delete ${forgettable.length} finished ${forgetNoun} records?`}
-        confirmLabel="Delete"
-        onCancel={() => setAsking(null)}
-        onConfirm={() => {
-          setAsking(null);
-          onForgetTerminal(forgettable);
-        }}
+        confirmLabel={sweeping === "forget" ? "Deleting…" : "Delete"}
+        confirmDisabled={sweeping !== null}
+        onCancel={sweeping === null ? () => setAsking(null) : undefined}
+        onConfirm={() => onForgetTerminal(forgettable)}
       >
         <p>
           {`Every job that is done, failed, killed, rejected or superseded, ${forgettable.length} right now, is `}

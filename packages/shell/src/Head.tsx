@@ -87,6 +87,8 @@ export type HeadProps = {
   jobs: readonly JobSummary[];
   onClearTerminal: (jobIds: readonly string[]) => void;
   onForgetTerminal: (jobIds: readonly string[]) => void;
+  /** Which bulk sweep is out, so its own control waits and the other is off. #1117. */
+  sweeping: "clear" | "forget" | null;
 };
 
 /** What the head is called, what it says beneath, and what sits at its edge. */
@@ -112,6 +114,7 @@ export function headOf({
   jobs,
   onClearTerminal,
   onForgetTerminal,
+  sweeping,
 }: HeadProps): Head | null {
   if (manifest !== false) {
     return {
@@ -201,6 +204,7 @@ export function headOf({
         onOpenLimits={onOpenLimits}
         onClearTerminal={onClearTerminal}
         onForgetTerminal={onForgetTerminal}
+        sweeping={sweeping}
       />
     ),
   };

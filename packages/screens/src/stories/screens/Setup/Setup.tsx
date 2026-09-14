@@ -325,7 +325,7 @@ export function SetupFrom({
     reading: false, composing: false, auditing: false, clearing: false, manifest: editing.view, live: true,
     refreshing: false, onCloseComposer: noop, onCompose: noop, onCloseReports: noop, onReadReports: noop,
     onCloseWorktrees: noop, onReadWorktrees: noop, onOpenLimits: noop, onRefresh: noop, jobs: [],
-    onClearTerminal: noop, onForgetTerminal: noop,
+    onClearTerminal: noop, onForgetTerminal: noop, sweeping: null,
   });
 
   return (

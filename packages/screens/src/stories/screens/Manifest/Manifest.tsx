@@ -352,6 +352,7 @@ export function ManifestFrom({
     jobs: [],
     onClearTerminal: noop,
     onForgetTerminal: noop,
+    sweeping: null,
   });
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
