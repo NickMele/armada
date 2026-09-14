@@ -283,7 +283,6 @@ pub use proposal::{proposed, Proposing};
 pub use proposing::{Brief, NotProposed, Proposal, ProposedJob, Unresolved};
 pub use questioning::{Answer, NotAnswered, NotAsked, Question, Told};
 pub use readopting::Recovered;
-pub use seeding::{Cold, CopyOnWrite, NotCloned, Seeding, TheVolume};
 pub use reconciled::Reconciled;
 pub use redaction::Redactor;
 pub use redispatch::Replacement;
@@ -296,6 +295,7 @@ pub use runtime::{
     Staleness, Vacancy, FILE_NAME,
 };
 pub use scope::{Declared, Drifting, NotDeclared};
+pub use seeding::{Cold, CopyOnWrite, NotCloned, Seeding, TheVolume};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use settling::Settled;
 pub use showing::{frames_dir, show, ComingUp, NotShown, Shown};

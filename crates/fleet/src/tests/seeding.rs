@@ -171,7 +171,11 @@ async fn a_new_worktree_starts_from_the_warm_seed_before_setup_requires_runs() {
             .expect("cloned"),
         format!("built at {COMMIT}")
     );
-    assert_eq!(copying.asked(), 1, "one clone, of the one declared directory");
+    assert_eq!(
+        copying.asked(),
+        1,
+        "one clone, of the one declared directory"
+    );
     assert_eq!(
         recorded(fleet.first().records_root(), &job.handle()),
         Some(Recorded::Seeded {
@@ -179,9 +183,15 @@ async fn a_new_worktree_starts_from_the_warm_seed_before_setup_requires_runs() {
             paths: vec![String::from("target")],
         })
     );
-    assert!(log(&fleet, &job).contains("the worktree was seeded from the base checkout's warm build"));
+    assert!(
+        log(&fleet, &job).contains("the worktree was seeded from the base checkout's warm build")
+    );
     assert_eq!(
-        fleet.run_sheet(job.id()).await.expect("a run sheet").seeding,
+        fleet
+            .run_sheet(job.id())
+            .await
+            .expect("a run sheet")
+            .seeding,
         Some(ipc::WorktreeSeeding::Seeded {
             commit: COMMIT.to_string(),
             paths: vec![String::from("target")],
@@ -189,7 +199,10 @@ async fn a_new_worktree_starts_from_the_warm_seed_before_setup_requires_runs() {
         "the Job's Setup group reads what was written down"
     );
     assert_eq!(
-        fleet.declared_seed(&fleet.first()).expect("declared").warmth,
+        fleet
+            .declared_seed(&fleet.first())
+            .expect("declared")
+            .warmth,
         ipc::SeedWarmth::Warm {
             commit: COMMIT.to_string()
         }
@@ -215,8 +228,18 @@ async fn a_repository_that_declares_no_seed_is_cut_exactly_as_before() {
         !log.contains("the worktree was seeded") && !log.contains("the worktree starts cold"),
         "{log}"
     );
-    assert!(fleet.vcs().bases().is_empty(), "no base checkout was made for it");
-    assert_eq!(fleet.run_sheet(job.id()).await.expect("a run sheet").seeding, None);
+    assert!(
+        fleet.vcs().bases().is_empty(),
+        "no base checkout was made for it"
+    );
+    assert_eq!(
+        fleet
+            .run_sheet(job.id())
+            .await
+            .expect("a run sheet")
+            .seeding,
+        None
+    );
     assert_eq!(fleet.declared_seed(&fleet.first()), None);
     assert!(fleet.warm_seeds().is_none(), "and nothing warms");
 }
@@ -240,7 +263,10 @@ async fn a_job_cut_while_the_seed_is_warming_starts_cold_and_says_so() {
     assert!(why.contains("still warming"), "{why}");
     assert!(log(&fleet, &job).contains("the worktree starts cold, with no seed"));
     assert_eq!(
-        fleet.declared_seed(&fleet.first()).expect("declared").warmth,
+        fleet
+            .declared_seed(&fleet.first())
+            .expect("declared")
+            .warmth,
         ipc::SeedWarmth::Warming {
             commit: COMMIT.to_string()
         },
@@ -248,7 +274,10 @@ async fn a_job_cut_while_the_seed_is_warming_starts_cold_and_says_so() {
     );
 
     warming.await.expect("the warm-up ends");
-    assert!(Path::new(&spec.seed_marker()).exists(), "marked once it succeeded");
+    assert!(
+        Path::new(&spec.seed_marker()).exists(),
+        "marked once it succeeded"
+    );
 }
 
 /// *A volume with no copy-on-write clone gets no seed rather than a full copy,
@@ -288,7 +317,10 @@ async fn the_warm_up_runs_in_the_base_checkout_and_marks_the_seed_once_it_succee
 
     assert!(Path::new(&spec.path()).join("target").is_dir());
     assert!(Path::new(&spec.seed_marker()).exists());
-    assert!(fleet.warm_seeds().is_none(), "a warm seed is not warmed again");
+    assert!(
+        fleet.warm_seeds().is_none(),
+        "a warm seed is not warmed again"
+    );
 }
 
 /// A warm-up that fails leaves no mark, is not retried at the same commit, and
@@ -311,11 +343,17 @@ async fn a_warm_up_that_fails_leaves_no_mark_and_the_next_job_says_why() {
         .await
         .expect("the warm-up ends");
     assert!(!Path::new(&spec.seed_marker()).exists());
-    assert!(fleet.warm_seeds().is_none(), "not retried until the base moves");
+    assert!(
+        fleet.warm_seeds().is_none(),
+        "not retried until the base moves"
+    );
 
     let job = a_dispatched_job(&home, &fleet).await;
     let why = cold_because(&fleet, &job);
-    assert!(why.contains("did not finish") && why.contains("warm"), "{why}");
+    assert!(
+        why.contains("did not finish") && why.contains("warm"),
+        "{why}"
+    );
 }
 
 /// A base that moved warms from the last seed rather than from nothing: the

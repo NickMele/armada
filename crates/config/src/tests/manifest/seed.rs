@@ -23,7 +23,11 @@ fn a_seed_arrives_with_its_paths_and_its_warm_up_resolved_in_order() {
     ))
     .expect("a seed");
     let seed = manifest.seed().expect("declared");
-    assert_eq!(seed.paths(), ["target", "build"], "a trailing `/` is dropped");
+    assert_eq!(
+        seed.paths(),
+        ["target", "build"],
+        "a trailing `/` is dropped"
+    );
     let warm: Vec<(&str, &str)> = seed
         .warmed_by()
         .iter()
@@ -44,8 +48,10 @@ fn a_repository_that_declares_no_seed_has_none() {
 
 #[test]
 fn a_seed_needs_no_requires_beside_it() {
-    let manifest = parse(&with_setup("  seed:\n    paths: [target]\n    warm: [warm]\n"))
-        .expect("a seed and nothing to prepare");
+    let manifest = parse(&with_setup(
+        "  seed:\n    paths: [target]\n    warm: [warm]\n",
+    ))
+    .expect("a seed and nothing to prepare");
     assert!(manifest.prepared_by().is_empty());
     assert!(manifest.seed().is_some());
 }
@@ -53,15 +59,24 @@ fn a_seed_needs_no_requires_beside_it() {
 #[test]
 fn a_setup_with_neither_key_is_still_refused_at_requires() {
     let refused = refusals(parse(&with_setup("  {}\n")));
-    assert!(matches!(fault_at(&refused, "setup.requires"), Fault::Missing));
+    assert!(matches!(
+        fault_at(&refused, "setup.requires"),
+        Fault::Missing
+    ));
 }
 
 #[test]
 fn both_seed_keys_are_required() {
     let refused = refusals(parse(&with_setup("  seed:\n    paths: [target]\n")));
-    assert!(matches!(fault_at(&refused, "setup.seed.warm"), Fault::Missing));
+    assert!(matches!(
+        fault_at(&refused, "setup.seed.warm"),
+        Fault::Missing
+    ));
     let refused = refusals(parse(&with_setup("  seed:\n    warm: [warm]\n")));
-    assert!(matches!(fault_at(&refused, "setup.seed.paths"), Fault::Missing));
+    assert!(matches!(
+        fault_at(&refused, "setup.seed.paths"),
+        Fault::Missing
+    ));
 }
 
 #[test]
@@ -115,7 +130,8 @@ fn one_directory_named_twice_is_refused() {
 
 #[test]
 fn clearing_requires_in_a_form_keeps_the_seed() {
-    let text = with_setup("  requires: [install]\n  seed:\n    paths: [target]\n    warm: [warm]\n");
+    let text =
+        with_setup("  requires: [install]\n  seed:\n    paths: [target]\n    warm: [warm]\n");
     let done = amend(
         &named("armada.yml"),
         &text,

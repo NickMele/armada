@@ -39,7 +39,8 @@ use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
     detect_ceiling, Allowance, BindConnectProbe, Bytes, CheckBudget, Clock, CommandBudget,
     Concurrency, DryRuns, Fittings, Fleet, Headroom, Host, JudgeBudget, Liveness, Micros, Mint,
-    Noticing, Polling, PortRange, Reclaiming, Spare, StepNorms, SystemClock, TheMachine, TheVolume, UlidMint,
+    Noticing, Polling, PortRange, Reclaiming, Spare, StepNorms, SystemClock, TheMachine, TheVolume,
+    UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;

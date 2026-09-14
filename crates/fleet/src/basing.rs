@@ -228,7 +228,8 @@ pub(crate) async fn prepare_checkout(
 ) -> Result<(), NoBase> {
     let at = spec.path();
     for command in required {
-        if let Err(cause) = prepare_one(command, Path::new(&at), budget, &BTreeMap::new(), &[]).await
+        if let Err(cause) =
+            prepare_one(command, Path::new(&at), budget, &BTreeMap::new(), &[]).await
         {
             // `verification::how` and not `NotPrepared`'s own `Display`:
             // that sentence opens *the worktree was not prepared*, and this
@@ -309,7 +310,10 @@ where
         // The seed's warm-up may have prepared it while this waited.
         let _held = self.base_preparing().lock().await;
         if Path::new(&spec.ready_marker()).exists() {
-            return Ok((served, BaseCheckout::at(checkout.path(), spec.commit(), true)));
+            return Ok((
+                served,
+                BaseCheckout::at(checkout.path(), spec.commit(), true),
+            ));
         }
         let prepared = self.prepare_the_base(job, &spec, checkout, &served).await?;
         Ok((served, prepared))

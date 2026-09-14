@@ -129,6 +129,7 @@ mod resources;
 /// What Scan found in a repository nobody set up for Armada. **Evidence,
 /// never a proposal** — every finding carries the file it came from.
 mod scan;
+mod seeding;
 /// A Command that stays running, held by Fleet. **Lifecycle on `/events`,
 /// output on a socket of its own.**
 mod servers;
@@ -249,7 +250,6 @@ pub use rehearsal::{
 pub use rehearsal::{
     CheckoutVerify, StartCheckoutVerify, VerifyGroup, VerifyStep, VerifyStepState,
 };
-pub use rehearsal::{DeclaredSeed, SeedWarmth, WorktreeSeeding};
 pub use remarks::{InlineContext, JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use repositories::{AddRepository, CloneRepository, RepositoryList, RepositorySummary};
@@ -261,6 +261,7 @@ pub use scan::{
     PackageWorkspaces, RepositoryScan, Runnable, ScannedWorkspace, ToolFile, ToolSection,
     WorkspaceGlob, WorkspaceGlobs,
 };
+pub use seeding::{DeclaredSeed, SeedWarmth, WorktreeSeeding};
 pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,
     ServerPort, ServerState, StartServer, StartedBy,

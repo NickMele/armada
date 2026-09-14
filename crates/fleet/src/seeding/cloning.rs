@@ -95,8 +95,14 @@ mod tests {
 
         match TheVolume.clone_tree(&from, &to) {
             Ok(()) => {
-                assert_eq!(std::fs::read_to_string(to.join("debug/deps/one.rlib")).unwrap(), "one");
-                assert_eq!(std::fs::read_to_string(to.join("CACHEDIR.TAG")).unwrap(), "tag");
+                assert_eq!(
+                    std::fs::read_to_string(to.join("debug/deps/one.rlib")).unwrap(),
+                    "one"
+                );
+                assert_eq!(
+                    std::fs::read_to_string(to.join("CACHEDIR.TAG")).unwrap(),
+                    "tag"
+                );
             }
             Err(NotCloned::Unsupported { .. }) => assert!(!to.exists()),
             Err(other) => panic!("a clone into a fresh path failed: {other:?}"),

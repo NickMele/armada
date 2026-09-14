@@ -34,8 +34,8 @@ use referring::{after_merge, preparation, required_by};
 use serving::CommandEntry;
 
 pub use declared::{Check, Command, Port, Preparation};
-pub use seed::{BadSeedPath, Seed};
 pub use harness::Harness;
+pub use seed::{BadSeedPath, Seed};
 pub use serving::{Link, Server};
 
 use std::collections::{BTreeMap, BTreeSet};

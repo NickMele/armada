@@ -49,7 +49,13 @@ where
                 let (setup, checks, commands) = entries::declared(manifest).sheet(&[]);
                 let holder = crate::servers::Holder::MainCheckout(served.root().to_string());
                 let servers = self.declared_servers(&holder, manifest);
-                (setup, checks, commands, servers, self.declared_seed(&served))
+                (
+                    setup,
+                    checks,
+                    commands,
+                    servers,
+                    self.declared_seed(&served),
+                )
             }
             None => Default::default(),
         };

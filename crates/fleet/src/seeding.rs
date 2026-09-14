@@ -74,17 +74,26 @@ pub enum Seeding {
 pub enum Cold {
     NoBase(NoBase),
     /// The seed at this commit is warming. A seed is never cloned mid-warm-up.
-    Warming { commit: String },
+    Warming {
+        commit: String,
+    },
     /// No warm-up has finished at this commit, and why the last one failed.
     NotWarm {
         commit: String,
         failed: Option<String>,
     },
     /// The warm seed holds none of the declared directories.
-    Empty { commit: String },
+    Empty {
+        commit: String,
+    },
     /// This volume cannot clone, and a seed is never copied in full.
-    NoCopyOnWrite { why: String },
-    NotCloned { path: String, why: String },
+    NoCopyOnWrite {
+        why: String,
+    },
+    NotCloned {
+        path: String,
+        why: String,
+    },
 }
 
 impl Cold {
@@ -183,12 +192,20 @@ where
         let cold = |why: NoBase| Seeding::Cold(Cold::NoBase(why));
         let served = match self.served_by(job) {
             Ok(served) => served,
-            Err(why) => return cold(NoBase::NotCheckedOut { why: why.to_string() }),
+            Err(why) => {
+                return cold(NoBase::NotCheckedOut {
+                    why: why.to_string(),
+                })
+            }
         };
         let at = match self.vcs().base_commit(served.root(), manifest.base()) {
             Ok(Some(at)) => at,
             Ok(None) => return cold(NoBase::Unnamed),
-            Err(cause) => return cold(NoBase::NotCheckedOut { why: cause.to_string() }),
+            Err(cause) => {
+                return cold(NoBase::NotCheckedOut {
+                    why: cause.to_string(),
+                })
+            }
         };
         let spec = match BaseSpec::at(served.root(), &at) {
             Ok(spec) => spec,
@@ -208,9 +225,10 @@ where
         let copying = Arc::clone(self.copy_on_write());
         let (from, into) = (PathBuf::from(spec.path()), PathBuf::from(worktree.path()));
         let paths = seed.paths().to_vec();
-        let cloned =
-            tokio::task::spawn_blocking(move || cloned_into(copying.as_ref(), &from, &into, &paths))
-                .await;
+        let cloned = tokio::task::spawn_blocking(move || {
+            cloned_into(copying.as_ref(), &from, &into, &paths)
+        })
+        .await;
         match cloned {
             Ok(Ok(paths)) if paths.is_empty() => Seeding::Cold(Cold::Empty { commit }),
             Ok(Ok(paths)) => Seeding::Seeded { commit, paths },
@@ -340,8 +358,9 @@ where
             self.spec.clone(),
             self.paths.clone(),
         );
-        let _ = tokio::task::spawn_blocking(move || carried_forward(copying.as_ref(), &spec, &paths))
-            .await;
+        let _ =
+            tokio::task::spawn_blocking(move || carried_forward(copying.as_ref(), &spec, &paths))
+                .await;
         for command in &self.warm {
             prepare_one(
                 command,
@@ -367,7 +386,9 @@ fn carried_forward(copying: &dyn CopyOnWrite, spec: &BaseSpec, paths: &[String])
     };
     let previous = listing
         .flatten()
-        .filter_map(|entry| BaseSpec::at(spec.repo_root(), &entry.file_name().to_string_lossy()).ok())
+        .filter_map(|entry| {
+            BaseSpec::at(spec.repo_root(), &entry.file_name().to_string_lossy()).ok()
+        })
         .filter(|other| other.commit() != spec.commit())
         .find(|other| Path::new(&other.seed_marker()).exists());
     if let Some(previous) = previous {
