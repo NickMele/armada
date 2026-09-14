@@ -99,8 +99,7 @@ faithful conversion has been wrong here twice.
 
 | Check | Command |
 |---|---|
-| Tests | `cargo nextest run --workspace --exclude acceptance`, then `cargo test -p acceptance` — the acceptance crate is excluded from the first because it is the milestone's claim rather than a unit test, and is worth reading on its own |
-| The gate | `cargo xtask verify-foundations` — read every line it names |
+| Tests and the gate | What `work-issue` step 4 says the change can affect, run once. `acceptance` is read on its own, because it is the milestone's claim rather than a unit test |
 | Dependencies | `cargo tree -p core-model` shows only itself |
 
 Then walk the step's own "How" bullets one at a time and say, for each, what

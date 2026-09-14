@@ -65,17 +65,10 @@ anything merged**, and take every edit inside the worktree the commit comes from
 
 ## 1. Through the gate, merged, and `main` synced
 
-For every branch this session committed to. The gate is all of it, every time:
-
-| | |
-|---|---|
-| `cargo build --workspace --locked` | **no warnings, not exit 0** — see below |
-| `cargo nextest run --workspace --exclude acceptance` | the count, against the count on `main` |
-| `cargo test -p acceptance` | separately; a milestone's own claim may be red while it is in flight |
-| `cargo fmt --all --check` | clean |
-| `cargo xtask verify-docs` | green — a stale `docs/OPEN.md` fails it |
-| `cargo xtask verify-foundations` | **the delta, never the colour.** A `missing:` line this session added is a regression |
-| Bridge: `typecheck`, `build`, `build-storybook` | if `apps/` or `packages/` was touched |
+For every branch this session committed to. The gate is what `work-issue` step 4
+says each branch's change can affect, run once per branch and one heavy run at a
+time. `verify-foundations` is **the delta, never the colour**: a `missing:` line
+this session added is a regression.
 
 **A warning is a gate line this table used to let through.** Confirmed
 2026-09-09: `cargo build` printed `method allowance is never used` on every run

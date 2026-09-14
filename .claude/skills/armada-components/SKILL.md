@@ -165,8 +165,11 @@ From `packages/components`:
   Chromium shell — `armada run browsers` from the root, once per machine.
 - **A `play` you added is run once against the component broken on purpose.**
   Revert the break before committing; the point is the failure, not the fix.
+- **Run the stories you changed, not the package**: `pnpm exec vitest run
+  src/<path>`. The whole package runs once, before the PR, and never beside
+  another heavy run.
 - `pnpm exec vitest` watches instead, which is the loop to work in.
-- `pnpm build-storybook` must succeed.
+- `pnpm build-storybook` must succeed, once, before the PR.
 - `pnpm exec storybook dev -p 6006 --no-open --ci` to look at it. **Pass `--ci`**
   — without it a port conflict opens an interactive prompt and the command hangs.
 
