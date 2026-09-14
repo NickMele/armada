@@ -578,17 +578,19 @@ fn checks_tool() -> Value {
     json!({
         "name": CHECKS_TOOL,
         "description":
-            "Run the checks that gate the part you are on — the ones your brief \
-             names under FINDING OUT WHERE YOU STAND — in your worktree, and get \
-             back what each one did and where its output was written. It runs \
+            "Start the checks that gate the part you are on — the ones your brief \
+             names under FINDING OUT WHERE YOU STAND — in your worktree. The call \
+             comes back at once, and what each one did and where its output was \
+             written arrives as a later turn when they finish, however long they \
+             take: wait for it rather than running the checks yourself. It runs \
              all of them; which checks they are was settled when this Job was \
              approved and there is nothing to choose. Call it when you want to \
              know whether the work holds up, before you submit. It is not a \
              verdict and it advances nothing — the checks are run again when you \
-             submit, and only that run decides anything. There is a limit on how \
-             many times one part may ask, a second call while one is still \
-             running is refused, and a part whose brief names no checks has none \
-             to run.",
+             submit, and only that run decides anything. Submitting while they \
+             run stops them, and no report comes. There is a limit on how many \
+             times one part may ask, a second call while one is still running is \
+             refused, and a part whose brief names no checks has none to run.",
         "inputSchema": {
             "type": "object",
             "properties": {

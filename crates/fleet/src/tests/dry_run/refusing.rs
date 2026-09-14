@@ -80,12 +80,12 @@ async fn a_drone_that_has_already_submitted_is_told_to_wait() {
 #[tokio::test]
 async fn a_step_that_has_spent_its_allowance_is_refused_and_told_why() {
     let home = TempDir::new();
-    let fleet = a_fleet_checking(
+    let fleet = Arc::new(a_fleet_checking(
         &home,
         one_step("/usr/bin/true"),
         Arc::new(Held::started()),
         1,
-    );
+    ));
     started(&fleet, &home).await;
 
     checked_by_the_one(&fleet).await.expect("the first run");
@@ -118,7 +118,12 @@ async fn a_step_with_no_checks_is_refused_rather_than_answered_with_nothing() {
         scope: None,
         gaming: None,
     }]);
-    let fleet = a_fleet_checking(&home, unchecked, Arc::new(Held::started()), 3);
+    let fleet = Arc::new(a_fleet_checking(
+        &home,
+        unchecked,
+        Arc::new(Held::started()),
+        3,
+    ));
     started(&fleet, &home).await;
 
     let refused = checked_by_the_one(&fleet)
@@ -135,12 +140,12 @@ async fn a_step_with_no_checks_is_refused_rather_than_answered_with_nothing() {
 #[tokio::test]
 async fn a_call_with_nothing_working_is_refused() {
     let home = TempDir::new();
-    let fleet = a_fleet_checking(
+    let fleet = Arc::new(a_fleet_checking(
         &home,
         one_step("/usr/bin/true"),
         Arc::new(Held::started()),
         3,
-    );
+    ));
 
     let refused = checked_by_the_one(&fleet)
         .await

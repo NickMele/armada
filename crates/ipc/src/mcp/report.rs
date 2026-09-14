@@ -106,6 +106,21 @@ pub struct CheckReport {
     pub narrowed: bool,
 }
 
+/// That the Checks have started, which is all `run_checks` answers. The
+/// [`CheckReport`] arrives as a later turn, once they finish. `#1020`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChecksStarted;
+
+impl ChecksStarted {
+    /// What the Drone reads as the tool's answer.
+    pub fn said(&self) -> &'static str {
+        "started. The checks are running, and what each one did arrives as a later \
+         turn once they finish, however long they take. Wait for it rather than \
+         running the checks yourself. Submitting before it arrives stops them, and \
+         then no report comes."
+    }
+}
+
 impl CheckReport {
     /// How many did not pass. A count for the summary line and not a verdict:
     /// see this module's comment.

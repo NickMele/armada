@@ -9,10 +9,11 @@
 //! would be the Drone marking its own work**, so most of what these prove is
 //! an absence.
 //!
-//! Why there are five modules: `report` is what comes back, `absence` is what
+//! Why there are six modules: `report` is what comes back, `absence` is what
 //! it did not decide and did not cost, `refusing` is the calls that get no
-//! report at all, `offering` is what a Drone was told before it made one, and
-//! `narrowing` is the second of the two runs it can ask for. The Fleet, the
+//! report at all, `offering` is what a Drone was told before it made one,
+//! `narrowing` is the second of the two runs it can ask for, and `later` is the
+//! report arriving as a turn, whatever the call did. The Fleet, the
 //! Checks and the wire are here, because a run assembled differently between
 //! them would leave five modules answering about five different steps.
 //!
@@ -24,6 +25,7 @@
 //! counts that time against the Drone.
 
 mod absence;
+mod later;
 mod narrowing;
 mod offering;
 mod refusing;
@@ -38,7 +40,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::Router;
 use config::ResolvedWorkflow;
-use core_model::Timestamp;
+use core_model::{DroneId, JobId, Timestamp};
 use http_body_util::BodyExt;
 use ipc::RunId;
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
@@ -192,30 +194,86 @@ struct Said {
 }
 
 /// The dry-run tool call, exactly as a client makes one, asking for the whole
-/// run.
-async fn ask(app: &Router) -> Said {
-    asking(app, false).await
+/// run — and then the report the Drone is sent, or the refusal it was given.
+async fn ask(app: &Router, fleet: &Fixture, home: &TempDir) -> Said {
+    asking(app, fleet, home, false).await
 }
 
 /// The same call, saying which of the two runs is wanted.
-async fn asking(app: &Router, only_what_changed: bool) -> Said {
-    let body = post(
-        app,
-        &format!(
-            r#"{{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{{"name":"run_checks",
-                "arguments":{{"only_what_changed":{only_what_changed}}}}}}}"#
-        ),
-    )
-    .await;
-    let at = body
-        .find("\"text\":\"")
-        .unwrap_or_else(|| panic!("a tool result carrying one text block: {body}"));
-    let rest = &body[at + 8..];
-    let end = rest.find("\",").expect("a closed text block");
-    Said {
-        text: rest[..end].to_string(),
+async fn asking(app: &Router, fleet: &Fixture, home: &TempDir, only_what_changed: bool) -> Said {
+    let drone = the_one_drone(fleet).await;
+    let before = match &drone {
+        Some((job, drone)) => told_checks(fleet, home, job, drone).await.len(),
+        None => 0,
+    };
+    let body = post(app, &call(only_what_changed)).await;
+    let answered = Said {
+        text: text_of(&body),
         is_error: body.contains("\"isError\":true"),
+    };
+    let Some((job, drone)) = drone.filter(|_| !answered.is_error) else {
+        return answered;
+    };
+    assert!(
+        answered.text.contains("later turn"),
+        "the call says where the report comes from: {}",
+        answered.text
+    );
+    for _ in 0..2_000 {
+        let told = told_checks(fleet, home, &job, &drone).await;
+        if let Some(text) = told.into_iter().nth(before) {
+            return Said {
+                text,
+                is_error: false,
+            };
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
+    panic!("the report never arrived as a later turn");
+}
+
+/// The `run_checks` call, as JSON-RPC.
+fn call(only_what_changed: bool) -> String {
+    format!(
+        r#"{{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{{"name":"run_checks",
+            "arguments":{{"only_what_changed":{only_what_changed}}}}}}}"#
+    )
+}
+
+/// The one Job being worked and its Drone, where there is one.
+async fn the_one_drone(fleet: &Fixture) -> Option<(JobId, DroneId)> {
+    let job = fleet.working_on().await.first().cloned()?;
+    let drone = fleet.load(&job).await.ok()?.assigned_drone().cloned()?;
+    Some((job, drone))
+}
+
+/// Every Checks report written into this Drone's transcript, oldest first, as
+/// the rows carry the text. The transcript is the record of what Fleet said.
+async fn told_checks(fleet: &Fixture, home: &TempDir, job: &JobId, drone: &DroneId) -> Vec<String> {
+    let handle = fleet.load(job).await.expect("the Job").handle();
+    let path = crate::transcript::transcript_of(&home.path().to_string_lossy(), &handle, drone);
+    std::fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|row| row.contains("\"occasion\":\"checks\""))
+        .map(text_of)
+        .collect()
+}
+
+/// The first `text` string in a JSON body, still escaped.
+fn text_of(body: &str) -> String {
+    let Some(at) = body.find("\"text\":\"") else {
+        panic!("a body carrying a text field: {body}");
+    };
+    let mut escaped = false;
+    body[at + 8..]
+        .chars()
+        .take_while(|c| {
+            let closes = *c == '"' && !escaped;
+            escaped = *c == '\\' && !escaped;
+            !closes
+        })
+        .collect()
 }
 
 async fn submit(app: &Router) {

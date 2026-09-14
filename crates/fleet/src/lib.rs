@@ -256,7 +256,7 @@ pub use detach::Detached;
 pub use drone::{
     aftermath, environment, Aftermath, DroneNotStarted, Ending, HostPaths, Left, Started,
 };
-pub use dry_run::{DryRuns, NotRun};
+pub use dry_run::{ChecksReported, DryRuns, NotRun};
 pub use evidence::{
     Call, Decline, EvidenceInbox, EvidenceTool, Landed, NotSubmitted, Recorded, Standing,
 };

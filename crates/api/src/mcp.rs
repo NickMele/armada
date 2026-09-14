@@ -140,18 +140,14 @@ async fn called<D: Tools>(
                 Err(why) => Answered::Refused { id, why },
             }
         }
-        // **The first of the two calls held open while work happens** — the
-        // other is `Widen` below. Every other arm here answers from a value the
-        // daemon already has; this one runs the step's Checks and comes back
-        // with what they printed, which is minutes rather than milliseconds. It
-        // adds nothing to the unbounded-sink risk this module's comment names —
-        // it is still one reply on the Drone's own connection — and what bounds
-        // the cost is `Tools::run_checks`'s, not the transport's.
+        // **Answered once the run has started, and the report is not here.** A
+        // build is minutes and a client gives up on a call sooner, which used to
+        // take the run with it (#1020). By `Arc`, because the run outlives this.
         Incoming::RunChecks {
             id,
             only_what_changed,
-        } => match served.daemon().run_checks(caller, only_what_changed).await {
-            Ok(report) => Answered::Checked { id, report },
+        } => match served.shared().run_checks(caller, only_what_changed).await {
+            Ok(started) => Answered::Checking { id, started },
             Err(why) => Answered::Refused { id, why },
         },
         // **Held open a bounded while**, so the answer can carry an address
@@ -172,9 +168,9 @@ async fn called<D: Tools>(
                 Err(why) => Answered::Refused { id, why },
             }
         }
-        // **The second call held open, and the wait has a budget.** What
-        // answers it is one Judge call, so the shape is `run_checks`'s rather
-        // than `ask_question`'s: the outcome *is* the answer, and a receipt
+        // **Held open, and the wait has a budget.** What answers it is one
+        // Judge call, so the shape is not `ask_question`'s: the outcome *is*
+        // the answer, and a receipt
         // that came back before the answer would leave the Drone with nothing
         // to act on. Nothing moves while it is out — the Job is `running` when
         // the call is made and `running` when it returns.
@@ -209,7 +205,7 @@ async fn called<D: Tools>(
             Ok(receipt) => Answered::Recorded { id, receipt },
             Err(why) => Answered::Refused { id, why },
         },
-        // **The third call held open**, and the harness's rather than the
+        // **The other call held open**, and the harness's rather than the
         // Drone's: the call it asks about runs on an allow and not otherwise,
         // so the answer has to be in the reply. What bounds the wait is the
         // harness's own patience, which Fleet holds for less than.

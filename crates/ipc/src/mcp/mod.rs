@@ -42,7 +42,7 @@ pub use dispatch::{DispatchJob, DISPATCH_FIELDS, DISPATCH_TOOL};
 pub use noting::{LeaveNote, MOST_NOTE_CHARS, NOTE_FIELDS, NOTE_TOOL};
 pub use permission::{PermissionAsked, PERMISSION_FIELDS, PERMISSION_TOOL};
 pub use planning::{PlanArgument, PlanCall, ADD_TASK_TOOL, RECORD_PLAN_TOOL, UPDATE_TASK_TOOL};
-pub use report::{CheckExcerpt, CheckRan, CheckReport};
+pub use report::{CheckExcerpt, CheckRan, CheckReport, ChecksStarted};
 pub use reviewing::{ReviewArgument, SubmittedReview, REVIEW_FIELDS};
 pub use serving::{ServerReport, SERVER_FIELDS, SERVER_TOOL};
 pub use tools::{
@@ -255,18 +255,13 @@ pub enum Answered {
         id: CallId,
         receipt: Receipt,
     },
-    /// What the Checks did, in full.
-    ///
-    /// **A success carrying failures.** A report naming three failed Checks is
-    /// still a tool call that worked, so `isError` is false — setting it would
-    /// tell the client the server is broken and put the one answer a Drone
-    /// asked for behind a retry.
-    Checked {
+    /// That the Checks have started. What they did is a later turn. `#1020`.
+    Checking {
         id: CallId,
-        report: CheckReport,
+        started: ChecksStarted,
     },
     /// Where a server is. **A success even where it fell over** — the Drone
-    /// asked where it stands, and that is the answer, for `Checked`'s reason.
+    /// asked where it stands, and that is the answer, so `isError` is false.
     Served {
         id: CallId,
         report: ServerReport,
@@ -466,7 +461,7 @@ pub fn answer(answered: Answered) -> Result<String, Unencodable> {
         Answered::Ping { id } => result(id, json!({})),
         Answered::Tools { id } => result(id, json!({ "tools": tools::listed() })),
         Answered::Recorded { id, receipt } => result(id, said(&receipt.word, false)),
-        Answered::Checked { id, report } => result(id, said(&report.to_string(), false)),
+        Answered::Checking { id, started } => result(id, said(started.said(), false)),
         Answered::Served { id, report } => result(id, said(&report.to_string(), false)),
         Answered::Refused { id, why } => result(id, said(&why.because, true)),
         Answered::Permitted { id, input } => result(

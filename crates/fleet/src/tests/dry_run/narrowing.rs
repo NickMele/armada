@@ -99,7 +99,7 @@ async fn a_narrowed_run_runs_the_command_the_manifest_declared_for_it() {
     let job = started(&fleet, &home).await;
     let handle = fleet.load(&job).await.expect("the Job").handle();
 
-    let said = asking(&app, true).await;
+    let said = asking(&app, &fleet, &home, true).await;
     assert!(!said.is_error, "{}", said.text);
     // The whole command is `/usr/bin/false` and cannot pass, so a passing row
     // is a row that ran the narrowed one.
@@ -141,7 +141,7 @@ async fn a_check_that_declares_no_narrowing_runs_whole_in_a_narrowed_run() {
     let app = router(&fleet);
     started(&fleet, &home).await;
 
-    let said = asking(&app, true).await;
+    let said = asking(&app, &fleet, &home, true).await;
     assert!(said.text.contains("whole"), "{}", said.text);
     // One narrowed command on the report and not two: `whole` ran its own.
     assert_eq!(
@@ -168,7 +168,7 @@ async fn a_check_that_narrows_to_nothing_is_skipped_rather_than_passed() {
     let app = router(&fleet);
     started(&fleet, &home).await;
 
-    let said = asking(&app, true).await;
+    let said = asking(&app, &fleet, &home, true).await;
     assert!(
         said.text.contains("suite") && said.text.contains("SKIPPED"),
         "the Check is named and said to have been skipped: {}",
@@ -202,7 +202,7 @@ async fn a_whole_run_ignores_the_narrowing_the_manifest_declares() {
     let app = router(&fleet);
     started(&fleet, &home).await;
 
-    let said = asking(&app, false).await;
+    let said = asking(&app, &fleet, &home, false).await;
     assert!(
         said.text.contains("suite") && said.text.contains("FAILED"),
         "the Check's own command ran: {}",
@@ -231,7 +231,7 @@ async fn a_narrowed_report_says_a_pass_is_the_smaller_claim() {
     let app = router(&fleet);
     started(&fleet, &home).await;
 
-    let narrowed = asking(&app, true).await;
+    let narrowed = asking(&app, &fleet, &home, true).await;
     assert!(
         narrowed.text.contains("narrowed to what you changed"),
         "the report names the question that was asked: {}",
@@ -265,7 +265,7 @@ async fn a_narrowed_run_of_an_unchanged_worktree_is_refused_before_anything_runs
     let app = router(&fleet);
     started(&fleet, &home).await;
 
-    let said = asking(&app, true).await;
+    let said = asking(&app, &fleet, &home, true).await;
     assert!(said.is_error, "{}", said.text);
     assert!(
         said.text.contains("holds no change"),
@@ -279,7 +279,7 @@ async fn a_narrowed_run_of_an_unchanged_worktree_is_refused_before_anything_runs
         said.text
     );
     // Nothing was spent: the whole run still answers on the next call.
-    let whole = asking(&app, false).await;
+    let whole = asking(&app, &fleet, &home, false).await;
     assert!(!whole.is_error, "{}", whole.text);
 }
 
@@ -304,7 +304,7 @@ async fn a_narrowed_pass_does_not_reach_the_gate() {
     let app = router(&fleet);
     let job = started(&fleet, &home).await;
 
-    let said = asking(&app, true).await;
+    let said = asking(&app, &fleet, &home, true).await;
     assert!(
         said.text.contains("PASSED") && !said.text.contains("FAILED"),
         "every check passed in the narrowed run: {}",
@@ -347,7 +347,7 @@ async fn an_excluded_value_stays_out_of_a_narrowed_run() {
     let app = router(&fleet);
     started(&fleet, &home).await;
 
-    let said = asking(&app, true).await;
+    let said = asking(&app, &fleet, &home, true).await;
     assert!(!said.is_error, "{}", said.text);
     assert!(
         said.text.contains("/bin/echo ipc"),

@@ -9,8 +9,7 @@
 //! Drone whose plan turned out wrong calls the other one.
 //!
 //! **The answer is in the reply.** What answers it is a Judge call with a
-//! budget on it, so it is held open like
-//! [`run_checks`](super::tools::CHECKS_TOOL) rather than receipted like
+//! budget on it, so it is held open rather than receipted like
 //! [`ask_question`](super::ask::ASK_TOOL), whose answer is a person's and has
 //! no budget to wait against.
 

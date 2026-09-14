@@ -376,7 +376,7 @@ where
         let Some(slot) = self.slot_of(job).await else {
             return Err(NotSubmitted::NothingIsWorking);
         };
-        let working = slot.lock().await;
+        let mut working = slot.lock().await;
         let Some(at_work) = working.as_ref() else {
             return Err(NotSubmitted::NothingIsWorking);
         };
@@ -385,6 +385,7 @@ where
         let recorded = EvidenceTool::for_job(job.clone(), self.inbox())
             .submit(call, at.clone())
             .map_err(NotSubmitted::Malformed)?;
+        cut_short(&mut working, &at);
         self.published_submission(&job, &step, evidence_type, &at);
         Ok(recorded)
     }
@@ -431,7 +432,7 @@ where
         let Some(slot) = self.slot_of(caller).await else {
             return Err(NotSubmitted::NothingIsWorking);
         };
-        let working = slot.lock().await;
+        let mut working = slot.lock().await;
         let Some(at_work) = working.as_ref() else {
             return Err(NotSubmitted::NothingIsWorking);
         };
@@ -484,6 +485,7 @@ where
                 at.clone(),
             )
             .map_err(NotSubmitted::Malformed)?;
+        cut_short(&mut working, &at);
         self.published_submission(&job, &step, evidence_type, &at);
         Ok(recorded)
     }
@@ -590,6 +592,14 @@ where
             dropped += 1;
         }
         dropped
+    }
+}
+
+/// Stop a dry run still going once a submission is taken: it would be a second
+/// build beside the gate's, reporting on a part already handed in. `#1020`.
+fn cut_short(working: &mut Option<crate::working::Working>, at: &Timestamp) {
+    if let Some(at_work) = working.as_mut() {
+        at_work.checks_cut_short(at.clone());
     }
 }
 

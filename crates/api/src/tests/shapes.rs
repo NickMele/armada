@@ -13,7 +13,6 @@
 //! know which Job was asked for, or whether there was one, belongs on the other
 //! side of the seam — which is what keeps these readable as the answer alone.
 
-use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
     Actor, Alert, AlertList, Asked, CallArguments, CheckOutput, CommandExplained, DroneDetail,
     DroneId, DroneSummary, EvidenceType, Finding, FleetCapacity, FleetHealth, FleetUsage, Held,
@@ -104,13 +103,6 @@ pub const A_PROPOSAL: &str = r#"{
     "model": "a-model",
     "acceptance_criteria": [{"text": "the symptom is gone", "source": "check"}]
 }"#;
-
-/// A check outcome by its registry spelling. **`from_wire` rather than a
-/// variant**, because this crate names no domain type — the same reason
-/// `origin` and `urgency` below are built this way.
-fn outcome(spelling: &str) -> ipc::CheckOutcome {
-    ipc::CheckOutcome::from_wire(spelling).expect("a check outcome")
-}
 
 /// One step of the rail, declared and not yet run.
 ///
@@ -701,35 +693,6 @@ pub fn models() -> ModelChoices {
     ModelChoices {
         models: vec!["a-model".to_string(), "another-model".to_string()],
         default: "a-model".to_string(),
-    }
-}
-
-/// One passing Check and one failing one, so a test over the router can tell
-/// that a report reaches the Drone **and** that a failure in it is still a
-/// successful tool call.
-pub fn check_report() -> CheckReport {
-    CheckReport {
-        ran: vec![
-            CheckRan {
-                name: "fmt".to_string(),
-                outcome: outcome("passed"),
-                detail: None,
-                took: std::time::Duration::from_millis(300),
-                log: Some(".armada/checks/a-job/implement.dry.0.log".to_string()),
-                narrowed_to: None,
-                output: None,
-            },
-            CheckRan {
-                name: "tests".to_string(),
-                outcome: outcome("failed"),
-                detail: Some("exit code 101, expected 0".to_string()),
-                took: std::time::Duration::from_secs(12),
-                log: Some(".armada/checks/a-job/implement.dry.1.log".to_string()),
-                narrowed_to: None,
-                output: None,
-            },
-        ],
-        narrowed: false,
     }
 }
 

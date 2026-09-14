@@ -26,7 +26,7 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{PermissionAnswer, Tools};
 use ipc::mcp::{
-    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, PlanCall,
+    AskQuestion, ChecksStarted, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, PlanCall,
     Receipt, RequestScope, ServerReport, SubmitEvidence,
 };
 
@@ -163,15 +163,16 @@ where
     /// carried through untouched: it is the Drone's question and Fleet's
     /// worktree that answer it together, and nothing here is either.
     ///
-    /// **What comes back is a report and never a verdict.** The step is exactly
-    /// where it was when the call arrived, whatever the Checks said.
+    /// **What comes back is that they started.** The report is a later turn,
+    /// and the run is Fleet's: the handle is dropped here and the run goes on.
     async fn run_checks(
-        &self,
+        self: std::sync::Arc<Self>,
         caller: api::Caller,
         only_what_changed: bool,
-    ) -> Result<CheckReport, NotRecorded> {
+    ) -> Result<ChecksStarted, NotRecorded> {
         let job = self.placed(&caller)?;
-        Ok(Fleet::run_checks(self, &job, only_what_changed).await?)
+        Fleet::run_checks(&self, &job, only_what_changed).await?;
+        Ok(ChecksStarted)
     }
 
     /// The Drone asking for one more Job to exist.

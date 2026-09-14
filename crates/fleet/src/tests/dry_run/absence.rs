@@ -50,7 +50,7 @@ async fn a_dry_run_that_passed_does_not_satisfy_the_gate() {
     let app = router(&fleet);
     let job = started(&fleet, &home).await;
 
-    let said = ask(&app).await;
+    let said = ask(&app, &fleet, &home).await;
     assert!(
         said.text.contains("PASSED") && !said.text.contains("FAILED"),
         "every check passed in the dry run: {}",

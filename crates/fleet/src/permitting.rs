@@ -368,7 +368,7 @@ impl Refusing {
             // Drone reached for `cargo check` instead of asking.
             Refusing::NotGranted if runs_what_checks_already_run(what) => format!(
                 "This Job is not granted `{what}`. Fleet already runs this part's checks \
-                 under `run_checks`, and its answer names what failed. Ask for that instead \
+                 under `run_checks`, and the report it sends back names what failed. Ask for that instead \
                  of running the command yourself."
             ),
             Refusing::NotGranted => format!(

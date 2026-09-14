@@ -269,7 +269,9 @@ impl Checking {
         block.push_str(
             " Use it \
              when you want to know whether the work holds up rather than \
-             guessing — and note that it takes as long as the checks take.\n\n\
+             guessing. The call comes back at once and what each one did \
+             arrives as a later turn, however long they take, so wait for it \
+             rather than running them yourself.\n\n\
              It is not a verdict and it advances nothing. A run in which \
              everything passes does not finish this part; the checks are run \
              again when you submit, and that run is the one that decides. \

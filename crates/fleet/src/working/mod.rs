@@ -262,6 +262,9 @@ pub(crate) struct Working {
     /// the pokes — and unlike the pokes it is not refunded by anything the
     /// Drone does, because what it bounds is money rather than patience.
     dry_runs: u32,
+    /// The run [`checking_since`](Working::is_checking) is timing, and what
+    /// keeps its Checks going. Dropped with the slot, which stops them.
+    in_flight: Option<(u64, crate::checking::Going)>,
 }
 
 /// A Drone that has been ended, and everything the slot that held it was
@@ -358,6 +361,7 @@ impl Working {
             checking_since: None,
             checked_for: Duration::ZERO,
             dry_runs: 0,
+            in_flight: None,
         }
     }
 
@@ -422,6 +426,7 @@ impl Working {
             checking_since: None,
             checked_for: Duration::ZERO,
             dry_runs: 0,
+            in_flight: None,
         }
     }
 
@@ -446,6 +451,8 @@ impl Working {
     /// same write end, so the pipe outlives the process and this is on the turn
     /// loop's own task — see [`Watching::drained`].
     pub(crate) async fn stood_down(mut self, at: &Timestamp) -> StoodDown {
+        // First, so a dry run's Checks do not outlast the terminate and drain.
+        self.in_flight = None;
         let terminated = self.session.terminate().await;
         let drained = self.transcript.drained().await;
         let events = self.transcript.events();
