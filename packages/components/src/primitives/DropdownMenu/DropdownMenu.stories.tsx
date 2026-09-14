@@ -58,6 +58,32 @@ export const RowMenu: Story = {
   },
 };
 
+/**
+ * The picked item takes a checkmark in the shortcut's own slot, and
+ * `aria-current` names it for anyone not reading the glyph. A reset action
+ * ("All repositories") sits above a separator from the specific choices below
+ * it, the repository picker's own shape.
+ */
+export const WithSelectedItem: Story = {
+  args: {
+    defaultOpen: true,
+    triggerLabel: "All repositories",
+    entries: [
+      { kind: "item", id: "all", label: "All repositories", selected: true },
+      { kind: "separator", id: "rule" },
+      { kind: "item", id: "armada", label: "armada" },
+      { kind: "item", id: "bridge", label: "bridge" },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("menuitem", { name: "All repositories" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    await expect(canvas.getByRole("menuitem", { name: "armada" })).not.toHaveAttribute("aria-current");
+  },
+};
+
 /** The section label the contract specifies: --text-2xs in --fg-subtle. */
 export const WithSectionLabels: Story = {
   args: {
