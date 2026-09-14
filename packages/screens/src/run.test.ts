@@ -267,3 +267,27 @@ describe("a Drone's own run of the Checks", () => {
     expect(factsOf(both).get("Checks")).toBe("1 running");
   });
 });
+
+// #1079 — the Job fixing #801 read `Verdict · evidence disputed` beside green
+// Checks and Judge, and nothing named the gaming check.
+describe("a step the gaming check stopped", () => {
+  const flagged = step({
+    checks: [{ kind: "manifest_check", name: "build", run: "cargo build" }],
+    check_runs: [{ attempt: 1, name: "build", outcome: "passed" }],
+    judge_checks: [{ criteria: 0, gaming_check: true }],
+    flagged: [{ attempt: 1, pattern: "assertion_weakened", cited: "a doc comment" }],
+    attempts: [{ attempt: 1, outcome: "stopped", why: "evidence_suspect", started_at: "2026-09-11T09:30:00Z" }],
+    verdicts: [{ attempt: 1, named: "failed", trigger: "evidence_suspect" }],
+    last_verdict: { attempt: 1, named: "failed", trigger: "evidence_suspect" },
+  });
+
+  it("names the gaming check in place of the verdict", () => {
+    const facts = factsOf(flagged);
+    expect(facts.get("Gaming check")).toBe("1 flag · stopped here");
+    expect(facts.has("Verdict")).toBe(false);
+  });
+
+  it("counts the flag in neither Checks nor Judge", () => {
+    expect(factsOf(flagged).get("Checks")).toBe("1 of 1 passed");
+  });
+});

@@ -62,6 +62,32 @@ describe("the Checks row on a step Fleet gates on everything it declares", () =>
   });
 });
 
+// #1079 — a section of its own, after the Judge, so the panel names what stopped the step.
+describe("the gaming check's row", () => {
+  const stopped = (over: Partial<StepDetail> = {}): StepDetail => ({
+    ...freshStep("implement", "Implement", 2),
+    state: "stopped",
+    judge_checks: [{ criteria: 0, gaming_check: true }],
+    flagged: [{ attempt: 1, pattern: "assertion_weakened", cited: "a doc comment" }],
+    attempts: [{ attempt: 1, outcome: "stopped", why: "evidence_suspect", started_at: "2026-09-10T14:22:18Z" }],
+    verdicts: [{ attempt: 1, named: "failed", trigger: "evidence_suspect" }],
+    ...over,
+  });
+
+  it("says it flagged and stopped the step, after the Judge", () => {
+    const [only] = timelineOf(stopped(), [], NOW);
+    const row = only?.rows.at(-1);
+    expect(row?.phase).toBe("gaming");
+    expect(row?.mark).toBe("stopped");
+    expect(row?.meta).toBe("1 flagged · stopped the step");
+  });
+
+  it("is not drawn on a step that declares no gaming check and was flagged nothing", () => {
+    const [only] = timelineOf(stopped({ judge_checks: [], flagged: [] }), [], NOW);
+    expect(only?.rows.some((row) => row.phase === "gaming")).toBe(false);
+  });
+});
+
 describe("an attempt is the spine", () => {
   it("draws one section per attempt, oldest first, the last one current", () => {
     const drawn = timelineOf(handedBack(), [], NOW);

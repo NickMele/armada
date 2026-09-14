@@ -696,12 +696,14 @@ export class JobCommands {
    * Its own act rather than a mode on `approveReview`: that one answers
    * `awaiting_review`, this one answers `escalated`, and one call taking which
    * would let a refusal be taken with the act built for work nobody objected
-   * to. Blank is refused before the request is sent, matching the 422 Fleet
-   * would give it — and refused at all because an override that says nothing
-   * gives the rate and never the cause.
+   * to.
+   *
+   * **A blank reason is sent, not refused here.** Fleet refuses one on a
+   * Judge's refusal and takes one on a gaming flag, and which stopped the step
+   * is Fleet's record rather than this process's. The dialog for a refusal
+   * still holds its confirm off while the field is blank. #1079.
    */
   async overrideVerdict(jobId: string, reason: string): Promise<Outcome> {
-    if (reason.trim() === "") return { ok: false, why: "empty_reason" };
     const body: Overruled = { reason };
     return this.act(jobId, this.overruling, "already_overruling", (port) =>
       ask(port, "POST", route(jobId, "override_verdict"), body),

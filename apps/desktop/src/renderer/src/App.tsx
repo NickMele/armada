@@ -663,6 +663,8 @@ export function App() {
                 }
                 models={state.holds.models}
                 onOverrule={(jobId, reason) => void commands.overrule(jobId, reason)}
+                // The card's Send it back: the restart act, with the note typed there.
+                onSendBack={(jobId, note) => void commands.act("restart_step", jobId, note)}
                 onRaiseCap={(jobId, micros) => void commands.raiseCap(jobId, micros)}
                 onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}
                 onRerun={(jobId) => void commands.rerun(jobId)}

@@ -40,6 +40,10 @@ import { span } from "./duration";
 import { onlyCurrentAttempt, ordered } from "./facts";
 import { askedOf, checksOf, checksStand, droneRunOf, DRONES_RUN, judgeAsking, panelsFrom } from "./gates";
 import { frozenBeneath } from "./frozen";
+import { flagsOf, gamingStands } from "./gaming";
+
+/** The trigger a gaming flag stops a step on. */
+const EVIDENCE_SUSPECT = "evidence_suspect";
 
 /**
  * The run before this Job's own read answers: the workflow's steps by name, in
@@ -189,7 +193,16 @@ function factsOfStep(
   // the ruling that sent the Drone back — a sentence about a run that is over,
   // in the row a person reads for where the step is now.
   const ruled = step.last_verdict;
-  if (ruled !== undefined && (!working || ruled.attempt === live)) facts.push(verdictFact(ruled));
+  // **The gaming check names itself, in place of the verdict it pulled.**
+  // `Verdict · evidence disputed` named the trigger and never the check, beside
+  // Checks and Judge both reading green. Read off the same attempt as the rest
+  // of the gate. #1079.
+  const flagStopped = ruled?.trigger === EVIDENCE_SUSPECT && !step.overridden;
+  const gaming = gamingStands(flagsOf(step, gateOf(step.flagged, live, working)), flagStopped);
+  if (gaming !== undefined) facts.push({ label: "Gaming check", value: gaming });
+  if (ruled !== undefined && (!working || ruled.attempt === live) && !(flagStopped && gaming !== undefined)) {
+    facts.push(verdictFact(ruled));
+  }
 
   // Served as a field rather than left as a pair to notice: a step reading
   // `advanced` beside a failed verdict is one a person overruled, and a tree

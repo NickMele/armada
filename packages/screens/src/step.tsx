@@ -38,7 +38,8 @@ import type { CommandAnswer, CommandInFlight, Criterion, JobDetail as JobWhole, 
 import type { CommandExplainedRead } from "./calls";
 import { answerNamed, offeredOf, said } from "./copy";
 import { span } from "./duration";
-import { onlyCurrentAttempt } from "./facts";
+import { heldByAFlag, heldFlagOf, type Deciding } from "./flag-held";
+import { flagsOf } from "./gaming";
 import { panelsOf, sentenceOf } from "./gates";
 import { Opening, openKept, type Opens } from "./phases";
 import { recourseOf, type Recourse } from "./recovery";
@@ -379,6 +380,8 @@ export function noticeOf(
   step: StepDetail,
   opens: Opens,
   answering?: Answering,
+  /** How the card a gaming flag holds this step with draws its lines and answers. #1079. */
+  deciding?: Deciding,
 ): StepNotice | undefined {
   if (render === "reviewing") {
     return {
@@ -418,7 +421,13 @@ export function noticeOf(
   // `undefined` on a Job refused nothing, which is most of them.
   const refused = refusedIn(whole);
   // The attempt that stopped the step. `flagged` holds every run's since 13.0.
-  const flagged = onlyCurrentAttempt(step.flagged);
+  // A flag a second reading cleared never holds a step, so it is not here.
+  const flagged = flagsOf(step).held;
+  // **The card, where Fleet holds this step on a flag**: what it means, the
+  // lines, what it asked, and both answers. The refused commands leave the band
+  // for a card of their own, because they are not why it stopped. #1079.
+  const card = heldFlagOf(job, whole, step, opens, deciding);
+  const byAFlag = heldByAFlag(whole, step);
   // The Judge's own refused criteria — `judgeRefusalsOf`'s own doc says why.
   const judgeRefusals = judgeRefusalsOf(step, whole?.acceptance_criteria ?? []);
   // **Present only where `stopped_by` is `gate_undecided`** — `Stuck.undecided`
@@ -454,7 +463,7 @@ export function noticeOf(
         )}
       </>
     ),
-    says: saysOf(recourse, refused?.again),
+    says: saysOf(recourse, byAFlag ? undefined : refused?.again),
     children: !shown ? undefined : (
       <>
         {/* Beside the headline, ahead of everything else the band says — the
@@ -464,7 +473,7 @@ export function noticeOf(
           <span className="block">{sentenceOf(undecided)}</span>
         )}
         {judgeRefusals}
-        {flagged.length === 0 ? null : (
+        {flagged.length === 0 ? null : card !== undefined ? card : (
           <GamingFlags
             flags={flagged.map((flag) => ({
               ...flag,
@@ -485,7 +494,7 @@ export function noticeOf(
             onOpenBrief={(brief) => openKept(opens, { kept: brief, what: "brief" })}
           />
         )}
-        {refused === undefined ? null : (
+        {refused === undefined || byAFlag ? null : (
           <Refusals
             {...refused}
             again={undefined}
