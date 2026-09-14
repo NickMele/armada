@@ -17,7 +17,9 @@
 //
 // **There is no count sentence.** `4 jobs need you. 15 on the Board.` sat over
 // the list until 11 Sep 2026, when the owner cut it: the tab counts say both
-// numbers already. The bulk acts that sat above it are in the head's menu.
+// numbers already. The bulk acts that sat above it are `BoardActions`, drawn
+// by the caller and passed in as `actions` — #1090 moved it here from the
+// page head that used to carry it, at the top of this content instead.
 //
 // # The keyboard
 //
@@ -69,7 +71,7 @@
 // replacement already spends on `Approve dispatch`.
 
 import { ActiveJobsList, BoardControls, Button } from "@armada/components";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { JobSummary, RepositorySummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
@@ -134,6 +136,15 @@ export type JobsProps = {
    */
   onKill: (jobId: string) => void;
   /**
+   * Ask to redispatch the Job under the cursor — the Recently ended section's
+   * own control, Overview 28 (#1092). **It asks; it never redispatches**,
+   * `onKill`'s own reason: `App` confirms, through the same dialog
+   * `JobDetail`'s header already goes through for this act.
+   */
+  onRedispatch: (jobId: string) => void;
+  /** Ask to clear the Job under the cursor — Recently ended's caret, beside Redispatch. Asks; never clears. */
+  onClear: (jobId: string) => void;
+  /**
    * Open the composer — `n`, the one key in the contextual tier that acts on
    * nothing on screen. The Board holds the binding because the Board is where
    * the cursor is; what it opens is `App`'s.
@@ -150,6 +161,12 @@ export type JobsProps = {
   onCursor?: (jobId: string | null) => void;
   /** Filled with what the palette can reach here. `keys.ts` says why. */
   reach?: { current: BoardReach | null };
+  /**
+   * `BoardActions` — `Dispatch` and everything else the Board offers, built by
+   * the caller. Absent draws none, which is every story that only wants the
+   * list. #1090 moved it here from the page head that used to carry it.
+   */
+  actions?: ReactNode;
 };
 
 export function Jobs({
@@ -163,10 +180,13 @@ export function Jobs({
   selected,
   onOpen,
   onKill,
+  onRedispatch,
+  onClear,
   onCompose,
   onCopied,
   onCursor,
   reach,
+  actions,
 }: JobsProps) {
   // Folded once for the whole board rather than per row. The dependency is the
   // array Bridge published, which is replaced on every event and never mutated,
@@ -369,6 +389,8 @@ export function Jobs({
       focused={job.id === cursor}
       onOpen={onOpen}
       onKill={onKill}
+      onRedispatch={onRedispatch}
+      onClear={onClear}
       onCopied={onCopied}
     />
   );
@@ -402,6 +424,9 @@ export function Jobs({
         onCursor?.(row.dataset.jobId);
       }}
     >
+      {actions === undefined ? null : (
+        <div className="armada-screen__board-actions">{actions}</div>
+      )}
       <ActiveJobsList
         // Every drawn row opens a Job, so the frame is a listbox and its rows
         // are options — which is what lets "this one is open" be a state a

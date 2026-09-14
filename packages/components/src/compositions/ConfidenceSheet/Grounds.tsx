@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { FramesShown, type ShownFrame } from "../FramesShown/FramesShown";
 import type { ConfidenceCi } from "./ConfidenceSheet";
@@ -97,15 +96,12 @@ export function Grounds({ lines }: { lines: readonly Line[] }) {
   );
 }
 
-/** Resolve conflicts outranks a failed run, as it did on the row this replaced. #905. */
+/**
+ * A conflict has nothing to press here — Fleet already sends the Drone back
+ * on its own, `#1131` — so this row draws an act only for a failed CI run.
+ */
 function ciAct(ci: ConfidenceCi): ReactNode {
-  if (ci.conflicted && ci.onResolve !== undefined) {
-    return (
-      <Button size="sm" disabled={ci.disabled} onClick={ci.onResolve}>
-        Resolve conflicts
-      </Button>
-    );
-  }
+  if (ci.conflicted) return null;
   if (ci.failed.length > 0 && ci.onInvestigate !== undefined) {
     return (
       <SplitButton

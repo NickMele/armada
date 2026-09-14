@@ -1,6 +1,8 @@
 //! A Job at its handoff gate whose pull request conflicts with main is sent
-//! back for a Drone that can edit files — by a person's press (`#663`), or by
-//! Fleet when its sweep finds the conflict (`#1131`).
+//! back for a Drone that can edit files. `sent_to_clear_conflicts` stays
+//! generic over who asked (`#663`), though the only road left to it is
+//! Fleet's own sweep (`#1131`) — the cases naming `Actor::Human` exercise the
+//! primitive directly, since Bridge's press is gone.
 //!
 //! The workflow is `daemon`'s two-step fixture — `implement`, which writes
 //! code, then `summarise`, which delivers and holds for a person.
@@ -347,7 +349,7 @@ async fn a_third_pass_that_still_conflicts_escalates() {
     );
 }
 
-/// **`#663`'s press, which stays until Bridge drops it.** A person sends the
+/// **`#663`'s primitive, run as a person would have reached it.** Sends the
 /// branch back to `implement`, a Drone there reads the conflict as its opening
 /// brief, and the walk forward carries the Job back through `summarise`, which
 /// pushes the fix. Nothing reaches `summarise`'s own Drone about the conflict.
@@ -366,7 +368,7 @@ async fn a_conflicted_pull_request_at_the_handoff_gate_is_resolved_without_reach
     );
 
     let sent_back = fleet
-        .resolve_pull_request_conflict(&job_id)
+        .sent_to_clear_conflicts(&job_id, Actor::Human)
         .await
         .expect("the gate offers this, and the branch is behind");
     assert_eq!(
@@ -450,9 +452,9 @@ async fn a_conflicted_pull_request_at_the_handoff_gate_is_resolved_without_reach
     );
 }
 
-/// A press with no open pull request has nothing to resolve.
+/// A call with no open pull request has nothing to resolve.
 #[tokio::test]
-async fn a_press_with_no_open_pull_request_is_refused() {
+async fn a_call_with_no_open_pull_request_is_refused() {
     let home = TempDir::new();
     let fleet = a_fleet_echoing(
         &home,
@@ -465,7 +467,7 @@ async fn a_press_with_no_open_pull_request_is_refused() {
     let job_id = a_job_at_its_handoff_gate(&home, &fleet).await;
 
     let refused = fleet
-        .resolve_pull_request_conflict(&job_id)
+        .sent_to_clear_conflicts(&job_id, Actor::Human)
         .await
         .expect_err("no remote, so no pull request was ever opened");
     assert!(matches!(
@@ -474,10 +476,9 @@ async fn a_press_with_no_open_pull_request_is_refused() {
     ));
 }
 
-/// A press off the review gate is refused the way every other answer at that
-/// gate already is.
+/// A call off the review gate is refused the way every other answer there is.
 #[tokio::test]
-async fn a_press_off_the_gate_is_refused() {
+async fn a_call_off_the_gate_is_refused() {
     let home = TempDir::new();
     let fleet = a_fleet_echoing(&home, FakeVcs::new());
     let job = fleet
@@ -489,7 +490,7 @@ async fn a_press_off_the_gate_is_refused() {
     dispatched(&fleet, &job_id).await.expect("it dispatches");
 
     let refused = fleet
-        .resolve_pull_request_conflict(&job_id)
+        .sent_to_clear_conflicts(&job_id, Actor::Human)
         .await
         .expect_err("running, not awaiting_review");
     assert!(matches!(

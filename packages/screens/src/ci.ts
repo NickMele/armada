@@ -8,7 +8,7 @@ import type { ConfidenceCi } from "@armada/components";
 import type { PullRequestChecks } from "@armada/protocol";
 
 /** What a person can do from the row, bound to the Job by the caller. */
-export type CiActs = Pick<ConfidenceCi, "onInvestigate" | "onRerun" | "onResolve" | "disabled">;
+export type CiActs = Pick<ConfidenceCi, "onInvestigate" | "onRerun" | "disabled">;
 
 export function ciOf(
   checks: PullRequestChecks | undefined,

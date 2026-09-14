@@ -33,7 +33,7 @@ import { Standing } from "./Standing";
 import { CopiedToast, SaidToast, useCopied, useSaid } from "@armada/shell";
 import { FailureBlock } from "@armada/shell";
 import { jobFailure } from "@armada/shell";
-import { headOf } from "@armada/shell";
+import { BoardActions } from "@armada/shell";
 import { AskRepository } from "@armada/screens";
 import { BridgeSettings } from "@armada/screens";
 import { Reports } from "@armada/screens";
@@ -156,9 +156,8 @@ export function App() {
   // `New job` is what opens it now, so the surface is the list until somebody
   // asks for the form.
   const [composing, setComposing] = useState(false);
-  // What has been reported against the Judge. Its own view for the reason the
-  // head gives: a report is filed about one Job and the rate is read across all
-  // of them.
+  // What has been reported against the Judge. Its own view: a report is filed
+  // about one Job and the rate is read across all of them.
   const [auditing, setAuditing] = useState(false);
   // Whether the held worktrees are open. **Its own view for the reports' kind
   // of reason and not the same one**: what is decided there is which of a set
@@ -181,7 +180,7 @@ export function App() {
   // The Check or Command the palette picked, or `null`. **It selects rather
   // than runs**, which is what Journey 9's own table says the palette does.
   const [picked, setPicked] = useState<string | null>(null);
-  // Whether Setup is the Manifest surface's view. Its own flag: the head's views are three.
+  // Whether Setup is the Manifest surface's view. Its own flag: the Manifest surface's own views are three.
   const [settingUp, setSettingUp] = useState(false);
   // The row the cursor goes back to when the detail closes. A keyboard that
   // opened a row and came back to the top of the document has lost its place.
@@ -492,30 +491,24 @@ export function App() {
     () => dockQuestionsOf(state.questions, state.jobs, repositories, now, { ...dockAnswering, onDiscuss: onDiscussHelm }),
     [state.questions, state.jobs, repositories, now, dockAnswering, onDiscussHelm],
   );
-  const head = headOf({
-    reading: reading !== null,
-    composing,
-    auditing,
-    clearing,
-    live,
-    refreshing: commands.refreshing,
-    onCloseComposer: () => setComposing(false),
-    onCompose: () => setComposing(true),
-    onCloseReports: () => setAuditing(false),
-    onReadReports: () => setAuditing(true),
-    onCloseWorktrees: () => setClearing(false),
-    onReadWorktrees: () => setClearing(true),
-    onOpenSettings: () => goTo(SURFACE.settings),
-    // Which Manifest view is up, so the head describes the one on screen.
-    manifest: manifesting ? editing.view : false,
-    overviewing,
-    settingsShowing,
-    onRefresh: () => void commands.refresh(),
-    jobs: boardJobs,
-    onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
-    onForgetTerminal: (jobIds) => void commands.forgetTerminal(jobIds),
-    sweeping: commands.sweeping,
-  });
+  // The Board's own menu, drawn at the top of its content now that #1090
+  // removed the page head it used to sit in — `BoardActions` unchanged, only
+  // where it mounts.
+  const boardActions = (
+    <BoardActions
+      jobs={boardJobs}
+      live={live}
+      refreshing={commands.refreshing}
+      onCompose={() => setComposing(true)}
+      onRefresh={() => void commands.refresh()}
+      onReadReports={() => setAuditing(true)}
+      onReadWorktrees={() => setClearing(true)}
+      onOpenSettings={() => goTo(SURFACE.settings)}
+      onClearTerminal={(jobIds) => void commands.clearTerminal(jobIds)}
+      onForgetTerminal={(jobIds) => void commands.forgetTerminal(jobIds)}
+      sweeping={commands.sweeping}
+    />
+  );
 
   return (
     <>
@@ -556,13 +549,6 @@ export function App() {
           open: fleetOpen,
           onOpenChange: setFleetOpen,
         }}
-        title={head?.title}
-        summary={
-          manifesting && settingUp
-            ? "Set up a Manifest for each workspace in this checkout. Write puts one file down and stops, without staging or committing it."
-            : head?.summary
-        }
-        actions={head?.actions}
         // Which row the rail marks. The held worktrees are the one surface
         // other than the Board that draws, so everything else — a Job, the
         // composer, the reports — is the Board with something over it.
@@ -612,7 +598,7 @@ export function App() {
 
           {/* One Job, read whole, in place of the board. Reviewing and deciding
               is one loop, so the detail is not a panel beside the list — and the
-              list is what Escape and the control in the head both return to. */}
+              list is what Escape and the rail's own Job Board row both return to. */}
           {reading !== null ? (
             // Keyed by the Job, so a render that threw on one Job is not the
             // failure notice drawn over the next one opened.
@@ -699,9 +685,6 @@ export function App() {
                 onShowAgain={showAgain}
                 onApprove={(jobId) => void commands.approve(jobId)}
                 onMergePullRequest={(jobId) => void commands.decide(jobId, "merge")}
-                onResolvePullRequestConflict={(jobId) =>
-                  void commands.resolvePullRequestConflict(jobId)
-                }
                 onRerunFailedChecks={(jobId) => void commands.rerunFailedChecks(jobId)}
                 onInvestigateFailedChecks={(jobId) => void commands.investigateFailedChecks(jobId)}
                 onQueueAfterFinding={(jobId, finding) => void commands.queueAfterFinding(jobId, finding)}
@@ -740,7 +723,12 @@ export function App() {
                point, and a listing reached from a Job would show only the
                reports somebody already had reason to open. */
             <Boundary region="the filed reports" {...guarded}>
-              <Reports reports={state.reports} onWant={readReports} onCopied={setCopied} />
+              <Reports
+                reports={state.reports}
+                onWant={readReports}
+                onClose={() => setAuditing(false)}
+                onCopied={setCopied}
+              />
             </Boundary>
           ) : clearing ? (
             /* What Fleet is holding disk for, read across every Job at once.
@@ -762,6 +750,7 @@ export function App() {
                 onForget={forgetOne}
                 // The app's one `now`, because two clocks in one window drift.
                 now={now}
+                onClose={() => setClearing(false)}
                 onCopied={setCopied}
               />
             </Boundary>
@@ -848,12 +837,11 @@ export function App() {
               selected={openJob}
               onOpen={setOpenJob}
               onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
-              onOpenSettings={() => goTo(SURFACE.settings)}
-              onOpenQueued={() => {
-                goTo(SURFACE.board);
-                setLanding("queued");
-              }}
-              onOpenManifest={() => goTo(SURFACE.manifest)}
+              // Recently ended's own two, reusing the same confirmation
+              // `JobDetail`'s header already goes through for both acts —
+              // `reclaim_worktree` is that header's own word for Clear.
+              onRedispatch={(jobId) => setConfirming({ act: "redispatch", jobId })}
+              onClear={(jobId) => setConfirming({ act: "reclaim_worktree", jobId })}
               onCopied={setCopied}
               onCursor={setOverviewCursor}
             />
@@ -869,8 +857,9 @@ export function App() {
           ) : (
             <>
               {/* The boundary `docs/practices/react.md` names: a Job that cannot
-                  be rendered must not blank the window, and the head above it
-                  stays usable while the list says what it could not draw. */}
+                  be rendered must not blank the window, and the board's own
+                  actions above it stay usable while the list says what it
+                  could not draw. */}
               <Boundary region="the job list" {...guarded}>
                 <Jobs
                   onCursor={setCursor}
@@ -888,7 +877,12 @@ export function App() {
                   // detail's own kill goes through, which is what keeps "Cancel
                   // holds initial focus" a rule with one implementation.
                   onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
+                  // Recently ended's own two, `Overview`'s own reason: one
+                  // shared confirmation, whichever screen a row is asked from.
+                  onRedispatch={(jobId) => setConfirming({ act: "redispatch", jobId })}
+                  onClear={(jobId) => setConfirming({ act: "reclaim_worktree", jobId })}
                   onCompose={() => setComposing(true)}
+                  actions={boardActions}
                   onCopied={setCopied}
                 />
               </Boundary>

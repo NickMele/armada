@@ -323,14 +323,23 @@ export function sorted(jobs: readonly JobSummary[], sort: BoardSort): JobSummary
 
 /**
  * The All tab's sections, in the order a person works down them: what needs
- * them, what is running, what is waiting its turn, and what is over. **Done is
- * finished and cleared together**, the owner's ruling on 11 Sep 2026: a Job
- * whose worktree was given back is still a Job that ended.
+ * them, what is running, what is waiting its turn, what ended without
+ * succeeding, and what is over. **Done is finished and cleared together**,
+ * the owner's ruling on 11 Sep 2026: a Job whose worktree was given back is
+ * still a Job that ended.
+ *
+ * **Recently ended is carved out of Done, open where Done is folded.**
+ * Overview 28 (#1092): a Job killed, failed or rejected is still one somebody
+ * meant to come back to — to redispatch or to read — and Done being collapsed
+ * by default, plus Overview dropping it outright, is what let one vanish. It
+ * sits above Done because it is live work in the sense that matters here:
+ * something is still owed on it, where a Done row is read and settled.
  */
 export const BOARD_SECTIONS = [
   { id: "needs-you", label: "Needs you" },
   { id: "running", label: "Running" },
   { id: "queued", label: "Queued" },
+  { id: "recently-ended", label: "Recently ended" },
   { id: "done", label: "Done" },
   // A Job no tab claims, which `tabOf` answers `null` for. Drawn under its
   // own label rather than dropped: a grouped list that loses a row is worse
@@ -340,10 +349,19 @@ export const BOARD_SECTIONS = [
 
 export type BoardSection = (typeof BOARD_SECTIONS)[number]["id"];
 
+/**
+ * The three statuses `job-statuses.toml` marks terminal without a verdict of
+ * success — the ones Overview 28 carves `recently-ended` out of Done for.
+ * `completed_success` and `superseded` stay in Done: nothing is owed on
+ * either, which is exactly what separates the two sections.
+ */
+const ENDED_WITHOUT_SUCCESS = new Set(["killed", "completed_failed", "rejected"]);
+
 /** Which section of the All tab a Job is drawn under. */
 export function sectionOf(job: JobSummary): BoardSection {
   const tab = tabOf(job);
-  if (tab === "finished" || tab === "cleared") return "done";
+  if (tab === "cleared") return "done";
+  if (tab === "finished") return ENDED_WITHOUT_SUCCESS.has(job.status) ? "recently-ended" : "done";
   return tab ?? "other";
 }
 

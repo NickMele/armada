@@ -25,7 +25,6 @@ export type DecidingAct =
   | "dismiss_finding"
   | "queue_after_finding"
   | "file_finding_issue"
-  | "resolve_conflict"
   | "rerun_failed_checks"
   | "investigate_failed_checks";
 

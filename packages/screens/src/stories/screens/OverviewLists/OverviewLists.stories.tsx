@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, within } from "storybook/test";
+import type { BoardSection } from "../../../board";
 import { ARMADA, RUNNING_ONE_WITH_A_PLAN, acrossTwo, OverviewListsFrom, STOREFRONT } from "./OverviewLists";
 
 /**
@@ -92,6 +94,38 @@ export const CursorReportsTheFocusedRow: Story = {
     if (row === null) throw new Error("a row to focus");
     row.focus();
     await expect(args.onCursor).toHaveBeenCalledWith(row.dataset.jobId);
+  },
+};
+
+/**
+ * Overview 27's own fold (#1091), wired through this screen rather than pressed straight on
+ * `ActiveJobsList` — proves `section.id` reaches the right panel's `open`/`onOpenChange`, which
+ * `ActiveJobsList`'s own story cannot see from inside one list.
+ */
+export const RunningFolds: Story = {
+  name: "Running folds and reopens",
+  render: function Render() {
+    const [open, setOpen] = useState<Partial<Record<BoardSection, boolean>>>({});
+    return (
+      <OverviewListsFrom
+        openSections={open}
+        onSectionOpenChange={(section, value) => setOpen((was) => ({ ...was, [section]: value }))}
+      />
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("heading", { name: "Running" })).toBeVisible();
+    const options = canvas.getAllByRole("option");
+    await expect(options.length).toBeGreaterThan(0);
+
+    const collapse = canvas.getByRole("button", { name: "Collapse Running" });
+    await collapse.click();
+    // Needs you and Queued still hold their own rows; only Running's left.
+    await expect(canvas.queryByRole("button", { name: "Collapse Needs you" })).toBeVisible();
+
+    await canvas.getByRole("button", { name: "Expand Running" }).click();
+    await expect(canvas.getByRole("button", { name: "Collapse Running" })).toBeVisible();
   },
 };
 

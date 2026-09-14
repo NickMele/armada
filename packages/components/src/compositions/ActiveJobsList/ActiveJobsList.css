@@ -73,6 +73,33 @@
   flex: none;
 }
 
+/* The panel fold, Overview's own Needs you, Running, Queued and Other — a
+   square icon button beside the count, `RunTree`'s own size for one. */
+.armada-active-jobs__fold-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.armada-active-jobs__fold-toggle:hover {
+  color: var(--fg-default);
+  background: var(--bg-hover);
+}
+
+.armada-active-jobs__fold-toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 /* The head's row count, opposite the heading. Muted and tabular: a fact read
    at a glance, not a value compared across rows. */
 .armada-active-jobs__count {

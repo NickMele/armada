@@ -256,6 +256,40 @@ export const WithFailedCi: Story = {
 };
 
 /**
+ * A pull request that conflicts with main: the row names the conflict and
+ * draws no act, `#1131`. Fleet sends a Drone to clear it on its own — there
+ * is nothing here to press, which is what this guards.
+ */
+export const WithConflictedPullRequest: Story = {
+  args: {
+    confidence: {
+      says: "not_confident",
+      reasons: ["The branch conflicts with main."],
+      areas: [],
+      needs_you: [],
+      small_fixes: [],
+      for_context: [],
+    },
+    grounds: {
+      checks: { result: "7 of 7 passed", tone: "met", detail: "build, format, tests" },
+      judge: { result: "3 of 3 criteria met", tone: "met" },
+      evidence: { result: "Within scope", tone: "met" },
+    },
+    ci: {
+      kind: "unreadable",
+      said: "Conflicts with main",
+      failed: [],
+      conflicted: true,
+    },
+  },
+  play: async ({ canvas }) => {
+    const row = canvas.getByRole("row", { name: /Pull request CI/ });
+    await expect(row).toHaveTextContent("Conflicts with main");
+    await expect(canvas.queryByRole("button", { name: "Resolve conflicts" })).toBeNull();
+  },
+};
+
+/**
  * Everything the verdict rests on held, so the section stays folded and says so in one line.
  * What the Job captured opens on the frames and the Drone's claim.
  */

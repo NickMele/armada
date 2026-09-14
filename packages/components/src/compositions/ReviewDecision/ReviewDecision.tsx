@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Separator } from "../../primitives/Separator/Separator";
 import { Textarea } from "../../primitives/Textarea/Textarea";
@@ -51,8 +51,9 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  *
  * **Merge can be drawn and disabled at once.** `#663`: a branch behind main
  * with conflicts is a pull request Fleet would refuse to merge, and
- * `mergeBlockedReason` says so beside the control rather than hiding it —
- * the caller's own conflict control is what fixes the branch, not this one.
+ * `mergeBlockedReason` says so under the row rather than hiding it. Fleet
+ * sends a Drone to clear the conflicts on its own, so nothing here presses
+ * anything.
  *
  * **No glyph on any of them.** Primary and secondary are label-only by
  * contract, and a mark on the destructive one alone would make the difference
@@ -81,7 +82,7 @@ export type ReviewDecisionProps = {
    */
   onMerge?: () => void;
   /**
-   * Why merging is blocked, shown beside the control rather than folded into
+   * Why merging is blocked, shown under the row rather than folded into
    * `disabledNote` — the rest of the group stays live while this one alone is
    * not. **Presence disables the merge control regardless of `disabled`.**
    * `#663`: a branch behind main with conflicts is not a pull request Fleet
@@ -173,6 +174,7 @@ export function ReviewDecision({
   const merging = onMerge !== undefined;
   const disabled = refused || pending !== undefined;
   const stillWaiting = useStillWaiting(pending !== undefined);
+  const mergeReasonId = useId();
 
   return (
     <div className="armada-decision">
@@ -217,26 +219,19 @@ export function ReviewDecision({
         {/* The one accent fill on this surface, and it moves. A job with a pull
             request open has one ordinary ending and it is this one; a job with
             none never draws this control at all. `mergeBlockedReason` present
-            is a third case — drawn, disabled either way, its sentence beside
-            it rather than lost in `disabledNote`, which is the group's. */}
+            is a third case — drawn, disabled either way. */}
         {merging ? (
-          <div className="armada-decision__merge">
-            <Tooltip label={mergeNote}>
-              <Button
-                variant="primary"
-                pending={pending === "merge"}
-                disabled={disabled || mergeBlockedReason !== undefined}
-                onClick={onMerge}
-              >
-                {pending === "merge" ? UNDERWAY.merge : mergeLabel}
-              </Button>
-            </Tooltip>
-            {mergeBlockedReason === undefined ? null : (
-              <p className="armada-decision__said" role="note">
-                {mergeBlockedReason}
-              </p>
-            )}
-          </div>
+          <Tooltip label={mergeNote}>
+            <Button
+              variant="primary"
+              pending={pending === "merge"}
+              disabled={disabled || mergeBlockedReason !== undefined}
+              aria-describedby={mergeBlockedReason === undefined ? undefined : mergeReasonId}
+              onClick={onMerge}
+            >
+              {pending === "merge" ? UNDERWAY.merge : mergeLabel}
+            </Button>
+          </Tooltip>
         ) : null}
         <Tooltip label={approveNote}>
           <Button
@@ -260,6 +255,14 @@ export function ReviewDecision({
           </Button>
         </Tooltip>
       </div>
+
+      {/* Under the row so a long sentence never widens Merge's column;
+          `aria-describedby` keeps it read as Merge's reason. */}
+      {mergeBlockedReason === undefined ? null : (
+        <p id={mergeReasonId} className="armada-decision__said" role="note">
+          {mergeBlockedReason}
+        </p>
+      )}
 
       {/* The rule is load-bearing, not decoration: it is what says the control
           under it is not another answer in the group above. */}

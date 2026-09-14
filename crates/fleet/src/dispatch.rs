@@ -757,16 +757,29 @@ where
     /// leaving are none of them a `queued` Job — so there is no board to read
     /// those from here either.
     ///
-    /// **`started_at` is read, unlike those.** A step advancing or a Drone
-    /// arriving or leaving is a Job already `running`, or one that was — its
-    /// clock is already ticking and this publish must carry the same instant
-    /// [`summarised`](Fleet::summarised) would, not the `None` a fresh Job
-    /// reads as.
+    /// **`started_at` and `ended_at` are read, unlike those.** A step
+    /// advancing or a Drone arriving or leaving is a Job already `running`, or
+    /// one that was — its clock is already ticking and this publish must
+    /// carry the same instants [`summarised`](Fleet::summarised) would, not
+    /// the `None`s a fresh Job reads as. `ended_at` is `None` on every Job this
+    /// publish actually reaches — none of a step advancing or a Drone moving
+    /// is a Job that has ended — and it is read anyway rather than hardcoded,
+    /// since a caller reading this conversion for the reason a terminal Job
+    /// might reach it is exactly the caller this doc would otherwise mislead.
     pub(crate) async fn published(&self, job: &Job) -> Result<ipc::JobSummary, Adrift> {
         let reason = self.last_reason(job.id()).await?;
         let started_at = self.job_started_at(job.id()).await?;
-        let mut summary =
-            ipc::JobSummary::of(job, reason.as_ref(), None, None, false, None, started_at);
+        let ended_at = self.job_ended_at(job.id()).await?;
+        let mut summary = ipc::JobSummary::of(
+            job,
+            reason.as_ref(),
+            None,
+            None,
+            false,
+            None,
+            started_at,
+            ended_at,
+        );
         // A client replaces its row with this one, so the counts ride along.
         summary.tasks = self.task_counts(job.id()).await?;
         Ok(summary)

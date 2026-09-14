@@ -271,6 +271,26 @@ describe("the last thing anyone did", () => {
     expect(latestOf([], [], [moved("2026-09-11T10:02:00Z", "fleet")])).toBeUndefined();
   });
 
+  // `#1131`: Fleet's own log line names the send back in its own words, and
+  // no person's own act reads the same — this is what tells a Fleet
+  // send-back apart from one a person made, since the history's own
+  // `Returned` move carries no sentence of its own to draw.
+  it("names Fleet's own conflict-clearing send-back in Fleet's words", () => {
+    const latest = latestOf(
+      [],
+      [
+        note(
+          "2026-09-14T10:02:00Z",
+          "the pull request's branch conflicts with its base, so Fleet sent it back for a " +
+            "Drone to clear the conflicts — the gate itself has not moved",
+        ),
+      ],
+      [],
+    );
+    expect(latest?.actor).toBe("Fleet");
+    expect(latest?.said).toContain("Fleet sent it back for a Drone to clear the conflicts");
+  });
+
   it("says nothing where nothing has happened", () => {
     expect(latestOf([], [], [])).toBeUndefined();
   });

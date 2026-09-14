@@ -84,6 +84,14 @@ where
             .job_started_at(job.id())
             .await
             .map_err(|why| self.refusal(why))?;
+        // **What Overview 28 (#1092) needed and the row never had**: a Job
+        // killed, failed or rejected has nowhere to stand once `sectionOf`
+        // sends it to Done, collapsed, and Overview drops Done outright — so
+        // this is the fact the Board's own Recently ended reads instead.
+        let ended_at = self
+            .job_ended_at(job.id())
+            .await
+            .map_err(|why| self.refusal(why))?;
         let mut summary = JobSummary::of(
             job,
             reason.as_ref(),
@@ -92,6 +100,7 @@ where
             asking,
             self.resumption(job),
             started_at,
+            ended_at,
         );
         summary.frozen_by = queued.frozen_by.iter().map(ipc::ManifestId::from).collect();
         summary.tasks = self

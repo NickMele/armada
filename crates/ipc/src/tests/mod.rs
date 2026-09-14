@@ -126,13 +126,14 @@ fn job() -> Job {
 
 /// One Job's detail, with every fact that is not the Job itself absent.
 ///
-/// **A helper because the signature is fourteen positional arguments**, nine
-/// of which every case here passes `None` for. Two of the nine were added on
+/// **A helper because the signature is fifteen positional arguments**, ten
+/// of which every case here passes `None` for. Two of the ten were added on
 /// one night by two people who could not see each other's, and a run of
 /// `None`s is where the next one lands in the wrong slot silently. What a
 /// case is about is the Job and its steps, and this says so.
 pub(super) fn detail_of(job: &core_model::Job, steps: &[StepFacts]) -> JobDetail {
     JobDetail::of(
-        job, None, None, None, None, None, steps, None, None, None, None, None, None, None, None,
+        job, None, None, None, None, None, None, steps, None, None, None, None, None, None, None,
+        None,
     )
 }

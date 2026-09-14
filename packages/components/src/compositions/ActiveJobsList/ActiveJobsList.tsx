@@ -1,6 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent, FocusEvent, ReactNode } from "react";
 import { Children, Fragment, isValidElement, useCallback, useRef, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { JOB_ROW_LIST, RovingOption } from "../JobRowStacked/JobRowStacked";
 
 /**
@@ -123,6 +123,20 @@ export type ActiveJobsListProps = {
    * naming its facts either way.
    */
   columns?: ReactNode[];
+  /**
+   * Forwarded to the outer `<section>` — Overview's summary strip
+   * `scrollIntoView`s a panel by this, so pressing a count can bring it on
+   * screen whether or not it was already open.
+   */
+  id?: string;
+  /**
+   * Controlled fold for a `panel` list — Overview's own Needs you, Running,
+   * Queued and Other. Absent for the Board's own flat list, which never
+   * folds. Defaults to open, `Panel`'s own default.
+   */
+  open?: boolean;
+  /** Present makes the head's trailing chevron a control; absent draws none. */
+  onOpenChange?: (open: boolean) => void;
 };
 
 /** Which key moves the cursor where. Nothing else in the list is bound. */
@@ -142,7 +156,11 @@ export function ActiveJobsList({
   label,
   view = "card",
   columns,
+  id,
+  open,
+  onOpenChange,
 }: ActiveJobsListProps) {
+  const isOpen = open ?? true;
   const rows = Array.isArray(children) ? children.filter(Boolean) : children;
   const isEmpty =
     sections !== undefined
@@ -196,10 +214,11 @@ export function ActiveJobsList({
     [options],
   );
 
-  const roving = selectable && !isEmpty;
+  const roving = selectable && !isEmpty && isOpen;
+  const foldName = typeof heading === "string" ? heading : "panel";
 
   return (
-    <section className="armada-active-jobs" data-variant={variant === "panel" ? "panel" : undefined}>
+    <section className="armada-active-jobs" data-variant={variant === "panel" ? "panel" : undefined} id={id}>
       {heading || summary || action || count !== undefined ? (
         <header className="armada-active-jobs__header">
           <div className="armada-active-jobs__titles">
@@ -208,49 +227,71 @@ export function ActiveJobsList({
           </div>
           {count !== undefined ? <span className="armada-active-jobs__count">{count}</span> : null}
           {action ? <div className="armada-active-jobs__action">{action}</div> : null}
+          {/* A separate control, not the whole head — the heading stays a real
+              `h2` rather than moving inside a `button`, which a heading is not
+              valid content for. `Panel`'s own icon pair, up for open. */}
+          {onOpenChange ? (
+            <button
+              type="button"
+              className="armada-active-jobs__fold-toggle"
+              aria-expanded={isOpen}
+              aria-label={`${isOpen ? "Collapse" : "Expand"} ${foldName}`}
+              onClick={() => onOpenChange(!isOpen)}
+            >
+              {isOpen ? (
+                <ChevronUp size={14} strokeWidth={2} aria-hidden />
+              ) : (
+                <ChevronRight size={14} strokeWidth={2} aria-hidden />
+              )}
+            </button>
+          ) : null}
         </header>
       ) : null}
-      {controls ? <div className="armada-active-jobs__controls">{controls}</div> : null}
-      {/* The frame carries the row tracks, so a field column sizes to the
-          widest value in the whole list rather than in one row. An empty
-          listbox has no options to select from, so it stays a plain list. */}
-      <div
-        ref={frame}
-        className={`armada-active-jobs__frame ${JOB_ROW_LIST}`}
-        data-view={view === "card" ? undefined : view}
-        data-columns={columns?.length}
-        role={roving ? "listbox" : "list"}
-        aria-label={label}
-        onKeyDown={roving ? rove : undefined}
-        onFocus={roving ? followed : undefined}
-      >
-        {/* `presentation`, because a listbox's children are its options and a
-            row of column names is not one — `:scope > [role="option"]` is what
-            the arrow keys walk, and this must not appear in it. It is hidden
-            from the reading order too: a screen reader gets each fact's name
-            from the row's own field label, which stays in the markup and is
-            only taken off the screen. */}
-        {view === "table" && columns !== undefined && !isEmpty ? (
-          <div className="armada-active-jobs__columns" role="presentation" aria-hidden="true">
-            {columns.map((column, at) => (
-              <span className="armada-active-jobs__column" key={at}>
-                {column}
-              </span>
-            ))}
+      {isOpen ? (
+        <>
+          {controls ? <div className="armada-active-jobs__controls">{controls}</div> : null}
+          {/* The frame carries the row tracks, so a field column sizes to the
+              widest value in the whole list rather than in one row. An empty
+              listbox has no options to select from, so it stays a plain list. */}
+          <div
+            ref={frame}
+            className={`armada-active-jobs__frame ${JOB_ROW_LIST}`}
+            data-view={view === "card" ? undefined : view}
+            data-columns={columns?.length}
+            role={roving ? "listbox" : "list"}
+            aria-label={label}
+            onKeyDown={roving ? rove : undefined}
+            onFocus={roving ? followed : undefined}
+          >
+            {/* `presentation`, because a listbox's children are its options and a
+                row of column names is not one — `:scope > [role="option"]` is what
+                the arrow keys walk, and this must not appear in it. It is hidden
+                from the reading order too: a screen reader gets each fact's name
+                from the row's own field label, which stays in the markup and is
+                only taken off the screen. */}
+            {view === "table" && columns !== undefined && !isEmpty ? (
+              <div className="armada-active-jobs__columns" role="presentation" aria-hidden="true">
+                {columns.map((column, at) => (
+                  <span className="armada-active-jobs__column" key={at}>
+                    {column}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {isEmpty
+              ? empty
+              : sections !== undefined
+                ? drawSections(sections, roving, active)
+                : roving
+                  ? // A provider renders no element, so the options stay direct
+                    // children of the listbox and `:scope >` still finds them.
+                    Children.map(rows, (row, index) => (
+                      <RovingOption.Provider value={{ index, active }}>{row}</RovingOption.Provider>
+                    ))
+                  : rows}
           </div>
-        ) : null}
-        {isEmpty
-          ? empty
-          : sections !== undefined
-            ? drawSections(sections, roving, active)
-            : roving
-              ? // A provider renders no element, so the options stay direct
-                // children of the listbox and `:scope >` still finds them.
-                Children.map(rows, (row, index) => (
-                  <RovingOption.Provider value={{ index, active }}>{row}</RovingOption.Provider>
-                ))
-              : rows}
-      </div>
+        </>
+      ) : null}
     </section>
   );
 }

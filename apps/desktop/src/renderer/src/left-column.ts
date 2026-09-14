@@ -49,7 +49,7 @@ function countRow(id: string, label: string, value: number, tone: StatRow["tone"
   return { id, label, value, ...(value > 0 ? { tone } : {}) };
 }
 
-/** `OverviewTileTone` collapsed to the Stats panel's warn/hot pair. */
+/** `ReadingTone` collapsed to the Stats panel's warn/hot pair. */
 function toneOf(tone: string | undefined): StatRow["tone"] {
   if (tone === "completed-failed") return "hot";
   if (tone === "awaiting-review" || tone === "notice-caution") return "warn";

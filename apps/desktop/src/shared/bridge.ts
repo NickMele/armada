@@ -563,7 +563,6 @@ export const CHANNELS = {
   readHeld: "bridge:read-held",
   approveReview: "bridge:approve-review",
   mergePullRequest: "bridge:merge-pull-request",
-  resolvePullRequestConflict: "bridge:resolve-pull-request-conflict",
   rerunFailedChecks: "bridge:rerun-failed-checks",
   investigateFailedChecks: "bridge:investigate-failed-checks",
   queueAfterFinding: "bridge:queue-after-finding",
