@@ -94,7 +94,8 @@ fn a_step_whose_work_product_is_a_note_is_judged_against_the_note() {
     let submitted = note();
     let patch = Patch::of(String::new());
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a note");
-    let product = Product::of(step, &patch, accepted, None).expect("the note is the work product");
+    let product =
+        Product::of(step, &patch, accepted, None, None).expect("the note is the work product");
 
     let brief = Brief::about(
         step,
@@ -134,7 +135,7 @@ fn a_step_whose_work_product_is_the_change_shows_the_judge_no_submission() {
     let submitted = diff();
     let patch = Patch::of(PATCH.to_string());
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a diff");
-    let product = Product::of(step, &patch, accepted, None).expect("the worktree moved");
+    let product = Product::of(step, &patch, accepted, None, None).expect("the worktree moved");
 
     assert!(
         product.written().is_none(),
@@ -164,7 +165,7 @@ fn what_an_earlier_step_established_reaches_the_brief_labelled_as_the_yardstick(
     let submitted = diff();
     let patch = Patch::of(PATCH.to_string());
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a diff");
-    let product = Product::of(step, &patch, accepted, None).expect("the worktree moved");
+    let product = Product::of(step, &patch, accepted, None, None).expect("the worktree moved");
     let earlier = StepEvidence {
         evidence_type: EvidenceType::FactsNote,
         claimed: "The change is confined to the retry backoff in `dispatch.rs`".to_string(),
@@ -203,7 +204,7 @@ fn a_step_that_produces_nothing_yields_no_product_rather_than_an_empty_one() {
     let patch = Patch::of(PATCH.to_string());
     let accepted = Accepted::of(step, &submitted).expect("a step declaring none accepts anything");
     assert_eq!(
-        Product::of(step, &patch, accepted, None),
+        Product::of(step, &patch, accepted, None, None),
         Err(NothingToJudge::StepProducesNothing)
     );
 }
@@ -219,7 +220,7 @@ fn a_diff_step_with_an_empty_patch_is_a_call_that_cannot_be_made() {
     let patch = Patch::of("   \n".to_string());
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a diff");
     assert_eq!(
-        Product::of(step, &patch, accepted, None),
+        Product::of(step, &patch, accepted, None, None),
         Err(NothingToJudge::NothingChanged {
             declared: EvidenceType::Diff
         })
@@ -236,7 +237,8 @@ fn a_written_step_that_also_changed_files_carries_both_and_labels_them() {
     let submitted = note();
     let patch = Patch::of(PATCH.to_string());
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a note");
-    let product = Product::of(step, &patch, accepted, None).expect("the note is the work product");
+    let product =
+        Product::of(step, &patch, accepted, None, None).expect("the note is the work product");
 
     assert!(product.written().is_some());
     assert!(product.changed().is_some());
@@ -270,8 +272,8 @@ fn a_step_that_delivered_a_file_is_judged_against_the_file() {
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a note");
     let delivered =
         Delivered::read(".armada/artifacts/scope.md", PLAN).expect("a deliverable that fits");
-    let product =
-        Product::of(step, &patch, accepted, Some(delivered)).expect("the file is the product");
+    let product = Product::of(step, &patch, accepted, Some(delivered), None)
+        .expect("the file is the product");
 
     let brief = Brief::about(
         step,
@@ -307,7 +309,7 @@ fn the_file_is_labelled_as_the_document_and_the_submission_as_a_summary() {
     let patch = Patch::of(String::new());
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a note");
     let delivered = Delivered::read(".armada/artifacts/scope.md", PLAN).expect("it fits");
-    let product = Product::of(step, &patch, accepted, Some(delivered)).expect("a product");
+    let product = Product::of(step, &patch, accepted, Some(delivered), None).expect("a product");
 
     let brief = Brief::about(
         step,
@@ -348,7 +350,7 @@ fn a_step_with_no_artifact_still_reads_as_the_document_itself() {
     let submitted = note();
     let patch = Patch::of(String::new());
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a note");
-    let product = Product::of(step, &patch, accepted, None).expect("a product");
+    let product = Product::of(step, &patch, accepted, None, None).expect("a product");
 
     let brief = Brief::about(
         step,

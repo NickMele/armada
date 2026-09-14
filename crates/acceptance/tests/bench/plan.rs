@@ -93,6 +93,57 @@ steps:
         .clone()
 }
 
+/// **`#1006`'s shape: a step keeps its own product and records the plan
+/// beside it.** `read` delivers `read.md` — `document`, not `plan` — and
+/// declares `records_plan: true` rather than `submitted.type: "plan"`; a
+/// following step still names `read.evidence` in `reference_docs`, which is
+/// what proves the plan sits beside the step's own product on the record
+/// rather than replacing it.
+pub fn bug_workflow_with_a_plan_beside_a_product() -> FrozenWorkflow {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture-bug-plan-beside-a-product.yml"),
+        r#"
+version: 1
+workflow_id: bug-with-a-plan-beside-a-product
+name: bug
+structure: linear
+steps:
+  - id: read
+    label: "Read the code"
+    records_plan: true
+    evidence: {submitted: {type: document}}
+    mechanical_checks:
+      - { type: artifact_exists, target: ".armada/artifacts/read.md" }
+      - { type: plan_recorded, min_tasks: 1 }
+    delivers: false
+    advance_gate: auto
+  - id: implement
+    label: "Implement"
+    follows_plan: true
+    evidence: {submitted: {type: diff}}
+    mechanical_checks:
+      - { type: diff_nonempty }
+    evidence_scope:
+      context_source: drone_declared
+      reference_docs:
+        - read.evidence
+    delivers: false
+    advance_gate: auto
+"#,
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    let armada_yml = config::Manifest::parse(
+        std::path::Path::new("fixture-armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\n",
+    )
+    .expect("the fixture manifest parses");
+    config::ResolvedWorkflow::resolve(&def, &armada_yml)
+        .unwrap_or_else(|refused| panic!("the fixture workflow did not resolve: {refused}"))
+        .frozen()
+        .clone()
+}
+
 fn at(second: usize) -> Timestamp {
     Timestamp::from_rfc3339(format!("2026-09-13T10:00:{second:02}.000Z"))
 }
@@ -107,7 +158,13 @@ pub struct Planned {
 
 impl Planned {
     pub fn created(title: &str) -> Planned {
-        let workflow = bug_workflow_with_a_plan();
+        Planned::created_with(title, bug_workflow_with_a_plan())
+    }
+
+    /// The same Job, on a workflow of the caller's choosing — `#1006`'s
+    /// beside-a-product fixture is the one caller so far that is not
+    /// [`bug_workflow_with_a_plan`].
+    pub fn created_with(title: &str, workflow: FrozenWorkflow) -> Planned {
         let id = JobId::carried(Ulid::carried(format!("01PLAN{:020}", 1)));
         let spec = WorktreeSpec::for_job(REPO_ROOT, id.as_str()).expect("a legal spec");
         let worktree = FakeVcs::new().create_worktree(&spec).expect("a worktree");

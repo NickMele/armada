@@ -371,6 +371,14 @@ pub struct ResolvedStep {
     /// `update_task`. **False on every step that does not say so**, and on
     /// every row frozen before a step could.
     follows_plan: bool,
+    /// Whether this step records the Job's plan, and so is given
+    /// `record_plan`. **True where `evidence_type` is `plan`**, which
+    /// [`frozen`](Self::frozen) sets without being asked, and also true where
+    /// the definition declared `records_plan: true` beside another product —
+    /// [`also_recording_the_plan`](Self::also_recording_the_plan) is the only
+    /// thing that can widen it, and it only ever widens: a plan step's own
+    /// product already makes this true, and nothing un-sets it. `#1006`.
+    records_plan: bool,
 }
 
 impl ResolvedStep {
@@ -415,6 +423,12 @@ impl ResolvedStep {
             quiet_after_seconds: None,
             poke_limit: None,
             follows_plan: false,
+            // Inferred rather than left for a builder: the step's own product
+            // being `plan` already settles this, so every caller building one
+            // would otherwise have to restate a fact this constructor already
+            // has in hand. `also_recording_the_plan` is where a caller adds
+            // the other way a step can record one.
+            records_plan: evidence_type == Some(EvidenceType::Plan),
         }
     }
 
@@ -431,11 +445,25 @@ impl ResolvedStep {
         self.follows_plan
     }
 
-    /// **The one thing that grants `record_plan`**: the step's product is a
-    /// plan. Read off the evidence type rather than a second flag that could
-    /// disagree with it.
+    /// This step also records the Job's plan, beside whatever
+    /// [`frozen`](Self::frozen) already inferred from its product.
+    ///
+    /// **Only ever widens.** A step whose product is already `plan` is
+    /// already recording one, and calling this with `false` does not undo
+    /// that — the two ways a step can record the plan are read together
+    /// everywhere the question is asked, never picked apart, so there is no
+    /// call that needs to turn this back off. `#1006`.
+    pub fn also_recording_the_plan(mut self, records: bool) -> ResolvedStep {
+        self.records_plan = self.records_plan || records;
+        self
+    }
+
+    /// **The one thing that grants `record_plan`.** True where the step's
+    /// whole product is `plan`, and true where it declared
+    /// `records_plan: true` beside another product — the two spellings
+    /// converge here rather than being told apart by a caller.
     pub fn records_plan(&self) -> bool {
-        self.evidence_type == Some(EvidenceType::Plan)
+        self.records_plan
     }
 
     /// The dispatch grant, for the reason [`frozen`](Self::frozen) is not

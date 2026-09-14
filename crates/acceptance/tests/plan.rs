@@ -2,6 +2,9 @@
 //! assertion is made against what crossed [`ipc::encode`], as `board.rs`'s are,
 //! and the apparatus is [`bench::plan`]. Every step of the claim is carried:
 //! #893 to #895 and #897 here, and #896 and #898 as the values their screens draw.
+//! #1006 widens it: a step may keep its own product and record the plan
+//! beside it, and neither a plan step nor a following one is ever told to plan
+//! a task for the checks that already run on their own.
 //!
 //! | Not proved here | Why not, and what proves it |
 //! |---|---|
@@ -26,8 +29,8 @@ use testkit::FakeJudge;
 
 use bench::board::{detail, received_detail, step_facts};
 use bench::plan::{
-    called, gated_on_implement, gated_on_the_plan, received_event, received_row, refused, Planned,
-    IMPLEMENT, PLAN,
+    bug_workflow_with_a_plan_beside_a_product, called, gated_on_implement, gated_on_the_plan,
+    received_event, received_row, refused, Planned, IMPLEMENT, PLAN,
 };
 
 const FOUR_TASKS: &str = r#"{"approach":"Stop the reader at the end, then cover the bound",
@@ -119,6 +122,50 @@ fn the_plan_steps_brief_asks_it_to_record_the_plan() {
     assert!(
         !said.contains("THE PLAN\n"),
         "the recording step is not shown a plan it has not recorded: {said}"
+    );
+    assert!(
+        said.contains(
+            "The checks each part must pass run on their own when that \
+             part is submitted, so the plan carries no task for running them."
+        ),
+        "the plan step is told not to plan a task for the checks that already run on their own: {said}"
+    );
+}
+
+/// **`#1006`'s widening: a step keeps its own product and records the plan
+/// beside it.** `read`'s brief asks for both — `WHAT THIS PART DELIVERS`
+/// still names `read.md`, and `RECORDING THE PLAN` is a second block beside
+/// it, carrying the same "no task for the checks" sentence as a pure plan
+/// step's. `implement`'s brief still shows THE PLAN, so `follows_plan` on a
+/// later step reads a plan recorded by a step whose own product was not
+/// `plan`.
+#[test]
+fn a_step_that_keeps_its_own_product_may_also_record_the_plan_beside_it() {
+    let planned = Planned::created_with(
+        "fix the reader's bound",
+        bug_workflow_with_a_plan_beside_a_product(),
+    );
+
+    let step = StepId::new("read");
+    let brief = briefing::first_turn(
+        &planned.job,
+        planned.job.workflow(),
+        &step,
+        &Crossed::nothing(),
+    )
+    .expect("a brief assembles");
+    let said = brief.as_str();
+
+    assert!(said.contains("WHAT THIS PART DELIVERS"), "{said}");
+    assert!(said.contains(".armada/artifacts/read.md"), "{said}");
+    assert!(said.contains("RECORDING THE PLAN"), "{said}");
+    assert!(said.contains("record_plan"), "{said}");
+    assert!(
+        said.contains(
+            "The checks each part must pass run on their own when that \
+             part is submitted, so the plan carries no task for running them."
+        ),
+        "{said}"
     );
 }
 

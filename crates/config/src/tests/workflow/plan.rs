@@ -1,5 +1,5 @@
-//! `plan`, `plan_recorded` and `follows_plan`: the plan step's shape, and each
-//! way the loader refuses one.
+//! `plan`, `plan_recorded`, `follows_plan` and `records_plan`: the plan
+//! step's shape, and each way the loader refuses one.
 //!
 //! **Its own fixture, not [`super::BUG`].** That constant is the worked
 //! example as it stands before #895 switches it — its `plan` step's product
@@ -147,18 +147,17 @@ fn plan_recorded_on_a_step_whose_product_is_not_plan_is_refused() {
     );
 }
 
-/// **`follows_plan` on the plan step itself is refused.** Nothing before it
-/// in the file has `plan` as its product, and that includes itself.
+/// **`follows_plan` on the recording step itself is allowed.** `#1006`
+/// reversed this: a single step may both record the plan and keep its own
+/// tasks current, which is `revert`'s shape.
 #[test]
-fn follows_plan_on_the_plan_step_itself_is_refused() {
-    let refused = refusals(parse(&PLAN_AND_IMPLEMENT.replace(
+fn follows_plan_on_the_recording_step_itself_is_allowed() {
+    let def = parse(&PLAN_AND_IMPLEMENT.replace(
         "  - id: plan\n    label: Plan the change\n    evidence: {submitted: {type: plan}}",
         "  - id: plan\n    label: Plan the change\n    follows_plan: true\n    evidence: {submitted: {type: plan}}",
-    )));
-    assert_eq!(
-        fault_at(&refused, "steps[0].follows_plan"),
-        &Fault::FollowsPlanWithNoPlanStep
-    );
+    ))
+    .expect("follows_plan on the recording step itself loads");
+    assert!(def.steps()[0].follows_plan());
 }
 
 /// **`follows_plan` on a step before the plan step is refused.** Reordering
@@ -218,4 +217,87 @@ steps:
         fault_at(&refused, "steps[0].follows_plan"),
         &Fault::FollowsPlanWithNoPlanStep
     );
+}
+
+// ------------------------------------------------------------- records_plan
+
+/// A step keeps its own product — `document`, not `plan` — and still records
+/// the plan beside it, gated by `plan_recorded` exactly as a plan step is.
+/// **#1006**, Code Review's `read` shape.
+const RECORDS_PLAN_BESIDE_A_PRODUCT: &str = r#"
+version: 1
+workflow_id: fixture-records-plan
+name: fixture
+structure: linear
+steps:
+  - id: read
+    label: Read the diff
+    records_plan: true
+    evidence: {submitted: {type: document}}
+    mechanical_checks:
+      - { type: artifact_exists, target: ".armada/artifacts/read.md" }
+      - { type: plan_recorded }
+    delivers: false
+    advance_gate: auto
+  - id: assess
+    label: Assess
+    follows_plan: true
+    evidence: {submitted: {type: review}}
+    delivers: true
+    advance_gate: auto
+"#;
+
+#[test]
+fn a_step_may_record_the_plan_beside_its_own_product() {
+    let def = parse(RECORDS_PLAN_BESIDE_A_PRODUCT).expect("records_plan beside a product parses");
+    let read = &def.steps()[0];
+    assert!(read.records_plan());
+    assert_eq!(read.evidence_type(), Some(EvidenceType::Document));
+    assert!(read.mechanical_checks().iter().any(|check| matches!(
+        check,
+        MechanicalCheck::ArtifactExists { target } if target == ".armada/artifacts/read.md"
+    )));
+    assert!(def.steps()[1].follows_plan());
+}
+
+/// **A step declaring `records_plan: true` and no `plan_recorded` is
+/// refused**, the same way a `plan`-product step is.
+#[test]
+fn a_step_that_records_the_plan_without_plan_recorded_is_refused() {
+    let refused = refusals(parse(
+        &RECORDS_PLAN_BESIDE_A_PRODUCT.replace("      - { type: plan_recorded }\n", ""),
+    ));
+    assert_eq!(
+        fault_at(&refused, "steps[0].mechanical_checks"),
+        &Fault::PlanStepWithoutPlanRecorded
+    );
+}
+
+/// **Two steps that each record the plan are refused, whichever spelling
+/// either uses**, and the second names the first.
+#[test]
+fn a_records_plan_step_and_a_plan_product_step_together_are_refused() {
+    let refused = refusals(parse(&format!(
+        "{RECORDS_PLAN_BESIDE_A_PRODUCT}  - id: replan\n    label: Plan again\n    \
+         evidence: {{submitted: {{type: plan}}}}\n    mechanical_checks:\n      \
+         - {{ type: plan_recorded }}\n    delivers: false\n    advance_gate: auto\n"
+    )));
+    assert_eq!(
+        fault_at(&refused, "steps[2].evidence.submitted.type"),
+        &Fault::TwoPlanSteps { first_at: 0 }
+    );
+}
+
+/// **`follows_plan` on the step that declares `records_plan: true` is
+/// allowed** — the same widening `#1006` makes for the `plan`-product
+/// spelling, so a step can record the plan and work it at once.
+#[test]
+fn follows_plan_on_a_records_plan_step_itself_is_allowed() {
+    let def = parse(&RECORDS_PLAN_BESIDE_A_PRODUCT.replace(
+        "  - id: read\n    label: Read the diff\n    records_plan: true",
+        "  - id: read\n    label: Read the diff\n    records_plan: true\n    follows_plan: true",
+    ))
+    .expect("follows_plan on the recording step itself loads");
+    assert!(def.steps()[0].follows_plan());
+    assert!(def.steps()[0].records_plan());
 }

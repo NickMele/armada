@@ -11,7 +11,9 @@ by the steps that follow it.
 Designed with the owner as the Plan milestone. #893 built the record and the
 Drone tools that write it, #894 put it in a Drone's brief, and #895 wired the
 workflow fields. #896 draws it in job detail, #897 lets a person change it,
-and #898 draws it on the Board — none of the three built yet.
+and #898 draws it on the Board — none of the three built yet. #1006 let any
+step record it beside its own product, so all eight carried workflows keep
+one.
 
 ## What it is
 
@@ -40,8 +42,8 @@ overwritten.
 
 | Who | May do |
 | --- | --- |
-| The step whose product is the plan | Record it whole, while its step runs. A retry of that step replaces the plan |
-| A step declaring `follows_plan: true` | Add a task, and move one to `working`, `done` or `dropped` with a reason. A `done` task may move back; a `dropped` one stays dropped |
+| The step that records the plan | Record it whole, while its step runs. A retry, or a loop's return to that step, replaces the plan |
+| A step declaring `follows_plan: true` | Add a task, and move one to `working`, `done` or `dropped` with a reason. A `done` task may move back; a `dropped` one stays dropped. Legal on the recording step itself, so one step may plan and keep its own tasks current |
 | A person | Add a task, or drop one with a reason, from Bridge, while the Job runs |
 | Any other step | Read the plan. Change nothing |
 
@@ -63,12 +65,25 @@ at least `min_tasks` tasks — see [Workflow](workflow.md).
 
 ## How a workflow declares it
 
-A workflow names its plan step by giving it `evidence.submitted.type:
-"plan"` and a `plan_recorded` mechanical check. A later step that keeps the
-plan current declares `follows_plan: true`. [Workflow](workflow.md) owns
-the field-by-field schema and the refusals a definition can trip — two plan
-steps, a plan step missing `plan_recorded`, `follows_plan` on or before the
-plan step.
+A workflow names the step that records the plan one of two ways: giving it
+`evidence.submitted.type: "plan"`, where the plan is the whole of the
+step's product, or giving it `records_plan: true` beside another product —
+Code Review's `read` keeps `read.md` and records the plan too. Either way
+the step needs a `plan_recorded` mechanical check. A later step that keeps
+the plan current declares `follows_plan: true`, legal on the recording step
+itself as well as on every step after it. [Workflow](workflow.md) owns the
+field-by-field schema and the refusals a definition can trip — two steps
+recording a plan, a recording step missing `plan_recorded`, `follows_plan`
+on a step before the recording step or in a workflow with none.
+
+## The plan never replaces a step's own product
+
+A step that records the plan beside another product keeps both. The Judge
+reads the step's own deliverable or diff and the plan, labelled apart, never
+one folded into the other — Epic's `plan` step keeps its split drawing this
+way, not just the tasks it broke the wave into. A later step naming
+`<recording_step>.evidence` in `reference_docs` reads the same pairing: the
+recording step's own submission, with the plan appended after it.
 
 ## Distinct from the declared scope's "plan"
 

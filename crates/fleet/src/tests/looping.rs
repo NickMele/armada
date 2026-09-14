@@ -16,7 +16,7 @@
 //! it is spent.
 
 use adapter_traits::WorktreeSpec;
-use core_model::{EvidenceType, JobStatus, StepId, StepState};
+use core_model::{Approach, EvidenceType, JobStatus, NewTask, PlanChange, StepId, StepState};
 use testkit::FakeWorkProduct;
 use verification::{Claimed, NotClaimed, ShownBy};
 
@@ -400,6 +400,21 @@ fn wrote_the_plan(home: &TempDir, handle: &str) {
         .expect("the plan is written");
 }
 
+/// One pass's recording, distinguishable from every other pass's — `#1006`'s
+/// "Watch for: Loops" is that a second round's `record_plan` must replace the
+/// plan whole, exactly as a retry does, and not be refused for the step
+/// having already recorded once. Naming the approach by pass number is what a
+/// later assertion reads back to tell which round's recording survived.
+fn a_plan_recording(pass: u32) -> PlanChange {
+    PlanChange::Recorded {
+        approach: Approach::new(&format!("Migrate, then backfill — pass {pass}"))
+            .expect("an approach"),
+        tasks: vec![
+            NewTask::new(&format!("Write the migration, pass {pass}"), "").expect("a title"),
+        ],
+    }
+}
+
 /// **Design Plan, the loop it is described as, driven twice round and stopped.**
 ///
 /// `workflows.toml` calls this Armada's only instantiated loop and said so
@@ -411,6 +426,12 @@ fn wrote_the_plan(home: &TempDir, handle: &str) {
 /// The cap is the designed five and the test spends three of them, so it
 /// asserts the loop rather than the bound — `two_passes_and_then_the_cap_is_spent`
 /// is where the arithmetic is pinned.
+///
+/// **`#1006` widened `draft` to record the plan**, so this is also where a
+/// step recording the plan is driven round a real loop: `draft` records on
+/// every one of the three passes, and the plan left standing at the end is
+/// the third recording's, whole — never the first's and never all three
+/// stacked together.
 #[tokio::test]
 async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
     let home = TempDir::new();
@@ -428,6 +449,13 @@ async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
     dispatched(&fleet, &job_id).await.expect("it dispatches");
 
     for pass in 1..=3 {
+        // `draft` records the plan on every pass, `#1006` — the step that
+        // records it is entered again each round, and `plan_recorded` gates
+        // its advance exactly as it does on every other recording step.
+        fleet
+            .change_plan(&job_id, &a_plan_recording(pass))
+            .await
+            .unwrap_or_else(|refused| panic!("pass {pass} may record the plan: {refused}"));
         submitted_by_the_one(&fleet, document())
             .await
             .expect("the draft is reported");
@@ -499,6 +527,16 @@ async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
         1,
         "no retry budget was spent on any of it: nothing failed"
     );
+    // **Each round replaced the plan whole.** Three recordings on the same
+    // step, and what survives is the third's alone — not the first's, and not
+    // all three stacked into a longer task list.
+    let plan = store
+        .work_plan(&job_id)
+        .expect("reads")
+        .expect("the draft recorded a plan");
+    assert_eq!(plan.approach(), "Migrate, then backfill — pass 3");
+    assert_eq!(plan.tasks().len(), 1, "the third round's plan, whole");
+    assert_eq!(plan.tasks()[0].title(), "Write the migration, pass 3");
 }
 
 /// Feature's shape once `review` sits after `tests`: the return to `implement`

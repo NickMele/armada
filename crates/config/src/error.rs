@@ -278,24 +278,30 @@ pub enum Fault {
     /// **A `requires` entry naming a server.** A server never exits, so what
     /// was meant to run after it would wait forever.
     RequiresAServer { value: String },
-    /// **A second step whose product is `plan`.** Fleet holds one plan per
-    /// Job, so a second step declaring `plan` would be a second record
-    /// nothing after it could tell from the first.
+    /// **A second step that records the plan.** A step records it either by
+    /// declaring `plan` as its whole product or by declaring
+    /// `records_plan: true` beside another — and Fleet holds one plan per
+    /// Job, so a second one recording would be a second record nothing after
+    /// either could tell from the first. `#1006`.
     TwoPlanSteps { first_at: usize },
-    /// **`plan_recorded` on a step whose product is not `plan`.** The check
+    /// **`plan_recorded` on a step that does not record the plan.** The check
     /// reads Fleet's own record of the plan, which exists only where a step
-    /// declared `plan` as its product — so the check belongs on that step and
-    /// nowhere else.
+    /// records one — its whole product is `plan`, or it declares
+    /// `records_plan: true` — so the check belongs on that step and nowhere
+    /// else.
     PlanRecordedNotOnAPlanStep,
-    /// **A step whose product is `plan` and declares no `plan_recorded`.** A
+    /// **A step that records the plan and declares no `plan_recorded`.** A
     /// step recording the plan is not done until Fleet's own record says so,
     /// and nothing else in `mechanical_checks` reads it.
     PlanStepWithoutPlanRecorded,
-    /// **`follows_plan: true` with no earlier step whose product is `plan`.**
-    /// Covers all three ways that can be true: the key on the plan step
-    /// itself, on a step before it, or in a workflow that declares no plan
-    /// step at all — each is a step asked to work a plan that does not exist
-    /// yet from where it stands.
+    /// **`follows_plan: true` with no step at or before it that records the
+    /// plan.** Covers both ways that can still be true: on a step strictly
+    /// before the one that records the plan, or in a workflow that declares
+    /// no recording step at all — each is a step asked to work a plan that
+    /// does not exist yet from where it stands. **The recording step itself
+    /// is no longer one of these ways** — `#1006` allows `follows_plan` there
+    /// too, so a single step can plan and keep its own tasks current, which
+    /// `revert` does.
     FollowsPlanWithNoPlanStep,
 }
 
@@ -557,25 +563,26 @@ impl fmt::Display for Fault {
             ),
             Fault::TwoPlanSteps { first_at } => write!(
                 f,
-                "is a second step whose product is `plan`, and steps[{first_at}] \
-                 already is. Fleet holds one plan per Job"
+                "is a second step that records the plan, and steps[{first_at}] \
+                 already does. Fleet holds one plan per Job"
             ),
             Fault::PlanRecordedNotOnAPlanStep => write!(
                 f,
-                "is `plan_recorded`, and this step's product is not `plan`. The \
+                "is `plan_recorded`, and this step does not record the plan — its \
+                 product is not `plan` and it declares no `records_plan`. The \
                  check reads Fleet's own record of the plan, and only the step \
                  that records one has one to read"
             ),
             Fault::PlanStepWithoutPlanRecorded => write!(
                 f,
-                "declares no `plan_recorded` check, and this step's product is \
-                 `plan`. A step that records the plan is not done until Fleet's \
+                "declares no `plan_recorded` check, and this step records the \
+                 plan. A step that records the plan is not done until Fleet's \
                  own record of it says so"
             ),
             Fault::FollowsPlanWithNoPlanStep => write!(
                 f,
-                "is `follows_plan: true`, and no step before this one has `plan` \
-                 as its product. There is no plan yet for this step to work"
+                "is `follows_plan: true`, and no step at or before this one \
+                 records the plan. There is no plan yet for this step to work"
             ),
         }
     }

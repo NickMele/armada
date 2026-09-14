@@ -245,7 +245,9 @@ impl ThePlan {
             true => {
                 "\n\nKeep it current as you work: call update_task when you \
                  start a task and when it is done, and add_task for work the \
-                 plan missed. Drop a task with a reason rather than leaving \
+                 plan missed. The checks each part must pass run on their \
+                 own when that part is submitted, so do not add a task for \
+                 running them. Drop a task with a reason rather than leaving \
                  it open. A done task may move back; a dropped one stays \
                  dropped. A task's state decides nothing on its own — it is \
                  your account of the work, and the diff is what is checked."

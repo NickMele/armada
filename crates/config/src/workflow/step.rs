@@ -48,6 +48,7 @@ const STEP_KEYS: &[&str] = &[
     "quiet_after_seconds",
     "poke_limit",
     "follows_plan",
+    "records_plan",
 ];
 
 /// **The schema's whole set, spelled out rather than sketched.** This held
@@ -118,6 +119,7 @@ pub struct Step {
     quiet_after_seconds: Option<u32>,
     poke_limit: Option<u32>,
     follows_plan: bool,
+    records_plan: bool,
 }
 
 impl Step {
@@ -259,6 +261,17 @@ impl Step {
     pub fn follows_plan(&self) -> bool {
         self.follows_plan
     }
+
+    /// Whether this step records the Job's plan **beside its own product**,
+    /// declared with `records_plan: true` rather than inferred from
+    /// `evidence.submitted.type`. **False where the file leaves the key
+    /// out** — which includes every step whose product is `plan` outright:
+    /// that case is carried on [`Step::evidence_type`] and read together with
+    /// this one wherever "does this step record the plan" is the question,
+    /// never through this field alone. `#1006`.
+    pub fn records_plan(&self) -> bool {
+        self.records_plan
+    }
 }
 
 /// One step, or [`None`] where something on it was refused.
@@ -286,7 +299,26 @@ pub(super) fn read(
         .required("label", out)
         .and_then(|value| yaml::text(&table.at("label"), value, out));
     let (evidence_type, captured) = evidence(&mut table, out);
-    let mechanical_checks = mechanical::checks(&mut table, evidence_type, out);
+    // **Absent is false, and anything that is not a boolean is a refusal** —
+    // `may_dispatch_jobs`'s rule, for its reason: a value read as absent
+    // would be a step written to record the plan beside its own product that
+    // silently does not. A step whose *whole* product is the plan does not
+    // need this key at all — `evidence.submitted.type: "plan"` already says
+    // so, unchanged, and `is_plan_step` below reads both together so the two
+    // spellings converge on one answer wherever the question is asked. `#1006`.
+    let records_plan_key = table.at("records_plan");
+    let records_plan = match table.optional("records_plan") {
+        None => Some(false),
+        Some(value) => yaml::flag(&records_plan_key, value, out),
+    };
+    // **Whether this step records the plan at all**, folding the declared
+    // field and the inferred case into the one answer everything below asks
+    // for. A step cannot both leave `records_plan` unset and have it read as
+    // true, so a refused `records_plan` reads as `false` here exactly as
+    // `model` and `follows_plan` already do — the refusal is already in
+    // `out`, and a definition carrying one does not load at all.
+    let is_plan_step = records_plan.unwrap_or(false) || evidence_type == Some(EvidenceType::Plan);
+    let mechanical_checks = mechanical::checks(&mut table, is_plan_step, out);
     let judge_checks = judge::checks(&mut table, roster, out);
     let evidence_scope = scope::evidence_scope(&mut table, out);
     // **Absent is none, and a malformed one is a refusal rather than none.**
@@ -406,17 +438,18 @@ pub(super) fn read(
         ));
     }
 
-    // **A step whose product is `plan` is not done until Fleet's own record
+    // **A step that records the plan is not done until Fleet's own record
     // says so.** `plan_recorded` is the only check that reads that record, so
-    // a step naming `plan` as its product and declaring none of these has
-    // nothing gating the one thing its Judge and every following step will
-    // trust. The reverse — `plan_recorded` on a step that is not this one —
-    // is refused where the check itself is read, in `super::mechanical`.
-    let records_plan = evidence_type == Some(EvidenceType::Plan);
+    // a step recording the plan — whether its whole product is `plan` or it
+    // declared `records_plan: true` beside another product — and declaring
+    // none of these has nothing gating the one thing its Judge and every
+    // following step will trust. The reverse — `plan_recorded` on a step that
+    // does not record the plan — is refused where the check itself is read,
+    // in `super::mechanical`.
     let has_plan_recorded = mechanical_checks
         .iter()
         .any(|check| matches!(check, MechanicalCheck::PlanRecorded { .. }));
-    if records_plan && !has_plan_recorded {
+    if is_plan_step && !has_plan_recorded {
         out.push(Refusal::new(
             format!("{at}.mechanical_checks"),
             Fault::PlanStepWithoutPlanRecorded,
@@ -444,7 +477,7 @@ pub(super) fn read(
         ));
     }
     table.close(STEP_KEYS, out);
-    if disagrees || (judged && evidence_type.is_none()) || (records_plan && !has_plan_recorded) {
+    if disagrees || (judged && evidence_type.is_none()) || (is_plan_step && !has_plan_recorded) {
         return None;
     }
     let Looping {
@@ -470,6 +503,7 @@ pub(super) fn read(
         quiet_after_seconds,
         poke_limit,
         follows_plan: follows_plan?,
+        records_plan: records_plan?,
     })
 }
 

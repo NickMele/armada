@@ -31,6 +31,11 @@
 # `crates/fleet/src/terms.rs` is the block, and it is keyed off
 # `may_dispatch_jobs` on this step or the next one rather than off this
 # workflow's name.
+#
+# **`plan` records the plan, `#1006`.** It keeps its split, `plan.md`, and
+# `dispatch` and `roll_up` both follow. `plan` is also where the loop returns,
+# so a second pass records again — `WorkPlan::after` replaces a `Recorded`
+# change whole, which is what keeps a second split from reading as two plans.
 {
   "version": 1,
   "workflow_id": "epic",
@@ -41,6 +46,7 @@
     {
       "id": "plan",
       "label": "Plan the wave",
+      "records_plan": true,
       "evidence": {
         "submitted": { "type": "document" }
       },
@@ -48,6 +54,9 @@
         {
           "type": "artifact_exists",
           "target": ".armada/artifacts/plan.md"
+        },
+        {
+          "type": "plan_recorded"
         }
       ],
       "judge_checks": [
@@ -72,6 +81,7 @@
     {
       "id": "dispatch",
       "label": "Dispatch the wave",
+      "follows_plan": true,
       "evidence": {
         "submitted": { "type": "facts_note" }
       },
@@ -88,6 +98,7 @@
     {
       "id": "roll_up",
       "label": "Roll up the wave",
+      "follows_plan": true,
       "evidence": {
         "submitted": { "type": "document" }
       },

@@ -164,6 +164,11 @@ fn question_text_of(
 /// [`CallFailed::NothingToJudge`] — which the gate turns into a ruling that
 /// decided neither way. It used to come back as a refusal, every time, on every
 /// Job whose first step wrote a note.
+///
+/// `plan` is `crate::gate`'s reading of the Job's plan, where this step
+/// records one — `None` on every other step. It is read into [`Product`]
+/// beside `delivered` and never instead of it, so a step that keeps its own
+/// product and records the plan shows a Judge both, labelled apart. `#1006`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn judged(
     at: AtStep<'_>,
@@ -171,6 +176,7 @@ pub(crate) async fn judged(
     accepted: Accepted<'_>,
     patch: &Patch,
     delivered: Option<Delivered<'_>>,
+    plan: Option<Delivered<'_>>,
     answered: Answered<'_>,
     off_plan: &[RepoPath],
     recorded: &[(StepId, StepEvidence)],
@@ -180,7 +186,7 @@ pub(crate) async fn judged(
 ) -> Result<(Vec<Judgment>, JudgeFold), CallFailed> {
     let step = at.step();
     let product =
-        Product::of(step, patch, accepted, delivered).map_err(CallFailed::NothingToJudge)?;
+        Product::of(step, patch, accepted, delivered, plan).map_err(CallFailed::NothingToJudge)?;
     let against = measured_against(at, recorded);
     let references: Vec<Reference<'_>> = against
         .iter()

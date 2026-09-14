@@ -61,7 +61,8 @@ fn brief_of(workflow: &ResolvedWorkflow, job: &Job) -> String {
     let submitted = note();
     let patch = Patch::of(String::new());
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a note");
-    let product = Product::of(step, &patch, accepted, None).expect("the note is the work product");
+    let product =
+        Product::of(step, &patch, accepted, None, None).expect("the note is the work product");
     Brief::about(
         step,
         &step.judge_checks()[0].criteria()[0],
