@@ -1,18 +1,10 @@
 /* No entrance animations on data. A Job Board that animates rows in on every
    poll is unusable. Live-updating values may pulse once on change, nothing more.
 
-   One carve-out, amended 2026-08-20: the running step mark in a workflow rail
-   animates continuously at --duration-pulse. A hue says which step is current;
-   only motion says it is still working, and that is the one reading a static
-   rail cannot give. Scope is exactly one element per SCREEN, amended
-   2026-08-21: the inner dot of the running mark on the FOCUSED Job, opacity
-   and scale only, so no row shifts. It was scoped per rail, where one row is
-   current by definition — but a list has one running mark per Job, and
-   fourteen breathing dots is the thing this file forbids in its first
-   sentence. The reading survives because the pulse never carried WHICH step
-   is current — hue does that, and hue is unchanged on every running row. It
-   carries STILL WORKING, and that is only asked of the row being read.
-   Nothing else on a data surface animates on a loop. */
+   What loops is what is still working: the running step mark, and a control
+   waiting on Fleet (#1117, which retired one-animation-per-screen). The mark
+   pulses on the FOCUSED Job, opacity and scale only, so no row shifts; hue
+   says WHICH step on every running row. */
 :root {
   --duration-fast: 120ms;  /* hover, focus */
   --duration-base: 180ms;  /* panel and dropdown transitions */
@@ -23,7 +15,7 @@
      wait and not eight; past it the delay applies again, because a pointer that
      has been elsewhere for a third of a second is not still reading. */
   --tooltip-grace: 300ms;
-  --duration-pulse: 1600ms; /* the running step mark, and nothing else */
+  --duration-pulse: 1600ms; /* a loop that says still working */
 }
 
 @media (prefers-reduced-motion: reduce) {

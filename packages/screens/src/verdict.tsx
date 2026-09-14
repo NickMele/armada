@@ -22,6 +22,7 @@ import { GitPullRequest, Minus } from "lucide-react";
 import {
   Button,
   CheckRuns,
+  type DecisionAct,
   JudgeQuestion,
   Tooltip,
   VerdictSheet,
@@ -537,6 +538,8 @@ export type VerdictSlotAtGateArgs = {
   onNeedRemarks: (jobId: string | null) => void;
   stale: boolean;
   deciding: boolean;
+  /** Which of the four answers is out, where `deciding` is one of them. #1117. */
+  decidingAct?: DecisionAct | undefined;
   onMergePullRequest: (jobId: string) => void;
   /** Send the branch back for a Drone that can edit files. `#663`. */
   onResolvePullRequestConflict: (jobId: string) => void;
@@ -585,6 +588,7 @@ export function verdictSlotAtGate({
   onNeedRemarks,
   stale,
   deciding,
+  decidingAct,
   onMergePullRequest,
   onResolvePullRequestConflict,
   onRerunFailedChecks,
@@ -681,6 +685,7 @@ export function verdictSlotAtGate({
           remarks={recorded.remarks}
           stale={stale}
           deciding={deciding}
+          decidingAct={decidingAct}
           {...(address === undefined ? {} : { pullRequest: address, conflicted })}
           onMerge={onMergePullRequest}
           onApprove={onApproveReview}

@@ -50,6 +50,7 @@ import {
   ReviewComments,
   ReviewDecision,
   UnifiedDiff,
+  type DecisionAct,
   type DecisionChange,
   type UnifiedDiffProps,
 } from "@armada/components";
@@ -102,6 +103,12 @@ export type DecideProps = {
   stale: boolean;
   /** A decision on this Job already in flight. */
   deciding: boolean;
+  /**
+   * Which of the four answers it is, when it is one of them. That control waits
+   * and says so; `deciding` without it is another act at this gate, and the
+   * group is off with the sentence. #1117.
+   */
+  decidingAct?: DecisionAct | undefined;
   /**
    * The address of the pull request this Job's branch went out on, where it
    * has one. **Absent is a Job with nothing to merge**, and it is what decides
@@ -158,6 +165,7 @@ export function Decide({
   remarks,
   stale,
   deciding,
+  decidingAct,
   pullRequest,
   onMerge,
   conflicted = false,
@@ -207,6 +215,8 @@ export function Decide({
 
   const off = stale || deciding;
   const why = stale ? NOT_LIVE : deciding ? IN_FLIGHT : undefined;
+  // The answer pressed, drawn on its own control. Not while stale: nothing live can answer it.
+  const waiting = !stale && deciding ? decidingAct : undefined;
 
   // **Read off the same address the merge control's own presence is decided
   // from.** `pullRequest` is undefined exactly where `onMerge` is absent below,
@@ -239,8 +249,9 @@ export function Decide({
         onApprove={() => (changes.length > 0 ? setAsking("approve") : onApprove(job.id))}
         onRequestChanges={() => onRequestChanges(job.id, noteWithChanges(changes, note))}
         onReject={() => setAsking("reject")}
-        disabled={off}
-        {...(why === undefined ? {} : { disabledNote: why })}
+        {...(waiting === undefined
+          ? { disabled: off, ...(why === undefined ? {} : { disabledNote: why }) }
+          : { pending: waiting })}
       />
 
       <Dialog

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode, type Ref } from "react";
 
 /**
  * The four button variants of the design system contract.
@@ -37,6 +37,13 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
    * required by the caller, since the glyph is the whole content.
    */
   iconOnly?: boolean;
+  /**
+   * This is the control that was pressed, and Fleet has not answered. It
+   * sweeps a bar, stays focusable, and refuses a second press. The caller
+   * disables the rest of the group and words the label as the act underway.
+   * #1117.
+   */
+  pending?: boolean;
   children?: ReactNode;
 };
 
@@ -45,7 +52,10 @@ export function Button({
   size = "default",
   ground = "card",
   iconOnly = false,
+  pending = false,
   type = "button",
+  disabled,
+  onClick,
   children,
   ...rest
 }: ButtonProps) {
@@ -58,8 +68,33 @@ export function Button({
       data-size={size}
       data-ground={ground}
       data-icon-only={iconOnly || undefined}
+      data-pending={pending || undefined}
+      // Not `disabled`: a disabled button drops focus and is skipped by a
+      // screen reader, and this one is the thing being waited on.
+      disabled={pending ? undefined : disabled}
+      aria-disabled={pending || undefined}
+      aria-busy={pending || undefined}
+      onClick={pending ? undefined : onClick}
     >
       {children}
     </button>
   );
+}
+
+/** How long a press waits before the group says Fleet is still on it. */
+export const STILL_WAITING_AFTER_MS = 5000;
+
+/** The one sentence for a press Fleet has not answered after that long. */
+export const STILL_WAITING = "Still waiting on Fleet. Pressing again won't send it twice.";
+
+/** True once `pending` has held for `after` milliseconds; false the moment it clears. */
+export function useStillWaiting(pending: boolean, after = STILL_WAITING_AFTER_MS): boolean {
+  const [long, setLong] = useState(false);
+  useEffect(() => {
+    setLong(false);
+    if (!pending) return;
+    const timer = setTimeout(() => setLong(true), after);
+    return () => clearTimeout(timer);
+  }, [pending, after]);
+  return pending && long;
 }

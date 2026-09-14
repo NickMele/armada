@@ -18,6 +18,8 @@
 // which is why that file already re-exports `ConfirmableAct`, `FoldedReads`
 // and `Render` from their own modules.
 
+import type { DecisionAct } from "@armada/components";
+
 import type {
   CommandAnswer,
   Examination,
@@ -70,6 +72,8 @@ export type JobDetailProps = {
   rerunningChecks: boolean;
   /** A decision on this Job's work already in flight. */
   deciding: boolean;
+  /** Which of the four review answers that is, so its own control waits. #1117. */
+  decidingAct?: DecisionAct | undefined;
   /** Ask for a confirmation. Nothing destructive is one press from here. */
   onAct: (act: ConfirmableAct, jobId: string) => void;
   /** Send a redirect straight through — its own dialog is the confirmation. */

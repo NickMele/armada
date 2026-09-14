@@ -205,6 +205,8 @@ export function useCommands(sending: Sending) {
   // the header's act set: sharing one flag would grey out the header's kills
   // while a review note was being sent.
   const [deciding, setDeciding] = useState<string | null>(null);
+  // Which of the four answers that is, so the control pressed is the one that waits. #1117.
+  const [decidingAct, setDecidingAct] = useState<"approve" | "changes" | "reject" | "merge" | null>(null);
   // Which Job is having a stopped step's Checks run again. Its own state
   // beside `acting`'s: a re-run can take minutes, and the step needs to keep
   // saying so for as long as it runs — `acting` alone cannot say which act
@@ -623,6 +625,7 @@ export function useCommands(sending: Sending) {
     note = "",
   ): Promise<void> {
     setDeciding(jobId);
+    setDecidingAct(what);
     try {
       const answer =
         what === "merge"
@@ -636,6 +639,7 @@ export function useCommands(sending: Sending) {
       if (what === "merge" || what === "approve") took(jobId, what, answer);
     } finally {
       setDeciding(null);
+      setDecidingAct(null);
     }
   }
 
@@ -746,6 +750,7 @@ export function useCommands(sending: Sending) {
     taken: notice === null ? null : { ...notice, onDismiss: () => setTaken(null) },
     acting,
     deciding,
+    decidingAct,
     takeUpRemarks,
     dismissFinding,
     resolvePullRequestConflict,

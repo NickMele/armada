@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Separator } from "../../primitives/Separator/Separator";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
@@ -103,6 +103,11 @@ export type ReviewDecisionProps = {
   disabled?: boolean;
   /** Why the controls are off, where they are. Never left to be guessed at. */
   disabledNote?: ReactNode;
+  /**
+   * The answer that was pressed and Fleet has not answered. That control waits
+   * and every other one is off; absent is nothing out. #1117.
+   */
+  pending?: DecisionAct;
   /** The label over the note field. Sentence case, no Wh- opener. */
   noteLabel?: string;
   /** What approving does, on hover over its control. */
@@ -117,6 +122,17 @@ export type ReviewDecisionProps = {
   approveLabel?: string;
   requestChangesLabel?: string;
   rejectLabel?: string;
+};
+
+/** The four answers, named as the command that sends each. */
+export type DecisionAct = "merge" | "approve" | "changes" | "reject";
+
+/** What each answer's control says while Fleet has not answered it. */
+const UNDERWAY: Record<DecisionAct, string> = {
+  merge: "Merging…",
+  approve: "Approving…",
+  changes: "Requesting changes…",
+  reject: "Rejecting…",
 };
 
 /** One thing that should change, and where it came from: `Small fix`, or a View. #907. */
@@ -136,8 +152,9 @@ export function ReviewDecision({
   onApprove,
   onRequestChanges,
   onReject,
-  disabled = false,
+  disabled: refused = false,
   disabledNote,
+  pending,
   noteLabel = "What should change",
   approveNote = "Takes the work as the drone left it.",
   requestChangesNote = "Sends this note to the drone as a turn. It keeps the worktree and the step, and comes back running.",
@@ -154,6 +171,8 @@ export function ReviewDecision({
   // and a boolean beside a handler would let a surface offer an act with
   // nothing behind it.
   const merging = onMerge !== undefined;
+  const disabled = refused || pending !== undefined;
+  const stillWaiting = useStillWaiting(pending !== undefined);
 
   return (
     <div className="armada-decision">
@@ -205,10 +224,11 @@ export function ReviewDecision({
             <Tooltip label={mergeNote}>
               <Button
                 variant="primary"
+                pending={pending === "merge"}
                 disabled={disabled || mergeBlockedReason !== undefined}
                 onClick={onMerge}
               >
-                {mergeLabel}
+                {pending === "merge" ? UNDERWAY.merge : mergeLabel}
               </Button>
             </Tooltip>
             {mergeBlockedReason === undefined ? null : (
@@ -221,20 +241,22 @@ export function ReviewDecision({
         <Tooltip label={approveNote}>
           <Button
             variant={merging ? "secondary" : "primary"}
+            pending={pending === "approve"}
             disabled={disabled}
             onClick={onApprove}
           >
-            {approveLabel}
+            {pending === "approve" ? UNDERWAY.approve : approveLabel}
           </Button>
         </Tooltip>
         {/* Off while the note is blank, which is what Fleet would answer. */}
         <Tooltip label={requestChangesNote}>
           <Button
             variant="secondary"
+            pending={pending === "changes"}
             disabled={disabled || blank}
             onClick={onRequestChanges}
           >
-            {requestChangesLabel}
+            {pending === "changes" ? UNDERWAY.changes : requestChangesLabel}
           </Button>
         </Tooltip>
       </div>
@@ -248,13 +270,22 @@ export function ReviewDecision({
             than as an act. Alone, because it is the only one of the three that
             leaves nothing behind. */}
         <Tooltip label={rejectNote}>
-          <Button variant="destructive" disabled={disabled} onClick={onReject}>
-            {rejectLabel}
+          <Button
+            variant="destructive"
+            pending={pending === "reject"}
+            disabled={disabled}
+            onClick={onReject}
+          >
+            {pending === "reject" ? UNDERWAY.reject : rejectLabel}
           </Button>
         </Tooltip>
       </div>
 
-      {disabled && disabledNote !== undefined ? (
+      {stillWaiting ? (
+        <p className="armada-decision__said" role="status">
+          {STILL_WAITING}
+        </p>
+      ) : refused && disabledNote !== undefined ? (
         <p className="armada-decision__said" role="note">
           {disabledNote}
         </p>

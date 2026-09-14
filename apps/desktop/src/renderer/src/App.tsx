@@ -634,6 +634,9 @@ export function App() {
                 rerunningChecks={commands.rerunningChecks === reading.id}
                 approving={state.approving.includes(reading.id)}
                 deciding={commands.deciding === reading.id}
+                decidingAct={
+                  commands.deciding === reading.id ? (commands.decidingAct ?? undefined) : undefined
+                }
                 observed={state.observed}
                 journalled={state.journalled}
                 followed={state.followed}

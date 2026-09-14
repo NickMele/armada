@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { RotateCw } from "lucide-react";
+import { expect, fn } from "storybook/test";
 import { Button } from "./Button";
 
 const meta: Meta<typeof Button> = {
@@ -116,6 +117,38 @@ export const Disabled: Story = {
       </Button>
     </Card>
   ),
+};
+
+/**
+ * Pressed, and Fleet has not answered. The pressed control is the one in its
+ * group that is not greyed out, and a second press sends nothing. #1117.
+ */
+export const Pending: Story = {
+  args: { onClick: fn() },
+  render: (args) => (
+    <Card>
+      <Button variant="primary" disabled>
+        Approve the work
+      </Button>
+      <Button variant="secondary" pending onClick={args.onClick}>
+        Requesting changes…
+      </Button>
+      <Button variant="destructive" disabled>
+        Reject the work
+      </Button>
+    </Card>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    const pressed = canvas.getByRole("button", { name: "Requesting changes…" });
+    await expect(pressed).toHaveAttribute("aria-busy", "true");
+    await expect(pressed).toHaveAttribute("aria-disabled", "true");
+    // By keyboard: it stays focusable, and Enter on it sends nothing.
+    pressed.focus();
+    await expect(pressed).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onClick).not.toHaveBeenCalled();
+    await expect(canvas.getByRole("button", { name: "Approve the work" })).toBeDisabled();
+  },
 };
 
 /** sm — 32px, for use inside table rows. */
