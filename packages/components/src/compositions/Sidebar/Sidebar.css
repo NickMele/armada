@@ -5,7 +5,15 @@
 
    Widths are all tokens: --sidebar-default, --sidebar-min, --sidebar-max and
    --sidebar-rail. Persistence of the resting width and the collapsed state is
-   the app's, not this component's. */
+   the app's, not this component's.
+
+   max-width stays even though the shell always renders this at --sidebar-min
+   through --sidebar-max today — a caller can still hand a wider `width` prop
+   than the drag range allows (`AtMaximumWidth`'s own story is exactly that
+   check), and this is what keeps a bad value from growing the rail past what
+   the shell reserves for it. `screens.css`'s `.armada-shell__left` is the
+   fix for the column beneath it: one width shared with Stats and Fleet,
+   rather than three siblings resolving their own. */
 .armada-sidebar {
   display: flex;
   flex-direction: column;
