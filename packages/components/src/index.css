@@ -248,7 +248,7 @@
 @import "./screens/TheShell/TheShell.css";
 
 /* Overview's band of readings. */
-@import "./compositions/OverviewTile/OverviewTile.css";
+@import "./compositions/OverviewSummaryStrip/OverviewSummaryStrip.css";
 
 /* Questions waiting on a person, in Helm's dock. */
 @import "./compositions/DockQuestions/DockQuestions.css";

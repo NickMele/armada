@@ -7,22 +7,31 @@
 // repository served the row names it, exactly as `Jobs.tsx` does.
 //
 // **Each section is its own panel** — `ActiveJobsList`'s `panel` variant, Board's flat list unchanged.
+// Overview 27 (#1091) gave the variant its own fold; `openSections` and `onSectionOpenChange` are
+// this screen's own pass-through, and the caller is who remembers a press across a restart.
 //
 // **Disconnected reads exactly as `BoardEmpty`'s own fault state.** Overview holds whatever Bridge
 // last received, so a Needs you row from before an outage stays on screen; only a board with
 // nothing on it at all draws the disconnected message.
 //
-// Not routed yet — #921 mounts this beneath the tile band — so a story draws it directly.
+// Not routed yet — #921 mounts this beneath the summary strip Overview 27 replaced the tile band
+// with — so a story draws it directly.
 
 import { useState } from "react";
 import { ActiveJobsList } from "@armada/components";
 import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { BoardEmpty } from "./BoardEmpty";
+import type { BoardSection } from "./board";
 import { columnsFor, repositoryOf } from "./board";
 import { headlineOf } from "./lineage";
 import { overviewListsOf } from "./overview-lists";
 import { readingOf } from "./reading";
 import { Row } from "./Row";
+
+/** `id` on a section's own outer element, so a press elsewhere can `scrollIntoView` it by name. */
+export function overviewPanelId(section: BoardSection): string {
+  return `armada-overview-panel-${section}`;
+}
 
 export type OverviewListsProps = {
   jobs: readonly JobSummary[];
@@ -38,6 +47,14 @@ export type OverviewListsProps = {
   disconnected: string | null;
   /** The Job whose detail is open, where one is. */
   selected: string | null;
+  /**
+   * Whether each section's panel is open, keyed by `BoardSection`. Absent for
+   * a section reads open — `ActiveJobsList`'s own default, `Panel`'s rule.
+   * Overview 24's mechanism remembers it; this only reads what it is told.
+   */
+  openSections?: Partial<Record<BoardSection, boolean>>;
+  /** A panel's fold pressed. Absent for a section leaves it always open. */
+  onSectionOpenChange?: (section: BoardSection, open: boolean) => void;
   /** Open a Job. Every row is a control, so every row calls this. */
   onOpen: (jobId: string) => void;
   /** Ask to kill the Job a row's own control names. It asks; it never kills — `Jobs.tsx`'s rule. */
@@ -63,6 +80,8 @@ export function OverviewLists({
   picked,
   disconnected,
   selected,
+  openSections,
+  onSectionOpenChange,
   onOpen,
   onKill,
   onCopied,
@@ -127,9 +146,14 @@ export function OverviewLists({
         sections.map((section) => (
           <ActiveJobsList
             key={section.id}
+            id={overviewPanelId(section.id)}
             variant="panel"
             heading={section.label}
             count={section.jobs.length}
+            open={openSections?.[section.id]}
+            onOpenChange={
+              onSectionOpenChange ? (open) => onSectionOpenChange(section.id, open) : undefined
+            }
             selectable
             label={section.label}
             columns={columns}

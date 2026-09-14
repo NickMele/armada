@@ -1,28 +1,26 @@
-// Whether the left column's Stats and Fleet panels are open, remembered
-// across a restart — Bridge/1088's own DoD line.
+// Whether a panel is open, remembered across a restart — Bridge/1088's own DoD line. Overview 27
+// (#1091) widened it past the left column's Stats and Fleet to Overview's own Needs you, Running,
+// Queued and Other, so the bag is keyed by name rather than a fixed pair.
 //
-// **`localStorage`, not a Fleet preference.** `where_things_are_open`
-// (`where-open.ts`) is Fleet-wide because more than one Bridge window can
-// watch the same daemon; a panel fold is this window's own layout and Fleet's
-// closed preference set (`fleet.unknown_preference`) has no room for a third
-// name without a wire change outside this issue's scope. Reported.
+// **`localStorage`, not a Fleet preference.** `where_things_are_open` (`where-open.ts`) is
+// Fleet-wide because more than one Bridge window can watch the same daemon; a panel fold is this
+// window's own layout and Fleet's closed preference set (`fleet.unknown_preference`) has no room
+// for a name without a wire change outside either issue's scope. Reported.
 
 import { useState } from "react";
 
-const KEY = "armada.bridge.left-column-open";
+const KEY = "armada.bridge.panels-open";
 
-type Stored = { stats: boolean; fleet: boolean };
-
-const DEFAULT: Stored = { stats: true, fleet: true };
+type Stored = Record<string, boolean>;
 
 function read(): Stored {
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (raw === null) return DEFAULT;
-    const parsed = JSON.parse(raw) as Partial<Stored>;
-    return { stats: parsed.stats ?? true, fleet: parsed.fleet ?? true };
+    if (raw === null) return {};
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null ? (parsed as Stored) : {};
   } catch {
-    return DEFAULT;
+    return {};
   }
 }
 
@@ -34,8 +32,8 @@ function write(next: Stored): void {
   }
 }
 
-/** One panel's open state, backed by the same stored pair. */
-export function usePanelOpen(panel: keyof Stored): [boolean, (open: boolean) => void] {
+/** One panel's open state, backed by the same stored bag. Absent for a name reads open. */
+export function usePanelOpen(panel: string): [boolean, (open: boolean) => void] {
   const [stored, setStored] = useState(read);
 
   function press(open: boolean): void {
@@ -44,5 +42,5 @@ export function usePanelOpen(panel: keyof Stored): [boolean, (open: boolean) => 
     write(next);
   }
 
-  return [stored[panel], press];
+  return [stored[panel] ?? true, press];
 }

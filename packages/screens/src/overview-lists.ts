@@ -33,8 +33,9 @@ export type OverviewListsRead = {
 /**
  * Overview's lists, scoped to the pick and ready to draw as the Board's own rows.
  *
- * `picked` is `null` for All repositories, and `ofPicked`'s own term otherwise — the same value
- * `queuedIn` in `overview.ts` takes for the tile band beside this.
+ * `picked` is `null` for All repositories, and `ofPicked`'s own term otherwise — the same term
+ * `OverviewSummary` resolves before reading this, so the strip's counts and the panels below it
+ * never drift apart.
  */
 export function overviewListsOf(jobs: readonly JobSummary[], picked: RepositorySummary | null): OverviewListsRead {
   const board = foldLineages(ofPicked(jobs, picked));

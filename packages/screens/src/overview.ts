@@ -1,31 +1,40 @@
-// What each of Overview's tiles reads, from what Fleet already serves. `OverviewTiles.tsx` draws
-// them; this decides them, so the arithmetic is tested as arithmetic.
+// What the left column's Stats and Fleet panels read, from what Fleet already serves. Overview's
+// own tile band read the same five once (#919); Overview 27 (#1091) replaced the band with the
+// summary strip and left these five readings here — `left-column.ts` is their only caller now.
 //
 // **Fleet, Doctor and Drones read the machine; Queued and drift read the scope.** A pick narrows
 // the last two and never the first three — `docs/concepts/fleet.md` names what stays Fleet-wide.
 
 import { ADMISSION_HOLD } from "@armada/components";
-import type { OverviewTileProps, OverviewTileTone } from "@armada/components";
-import type { Connection, FleetCapacity, JobSummary, ManifestDrift, RepositorySummary } from "@armada/protocol";
+import type { Connection, FleetCapacity, ManifestDrift, RepositorySummary } from "@armada/protocol";
+import type { ReactNode } from "react";
 import { statementOf } from "@armada/shell/src/fleet";
-import { manifestLabel, repositoryLabel } from "@armada/shell/src/repository-label";
-import { ofPicked, tabOf } from "./board";
 import { said } from "./copy";
 import type { FleetHealth } from "@armada/protocol";
 import type { DriftsRead, HealthRead, RepositoryDrift } from "./overview-reads";
 
-/** A tile's reading. Where it opens is the band's, not the reading's. */
-export type TileReading = Omit<OverviewTileProps, "opens" | "onOpen">;
+/** One of the state machine's own hues, or none — never a colour picked for its own sake. */
+export type ReadingTone = "completed-success" | "awaiting-review" | "completed-failed" | "notice-caution";
+
+/** A reading, in `StatsPanel`'s and `FleetPanel`'s own terms. */
+export type MachineReading = {
+  label: string;
+  value?: ReactNode;
+  valueFace?: "sans" | "mono";
+  tone?: ReadingTone;
+  detail?: ReactNode;
+  detailFace?: "sans" | "mono";
+};
 
 /** The status bar's three hues, and nothing for the states that are none of them. */
-const FLEET_TONE: Partial<Record<Connection["state"], OverviewTileTone>> = {
+const FLEET_TONE: Partial<Record<Connection["state"], ReadingTone>> = {
   connected: "completed-success",
   not_running: "completed-failed",
   unreachable: "awaiting-review",
 };
 
 /** The connection's own statement — the status bar's sentence, not a second one. */
-export function fleetReading(connection: Connection, now: number, readAt: number | null): TileReading {
+export function fleetReading(connection: Connection, now: number, readAt: number | null): MachineReading {
   const statement = statementOf(connection, now, readAt);
   const tone = FLEET_TONE[connection.state];
   return {
@@ -38,13 +47,13 @@ export function fleetReading(connection: Connection, now: number, readAt: number
 
 /** Doctor's words, worst first. A word this build does not know ranks below all three. */
 const OUTCOMES = ["fail", "warn", "pass"] as const;
-const DOCTOR_TONE: Record<(typeof OUTCOMES)[number], OverviewTileTone> = {
+const DOCTOR_TONE: Record<(typeof OUTCOMES)[number], ReadingTone> = {
   fail: "completed-failed",
   warn: "awaiting-review",
   pass: "completed-success",
 };
 
-export function doctorReading(read: HealthRead): TileReading {
+export function doctorReading(read: HealthRead): MachineReading {
   switch (read.state) {
     case "none":
     case "reading":
@@ -60,7 +69,7 @@ export function doctorReading(read: HealthRead): TileReading {
  * The worst word, and every module that did not pass named beside its own. **No blended score**:
  * a failing module is named rather than folded into a count a passing one could hide it in.
  */
-function doctorOf(health: FleetHealth): TileReading {
+function doctorOf(health: FleetHealth): MachineReading {
   const first = health.probes[0];
   if (first === undefined) return { label: "Doctor", value: "Nothing probed" };
   const worst = OUTCOMES.find((word) => health.probes.some((probe) => probe.outcome === word));
@@ -82,7 +91,7 @@ function doctorOf(health: FleetHealth): TileReading {
  * How full the fleet is. **What holds the next Drone back appears only while something is
  * queued**, the status bar's rule: a hold with nothing waiting on it answers no question.
  */
-export function dronesReading(connection: Connection, capacity: FleetCapacity | null, queued: number): TileReading {
+export function dronesReading(connection: Connection, capacity: FleetCapacity | null, queued: number): MachineReading {
   if (capacity === null) {
     return connection.state === "connected" ? { label: "Drones" } : { label: "Drones", value: "Not read" };
   }
@@ -93,29 +102,8 @@ export function dronesReading(connection: Connection, capacity: FleetCapacity | 
   return { label: "Drones", value: `${capacity.occupied} of ${capacity.bound}`, valueFace: "mono", detail };
 }
 
-/** The queued Jobs in the scope, by the Board's own tab rule. */
-export function queuedIn(jobs: readonly JobSummary[], picked: RepositorySummary | null): JobSummary[] {
-  return ofPicked(jobs, picked).filter((job) => tabOf(job) === "queued");
-}
-
-/** How many are queued, and where. A pick names itself; All says how many repositories hold them. */
-export function queuedReading(
-  queued: readonly JobSummary[],
-  served: readonly RepositorySummary[],
-  picked: RepositorySummary | null,
-): TileReading {
-  const reading = { label: "Queued", value: String(queued.length), valueFace: "mono" as const };
-  if (picked !== null) return { ...reading, detail: repositoryLabel(picked, served) };
-  if (served.length <= 1) return reading;
-  const owners = [...new Set(queued.map((job) => job.owner_manifest_id))];
-  const only = owners.length === 1 ? owners[0] : undefined;
-  if (queued.length === 0) return { ...reading, detail: `Across ${repositories(served.length)}` };
-  if (only !== undefined) return { ...reading, detail: manifestLabel(only, served) };
-  return { ...reading, detail: `In ${owners.length} of ${repositories(served.length)}` };
-}
-
 /** Whether a repository's drift names that it is behind, current, or could not be read. */
-export function driftReading(read: DriftsRead, picked: RepositorySummary | null): TileReading {
+export function driftReading(read: DriftsRead, picked: RepositorySummary | null): MachineReading {
   if (read.state === "none") return { label: "Manifest drift" };
   if (picked === null) return acrossOf(read.repositories);
   return oneOf(read.repositories.find((one) => one.root === picked.root));
@@ -130,7 +118,7 @@ function notSetUp(one: RepositoryDrift): boolean {
 }
 
 /** One repository: how many of the lines `armada.yml` names are behind. */
-function oneOf(one: RepositoryDrift | undefined): TileReading {
+function oneOf(one: RepositoryDrift | undefined): MachineReading {
   const label = "Manifest drift";
   if (one === undefined) return { label };
   const drift = one.drift;
@@ -154,7 +142,7 @@ function oneOf(one: RepositoryDrift | undefined): TileReading {
 }
 
 /** Every repository: how many are behind, and which could not be asked. */
-function acrossOf(each: readonly RepositoryDrift[]): TileReading {
+function acrossOf(each: readonly RepositoryDrift[]): MachineReading {
   const label = "Manifest drift";
   if (each.length === 0) return { label, value: "No repositories" };
   const read = each.flatMap((one) => (one.drift.state === "read" ? [one.drift.drift] : []));
