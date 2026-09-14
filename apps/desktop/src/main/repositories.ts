@@ -1,6 +1,5 @@
-// What Fleet serves, and which of it each window's own rail picked: the holdings, shared, and the
-// pick and the Manifest reading scoped to it, per window. Beside `connection.ts`, which is at the
-// length the gate refuses.
+// What Fleet serves, shared, and which of it each window's own rail picked, per window.
+// Beside `connection.ts`, which is at the length the gate refuses.
 
 import type { BridgeState, PickedView } from "../shared/bridge";
 import type { Holdings, ManifestReading, RepositoryList } from "@armada/protocol";
@@ -10,12 +9,8 @@ import { Locating } from "./locating";
 import { holdingsOf, manifestReadingOf, repositoriesOf } from "./request";
 
 export type RepositoryWiring = {
-  /**
-   * The one pick shared across every window, kept exactly as it was before this file went
-   * per-window. **Verify and `holdingsOf`'s `leftOut` still read this** — `checkout-runs.ts` is
-   * mid-flight in a sibling change and does not take a window yet, so a pick made anywhere is
-   * still what the one and what New job's own answer on All reads.
-   */
+  /** The one pick still shared across every window — Verify and `holdingsOf`'s `leftOut` read
+   * this until `checkout-runs.ts` goes per window too. */
   picked: Picked;
   /** Every window's own pick, apart from the shared one above and from each other. */
   pickedByWindow: PickedByWindow;

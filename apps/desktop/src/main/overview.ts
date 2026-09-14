@@ -17,10 +17,7 @@ import { ask, NOT_SET_UP } from "./request";
 import type { Answer } from "./request";
 
 export type OverviewWiring = {
-  /**
-   * This window's own overlay — `PickedView`. **One `OverviewReads` per window**, `main/connection.ts`'s
-   * `windowFacades`: `health` and `drifts` are this window's own, off this window's own `Picked` below.
-   */
+  /** This window's own overlay — one `OverviewReads` per window, `connection.ts`'s `windowFacades`. */
   publish: (change: Partial<PickedView>) => void;
   picked: Picked;
   port: () => number | null;

@@ -161,8 +161,7 @@ function createWindow(): BrowserWindow {
   window.on("minimize", tellVisibility);
   window.on("restore", tellVisibility);
   window.on("closed", tellVisibility);
-  // This window's own pick and its Manifest and always-allow commands go with it — nothing else
-  // reclaims them, `agent-worktrees`' reason repeated for a window rather than a worktree.
+  // This window's own pick and its per-window commands go with it.
   window.on("closed", () => {
     pickedViews.delete(window.id);
     connection?.dropWindow(window.id);
@@ -220,11 +219,7 @@ const remarksPoll = new RemarksPoll({
   again: (port, jobId) => connection?.material.remarksChanged(port, jobId) ?? Promise.resolve(),
 });
 
-/**
- * Every window's own `repository` and `manifestReading` — `shared/bridge.ts`'s `PickedView` —
- * kept apart from `published` and from every other window's. **This, not `published`, is what
- * makes a pick per window**: everything else here still reaches every window identically.
- */
+/** Every window's own `PickedView`, kept apart from `published` and from every other window's. */
 const pickedViews = new Map<number, PickedView>();
 
 const NO_PICK: PickedView = {
