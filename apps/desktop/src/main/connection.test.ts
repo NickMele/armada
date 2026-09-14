@@ -853,7 +853,10 @@ it("keeps drawing the shipped default when Fleet's preferences read fails", asyn
     home,
     publish: (state) => published.publish(state),
     publishToWindow: (id, change) => published.publishToWindow(id, change),
-    windowIds: () => published.windowIds(),
+    // One open window, so the per-window reads a resync also fires keep this
+    // test's ordering the same as every other read here — an empty set skips
+    // them outright, which is correct but not what this race depends on.
+    windowIds: () => [1],
     now: () => 1_756_840_000_000,
   });
   opened.push(() => connection.stop());

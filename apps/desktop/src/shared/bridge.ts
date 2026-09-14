@@ -37,7 +37,7 @@ import type {
   RepositorySummary,
   UnreadableJob,
 } from "@armada/protocol";
-import type { ManifestReading } from "@armada/protocol";
+import type { LeftOutWorkflow, ManifestReading } from "@armada/protocol";
 import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
 import type { CheckoutRunFollowed, CheckoutRunSheetRead, ManifestDriftRead } from "@armada/protocol";
 import type { DriftsRead, HealthRead } from "@armada/screens/src/overview-reads";
@@ -85,21 +85,23 @@ export function identifying(state: BridgeState): BridgeState {
 export type Summons = { jobId: string | null };
 
 /**
- * What one window's own pick decides, and what is read against its own scope — the root, the
- * Manifest reading under it, and Overview's health and drift, which span every repository in
- * the scope: every one on All, or the one picked.
+ * Everything one window's own pick decides, or reads against its own scope: the root, the
+ * Manifest reading, Overview's health and drift, the workflows left out on this scope, and the
+ * Manifest surface's own run sheet, its followed run and its drift.
  *
  * **Every window keeps its own** — `main/picked.ts`'s `PickedByWindow` holds one `Picked`
  * per window, and `main/index.ts` overlays this shape onto the shared state each window
- * receives, so a pick made in one window never moves what another window reads back. A
- * fresh window's is `{ repository: null, manifestReading: null, health: { state: "none" },
- * drifts: { state: "none" } }`, which is All with Overview closed.
+ * receives, so a pick made in one window never moves what another window reads back.
  */
 export type PickedView = {
   repository: string | null;
   manifestReading: ManifestReading | null;
   health: HealthRead;
   drifts: DriftsRead;
+  leftOut?: LeftOutWorkflow[];
+  checkoutRunSheet: CheckoutRunSheetRead;
+  checkoutRunFollowed: CheckoutRunFollowed;
+  manifestDrift: ManifestDriftRead;
 };
 
 /** Everything the renderer draws, published by main and never assembled twice. */
@@ -186,6 +188,8 @@ export type BridgeState = {
    * pasted id was accepted by Fleet unchecked. Both halves of that are fixed:
    * Fleet refuses an id it does not hold, and this is what the form offers so
    * nobody has to guess at one.
+   *
+   * **`leftOut` is this window's own**, off `PickedView` — every other field here is shared.
    */
   holds: Holdings;
   /**
@@ -355,16 +359,16 @@ export type BridgeState = {
    * Held open while the surface is showing **or the palette is up**: the
    * palette lists one row per Check and Command off this reading, and a read
    * scoped to the surface alone would leave those rows missing everywhere a
-   * person would think to look for them.
+   * person would think to look for them. **This window's own** — `PickedView`.
    */
   checkoutRunSheet: CheckoutRunSheetRead;
   /** The checkout run a window is reading, as it prints. Its own socket,
-   * `runFollowed`'s shape one owner over. One at a time. */
+   * `runFollowed`'s shape one owner over. One at a time, and this window's own. */
   checkoutRunFollowed: CheckoutRunFollowed;
   /**
    * Whether the repository still has what `armada.yml` names — drift, the
    * Manifest surface's free read on opening. **Held open by that surface
-   * alone**, and read again when Fleet re-reads the file.
+   * alone**, and read again when Fleet re-reads the file. This window's own.
    */
   manifestDrift: ManifestDriftRead;
   /**

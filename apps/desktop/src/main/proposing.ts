@@ -51,10 +51,7 @@ import type { Picked } from "./picked";
  * carry it: on All, #959 keeps the Board there rather than narrowing it, so
  * the request must name what was answered instead of reading `picked`.
  * `null`, the default, is every other caller — the pick still names it, as it
- * always did.
- *
- * `picked` is the window's own that sent this request — `main/index.ts` names it, off
- * `RepositoryReads.pickedByWindow`; `board.picked` only where a caller supplies none.
+ * always did. `picked` is that caller's own window; `board.picked` only where none is given.
  */
 export async function proposeFromRequest(
   board: Board,

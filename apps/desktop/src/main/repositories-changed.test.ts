@@ -21,6 +21,9 @@ const NO_PICK: PickedView = {
   manifestReading: null,
   health: { state: "none" },
   drifts: { state: "none" },
+  checkoutRunSheet: { state: "none" },
+  checkoutRunFollowed: { state: "none" },
+  manifestDrift: { state: "none" },
 };
 
 const ARMADA: RepositorySummary = {
@@ -128,6 +131,8 @@ async function bridgeOn(port: number) {
     pick: (windowId: number, root: string | null) => connection.repositories.pick(windowId, root),
     /** This window's own Manifest file and Setup commands — `connection.ts`'s `editingFor`. */
     editingFor: (windowId: number) => connection.editingFor(windowId),
+    /** Verify and the run sheet, this window's own — `rehearsal.ts`. */
+    rehearsal: connection.rehearsal,
   };
 }
 
@@ -224,5 +229,23 @@ it("Setup and a Manifest read act on the window's own pick — Open Setup in one
   expect(fleet.urlsFrom("/repository/scan")).toEqual([
     `/repository/scan?repository=${encodeURIComponent(ARMADA.root)}`,
     `/repository/scan?repository=${encodeURIComponent(STOREFRONT.root)}`,
+  ]);
+
+  // B's own Verify and run sheet still name armada, not the repository A opened.
+  await bridge.rehearsal.startCheckoutVerify(2);
+  await bridge.rehearsal.watchCheckoutRunSheet(2, true);
+  expect(fleet.urlsFrom("/manifest/start_verify")).toEqual(["/manifest/start_verify?manifest_id=armada"]);
+  expect(fleet.urlsFrom("/manifest/run_sheet")).toEqual(["/manifest/run_sheet?manifest_id=armada"]);
+
+  // A's own Verify and run sheet name storefront.
+  await bridge.rehearsal.startCheckoutVerify(1);
+  await bridge.rehearsal.watchCheckoutRunSheet(1, true);
+  expect(fleet.urlsFrom("/manifest/start_verify")).toEqual([
+    "/manifest/start_verify?manifest_id=armada",
+    "/manifest/start_verify?manifest_id=storefront",
+  ]);
+  expect(fleet.urlsFrom("/manifest/run_sheet")).toEqual([
+    "/manifest/run_sheet?manifest_id=armada",
+    "/manifest/run_sheet?manifest_id=storefront",
   ]);
 });

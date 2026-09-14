@@ -13,9 +13,11 @@ import { afterEach, expect, it } from "vitest";
 import { WebSocketServer, type WebSocket } from "ws";
 
 import { PROTOCOL_VERSION, type ServerState } from "@armada/protocol";
-import type { BridgeState } from "../shared/bridge";
+import type { BridgeState, PickedView } from "../shared/bridge";
 import { FleetConnection } from "./connection";
 import { holderOf } from "./runtime-file";
+
+const WINDOW = 1;
 
 const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
 
@@ -75,7 +77,9 @@ async function bridgeOn(port: number) {
   const startedAt = holder.held === true ? holder.startedAt : "";
   await writeFile(join(dir, "fleet.json"), JSON.stringify({ protocol_version: PROTOCOL_VERSION, pid: process.pid, port, started_at: startedAt }));
   let latest: BridgeState | null = null;
+  const views = new Map<number, PickedView>();
   const waits: { holds: (state: BridgeState) => boolean; keep: () => void }[] = [];
+  const viewWaits: { holds: (view: PickedView) => boolean; keep: () => void }[] = [];
   const connection = new FleetConnection({
     home,
     now: () => 1_757_000_000_000,
@@ -83,8 +87,12 @@ async function bridgeOn(port: number) {
       latest = state;
       for (const [at, wait] of [...waits.entries()].reverse()) if (wait.holds(state)) waits.splice(at, 1) && wait.keep();
     },
-    publishToWindow: () => {},
-    windowIds: () => [],
+    publishToWindow: (windowId, change) => {
+      const view = { ...(views.get(windowId) ?? NO_PICK), ...change };
+      views.set(windowId, view);
+      for (const [at, wait] of [...viewWaits.entries()].reverse()) if (wait.holds(view)) viewWaits.splice(at, 1) && wait.keep();
+    },
+    windowIds: () => [WINDOW],
   });
   opened.push(() => connection.stop());
   connection.start();
@@ -96,8 +104,26 @@ async function bridgeOn(port: number) {
           new Promise<void>((keep) => waits.push({ holds, keep })),
           new Promise<void>((_, refuse) => setTimeout(() => refuse(new Error(`never published: ${what}`)), 2000)),
         ]);
-  return { connection, until, latest: () => latest! };
+  const viewOf = () => views.get(WINDOW) ?? NO_PICK;
+  const untilView = (what: string, holds: (view: PickedView) => boolean) =>
+    holds(viewOf())
+      ? Promise.resolve()
+      : Promise.race([
+          new Promise<void>((keep) => viewWaits.push({ holds, keep })),
+          new Promise<void>((_, refuse) => setTimeout(() => refuse(new Error(`never published: ${what}`)), 2000)),
+        ]);
+  return { connection, until, latest: () => latest!, viewOf, untilView };
 }
+
+const NO_PICK: PickedView = {
+  repository: null,
+  manifestReading: null,
+  health: { state: "none" },
+  drifts: { state: "none" },
+  checkoutRunSheet: { state: "none" },
+  checkoutRunFollowed: { state: "none" },
+  manifestDrift: { state: "none" },
+};
 
 function event(cursor: number, row: ServerState, kind = `server.${row.phase}`): string {
   return JSON.stringify({ message: "event", cursor, event: { kind, ...row } });
@@ -105,23 +131,23 @@ function event(cursor: number, row: ServerState, kind = `server.${row.phase}`): 
 
 it("draws a main-checkout server as it moves, on the Manifest surface's sheet", async () => {
   const { port, held, client } = await fleet();
-  const { connection, until } = await bridgeOn(port);
+  const { connection, until, untilView } = await bridgeOn(port);
   const socket = await client;
   socket.send(JSON.stringify({ message: "resync", protocol_version: PROTOCOL_VERSION, cursor: 1, jobs: { jobs: [] } }));
   await until("connected", (state) => state.connection.state === "connected");
 
-  await connection.rehearsal.watchCheckoutRunSheet(true);
-  const phase = (state: BridgeState) =>
-    state.checkoutRunSheet.state === "read" ? state.checkoutRunSheet.sheet.servers?.[0]?.instance?.phase : "unread";
-  await until("the sheet, before Run", (state) => phase(state) === undefined);
+  await connection.rehearsal.watchCheckoutRunSheet(WINDOW, true);
+  const phase = (view: PickedView) =>
+    view.checkoutRunSheet.state === "read" ? view.checkoutRunSheet.sheet.servers?.[0]?.instance?.phase : "unread";
+  await untilView("the sheet, before Run", (view) => phase(view) === undefined);
 
   held.checkout = instance("starting");
   socket.send(event(2, held.checkout));
-  await until("starting, on the sheet", (state) => phase(state) === "starting");
+  await untilView("starting, on the sheet", (view) => phase(view) === "starting");
 
   held.checkout = { ...instance("exited"), stopped: true };
   socket.send(event(3, held.checkout));
-  await until("exited, on the sheet", (state) => phase(state) === "exited");
+  await untilView("exited, on the sheet", (view) => phase(view) === "exited");
 });
 
 it("draws a Job's server as it moves, on that Job's run sheet and no other", async () => {

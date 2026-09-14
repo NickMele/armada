@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { NOTHING_YET, type BridgeState, type PickedView } from "../shared/bridge";
 import { CLONE_MS, Locating, locateAnswerOf, resolvedFolder } from "./locating";
-import { Picked, PickedByWindow } from "./picked";
+import { PickedByWindow } from "./picked";
 import type { RehearsalConnection } from "./rehearsal";
 import { RepositoryReads } from "./repositories";
 import { ask, COMMAND_MS } from "./request";
@@ -165,8 +165,6 @@ describe("a clone that lands late", () => {
     const port = (server.address() as AddressInfo).port;
 
     // Bridge opens on All repositories, so the window's own pick is made, as the rail makes it.
-    const picked = new Picked();
-    picked.hold([armada]);
     const WINDOW = 1;
     const pickedByWindow = new PickedByWindow();
     pickedByWindow.of(WINDOW).hold([armada]);
@@ -175,7 +173,6 @@ describe("a clone that lands late", () => {
     const windows: { windowId: number; change: Partial<PickedView> }[] = [];
     const publish = (change: Partial<BridgeState>) => void published.push(change);
     const reads = new RepositoryReads({
-      picked,
       pickedByWindow,
       publish,
       publishToWindow: (windowId, change) => void windows.push({ windowId, change }),

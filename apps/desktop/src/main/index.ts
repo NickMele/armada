@@ -227,17 +227,26 @@ const NO_PICK: PickedView = {
   manifestReading: null,
   health: { state: "none" },
   drifts: { state: "none" },
+  checkoutRunSheet: { state: "none" },
+  checkoutRunFollowed: { state: "none" },
+  manifestDrift: { state: "none" },
 };
 
 function viewFor(windowId: number): PickedView {
   return pickedViews.get(windowId) ?? NO_PICK;
 }
 
+/** `state` with one window's own view folded in — `leftOut` nests under `holds`, everything else is top-level. */
+function withView(state: BridgeState, view: PickedView): BridgeState {
+  const { leftOut, ...rest } = view;
+  return { ...state, ...rest, holds: { ...state.holds, leftOut } };
+}
+
 /** Every window sees the same state, save its own pick — `pickedViews`, overlaid here. */
 function publish(state: BridgeState): void {
   published = state;
   for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) window.webContents.send(CHANNELS.changed, { ...state, ...viewFor(window.id) });
+    if (!window.isDestroyed()) window.webContents.send(CHANNELS.changed, withView(state, viewFor(window.id)));
   }
   // **Here rather than on chosen events**, because what decides a notification
   // is the needs-you set changing and this is the one funnel every change to
@@ -252,7 +261,7 @@ function publishToWindow(windowId: number, change: Partial<PickedView>): void {
   pickedViews.set(windowId, view);
   const window = BrowserWindow.getAllWindows().find((one) => one.id === windowId);
   if (window !== undefined && !window.isDestroyed()) {
-    window.webContents.send(CHANNELS.changed, { ...published, ...view });
+    window.webContents.send(CHANNELS.changed, withView(published, view));
   }
 }
 
@@ -363,7 +372,7 @@ void app.whenReady().then(() => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window !== null) hand(window);
     // This window's own pick, overlaid — a reload is a fresh reader, not a reset of it.
-    return state === undefined ? state : { ...state, ...viewFor(windowIdOf(event)) };
+    return state === undefined ? state : withView(state, viewFor(windowIdOf(event)));
   });
   // Every act on a Job is reached through `commands` — see `command.ts`, which
   // holds them because they are HTTP and the connection is a socket.
@@ -624,44 +633,44 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.getRunOutput, (_event, jobId: string, runId: string) =>
     connection?.rehearsal.getRunOutput(jobId, runId),
   );
-  // The same rehearsal in the main checkout — the Manifest surface. Held open
+  // The same rehearsal in this window's own checkout — the Manifest surface. Held open
   // while that surface is showing or the palette is up, since the palette
   // lists one row per Check and Command off this reading.
-  ipcMain.handle(CHANNELS.watchCheckoutRunSheet, (_event, want: boolean) =>
-    connection?.rehearsal.watchCheckoutRunSheet(want),
+  ipcMain.handle(CHANNELS.watchCheckoutRunSheet, (event, want: boolean) =>
+    connection?.rehearsal.watchCheckoutRunSheet(windowIdOf(event), want),
   );
-  ipcMain.handle(CHANNELS.observeCheckoutRun, (_event, runId: string | null) =>
-    connection?.rehearsal.observeCheckoutRun(runId),
+  ipcMain.handle(CHANNELS.observeCheckoutRun, (event, runId: string | null) =>
+    connection?.rehearsal.observeCheckoutRun(windowIdOf(event), runId),
   );
   // A run in the tree a person is working in. **A name and nothing else** —
   // there is no frozen Manifest to choose against and no diff to narrow to.
-  ipcMain.handle(CHANNELS.startCheckoutRun, (_event, body: StartCheckoutRun) =>
-    connection?.rehearsal.startCheckoutRun(body),
+  ipcMain.handle(CHANNELS.startCheckoutRun, (event, body: StartCheckoutRun) =>
+    connection?.rehearsal.startCheckoutRun(windowIdOf(event), body),
   );
-  ipcMain.handle(CHANNELS.stopCheckoutRun, (_event, runId: string) =>
-    connection?.rehearsal.stopCheckoutRun(runId),
+  ipcMain.handle(CHANNELS.stopCheckoutRun, (event, runId: string) =>
+    connection?.rehearsal.stopCheckoutRun(windowIdOf(event), runId),
   );
-  ipcMain.handle(CHANNELS.undoCheckoutRun, (_event, runId: string) =>
-    connection?.rehearsal.undoCheckoutRun(runId),
+  ipcMain.handle(CHANNELS.undoCheckoutRun, (event, runId: string) =>
+    connection?.rehearsal.undoCheckoutRun(windowIdOf(event), runId),
   );
-  ipcMain.handle(CHANNELS.listCheckoutRuns, () => connection?.rehearsal.listCheckoutRuns());
-  ipcMain.handle(CHANNELS.getCheckoutRunOutput, (_event, runId: string) =>
-    connection?.rehearsal.getCheckoutRunOutput(runId),
+  ipcMain.handle(CHANNELS.listCheckoutRuns, (event) => connection?.rehearsal.listCheckoutRuns(windowIdOf(event)));
+  ipcMain.handle(CHANNELS.getCheckoutRunOutput, (event, runId: string) =>
+    connection?.rehearsal.getCheckoutRunOutput(windowIdOf(event), runId),
   );
   // What one run changed, against the snapshot it took — never `HEAD`. A read.
-  ipcMain.handle(CHANNELS.getCheckoutRunDiff, (_event, runId: string) =>
-    connection?.rehearsal.getCheckoutRunDiff(runId),
+  ipcMain.handle(CHANNELS.getCheckoutRunDiff, (event, runId: string) =>
+    connection?.rehearsal.getCheckoutRunDiff(windowIdOf(event), runId),
   );
   // Drift, held open by the Manifest surface; Verify, only ever pressed there.
-  ipcMain.handle(CHANNELS.watchManifestDrift, (_event, want: boolean) =>
-    connection?.rehearsal.watchManifestDrift(want),
+  ipcMain.handle(CHANNELS.watchManifestDrift, (event, want: boolean) =>
+    connection?.rehearsal.watchManifestDrift(windowIdOf(event), want),
   );
   // Overview's health and per-repository drift, held open by that surface.
   ipcMain.handle(CHANNELS.watchOverview, (event, want: unknown) =>
     connection?.overviewFor(windowIdOf(event)).watch(want === true),
   );
-  ipcMain.handle(CHANNELS.startCheckoutVerify, (_event, workspace: unknown) =>
-    connection?.rehearsal.startCheckoutVerify(typeof workspace === "string" ? workspace : undefined),
+  ipcMain.handle(CHANNELS.startCheckoutVerify, (event, workspace: unknown) =>
+    connection?.rehearsal.startCheckoutVerify(windowIdOf(event), typeof workspace === "string" ? workspace : undefined),
   );
   // The Manifest file, read and saved, and Setup below it — each window's own, `connection.ts`'s
   // `editingFor`: Fleet resolves the path and guards the write against a file that moved; nothing
@@ -716,8 +725,8 @@ void app.whenReady().then(() => {
   // A declared server, for this Job's worktree or the main checkout where no
   // Job is named. `servers` on the published state is what keeps a *Serving*
   // row on screen after the sheet that started it closes.
-  ipcMain.handle(CHANNELS.startServer, (_event, name: string, jobId?: string) =>
-    connection?.rehearsal.startServer(name, jobId),
+  ipcMain.handle(CHANNELS.startServer, (event, name: string, jobId?: string) =>
+    connection?.rehearsal.startServer(name, jobId, connection.repositories.pickedByWindow.of(windowIdOf(event))),
   );
   ipcMain.handle(CHANNELS.stopServer, (_event, serverId: string) =>
     connection?.rehearsal.stopServer(serverId),
@@ -762,8 +771,8 @@ void app.whenReady().then(() => {
     connection?.readCheckOutput(jobId, kept),
   );
   // New job's own reads for the repository its ask answered, on All — #959.
-  ipcMain.handle(CHANNELS.readComposing, (_event, repository: string) =>
-    connection?.readComposing(repository),
+  ipcMain.handle(CHANNELS.readComposing, (event, repository: string) =>
+    connection?.readComposing(repository, connection.repositories.pickedByWindow.of(windowIdOf(event))),
   );
   // Every report a person has filed, and the counts they are read beside. The
   // one read here that names no Job: a report outlives the Job it is about, so

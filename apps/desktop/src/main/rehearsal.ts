@@ -27,13 +27,13 @@ import type {
 import type { Outcome } from "@armada/protocol";
 import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
-import type { BridgeState } from "../shared/bridge";
+import type { BridgeState, PickedView } from "../shared/bridge";
 import { ask, route, serversOf } from "./request";
 import { CheckoutRunCommands, CheckoutRunSocket, CheckoutSheetReader, DriftReader } from "./checkout-runs";
 import { JobReader } from "./reader";
 import { HOST } from "./runtime-file";
 import { ServerCommands } from "./servers";
-import type { Picked } from "./picked";
+import { Picked, type PickedByWindow } from "./picked";
 
 /** What starting and stopping a run needs of the connection, and no more. */
 export type RunBoard = {
@@ -229,6 +229,14 @@ export class RunSocket {
   }
 }
 
+/** The Manifest surface's own four, one set per window — `checkout-runs.ts`. */
+type CheckoutFacades = {
+  checkoutSheet: CheckoutSheetReader;
+  checkoutFollow: CheckoutRunSocket;
+  checkoutRuns: CheckoutRunCommands;
+  drift: DriftReader;
+};
+
 /**
  * Journey 9 and servers, both, as one facade `connection.ts` holds one field
  * for. **Split out of `connection.ts`**, which named the run sheet and the
@@ -237,29 +245,32 @@ export class RunSocket {
  * own reader, its output socket, its commands and the server commands all
  * moved here together, because the four were one thing added at once and
  * splitting them again would put one feature's wiring in four files.
+ *
+ * **The run sheet above is a Job's, shared** — every window reading the same
+ * Job sees the same sheet. **The Manifest surface's four below are a window's
+ * own** — `windows`, one set per window off that window's own `Picked`.
  */
 export class RehearsalConnection {
   private readonly publish: (change: Partial<BridgeState>) => void;
+  private readonly publishToWindow: (windowId: number, change: Partial<PickedView>) => void;
   private readonly port: () => number | null;
+  private readonly pickedByWindow: PickedByWindow;
   private readonly sheet: JobReader<{ sheet: RunSheet }>;
   private readonly follow: RunSocket;
   private readonly runs: RunCommands;
   private readonly servers: ServerCommands;
-  /** The Manifest surface's own three — see `checkout-runs.ts`. */
-  private readonly checkoutSheet: CheckoutSheetReader;
-  private readonly checkoutFollow: CheckoutRunSocket;
-  private readonly checkoutRuns: CheckoutRunCommands;
-  /** Drift, the Manifest surface's free read on opening. */
-  private readonly drift: DriftReader;
+  private readonly windows = new Map<number, CheckoutFacades>();
 
   constructor(wiring: {
     publish: (change: Partial<BridgeState>) => void;
+    publishToWindow: (windowId: number, change: Partial<PickedView>) => void;
     port: () => number | null;
-    picked: Picked;
+    pickedByWindow: PickedByWindow;
   }) {
     this.publish = wiring.publish;
+    this.publishToWindow = wiring.publishToWindow;
     this.port = wiring.port;
-    const picked = wiring.picked;
+    this.pickedByWindow = wiring.pickedByWindow;
     this.sheet = new JobReader<{ sheet: RunSheet }>({
       route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/run_sheet`,
       keeps: (body) => ({ sheet: body as RunSheet }),
@@ -271,30 +282,51 @@ export class RehearsalConnection {
       follow: (port, jobId, runId) => this.follow.open(port, jobId, runId),
       refreshSheet: (port) => this.sheet.again(port),
     });
-    this.servers = new ServerCommands({ port: this.port, picked });
-    this.checkoutSheet = new CheckoutSheetReader(
-      (checkoutRunSheet) => this.publish({ checkoutRunSheet }),
-      picked,
-    );
-    this.checkoutFollow = new CheckoutRunSocket(
-      (checkoutRunFollowed) => this.publish({ checkoutRunFollowed }),
-      picked,
-    );
-    this.checkoutRuns = new CheckoutRunCommands({
-      port: this.port,
-      picked,
-      follow: (port, runId) => this.checkoutFollow.open(port, runId),
-      refreshSheet: (port) => this.checkoutSheet.again(port),
-    });
-    this.drift = new DriftReader((manifestDrift) => this.publish({ manifestDrift }), picked);
+    // Never held with a real listing: `startServer`'s own default, exercised only where a
+    // caller supplies no `picked` — every real one does.
+    this.servers = new ServerCommands({ port: this.port, picked: new Picked() });
+  }
+
+  /** This window's own Manifest surface facades, built on first ask. */
+  private facadesFor(windowId: number): CheckoutFacades {
+    let found = this.windows.get(windowId);
+    if (found === undefined) {
+      const picked = this.pickedByWindow.of(windowId);
+      const checkoutFollow = new CheckoutRunSocket(
+        (checkoutRunFollowed) => this.publishToWindow(windowId, { checkoutRunFollowed }),
+        picked,
+      );
+      const checkoutSheet = new CheckoutSheetReader(
+        (checkoutRunSheet) => this.publishToWindow(windowId, { checkoutRunSheet }),
+        picked,
+      );
+      const checkoutRuns = new CheckoutRunCommands({
+        port: this.port,
+        picked,
+        follow: (port, runId) => checkoutFollow.open(port, runId),
+        refreshSheet: (port) => checkoutSheet.again(port),
+      });
+      const drift = new DriftReader((manifestDrift) => this.publishToWindow(windowId, { manifestDrift }), picked);
+      found = { checkoutSheet, checkoutFollow, checkoutRuns, drift };
+      this.windows.set(windowId, found);
+    }
+    return found;
+  }
+
+  /** The window closed. Its Manifest surface facades go with it. */
+  dropWindow(windowId: number): void {
+    const found = this.windows.get(windowId);
+    if (found === undefined) return;
+    found.checkoutSheet.close();
+    found.checkoutFollow.close();
+    found.drift.close();
+    this.windows.delete(windowId);
   }
 
   close(): void {
     this.sheet.close();
     this.follow.close();
-    this.checkoutSheet.close();
-    this.checkoutFollow.close();
-    this.drift.close();
+    for (const windowId of this.windows.keys()) this.dropWindow(windowId);
   }
 
   /** Every server Fleet holds. Read once per connection; `server.*` on
@@ -312,14 +344,13 @@ export class RehearsalConnection {
 
   /**
    * A run in the main checkout finished — `checkout_run.finished`, its own
-   * kind because the record names no Job.
-   *
-   * Only the Manifest surface's own reading moves, and only where something is
-   * holding it open: the event arrives on every window whether or not one is
-   * looking at that surface.
+   * kind because the record names no Job. Every window whose Manifest surface
+   * holds its sheet open reads it again; the event arrives on all of them.
    */
   onCheckoutRunFinished(port: number): void {
-    if (this.checkoutSheet.open) void this.checkoutSheet.again(port);
+    for (const { checkoutSheet } of this.windows.values()) {
+      if (checkoutSheet.open) void checkoutSheet.again(port);
+    }
   }
 
   /**
@@ -329,7 +360,9 @@ export class RehearsalConnection {
    */
   onServerMoved(row: ServerState, port: number): void {
     if (row.job_id === undefined) {
-      if (this.checkoutSheet.open) void this.checkoutSheet.again(port);
+      for (const { checkoutSheet } of this.windows.values()) {
+        if (checkoutSheet.open) void checkoutSheet.again(port);
+      }
     } else if (this.sheet.jobId === row.job_id) {
       void this.sheet.again(port);
     }
@@ -378,77 +411,82 @@ export class RehearsalConnection {
     return this.runs.getRunOutput(jobId, runId);
   }
 
-  /** Read what this repository's Manifest declares, or `false` to stop. Held
-   * open by the Manifest surface and by the palette, which lists off it. */
-  async watchCheckoutRunSheet(want: boolean): Promise<void> {
-    await this.checkoutSheet.want(this.port(), want);
+  /** Read what this window's own picked repository's Manifest declares, or `false` to stop. */
+  async watchCheckoutRunSheet(windowId: number, want: boolean): Promise<void> {
+    await this.facadesFor(windowId).checkoutSheet.want(this.port(), want);
   }
 
   /** One checkout run's output, or `null` to stop. */
-  async observeCheckoutRun(runId: string | null): Promise<void> {
-    this.checkoutFollow.open(this.port(), runId);
+  async observeCheckoutRun(windowId: number, runId: string | null): Promise<void> {
+    this.facadesFor(windowId).checkoutFollow.open(this.port(), runId);
   }
 
-  /** Run one Check or Command in the main checkout, and start following it. */
-  startCheckoutRun(body: StartCheckoutRun): Promise<Outcome> {
-    return this.checkoutRuns.startRun(body);
+  /** Run one Check or Command in this window's own checkout, and start following it. */
+  startCheckoutRun(windowId: number, body: StartCheckoutRun): Promise<Outcome> {
+    return this.facadesFor(windowId).checkoutRuns.startRun(body);
   }
 
   /** End a checkout run's process group. Its log keeps what printed. */
-  stopCheckoutRun(id: string): Promise<Outcome> {
-    return this.checkoutRuns.stopRun(id);
+  stopCheckoutRun(windowId: number, id: string): Promise<Outcome> {
+    return this.facadesFor(windowId).checkoutRuns.stopRun(id);
   }
 
   /** Put back the files one checkout run changed, from its own snapshot. */
-  undoCheckoutRun(id: string): Promise<Outcome> {
-    return this.checkoutRuns.undoRun(id);
+  undoCheckoutRun(windowId: number, id: string): Promise<Outcome> {
+    return this.facadesFor(windowId).checkoutRuns.undoRun(id);
   }
 
-  /** Every earlier run in this checkout, newest first. */
-  listCheckoutRuns(): Promise<CheckoutRunListRead> {
-    return this.checkoutRuns.listRuns();
+  /** Every earlier run in this window's own checkout, newest first. */
+  listCheckoutRuns(windowId: number): Promise<CheckoutRunListRead> {
+    return this.facadesFor(windowId).checkoutRuns.listRuns();
   }
 
   /** One checkout run's log, read back as a window that says it is one. */
-  getCheckoutRunOutput(runId: string): Promise<RunOutputRead> {
-    return this.checkoutRuns.getRunOutput(runId);
+  getCheckoutRunOutput(windowId: number, runId: string): Promise<RunOutputRead> {
+    return this.facadesFor(windowId).checkoutRuns.getRunOutput(runId);
   }
 
   /** One checkout run's patch, against the snapshot it took. A read. */
-  getCheckoutRunDiff(runId: string): Promise<CheckoutRunDiffRead> {
-    return this.checkoutRuns.getRunDiff(runId);
+  getCheckoutRunDiff(windowId: number, runId: string): Promise<CheckoutRunDiffRead> {
+    return this.facadesFor(windowId).checkoutRuns.getRunDiff(runId);
   }
 
-  /** Drift, or `false` to stop. Held open by the Manifest surface alone. */
-  async watchManifestDrift(want: boolean): Promise<void> {
-    await this.drift.want(this.port(), want);
+  /** Drift, or `false` to stop. Held open by this window's own Manifest surface alone. */
+  async watchManifestDrift(windowId: number, want: boolean): Promise<void> {
+    await this.facadesFor(windowId).drift.want(this.port(), want);
   }
 
   /**
-   * The picked repository moved, or gained its Manifest. What the Manifest surface holds open
-   * is read again for it, and a run in the last one's checkout stops being followed.
+   * This window's own picked repository moved, or gained its Manifest. What its Manifest
+   * surface holds open is read again, and a run in the last one's checkout stops being followed.
    */
-  async onRepositoryMoved(port: number): Promise<void> {
-    this.checkoutFollow.open(port, null);
+  async onRepositoryMoved(windowId: number, port: number): Promise<void> {
+    const facades = this.facadesFor(windowId);
+    facades.checkoutFollow.open(port, null);
     await Promise.all([
-      this.checkoutSheet.open ? this.checkoutSheet.again(port) : null,
-      this.drift.open ? this.drift.again(port) : null,
+      facades.checkoutSheet.open ? facades.checkoutSheet.again(port) : null,
+      facades.drift.open ? facades.drift.again(port) : null,
     ]);
   }
 
-  /** Fleet re-read `armada.yml`, so what it names may have moved. */
-  onManifestReread(port: number): void {
-    if (this.drift.open) void this.drift.again(port);
+  /** Fleet re-read `armada.yml`; every window whose own pick reads that file draws its drift again. */
+  onManifestReread(path: string, port: number): void {
+    for (const [windowId, picked] of this.pickedByWindow.all()) {
+      if (!picked.reads(path)) continue;
+      const { drift } = this.facadesFor(windowId);
+      if (drift.open) void drift.again(port);
+    }
   }
 
-  /** Verify: setup and every Check once in the checkout, one after another. Absent `workspace` is the root's file. */
-  startCheckoutVerify(workspace?: string): Promise<Outcome> {
-    return this.checkoutRuns.startVerify(workspace);
+  /** Verify — setup and every Check once, one after another, in this window's own checkout. */
+  startCheckoutVerify(windowId: number, workspace?: string): Promise<Outcome> {
+    return this.facadesFor(windowId).checkoutRuns.startVerify(workspace);
   }
 
-  /** Start a declared server, for a Job's worktree or the main checkout. */
-  startServer(name: string, jobId?: string): Promise<Outcome> {
-    return this.servers.startServer(name, jobId);
+  /** Start a declared server, for a Job's worktree or the main checkout — `picked` is the
+   * calling window's own, where `jobId` is absent; unused otherwise. */
+  startServer(name: string, jobId?: string, picked?: Picked): Promise<Outcome> {
+    return this.servers.startServer(name, jobId, picked);
   }
 
   /** End a server's process group. Its log keeps what printed. */

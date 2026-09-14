@@ -19,8 +19,6 @@ export type JobReadsWiring = {
   material: ReviewMaterial;
   reports: ReportsReader;
   held: HeldReader;
-  /** New job's own reads on All — #959. The rail's pick, read and never moved. */
-  picked: Picked;
 };
 
 export class JobReads {
@@ -111,10 +109,10 @@ export class JobReads {
    * the composer that asked and not to `BridgeState` — the Board stays on
    * All throughout, so nothing else on screen reads this repository at all.
    */
-  async readComposing(repository: string): Promise<ComposingRead> {
+  async readComposing(repository: string, picked: Picked): Promise<ComposingRead> {
     const port = this.wiring.port();
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
-    return await composingOf(port, this.wiring.picked, repository);
+    return await composingOf(port, picked, repository);
   }
 
   // ----------------------------------------------- every report, and the counts

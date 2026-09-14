@@ -181,12 +181,14 @@ export class FleetConnection {
       reading: () => this.reading,
     });
     this.planEdits = new PlanEdits({ port, foldPlan: (jobId, plan) => this.jobFocus.foldPlan(jobId, plan) });
-    const [publish, picked] = [(change: Partial<BridgeState>) => this.publish(change), new Picked()];
-    this.rehearsal = new RehearsalConnection({ publish, port, picked });
+    const publish = (change: Partial<BridgeState>) => this.publish(change);
+    // The one registry every per-window pick is minted into — `rehearsal` and `repositories`
+    // both read it, so a window's Setup, Verify and rail all name the same `Picked`.
+    const pickedByWindow = new PickedByWindow();
+    this.rehearsal = new RehearsalConnection({ publish, publishToWindow: wiring.publishToWindow, port, pickedByWindow });
     const holds = () => this.current.holds;
     this.repositories = new RepositoryReads({
-      picked,
-      pickedByWindow: new PickedByWindow(),
+      pickedByWindow,
       publish,
       publishToWindow: wiring.publishToWindow,
       windowIds: wiring.windowIds,
@@ -197,7 +199,9 @@ export class FleetConnection {
     });
     this.commands = new JobCommands({
       port,
-      picked,
+      // Never held with a real listing: `searchFiles` and `proposeFromRequest`'s own default,
+      // exercised only where a caller supplies no `picked` — every real one does.
+      picked: new Picked(),
       fold: (job) => this.fold(job),
       forget: (jobId) => this.forget(jobId),
       reread: (port) => reread(port, (change) => this.publish(change), this.wiring.now),
@@ -220,7 +224,6 @@ export class FleetConnection {
       material: this.material,
       reports: this.reports,
       held: this.held,
-      picked,
     });
     // The exact slice of this object `arrivals.ts`'s switch may reach — built
     // once, after everything it names, so the switch never touches a private
@@ -293,10 +296,11 @@ export class FleetConnection {
     await Promise.all(this.wiring.windowIds().map((windowId) => this.facadesFor(windowId).overview.again(port)));
   }
 
-  /** The window closed. Its own pick and its Manifest, always-allow and Overview commands go with it. */
+  /** The window closed. Its own pick and every per-window facade go with it. */
   dropWindow(windowId: number): void {
     this.windowFacades.get(windowId)?.overview.close();
     this.windowFacades.delete(windowId);
+    this.rehearsal.dropWindow(windowId);
     this.repositories.pickedByWindow.drop(windowId);
   }
 
@@ -428,9 +432,10 @@ export class FleetConnection {
     return await this.jobReads.readCheckOutput(jobId, kept);
   }
 
-  /** `leftOut` and the Manifest reading for the repository New job's ask answered, on All — #959. */
-  async readComposing(repository: string): Promise<ComposingRead> {
-    return await this.jobReads.readComposing(repository);
+  /** `leftOut` and the Manifest reading for the repository New job's ask answered, on All — #959.
+   * `picked` is the calling window's own, though the answer would be the same off any window's. */
+  async readComposing(repository: string, picked: Picked): Promise<ComposingRead> {
+    return await this.jobReads.readComposing(repository, picked);
   }
 
   async readFrame(jobId: string, kept: string): Promise<FrameRead> {

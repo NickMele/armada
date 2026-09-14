@@ -32,13 +32,16 @@ export class ServerCommands {
    * **Answers at once, `starting`** — `server.serving` and `server.exited`
    * follow on `/events`, which is what keeps the list current without a
    * second read here.
+   *
+   * `picked` is the calling window's own — `main/index.ts` names it; `this.board.picked` only
+   * where a caller (`picked.test.ts`) supplies none.
    */
-  async startServer(name: string, jobId?: string): Promise<Outcome> {
+  async startServer(name: string, jobId?: string, picked: Picked = this.board.picked): Promise<Outcome> {
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };
     const body: StartServer = jobId === undefined ? { name } : { name, job_id: jobId };
     // A Job names its own repository; the main checkout is the picked one's.
-    const path = jobId === undefined ? this.board.picked.manifest("/servers/start") : "/servers/start";
+    const path = jobId === undefined ? picked.manifest("/servers/start") : "/servers/start";
     if (path === null) return NOT_SET_UP;
     const answer = await ask(port, "POST", path, body);
     return answer.ok === true ? { ok: true } : answer.outcome;

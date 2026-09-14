@@ -376,10 +376,9 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // Overview's drift spans every repository on All, so it reads whichever file this was.
     void host.overviewAgain(fleet.port);
     host.publish({ connection });
-    // Every window whose own pick reads this file draws it — `RepositoryReads.manifestReread`.
+    // Every window whose own pick reads this file draws it, the Manifest reading and drift both.
     host.repositories.manifestReread(event);
-    // The still-shared pick's own reader — Verify, until it moves per window too.
-    if (host.repositories.picked.reads(event.path)) host.rehearsal.onManifestReread(fleet.port);
+    host.rehearsal.onManifestReread(event.path, fleet.port);
     return;
   }
   if (event.kind === "repositories.changed") {
