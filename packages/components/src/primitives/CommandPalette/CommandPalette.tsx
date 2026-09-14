@@ -171,6 +171,24 @@ export function CommandPalette({
     if (open) input.current?.focus();
   }, [open]);
 
+  // Esc closes the palette and stops there, wherever focus went. On `window` in the capture phase
+  // for the reason `Popover` is: a field-only handler goes deaf once a click blurs the field, and
+  // a Job detail or sheet listening on the same window would answer the same press.
+  useEffect(() => {
+    if (!open) return;
+    function onEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      // A confirmation opened over the palette is the top layer, and the press is its to answer.
+      const layer = (event.target as Element | null)?.closest?.('[role="dialog"]');
+      if (layer && !layer.classList.contains("armada-palette")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose?.();
+    }
+    window.addEventListener("keydown", onEscape, true);
+    return () => window.removeEventListener("keydown", onEscape, true);
+  }, [open, onClose]);
+
   // The active row is kept in view. `nearest` and not `center`: the list is
   // scrolled past 400px and centering would jump a row that was already
   // visible, which is the moving target the top anchor exists to prevent.
@@ -194,8 +212,8 @@ export function CommandPalette({
     onClose?.();
   }
 
-  // Only the navigation set and `Esc` are intercepted. Every other key belongs
-  // to the query, which is the suppression rule holding.
+  // Only the navigation set is intercepted here, and `Esc` above. Every other
+  // key belongs to the query, which is the suppression rule holding.
   function onKey(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -210,11 +228,6 @@ export function CommandPalette({
     if (event.key === "Enter") {
       event.preventDefault();
       choose(flat[at]);
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose?.();
     }
   }
 

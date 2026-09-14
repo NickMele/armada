@@ -141,6 +141,8 @@ export function Sheet({
       // open and will: listeners on one window run in no order this can rely on.
       if (event.defaultPrevented) return;
       if (closeRef.current?.closest('[role="dialog"]')?.querySelector(".armada-popover__panel")) return;
+      // The command palette opens over every surface, a sheet included, and takes the press for the same reason.
+      if (document.querySelector(".armada-palette")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

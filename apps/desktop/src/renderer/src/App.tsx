@@ -346,7 +346,8 @@ export function App() {
     const pressed = (event: KeyboardEvent): void => {
       // One view to leave, since the turns stopped being a screen of their own:
       // Escape returns to the list from anywhere inside a Job.
-      if (event.key !== "Escape") return;
+      // A press a layer above already answered — the palette, a sheet — is not a second exit.
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       close();
     };
     window.addEventListener("keydown", pressed);
