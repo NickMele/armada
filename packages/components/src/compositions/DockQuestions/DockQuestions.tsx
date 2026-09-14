@@ -1,6 +1,6 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 
-import { Button } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
 import { Card } from "../../primitives/Card/Card";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
@@ -91,6 +91,14 @@ function QuestionCard({
   onDiscuss,
 }: DockQuestion) {
   const where = `${repository}, job ${job}`;
+  // Which of this card's own answers was pressed — `answering` alone says
+  // Fleet has not answered, not which control sent it. Cleared once
+  // `answering` drops, so a fresh question always starts unpressed. #1117.
+  const [pressedId, setPressedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (answering !== true) setPressedId(null);
+  }, [answering]);
+  const stillWaiting = useStillWaiting(answering === true);
   return (
     <Card className="armada-dock-question" role="article" aria-label={`${label} — ${where}`}>
       <div className="armada-dock-question__where">
@@ -107,12 +115,17 @@ function QuestionCard({
       {detail === undefined ? null : <p className="armada-dock-question__detail">{detail}</p>}
       <div className="armada-dock-question__answers" role="group" aria-label="Answers">
         {answers.map((answer) => {
+          const pending = answering === true && pressedId === answer.id;
           const control = (
             <Button
               variant="secondary"
               size="sm"
+              pending={pending}
               disabled={onAnswer === undefined || answering === true}
-              onClick={() => onAnswer?.(answer.id)}
+              onClick={() => {
+                setPressedId(answer.id);
+                onAnswer?.(answer.id);
+              }}
             >
               {answer.label}
             </Button>
@@ -136,6 +149,11 @@ function QuestionCard({
           {refusal}
         </p>
       )}
+      {stillWaiting ? (
+        <p className="armada-dock-question__detail" role="status">
+          {STILL_WAITING}
+        </p>
+      ) : null}
       <div>
         <Button variant="ghost" size="sm" disabled={onDiscuss === undefined} onClick={onDiscuss}>
           Discuss with Helm
