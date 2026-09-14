@@ -162,10 +162,6 @@ on purpose and makes the gate name what was waiting.
 - **[widening-and-the-judge-context]** Should a person's widening at the gate warn that a wider diff may exceed the Judge's context? A Convoy is where `max_context_size` bites first.
 - **[scope-revision-on-a-stopped-job]** Is a scope revision legal on an escalated or piloted Job? No edge exists, so it is not offered, and whether that is deliberate is unknown. A Drone's own request cannot arise there — it is refused unless the Job is `running` — so what is open is the person's route, which is also the second half of the question above.
 
-## docs/journeys/consult-helm.md
-
-- **[helm-session-lifecycle]** How do you start, name and find Helm sessions? Session-per-topic is decided. Its surface is not: how a session starts, whether it is named or auto-titled, how past sessions are found again, and what "done" looks like. Session retention/expiry already exists as a Guild config row, which implies past sessions are findable for some window — that window and the way you browse it are unspecified.
-
 ## docs/journeys/first-run-onboarding.md
 
 - **[onboarding-reopen-after-complete]** Can First-Run Onboarding be reopened after it completes? Once it completes, all four surfaces are freely reachable with no gating anywhere. Whether the sequence itself can be re-entered is undecided. The case for: onboarding a second machine, or returning after a long gap, is the same walkthrough, and rebuilding it by hand from four separate surfaces is worse than replaying the guided path. The case against: the hard-gate exists to protect a *fresh* install, and a re-entered onboarding that blocks you from surfaces you already use would be actively worse than nothing on a working install. A middle answer exists: re-run it ungated, as a checklist rather than a sequence.

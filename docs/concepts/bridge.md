@@ -53,9 +53,9 @@ Run and edit a Manifest reads a project's Checks and Commands, runs any one of t
 
 Bridge's shell is a **left resizable rail** for navigation, a **full-width panel** to its right where the journeys mount, and a **status bar fixed to the bottom**. Finer layout treatment within each journey remains UI/UX design phase work.
 
-The rail carries Overview, Job Board, Alerts, Doctor, Manifest and Cleanup. Helm sits below them.
+The rail carries Overview, Job Board, Alerts, Doctor, Manifest and Cleanup. Helm is not one of them — it is a dock beside the content on every surface, toggled by `⌘J` rather than a rail digit. See [Helm](helm.md).
 
-**Cleanup was last because it was newest, and that is the rule rather than a placement.** A surface joins at the end, so `⌘1`–`⌘4` kept reaching what they reached when Cleanup, then named Held worktrees, arrived, and only the sibling beneath the rule took a new digit — Helm went to `⌘6`. **Overview is the one surface that broke that rule**: it is where Bridge opens (#921), so it joined first rather than last, taking `⌘1` and pushing every other surface's digit down by one — Job Board `⌘2`, Alerts `⌘3`, Doctor `⌘4`, Manifest `⌘5`, Held worktrees `⌘6`. See `../contracts/design-system.md`, Two tiers.
+**Cleanup was last because it was newest, and that is the rule rather than a placement.** A surface joins at the end, so `⌘1`–`⌘4` kept reaching what they reached when Cleanup, then named Held worktrees, arrived. **Overview is the one surface that broke that rule**: it is where Bridge opens (#921), so it joined first rather than last, taking `⌘1` and pushing every other surface's digit down by one — Job Board `⌘2`, Alerts `⌘3`, Doctor `⌘4`, Manifest `⌘5`, Held worktrees `⌘6`. See `../contracts/design-system.md`, Two tiers, for the rail's own digit history and for Helm's move off it.
 
 What the rail draws is what is built, which is not yet the whole roster. A surface with nothing behind it would be a promise Armada does not keep, so it holds its place in the order and its digit without drawing a row.
 

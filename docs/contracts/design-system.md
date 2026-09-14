@@ -39,12 +39,12 @@ escalates when they misbehave. Single user, local, always open on a
 second monitor across a working day.
 
 **Surfaces:** Bridge is the operational surface group — Job Board,
-Alerts, Doctor, Manifest. Helm is a sibling conversational surface. The
-count is not a contract: a surface earns a place in the rail where a
-journey needs one, and the roster lives on Bridge. Active Jobs, Reviews
-and the Activity Feed were retired into the Board, which holds every Job
-with state as a filter. Alerts stays because an alert is a condition on a
-Job rather than a status a Job holds.
+Alerts, Doctor, Manifest. The count is not a contract: a surface earns a
+place in the rail where a journey needs one, and the roster lives on
+Bridge. Active Jobs, Reviews and the Activity Feed were retired into the
+Board, which holds every Job with state as a filter. Alerts stays because
+an alert is a condition on a Job rather than a status a Job holds. Helm
+is not a surface — see Window and layout model, Content area, below.
 
 **The screen's job:** at a glance, tell one person what is running, what
 needs them, and what broke.
@@ -432,11 +432,9 @@ collapsed   48px icon rail
 persistence width and collapsed state survive app restart
 ```
 
-**Two levels, rendered structurally.** Bridge is a section label above
-its surfaces, listed on Bridge rather than counted here. A separator,
-then Helm as a sibling beneath — not one more peer in a flat list. This
-is the app/surface-group hierarchy made visible; a flat nav quietly
-contradicts it.
+**One level, Bridge's own.** The rail lists Bridge's surfaces and nothing
+else — Helm left it for the dock (#948), so there is no second tier
+beneath it any more.
 
 **The rail never disappears.** 48px is cheap and losing navigation
 entirely is worse than losing 48px, at any width.
@@ -448,7 +446,11 @@ the sidebar creates two places to check and two chances to disagree.
 ### Content area
 
 **Full-width routes. No inspector pane, no modal for Job detail.** Board
-and detail are separate destinations.
+and detail are separate destinations. **Helm's dock is the one
+exception**: it sits beside the content at 1100px and wider, because it
+answers questions about whatever is on screen rather than inspecting one
+Job, and folds away entirely rather than resizing the content beneath it
+at any width. See Responsive behaviour, below, and [Helm](../concepts/helm.md).
 
 This follows from what a detail view actually holds: the escalation
 payload, the full attempt history including every prior Judge summary
@@ -497,9 +499,10 @@ sidebar rather than inset to the content area.
 Fixed because a healthy state has to say "Fleet running" out loud, and
 that guarantee fails the moment the bar can scroll away — it is a
 liveness indicator for a daemon that outlives the window. Full width
-because the bar is app-level, not Bridge-level: it appears on Helm too,
-and running it edge to edge makes that claim visible. Inset it and it
-reads as belonging to whatever surface is open.
+because the bar is app-level, not Bridge-level: it spans beneath Helm's
+dock the same as beneath the rail, and running it edge to edge makes
+that claim visible. Inset it and it reads as belonging to whatever
+surface is open.
 
 Token treatment is specified under Component → token mapping.
 
@@ -522,6 +525,7 @@ floors at 390px, which leaves 358px between its gutters.
 | --- | --- | --- | --- |
 | Sidebar | Expanded, user-resizable | Auto-collapses to the 48px rail | A bottom tab bar |
 | Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes | The same row, field run wrapped |
+| Helm's dock | Beside the content, open or closed | An edge strip; open draws it as a sheet over the content instead | Not built |
 
 The third column is a client and not a window width. Nothing between 390px and
 768px is drawn, because the desktop window cannot get there and the touch
@@ -1211,11 +1215,12 @@ than one timeout message.
   confirmed against Phosphor, Tabler, Radix and Heroicons; hard rule 5
   stands. The enum→verb test asserts an icon entry in the same pass.
 - **~~Window and layout model~~** **Closed.** Specified in full under
-  Window and layout model above — frameless `hiddenInset` chrome,
-  collapsible/resizable sidebar with Bridge and Helm as two levels,
-  full-width routes with no inspector, bottom-fixed full-width status
-  bar, and the floors and breakpoint under Responsive behaviour. Delivered as one
-  responsive prototype rather than per-width comps.
+  Window and layout model above — frameless `hiddenInset` chrome, a
+  collapsible/resizable sidebar carrying Bridge's own surfaces,
+  full-width routes with no inspector but for Helm's dock, bottom-fixed
+  full-width status bar, and the floors and breakpoint under Responsive
+  behaviour. Delivered as one responsive prototype rather than per-width
+  comps.
 
 ---
 
@@ -1491,8 +1496,8 @@ read plausibly under a different job has failed.
 - **Armada** the app. Never the tool, the system.
 - **Fleet** the daemon. Never the backend, the server, the sidecar.
 - **Bridge** the operational surfaces. Never the dashboard, the UI.
-- **Helm** the conversational surface and its agent. Never the
-  assistant, the chat.
+- **Helm** the dock and its agent. Never the assistant, the chat, the
+  surface.
 - **Drone** one agent instance. Never the agent, the bot, the AI,
   Claude.
 - **Job** one unit of work. Never run, ticket.
@@ -1821,7 +1826,7 @@ both rest on. It is a product rule about what these events mean, not a
 config-tier rule: notification routing is a Machine setting with one
 value and no merge, so no Manifest is party to it.
 
-**Status bar**, present on every surface including Helm. "Fleet
+**Status bar**, present beneath every surface and beneath Helm's dock. "Fleet
 running" when idle. "Fleet running · 3 jobs · 68% quota left" when
 working on a personal machine, or "Fleet running · 3 jobs · ~$2.40 of
 $20" on a work machine. It expands when something is wrong, and

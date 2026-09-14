@@ -132,6 +132,14 @@ happened to open that Job, which is the failure `Needs you` exists to prevent. A
 terminal Job has no Drone left to be waiting, so `terminal` still comes first and
 the two can never both be true.
 
+**The row carries the flag, not the question.** `asking` is what puts a Job in
+`Needs you`; the question itself — its text and its options — is not on the
+row, because the Board is a list of Jobs and a list is not where a person
+reads and answers one. That is [Helm](helm.md)'s dock: it gathers every
+question `asking` marks, across every repository, as its own card, and
+answering there clears `asking` on this Job the same as answering from the
+Job's own detail does.
+
 **`Working` is asked before the actor.** `piloted` is `Working` with a person
 acting, and a Job somebody has taken over is still moving.
 
