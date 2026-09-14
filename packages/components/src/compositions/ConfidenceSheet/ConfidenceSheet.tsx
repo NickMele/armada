@@ -165,7 +165,11 @@ export function ConfidenceSheet({ confidence, onView, ci, followUp }: Confidence
           title="Dismissed"
           summary={dismissed.length === 1 ? "1 finding" : `${dismissed.length} findings`}
         >
-          <table className="armada-confidence__table" aria-label="Dismissed findings">
+          <table
+            className="armada-confidence__table"
+            data-shape="prose"
+            aria-label="Dismissed findings"
+          >
             <thead>
               <tr>
                 <th scope="col">Finding</th>
@@ -343,7 +347,7 @@ function Tests({ tests }: { tests: TestsSection }) {
         </table>
       )}
       {tests.untested.length > 0 && (
-        <table className="armada-confidence__table" aria-label="Not tested">
+        <table className="armada-confidence__table" data-shape="prose" aria-label="Not tested">
           <thead>
             <tr>
               <th scope="col">Changed code no test reaches</th>
@@ -379,20 +383,27 @@ function Findings({
 }) {
   const viewable = viewColumn(findings, onView);
   return (
-    <table className="armada-confidence__table" {...(marked ? { "data-marked": "" } : {})}>
+    <table
+      className="armada-confidence__table"
+      data-shape="prose"
+      {...(marked ? { "data-marked": "" } : {})}
+    >
       <thead>
         <tr>
           <th scope="col">Finding</th>
           <th scope="col">Why it is here</th>
           {viewable && <th scope="col" className="armada-confidence__act" aria-label="View" />}
-          {followUp && <th scope="col" className="armada-confidence__act" aria-label="Follow up" />}
         </tr>
       </thead>
       <tbody>
         {findings.map((row) => (
           <tr key={row.finding}>
             <td>{withCode(row.finding)}</td>
-            <td className="armada-confidence__muted">{withCode(row.why)}</td>
+            <td className="armada-confidence__muted">
+              {withCode(row.why)}
+              {/* Under the reason rather than in a column of its own, which clipped it. */}
+              {followUp && <FollowUp finding={row.finding} followed={followed} followUp={followUp} />}
+            </td>
             {viewable && (
               <ViewCell
                 title={row.finding.replaceAll("`", "")}
@@ -401,7 +412,6 @@ function Findings({
                 onView={onView}
               />
             )}
-            {followUp && <FollowUpCell finding={row.finding} followed={followed} followUp={followUp} />}
           </tr>
         ))}
       </tbody>
@@ -410,7 +420,7 @@ function Findings({
 }
 
 /** What a For context finding can become, or what it became. #906. */
-function FollowUpCell({
+function FollowUp({
   finding,
   followed,
   followUp,
@@ -423,7 +433,7 @@ function FollowUpCell({
   const filed = followed.some((row) => row.finding === finding && row.issue !== undefined);
   if (!queued && !filed) {
     return (
-      <td className="armada-confidence__act">
+      <div className="armada-confidence__follow">
         <SplitButton
           items={[{ label: "File an issue", onSelect: () => followUp.onFileIssue(finding) }]}
           disabled={followUp.disabled}
@@ -432,11 +442,11 @@ function FollowUpCell({
         >
           Queue after this lands
         </SplitButton>
-      </td>
+      </div>
     );
   }
   return (
-    <td className="armada-confidence__act">
+    <div className="armada-confidence__follow">
       <span className="armada-confidence__became">
         {queued ? "Job queued. It starts when this one lands." : null}
         {!filed ? null : followUp.onOpenIssue === undefined ? (
@@ -447,7 +457,7 @@ function FollowUpCell({
           </Button>
         )}
       </span>
-    </td>
+    </div>
   );
 }
 

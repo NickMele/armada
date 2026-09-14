@@ -150,6 +150,11 @@
   width: 30%;
 }
 
+/* A table whose first column is a sentence, not a name: a finding, untested code. */
+[data-shape="prose"].armada-confidence__table th:first-child {
+  width: 45%;
+}
+
 .armada-confidence__table td {
   padding: var(--space-1) var(--space-2);
   vertical-align: top;
@@ -174,6 +179,7 @@
 
 /* Two classes, to outrank the header cell's left alignment. */
 .armada-confidence__table .armada-confidence__number {
+  width: var(--space-12);
   font-family: var(--font-mono);
   text-align: right;
 }
@@ -223,6 +229,11 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* A For context finding's follow-up, under its reason. #906. */
+.armada-confidence__follow {
+  margin-top: var(--space-2);
 }
 
 /* What a For context finding became. #906. */

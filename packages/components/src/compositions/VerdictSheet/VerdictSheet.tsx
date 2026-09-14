@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 /**
  * Verdict sheet — the record job detail shows at the one place a Job stops for
@@ -83,6 +84,11 @@ export type VerdictSheetProps = {
   actions?: ReactNode;
   /** Drawn instead of `actions`, in the dashed frame an empty state takes. */
   recordNote?: ReactNode;
+  /**
+   * Drawn under Armada's review, which already says what it found: the record
+   * folds behind one line a person can open, and `note` and `actions` stay open.
+   */
+  folded?: boolean;
 };
 
 export function VerdictSheet({
@@ -102,15 +108,12 @@ export function VerdictSheet({
   note,
   actions,
   recordNote,
+  folded = false,
 }: VerdictSheetProps) {
-  return (
-    <div className="armada-verdict">
-      {header === undefined ? null : (
-        <div className="armada-verdict__header">
-          <span className="armada-verdict__done">{header.done}</span>
-          <span className="armada-verdict__when">{header.when}</span>
-        </div>
-      )}
+  const [open, setOpen] = useState(false);
+  const Mark = open ? ChevronDown : ChevronRight;
+  const record = (
+    <>
       <Block label="What you asked for">
         <p className="armada-verdict__lede">{title}</p>
         {brief === undefined ? null : <p className="armada-verdict__said">{brief}</p>}
@@ -165,6 +168,35 @@ export function VerdictSheet({
           </li>
         ))}
       </ul>
+    </>
+  );
+  return (
+    <div className="armada-verdict">
+      {header === undefined ? null : (
+        <div className="armada-verdict__header">
+          <span className="armada-verdict__done">{header.done}</span>
+          <span className="armada-verdict__when">{header.when}</span>
+        </div>
+      )}
+      {folded ? (
+        <div className="armada-verdict__block">
+          <button
+            type="button"
+            className="armada-verdict__fold"
+            aria-expanded={open}
+            onClick={() => setOpen((was) => !was)}
+          >
+            <Mark size={12} aria-hidden="true" />
+            <span className="armada-verdict__label">The Job&apos;s record</span>
+          </button>
+          {/* `hidden`, not unmounted, on `DroneBrief`'s rule: a folded record stays in the page. */}
+          <div className="armada-verdict__record-body" hidden={!open}>
+            {record}
+          </div>
+        </div>
+      ) : (
+        record
+      )}
 
       {note === undefined ? null : <p className="armada-verdict__said">{note}</p>}
 

@@ -641,8 +641,9 @@ export function verdictSlotAtGate({
     ) : (
       "The run tree on the left is where each step's own evidence is. This reads the Job."
     );
-  const sheetWith = (pending?: PendingChanges) => (
+  const sheetWith = (pending?: PendingChanges, folded = false) => (
     <VerdictSheet
+      folded={folded}
       {...verdictOf({
         job,
         whole,
@@ -729,7 +730,8 @@ export function verdictSlotAtGate({
               disabled: stale || deciding,
             },
           })}
-      sheet={sheetWith}
+      // Under the review, the record folds: the review already says what it found.
+      sheet={(pending) => sheetWith(pending, true)}
     />
   );
 }
