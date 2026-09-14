@@ -7,9 +7,10 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::Refusal;
-use ipc::{FleetHealth, Probe, Unprobed};
+use ipc::{FleetHealth, HelmActionAuthority, Probe, Unprobed};
 
 use crate::daemon::Fleet;
+use crate::helm::Authority;
 
 /// Doctor's three words. `docs/concepts/doctor.md`, *Result vocabulary*.
 const PASS: &str = "pass";
@@ -52,6 +53,15 @@ fn elsewhere() -> Vec<Unprobed> {
     .collect()
 }
 
+/// `crate::helm::Authority`, as the wire spells it. `#1127` — the resolved
+/// value Fleet started with had no field to travel on; this is that field.
+fn helm_action_authority(authority: Authority) -> HelmActionAuthority {
+    match authority {
+        Authority::Acting => HelmActionAuthority::Acting,
+        Authority::ReadOnly => HelmActionAuthority::ReadOnly,
+    }
+}
+
 impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
@@ -81,6 +91,7 @@ where
         Ok(FleetHealth {
             probes,
             not_probed: elsewhere(),
+            helm_action_authority: helm_action_authority(self.helm_authority()),
         })
     }
 

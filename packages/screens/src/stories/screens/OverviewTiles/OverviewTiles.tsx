@@ -30,7 +30,7 @@ export function health(over: Record<string, [string, string]> = {}): HealthRead 
     return changed === undefined ? probe : { ...probe, outcome: changed[0], detail: changed[1] };
   });
   const not_probed = [{ owner: "adapters", because: "Its probes are Doctor's, which is not built" }];
-  return { state: "read", health: { probes, not_probed } };
+  return { state: "read", health: { probes, not_probed, helm_action_authority: "acting" } };
 }
 
 const line = (name: string, missing?: string) => ({

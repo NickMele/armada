@@ -40,6 +40,7 @@ describe("the Doctor tile", () => {
   const health = (...outcomes: [string, string][]): FleetHealth => ({
     probes: outcomes.map(([module, outcome]) => ({ module, outcome, detail: "read" })),
     not_probed: [{ owner: "adapters", because: "Doctor is not built" }],
+    helm_action_authority: "acting",
   });
 
   it("says the worst of Doctor's words and names every module that did not pass", () => {
