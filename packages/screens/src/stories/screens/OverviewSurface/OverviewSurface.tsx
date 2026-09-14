@@ -15,58 +15,56 @@ const noop = () => {};
  */
 export function OverviewSurfaceFrom() {
   return (
-    <div className="armada-screen">
-      <div className="armada-screen__window">
-        <TheShell
-          surfaces={[
-            { id: "board", label: "Job Board", icon: ClipboardList, count: 6 },
-            { id: "worktrees", label: "Cleanup", icon: HardDrive },
-          ]}
-          title="Overview"
-          summary="Everything in flight for armada."
-          status={{
-            fleet: "running",
-            fleetLabel: "Fleet running",
-            detail: "pid 4417 · port 7411",
-            items: ["6 jobs"],
-            approvals: 1,
-          }}
-          dock={{
-            open: true,
-            binding: "⌘J",
-            questions: 1,
-            onOpen: noop,
-            children: (
-              <DockQuestions
-                questions={[
-                  {
-                    id: "b:judge",
-                    repository: "armada",
-                    job: "31",
-                    title: "Split the settings reducer",
-                    label: "Helm is asking",
-                    asked:
-                      "Two callers outside settings read the reducer directly. Move them in, or export the shape and leave them?",
-                    waiting: "2m",
-                    answers: [
-                      { id: "move", label: "Move them in" },
-                      { id: "export", label: "Export the shape" },
-                    ],
-                    note: "Open job 31 to answer.",
-                  },
-                ]}
-              />
-            ),
-          }}
-        >
-          <div className="armada-screen__mounted">
-            <div className="armada-screen__overview">
-              <OverviewTilesFrom />
-              <OverviewListsFrom />
-            </div>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+      <TheShell
+        surfaces={[
+          { id: "board", label: "Job Board", icon: ClipboardList, count: 6 },
+          { id: "worktrees", label: "Cleanup", icon: HardDrive },
+        ]}
+        title="Overview"
+        summary="Everything in flight for armada."
+        status={{
+          fleet: "running",
+          fleetLabel: "Fleet running",
+          detail: "pid 4417 · port 7411",
+          items: ["6 jobs"],
+          approvals: 1,
+        }}
+        dock={{
+          open: true,
+          binding: "⌘J",
+          questions: 1,
+          onOpen: noop,
+          children: (
+            <DockQuestions
+              questions={[
+                {
+                  id: "b:judge",
+                  repository: "armada",
+                  job: "31",
+                  title: "Split the settings reducer",
+                  label: "Helm is asking",
+                  asked:
+                    "Two callers outside settings read the reducer directly. Move them in, or export the shape and leave them?",
+                  waiting: "2m",
+                  answers: [
+                    { id: "move", label: "Move them in" },
+                    { id: "export", label: "Export the shape" },
+                  ],
+                  note: "Open job 31 to answer.",
+                },
+              ]}
+            />
+          ),
+        }}
+      >
+        <div className="armada-screen__mounted">
+          <div className="armada-screen__overview">
+            <OverviewTilesFrom />
+            <OverviewListsFrom />
           </div>
-        </TheShell>
-      </div>
+        </div>
+      </TheShell>
     </div>
   );
 }
