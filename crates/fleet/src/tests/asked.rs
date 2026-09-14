@@ -77,7 +77,7 @@ async fn ruled(judge: Arc<FakeJudge>, asked: Asked, worktree: &Worktree) -> Ruli
         &diff_evidence(),
         None,
         &Lifted::default(),
-        Some(&Footprint::nothing()),
+        crate::gate::Began::At(&Footprint::nothing()),
         &[],
         &work,
         budget(),

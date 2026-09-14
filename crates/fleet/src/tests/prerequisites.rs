@@ -102,7 +102,7 @@ async fn ruled_with_ports(
         &diff_evidence(),
         None,
         &Lifted::default(),
-        Some(&Footprint::nothing()),
+        crate::gate::Began::At(&Footprint::nothing()),
         &[],
         &work,
         CheckBudget::of(Duration::from_secs(20)),
