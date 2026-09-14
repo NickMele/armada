@@ -260,9 +260,10 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     void host.material.evidenceSubmitted(fleet.port, event.job_id);
     return;
   }
-  if (event.kind === "job.judging" || event.kind === "job.checking") {
+  if (event.kind === "job.judging" || event.kind === "job.checking" || event.kind === "job.dry_run") {
     // `job.checking` is the same answer one tier along: `StepDetail.checking`
     // is re-read, and a running Check's elapsed time is counted, not re-read.
+    // `job.dry_run` is that again for a Drone's own run, `StepDetail.dry_run`.
     // **Re-read rather than fold.** The call is served on the open Job's own
     // field, `StepDetail.judging`, which is what a Bridge opened mid-call
     // already reads — so folding it into a second copy would give one fact

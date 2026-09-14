@@ -51,6 +51,8 @@ export type Event =
   | ({ kind: "job.files_changed" } & JobFilesChanged)
   | ({ kind: "job.judging" } & JobJudging)
   | ({ kind: "job.checking" } & JobChecking)
+  /** A Drone's own mid-step run of the Checks, never the gate's. Since 13.45. */
+  | ({ kind: "job.dry_run" } & JobDryRun)
   /** A Drone handed in its report, before the gate starts. Since 13.3. */
   | ({ kind: "evidence.submitted" } & EvidenceSubmitted)
   | ({ kind: "job.asking" } & JobAsking)
@@ -265,6 +267,22 @@ export type JobChecking = {
   step_id: string;
   /** The step's Checks as they stand, or absent because the ruling is written. */
   checking?: ChecksUnderway;
+  actor: string;
+  at: string;
+};
+
+/**
+ * One of the Checks a Drone asked for mid-step started or finished, or its run
+ * is no longer shown. `crates/ipc/src/event.rs`. Since 13.45.
+ *
+ * **`job.checking`'s shape, as a kind of its own**, so a Drone's run is never
+ * drawn as the gate's.
+ */
+export type JobDryRun = {
+  job_id: string;
+  step_id: string;
+  /** The run's Checks as they stand, or absent once it is no longer shown. */
+  dry_run?: ChecksUnderway;
   actor: string;
   at: string;
 };

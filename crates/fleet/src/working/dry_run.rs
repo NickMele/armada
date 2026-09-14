@@ -30,6 +30,7 @@ impl Working {
     /// for the same reason, and this is the same mechanism on a different
     /// trigger.
     pub(crate) fn checking(&mut self, at: Timestamp, run: u64, going: Going) {
+        self.dry_run_shown = None;
         self.checking_since = Some(at);
         self.in_flight = Some((run, going));
         self.dry_runs += 1;
@@ -41,15 +42,25 @@ impl Working {
     ///
     /// `false` where `run` is not the run in flight: the step already ended it.
     pub(crate) fn checked(&mut self, at: Timestamp, run: u64) -> bool {
-        if !self
-            .in_flight
-            .as_ref()
-            .is_some_and(|(held, _)| *held == run)
-        {
+        if !self.checks_in_flight(run) {
             return false;
         }
         self.checks_cut_short(at);
         true
+    }
+
+    /// Whether run `run` is still the one in flight, leaving it so. A result
+    /// heard mid-run is told the Drone only while this holds. #1062.
+    pub(crate) fn checks_in_flight(&self, run: u64) -> bool {
+        self.in_flight
+            .as_ref()
+            .is_some_and(|(held, _)| *held == run)
+    }
+
+    /// Keep a finished run's view up until the Drone asks again, submits or
+    /// the step ends, each of which drops it. #1062.
+    pub(crate) fn show_dry_run(&mut self, shown: crate::underway::Announcing) {
+        self.dry_run_shown = Some(shown);
     }
 
     /// End the run in flight, where there is one: its Checks are stopped, and
@@ -57,6 +68,7 @@ impl Working {
     /// the same Checks in the same worktree.
     pub(crate) fn checks_cut_short(&mut self, at: Timestamp) {
         self.in_flight = None;
+        self.dry_run_shown = None;
         if let Some(began) = self.checking_since.take() {
             self.checked_for += elapsed(&began, &at);
             self.waiting(at);

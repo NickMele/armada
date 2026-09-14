@@ -12,7 +12,7 @@ import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { AssertionSet, type CheckRun as CheckRunRow } from "@armada/components";
-import type { CheckRun, StepDetail } from "@armada/protocol";
+import type { CheckRun, CheckUnderway, StepDetail } from "@armada/protocol";
 
 import { checkSheetOf, checksChapter, saidOf } from "./checks";
 import type { Opens } from "./phases";
@@ -167,5 +167,60 @@ describe("a Check the gate reused from the Drone's own dry run", () => {
   it("says it was reused, and a Check the gate ran itself does not", () => {
     expect(saidOf(reused)).toBe("Passed — reused from the drone's run");
     expect(saidOf(passed)).toBe("Passed");
+  });
+});
+
+// #1062 — a Drone's own mid-step run, drawn where the gate's would be and
+// marked as the Drone's, so a person never reads it as a ruling.
+describe("a Drone's own run of the step's Checks", () => {
+  function asking(checks: CheckUnderway[]): StepDetail {
+    return gating({ checking: undefined, dry_run: { attempt: 1, checks } });
+  }
+
+  it("draws which Check is running and each result as it lands, marked as the Drone's run", () => {
+    const step = asking([
+      { name: "build", started_at: STARTED, took_ms: 9_000, ran: { attempt: 1, name: "build", outcome: "passed" } },
+      { name: "test", started_at: STARTED },
+      { name: "format" },
+    ]);
+    expect(checksChapter(step, [], OPENS, NOW)?.summary).toBe("The Drone's run · 1 running · 1 of 3 passed");
+    const rows = rowsOf(step);
+    expect(rows.find((row) => row.id === "build")?.named).toBe("passed");
+    expect(rows.find((row) => row.id === "test")?.says).toBe("Running for 1m 04s.");
+    expect(rows.find((row) => row.id === "format")?.named).toBe("queued");
+  });
+
+  it("counts the Checks its first failure stopped apart from the one that failed", () => {
+    const stopped = "stopped when `build` did not pass";
+    const step = asking([
+      {
+        name: "build",
+        started_at: STARTED,
+        took_ms: 4_000,
+        ran: { attempt: 1, name: "build", outcome: "failed", produced: "it exited 1" },
+      },
+      {
+        name: "test",
+        started_at: STARTED,
+        took_ms: 4_100,
+        ran: { attempt: 1, name: "test", outcome: "signalled", produced: stopped },
+        stopped_by: "build",
+      },
+      {
+        name: "format",
+        took_ms: 0,
+        ran: { attempt: 1, name: "format", outcome: "never_ran", produced: stopped },
+        stopped_by: "build",
+      },
+    ]);
+    expect(checksChapter(step, [], OPENS, NOW)?.summary).toBe("The Drone's run · 1 of 3 did not pass · 2 stopped");
+    const test = rowsOf(step).find((row) => row.id === "test");
+    expect(test?.says).toBe("Stopped when build did not pass.");
+    expect(test?.named).toBeUndefined();
+  });
+
+  it("gives way to the gate's own run, which is the step's now", () => {
+    const both = gating({ dry_run: { attempt: 1, checks: [{ name: "build", started_at: STARTED }] } });
+    expect(checksChapter(both, [], OPENS, NOW)?.summary).toBe("1 running · 1 of 3 passed");
   });
 });

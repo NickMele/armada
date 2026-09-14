@@ -550,6 +550,9 @@ pub(crate) fn step_facts(
                 // Read from the live slot for `judging`'s reason, and gone the
                 // moment the ruling's rows are written.
                 checking: underway.on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
+                // The Drone's own run, apart from the gate's. #1062.
+                dry_run: underway
+                    .dry_run_on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
             }
         })
         .collect()

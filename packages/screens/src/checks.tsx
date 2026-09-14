@@ -34,6 +34,8 @@ import {
   checksOf,
   checksStand,
   didNotPass,
+  droneRunOf,
+  DRONES_RUN,
   isRunning,
   isWaiting,
   notedFrom,
@@ -80,7 +82,10 @@ export function checksChapter(
    */
   onOpenCheck?: (checkId: string) => void,
 ): Omit<StepChapter, "ordinal"> | undefined {
-  const reads = checksOf(step);
+  // **A Drone's own run draws here until the gate takes the step**, marked as
+  // the Drone's in the summary so it never reads as a ruling. #1062.
+  const drone = droneRunOf(step);
+  const reads = drone ?? checksOf(step);
   if (reads.length === 0) return undefined;
 
   const rows = reads.map((read) => checkRow(read, now, onRunHere));
@@ -101,7 +106,10 @@ export function checksChapter(
     // The same sentence the phase strip's tier stands at, from the same call
     // — with which attempt it is from, where a rerun gate has left it behind
     // the step's own current one.
-    summary: notedFrom(checksStand(reads), checksFromAttempt(step)),
+    summary:
+      drone === undefined
+        ? notedFrom(checksStand(reads), checksFromAttempt(step))
+        : `${DRONES_RUN} · ${checksStand(reads)}`,
     // The preview is the whole list — four rows is not a reading. What has no
     // end is what is behind each row, and pressing one opens the sheet rather
     // than filling this chapter with it. `CheckRuns` only draws the control on
@@ -201,6 +209,12 @@ export function checkRow(
       result: "running",
       ...(live?.output_path === undefined ? {} : { output: basename(live.output_path) }),
     };
+  }
+  // Stopped when another Check failed first, on a Drone's run. It finished
+  // nothing, so it takes no hue and says what stopped it. #1062.
+  const stoppedBy = live?.stopped_by;
+  if (stoppedBy !== undefined) {
+    return { id: name, says: `Stopped when ${stoppedBy} did not pass.`, identifier: name, result: STOPPED };
   }
   const failed = run !== undefined && didNotPass(run);
   return {
@@ -392,6 +406,9 @@ const WAITING_TO_START = "Waiting to start.";
 
 /** What a running Check says where its start will not parse. */
 const RUNNING_NOW = "Running now.";
+
+/** What a Check a Drone's run stopped reads as, in the result column. */
+const STOPPED = "stopped";
 
 /**
  * What opening the chapter offers.

@@ -212,7 +212,8 @@ where
         && footprint_now
             .as_ref()
             .is_some_and(|now| entered_with.is_some_and(|before| now.differs_from(before)));
-    // **Several at a time, in declaration order, each with its own budget.**
+    // **Several at a time, started fastest first, reported in declaration
+    // order, each with its own budget, and never stopped at a failure.**
     // `crate::checking` owns all three properties; what matters here is that
     // what comes back is one entry per declared Check, skips included, so the
     // invariant `Ran::of` enforces is carried by the shape of the answer rather

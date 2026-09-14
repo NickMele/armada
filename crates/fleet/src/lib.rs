@@ -135,6 +135,8 @@ mod naming;
 /// An open one is asked a second question on the same rotation —
 /// `crate::under_review`.
 pub mod noticing;
+/// Which of a step's Checks starts first, from this repository's past runs.
+mod ordering;
 /// Where two Jobs claim the same paths, worked out at read time. **A
 /// warning and nothing else** — no dispatch path reaches it.
 pub mod overlap;

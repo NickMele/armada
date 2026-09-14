@@ -92,6 +92,31 @@ export function checksOf(step: StepDetail): CheckRead[] {
 }
 
 /**
+ * The Drone's own mid-step run, read the way the gate's Checks are — or
+ * `undefined` where there is none, and while the gate's run is up, which is
+ * the step's now. **Never the gate's**: nothing it finds moves the step. #1062.
+ */
+export function droneRunOf(step: StepDetail): CheckRead[] | undefined {
+  if (step.checking !== undefined || step.dry_run === undefined) return undefined;
+  const underway = step.dry_run.checks;
+  return (step.checks ?? [])
+    .filter((check) => !isSweepMarker(check))
+    .map((check) => {
+      const name = nameOf(check);
+      const live = underway.find((one) => one.name === name);
+      return { name, check, run: live === undefined ? undefined : ranOf(live), live };
+    });
+}
+
+/** What a Drone's own run is called wherever it is drawn where the gate's would be. */
+export const DRONES_RUN = "The Drone's run";
+
+/** Stopped when another Check failed first, so it says nothing either way. #1062. */
+export function isStopped(read: CheckRead): boolean {
+  return read.live?.stopped_by !== undefined;
+}
+
+/**
  * A finished live Check as the row it will be recorded as, with its live log
  * where the recorded one will go. `undefined` while it waits or runs.
  */
@@ -149,7 +174,8 @@ export function howTheChecksWent(reads: readonly CheckRead[]): {
   ran: CheckRead[];
   failed: CheckRead[];
 } {
-  const ran = reads.filter((read) => read.run !== undefined);
+  // A stopped Check is neither: it did not finish, so it neither ran nor failed.
+  const ran = reads.filter((read) => read.run !== undefined && !isStopped(read));
   return { ran, failed: ran.filter((read) => read.run !== undefined && didNotPass(read.run)) };
 }
 
@@ -162,10 +188,11 @@ export function howTheChecksWent(reads: readonly CheckRead[]): {
  */
 export function checksStand(reads: readonly CheckRead[]): string {
   const { ran, failed } = howTheChecksWent(reads);
+  const stopped = reads.filter(isStopped).length;
   const counted =
-    failed.length > 0
+    (failed.length > 0
       ? `${failed.length} of ${reads.length} did not pass`
-      : `${ran.length} of ${reads.length} passed`;
+      : `${ran.length} of ${reads.length} passed`) + (stopped === 0 ? "" : ` · ${stopped} stopped`);
   // **While the gate works through them, what is running leads**, because "is
   // anything happening" is the question a person opened the step with. The
   // count of what landed rides behind it once there is one.

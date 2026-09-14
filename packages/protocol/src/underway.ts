@@ -48,6 +48,11 @@ export type CheckUnderway = {
    * runs no command.
    */
   output_path?: string;
+  /**
+   * The Check whose failure stopped this one before it finished, on a Drone's
+   * own run. Absent on every gate's Check, which never stops early. Since 13.45.
+   */
+  stopped_by?: string;
 };
 
 /** One message on a running Check's log socket. `observe_job_log`'s shape. */
