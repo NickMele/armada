@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Bell, ClipboardList, FileCog, HardDrive, Settings, Stethoscope } from "lucide-react";
+import { Bell, ClipboardList, FileCog, HardDrive, LayoutDashboard, Settings, Stethoscope } from "lucide-react";
 import { expect } from "storybook/test";
 
 import { actsIn, ALIASES, globalActs, type Action } from "../../actions";
@@ -34,12 +34,11 @@ const CONTEXT = "job_2d90bb — coalesce the session refresh";
  * being drawn. Helm is not among them: it is a sibling surface with a registry
  * row of its own, and it arrives through `globalActs`.
  *
- * **This is where the digits are read as a set, and where one of them moved.**
- * `⌘1–⌘5` is bound to Bridge surfaces *in rail order*, so a digit is a place in
- * the rail and nothing else. Cleanup joined at the end and took `⌘5`; Helm,
- * the digit after the last surface, went to `⌘6`. Drawn together, the
- * five keys people already know are unmoved and the one that moved is beside
- * the row that pushed it.
+ * **This is where the digits are read as a set, and where they moved twice.**
+ * `⌘1–⌘6` is bound to Bridge surfaces *in rail order*. Cleanup joined at the
+ * end on 2026-09-03 and took `⌘5`; Helm went to `⌘6`. Overview joined first
+ * rather than last, because it is where Bridge opens (#921), taking `⌘1` and
+ * pushing every other surface down one.
  *
  * The Manifest drew `clipboard-list` here until the fifth row was added — the
  * Job Board's glyph, on a second destination, in the one place the set is read
@@ -47,15 +46,16 @@ const CONTEXT = "job_2d90bb — coalesce the session refresh";
  * to the Manifest surface and the file.
  */
 const RAIL: PaletteEntry[] = [
-  { id: "nav-board", section: "navigation", label: "Job Board", shortcut: "⌘1", icon: ClipboardList },
-  { id: "nav-alerts", section: "navigation", label: "Alerts", shortcut: "⌘2", icon: Bell },
-  { id: "nav-doctor", section: "navigation", label: "Doctor", shortcut: "⌘3", icon: Stethoscope },
-  { id: "nav-manifest", section: "navigation", label: "Manifest", shortcut: "⌘4", icon: FileCog },
+  { id: "nav-overview", section: "navigation", label: "Overview", shortcut: "⌘1", icon: LayoutDashboard },
+  { id: "nav-board", section: "navigation", label: "Job Board", shortcut: "⌘2", icon: ClipboardList },
+  { id: "nav-alerts", section: "navigation", label: "Alerts", shortcut: "⌘3", icon: Bell },
+  { id: "nav-doctor", section: "navigation", label: "Doctor", shortcut: "⌘4", icon: Stethoscope },
+  { id: "nav-manifest", section: "navigation", label: "Manifest", shortcut: "⌘5", icon: FileCog },
   {
     id: "nav-worktrees",
     section: "navigation",
     label: "Cleanup",
-    shortcut: "⌘5",
+    shortcut: "⌘6",
     aliases: ["held worktrees", "disk", "held disk"],
     icon: HardDrive,
   },
@@ -263,19 +263,17 @@ export const AnAliasFindsTheLexiconTerm: Story = {
 };
 
 /**
- * **The newest surface goes last, so it is the only digit that is new.**
- * Cleanup — Held worktrees, before its rename — joined the rail on 2026-09-03
- * and took `⌘5`; Helm, which is the digit after the last surface rather than a
- * surface, went from `⌘5` to `⌘6`. Every key anyone had learned still reaches
- * what it reached.
+ * **The newest surface goes last, so it is the only digit that is new** —
+ * true of Cleanup's own arrival on 2026-09-03, which took `⌘5` and pushed Helm
+ * to `⌘6`. Job Board reads `⌘2` here, not the `⌘1` that arrival left it: a
+ * later, unrelated one — Overview (#921) — broke the rule once and moved
+ * every digit but its own.
  *
- * A published binding moved, and this is where a person finds out: the palette
- * displays the binding beside every entry, so the two rows are read together
- * the next time anybody opens it.
+ * A published binding moved, and this is where a person finds out: the two
+ * rows are read together the next time anybody opens the palette.
  *
  * The query is "disk", the word on the control that has reached this screen
- * since it shipped, unchanged by the rename. The row reads `Cleanup`, which is
- * the title of the screen it lands on.
+ * since it shipped. The row reads `Cleanup`, the screen's own title.
  */
 export const TheNewestSurfaceTookTheLastDigit: Story = {
   args: { ...board, defaultQuery: "disk" },
@@ -297,10 +295,10 @@ export const TheNewestSurfaceTookTheLastDigit: Story = {
 
     // Two caps and so two words: a chord is drawn as one `Kbd` per key.
     await expect(canvas.getByRole("option", { name: /^Job Board/ })).toHaveAccessibleName(
-      "Job Board ⌘ 1",
+      "Job Board ⌘ 2",
     );
     await expect(canvas.getByRole("option", { name: /^Cleanup/ })).toHaveAccessibleName(
-      "Cleanup ⌘ 5",
+      "Cleanup ⌘ 6",
     );
     await expect(canvas.getByRole("option", { name: /^Helm/ })).toHaveAccessibleName("Helm ⌘ J");
   },

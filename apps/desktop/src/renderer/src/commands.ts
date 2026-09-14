@@ -123,6 +123,8 @@ export const getCheckoutRunDiff = (runId: string) => window.armada.getCheckoutRu
 // pressed, so nothing here starts one on a read.
 export const watchManifestDrift = (want: boolean): void =>
   void window.armada.watchManifestDrift(want);
+// Overview's health and per-repository drift. Held open by the surface, `holding.ts`'s shape.
+export const watchOverview = (want: boolean): void => void window.armada.watchOverview(want);
 export const startCheckoutVerify = (workspace?: string) => window.armada.startCheckoutVerify(workspace);
 export const pickRepository = (root: string | null): void => void window.armada.pickRepository(root);
 // Locate: a folder from the OS dialog, and a repository added or cloned. The window picks what it located.

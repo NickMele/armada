@@ -51,13 +51,23 @@ export type HeadProps = {
    * the surface is not showing.
    *
    * **A name and no way out, and the missing control is the point.** Manifest
-   * is a rail destination: a person who pressed `⌘4` did not come from the
+   * is a rail destination: a person who pressed `⌘5` did not come from the
    * Board, so *Back to the list* would name a place they never were — and the
    * rail they would actually leave by is already on screen beside it. The head
    * is here only because the page's own rows never say what surface they
    * belong to.
    */
   manifest: false | "run" | "form" | "file";
+  /**
+   * Overview, the same shape as `manifest`'s own reasoning: a rail destination
+   * with no way out, because the rail beside it is the way out. Where Bridge
+   * opens (#921), so it gets no *New job* either — Overview reads, and the
+   * Board is where a person acts.
+   *
+   * **Optional, so a caller that never shows Overview does not have to say
+   * so.** Every existing story head was built before Overview existed.
+   */
+  overviewing?: boolean;
   /** A live connection. What stops a new Job being proposed into nothing. */
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
@@ -87,6 +97,7 @@ export function headOf({
   auditing,
   clearing,
   manifest,
+  overviewing,
   live,
   refreshing,
   onCloseComposer,
@@ -171,6 +182,10 @@ export function headOf({
       ),
     };
   }
+  // Checked after the composer: the palette's `New job` does not leave
+  // Overview, so both can be true at once and the composer is what is on
+  // screen.
+  if (overviewing) return { title: "Overview", actions: null };
   return {
     title: "Job Board",
     actions: (

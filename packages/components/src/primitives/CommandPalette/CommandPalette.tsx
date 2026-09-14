@@ -362,7 +362,7 @@ function Marked({ label, query, at }: { label: string; query: string; at: number
  * The binding, cut into one box per key.
  *
  * **The registry's spelling is the input and nothing is re-spelled here.**
- * `⌘K`, `j / k / ↓ / ↑`, `⌘1–⌘4` and `[ ]` are all how `actions.toml` writes
+ * `⌘K`, `j / k / ↓ / ↑`, `⌘1–⌘6` and `[ ]` are all how `actions.toml` writes
  * them, and the gate holds that file to the contract's map — so the palette
  * shows exactly the string a person will read in the contract. What this does
  * is put each key in its own box, because a chord set in one box reads as a
@@ -392,7 +392,7 @@ type Piece = { key: string; between?: undefined } | { key?: undefined; between: 
  *
  * A space separates two whole bindings and needs no mark — the gap between
  * boxes is the separation. `/` and `–` are kept and drawn, because `j / k`
- * means either key and `⌘1–⌘4` means a range, and dropping them would turn
+ * means either key and `⌘1–⌘6` means a range, and dropping them would turn
  * both into a chord. A leading `⌘` takes a box of its own for the same reason
  * the chord rule exists.
  */

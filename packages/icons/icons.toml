@@ -298,6 +298,13 @@
   status = "Specified"
   notes = "At the approval gate and in the detail header only, never in a Job Board row — the row already says convoy, 3 in text."
 
+[icons.layout-dashboard]
+  means = "Overview — a rectangle split into panes, like the tile band and lists it opens on"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  notes = "Added 2026-09-13 with Overview, Bridge's first surface (#921). The only Navigation glyph built from a grid of panes rather than a single bounded shape, which is what keeps it clear of clipboard-list (an upright board), hard-drive (a horizontal vessel), and the outline-with-something-inside family — message-square, bell, stethoscope, file-cog."
+
 [icons.link]
   means = "Two interlocking chain segments on a diagonal"
   group = "Queued reason"
