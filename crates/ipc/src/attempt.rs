@@ -211,7 +211,10 @@ pub struct Move<'a> {
 /// the first entry, however many later ones arrive.
 pub fn first_started_at<'a>(moves: impl Iterator<Item = Move<'a>>) -> Option<Instant> {
     let running = core_model::JobStatus::Running.as_wire();
-    moves.filter(|moved| moved.to == running).map(|moved| moved.at.clone()).next()
+    moves
+        .filter(|moved| moved.to == running)
+        .map(|moved| moved.at.clone())
+        .next()
 }
 
 #[cfg(test)]

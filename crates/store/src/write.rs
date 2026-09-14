@@ -23,11 +23,11 @@
 //! clock either — a store that timestamped its own writes could not be replayed
 //! and could not be tested.
 use core_model::{
-    Attachment, DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, Judgment,
-    StepCheck, StepEvidence, StepId, StepLevelTrigger, StepTransitioned, Timestamp,
+    Attachment, DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStatus, JobStep,
+    Judgment, StepCheck, StepEvidence, StepId, StepLevelTrigger, StepTransitioned, Timestamp,
     TransitionReason, Transitioned, WhenBlocked, WriteTargets,
 };
-use rusqlite::Transaction;
+use rusqlite::{OptionalExtension, Transaction};
 
 use crate::attempt::attempt_now;
 use crate::columns;
@@ -207,16 +207,43 @@ impl Store {
             .map_err(fault("starting the transition"))
             .map_err(WriteError::Database)?;
 
+        // Compare-and-swap on the status the move started from. Two callers
+        // loading the same Job can each compute a legal-looking move off
+        // their own snapshot; without the `AND status = ?3` an unconditional
+        // `UPDATE` lets both land, the second overwriting the first's status
+        // while both events are appended — leaving an event whose
+        // `status_from` does not match what the prior event left the Job at,
+        // unreadable by the fold. `updated == 0` here means the row is either
+        // gone or has already moved past `event.from()`.
         let updated = tx
             .execute(
-                "UPDATE jobs SET status = ?2 WHERE job_id = ?1",
-                (job_id, event.to().as_wire()),
+                "UPDATE jobs SET status = ?2 WHERE job_id = ?1 AND status = ?3",
+                (job_id, event.to().as_wire(), event.from().as_wire()),
             )
             .map_err(fault("updating the cached status"))
             .map_err(WriteError::Database)?;
         if updated == 0 {
-            return Err(WriteError::NoSuchJob {
-                job_id: event.job_id().clone(),
+            let found: Option<String> = tx
+                .query_row(
+                    "SELECT status FROM jobs WHERE job_id = ?1",
+                    [job_id],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(fault("reading the status a transition was refused against"))
+                .map_err(WriteError::Database)?;
+            return Err(match found {
+                None => WriteError::NoSuchJob {
+                    job_id: event.job_id().clone(),
+                },
+                Some(found) => WriteError::StatusChanged {
+                    job_id: event.job_id().clone(),
+                    expected: event.from(),
+                    // Read with the same `as_wire()` this crate wrote it
+                    // with, so a mismatch here would be this store's own bug
+                    // and not a caller's to answer for.
+                    found: JobStatus::from_wire(&found).expect("just read as a status"),
+                },
             });
         }
 

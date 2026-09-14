@@ -159,6 +159,50 @@ fn a_transition_against_a_job_that_was_never_stored_is_refused() {
     }
 }
 
+/// `#793`: a person approving a Job and a person (or Fleet) killing it at the
+/// same moment both load it at `awaiting_approval` and both compute a legal
+/// move off that snapshot. The second to write is refused rather than
+/// silently overwriting the first's status — and the Job still loads.
+#[test]
+fn two_moves_off_one_loaded_snapshot_do_not_both_land() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let job = top_level("01RACE");
+    store.insert_job(&job, &created_at()).expect("stored");
+
+    let approve = job
+        .transition(Target::Queued, Actor::Human, created_at())
+        .expect("a legal move");
+    let kill = job
+        .transition(Target::Killed, Actor::Human, created_at())
+        .expect("a legal move");
+
+    store.record_transition(&approve).expect("the winner lands");
+    match store.record_transition(&kill) {
+        Err(WriteError::StatusChanged {
+            job_id,
+            expected,
+            found,
+        }) => {
+            assert_eq!(job_id.as_str(), "01RACE");
+            assert_eq!(expected, JobStatus::AwaitingApproval);
+            assert_eq!(found, JobStatus::Queued);
+        }
+        other => panic!("expected a refusal, found {other:?}"),
+    }
+
+    let loaded = store.load_job(&job_id("01RACE")).expect("still loads");
+    assert_eq!(loaded.status(), JobStatus::Queued);
+    assert_eq!(
+        store
+            .events_for(&job_id("01RACE"))
+            .expect("events readable")
+            .len(),
+        1,
+        "only the winner's event was appended"
+    );
+}
+
 /// Never edited and never removed — enforced by the database, not by this
 /// crate's discipline. There is no method here that would try either; these go
 /// straight at the table to show the trigger is what stops them.
