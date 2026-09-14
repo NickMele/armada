@@ -30,7 +30,9 @@ import {
   type VerdictSheetProps,
 } from "@armada/components";
 import { ReviewedGate, type PendingChanges } from "./confidence";
-import { ciOf } from "./ci";
+import { ciOf, ciShown } from "./ci";
+import { NO_FRAMES, type Frames } from "./frames";
+import { capturedOf, groundsOf } from "./grounds";
 import type {
   Diff,
   Evidence,
@@ -527,6 +529,8 @@ export type VerdictSlotAtGateArgs = {
   opensRecords: Opens;
   now: number;
   claimed: Submitted | undefined;
+  /** The frames this window holds, for What the Job captured. Absent draws each as still reading. */
+  frames?: Frames;
   /** Fleet's own reason the gate could not decide, scoped to this step. */
   undecided?: string;
   onNeedMaterial: (jobId: string | null) => void;
@@ -575,6 +579,7 @@ export function verdictSlotAtGate({
   opensRecords,
   now,
   claimed,
+  frames,
   undecided,
   onNeedMaterial,
   onNeedRemarks,
@@ -691,11 +696,14 @@ export function verdictSlotAtGate({
   // Armada's review comes first, above the record it is about. #903.
   const confidence = whole?.confidence;
   if (confidence === undefined) return sheetWith();
+  const captured = capturedOf(open, claimed, frames ?? NO_FRAMES);
   return (
     <ReviewedGate
       confidence={confidence}
       diff={recorded.diff}
       jobId={job.id}
+      grounds={groundsOf(open, whole?.acceptance_criteria ?? [], claimed, recorded.diff)}
+      {...(captured === undefined ? {} : { captured })}
       {...(onOpenDiff === undefined ? {} : { onOpenDiff })}
       {...(onDismissFinding === undefined
         ? {}
@@ -703,7 +711,7 @@ export function verdictSlotAtGate({
             onDismissFinding: (finding: string, reason: string) =>
               onDismissFinding(job.id, finding, reason),
           })}
-      {...(detail?.checks === undefined && !conflicted
+      {...(!ciShown(detail?.checks, conflicted)
         ? {}
         : {
             ci: ciOf(detail?.checks, conflicted, {
