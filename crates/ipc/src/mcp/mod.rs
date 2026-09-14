@@ -23,6 +23,7 @@
 //! field means.
 mod ask;
 mod dispatch;
+mod noting;
 mod permission;
 mod planning;
 mod report;
@@ -38,6 +39,7 @@ use crate::codec::{encode, Unencodable};
 
 pub use ask::{AskQuestion, AskedOption, ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 pub use dispatch::{DispatchJob, DISPATCH_FIELDS, DISPATCH_TOOL};
+pub use noting::{LeaveNote, MOST_NOTE_CHARS, NOTE_FIELDS, NOTE_TOOL};
 pub use permission::{PermissionAsked, PERMISSION_FIELDS, PERMISSION_TOOL};
 pub use planning::{PlanArgument, PlanCall, ADD_TASK_TOOL, RECORD_PLAN_TOOL, UPDATE_TASK_TOOL};
 pub use report::{CheckExcerpt, CheckRan, CheckReport};
@@ -170,6 +172,12 @@ pub enum Incoming {
     Ask {
         id: CallId,
         asking: AskQuestion,
+    },
+    /// A call of the note tool that read as a note. Whether the addressee may
+    /// be reached is the daemon's answer, not this module's. #1000.
+    Note {
+        id: CallId,
+        note: LeaveNote,
     },
     /// The harness asking whether a call outside the Drone's allowlist may run.
     /// Whether it may is the daemon's answer, not this module's.
@@ -417,6 +425,12 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
     if tool == ASK_TOOL {
         return match ask::question(arguments) {
             Ok(asking) => Incoming::Ask { id, asking },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
+    if tool == NOTE_TOOL {
+        return match noting::left(arguments) {
+            Ok(note) => Incoming::Note { id, note },
             Err(why) => Incoming::NotASubmission { id, why },
         };
     }

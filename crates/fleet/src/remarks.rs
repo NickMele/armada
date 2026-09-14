@@ -313,8 +313,14 @@ fn file_contents(picked: &[&Remark]) -> String {
 /// what a Drone is handed — `FromOutside`'s own rule, kept at the one place it
 /// would be tempting to break.
 fn quoted(said: &FromOutside) -> String {
+    fenced(said.as_written())
+}
+
+/// Words that are not Armada's, every line behind the marker: [`quoted`]'s fence
+/// for a comment, and `crate::peers`' for one Drone's note to another. #1000.
+pub(crate) fn fenced(said: &str) -> String {
     let mut out = String::with_capacity(said.len() + 16);
-    for line in said.as_written().split('\n') {
+    for line in said.split('\n') {
         out.push_str("> ");
         // A carriage return would put the rest of the line back at the start of
         // it, which is a line without the marker as far as anything reading the

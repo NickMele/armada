@@ -197,6 +197,12 @@ async fn called<D: Tools>(
             Ok(receipt) => Answered::Recorded { id, receipt },
             Err(why) => Answered::Refused { id, why },
         },
+        // **Answered immediately**, like a question: the note reaches the other
+        // Drone with its next peer turn, never on this connection. #1000.
+        Incoming::Note { id, note } => match served.daemon().leave_note(caller, note).await {
+            Ok(receipt) => Answered::Recorded { id, receipt },
+            Err(why) => Answered::Refused { id, why },
+        },
         // **Answered from the record**, like a declaration: the change is kept
         // or refused before the reply, and a refusal is words the Drone reads.
         Incoming::Plan { id, call } => match served.daemon().change_plan(caller, call).await {

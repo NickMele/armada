@@ -83,6 +83,10 @@ const ASK_TOOL: &str = "mcp__armada__ask_question";
 /// on the same port.
 const SERVER_TOOL: &str = "mcp__armada__start_server";
 
+/// **In every toolbelt, and not a `Grant`**, for [`ASK_TOOL`]'s reason: a note
+/// costs nothing and creates nothing. #1000.
+const NOTE_TOOL: &str = "mcp__armada__leave_note";
+
 /// **Not in the table above, because it is not in every toolbelt.** It is the
 /// one Armada tool that is granted rather than given: a Drone that may create
 /// Jobs is a Drone one approval bought several Drones' worth of spend from, so
@@ -298,6 +302,7 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
         String::from(WIDEN_TOOL),
         String::from(ASK_TOOL),
         String::from(SERVER_TOOL),
+        String::from(NOTE_TOOL),
     ];
     for grant in config.toolbelt().granted() {
         match grant {
@@ -505,6 +510,11 @@ pub fn ask_tool() -> &'static str {
 /// denied it starts a server from its shell instead, which Fleet never sees.
 pub fn server_tool() -> &'static str {
     SERVER_TOOL
+}
+
+/// The note tool's name. In every toolbelt with the six above. #1000.
+pub fn note_tool() -> &'static str {
+    NOTE_TOOL
 }
 
 /// The dispatch tool's name, for a caller that needs to assert it is *absent*

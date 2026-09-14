@@ -74,8 +74,8 @@ pub use ci_workflows::ActionsWorkflows;
 pub use conversing::{door_tools, ConversationRefused, Conversing};
 pub use error::{CommitWorkError, CreateWorktreeError, ReadWorkProductError};
 pub use harness::{
-    ask_tool, checks_tool, dispatch_tool, evidence_server, evidence_tool, permission_tool,
-    scope_tool, server_tool, widen_tool, HarnessRefused, HeadlessAgent,
+    ask_tool, checks_tool, dispatch_tool, evidence_server, evidence_tool, note_tool,
+    permission_tool, scope_tool, server_tool, widen_tool, HarnessRefused, HeadlessAgent,
 };
 pub use issue_lookup::IssueLookup;
 pub use mcp::{only_the_evidence_server, publish_the_agents_door, Published, REPOSITORY_CONFIG};
