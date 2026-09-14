@@ -2,7 +2,8 @@
 //!
 //! **One claim per repository, Check and test**, so a second Drone reporting
 //! the same failure drafts nothing. The claim belongs to the fix: it ends when
-//! that Job ends, and forgetting the fix removes it.
+//! the fix's pull request settles, or when the fix ends without one, and
+//! forgetting the fix removes it.
 
 use alloc::string::String;
 

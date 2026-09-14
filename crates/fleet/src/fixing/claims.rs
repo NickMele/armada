@@ -1,4 +1,5 @@
-//! The claims a Job is part of: read for its detail, given back when it ends.
+//! The claims a Job is part of, read for its detail. `crate::fixing::waiting`
+//! gives them back.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Job, JobId};

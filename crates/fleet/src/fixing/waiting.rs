@@ -73,7 +73,8 @@ where
 {
     /// Point this Job at every claimed fix in its repository whose test one of
     /// its failed Checks printed. **Nothing here can fail the gate or the dry
-    /// run that reached it**: a read that will not answer points nothing.
+    /// run that reached it**: a read that will not answer points nothing. A
+    /// name cut from the output is missed: `[fleet-fix-pointing-reads-a-cut-output]`.
     pub(crate) async fn pointed_at_fixes(&self, job: &JobId, failed: &[(String, String)]) {
         if failed.is_empty() {
             return;

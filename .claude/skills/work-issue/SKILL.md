@@ -42,6 +42,12 @@ Use `EnterWorktree` where it is available. Worktrees live under
 `.claude/worktrees/`, named for the issue. `.armada/worktrees/` is Fleet's and is
 never touched by hand — a Drone is working in there.
 
+**Then fetch, and fast-forward onto what `main` is now.** `EnterWorktree` cuts
+from the local `origin/main` ref, which is only as fresh as the last fetch.
+Confirmed 14 Sep 2026: the #1001 worktree came up at a commit from before #999
+merged, missing the code the step was built on. `git fetch origin main && git
+merge --ff-only origin/main` before reading anything.
+
 **Never work on `main`.** Not for a doc fix, not for a comment.
 
 **One issue per worktree.** Two issues in one tree is the defect above, arriving
