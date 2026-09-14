@@ -73,6 +73,19 @@ impl Working {
         self.dry_runs
     }
 
+    /// Fleet has started running one test against main for the Drone. **The
+    /// clocks suspend as for a dry run**, and the step's fixes are spent, not
+    /// its dry runs. #999.
+    pub(crate) fn fixing(&mut self, at: Timestamp) {
+        self.checking_since = Some(at);
+        self.fixes += 1;
+    }
+
+    /// How many fixes this step has asked for.
+    pub(crate) fn fixes(&self) -> u32 {
+        self.fixes
+    }
+
     /// How long of the window ending at `now` was Fleet running Checks.
     pub(super) fn suspended_for(&self, now: &Timestamp) -> Duration {
         match &self.checking_since {

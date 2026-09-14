@@ -29,6 +29,7 @@ import type { StepAttempt } from "./attempt";
 import type { ChecksUnderway } from "./underway";
 import type {
   CheckRun,
+  ClaimedBreakage,
   DeclaredCheck,
   DeclaredJudge,
   JobSummary,
@@ -91,6 +92,14 @@ export type JobDetail = {
    * "no overlap" about a Job nothing had looked at.
    */
   write_scope_overlaps?: ScopeOverlap[];
+  /**
+   * Tests broken on main this Job reported, or is fixing. Since protocol 13.41.
+   *
+   * **One list for both sides of a claim.** Where this Job's Drone reported the
+   * test, `reported_by` is this Job; on the fix Job, `fix` is. Absent is none,
+   * which is every Job that neither reported nor claims one.
+   */
+  breakages?: ClaimedBreakage[];
   /**
    * What the worktree held when the job stopped. Since protocol 4.12.
    *

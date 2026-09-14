@@ -40,5 +40,5 @@ pub use vcs::{CommitScope, Delivered, Delivering, FakeCommit, FakeVcs, FakeVcsEr
 pub use work_product::{FakeDiffRefused, FakeWorkProduct, Holding, Written};
 pub use workflow::{
     delivering, frozen, handing_off, modelled, narrowing, patient, requiring, resolved, retried,
-    Gaming, Gate, Narrows, Patience, Scoped, Sketch,
+    testing_one, Gaming, Gate, Narrows, OneTest, Patience, Scoped, Sketch,
 };

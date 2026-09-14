@@ -233,6 +233,11 @@ fn detail(input: &ToolInput) -> CallDetail {
     if let (Some(to), Some(note)) = (&input.to, &input.note) {
         return CallDetail::of(&format!("to {to}: {note}"));
     }
+    // `draft_fix`: which test the Drone said is broken on main. Both keys, so a
+    // stray `test` on another tool leaves that tool's row alone. #999.
+    if let (Some(check), Some(test)) = (&input.check, &input.test) {
+        return CallDetail::of(&format!("{test} under {check}, broken on main"));
+    }
     if let Some(declared) = &input.context_paths {
         return CallDetail::of(&declared_as(declared));
     }
@@ -512,6 +517,11 @@ struct ToolInput {
     /// `leave_note`: what it said. Carried because nothing else keeps a note
     /// once it has been delivered, so this row is the sender's record of it.
     note: Option<String>,
+    /// `draft_fix`: the Check a test failed under. #999.
+    check: Option<String>,
+    /// `draft_fix`: the test the Drone said is broken on main. With `check`,
+    /// the row is the Drone's own record of what it claimed.
+    test: Option<String>,
 }
 
 #[derive(Deserialize)]

@@ -64,6 +64,26 @@ fn a_second_claim_on_the_same_test_takes_nothing() {
 }
 
 #[test]
+fn a_claim_reads_from_the_reporter_as_well_as_the_fix() {
+    let dir = TempDir::new();
+    let mut store = with_jobs(&dir);
+    let here = repository("01REPOAAAAAAAAAAAAAAAAAAAA");
+    store
+        .claim_breakage(&claim(FIX, &here), &created_at())
+        .expect("written");
+
+    let reported = store
+        .breakages_reported_by(&job_id(REPORTER))
+        .expect("read");
+    assert_eq!(reported.len(), 1);
+    assert_eq!(reported[0].fix, job_id(FIX));
+    assert!(store
+        .breakages_reported_by(&job_id(SECOND_FIX))
+        .expect("read")
+        .is_empty());
+}
+
+#[test]
 fn the_same_test_in_another_repository_is_its_own_breakage() {
     let dir = TempDir::new();
     let mut store = with_jobs(&dir);

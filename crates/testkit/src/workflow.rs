@@ -252,6 +252,32 @@ pub fn narrowing(steps: &[Sketch<'_>], narrows: &[Narrows<'_>]) -> ResolvedWorkf
     )
 }
 
+/// How a named Check runs one test by name, as the fixture's Manifest writes
+/// it. A whole-fixture argument, for [`Narrows`]' reason.
+#[derive(Debug, Clone, Copy)]
+pub struct OneTest<'a> {
+    /// The Check this belongs to.
+    pub check: &'a str,
+    /// The command, with `{}` where the test's name goes.
+    pub run: &'a str,
+}
+
+/// The same fixture with some of its Checks declaring how to run one test.
+pub fn testing_one(steps: &[Sketch<'_>], one_tests: &[OneTest<'_>]) -> ResolvedWorkflow {
+    assembled_with(
+        steps,
+        0,
+        &[],
+        &[],
+        &[],
+        &[],
+        &[],
+        Sends::TheLastStep,
+        Held::NoStep,
+        one_tests,
+    )
+}
+
 fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> ResolvedWorkflow {
     assembled(
         steps,
@@ -366,6 +392,33 @@ fn assembled(
     delivers: Sends<'_>,
     held: Held<'_>,
 ) -> ResolvedWorkflow {
+    assembled_with(
+        steps,
+        retry_limit,
+        models,
+        commands,
+        requires,
+        patience,
+        narrows,
+        delivers,
+        held,
+        &[],
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assembled_with(
+    steps: &[Sketch<'_>],
+    retry_limit: u32,
+    models: &[(&str, &str)],
+    commands: &[(&str, &str)],
+    requires: &[(&str, &[&str])],
+    patience: &[Patience<'_>],
+    narrows: &[Narrows<'_>],
+    delivers: Sends<'_>,
+    held: Held<'_>,
+    one_tests: &[OneTest<'_>],
+) -> ResolvedWorkflow {
     let roster = Roster::of(models.iter().map(|(_, model)| *model));
     let def = WorkflowDef::parse(
         Path::new("fixture-workflow.yml"),
@@ -375,7 +428,7 @@ fn assembled(
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
     let manifest = Manifest::parse(
         Path::new("fixture-armada.yml"),
-        &manifest_text(steps, commands, requires, narrows),
+        &manifest_text(steps, commands, requires, narrows, one_tests),
     )
     .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
     ResolvedWorkflow::resolve(&def, &manifest)
@@ -516,6 +569,7 @@ fn manifest_text(
     commands: &[(&str, &str)],
     requires: &[(&str, &[&str])],
     narrows: &[Narrows<'_>],
+    one_tests: &[OneTest<'_>],
 ) -> String {
     let mut declared: BTreeMap<&str, (&str, i64, &[&str])> = BTreeMap::new();
     for step in steps {
@@ -577,6 +631,10 @@ fn manifest_text(
             if !narrow.except.is_empty() {
                 text.push_str(&format!("      except: [{}]\n", narrow.except.join(", ")));
             }
+        }
+        // And again: a Check the list does not name cannot run one test by name.
+        if let Some(one) = one_tests.iter().find(|one| one.check == name) {
+            text.push_str(&format!("    one_test:\n      run: \"{}\"\n", one.run));
         }
     }
     if !commands.is_empty() {

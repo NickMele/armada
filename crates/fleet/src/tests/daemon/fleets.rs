@@ -161,6 +161,8 @@ pub fn fitted_over<V>(
         // The production allowance, so the cases that spend it spend the number
         // that ships. A fixture with its own would prove a cap and not the cap.
         dry_runs: DryRuns::of(3),
+        // The production allowance, for `dry_runs`' reason. #999.
+        fixes: crate::fixing::Fixes::of(1),
         // A Judge that fails every call, because no step in these fixtures
         // declares a criterion. One that answered would let a cold-by-default
         // regression pass unseen.

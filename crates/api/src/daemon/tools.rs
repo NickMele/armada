@@ -90,6 +90,20 @@ pub trait Tools: Send + Sync + 'static {
         note: ipc::mcp::LeaveNote,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 
+    /// `draft_fix` — the working Drone says a test it hit is already broken on
+    /// main, and asks for the fix to be drafted. #999.
+    ///
+    /// **Held open while that one test runs against main**, for
+    /// [`run_checks`](Tools::run_checks)'s reason: the outcome is the answer.
+    /// The receipt names the fix Job, the one drafted now or the one already
+    /// claiming the test; a test that passes on main is a refusal. It passes
+    /// nothing on the caller's own step.
+    fn draft_fix(
+        &self,
+        caller: Caller,
+        fix: ipc::mcp::DraftFix,
+    ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
+
     /// `submit_evidence` — the Evidence tool, called by the Drone that is
     /// working. **Not an inventory operation and not Bridge's**: its caller is
     /// a Drone rather than Bridge, which is why its refusal is [`NotRecorded`]

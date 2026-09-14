@@ -87,6 +87,11 @@ const SERVER_TOOL: &str = "mcp__armada__start_server";
 /// costs nothing and creates nothing. #1000.
 const NOTE_TOOL: &str = "mcp__armada__leave_note";
 
+/// **In every toolbelt, and not a `Grant`.** A Drone denied it silently fixes a
+/// test broken on main inside its own change, which is what it exists to stop;
+/// the draft still waits for a person, and Fleet bounds the run on main. #999.
+const FIX_TOOL: &str = "mcp__armada__draft_fix";
+
 /// **Not in the table above, because it is not in every toolbelt.** It is the
 /// one Armada tool that is granted rather than given: a Drone that may create
 /// Jobs is a Drone one approval bought several Drones' worth of spend from, so
@@ -303,6 +308,7 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
         String::from(ASK_TOOL),
         String::from(SERVER_TOOL),
         String::from(NOTE_TOOL),
+        String::from(FIX_TOOL),
     ];
     for grant in config.toolbelt().granted() {
         match grant {
@@ -515,6 +521,11 @@ pub fn server_tool() -> &'static str {
 /// The note tool's name. In every toolbelt with the six above. #1000.
 pub fn note_tool() -> &'static str {
     NOTE_TOOL
+}
+
+/// The fix tool's name. In every toolbelt with the seven above. #999.
+pub fn fix_tool() -> &'static str {
+    FIX_TOOL
 }
 
 /// The dispatch tool's name, for a caller that needs to assert it is *absent*

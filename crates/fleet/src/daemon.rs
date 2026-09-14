@@ -91,6 +91,7 @@ pub struct Fleet<H, V, W> {
     norms: StepNorms,
     liveness: Liveness,
     dry_runs: DryRuns,
+    fixes: crate::fixing::Fixes,
     judge: Arc<dyn ModelClient + Send + Sync>,
     judge_budget: JudgeBudget,
     proposer_budget: JudgeBudget,
@@ -175,6 +176,9 @@ pub struct Fleet<H, V, W> {
     /// Which commit is being proved and what came back. Never written down, for
     /// `sweeping`'s reason; an `Arc` because the run is spawned — `crate::proving`.
     proving: Arc<Mutex<crate::proving::Proving>>,
+    /// The repositories whose checkout of main is running a Drone's one test,
+    /// by root. Never written down, for `proving`'s reason — `crate::fixing`.
+    fixing_on_main: Mutex<std::collections::BTreeSet<String>>,
     /// Which Jobs have a person's press out. Never written down, for
     /// `proving`'s reason; shared because the press's own task gives it back.
     pressing: crate::showing_again::Pressing,

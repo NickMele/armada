@@ -199,6 +199,12 @@ async fn called<D: Tools>(
             Ok(receipt) => Answered::Recorded { id, receipt },
             Err(why) => Answered::Refused { id, why },
         },
+        // **Held open while one test runs against main**, `run_checks`'s shape:
+        // the outcome is the answer, and what bounds the wait is Fleet's. #999.
+        Incoming::Fix { id, fix } => match served.daemon().draft_fix(caller, fix).await {
+            Ok(receipt) => Answered::Recorded { id, receipt },
+            Err(why) => Answered::Refused { id, why },
+        },
         // **Answered from the record**, like a declaration: the change is kept
         // or refused before the reply, and a refusal is words the Drone reads.
         Incoming::Plan { id, call } => match served.daemon().change_plan(caller, call).await {

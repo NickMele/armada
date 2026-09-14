@@ -74,7 +74,7 @@ pub use ci_workflows::ActionsWorkflows;
 pub use conversing::{door_tools, ConversationRefused, Conversing};
 pub use error::{CommitWorkError, CreateWorktreeError, ReadWorkProductError};
 pub use harness::{
-    ask_tool, checks_tool, dispatch_tool, evidence_server, evidence_tool, note_tool,
+    ask_tool, checks_tool, dispatch_tool, evidence_server, evidence_tool, fix_tool, note_tool,
     permission_tool, scope_tool, server_tool, widen_tool, HarnessRefused, HeadlessAgent,
 };
 pub use issue_lookup::IssueLookup;

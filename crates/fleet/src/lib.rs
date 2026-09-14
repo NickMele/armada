@@ -87,6 +87,8 @@ mod examining;
 pub mod explaining;
 /// Walking the checkout for `search_files`, the `@` mention popup's read.
 mod files;
+/// A Drone asking for the fix to a test broken on main. #999.
+pub mod fixing;
 /// A running Check's log, read for `observe_check_output` as it grows.
 mod following;
 mod following_up;

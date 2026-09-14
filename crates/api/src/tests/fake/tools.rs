@@ -116,6 +116,20 @@ impl Tools for FakeDaemon {
         })
     }
 
+    /// A fix asked for while a Job is running, answering with the test it named
+    /// so a router test can tell the argument arrived. **The run against main
+    /// and the draft** are `fleet::fixing`'s and tested there.
+    async fn draft_fix(
+        &self,
+        _caller: crate::Caller,
+        fix: ipc::mcp::DraftFix,
+    ) -> Result<Receipt, NotRecorded> {
+        self.while_working("fix to be asked from")?;
+        Ok(Receipt {
+            word: format!("drafting a fix for {}", fix.test),
+        })
+    }
+
     async fn run_checks(
         self: std::sync::Arc<Self>,
         _caller: crate::Caller,

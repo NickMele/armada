@@ -81,6 +81,17 @@ impl Store {
         )
     }
 
+    /// Every claimed fix for a test one Job's Drone reported, oldest first.
+    pub fn breakages_reported_by(
+        &self,
+        reporter: &JobId,
+    ) -> Result<Vec<BreakageClaim>, LoadJobError> {
+        self.breakage_claims(
+            "WHERE reported_by = ?1 ORDER BY at, check_name, test",
+            rusqlite::params![reporter.as_str()],
+        )
+    }
+
     /// Give back every claim a fix Job holds, once it has ended.
     pub fn release_breakages(&mut self, fix: &JobId) -> Result<(), WriteError> {
         self.conn
