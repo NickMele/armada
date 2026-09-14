@@ -260,7 +260,7 @@ test("the Checks chapter says what each declared Check came to", async () => {
   // And the chapter opens onto more than its preview, which is what makes the
   // reading below reachable rather than only built.
   await expect
-    .element(page.getByText("Read what the Checks asserted and printed"))
+    .element(page.getByText("Read what the Checks asserted"))
     .toBeVisible();
 });
 

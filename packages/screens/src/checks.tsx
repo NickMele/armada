@@ -402,4 +402,4 @@ const RUNNING_NOW = "Running now.";
  * that said "open the output" twice on one line would be two words for two
  * different places.
  */
-const OPENS_THE_READING = "Read what the Checks asserted and printed";
+const OPENS_THE_READING = "Read what the Checks asserted";
