@@ -231,6 +231,11 @@ pub enum Fault {
     /// The path is also what Fleet has to be able to hand the next step's
     /// Drone, so "whichever file matched" is not an answer this can carry.
     NotAnArtifactPath { value: String, why: BadTarget },
+    /// A `setup.seed.paths` entry that names no directory a build writes. #1064.
+    NotASeedPath {
+        value: String,
+        why: crate::manifest::BadSeedPath,
+    },
     /// **A step declaring two `artifact_exists` checks.** A step has one
     /// deliverable: Fleet reads it into the Judge's brief as *the document this
     /// step produced*, and the next step's Drone is pointed at it. Two would
@@ -533,6 +538,10 @@ impl fmt::Display for Fault {
             Fault::NotAnArtifactPath { value, why } => write!(
                 f,
                 "is `{value}`, which cannot name the file this step writes: {why}"
+            ),
+            Fault::NotASeedPath { value, why } => write!(
+                f,
+                "is `{value}`, which cannot name a directory a worktree is seeded with: {why}"
             ),
             Fault::ServeReadyMustPair { present } => write!(
                 f,

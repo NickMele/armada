@@ -474,6 +474,15 @@ where
     pub(crate) fn proving(&self) -> &Arc<Mutex<crate::proving::Proving>> {
         &self.proving
     }
+    pub(crate) fn seeds(&self) -> &Arc<std::sync::Mutex<crate::seeding::Seeds>> {
+        &self.seeds
+    }
+    pub(crate) fn base_preparing(&self) -> &Arc<tokio::sync::Mutex<()>> {
+        &self.base_preparing
+    }
+    pub(crate) fn copy_on_write(&self) -> &Arc<dyn crate::seeding::CopyOnWrite> {
+        &self.copy_on_write
+    }
     pub(crate) fn pressing(&self) -> &crate::showing_again::Pressing {
         &self.pressing
     }

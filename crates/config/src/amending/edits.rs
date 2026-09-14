@@ -202,7 +202,10 @@ impl Edit {
         match self {
             Edit::Version(version) => Ok(vec![Op::set(&["version"], number(*version))]),
             Edit::Id(id) => Ok(vec![Op::set(&["id"], text(id))]),
+            // A declared `seed` outlives its `requires`: clearing one list
+            // must not take the build directories a worktree starts from.
             Edit::SetupRequires(names) => Ok(vec![match names.is_empty() {
+                true if holds(doc, &["setup", "seed"]) => Op::remove(&["setup", "requires"]),
                 true => Op::remove(&["setup"]),
                 false => Op::set(&["setup", "requires"], texts(names)),
             }]),

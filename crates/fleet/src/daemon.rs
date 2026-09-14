@@ -179,6 +179,13 @@ pub struct Fleet<H, V, W> {
     /// The repositories whose checkout of main is running a Drone's one test,
     /// by root. Never written down, for `proving`'s reason — `crate::fixing`.
     fixing_on_main: Mutex<std::collections::BTreeSet<String>>,
+    /// Which seed is warming and which warm-up failed. Never written down, for
+    /// `proving`'s reason; an `Arc` because the warm-up is spawned — `crate::seeding`.
+    seeds: Arc<std::sync::Mutex<crate::seeding::Seeds>>,
+    /// Held while a base checkout runs `setup.requires`, which a before run and
+    /// the seed's warm-up can both reach — `crate::basing`.
+    base_preparing: Arc<tokio::sync::Mutex<()>>,
+    copy_on_write: Arc<dyn crate::seeding::CopyOnWrite>,
     /// Which Jobs have a person's press out. Never written down, for
     /// `proving`'s reason; shared because the press's own task gives it back.
     pressing: crate::showing_again::Pressing,

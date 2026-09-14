@@ -203,6 +203,7 @@ pub mod saying;
 pub mod scanning;
 pub mod scope;
 mod scoping;
+pub mod seeding;
 mod servers;
 pub mod serving;
 pub mod session;
@@ -294,6 +295,7 @@ pub use runtime::{
     Staleness, Vacancy, FILE_NAME,
 };
 pub use scope::{Declared, Drifting, NotDeclared};
+pub use seeding::{Cold, CopyOnWrite, NotCloned, Seeding, TheVolume};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use settling::Settled;
 pub use showing::{frames_dir, show, ComingUp, NotShown, Shown};

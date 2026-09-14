@@ -43,13 +43,19 @@ where
         let place = Place::of_checkout(checkout);
         let tree = self.tree_at(&place);
         // No root Manifest lists nothing, and still reads a workspace's Verify.
-        let (setup, checks, commands, servers) = match place.checkout.served() {
+        let (setup, checks, commands, servers, seed) = match place.checkout.served() {
             Some(served) => {
                 let manifest = served.manifest();
                 let (setup, checks, commands) = entries::declared(manifest).sheet(&[]);
                 let holder = crate::servers::Holder::MainCheckout(served.root().to_string());
                 let servers = self.declared_servers(&holder, manifest);
-                (setup, checks, commands, servers)
+                (
+                    setup,
+                    checks,
+                    commands,
+                    servers,
+                    self.declared_seed(&served),
+                )
             }
             None => Default::default(),
         };
@@ -70,6 +76,7 @@ where
             servers,
             verify: self.rehearsals().verifies().seen(place.checkout.root()),
             workspaces,
+            seed,
         })
     }
 

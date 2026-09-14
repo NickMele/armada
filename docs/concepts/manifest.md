@@ -52,6 +52,10 @@ Still open: whether the root *owns* the lockfile as opposed to merely being able
 
 **Fleet tracks whether a required root command has already run for a given worktree**, and re-runs it when **either** the worktree is new, or the evidence backing the root command — the lockfile/manifest Scan traced it from — has drifted since it last ran. That is the same signal Verify's drift detection computes, applied at dispatch time instead of on-demand.
 
+### Seeding a worktree's build
+
+**`setup.seed` names the build directories a new worktree starts from, and the Commands that fill them.** Fleet runs `warm` in the base checkout when the base moves and marks the seed only once every command has succeeded; it clones `paths` into each new worktree, copy-on-write, before `setup.requires` runs. A Job cut while the seed is warming, or on a volume that cannot clone, starts cold and says why — a seed is never copied in full, and never shared. A repository that declares no seed gets none.
+
 ### Cross-Workspace Jobs
 
 The Job shapes covering cross-workspace work are selected **per-Job**, not fixed by the repo's overall shape.

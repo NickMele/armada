@@ -95,7 +95,7 @@ Where the Job's worktree no longer exists, **Run…** stays in place, disabled, 
 | Checks | Every Check, in declaration order | Its `run` line |
 | Commands | Every Command `setup.requires` does not name | Its `run` line, or its `serve` line for a server |
 
-Setup rows show no time, because nothing records when setup finished in a worktree. The sheet's header shows when `armada.yml` was last edited before the Job froze it, which Fleet reads from git. Where the worktree's own `armada.yml` differs from the frozen one, a notice says so and offers the worktree's version.
+Setup rows show no time, because nothing records when setup finished in a worktree. Where the Manifest declares `setup.seed`, the Setup group says whether this worktree was seeded and from which base commit, or why it started cold. The sheet's header shows when `armada.yml` was last edited before the Job froze it, which Fleet reads from git. Where the worktree's own `armada.yml` differs from the frozen one, a notice says so and offers the worktree's version.
 
 ### Running one
 

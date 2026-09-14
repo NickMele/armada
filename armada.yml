@@ -269,6 +269,13 @@ commands:
     # Exits non-zero on purpose, which is why it is not a Check.
     run: cargo xtask verify-foundations
 
+  # What `setup.seed` warms the base checkout with: the same build the `build`
+  # Check compiles, and every test binary without running one.
+  warm_build:
+    run: cargo build --workspace --locked
+  warm_tests:
+    run: cargo nextest run --workspace --no-run --locked
+
   # The `storybook` Check builds and exits; this holds the port open. `--ci` or
   # a taken port opens a prompt nobody can answer.
   storybook_dev:
@@ -349,3 +356,12 @@ setup:
   requires:
     - bootstrap
     - browsers
+  # What a new worktree's `target/` starts from: a copy-on-write clone of the
+  # base checkout's, warmed by the two Commands above. Measured 14 Sep 2026: a
+  # seeded worktree's build recompiled only this workspace's own 14 crates.
+  seed:
+    paths:
+      - target
+    warm:
+      - warm_build
+      - warm_tests

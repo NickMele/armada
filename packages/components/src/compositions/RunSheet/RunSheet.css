@@ -124,6 +124,15 @@
 }
 
 /* A plain sentence, never a bare tag. */
+.armada-run-sheet__group-says {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0 var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
 .armada-run-sheet__entry-note {
   margin: 0 var(--space-2);
   font-family: var(--font-sans);

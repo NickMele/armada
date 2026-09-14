@@ -29,6 +29,7 @@ use core_model::{Prerequisite, ResolvedCheck};
 use serde_yaml_ng::Value;
 
 use super::declared::{Check, Command, Preparation};
+use super::seed::Seed;
 use super::{texts, DraftCheck, AFTER_MERGE_KEYS, SETUP_KEYS};
 use crate::error::{Fault, Refusal};
 use crate::yaml::{self, Table};
@@ -50,23 +51,32 @@ pub(super) fn preparation(
     commands: &BTreeMap<String, Command>,
     serves: &BTreeSet<String>,
     out: &mut Vec<Refusal>,
-) -> Vec<Preparation> {
+) -> (Vec<Preparation>, Option<Seed>) {
     let Some(mut table) = Table::open("setup", value, out) else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
-    // `requires` is required, because `setup:` with nothing under it says
-    // nothing and `close` would report no fault for it.
-    let items = table
-        .required("requires", out)
-        .and_then(|value| yaml::list(&table.at("requires"), value, out));
+    // `requires` is required unless `seed` is there, because `setup:` with
+    // nothing under it says nothing and `close` would report no fault for it.
+    let seed = table
+        .optional("seed")
+        .and_then(|value| super::seed::read(value, declares, commands, serves, out));
+    let items = match table.optional("requires") {
+        Some(value) => yaml::list(&table.at("requires"), value, out),
+        None if table.present("seed") => None,
+        None => {
+            out.push(Refusal::new(table.at("requires"), Fault::Missing));
+            None
+        }
+    };
     table.close(SETUP_KEYS, out);
-    let Some(items) = items else {
-        return Vec::new();
+    let prepared = match items {
+        Some(items) => named_commands(texts(items, out), declares, commands, serves, out)
+            .into_iter()
+            .map(|(name, run)| Preparation { name, run })
+            .collect(),
+        None => Vec::new(),
     };
-    named_commands(texts(items, out), declares, commands, serves, out)
-        .into_iter()
-        .map(|(name, run)| Preparation { name, run })
-        .collect()
+    (prepared, seed)
 }
 
 /// `after_merge:`, the Checks this repository asks to be run against the tree a
@@ -203,7 +213,7 @@ pub(super) fn required_by(
 /// bad names is one edit. The pairs come back in the order the file wrote them:
 /// `[migrate, seed]` is a sequence somebody wrote, and sorting it would run the
 /// second before what it depends on.
-fn named_commands(
+pub(super) fn named_commands(
     items: Vec<(String, String)>,
     declares: &BTreeSet<String>,
     commands: &BTreeMap<String, Command>,

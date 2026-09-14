@@ -918,6 +918,10 @@ cannot work.
 
 `StepDetail.dry_run` and the `job.dry_run` event, additive: the Checks a Drone asked for mid-step, in `ChecksUnderway`'s shape, from their start until the Drone asks again, submits or the step ends (#1062). `checking` stays the gate's alone, and an event kind of its own keeps a Bridge that does not know it from drawing a Drone's run as the gate's. `CheckUnderway.stopped_by`, on a Drone's run alone, names the Check whose failure stopped this one before it finished, and its `produced` says so in words.
 
+## Protocol 13.46: what a worktree's build started from
+
+`RunSheet.seeding` and `CheckoutRunSheet.seed`, additive (#1064). `seeding` is absent where the Job's Manifest declares no `setup.seed`; otherwise it is `seeded`, with the base commit and the directories cloned, `cold`, with Fleet's sentence for why, or `unrecorded` for a worktree cut before seeding existed. `seed` is absent where the Manifest declares none; otherwise it names the directories and the Commands that warm them, and says whether the seed at the current base commit is `warm`, `warming` or `cold`.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

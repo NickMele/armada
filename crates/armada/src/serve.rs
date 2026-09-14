@@ -39,7 +39,8 @@ use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
     detect_ceiling, Allowance, BindConnectProbe, Bytes, CheckBudget, Clock, CommandBudget,
     Concurrency, DryRuns, Fittings, Fleet, Headroom, Host, JudgeBudget, Liveness, Micros, Mint,
-    Noticing, Polling, PortRange, Reclaiming, Spare, StepNorms, SystemClock, TheMachine, UlidMint,
+    Noticing, Polling, PortRange, Reclaiming, Spare, StepNorms, SystemClock, TheMachine, TheVolume,
+    UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -741,6 +742,7 @@ fn assemble(
         // The operator's home, for this one bundled reading. A Job's own
         // repository is read at admission, on its own volume — `fleet::admitting`.
         machine: Arc::new(TheMachine::watching(&home)),
+        copy_on_write: Arc::new(TheVolume),
         headroom: PROVISIONAL_HEADROOM,
         checks_at_once: PROVISIONAL_CHECKS_AT_ONCE,
         polling: PROVISIONAL_RESOURCE_POLL,

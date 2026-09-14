@@ -79,6 +79,8 @@ export type RunPageGroup = {
   kind: RunPageGroupKind;
   /** `Setup`, `Checks`, `Commands` — the vocabulary, never invented here. */
   label: string;
+  /** A sentence about the group as a whole — Setup's names the declared seed and how warm it is. */
+  says?: ReactNode;
   entries: RunPageEntry[];
 };
 
@@ -473,6 +475,7 @@ function RunPageGroupList({
   return (
     <div className="armada-run-page__group">
       <span className="armada-run-page__group-label">{group.label}</span>
+      {group.says === undefined ? null : <p className="armada-run-page__group-says">{group.says}</p>}
       {group.entries.length === 0 ? (
         <p className="armada-run-page__group-empty">This Manifest declares none.</p>
       ) : (

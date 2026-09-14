@@ -45,6 +45,10 @@ pub struct RunSheet {
     /// `start_run`. Since protocol 10.10.
     #[serde(default)]
     pub servers: Vec<crate::servers::ServerEntry>,
+    /// What the worktree's build directories started from. **Absent where the
+    /// Job's Manifest declares no `setup.seed`.** Since protocol 13.46.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seeding: Option<crate::seeding::WorktreeSeeding>,
 }
 
 /// One Check or Command, as the sheet lists it.
@@ -255,6 +259,10 @@ pub struct CheckoutRunSheet {
     /// Commands that file declares — pressed with `StartCheckoutRun.workspace`.
     #[serde(default)]
     pub workspaces: Vec<WorkspaceCommands>,
+    /// The seed `setup.seed` declares, and how warm it is. **Absent where the
+    /// Manifest declares none.** Since protocol 13.46.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<crate::seeding::DeclaredSeed>,
 }
 
 /// One workspace's own Commands, as `CheckoutRunSheet::workspaces` lists them.

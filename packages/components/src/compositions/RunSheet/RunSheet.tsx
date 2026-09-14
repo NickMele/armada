@@ -64,6 +64,8 @@ export type RunSheetGroup = {
   kind: RunSheetGroupKind;
   /** `Setup`, `Checks`, `Commands` — the vocabulary, never invented here. */
   label: string;
+  /** A sentence about the group as a whole — Setup's says what the worktree's build started from. */
+  says?: ReactNode;
   entries: RunSheetEntry[];
 };
 
@@ -368,6 +370,7 @@ function RunSheetGroupList({
   return (
     <div className="armada-run-sheet__group">
       <span className="armada-run-sheet__group-label">{group.label}</span>
+      {group.says === undefined ? null : <p className="armada-run-sheet__group-says">{group.says}</p>}
       <ul className="armada-run-sheet__entries">
         {group.entries.map((entry) => (
           <li className="armada-run-sheet__entry" key={entry.id}>

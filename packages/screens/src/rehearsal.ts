@@ -35,6 +35,7 @@ import type {
 } from "@armada/protocol";
 import { absoluteOf, span } from "./duration";
 import { openServerLink } from "./opening";
+import { seedingSaid } from "./seed";
 
 export const SETUP_PREFIX = "setup:";
 export const CHECK_PREFIX = "check:";
@@ -70,7 +71,12 @@ export function nameOf(id: string): string {
 /** The three groups the sheet lists, in the journey's order. */
 export function runSheetGroupsOf(sheet: RunSheet, wide: ReadonlySet<string>): RunSheetGroup[] {
   return [
-    { kind: "setup", label: "Setup", entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e, wide)) },
+    {
+      kind: "setup",
+      label: "Setup",
+      ...saying(seedingSaid(sheet.seeding)),
+      entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e, wide)),
+    },
     { kind: "checks", label: "Checks", entries: sheet.checks.map((e) => entryOf(CHECK_PREFIX, e, wide)) },
     {
       kind: "commands",
@@ -81,6 +87,11 @@ export function runSheetGroupsOf(sheet: RunSheet, wide: ReadonlySet<string>): Ru
       ],
     },
   ];
+}
+
+/** A group's `says`, left off where there is nothing to say. */
+export function saying(says: string | undefined): { says?: string } {
+  return says === undefined ? {} : { says };
 }
 
 function entryOf(prefix: string, entry: RunEntry, wide: ReadonlySet<string>): RunSheetEntry {

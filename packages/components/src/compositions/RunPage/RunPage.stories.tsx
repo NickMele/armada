@@ -105,6 +105,23 @@ export const AtRest: Story = {
   args: { ...EDITED, groups: GROUPS, onSelect: fn(), onRun: fn() },
 };
 
+/** The Manifest declares `setup.seed`: Setup names it and says how warm it is. #1064. */
+export const SetupShowsTheDeclaredSeed: Story = {
+  args: {
+    ...EDITED,
+    groups: GROUPS.map((group) =>
+      group.kind === "setup"
+        ? {
+            ...group,
+            says: "A new worktree is seeded with target, warmed by warm_build, warm_tests. Warm at base a787ffc2c1d0.",
+          }
+        : group,
+    ),
+    onSelect: fn(),
+    onRun: fn(),
+  },
+};
+
 /**
  * **A repository-wide always-allow, beside the Commands it grew a Job's own
  * row of.** #836's own case: a person always-allowed `gh issue view` while
