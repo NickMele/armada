@@ -498,17 +498,16 @@ export const SubDispatchedWaitingOnResources: Story = {
  * fixed value would also have passed it — which is why the drawing's own 184px
  * is not the fix.
  *
- * **Past this length the badge takes the row's own first line (#984).**
- * `minmax(132px, max-content)` alone still starved the headline beside it —
- * beside a readable title, a whole handle and a visible action there is no
- * width left to also grow the badge to its full 270-odd pixels, and the title
- * disappeared entirely rather than the badge painting over it. The row grows
- * in height instead, the same move already made for a title that outgrows its
- * own line.
+ * **Past this length the badge takes the row's own first line (#984)** —
+ * `minmax(132px, max-content)` alone still starved the headline beside it.
  */
 export const TheLongestVerbAtTheWidthFloor: StoryObj = {
   render: () => (
-    <div style={{ width: "calc(var(--window-floor) - var(--sidebar-rail))" }}>
+    // A story has no list frame to be the container, so it is its own —
+    // `containerType` is what the wide-badge container query reads (#984).
+    <div
+      style={{ width: "calc(var(--window-floor) - var(--sidebar-rail))", containerType: "inline-size" }}
+    >
       <JobRowStacked
         status="escalated"
         statusIcon={OctagonAlert}

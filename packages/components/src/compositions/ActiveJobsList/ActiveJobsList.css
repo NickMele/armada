@@ -92,6 +92,8 @@
    the case. What separates this from the head above it is that head's own
    edge. */
 .armada-active-jobs__frame {
+  /* So a row can ask how wide the list itself is (#984), not just its own cell. */
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   /* The rows are what moves. The head above them and the controls above that

@@ -339,28 +339,28 @@
   overflow: hidden;
 }
 
-/* The table's first fact — the workflow, or the branch — gives way to its
-   glyph before any other column: at the 720px floor there is no width left to
-   draw beside a readable title, a whole handle and a visible action (#984).
-   The name stays reachable rather than gone: on focus it floats free of its
-   cramped column instead of the whole row fighting for the width to keep it
-   in place. `position: relative` on the cell is what floating is relative to. */
+/* The Workflow column gives way to its glyph at the 720px floor; the name
+   floats back in on hover or focus rather than staying gone (#984). */
 .armada-job-row[data-view="table"] .armada-job-row__field:first-child,
 .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:first-child {
   position: relative;
 }
 
-.armada-job-row[data-view="table"][data-focused] .armada-job-row__field:first-child,
-.armada-job-row[data-view="table"]:focus-visible .armada-job-row__field:first-child,
-.armada-job-row-list[data-view="table"] > .armada-job-row[data-focused] .armada-job-row__field:first-child,
-.armada-job-row-list[data-view="table"] > .armada-job-row:focus-visible .armada-job-row__field:first-child {
+.armada-job-row[data-view="table"]:is(:hover, :focus-visible, [data-focused])
+  .armada-job-row__field:first-child,
+.armada-job-row-list[data-view="table"]
+  > .armada-job-row:is(:hover, :focus-visible, [data-focused])
+  .armada-job-row__field:first-child {
   overflow: visible;
 }
 
-.armada-job-row[data-view="table"][data-focused] .armada-job-row__field:first-child > .armada-job-row__field-body,
-.armada-job-row[data-view="table"]:focus-visible .armada-job-row__field:first-child > .armada-job-row__field-body,
-.armada-job-row-list[data-view="table"] > .armada-job-row[data-focused] .armada-job-row__field:first-child > .armada-job-row__field-body,
-.armada-job-row-list[data-view="table"] > .armada-job-row:focus-visible .armada-job-row__field:first-child > .armada-job-row__field-body {
+.armada-job-row[data-view="table"]:is(:hover, :focus-visible, [data-focused])
+  .armada-job-row__field:first-child
+  > .armada-job-row__field-body,
+.armada-job-row-list[data-view="table"]
+  > .armada-job-row:is(:hover, :focus-visible, [data-focused])
+  .armada-job-row__field:first-child
+  > .armada-job-row__field-body {
   position: absolute;
   left: 0;
   top: 50%;
@@ -638,49 +638,42 @@
 }
 
 /* ---- the longest badge in the registry -----------------------------------
+   `data-badge-wide` names a verb too long to fit beside a headline — no CSS
+   condition reads a badge's own overflow (#984).
 
-   `a required command did not succeed` is 34 characters, the registry's
-   longest verb (enum-verbs.toml), and Badge is nowrap by design (#262) — no
-   floor this row draws leaves room for it beside a readable headline, a whole
-   handle and a visible action at once. Past the length JobRowStacked treats
-   as wide, the row gives the badge its own first line instead, the same move
-   already made for a title that outgrows its cell: grown height, not a clip
-   and not nowrap text painted over whatever sits beside it (#984).
+   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   720px is the window floor less the rail, with no token of its own — docs/contracts/design-system.md */
+@container (max-width: 720px) {
+  .armada-job-row[data-badge-wide] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: var(--space-2);
+  }
 
-   Flex rather than the grid or subgrid every other row borrows its columns
-   from: a row this shape is not lining up with its neighbours' tracks either
-   way, so it stops trying rather than fighting them. Escalated and failed
-   states never pulse, so the aligned badge column this gives up for one row
-   is not one anything was reading motion from. */
-.armada-job-row[data-badge-wide] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  row-gap: var(--space-2);
-}
+  .armada-job-row[data-badge-wide] > .armada-job-row__badge {
+    flex: 1 0 100%;
+  }
 
-.armada-job-row[data-badge-wide] > .armada-job-row__badge {
-  flex: 1 0 100%;
-}
+  .armada-job-row[data-badge-wide] > .armada-job-row__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 
-.armada-job-row[data-badge-wide] > .armada-job-row__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  flex: 1 1 auto;
-  min-width: 0;
-}
+  .armada-job-row[data-badge-wide] .armada-job-row__headline {
+    flex-wrap: wrap;
+  }
 
-.armada-job-row[data-badge-wide] .armada-job-row__headline {
-  flex-wrap: wrap;
-}
+  .armada-job-row[data-badge-wide] .armada-job-row__fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
 
-.armada-job-row[data-badge-wide] .armada-job-row__fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.armada-job-row[data-badge-wide] > .armada-job-row__action {
-  flex: none;
+  .armada-job-row[data-badge-wide] > .armada-job-row__action {
+    flex: none;
+  }
 }
