@@ -131,6 +131,13 @@ while the agent door's branch also bumped to 13.36, and the rebase dropped the
 door's bump as already applied. Only re-reading `protocol-version.toml` caught
 two wire changes about to share one version; the door took 13.37.
 
+**What broke a merge run in the Overview milestone, 13–14 Sep 2026**, each one a stop that cost a rerun:
+
+- **`armada check` refusing `armada.yml`** because another session added a key the CLI did not know yet. Running the Check's command by hand is not a substitute: a nested `pnpm -C` picked pnpm 11.25 against the `packageManager` pin of 11.6.0 and refused. Build a current `armada` once in a warm worktree and rerun the Check with it.
+- **A protocol bump that merges identical to main's** is two changes claiming one version, and nothing catches it. #1041's branch took 13.43 while another session's commit held it; it was caught only by reading both files before the merge. Where the branch has commits touching `protocol-version.toml` but the file ends up equal to main's after the rebase, stop.
+- **The heavy-run hook reads command text anywhere in a Bash call**, fixture strings included: a sample Job history saying `pnpm -C apps/desktop test` was refused as a test run. So was a story title with `#801`, which `verify-foundations` read as a colour literal. Keep command text and `#` plus hex digits out of fixtures.
+- **A screen change merged on green checks still looked wrong to the owner** three times: panels jammed to the edge, rows that did not align, a header that wrapped a handle across four lines. Require a screenshot at the owner's widths (about 2000px, and 1284×930 with the dock open), and look at it before merging.
+
 **Then give the worktree back** — see `agent-worktrees`. At the merge, not later.
 
 **Restart Fleet when the protocol moves**, and after a store migration. A running
