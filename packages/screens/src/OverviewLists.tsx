@@ -6,8 +6,7 @@
 // **Rows are the Board's own `Row`** — same field run, same act, and on All with more than one
 // repository served the row names it, exactly as `Jobs.tsx` does.
 //
-// **Each section is its own panel** — `ActiveJobsList`'s `panel` variant. The Board's own flat,
-// single-frame list is unchanged.
+// **Each section is its own panel** — `ActiveJobsList`'s `panel` variant, Board's flat list unchanged.
 //
 // **Disconnected reads exactly as `BoardEmpty`'s own fault state.** Overview holds whatever Bridge
 // last received, so a Needs you row from before an outage stays on screen; only a board with
