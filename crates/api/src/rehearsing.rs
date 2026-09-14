@@ -16,7 +16,7 @@ use serde::Deserialize;
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::{Commands, Queries};
 use crate::reference::Resolved;
-use crate::scoped::{InCheckout, InManifest};
+use crate::scoped::InCheckout;
 use crate::served::Served;
 
 /// The segment after `runs` on `get_run_output`.
@@ -145,9 +145,14 @@ pub(crate) async fn get_checkout_run_sheet<D: Queries>(
 
 pub(crate) async fn list_checkout_runs<D: Queries>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
 ) -> Response {
-    match served.daemon().list_checkout_runs(scope.manifest()).await {
+    let (manifest_id, repository) = scope.scope();
+    match served
+        .daemon()
+        .list_checkout_runs(manifest_id, repository)
+        .await
+    {
         Ok(runs) => answer(StatusCode::OK, &runs, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -155,12 +160,13 @@ pub(crate) async fn list_checkout_runs<D: Queries>(
 
 pub(crate) async fn get_checkout_run_output<D: Queries>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
     Path(Ran { run_id }): Path<Ran>,
 ) -> Response {
+    let (manifest_id, repository) = scope.scope();
     match served
         .daemon()
-        .get_checkout_run_output(run_id, scope.manifest())
+        .get_checkout_run_output(run_id, manifest_id, repository)
         .await
     {
         Ok(output) => answer(StatusCode::OK, &output, served.run_id()),
@@ -172,12 +178,13 @@ pub(crate) async fn get_checkout_run_output<D: Queries>(
 /// the checkout is written, staged or committed.
 pub(crate) async fn get_checkout_run_diff<D: Queries>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
     Path(Ran { run_id }): Path<Ran>,
 ) -> Response {
+    let (manifest_id, repository) = scope.scope();
     match served
         .daemon()
-        .get_checkout_run_diff(run_id, scope.manifest())
+        .get_checkout_run_diff(run_id, manifest_id, repository)
         .await
     {
         Ok(diff) => answer(StatusCode::OK, &diff, served.run_id()),
@@ -209,16 +216,17 @@ pub(crate) async fn observe_checkout_run<D: Queries>(
 /// 202: the run is underway and has not finished.
 pub(crate) async fn start_checkout_run<D: Commands>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
     body: Bytes,
 ) -> Response {
+    let (manifest_id, repository) = scope.scope();
     let asked: StartCheckoutRun = match ipc::decode("a run to start in the checkout", &body) {
         Ok(asked) => asked,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served
         .shared()
-        .start_checkout_run(asked, scope.manifest())
+        .start_checkout_run(asked, manifest_id, repository)
         .await
     {
         Ok(underway) => answer(StatusCode::ACCEPTED, &underway, served.run_id()),
@@ -275,16 +283,17 @@ pub(crate) async fn stop_checkout_run<D: Commands>(
 
 pub(crate) async fn undo_checkout_run<D: Commands>(
     State(served): State<Served<D>>,
-    Query(scope): Query<InManifest>,
+    Query(scope): Query<InCheckout>,
     body: Bytes,
 ) -> Response {
+    let (manifest_id, repository) = scope.scope();
     let named: NamedRun = match ipc::decode("a run to undo", &body) {
         Ok(named) => named,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served
         .daemon()
-        .undo_checkout_run(named, scope.manifest())
+        .undo_checkout_run(named, manifest_id, repository)
         .await
     {
         Ok(record) => answer(StatusCode::OK, &record, served.run_id()),

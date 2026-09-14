@@ -11,6 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use config::Manifest;
@@ -78,6 +79,54 @@ pub(crate) fn resolved(
             },
         })?;
     Ok(Some(Workspace { dir, manifest }))
+}
+
+/// Which directories hold a workspace `armada.yml`, per repository root. **Walked
+/// once and kept**, since the sheet is read on every run's start and finish; let
+/// go when the root's Manifest is re-read, the served list changes, or Setup
+/// writes a file. `std`'s lock, never held across the walk.
+#[derive(Clone, Default)]
+pub(crate) struct WorkspaceDirs(Arc<Mutex<BTreeMap<String, Vec<String>>>>);
+
+impl WorkspaceDirs {
+    fn or_walked(&self, root: &str) -> Vec<String> {
+        if let Some(dirs) = self.held().get(root) {
+            return dirs.clone();
+        }
+        let dirs = crate::scanning::manifested(&crate::scanning::Checkout::at(root));
+        self.held().insert(root.to_string(), dirs.clone());
+        dirs
+    }
+
+    /// Walk `root` again on its next read, or every root where `None`.
+    pub(crate) fn forget(&self, root: Option<&str>) {
+        match root {
+            Some(root) => drop(self.held().remove(root)),
+            None => self.held().clear(),
+        }
+    }
+
+    fn held(&self) -> MutexGuard<'_, BTreeMap<String, Vec<String>>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// Each workspace below `root` whose own `armada.yml` loads, with its Commands.
+/// A file that will not load lists nothing; Verify is where it says why. Each
+/// file is read afresh; only which directories hold one is kept.
+pub(crate) fn listed(root: &str, known: &WorkspaceDirs) -> Vec<ipc::WorkspaceCommands> {
+    known
+        .or_walked(root)
+        .into_iter()
+        .filter_map(|dir| {
+            let one = resolved(root, Some(&dir)).ok().flatten()?;
+            let (_, _, commands) = super::entries::declared(&one.manifest).sheet(&[]);
+            Some(ipc::WorkspaceCommands {
+                dir: one.dir,
+                commands,
+            })
+        })
+        .collect()
 }
 
 /// A workspace a Verify runs in: its directory, and the ports its own file

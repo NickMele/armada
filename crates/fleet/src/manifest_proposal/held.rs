@@ -145,6 +145,9 @@ where
             })?;
             Ok(draft.answer())
         })?;
+        self.rehearsals()
+            .workspace_dirs()
+            .forget(Some(repository.root()));
         // The root's `armada.yml` is the repository's Manifest once it loads.
         if at_the_root {
             self.set_up_after_write(repository);

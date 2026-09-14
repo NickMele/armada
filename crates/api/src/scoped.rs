@@ -32,8 +32,9 @@ impl InRepository {
     }
 }
 
-/// `?manifest_id=` or `?repository=` on the main checkout's Verify routes, which
-/// reach a repository with no root Manifest by its root. Fleet refuses both.
+/// `?manifest_id=` or `?repository=` on the main checkout's run and Verify
+/// routes, which reach a repository with no root Manifest by its root. Fleet
+/// refuses both.
 #[derive(Deserialize)]
 pub(crate) struct InCheckout {
     #[serde(default)]

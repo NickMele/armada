@@ -16,7 +16,7 @@ use crate::tests::daemon::fittings;
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
 
-type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+pub(super) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 /// The root's: `slow` outlives the assertions around it.
 const ROOT: &str = r#"version: 1
@@ -38,6 +38,8 @@ checks:
 commands:
   prepare:
     run: "/bin/sh -c 'echo ready > prepared.txt'"
+  say:
+    run: "/bin/sh -c 'pwd -P; echo said > said.txt'"
 setup:
   requires: [prepare]
 "#;
@@ -46,7 +48,7 @@ setup:
 const BROKEN: &str = "version: 1\nid: 01BROKENMANIFEST\nchecks:\n  lint:\n    run: \"\"\n";
 
 /// A checkout with a root Manifest, `apps/web`'s, and `apps/broken`'s.
-fn a_checkout(home: &TempDir) -> Arc<Fixture> {
+pub(super) fn a_checkout(home: &TempDir) -> Arc<Fixture> {
     let manifest = config::Manifest::parse(Path::new("armada.yml"), ROOT)
         .unwrap_or_else(|why| panic!("the root manifest did not parse: {why}"));
     let mut fittings = fittings(home, FakeWorkProduct::changed(&[]));
@@ -245,10 +247,12 @@ async fn a_workspace_outside_the_root_or_without_a_file_is_refused() {
 
 /// A repository with `apps/web/armada.yml` and nothing at its root, served
 /// beside the Fleet's own. Answers its root.
-fn only_a_workspace(home: &TempDir, fleet: &Fixture) -> String {
+pub(super) fn only_a_workspace(home: &TempDir, fleet: &Fixture) -> String {
     let root = home.path().join("alone");
     std::fs::create_dir_all(root.join("apps/web")).expect("a workspace");
     std::fs::write(root.join("apps/web/armada.yml"), WEB).expect("its Manifest");
+    // Scan finds a workspace by its package file; the sheet lists what Scan finds.
+    std::fs::write(root.join("apps/web/package.json"), "{}").expect("its package");
     let git = |args: &[&str]| {
         let run = Command::new("git")
             .arg("-C")
@@ -283,7 +287,7 @@ fn only_a_workspace(home: &TempDir, fleet: &Fixture) -> String {
     root.to_string_lossy().to_string()
 }
 
-fn routed(fleet: &Arc<Fixture>) -> axum::Router {
+pub(super) fn routed(fleet: &Arc<Fixture>) -> axum::Router {
     api::router(api::Served::sharing(
         Arc::clone(fleet),
         ipc::RunId::carried("01RUN"),

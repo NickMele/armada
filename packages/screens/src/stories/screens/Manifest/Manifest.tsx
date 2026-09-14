@@ -26,6 +26,7 @@ import type {
   RunEntry,
   RunOutputRead,
   SaveManifestFile,
+  StartCheckoutRun,
   ServerEntry,
   VerifyStep,
 } from "@armada/protocol";
@@ -227,7 +228,13 @@ export function ManifestFrom({
   spend = NO_SPEND,
   frozen = false,
   onEdits,
+  setUp,
+  onStartRun = nothingHappens,
 }: {
+  /** `false` where the repository has no root `armada.yml`. */
+  setUp?: boolean;
+  /** What pressing Run sends, for a play to read. */
+  onStartRun?: (body: StartCheckoutRun) => Promise<Outcome>;
   /** `GET /manifest/drift`. Every line current, unless a story says otherwise. */
   drift?: ManifestDriftRead;
   sheet: CheckoutRunSheetRead;
@@ -373,7 +380,10 @@ export function ManifestFrom({
             form={form}
             onSaid={noop}
             onObserveRun={noop}
-            onStartRun={nothingHappens}
+            onStartRun={onStartRun}
+            {...(setUp === undefined
+              ? {}
+              : { setUp, setup: <p className="text-fg-muted">Screens/Setup draws this tab.</p> })}
             drift={drift}
             onStartVerify={nothingHappens}
             onStopRun={nothingHappens}

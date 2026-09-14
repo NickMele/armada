@@ -18,6 +18,7 @@ import {
   exitedOf,
   runningEntryOf,
 } from "./checkout-runs";
+import { checkoutStartOf, followedWorkspaceOf } from "./checkout-workspace";
 
 function entry(name: string, run: string, over: Partial<RunEntry> = {}): RunEntry {
   return {
@@ -86,11 +87,11 @@ describe("the output pane, keyed to the selection", () => {
   it("draws nothing where what is followed is not what is selected", () => {
     // `rehearsal.test.ts`'s finding, one surface over: a server's bar came up
     // live while the pane beneath still read the Command run before it.
-    expect(checkoutOutputOf(FMT, "storybook_dev")).toBeUndefined();
+    expect(checkoutOutputOf(FMT, { name: "storybook_dev" })).toBeUndefined();
   });
 
   it("draws the run where the two agree", () => {
-    expect(checkoutOutputOf(FMT, "fmt")?.rows).toHaveLength(1);
+    expect(checkoutOutputOf(FMT, { name: "fmt" })?.rows).toHaveLength(1);
   });
 
   it("draws a run already under way when nothing is selected yet", () => {
@@ -140,5 +141,79 @@ describe("an ended server", () => {
 
   it("carries its code where it exited on its own", () => {
     expect(exitedOf({ ...ENDED, exit_code: 1 })).toEqual({ phase: "exited", stopped: false, exitCode: 1 });
+  });
+});
+
+describe("a workspace's own Commands", () => {
+  const ROOTLESS: CheckoutRunSheet = {
+    setup: [],
+    checks: [],
+    commands: [],
+    workspaces: [
+      { dir: "apps/web", commands: [entry("dev", "pnpm dev")] },
+      { dir: "apps/api", commands: [entry("dev", "cargo run")] },
+    ],
+  };
+  const groups = checkoutGroupsOf(ROOTLESS, true);
+
+  it("lists only Commands where there is no root file, each saying where it runs", () => {
+    expect(groups.map((group) => group.label)).toEqual(["Commands"]);
+    expect(groups[0]?.entries.map((row) => row.note)).toEqual(["In apps/web.", "In apps/api."]);
+  });
+
+  it("starts a row with its workspace named", () => {
+    expect(checkoutStartOf(groups[0]!.entries[1]!.id)).toEqual({ name: "dev", workspace: "apps/api" });
+    expect(checkoutStartOf("command:fmt")).toEqual({ name: "fmt" });
+  });
+
+  it("keeps two of one name apart, in flight and in Earlier runs", () => {
+    expect(runningEntryOf(groups, "dev", "apps/api")).toBe(groups[0]!.entries[1]!.id);
+    const runs = [
+      { id: "r2", name: "dev", workspace: "apps/api" },
+      { id: "r1", name: "dev", workspace: "apps/web" },
+    ] as CheckoutRunRecord[];
+    expect(checkoutResultRunOf(runs, groups[0]!.entries[0]!.id, undefined)?.id).toBe("r1");
+    expect(checkoutRunnablesOf({ state: "read", sheet: ROOTLESS }).map((row) => row.label)).toEqual([
+      "dev in apps/web",
+      "dev in apps/api",
+    ]);
+  });
+});
+
+describe("two Commands of one name in different workspaces", () => {
+  const DEV_IN_API: CheckoutRunFollowed = {
+    state: "following",
+    runId: "crun_api",
+    name: "dev",
+    path: ".armada/runs/main/crun_api/output.log",
+    fromLine: 1,
+    lines: ["listening"],
+  };
+  const followedIn = followedWorkspaceOf(DEV_IN_API, new Map([["crun_api", "apps/api"]]), []);
+
+  it("draw only the selected one's output, never the other's", () => {
+    expect(checkoutOutputOf(DEV_IN_API, { name: "dev", workspace: "apps/web" }, followedIn)).toBeUndefined();
+    expect(checkoutOutputOf(DEV_IN_API, { name: "dev", workspace: "apps/api" }, followedIn)?.rows).toHaveLength(1);
+    expect(checkoutOutputOf(DEV_IN_API, { name: "dev" }, followedIn)).toBeUndefined();
+  });
+
+  it("know a finished run's workspace from its record once the sheet no longer has it out", () => {
+    const runs = [{ id: "crun_api", name: "dev", workspace: "apps/api" }] as CheckoutRunRecord[];
+    expect(followedWorkspaceOf(DEV_IN_API, new Map(), runs)).toBe("apps/api");
+  });
+});
+
+describe("a root Manifest with workspaces of its own", () => {
+  const groups = checkoutGroupsOf({
+    ...SHEET,
+    workspaces: [{ dir: "apps/web", commands: [entry("fmt", "pnpm format")] }],
+  });
+
+  it("keeps the root's three groups and lists the workspace's Commands after the root's", () => {
+    expect(groups.map((group) => group.label)).toEqual(["Setup", "Checks", "Commands"]);
+    const commands = groups[2]!.entries;
+    const fmt = commands.filter((row) => row.name === "fmt").map((row) => row.note ?? "root");
+    expect(fmt).toEqual(["root", "In apps/web."]);
+    expect(runningEntryOf(groups, "fmt")).toBe("command:fmt");
   });
 });

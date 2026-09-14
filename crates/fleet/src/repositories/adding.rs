@@ -153,6 +153,7 @@ where
     /// Say the list changed, whole, so every Bridge's picker reads it again.
     fn published_repositories(&self) {
         let list = self.repository_list();
+        self.rehearsals().workspace_dirs().forget(None);
         self.events().publish(ipc::Event::RepositoriesChanged(list));
     }
 

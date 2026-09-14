@@ -544,12 +544,14 @@ impl Queries for FakeDaemon {
             running: None,
             servers: Vec::new(),
             verify: None,
+            workspaces: Vec::new(),
         })
     }
 
     async fn list_checkout_runs(
         &self,
         _manifest_id: Option<ipc::ManifestId>,
+        _repository: Option<String>,
     ) -> Result<ipc::CheckoutRunList, Refusal> {
         Ok(ipc::CheckoutRunList {
             runs: Vec::new(),
@@ -561,6 +563,7 @@ impl Queries for FakeDaemon {
         &self,
         _run_id: String,
         _manifest_id: Option<ipc::ManifestId>,
+        _repository: Option<String>,
     ) -> Result<ipc::RunOutput, Refusal> {
         self.runs_nothing_here()
     }
@@ -569,6 +572,7 @@ impl Queries for FakeDaemon {
         &self,
         _run_id: String,
         _manifest_id: Option<ipc::ManifestId>,
+        _repository: Option<String>,
     ) -> Result<ipc::CheckoutRunDiff, Refusal> {
         self.runs_nothing_here()
     }

@@ -57,6 +57,9 @@ pub(crate) struct Record {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) undone_at: Option<Instant>,
     pub(crate) log: String,
+    /// The workspace whose own file declared it. Absent is the root's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) workspace: Option<String>,
 }
 
 impl Record {
@@ -99,6 +102,7 @@ impl Record {
         CheckoutRunRecord {
             id: self.id.clone(),
             name: self.name.clone(),
+            workspace: self.workspace.clone(),
             command: self.command.clone(),
             required: self.required.clone(),
             started_at: self.started_at.clone(),
@@ -131,6 +135,7 @@ pub(crate) struct Underway {
     pub(crate) command: String,
     pub(crate) narrowed: bool,
     pub(crate) started_at: Instant,
+    pub(crate) workspace: Option<String>,
 }
 
 impl Underway {
@@ -151,6 +156,7 @@ impl Underway {
             name: self.name.clone(),
             command: self.command.clone(),
             started_at: self.started_at.clone(),
+            workspace: self.workspace.clone(),
         }
     }
 }

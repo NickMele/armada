@@ -686,27 +686,30 @@ where
     async fn list_checkout_runs(
         &self,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ipc::CheckoutRunList, Refusal> {
-        self.checkout_rehearsal_history(self.served_named(manifest_id.as_ref())?)
-            .await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        self.checkout_rehearsal_history(checkout).await
     }
 
     async fn get_checkout_run_output(
         &self,
         run_id: String,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ipc::RunOutput, Refusal> {
-        self.checkout_rehearsal_output(run_id, self.served_named(manifest_id.as_ref())?)
-            .await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        self.checkout_rehearsal_output(run_id, checkout).await
     }
 
     async fn get_checkout_run_diff(
         &self,
         run_id: String,
         manifest_id: Option<ipc::ManifestId>,
+        repository: Option<String>,
     ) -> Result<ipc::CheckoutRunDiff, Refusal> {
-        self.checkout_rehearsal_diff(run_id, self.served_named(manifest_id.as_ref())?)
-            .await
+        let checkout = self.checkout_named(manifest_id.as_ref(), repository.as_deref())?;
+        self.checkout_rehearsal_diff(run_id, checkout).await
     }
 
     async fn observe_checkout_run(
