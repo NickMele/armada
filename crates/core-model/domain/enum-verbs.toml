@@ -277,11 +277,11 @@ notes = "Retries spent, and neither retrying nor waiting on a person — folding
 
 [verbs.queued_reason.frozen]
 verb = "frozen"
-icon = ""
+icon = "pause"
 status_token = "--status-not-started"
 vocabulary = "Queued reason"
 in_code = ""
-notes = "A Manifest gating the Job says `freeze: true`, so Fleet starts nothing on it: not a Job that has never run, and not the next step of one that has. It reads before every other reason because only a person lifts it, and while it holds nothing else would start the Job either. Which Manifest it is rides beside the label as `frozen_by`. No glyph: minting one is a decision for packages/icons/icons.toml."
+notes = "A Manifest gating the Job says `freeze: true`, so Fleet starts nothing on it: not a Job that has never run, and not the next step of one that has. It reads before every other reason because only a person lifts it, and while it holds nothing else would start the Job either. Which Manifest it is rides beside the label as `frozen_by`. `pause` is packages/icons/icons.toml's Freeze dispatch glyph, so the row matches the button that put it here."
 
 [verbs.queued_reason.blocked_by_dependency]
 verb = "blocked"
