@@ -134,9 +134,16 @@ where
             }
             None => None,
         };
-        // `None` on the step that records the plan, or on a Job with no plan yet.
+        // **Shown whenever this step follows the plan, whether or not it also
+        // records it.** A step that only records — Bug's `plan` step — gets
+        // none: its retry re-records, which is `RecordingThePlan`'s own
+        // instruction. A step that records *and* follows — `revert`'s one
+        // step — still needs it on a retry: without a block naming the tasks
+        // it is holding `update_task` for, the Drone either re-records and
+        // loses every task's state, or works blind. `None` on a first
+        // attempt either way, because no plan exists yet to show. `#1006`.
         let the_plan = match job.workflow().step(step) {
-            Some(s) if !s.records_plan() => self
+            Some(s) if s.follows_plan() || !s.records_plan() => self
                 .plan_of(&job_id)
                 .await?
                 .map(|plan| ThePlan::of(&plan, s.follows_plan())),

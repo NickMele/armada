@@ -30,7 +30,8 @@ use testkit::FakeJudge;
 use bench::board::{detail, received_detail, step_facts};
 use bench::plan::{
     bug_workflow_with_a_plan_beside_a_product, called, gated_on_implement, gated_on_the_plan,
-    received_event, received_row, refused, Planned, IMPLEMENT, PLAN,
+    received_event, received_row, refused, revert_shaped_workflow, Planned, IMPLEMENT, PLAN,
+    REVERT_SHAPED,
 };
 
 const FOUR_TASKS: &str = r#"{"approach":"Stop the reader at the end, then cover the bound",
@@ -167,6 +168,43 @@ fn a_step_that_keeps_its_own_product_may_also_record_the_plan_beside_it() {
         ),
         "{said}"
     );
+}
+
+/// **The owner's follow-up, 13 Sep 2026: a step that records the plan and
+/// also follows it must still see THE PLAN on a retry.** `revert`'s shape —
+/// one step, `records_plan: true` and `follows_plan: true` together. Attempt
+/// 1 records the plan and marks a task done; attempt 2's opening brief must
+/// carry THE PLAN with that task's state, not a bare record instruction —
+/// without it a retried Drone holding `update_task` cannot see what it is
+/// updating. A step that only records, with no `follows_plan`, still gets no
+/// THE PLAN block; `the_plan_steps_brief_asks_it_to_record_the_plan` above
+/// pins that half.
+#[test]
+fn a_step_that_records_and_follows_the_plan_sees_it_on_a_retry() {
+    let mut planned = Planned::created_with("undo the change", revert_shaped_workflow());
+    planned.kept(called("record_plan", THREE_TASKS), REVERT_SHAPED, 1);
+    let plan = planned.kept(
+        called("update_task", r#"{"task":"T1","state":"done","reason":""}"#),
+        REVERT_SHAPED,
+        1,
+    );
+
+    let step = StepId::new(REVERT_SHAPED);
+    let follows = planned
+        .job
+        .workflow()
+        .step(&step)
+        .expect("revert_shaped is a real step")
+        .follows_plan();
+    assert!(follows, "the fixture step follows the plan it records");
+    let crossed = Crossed::nothing().and_the_plan(Some(ThePlan::of(&plan, follows)));
+    let brief = briefing::first_turn(&planned.job, planned.job.workflow(), &step, &crossed)
+        .expect("attempt 2's brief assembles");
+    let said = brief.as_str();
+
+    assert!(said.contains("THE PLAN"), "{said}");
+    assert!(said.contains("T1 [done]"), "{said}");
+    assert!(said.contains("update_task"), "{said}");
 }
 
 /// #894's other half of the same row: **a step that does not follow the plan

@@ -144,6 +144,46 @@ steps:
         .clone()
 }
 
+/// **`revert`'s shape: one step that records the plan and follows it.**
+/// Nothing here folds — one step, `records_plan: true` and `follows_plan:
+/// true` together, which `#1006` made legal. There is no second step to put
+/// either half on.
+pub const REVERT_SHAPED: &str = "revert_shaped";
+
+pub fn revert_shaped_workflow() -> FrozenWorkflow {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture-revert-shaped.yml"),
+        r#"
+version: 1
+workflow_id: revert-shaped
+name: revert-shaped
+structure: linear
+steps:
+  - id: revert_shaped
+    label: "Undo the change"
+    records_plan: true
+    follows_plan: true
+    evidence: {submitted: {type: diff}}
+    mechanical_checks:
+      - { type: diff_nonempty }
+      - { type: plan_recorded }
+    delivers: true
+    advance_gate: auto
+"#,
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    let armada_yml = config::Manifest::parse(
+        std::path::Path::new("fixture-armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\n",
+    )
+    .expect("the fixture manifest parses");
+    config::ResolvedWorkflow::resolve(&def, &armada_yml)
+        .unwrap_or_else(|refused| panic!("the fixture workflow did not resolve: {refused}"))
+        .frozen()
+        .clone()
+}
+
 fn at(second: usize) -> Timestamp {
     Timestamp::from_rfc3339(format!("2026-09-13T10:00:{second:02}.000Z"))
 }
