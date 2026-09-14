@@ -14,6 +14,7 @@
 //
 // Not routed yet — #921 mounts this beneath the tile band — so a story draws it directly.
 
+import { useState } from "react";
 import { ActiveJobsList } from "@armada/components";
 import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { BoardEmpty } from "./BoardEmpty";
@@ -43,6 +44,14 @@ export type OverviewListsProps = {
   onKill: (jobId: string) => void;
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
+  /**
+   * Where the cursor is, reported up. **This holds it, `Jobs.tsx`'s own
+   * pattern** — DOM focus is the cursor, whichever panel's row holds it, so
+   * `j`, the arrows, Tab and the mouse all move one cursor across every
+   * section. When focus leaves every panel the last row stands, the same as
+   * the Board.
+   */
+  onCursor?: (jobId: string | null) => void;
 };
 
 export function OverviewLists({
@@ -57,6 +66,7 @@ export function OverviewLists({
   onOpen,
   onKill,
   onCopied,
+  onCursor,
 }: OverviewListsProps) {
   const pickedRepository = repositories.find((one) => one.root === picked) ?? null;
   const all = picked === null;
@@ -64,6 +74,9 @@ export function OverviewLists({
   // The Board's own call, `Jobs.tsx`'s own name for it: the columns a row's own fact set names,
   // shared down the list so a column lines up whether or not every row carries that fact.
   const columns = columnsFor(jobs, repositories, all);
+  // Where the cursor is, as a job id — `Jobs.tsx`'s own state, held here for the same reason:
+  // DOM focus is the cursor, so this is what the focus handler below sets.
+  const [cursor, setCursor] = useState<string | null>(null);
 
   const rowOf = (job: JobSummary) => (
     <Row
@@ -75,7 +88,7 @@ export function OverviewLists({
       workflows={workflows}
       repository={repositoryOf(job, repositories, all)}
       selected={job.id === selected}
-      focused={false}
+      focused={job.id === cursor}
       onOpen={onOpen}
       onKill={onKill}
       onCopied={onCopied}
@@ -83,7 +96,18 @@ export function OverviewLists({
   );
 
   return (
-    <div className="armada-screen__overview-lists">
+    <div
+      className="armada-screen__overview-lists"
+      // The cursor is DOM focus, across every panel — `Jobs.tsx`'s own
+      // handler: a row reached by the mouse, by Tab or by a panel's own
+      // arrows all set the same value, whichever section it is in.
+      onFocusCapture={(event) => {
+        const row = (event.target as HTMLElement).closest<HTMLElement>("[data-job-id]");
+        if (row?.dataset.jobId === undefined) return;
+        setCursor(row.dataset.jobId);
+        onCursor?.(row.dataset.jobId);
+      }}
+    >
       {sections.length === 0 ? (
         <ActiveJobsList
           variant="panel"

@@ -2,8 +2,9 @@
 //! decode, and every socket message is told apart by its `message` tag.
 
 use crate::{
-    decode, encode, AskHelm, Freshness, HelmAsked, HelmClosed, HelmFresh, HelmMessage, HelmSilence,
-    HelmText, Instant, Saw, Shown, TranscriptRow, Voice,
+    decode, encode, AskHelm, Freshness, HelmAsked, HelmClosed, HelmContext, HelmFresh, HelmMessage,
+    HelmScreen, HelmSilence, HelmText, Instant, JobId, ManifestId, Saw, Shown, TranscriptRow,
+    Voice,
 };
 
 #[test]
@@ -11,6 +12,38 @@ fn a_message_with_something_in_it_decodes() {
     let asked = decode::<AskHelm>("a message to Helm", br#"{"text":"why did job 12 stall?"}"#)
         .expect("plain data");
     assert_eq!(asked.text.as_str(), "why did job 12 stall?");
+}
+
+/// An older Bridge asks with no `context` at all — `#1075`'s protocol minor
+/// must still decode it.
+#[test]
+fn an_ask_with_no_context_still_decodes() {
+    let asked = decode::<AskHelm>("a message to Helm", br#"{"text":"why did job 12 stall?"}"#)
+        .expect("plain data");
+    assert_eq!(asked.context, None);
+}
+
+#[test]
+fn an_asks_context_round_trips() {
+    let asked = AskHelm {
+        text: HelmText::said("what is this stuck on?").expect("not blank"),
+        context: Some(HelmContext {
+            screen: HelmScreen::JobDetail,
+            picked: Some(ManifestId::carried("armada")),
+            chip: Some(JobId::carried("01JOB0000000000000000000A")),
+            cursor: None,
+        }),
+    };
+    let json = encode(&asked).expect("plain data");
+    assert!(json.contains(r#""screen":"job_detail""#), "{json}");
+    assert!(
+        !json.contains("cursor"),
+        "an absent field is left off: {json}"
+    );
+    assert_eq!(
+        decode::<AskHelm>("a message to Helm", json.as_bytes()).expect("round-trips"),
+        asked
+    );
 }
 
 #[test]

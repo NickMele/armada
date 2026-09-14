@@ -24,6 +24,7 @@ export function Overview({
   onOpenQueued,
   onOpenManifest,
   onCopied,
+  onCursor,
 }: {
   state: BridgeState;
   now: number;
@@ -40,6 +41,8 @@ export function Overview({
   onOpenQueued: () => void;
   onOpenManifest: () => void;
   onCopied: (value: string) => void;
+  /** Where the cursor is, reported up — `OverviewLists`' own state, mirrored. #1075. */
+  onCursor?: (jobId: string | null) => void;
 }) {
   const guarded = { bridge: state.bridge, onCopied };
   return (
@@ -71,6 +74,7 @@ export function Overview({
           onOpen={onOpen}
           onKill={onKill}
           onCopied={onCopied}
+          onCursor={onCursor}
         />
       </div>
     </Boundary>

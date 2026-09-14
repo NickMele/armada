@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 import { ARMADA, RUNNING_ONE_WITH_A_PLAN, acrossTwo, OverviewListsFrom, STOREFRONT } from "./OverviewLists";
 
 /**
@@ -77,6 +77,21 @@ export const PanelRowsAligned: Story = {
     await expect(canvas.getByRole("img", { name: "0 of 6 tasks" })).toBeVisible();
     await expect(canvas.getByRole("option", { name: /unanswered permission ask/ })).toBeVisible();
     await expect(canvas.getByRole("option", { name: /shows "queued"/ })).toBeVisible();
+  },
+};
+
+/**
+ * Focus is the cursor, whichever panel it lands in — `Jobs.tsx`'s own rule,
+ * reported up the same way. `#1075` reads this for Helm's context.
+ */
+export const CursorReportsTheFocusedRow: Story = {
+  name: "Cursor reports the focused row",
+  args: { onCursor: fn() },
+  play: async ({ args, canvasElement }) => {
+    const row = canvasElement.querySelector<HTMLElement>("[data-job-id]");
+    if (row === null) throw new Error("a row to focus");
+    row.focus();
+    await expect(args.onCursor).toHaveBeenCalledWith(row.dataset.jobId);
   },
 };
 

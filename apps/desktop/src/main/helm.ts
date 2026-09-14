@@ -14,6 +14,7 @@ import WebSocket from "ws";
 
 import type {
   AskHelm,
+  HelmContext,
   HelmMessage,
   HelmThread,
   HelmThreadItem,
@@ -152,9 +153,9 @@ export class HelmSocket {
   }
 
   /** `POST /helm/ask`. Answers at once; the reply is always the socket's. */
-  async askHelm(manifestId: string, text: string): Promise<Outcome> {
+  async askHelm(manifestId: string, text: string, context?: HelmContext): Promise<Outcome> {
     if (this.port === null) return { ok: false, why: "not_connected" };
-    const body: AskHelm = { text };
+    const body: AskHelm = context === undefined ? { text } : { text, context };
     const answer = await ask(
       this.port,
       "POST",
@@ -240,10 +241,10 @@ export class HelmConnection {
     this.socket.open(port, this.targetManifestId());
   }
 
-  async askHelm(text: string): Promise<Outcome> {
+  async askHelm(text: string, context?: HelmContext): Promise<Outcome> {
     const manifestId = this.targetManifestId();
     if (manifestId === null) return { ok: false, why: "not_connected" };
-    const outcome = await this.socket.askHelm(manifestId, text);
+    const outcome = await this.socket.askHelm(manifestId, text, context);
     if (outcome.ok) this.lastTalked = manifestId;
     return outcome;
   }

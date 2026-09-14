@@ -16,6 +16,7 @@ import type {
   StagedAttachment,
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
+import type { HelmContext } from "@armada/protocol";
 import type { AddTask, DropTask } from "@armada/protocol";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
@@ -557,7 +558,8 @@ const api: BridgeApi = {
     };
   },
 
-  askHelm: (text: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.askHelm, text),
+  askHelm: (text: string, context?: HelmContext): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.askHelm, text, context),
   startHelmFresh: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.startHelmFresh),
   pointHelm: (manifestId: string): Promise<void> => ipcRenderer.invoke(CHANNELS.pointHelm, manifestId),
 };

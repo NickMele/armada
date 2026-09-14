@@ -4,8 +4,13 @@
 
 import { useState } from "react";
 import { HelmComposer, HelmThread } from "@armada/components";
-import type { HelmApprovalCard, HelmApprovalCardState, HelmThreadRow } from "@armada/components";
-import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
+import type {
+  HelmApprovalCard,
+  HelmApprovalCardState,
+  HelmComposerChip,
+  HelmThreadRow,
+} from "@armada/components";
+import type { HelmContext, JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { helmRowsOf, type HelmApprovalAsk, type HelmFoldedRow } from "@armada/screens/src/helm-thread";
 import type { BridgeState } from "../../shared/bridge";
 
@@ -16,7 +21,12 @@ export type HelmDockProps = {
   jobs: readonly JobSummary[];
   workflows: readonly WorkflowSummary[];
   live: boolean;
-  onAsk: (text: string) => void;
+  /** The open Job's chip, while it stands — `App.tsx`'s own state. #1075. */
+  chip?: HelmComposerChip;
+  onRemoveChip?: () => void;
+  onAsk: (text: string, context: HelmContext) => void;
+  /** Where the person is, assembled by `App.tsx`. Sent with every ask, unchanged here. #1075. */
+  context: HelmContext;
   onStartFresh: () => void;
   onSwitch: (manifestId: string) => void;
   onApprove: (jobId: string) => void;
@@ -31,7 +41,10 @@ export function HelmDock({
   jobs,
   workflows,
   live,
+  chip,
+  onRemoveChip,
   onAsk,
+  context,
   onStartFresh,
   onSwitch,
   onApprove,
@@ -63,7 +76,7 @@ export function HelmDock({
   function send(): void {
     const text = draft.trim();
     if (text === "") return;
-    onAsk(text);
+    onAsk(text, context);
     setDraft("");
   }
 
@@ -73,6 +86,8 @@ export function HelmDock({
       <HelmComposer
         current={current}
         repositories={options}
+        chip={chip}
+        onRemoveChip={onRemoveChip}
         // Drawn whenever there is somewhere else to point Helm — a specific
         // pick does not hide it, because Discuss or the switch itself is
         // what points Helm away from the picked repository without moving

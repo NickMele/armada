@@ -39,6 +39,7 @@ import type {
 import type { BridgeState, Summons } from "./bridge";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
+import type { HelmContext } from "@armada/protocol";
 import type {
   ManifestEditAnswer,
   ManifestFileRead,
@@ -846,8 +847,12 @@ export type BridgeApi = {
    */
   onSummoned: (onGo: (to: Summons) => void) => () => void;
 
-  /** Say something to Helm, about whichever repository it currently answers for. The reply arrives on `BridgeState.helm`. */
-  askHelm: (text: string) => Promise<Outcome>;
+  /**
+   * Say something to Helm, about whichever repository it currently answers
+   * for. The reply arrives on `BridgeState.helm`. `context` names where the
+   * person is — omitted, an older Bridge's shape, Helm asks as it always has.
+   */
+  askHelm: (text: string, context?: HelmContext) => Promise<Outcome>;
   /** Forget Helm's stored session and the thread. Refused while a reply is being written. */
   startHelmFresh: () => Promise<Outcome>;
   /**

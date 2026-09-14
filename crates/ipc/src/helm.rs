@@ -16,7 +16,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::event::Missed;
-use crate::ids::{Instant, ManifestId};
+use crate::ids::{Instant, JobId, ManifestId};
 use crate::turn::Shown;
 use crate::version::ProtocolVersion;
 
@@ -24,6 +24,44 @@ use crate::version::ProtocolVersion;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AskHelm {
     pub text: HelmText,
+    /// Where the person is in Bridge. **Optional**, so a Bridge built before
+    /// `#1075` still asks — Fleet hands a session this line only where one
+    /// arrived. `crates/fleet/src/helm/serving.rs` reads it; the thread's
+    /// `asked` row never does, and keeps only what was typed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<HelmContext>,
+}
+
+/// Where the person is in Bridge, as one ask carries it — `#1075`'s three
+/// decisions. A snapshot of the moment the message was sent, not a
+/// subscription: the picker, the chip and the cursor may all have moved by
+/// the time the next message goes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HelmContext {
+    pub screen: HelmScreen,
+    /// The repository the rail has picked. Absent for All repositories.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picked: Option<ManifestId>,
+    /// The Job chipped above Helm's message box — present only while the
+    /// chip stands, gone the moment its `×` is pressed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chip: Option<JobId>,
+    /// The row the cursor is on, in the Board or in Overview. Neither always
+    /// has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<JobId>,
+}
+
+/// Which screen is showing. `apps/desktop/src/renderer/src/App.tsx` is the
+/// one place that decides between them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HelmScreen {
+    Overview,
+    Board,
+    Manifest,
+    Cleanup,
+    JobDetail,
 }
 
 /// A message with something in it. **Blank does not decode**, so an empty
