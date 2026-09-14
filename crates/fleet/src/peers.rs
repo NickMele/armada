@@ -19,6 +19,7 @@ use ipc::mcp::{LeaveNote, NotRecorded};
 
 use crate::converging::elapsed;
 use crate::daemon::Fleet;
+use crate::fixing::FixStands;
 use crate::session::{LiveSession, Occasion};
 
 /// The least time between two peer turns to one Drone, and between two notes
@@ -50,34 +51,13 @@ pub(crate) enum News {
         handle: String,
         said: String,
     },
-    /// The other Job is fixing a test this one's Checks failed on. #1001.
-    Fixing {
+    /// Where a fix for a test this Job's Checks failed on stands. #1001.
+    Fix {
         title: String,
         handle: String,
         test: String,
+        stands: FixStands,
     },
-    /// The fix this Job was pointed at landed.
-    FixLanded {
-        title: String,
-        handle: String,
-        test: String,
-    },
-    /// The fix this Job was pointed at ended without landing.
-    FixGone {
-        title: String,
-        handle: String,
-        test: String,
-    },
-}
-
-impl News {
-    /// Whether this is about a fix rather than about shared paths.
-    fn is_about_a_fix(&self) -> bool {
-        matches!(
-            self,
-            News::Fixing { .. } | News::FixLanded { .. } | News::FixGone { .. }
-        )
-    }
 }
 
 /// What is queued, what has been said, and when each Drone last heard.
@@ -116,7 +96,7 @@ impl PeersChanged {
     }
 
     fn rendered(news: &[News], landed_reaches: &str) -> PeersChanged {
-        let about_paths = news.iter().any(|item| !item.is_about_a_fix());
+        let about_paths = news.iter().any(|item| !matches!(item, News::Fix { .. }));
         let mut text = String::from("OTHER JOBS WRITING WHERE YOU ARE\n\n");
         if about_paths {
             text.push_str(
@@ -124,7 +104,7 @@ impl PeersChanged {
                  stopped, and nobody waits on you.\n",
             );
         }
-        if news.iter().any(News::is_about_a_fix) {
+        if news.iter().any(|item| matches!(item, News::Fix { .. })) {
             text.push_str(
                 "A test your checks failed on is another Job's to fix, not yours. Your checks \
                  still fail on it until that fix lands.\n",
@@ -143,10 +123,16 @@ impl PeersChanged {
             text.push_str(&line(item));
         }
         text.push_str("\n\n");
-        if news
-            .iter()
-            .any(|item| matches!(item, News::Landed { .. } | News::FixLanded { .. }))
-        {
+        if news.iter().any(|item| {
+            matches!(
+                item,
+                News::Landed { .. }
+                    | News::Fix {
+                        stands: FixStands::Landed,
+                        ..
+                    }
+            )
+        }) {
             text.push_str(landed_reaches);
             text.push(' ');
         }
@@ -195,24 +181,12 @@ fn line(item: &News) -> String {
              not Armada's:\n{}",
             crate::remarks::fenced(said).trim_end()
         ),
-        News::Fixing {
+        News::Fix {
             title,
             handle,
             test,
-        } => format!("\n- \"{title}\" ({handle}) is fixing `{test}`, which your checks failed on."),
-        News::FixLanded {
-            title,
-            handle,
-            test,
-        } => format!("\n- \"{title}\" ({handle}) landed its fix for `{test}`."),
-        News::FixGone {
-            title,
-            handle,
-            test,
-        } => format!(
-            "\n- \"{title}\" ({handle}) ended without landing its fix for `{test}`, so nobody \
-             is fixing it now."
-        ),
+            stands,
+        } => stands.line(title, handle, test),
     }
 }
 

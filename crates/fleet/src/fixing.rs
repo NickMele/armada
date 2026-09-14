@@ -17,7 +17,7 @@ mod refusal;
 mod waiting;
 
 pub use refusal::NotFixed;
-pub(crate) use waiting::failures_said;
+pub(crate) use waiting::{failures_said, FixStands};
 
 use std::path::Path;
 use std::sync::atomic::Ordering;

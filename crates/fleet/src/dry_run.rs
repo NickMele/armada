@@ -388,6 +388,7 @@ where
         drop(working);
         if let Ok(report) = &ran {
             self.noted_dry_run(plan, report);
+            self.pointed_at_fixes_in(plan.record.id(), report).await;
         }
         Some(ran)
     }
@@ -444,19 +445,6 @@ where
             &ran.recorded(),
             &printed,
         );
-        // A failed Check printing a test another Job is fixing points this Job
-        // at that fix, as the gate does. #1001.
-        let said: Vec<_> = printed
-            .iter()
-            .map(|(name, output)| (name.as_str(), output))
-            .collect();
-        let failed = crate::fixing::failures_said(
-            rows.iter()
-                .filter(|row| !row.outcome.advances())
-                .map(|row| row.name.as_str()),
-            &said,
-        );
-        self.pointed_at_fixes(plan.record.id(), &failed).await;
         Ok(CheckReport {
             ran: rows
                 .into_iter()

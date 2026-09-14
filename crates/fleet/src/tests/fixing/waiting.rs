@@ -15,7 +15,7 @@ use super::{fix_for, started, Fixture, COMMIT, TEST};
 use crate::daemon::Fleet;
 use crate::dry_run::DryRuns;
 use crate::evidence::Call;
-use crate::fixing::{FixAnswer, Fixes};
+use crate::fixing::{FixAnswer, FixStands, Fixes};
 use crate::peers::{News, PeersChanged};
 use crate::tests::daemon::{a_proposal, fitted_over, one};
 use crate::tests::tmp::TempDir;
@@ -274,10 +274,11 @@ async fn waiting_jobs_hear_when_the_fix_ends_without_landing() {
 /// A turn carrying only fixes says nothing about shared files.
 #[test]
 fn a_turn_about_a_fix_leaves_the_shared_file_sentences_out() {
-    let text = PeersChanged::injected(&[News::Fixing {
+    let text = PeersChanged::injected(&[News::Fix {
         title: "fix the parser on main".to_string(),
         handle: "3-fix-the-parser-on-main".to_string(),
         test: TEST.to_string(),
+        stands: FixStands::Fixing,
     }])
     .text()
     .to_string();

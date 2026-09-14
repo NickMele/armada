@@ -12,9 +12,32 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use checks_runner::Output;
 use core_model::{BreakageClaim, FixWaiter, Job, JobId, JobStatus, ManifestId, Ulid};
+use ipc::mcp::CheckReport;
 
 use crate::daemon::Fleet;
 use crate::peers::News;
+
+/// Where a fix a Job was pointed at stands, as its peer turn says it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FixStands {
+    Fixing,
+    Landed,
+    Gone,
+}
+
+impl FixStands {
+    /// The item's line in the turn.
+    pub(crate) fn line(self, title: &str, handle: &str, test: &str) -> String {
+        let said = match self {
+            FixStands::Fixing => format!("is fixing `{test}`, which your checks failed on"),
+            FixStands::Landed => format!("landed its fix for `{test}`"),
+            FixStands::Gone => {
+                format!("ended without landing its fix for `{test}`, so nobody is fixing it now")
+            }
+        };
+        format!("\n- \"{title}\" ({handle}) {said}.")
+    }
+}
 
 /// Each failed Check and both streams it printed, from the names that failed
 /// and what every Check printed.
@@ -76,6 +99,21 @@ where
         }
     }
 
+    /// The same, from a dry run's report: each row that did not advance, with
+    /// the tail of what it printed.
+    pub(crate) async fn pointed_at_fixes_in(&self, job: &JobId, report: &CheckReport) {
+        let failed: Vec<(String, String)> = report
+            .ran
+            .iter()
+            .filter_map(|row| {
+                row.output
+                    .as_ref()
+                    .map(|excerpt| (row.name.clone(), excerpt.lines.join("\n")))
+            })
+            .collect();
+        self.pointed_at_fixes(job, &failed).await;
+    }
+
     /// Record the pointer and, the first time and where `tell` asks, queue the
     /// news for the Job's Drone.
     pub(crate) async fn point_at(&self, job: &JobId, claim: &BreakageClaim, tell: bool) {
@@ -101,10 +139,11 @@ where
         };
         self.owe(
             job,
-            News::Fixing {
+            News::Fix {
                 title: fix.title().as_str().to_string(),
                 handle: fix.handle(),
                 test: waiter.test,
+                stands: FixStands::Fixing,
             },
         )
         .await;
@@ -137,19 +176,13 @@ where
         if !waiting.is_empty() {
             if let Ok(record) = self.load(fix).await {
                 for waiter in waiting {
-                    let title = record.title().as_str().to_string();
-                    let handle = record.handle();
-                    let test = waiter.test;
-                    let news = match landed {
-                        true => News::FixLanded {
-                            title,
-                            handle,
-                            test,
-                        },
-                        false => News::FixGone {
-                            title,
-                            handle,
-                            test,
+                    let news = News::Fix {
+                        title: record.title().as_str().to_string(),
+                        handle: record.handle(),
+                        test: waiter.test,
+                        stands: match landed {
+                            true => FixStands::Landed,
+                            false => FixStands::Gone,
                         },
                     };
                     self.owe(&waiter.waiting, news).await;
