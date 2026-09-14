@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
 import { Input } from "../../primitives/Input/Input";
 import { Sheet } from "../../primitives/Sheet/Sheet";
@@ -142,6 +142,13 @@ function Row({
   disabled: boolean;
 }) {
   const [typed, setTyped] = useState<string | null>(null);
+  // Which of this row's two sends is out — Save and "Use the shipped value"
+  // call the same `onSave`, so this is what tells the pressed control from
+  // its sibling once `row.saving` alone cannot. #1117.
+  const [pressed, setPressed] = useState<"save" | "shipped" | null>(null);
+  useEffect(() => {
+    if (row.saving !== true) setPressed(null);
+  }, [row.saving]);
   const field = typed ?? String(row.value);
   const asked = Number(field);
   const dirty = field !== String(row.value);
@@ -150,8 +157,9 @@ function Row({
   const off = disabled || row.saving === true;
   const meansId = `${id}-means`;
 
-  function send(value: number): void {
+  function send(value: number, which: "save" | "shipped"): void {
     setTyped(null);
+    setPressed(which);
     row.onSave(value);
   }
 
@@ -186,11 +194,12 @@ function Row({
           variant="secondary"
           size="sm"
           ground="sunken"
+          pending={pressed === "save"}
           disabled={off || !dirty || !inRange}
           aria-label={`Save ${label}`}
-          onClick={() => send(asked)}
+          onClick={() => send(asked, "save")}
         >
-          Save
+          {pressed === "save" ? "Saving…" : "Save"}
         </Button>
       </div>
       <p className="armada-fleet-settings__ships">
@@ -199,11 +208,12 @@ function Row({
           <Button
             variant="ghost"
             size="sm"
+            pending={pressed === "shipped"}
             disabled={off}
             aria-label={`Use the shipped value for ${label}`}
-            onClick={() => send(row.shipped)}
+            onClick={() => send(row.shipped, "shipped")}
           >
-            Use the shipped value
+            {pressed === "shipped" ? "Using the shipped value…" : "Use the shipped value"}
           </Button>
         ) : null}
       </p>
