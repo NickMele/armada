@@ -114,7 +114,7 @@ export type DecideProps = {
    * The branch conflicts with main. `#663`, `#1131`. **Merge stays drawn and
    * is disabled**, not hidden — a person who has not read the pull request
    * block above should not wonder where the button went, and the reason
-   * sits right beside it: Fleet sends a Drone to clear it, nothing here
+   * sits under the row: Fleet sends a Drone to clear it, nothing here
    * presses anything.
    */
   conflicted?: boolean;

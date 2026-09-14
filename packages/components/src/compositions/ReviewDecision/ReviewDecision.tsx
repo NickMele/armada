@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
 import { Separator } from "../../primitives/Separator/Separator";
 import { Textarea } from "../../primitives/Textarea/Textarea";
@@ -51,9 +51,11 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  *
  * **Merge can be drawn and disabled at once.** `#663`: a branch behind main
  * with conflicts is a pull request Fleet would refuse to merge, and
- * `mergeBlockedReason` says so beside the control rather than hiding it —
- * Fleet already sends a Drone to clear it on its own, `#1131`, and nothing
- * on this surface presses anything to do the same.
+ * `mergeBlockedReason` says so under the row rather than hiding it —
+ * `aria-describedby` is what keeps it read as Merge's own reason, since a
+ * sentence this long sizes whatever box holds it, `#1131`. Fleet already
+ * sends a Drone to clear it on its own, and nothing on this surface presses
+ * anything to do the same.
  *
  * **No glyph on any of them.** Primary and secondary are label-only by
  * contract, and a mark on the destructive one alone would make the difference
@@ -82,7 +84,7 @@ export type ReviewDecisionProps = {
    */
   onMerge?: () => void;
   /**
-   * Why merging is blocked, shown beside the control rather than folded into
+   * Why merging is blocked, shown under the row rather than folded into
    * `disabledNote` — the rest of the group stays live while this one alone is
    * not. **Presence disables the merge control regardless of `disabled`.**
    * `#663`: a branch behind main with conflicts is not a pull request Fleet
@@ -155,6 +157,11 @@ export function ReviewDecision({
   // and a boolean beside a handler would let a surface offer an act with
   // nothing behind it.
   const merging = onMerge !== undefined;
+  // `mergeBlockedReason` reads as long as a sentence, and a flex item sized by
+  // its own content stretches the row that holds it — the defect a short
+  // "Resolve the conflicts first." never surfaced. `aria-describedby` is what
+  // keeps it Merge's own reason once it is no longer inside the same box.
+  const mergeReasonId = useId();
 
   return (
     <div className="armada-decision">
@@ -199,25 +206,20 @@ export function ReviewDecision({
         {/* The one accent fill on this surface, and it moves. A job with a pull
             request open has one ordinary ending and it is this one; a job with
             none never draws this control at all. `mergeBlockedReason` present
-            is a third case — drawn, disabled either way, its sentence beside
-            it rather than lost in `disabledNote`, which is the group's. */}
+            is a third case — drawn, disabled either way. Its sentence sits
+            under the whole row, below, rather than beside this control: a
+            flex item sized by a sentence stretches the row that holds it. */}
         {merging ? (
-          <div className="armada-decision__merge">
-            <Tooltip label={mergeNote}>
-              <Button
-                variant="primary"
-                disabled={disabled || mergeBlockedReason !== undefined}
-                onClick={onMerge}
-              >
-                {mergeLabel}
-              </Button>
-            </Tooltip>
-            {mergeBlockedReason === undefined ? null : (
-              <p className="armada-decision__said" role="note">
-                {mergeBlockedReason}
-              </p>
-            )}
-          </div>
+          <Tooltip label={mergeNote}>
+            <Button
+              variant="primary"
+              disabled={disabled || mergeBlockedReason !== undefined}
+              aria-describedby={mergeBlockedReason === undefined ? undefined : mergeReasonId}
+              onClick={onMerge}
+            >
+              {mergeLabel}
+            </Button>
+          </Tooltip>
         ) : null}
         <Tooltip label={approveNote}>
           <Button
@@ -239,6 +241,15 @@ export function ReviewDecision({
           </Button>
         </Tooltip>
       </div>
+
+      {/* Under the row, never inside it — `aria-describedby` on Merge is what
+          keeps this read as its reason rather than the group's, now that
+          nothing here sizes a button's column. */}
+      {mergeBlockedReason === undefined ? null : (
+        <p id={mergeReasonId} className="armada-decision__said" role="note">
+          {mergeBlockedReason}
+        </p>
+      )}
 
       {/* The rule is load-bearing, not decoration: it is what says the control
           under it is not another answer in the group above. */}

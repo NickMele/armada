@@ -94,6 +94,14 @@ function readMs(name: string, fallback: number): number {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
+/** `target`'s own `aria-describedby`, plus the bubble's id, once and in order. */
+function describedBy(target: Element, bubbleId: string): string {
+  const already = (target.getAttribute("aria-describedby") ?? "")
+    .split(" ")
+    .filter((id) => id !== "" && id !== bubbleId);
+  return [...already, bubbleId].join(" ");
+}
+
 export function Tooltip({
   label,
   shortcut,
@@ -119,15 +127,19 @@ export function Tooltip({
   // is announced by nothing, so the control inside is found here rather than
   // guessed from the element type — and where there is no control, the frame
   // takes the stop, because a tooltip only a pointer can open reaches nobody.
+  //
+  // **Added, never replaced.** A caller may already have its own reason named
+  // on the same control — `ReviewDecision`'s Merge points at why it is
+  // blocked once the sentence can no longer sit inside the tooltip's own box
+  // — and a hard `setAttribute` here would silently drop that id every time
+  // this effect re-ran.
   useEffect(() => {
     const held = frame.current;
     if (held === null) return;
     const on = held.matches(FOCUSABLE) ? held : held.querySelector<HTMLElement>(FOCUSABLE);
-    if (on !== null) {
-      on.setAttribute("aria-describedby", bubbleId);
-      return;
-    }
-    held.setAttribute("aria-describedby", bubbleId);
+    const target = on ?? held;
+    target.setAttribute("aria-describedby", describedBy(target, bubbleId));
+    if (on !== null) return;
     // A stop of its own only where it is not already inside a control. A
     // focusable span within a button is not somewhere a keyboard can go, and a
     // concept annotated on part of a control is read by hovering it — the
