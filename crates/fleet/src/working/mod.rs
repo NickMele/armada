@@ -111,6 +111,14 @@ pub(crate) struct Working {
     /// declare again — and it survives a revert, which is the only thing the
     /// live check sees that the gate cannot.
     drifted: Vec<RepoPath>,
+    /// Paths seen outside the plan on the last reading, told nothing yet.
+    ///
+    /// **A single reading is noise, not drift.** A build tool that writes and
+    /// then removes a file inside one turn — electron-vite's bundled config is
+    /// the one that was caught — is gone by the next reading and never enters
+    /// `drifted`. A path still here on the *next* reading is confirmed and
+    /// moves there; see [`Working::drifting`].
+    pending: Vec<RepoPath>,
     /// When the step in this slot started, as the injected clock read it. What
     /// the wall-clock tripwire is measured from.
     step_began: Timestamp,
@@ -344,6 +352,7 @@ impl Working {
             _complaints: Some(started.complaints),
             declared: None,
             drifted: Vec::new(),
+            pending: Vec::new(),
             step_began: at.clone(),
             calls_before: 0,
             rested_before: 0,
@@ -410,6 +419,7 @@ impl Working {
             _complaints: None,
             declared: None,
             drifted: Vec::new(),
+            pending: Vec::new(),
             step_began: at.clone(),
             calls_before: 0,
             rested_before: 0,

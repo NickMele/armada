@@ -112,6 +112,16 @@ impl Holding {
     fn each(&self) -> Vec<Wrote> {
         self.0.lock().expect("not poisoned").clone()
     }
+
+    /// Drop these paths as though they had never been written. **Unlike
+    /// [`wrote`](Holding::wrote) with `Change::Removed`**, which keeps the
+    /// path in the list with a new kind, this is a path a reading no longer
+    /// sees at all — what a build tool's own temporary file looks like an
+    /// instant after it unlinks it, `#1049`.
+    pub fn forgot(&self, paths: &[&str]) {
+        let mut held = self.0.lock().expect("not poisoned");
+        held.retain(|was| !paths.contains(&was.path.as_str()));
+    }
 }
 
 /// A work product that is whatever the test said it is.
@@ -214,6 +224,11 @@ impl FakeWorkProduct {
     /// the worktree to move.
     pub fn wrote(&self, files: &[(&str, Change)]) {
         self.changed.wrote(files);
+    }
+
+    /// A path a reading no longer sees. See [`Holding::forgot`].
+    pub fn forgot(&self, paths: &[&str]) {
+        self.changed.forgot(paths);
     }
 
     /// A handle on what this worktree holds, for whatever else writes into it.
