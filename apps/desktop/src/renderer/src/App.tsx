@@ -854,7 +854,12 @@ export function App() {
             />
           ) : settingsShowing ? (
             <Boundary region="Settings" {...guarded}>
-              <BridgeSettings limits={state.limits} live={live} onSave={commands.saveLimits} />
+              <BridgeSettings
+                limits={state.limits}
+                live={live}
+                health={state.health}
+                onSave={commands.saveLimits}
+              />
             </Boundary>
           ) : (
             <>

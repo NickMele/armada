@@ -16,9 +16,9 @@
 use ipc::{
     Actor, Alert, AlertList, Asked, CallArguments, CheckOutput, CommandExplained, DroneDetail,
     DroneId, DroneSummary, EvidenceType, Finding, FleetCapacity, FleetHealth, FleetUsage, Held,
-    Instant, JobDetail, JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess,
-    JobRemarks, JobResources, JobStatus, JobSummary, KeptFrame, Look, ManifestConfig, ManifestId,
-    ManifestSummary, ModelChoices, Movement, NotedField, Origin, Overspending, Probe,
+    HelmActionAuthority, Instant, JobDetail, JobDiff, JobEvidence, JobExamined, JobHistory, JobId,
+    JobProcess, JobRemarks, JobResources, JobStatus, JobSummary, KeptFrame, Look, ManifestConfig,
+    ManifestId, ManifestSummary, ModelChoices, Movement, NotedField, Origin, Overspending, Probe,
     ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted, Unprobed,
     Urgency, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
@@ -763,6 +763,7 @@ pub fn health() -> FleetHealth {
             owner: "adapters".to_string(),
             because: "it owns talking to anything outside Armada".to_string(),
         }],
+        helm_action_authority: HelmActionAuthority::Acting,
     }
 }
 

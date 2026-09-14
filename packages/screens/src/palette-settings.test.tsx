@@ -51,6 +51,7 @@ function Host() {
         <BridgeSettings
           limits={LIMITS}
           live
+          health={{ state: "none" }}
           onSave={(): Promise<Outcome> => Promise.resolve({ ok: true })}
         />
       ) : null}

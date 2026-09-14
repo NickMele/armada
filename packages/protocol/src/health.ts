@@ -30,6 +30,12 @@ export type Unprobed = {
 };
 
 /**
+ * How far this machine lets Helm act, as `crates/fleet/src/helm/reach.rs`'s
+ * `Authority` spells it on the wire.
+ */
+export type HelmActionAuthority = "acting" | "read_only";
+
+/**
  * Every probe Fleet ran, and everything it could not run one for. **`not_probed`
  * is the honest half**: four passing rows with no mention of the modules nobody
  * asked read as a healthy machine.
@@ -37,4 +43,9 @@ export type Unprobed = {
 export type FleetHealth = {
   probes: Probe[];
   not_probed: Unprobed[];
+  /**
+   * `settings.helm-action-authority-tier-1-redirect-enabled-vs-read-only`,
+   * resolved once when Fleet started. `#1127`.
+   */
+  helm_action_authority: HelmActionAuthority;
 };

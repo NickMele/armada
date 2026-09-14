@@ -29,6 +29,20 @@ pub struct FleetHealth {
     pub probes: Vec<Probe>,
     /// What this answer says nothing about, with why beside each.
     pub not_probed: Vec<Unprobed>,
+    /// `settings.helm-action-authority-tier-1-redirect-enabled-vs-read-only`,
+    /// resolved once when Fleet started. `#1127` — Bridge had no way to read
+    /// what Fleet actually decided, only the setting's own description.
+    pub helm_action_authority: HelmActionAuthority,
+}
+
+/// How far this machine lets Helm act, as the wire spells `fleet::helm::
+/// Authority`. Its own type here rather than a shared one: `ipc` names
+/// nothing from `fleet`, and a wire enum outlives the Rust type it mirrors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HelmActionAuthority {
+    Acting,
+    ReadOnly,
 }
 
 /// A set of Doctor probes Fleet cannot run.

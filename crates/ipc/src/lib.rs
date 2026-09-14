@@ -205,7 +205,7 @@ pub use event::{
 };
 pub use explaining::CommandExplained;
 pub use files::FilesFound;
-pub use health::{FleetHealth, Probe, Unprobed};
+pub use health::{FleetHealth, HelmActionAuthority, Probe, Unprobed};
 pub use helm::{
     AskHelm, Blank, Freshness, HelmAsked, HelmClosed, HelmContext, HelmConversation, HelmFresh,
     HelmMessage, HelmOpened, HelmScreen, HelmSilence, HelmText, HelmUnanswered,

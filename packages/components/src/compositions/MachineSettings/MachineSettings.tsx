@@ -9,6 +9,11 @@ export type MachineSettingsRow = {
   label: string;
   /** What the setting does, and when Fleet decides it. */
   means: string;
+  /**
+   * What Fleet actually resolved this to, at start — `#1127`. Absent while
+   * nothing has answered `GET /health` yet, so the row still reads without one.
+   */
+  value?: string;
 };
 
 export type MachineSettingsProps = {
@@ -21,6 +26,9 @@ export function MachineSettings({ rows }: MachineSettingsProps) {
       {rows.map((row) => (
         <div className="armada-machine-settings__field" key={row.label}>
           <p className="armada-machine-settings__label">{row.label}</p>
+          {row.value === undefined ? null : (
+            <p className="armada-machine-settings__value">{row.value}</p>
+          )}
           <p className="armada-machine-settings__means">{row.means}</p>
         </div>
       ))}

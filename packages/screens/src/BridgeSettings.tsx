@@ -19,8 +19,9 @@ import {
   MachineSettings,
   type FleetSettingsRow,
 } from "@armada/components";
-import type { FleetLimits, Outcome, SaveLimits } from "@armada/protocol";
+import type { FleetLimits, HelmActionAuthority, Outcome, SaveLimits } from "@armada/protocol";
 import { useState } from "react";
+import type { HealthRead } from "./overview-reads";
 
 /** One of the four fields a row may send, by its wire name. */
 type Field = keyof SaveLimits;
@@ -40,10 +41,20 @@ export type BridgeSettingsProps = {
   limits: FleetLimits | null;
   /** A live connection. Off with nothing to send to. */
   live: boolean;
+  /** `GET /health`, `#1127`'s reason: what Fleet resolved `this machine`'s own settings to. */
+  health: HealthRead;
   onSave: (values: SaveLimits) => Promise<Outcome>;
 };
 
-export function BridgeSettings({ limits, live, onSave }: BridgeSettingsProps) {
+/** "Acting"/"Read-only", as `this machine` reads it — or absent, before `health` has answered. */
+export function helmActionAuthorityValue(health: HealthRead): string | undefined {
+  if (health.state !== "read") return undefined;
+  return WORDS[health.health.helm_action_authority];
+}
+
+const WORDS: Record<HelmActionAuthority, string> = { acting: "Acting", read_only: "Read-only" };
+
+export function BridgeSettings({ limits, live, health, onSave }: BridgeSettingsProps) {
   return (
     <div className="armada-screen__pane">
       <Card>
@@ -68,6 +79,7 @@ export function BridgeSettings({ limits, live, onSave }: BridgeSettingsProps) {
             rows={[
               {
                 label: "Helm action authority",
+                value: helmActionAuthorityValue(health),
                 means:
                   "Whether Helm may act on a Tier 1 Redirect on this machine, or only read one and suggest it. Fleet resolves this once, when it starts, and nothing here changes it while Fleet runs.",
               },
