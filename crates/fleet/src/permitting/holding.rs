@@ -7,8 +7,8 @@
 //! wait longer — `docs/spikes/015-can-a-person-answer-a-blocked-command.md`.
 //!
 //! **The same answer reaches a refused row after the fact**, on a Job stopped
-//! at `blocked_by_policy`: the allow is recorded, and a Drone still standing
-//! there is told, or the step restarts where none is.
+//! at `blocked_by_policy` or `ask_unanswered`: the allow is recorded, and a
+//! Drone still standing there is told, or the step restarts where none is.
 
 use adapter_traits::{AgentHarness, CallDetail, Delivery, Vcs, WorkProduct};
 use api::PermissionAnswer;
@@ -429,15 +429,16 @@ where
     }
 
     /// What a person may answer about one refused row, and why nothing where
-    /// nothing. **Only on a Job that stopped at `blocked_by_policy`**, and
-    /// Reject only where a Drone is standing there to be told.
+    /// nothing. **Only on a Job that stopped over a refused command** —
+    /// `blocked_by_policy` or `ask_unanswered` — and Reject only where a
+    /// Drone is standing there to be told.
     pub(crate) async fn offers_after(
         &self,
         job: &Job,
         tool: &str,
         command: Option<&str>,
     ) -> Offered {
-        if !self.stopped_by_policy(job).await {
+        if !self.stopped_over_a_refusal(job).await {
             return Offered::nothing();
         }
         let ungrantable = command.and_then(|run| self.ungrantable(run));
@@ -468,11 +469,11 @@ where
         }
     }
 
-    async fn stopped_by_policy(&self, job: &Job) -> bool {
+    async fn stopped_over_a_refusal(&self, job: &Job) -> bool {
         matches!(
             self.last_reason(job.id()).await.ok().flatten(),
             Some(core_model::TransitionReason::Escalation(
-                EscalationTrigger::BlockedByPolicy
+                EscalationTrigger::BlockedByPolicy | EscalationTrigger::AskUnanswered
             ))
         )
     }
@@ -489,7 +490,7 @@ where
     }
 
     /// A person's answer to a command a Drone is waiting on, or was refused on
-    /// a Job that stopped at `blocked_by_policy`. The call id says which.
+    /// a Job that stopped over a refused command. The call id says which.
     pub async fn answer_command(
         &self,
         job_id: &JobId,
@@ -568,7 +569,8 @@ where
         Ok(true)
     }
 
-    /// An answer to a refused row, on a Job that stopped at `blocked_by_policy`.
+    /// An answer to a refused row, on a Job that stopped over a refused
+    /// command.
     async fn answer_refused(
         &self,
         job_id: &JobId,

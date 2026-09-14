@@ -53,6 +53,33 @@ impl PermissionHold {
     }
 }
 
+/// How long a permission ask may go unanswered before Fleet gives up waiting
+/// for a person and reclaims the Job's concurrency slot: ends the Drone,
+/// stops the step and escalates the Job as `ask_unanswered`. `#801`.
+///
+/// **Beside [`PermissionHold`] and not derived from it**, because the two
+/// bound the same wait from different vantage points. That one is how long
+/// the harness's own HTTP call is held open before the Drone is told to wait
+/// for a turn instead — a few minutes, fixed by what the harness itself will
+/// wait. This is how long the Job's own slot is held for an answer that may
+/// never come, which is a person's patience rather than a process's, and runs
+/// on long after the call itself has returned a deny.
+///
+/// **A fitting rather than a bare constant**, for [`PermissionHold`]'s own
+/// reason: a test can plant a limit it can outlive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UnansweredAskLimit(Duration);
+
+impl UnansweredAskLimit {
+    pub fn of(limit: Duration) -> UnansweredAskLimit {
+        UnansweredAskLimit(limit)
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.0
+    }
+}
+
 /// A permission question a person has been asked, about a call this Drone
 /// made, and not answered yet.
 ///
@@ -335,6 +362,9 @@ pub enum Refusing {
         note: Option<Note>,
     },
     Withheld(Withheld),
+    /// Nobody answered before the ask's own bound ran out. The Job has
+    /// escalated and this run is ending.
+    Unanswered,
 }
 
 /// Programs whose whole job is build, test or typecheck — exactly what
@@ -396,6 +426,10 @@ impl Refusing {
             Refusing::Withheld(Withheld::NotACommand { .. }) => format!(
                 "This Job is not granted `{what}`. Do not try to get the same result another \
                  way."
+            ),
+            Refusing::Unanswered => format!(
+                "Nobody answered whether you may run `{what}` before the job's own limit on \
+                 waiting for a person ran out. The job has escalated and this run is ending."
             ),
         }
     }

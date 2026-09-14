@@ -78,6 +78,7 @@ export const RESUMPTION: Readonly<Record<string, Rendering | undefined>> = {
 
 /** `escalation_reason`, keyed by the wire value. */
 export const ESCALATION_REASON: Readonly<Record<string, Rendering | undefined>> = {
+  "ask_unanswered": { verb: "the ask went unanswered", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
   "blocked_by_policy": { verb: "blocked by policy", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
   "check_timeout": { verb: "a check timed out", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
   "dependency_failed": { verb: "an upstream failed", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
@@ -284,6 +285,7 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "resumption", variant: "reviewed", missing: ["icon"] },
   { vocabulary: "resumption", variant: "restarted", missing: ["icon"] },
   { vocabulary: "resumption", variant: "overruled", missing: ["icon"] },
+  { vocabulary: "escalation_reason", variant: "ask_unanswered", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "blocked_by_policy", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "check_timeout", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "dependency_failed", missing: ["icon"] },

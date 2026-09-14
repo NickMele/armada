@@ -21,15 +21,20 @@ use std::time::Duration;
 use adapter_traits::{CallDetail, DroneEvent, WorktreeSpec};
 use api::{PermissionAnswer, Queries};
 use config::ResolvedWorkflow;
-use core_model::{Actor, AllowedCommand, JobId, JobStatus, Reach, Timestamp, WhenBlocked};
+use core_model::{
+    Actor, AllowedCommand, EscalationTrigger, JobId, JobStatus, Reach, Timestamp, TransitionReason,
+    WhenBlocked,
+};
 use ipc::mcp::{Incoming, PermissionAsked};
 use ipc::{CommandAnswer, CommandInFlight};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
 use crate::daemon::{Fittings, Fleet};
-use crate::permitting::{Answered, NotPermitted, PermissionHold, Refusing};
+use crate::permitting::{Answered, NotPermitted, PermissionHold, Refusing, UnansweredAskLimit};
+use crate::silence::Vigil;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
+use crate::tests::planted::Held;
 use crate::tests::tmp::TempDir;
 
 pub(super) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -110,6 +115,22 @@ pub(super) fn a_fleet_judged_by(
 fn a_fleet_holding_for(home: &TempDir, harness: FakeHarness, hold: Duration) -> Fixture {
     let mut fittings = the_fittings(home, harness);
     fittings.permission_hold = PermissionHold::of(hold);
+    Fleet::assembled(fittings)
+}
+
+/// [`a_fleet_holding_for`]'s own hold, [`BRIEFLY`], plus a clock a case can
+/// push and an unanswered-ask limit of `limit` rather than the fixture's own
+/// out-of-reach one — what lets a case cross it without sitting through it.
+fn a_fleet_bounding_the_ask(
+    home: &TempDir,
+    harness: FakeHarness,
+    clock: Arc<Held>,
+    limit: Duration,
+) -> Fixture {
+    let mut fittings = the_fittings(home, harness);
+    fittings.clock = clock;
+    fittings.permission_hold = PermissionHold::of(BRIEFLY);
+    fittings.unanswered_ask_limit = UnansweredAskLimit::of(limit);
     Fleet::assembled(fittings)
 }
 
@@ -743,6 +764,144 @@ async fn an_answer_at_the_end_of_the_hold_is_delivered_once() {
             "round {round}: settled, whichever side carried it"
         );
     }
+}
+
+/// Start a Job, ask permission on `c1`, let the hold run out with nobody
+/// answering, then push the clock past `limit` and turn until the vigil ends
+/// the ask — the shared setup the three cases below start from.
+async fn a_job_escalated_over_an_unanswered_ask(
+    home: &TempDir,
+    limit: Duration,
+) -> (Fixture, JobId) {
+    let clock = Arc::new(Held::started());
+    let fleet = a_fleet_bounding_the_ask(
+        home,
+        a_drone_that_reached_for("c1"),
+        Arc::clone(&clock),
+        limit,
+    );
+    let job = started(&fleet, home).await;
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
+
+    let answer = fleet
+        .permission(&job, &asked("Bash", "npm publish", "c1"))
+        .await;
+    assert_eq!(
+        answer,
+        PermissionAnswer::Deny(Refusing::Asked.to_the_drone("npm publish")),
+        "nobody answered inside the hold, so the call gives up first"
+    );
+    assert!(
+        fleet.command_awaited(&job).await.is_some(),
+        "the question stands for a person who is late"
+    );
+
+    clock.on(limit.as_secs() + 60);
+    let mut ended = false;
+    for _ in 0..400 {
+        let turned = fleet.turn().await.expect("a turn");
+        if let Some(quiet) = turned.quiet() {
+            assert!(
+                matches!(quiet.said, Vigil::EndedUnanswered),
+                "the vigil found something else: {:?}",
+                quiet.said
+            );
+            ended = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(ended, "the vigil never ended the unanswered ask");
+    (fleet, job)
+}
+
+/// **The limit `PermissionHold` does not have.** Nobody ever answers, and
+/// past its own bound Fleet ends the Drone rather than holding the Job's slot
+/// for as long as nobody does — #801.
+#[tokio::test]
+async fn an_unanswered_ask_past_its_limit_escalates_and_frees_the_slot() {
+    let home = TempDir::new();
+    let (fleet, job) =
+        a_job_escalated_over_an_unanswered_ask(&home, Duration::from_secs(1800)).await;
+
+    assert_eq!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Escalated
+    );
+    assert_eq!(
+        fleet.last_reason(&job).await.unwrap(),
+        Some(TransitionReason::Escalation(
+            EscalationTrigger::AskUnanswered
+        )),
+    );
+    assert!(
+        fleet.command_awaited(&job).await.is_none(),
+        "nothing is left waiting on the ended Drone"
+    );
+
+    // A second Job, queued behind the one slot this fixture ships with,
+    // proves the first Job's slot is free rather than merely idle.
+    let second = fleet.propose(a_proposal("a second job")).await.unwrap();
+    worktree_directory(&home, &second);
+    let second = dispatched(&fleet, second.id())
+        .await
+        .expect("the freed slot admits it");
+    assert_eq!(
+        second.status(),
+        JobStatus::Running,
+        "the freed slot went to the next queued Job"
+    );
+}
+
+/// **An answer that arrives after the escalation is recorded, not dropped.**
+/// No Drone is left to carry it, so it lands the way a `blocked_by_policy`
+/// allow with none standing there does: written down, and the step restarts.
+#[tokio::test]
+async fn a_late_answer_after_the_escalation_is_honored() {
+    let home = TempDir::new();
+    let (fleet, job) =
+        a_job_escalated_over_an_unanswered_ask(&home, Duration::from_secs(1800)).await;
+
+    fleet
+        .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
+        .await
+        .expect("a late allow is recorded, not silently dropped");
+
+    let allowed = fleet.store().lock().await.allowed_commands(&job).unwrap();
+    assert_eq!(allowed.len(), 1);
+    assert_eq!(allowed[0].run, "npm publish");
+    assert_ne!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Escalated,
+        "the allow redispatches the step rather than sitting unread"
+    );
+}
+
+/// **Reject is correctly withheld, since no Drone is there to tell.** The
+/// same shape as an allow with none standing there, and not a road that
+/// drops the answer instead of refusing it.
+#[tokio::test]
+async fn a_late_reject_is_withheld_with_no_drone_to_tell() {
+    let home = TempDir::new();
+    let (fleet, job) =
+        a_job_escalated_over_an_unanswered_ask(&home, Duration::from_secs(1800)).await;
+
+    let rejected = fleet
+        .answer_command(&job, "c1", Answered::of(CommandAnswer::Reject, None))
+        .await;
+    assert!(
+        matches!(
+            rejected,
+            Err(NotPermitted::NotOffered {
+                answer: CommandAnswer::Reject,
+                ..
+            })
+        ),
+        "{rejected:?}"
+    );
 }
 
 /// What a Drone's own uncommitted edit to `armada.yml` looks like, left dirty

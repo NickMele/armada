@@ -48,6 +48,24 @@
 #   why             - why the row exists at all, and what was refused in its
 #                     place. Carried by the rows argued in this repository
 
+[triggers.ask_unanswered]
+kind = "Trigger"
+level = "Step"
+meaning = "A person's permission ask about one of the Drone's calls went unanswered past the ask's own bound, so Fleet ended the Drone and the step stopped where it stood."
+in_code = ""
+notes = """
+**`drone_killed` and `run_ended`'s third sibling**, and the same argument both of theirs makes: nothing weighed the work, so this names a step rather than a Job and `overrulable` is false. What tells the three apart is who ended the process and on what word — a person on purpose, the Drone's own report that it was over, or here, nobody ever answering what it asked.
+
+**Unlike its two siblings, this is also the Job's own escalation reason.** `drone_killed` and `run_ended` leave what the Job stopped *for* to the ending's classification, because an ended Drone's stream still has to be folded to say which it was. There is nothing to fold here: a person's silence is the whole of why the Job stopped, so `job_transitions` is absent for the ordinary reason rather than `drone_killed`'s — this row takes the default `running -> escalated` edge, as `blocked_by_policy` does.
+
+The command it was asking about is on the transcript beside this row's own `stopped` line, refused the way `blocked_by_policy` refuses one — and a late answer reaches the same road that trigger's does.
+"""
+why = """
+`waiting_on_an_answer` declined the silence watcher on an outstanding permission ask exactly as it declines on a Drone's own question, on the argument that a person is correctly being waited on. That argument holds for the HTTP call, which the harness itself bounds, but not for the Job's own concurrency slot, which nothing measured once the call's own hold ran out: the Drone was refused and the hold stayed on the slot, unconditionally and forever, until somebody answered. A queued Job waits behind it for as long as nobody does — #801 found it running overnight.
+
+Poking the Drone in its place was refused: it is correctly waiting, and three pokes would escalate it as `stalled`, blaming it for a person's silence rather than its own. What the Job needed instead was its own bound, separate from the poke ladder, which is this row.
+"""
+
 [triggers.blocked_by_policy]
 kind = "Trigger"
 level = "Step"

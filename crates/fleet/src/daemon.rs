@@ -103,6 +103,10 @@ pub struct Fleet<H, V, W> {
     /// the Drone is told to wait for a turn. See
     /// [`crate::permitting::PermissionHold`].
     permission_hold: crate::permitting::PermissionHold,
+    /// How long a permission ask may go unanswered before Fleet ends the
+    /// Drone and escalates the Job, reclaiming its concurrency slot. See
+    /// [`crate::permitting::UnansweredAskLimit`].
+    unanswered_ask_limit: crate::permitting::UnansweredAskLimit,
     /// The Judge call that is out right now, or none. **The one piece of Fleet
     /// state that is only ever true for as long as it takes** — it is never
     /// written down, because a record of it would outlive the fact.

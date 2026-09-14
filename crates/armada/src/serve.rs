@@ -33,7 +33,7 @@ use std::time::Duration;
 
 use adapters::{ActionsWorkflows, GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
-use fleet::permitting::{self, PermissionHold};
+use fleet::permitting::{self, PermissionHold, UnansweredAskLimit};
 use fleet::repositories::Locating;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
@@ -110,6 +110,16 @@ pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 /// before `#693` moved Fleet's blocking `git`/`gh` calls off the async
 /// runtime and made that number stop describing the system.
 pub const PROVISIONAL_COMMAND_BUDGET: Duration = Duration::from_secs(15);
+
+/// How long a permission ask may run unanswered before Fleet gives up
+/// waiting for a person and reclaims the Job's slot: ends the Drone, stops
+/// the step and escalates the Job as `ask_unanswered`. `#801`.
+///
+/// **Provisional, and measured on nothing** — chosen only to sit an order of
+/// magnitude past [`permitting::HOLD`]'s few minutes, which bounds the
+/// harness's own call rather than the Job's patience for a person, and
+/// comfortably short of the "overnight" `#801` was filed about.
+pub const PROVISIONAL_UNANSWERED_ASK_LIMIT: Duration = Duration::from_secs(30 * 60);
 
 /// How long the Job proposer's call may take.
 ///
@@ -766,6 +776,7 @@ fn assemble(
         // from what the agent CLI itself waits, so it stays spelled beside that
         // derivation and this line only names it.
         permission_hold: PermissionHold::of(permitting::HOLD),
+        unanswered_ask_limit: UnansweredAskLimit::of(PROVISIONAL_UNANSWERED_ASK_LIMIT),
         judge_model,
         proposer_model,
         // The one link shape resolved before dispatch. See

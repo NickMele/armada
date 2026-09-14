@@ -23,6 +23,20 @@ use crate::job::status::JobStatus;
 /// `domain/escalation-triggers.toml`, one variant each.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EscalationTrigger {
+    /// The Drone was ended by Fleet because a person never answered a
+    /// permission ask about one of its calls before the ask's own bound ran
+    /// out, and the step stopped where it stood.
+    ///
+    /// **[`DroneKilled`](Self::DroneKilled) and [`RunEnded`](Self::RunEnded)'s
+    /// third sibling**: none of the three weighed the work, so none is
+    /// overrulable. What differs is what took the process away — a person, the
+    /// Drone's own word its run was over, or here, nobody ever answering.
+    ///
+    /// **Unlike its two siblings, this is also the Job's own escalation
+    /// reason**: they leave what the Job stopped *for* to the ending's own
+    /// classification, and there is nothing to classify here — a person's
+    /// silence is the whole of why the Job stopped.
+    AskUnanswered,
     /// The Drone was refused a tool or command it needed, never reached for
     /// anything again, and finished having submitted no evidence. It tried and
     /// was stopped, where [`Silent`](Self::Silent) called nothing at all — the
@@ -332,7 +346,8 @@ impl StepLevelTrigger {
     pub fn overrulable(&self) -> bool {
         match self.0 {
             EscalationTrigger::GateFailure | EscalationTrigger::EvidenceSuspect => true,
-            EscalationTrigger::GateUndecided
+            EscalationTrigger::AskUnanswered
+            | EscalationTrigger::GateUndecided
             | EscalationTrigger::BlockedByPolicy
             | EscalationTrigger::CheckTimeout
             | EscalationTrigger::DroneKilled
@@ -367,6 +382,7 @@ impl StepLevelTrigger {
 impl EscalationTrigger {
     /// Every variant, in registry order.
     pub const ALL: &'static [EscalationTrigger] = &[
+        EscalationTrigger::AskUnanswered,
         EscalationTrigger::BlockedByPolicy,
         EscalationTrigger::CheckTimeout,
         EscalationTrigger::DependencyFailed,
@@ -396,6 +412,7 @@ impl EscalationTrigger {
     /// The wire value, which is also the registry key.
     pub fn as_wire(&self) -> &'static str {
         match self {
+            EscalationTrigger::AskUnanswered => "ask_unanswered",
             EscalationTrigger::BlockedByPolicy => "blocked_by_policy",
             EscalationTrigger::CheckTimeout => "check_timeout",
             EscalationTrigger::DependencyFailed => "dependency_failed",
@@ -456,7 +473,8 @@ impl EscalationTrigger {
     /// to attach to, because no step is the reason.
     pub fn level(&self) -> TriggerLevel {
         match self {
-            EscalationTrigger::BlockedByPolicy
+            EscalationTrigger::AskUnanswered
+            | EscalationTrigger::BlockedByPolicy
             | EscalationTrigger::CheckTimeout
             | EscalationTrigger::EvidenceSuspect
             | EscalationTrigger::EvidenceTooLarge
