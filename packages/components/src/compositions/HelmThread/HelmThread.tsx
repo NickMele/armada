@@ -57,9 +57,11 @@ export function HelmThread({
                 <span className="armada-helm-thread__who">{row.actor === "you" ? "You" : "Helm"}</span>
                 <span className="armada-helm-thread__at">{row.at}</span>
               </div>
-              <p className="armada-helm-thread__message" data-mono={row.mono || undefined}>
-                {row.message}
-              </p>
+              <div className="armada-helm-thread__message" data-mono={row.mono || undefined}>
+                {typeof row.message === "string"
+                  ? row.message.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)
+                  : row.message}
+              </div>
               {row.meta === undefined ? null : <p className="armada-helm-thread__meta">{row.meta}</p>}
             </li>
           ))}
