@@ -164,9 +164,20 @@ impl TempRepo {
     ///
     /// **Never a real remote.** A push in a test that reached a network would
     /// be a test that needs a credential and touches somebody's account.
+    ///
+    /// **`main` by name, for [`TempRepo::empty`]'s own reason.** A bare
+    /// repository's `HEAD` defaults to whichever branch git guesses — the
+    /// machine's `init.defaultBranch`, or its own fallback where that is
+    /// unset — never necessarily `main`. A clone of a bare `HEAD` naming a
+    /// branch nothing has pushed yet checks nothing out, so the clone
+    /// succeeds and every push after it fails with "src refspec main does
+    /// not match any" — the setup failing for a reason nothing under test
+    /// caused. `#1098`.
     pub fn with_a_bare_remote(&self) -> PathBuf {
         let bare = self.root.with_extension("remote.git");
-        Repository::init_bare(&bare).expect("a bare repository");
+        let mut options = git2::RepositoryInitOptions::new();
+        options.bare(true).initial_head("main");
+        Repository::init_opts(&bare, &options).expect("a bare repository");
         let bare = bare.canonicalize().expect("a real path");
         self.git(&["remote", "add", "origin", &bare.to_string_lossy()]);
         bare
