@@ -429,15 +429,11 @@ It lands in the handoff bundle, and Fleet assembles everything else in the hando
 
 ## Written output
 
-A Drone writes text that leaves Armada permanently: commit messages and PR descriptions land in a real repo and are read by humans who are not you. That text is governed by `../contracts/agent-copy.md`, which sits under `../contracts/design-system.md`. Text going the other way — what a Drone is **told** — is governed by its sibling, `../contracts/agent-prompt.md`.
+A Drone writes no text that leaves Armada: Fleet composes the commit message and the PR description from the Job's record, and a Drone is denied `git`. What a Drone does write is governed by `../contracts/agent-copy.md`, which sits under `../contracts/design-system.md`. Text going the other way — what a Drone is **told** — is governed by its sibling, `../contracts/agent-prompt.md`.
 
-The surfaces a Drone writes to are rows in the Copy registry under `Written by = Drone`, each carrying its enforcement, its reader and its samples. Enforcement splits by destination rather than by surface: text landing in a real repo is read by people who did not ask for it, which is what earns a hard gate.
-
-**A gate failure gets one free correction round that does not consume the retry budget.** Why: without the free round a style bounce spends `retry_count`, and enough of them escalate the Job as `gate_failure`. It reuses the one-free-round mechanism for present-but-insufficient evidence above, so a phrasing problem can cost a turn and can never escalate a Job.
+The surfaces a Drone writes to are rows in the Copy registry under `Written by = Drone`, each carrying its enforcement, its reader and its samples. None of them leaves Armada, so none draws a gate.
 
 **Seeded with real samples, not more rules.** The Drone prompt carries curated exemplars from actual pre-AI commit history. Corpus build is an open task on the Agent Copy Contract, targeted at the M0 v1 harvest.
-
-**Open collision:** the Manifest-level `Commit/PR message template` setting could mandate a format the lint rejects — tracked in `../contracts/configuration.md`.
 
 ## Open questions
 

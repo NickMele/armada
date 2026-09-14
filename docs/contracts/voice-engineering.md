@@ -99,8 +99,9 @@ the same codegen intent already noted for the status tokens.
 
 - CI, over the Bridge static string catalog. Catches drift in hand-written
   UI copy.
-- The checks runner, over agent-written PR bodies, commit messages and
-  Judge summaries. See [the Agent Copy Contract](agent-copy.md).
+- The checks runner, over Judge summaries. Fleet composes PR bodies and
+  commit messages from the record, so no lint reads them. See
+  [the Agent Copy Contract](agent-copy.md).
 
 *Source: P6 and the Agent Copy Contract. Phase: CI lint early, checks-runner
 lint with the checks runner.*

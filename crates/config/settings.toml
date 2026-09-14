@@ -281,25 +281,25 @@ Noise tolerance varies by machine; the adapter itself is in-app only until Phase
 [settings.copy-lint-enforcement-mode-gate-vs-warning]
 name = "Copy lint enforcement mode (gate vs warning)"
 scope = "Kit → Manifest"
-default = "Gate on commit messages and PR descriptions; warning on Judge summaries"
+default = "Warning on Judge summaries"
 lifetime = "Live"
 merge_strategy = "REPLACE"
 peer_polarity = "Union (deny-shaped)"
 read_by = "verification"
 notes = """
-Split by destination, not by surface. Text that leaves Armada and is read by people who did not ask for it earns a gate; text that stays inside does not. A gate failure gets one free correction round that does not consume the retry budget — without it a style bounce spends retry_count and a Job can escalate as gate_failure over an em dash, which is what made a hard gate look dangerous. It reuses the existing one-free-round mechanism for present-but-insufficient evidence. Voice cannot widen or narrow this in either direction. A block wins over a warning across a Convoy's Manifests. A repo asking for its own commit messages to be gated should not have that switched off by a peer repo that did not. Owner is empty on purpose: Agent Copy Contract is a Doc, not a Concept row, and the unit that enforces this is verification.
+Split by destination, not by surface. No agent writes text that leaves Armada: Fleet composes PR descriptions and commit messages from the Job's record, so neither is linted. Judge summaries stay inside and draw a warning. The lint is not built. A gate here would need a correction round that does not consume the retry budget, or a style bounce spends retry_count and a Job can escalate as gate_failure over an em dash. Voice cannot widen or narrow this in either direction. A block wins over a warning across a Convoy's Manifests. Owner is empty on purpose: Agent Copy Contract is a Doc, not a Concept row, and the unit that enforces this is verification.
 """
 
 [settings.copy-lint-scope-which-surfaces-are-linted]
 name = "Copy lint scope (which surfaces are linted)"
 scope = "Kit → Manifest"
-default = "PR descriptions, commit messages, Judge summaries"
+default = "Judge summaries"
 lifetime = "Live"
 merge_strategy = "APPEND_AND_REMOVE"
 peer_polarity = "Intersect (allow-shaped)"
 read_by = "verification"
 notes = """
-New, undecided. Evidence summaries and Helm replies are deliberately not linted. Open whether a Manifest may change this scope, in either direction, and whether Voice/tone interacts with it. The question was previously framed as whether a Manifest may narrow it — that framing came from the config direction rule, withdrawn Aug 22 2026, and the question is wider than it was. Owner empty for the same reason as Copy lint enforcement mode.
+New, undecided. Evidence summaries and Helm replies are deliberately not linted, and Fleet composes PR descriptions and commit messages from the record. Open whether a Manifest may change this scope, in either direction, and whether Voice/tone interacts with it. The question was previously framed as whether a Manifest may narrow it — that framing came from the config direction rule, withdrawn Aug 22 2026, and the question is wider than it was. Owner empty for the same reason as Copy lint enforcement mode.
 """
 
 [settings.allowlist-safe-ops]
@@ -398,7 +398,7 @@ peer_polarity = "n/a — single layer"
 owner = "Manifest"
 read_by = "fleet"
 notes = """
-Project-specific convention. Open collision: a project template could mandate a format the copy lint rejects (a required bulleted body, say). Precedence between the Manifest template and the Agent Copy Contract lint is undecided.
+Project-specific convention. No copy lint reads commit messages or PR descriptions, which Fleet composes, so a template cannot collide with one.
 """
 
 [settings.secrets-exposure-method-env-var-vs-file-injection-naming]

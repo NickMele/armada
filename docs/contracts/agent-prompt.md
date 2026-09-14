@@ -193,9 +193,7 @@ generated-text tells: puffery, weasel attribution, faux-insight setups.
 The case for making it configurable assumed the blocklist holds phrasing a
 warm Voice would want, and it does not.
 
-Two things reinforce it. The lint now **hard-gates commit messages and PR
-descriptions**, so a widening Voice would let a tone setting weaken a
-gate. And the may-narrow-never-widen precedent is withdrawn — it came from
+The may-narrow-never-widen precedent is withdrawn too — it came from
 the config direction rule, itself withdrawn once Kit was found to be
 defaults rather than a ceiling. Under the Kit/Machine split Voice is a
 Machine setting: one tier, nothing to narrow against.
@@ -1458,7 +1456,7 @@ below.
 | **Tool documentation.** How a Drone is shown its Commands and MCP tools, and with what descriptions. Commands, MCP and Sub agents are frozen for the Job and this contract names no wording for any of them. Tracked separately | 2, 3 |
 | **No token budget** for the assembled prompt. Six layers plus a corpus, unbounded | 3 |
 | **Wording for the injected turns.** Every turn Fleet authors and injects is drafted rather than sanctioned. The one entry with sanctioned wording, the refusal reprompt, is injected into nothing — it rides a brief | 4a |
-| **The `Commit/PR message template` collision.** A Manifest template is layer-3 prompt content and it is a shape rule. Section 5 forbids shape rules in the baseline and says nothing about layers 2 to 6. Precedence against the copy lint is undecided | 3, 5 |
+| **The `Commit/PR message template` collision.** A Manifest template is layer-3 prompt content and it is a shape rule. Section 5 forbids shape rules in the baseline and says nothing about layers 2 to 6 | 3, 5 |
 | **Prior-iteration context on loop workflows.** Evidence Scope appends it, which is a further source of prompt content — and for the Judge it sits oddly against "stateless, one-shot, no memory between calls" | 2, 3 |
 | **Helm has no frozen/live story.** Sessions are persistent and per-Manifest; Voice and authority are configurable; Helm has no respawn path. What happens to a live session when the Kit or Machine config changes is unstated | 4 |
 | **Two of the three Job shapes have no name** to classify into. Inherited from System Architecture | 2 |
