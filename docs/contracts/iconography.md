@@ -772,3 +772,23 @@ should paper over.
   it is whether a person scanning the Board can tell this row from a
   `stalled` row on the words alone; if they can, it stays wordless, the
   same way the three above were left.
+
+- **[drone-gone-glyph]** Which glyph, if any, carries the escalation
+  reason `drone_gone` — the step a person restarted whose Drone had
+  already left, on its own or across a Fleet restart, before anybody
+  acted? It ships drawing its verb alone, **the Drone was already gone**,
+  beside the escalation reasons that already draw one. What was looked at
+  and refused: `unplug` is `interrupted`'s, and lending it here would draw
+  a person's own restart the same way as a process Fleet found dead on its
+  own, which is a different claim about who noticed and when; `octagon-alert`
+  is reserved to `stalled` by its own note, and `stalled` is the Job's own
+  reason this trigger sits beside rather than replaces; `user-check` is the
+  only human silhouette in the badge set and means a person is *required*,
+  which is the opposite of a person having already pressed restart. This
+  row is closest to `[drone-killed-glyph]` — both name a person's own act —
+  and what makes it a different question is that `drone_killed` ends a
+  process and this one finds none to end; a glyph answering the first
+  question is not automatically honest about the second. What decides it is
+  whether a person scanning the Board can tell this row from a
+  `drone_killed` row on the words alone; if they can, it stays wordless,
+  the same way `[drone-killed-glyph]` above was left.

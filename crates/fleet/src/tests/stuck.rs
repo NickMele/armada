@@ -529,6 +529,53 @@ async fn killing_a_stalled_jobs_drone_turns_the_redirect_into_a_restart() {
     assert_eq!(stuck.stopped_by.as_deref(), Some("drone_killed"));
 }
 
+/// **#1034: the same dead end reached without a kill.** The vigil escalates
+/// the Job on `stalled` over a Drone that is still there, and this time
+/// nobody ends it — it leaves on its own, which `dispatch::reap`'s
+/// `Aftermath::AlreadyStopped` arm sees and clears the pointer for, without
+/// stopping the step. Before this, the step stayed `running` forever and both
+/// resume acts refused it.
+#[tokio::test]
+async fn a_stalled_jobs_drone_that_leaves_on_its_own_turns_the_redirect_into_a_restart() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_leaves());
+    let job = stalled(&fleet, &home).await;
+    until_reaped(&fleet).await;
+
+    let record = fleet.load(&job).await.unwrap();
+    assert_eq!(record.status(), JobStatus::Escalated);
+    assert_eq!(
+        record.step(&StepId::new(IMPLEMENT)).map(|row| row.state()),
+        Some(StepState::Running),
+        "nobody stopped the step — the record still says a Drone is working it"
+    );
+
+    let stuck = detail(&fleet, &job).await.stuck.expect("it stopped");
+    assert_eq!(
+        spelled(&stuck),
+        ["restart_step", "redispatch_job"],
+        "the redirect goes with the Drone and the restart arrives with the empty slot"
+    );
+
+    fleet
+        .restart_step(&job, None)
+        .await
+        .expect("the act the classification named");
+
+    let record = fleet.load(&job).await.unwrap();
+    let row = record.step(&StepId::new(IMPLEMENT)).expect("the step");
+    assert_eq!(row.state(), StepState::Stopped);
+    assert_eq!(
+        row.last_verdict(),
+        Some(StepVerdict::Failed(
+            StepLevelTrigger::of(EscalationTrigger::DroneGone).expect("a step-level trigger")
+        )),
+        "the restart is what stopped it, and the row says so rather than \
+         claiming a person killed a Drone that had already left"
+    );
+    assert_eq!(record.status(), JobStatus::Queued);
+}
+
 /// The half the issue is actually about: **the step that already passed
 /// survives the recovery.**
 ///

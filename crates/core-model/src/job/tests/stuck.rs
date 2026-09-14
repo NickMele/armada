@@ -187,6 +187,77 @@ fn an_unheard_drone_with_no_worktree_is_not_offered_the_restart() {
     assert_eq!(stuck.recourse(), [Recourse::Redispatch]);
 }
 
+/// **#1034.** A Drone genuinely there when the Job escalated `stalled` has
+/// since left — ended on its own, or lost to a Fleet restart — and the step
+/// it left is still `running`. The trigger is read off the transition, as
+/// every Job-level reading is, so `classify` (which passes `None`) cannot
+/// reach this case; `Stuck::of` is called directly with the reason a real
+/// caller would supply.
+#[test]
+fn a_stalled_jobs_drone_that_left_on_its_own_is_restarted() {
+    // `stalled()` never dispatches a step — it is the shape a Job-level
+    // escalation over a Drone that was never sent anywhere leaves — so this
+    // builds the shape the vigil actually produces: a step entered `running`
+    // before the Job escalates over it, as `unheard_job` does for `unheard`.
+    let job = drive(&created(), &[Target::Queued, Target::Running])
+        .transition_step(
+            &StepId::new("repro"),
+            StepTarget::Running,
+            Actor::Fleet,
+            at("2026-08-26T09:02:00.000Z"),
+        )
+        .expect("not_started -> running")
+        .job;
+    let job = drive(&job, &[Target::Escalated(EscalationTrigger::Stalled)]);
+    let reason = TransitionReason::Escalation(EscalationTrigger::Stalled);
+
+    let stuck =
+        Stuck::of(&job, Some(&reason), drone_gone(), Refusals::none(), None).expect("escalated");
+
+    assert_eq!(
+        stuck.recourse(),
+        [Recourse::RestartStep, Recourse::Redispatch],
+        "the Drone that was there when the Job escalated has since gone, and \
+         the step it left running is what a restart lands on"
+    );
+}
+
+/// **The trigger is what tells this apart from a Drone that never existed.**
+/// `would_not_start`, `not_configurable`, `no_worktree` and
+/// `resource_exhausted` reach the identical four facts — step running, no
+/// Drone, worktree on disk — with no Drone ever having been assigned, and
+/// offering a restart there is the redispatch dressed up as a cheaper act.
+#[test]
+fn the_same_shape_under_a_different_trigger_offers_no_restart() {
+    for trigger in [
+        EscalationTrigger::WouldNotStart,
+        EscalationTrigger::NotConfigurable,
+        EscalationTrigger::NoWorktree,
+        EscalationTrigger::ResourceExhausted,
+    ] {
+        let working = drive(&created(), &[Target::Queued, Target::Running])
+            .transition_step(
+                &StepId::new("repro"),
+                StepTarget::Running,
+                Actor::Fleet,
+                at("2026-08-26T09:02:00.000Z"),
+            )
+            .expect("not_started -> running")
+            .job;
+        let job = drive(&working, &[Target::Escalated(trigger)]);
+        let reason = TransitionReason::Escalation(trigger);
+
+        let stuck = Stuck::of(&job, Some(&reason), drone_gone(), Refusals::none(), None)
+            .expect("escalated");
+        assert_eq!(
+            stuck.recourse(),
+            [Recourse::Redispatch],
+            "{}: a Drone that never existed is not one that left",
+            trigger.as_wire()
+        );
+    }
+}
+
 /// The trigger a Job-level escalation carries is on the transition and nowhere
 /// else, so a classification that did not read it would have nothing to say
 /// about the commonest escalation there is.
