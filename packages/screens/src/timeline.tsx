@@ -22,13 +22,15 @@ import { Fragment, type ReactNode } from "react";
 import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
 import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/components";
 
+import { isSweepMarker } from "./declared";
 import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import { askedOf, didNotPass, judgeAsking } from "./gates";
+import { declaredPatterns, declaresGaming, flagsOf, gamingReached, gamingSummary } from "./gaming";
 import { entriesOf } from "./story";
 
 /** Which phase a row is. What an attempt wrote rides on `working`. */
-export type TimelinePhase = "instructed" | "working" | "checks" | "judge";
+export type TimelinePhase = "instructed" | "working" | "checks" | "judge" | "gaming";
 
 /** One phase of one attempt. */
 export type TimelineRow = {
@@ -179,7 +181,11 @@ export function timelineOf(
         ...(kept.length === 0 ? {} : { kept }),
       },
     ];
-    const gate = [checksRow(step, attempt, runs, current), judgeRow(step, attempt, ruled, current)];
+    const gate = [
+      checksRow(step, attempt, runs, current),
+      judgeRow(step, attempt, ruled, current),
+      gamingRow(asAttempt(step, attempt, ended, current), attempt, current),
+    ];
     for (const row of gate) if (row !== undefined) rows.push(row);
     return {
       id: `attempt-${attempt.attempt}`,
@@ -342,7 +348,9 @@ function checksRow(
   runs: CheckRun[],
   current: boolean,
 ): TimelineRow | undefined {
-  const declared = step.checks?.length ?? 0;
+  // Without the sweep marker, which declares every Manifest Check and never
+  // runs: counted, it read `8 of 9` beside the rail's `8 of 8`. #1079.
+  const declared = (step.checks ?? []).filter((check) => !isSweepMarker(check)).length;
   const running = current && step.checking?.attempt === attempt.attempt;
   const failed = runs.filter(didNotPass);
   const mark: StepActivity =
@@ -424,6 +432,36 @@ function judgeRow(
 }
 
 /**
+ * This attempt's gaming check. #1079.
+ *
+ * **Its own row, after the Judge, and counted in neither tier.** A flag is not
+ * a verdict. It is read off `read`, the step narrowed to this attempt, so the
+ * row and the section it opens say one thing.
+ */
+function gamingRow(read: StepDetail, attempt: StepAttempt, current: boolean): TimelineRow | undefined {
+  if (!declaresGaming(read) && read.flagged.length === 0) return undefined;
+  const flags = flagsOf(read, read.flagged);
+  const stopped = flags.held.length > 0 && !read.overridden;
+  const asking = current && read.judging?.look === "gaming";
+  const reached = gamingReached(read);
+  const mark: StepActivity = stopped
+    ? "stopped"
+    : asking
+      ? "running"
+      : reached
+        ? "advanced"
+        : "not_started";
+  return {
+    id: `${attempt.attempt}-gaming`,
+    phase: "gaming",
+    name: "Gaming check",
+    mark,
+    meta: asking ? "asking" : gamingSummary(flags, reached, stopped, declaredPatterns(read)),
+    ...(asking ? { live: true } : {}),
+  };
+}
+
+/**
  * The timeline as the panel draws it: the phases of each attempt, with the
  * step's own chapters arranged into the rows they belong to.
  *
@@ -490,6 +528,7 @@ const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
   working: ["log", "shown", "produced"],
   checks: ["checks"],
   judge: ["verdicts"],
+  gaming: ["gaming"],
 };
 
 /**

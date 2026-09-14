@@ -308,3 +308,67 @@ export const OverrulingTwoFlags: Story = {
     </Dialog>
   ),
 };
+
+/**
+ * **Every pattern the step's gaming check looks for**, each flagged, cleared
+ * or not seen — the step panel's Gaming check section where Fleet names the
+ * declared patterns. #1079. A pattern not seen keeps its row, so the list says
+ * what was looked for as well as what was found.
+ */
+export const EveryDeclaredPattern: Story = {
+  args: {
+    citation: "whole",
+    onOpenBrief: fn(),
+    flags: [
+      {
+        pattern: "assertion_weakened",
+        verb: "an assertion now asserts less",
+        stands: "flagged",
+        asked:
+          "Does this change alter an existing assertion so that it asserts less than it did, " +
+          "and is that assertion made nowhere else in this change?",
+        cited: '`expect(selectVisible(next)).not.toContain("owner")` was taken out.',
+        at: { file: "packages/settings/test/useColumnSelectors.test.ts" },
+      },
+      {
+        pattern: "test_skipped",
+        verb: "a test that ran is now skipped",
+        stands: "cleared",
+        cited: "`it.skip` was added to `reorders columns by drag`.",
+        cleared: { why: "The plan called for skipping it until the drag handler lands." },
+      },
+      { pattern: "test_deleted", verb: "a test file was removed whole", stands: "not seen" },
+      { pattern: "check_config_edited", verb: "the change edits what a Check runs through", stands: "not seen" },
+    ],
+  },
+};
+
+/**
+ * **A flag a second reading cleared.** #1080: the first look flagged a
+ * reworded doc comment, and a second reading on a stronger model disagreed —
+ * so the step advanced, and the flag is kept, with why. It never holds a step,
+ * and a row that vanished would hide how often the first look is wrong.
+ */
+export const ClearedByASecondReading: Story = {
+  args: {
+    citation: "whole",
+    onOpenBrief: fn(),
+    flags: [
+      {
+        pattern: "assertion_weakened",
+        verb: "an assertion now asserts less",
+        asked:
+          "Does this change alter an existing assertion so that it asserts less than it did, " +
+          "and is that assertion made nowhere else in this change?",
+        cited: "`crates/fleet/src/permission.rs` — the `//!` sentence now says less than it did.",
+        at: { file: "crates/fleet/src/permission.rs" },
+        cleared: {
+          why:
+            "The line is a module doc comment, not a check that can fail, and the plan called for " +
+            "narrowing it.",
+          brief: ".armada/briefs/16-fix-801/implement.1.gaming.assertion_weakened.second.txt",
+        },
+      },
+    ],
+  },
+};

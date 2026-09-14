@@ -111,6 +111,14 @@ export type JobDetailProps = {
   /** Overrule a Judge that refused the work, with the reason. */
   onOverrule: (jobId: string, reason: string) => void;
   /**
+   * Send a step a gaming flag held back to be worked again, with an optional
+   * note for the next Drone. **The restart, answered from the card**, where the
+   * Drone has gone; where it still holds its session the card redirects it
+   * through `onRedirect` instead. The card's answer is its own confirmation,
+   * as the redirect's dialog is. #1079.
+   */
+  onSendBack: (jobId: string, note?: string) => void;
+  /**
    * Give this job a higher cost ceiling, in millionths of a dollar. **The one
    * handler here that moves no part of the job** — it stops the next dispatch
    * being refused for money, and the job stays exactly where it was.

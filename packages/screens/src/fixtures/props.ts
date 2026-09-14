@@ -60,6 +60,7 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onRemoveAllowedCommand: noop,
     models: MODELS,
     onOverrule: noop,
+    onSendBack: noop,
     onRaiseCap: noop,
     onRaiseTurnCap: noop,
     onRerun: noop,

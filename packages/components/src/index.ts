@@ -286,3 +286,5 @@ export * from "./compositions/ProposalSheet/ProposalSheet";
 export * from "./compositions/ValuePopover/ValuePopover";
 // Overview's band — Fleet, Doctor, Drones, Queued and Manifest drift at a glance.
 export * from "./compositions/OverviewTile/OverviewTile";
+// The card a gaming flag holds a step with, and the two answers to it. #1079.
+export * from "./compositions/HeldFlag/HeldFlag";

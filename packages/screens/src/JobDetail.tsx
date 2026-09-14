@@ -54,6 +54,7 @@ import { renderFor } from "./render";
 import { runOf, whyNoSteps } from "./run";
 import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, waitingOf } from "./step";
 import { StepActs } from "./StepActs";
+import { refusedAsideOf, type Deciding } from "./flag-held";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
@@ -136,6 +137,7 @@ function OneJob({
   onRemoveAllowedCommand,
   models,
   onOverrule,
+  onSendBack,
   onRerun,
   onShowAgain,
   onReport,
@@ -527,6 +529,9 @@ function OneJob({
   // One way to answer a command the Drone was not given, for both places a
   // person meets one: the command it is waiting on, and a refused row.
   const answering = answeringOf(job.id, stale, acting, onAnswerCommand);
+  // What the card a gaming flag holds a step with draws from and sends. #1079.
+  const flagAnswers: Deciding = { diff: recorded.diff, stale, acting, onOverrule, onSendBack, onRedirect };
+  const refusedAside = open === undefined ? undefined : refusedAsideOf(whole, open, answering);
   // Bound to the Job being read, so nothing downstream carries an id back.
   const explain =
     onExplainCommand === undefined ? undefined : (call: string) => onExplainCommand(job.id, call);
@@ -681,13 +686,16 @@ function OneJob({
               // A question outranks the render's own notice: nothing else on
               // this step is what a person is here for while one is open, and
               // the two would otherwise both claim the band.
-              notice: askingOf(whole) ?? noticeOf(job, whole, render, open, opensRecords, answering),
+              notice:
+                askingOf(whole) ?? noticeOf(job, whole, render, open, opensRecords, answering, flagAnswers),
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
               // box a person acts in about the step they are looking at. A
               // command the Drone is waiting on is the same box, and at the gate
               // so is the review (the owner, 11 Sep 2026).
-              before: atGate ? <>{waiting}{verdictSlot}</> : waiting,
+              // Refused commands on a step a flag holds fold into a card of
+              // their own here, out of the band: they are not why it stopped.
+              before: atGate ? <>{waiting}{verdictSlot}</> : <>{refusedAside}{waiting}</>,
               timelineAbsent: whyNoSteps(watched, job.id),
               timeline,
               openRow: keys.openChapterId,

@@ -296,6 +296,8 @@ for (const [outcome, flag] of advances) {
 const vocabularies = new Map(WANTED.map((name) => [name, []]));
 const gaps = [];
 const glyphs = new Set();
+// What each gaming pattern means, for the card a flag holds a step with.
+const meanings = [];
 
 for (const [header, table] of verbs) {
   const parts = header.split(".");
@@ -315,6 +317,33 @@ for (const [header, table] of verbs) {
   const icon = table.icon ?? "";
   const token = table.status_token ?? "";
   const hint = table.hint ?? "";
+  // A gaming flag stops a step and the card that holds it leads with what the
+  // pattern means, so all nine carry both or the build stops. #1079.
+  if (vocabulary === "gaming_pattern") {
+    const headline = table.headline ?? "";
+    const explanation = table.explanation ?? "";
+    if (headline === "" || explanation === "") {
+      throw new Error(
+        `enum-verbs.toml — [verbs.gaming_pattern.${variant}] names no headline or no explanation`,
+      );
+    }
+    // Three reasons a person may give for carrying on past the flag, as a
+    // one-line array of basic strings, which JSON reads as it is written.
+    let presets = null;
+    try {
+      presets = JSON.parse(table.presets ?? "");
+    } catch {
+      presets = null;
+    }
+    if (
+      !Array.isArray(presets) ||
+      presets.length !== 3 ||
+      presets.some((one) => typeof one !== "string" || one === "")
+    ) {
+      throw new Error(`enum-verbs.toml — [verbs.gaming_pattern.${variant}] names no three presets`);
+    }
+    meanings.push({ variant, headline, explanation, presets });
+  }
   const missing = [];
   if (verb === "") missing.push("verb");
   if (icon === "") missing.push("icon");
@@ -417,6 +446,24 @@ for (const outcome of advances.keys()) {
   }
 }
 
+lines.push("/**");
+lines.push(" * What a gaming pattern means to the person reading a step it stopped: a plain");
+lines.push(" * headline, and what it means in a sentence or two. From `enum-verbs.toml`,");
+lines.push(" * beside the verb, so all nine read the same on every surface. #1079.");
+lines.push(" */");
+lines.push(
+  "export const GAMING_PATTERN_MEANING: Readonly<Record<string, " +
+    "{ readonly headline: string; readonly explanation: string; readonly presets: readonly string[] } " +
+    "| undefined>> = {",
+);
+for (const row of meanings) {
+  lines.push(
+    `  ${JSON.stringify(row.variant)}: { headline: ${JSON.stringify(row.headline)}, ` +
+      `explanation: ${JSON.stringify(row.explanation)}, presets: ${JSON.stringify(row.presets)} },`,
+  );
+}
+lines.push("};");
+lines.push("");
 lines.push("/** Where a Job is in its life, from `job-statuses.toml`. Not a rendering. */");
 lines.push("export type Lifecycle = {");
 lines.push("  /** Whether the Job is over here. */");

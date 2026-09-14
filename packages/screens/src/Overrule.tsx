@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { Button, Dialog, GAMING_PATTERN, GamingFlags, Textarea } from "@armada/components";
 
-import { onlyCurrentAttempt } from "./facts";
+import { flagsOf } from "./gaming";
 import { openKept, type Opens } from "./phases";
 import { onwards, OVERRULING, type Overrule } from "./recovery";
 
@@ -83,7 +83,7 @@ export function OverruleControl({
   // rather than counted: what was cited is the whole value of a flag, exactly
   // as a citation is the whole value of a refusal.
   const flagged =
-    overrule.trigger === "evidence_suspect" ? onlyCurrentAttempt(overrule.step.flagged) : [];
+    overrule.trigger === "evidence_suspect" ? flagsOf(overrule.step).held : [];
 
   function close() {
     setOpen(false);

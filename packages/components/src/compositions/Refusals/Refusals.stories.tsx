@@ -385,3 +385,32 @@ export const NothingWasRefused: Story = {
     refused: [],
   },
 };
+
+/**
+ * **Folded, on a step a gaming flag holds.** #1079: three refused commands sat
+ * in the same box as the flag, and read as a second reason the step stopped.
+ * They are kept, in a card of their own that says they are not why, and the
+ * rows open only when somebody asks.
+ */
+export const FoldedBesideAFlag: Story = {
+  args: {
+    refused: [
+      { tool: "Bash", detail: "cargo nextest run --package fleet 2>&1 | tail -80" },
+      { tool: "Bash", detail: "git stash" },
+      { tool: "WebFetch", detail: "https://docs.rs/tokio" },
+    ],
+    folded: {
+      summary: "3 commands were refused during Implement",
+      aside: "not why it stopped",
+      showLabel: "Show them",
+      hideLabel: "Hide them",
+    },
+  },
+  /** Folded is unmounted rows, not hidden ones — the one thing a rendering cannot show. */
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByText("git stash")).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Show them" }));
+    await expect(canvas.getByText("git stash")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Hide them" })).toHaveAttribute("aria-expanded", "true");
+  },
+};

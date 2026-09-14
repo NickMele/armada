@@ -78,6 +78,7 @@ import { checksChapter } from "./checks";
 import { panelsOf } from "./gates";
 import type { Opens } from "./phases";
 import { verdictsChapter } from "./verdicts";
+import { gamingChapter } from "./gaming-check";
 
 export { CHECKS_CHAPTER } from "./checks";
 export { VERDICTS_CHAPTER } from "./verdicts";
@@ -139,6 +140,8 @@ export function evidenceChaptersOf({
   return [
     checksChapter(step, panels, opens, now, undecided, onRunHere, openCheckId, onOpenCheck),
     verdictsChapter(step, panels, opens, undecided),
+    // After the Judge and counted in neither tier: a flag is not a verdict. #1079.
+    gamingChapter(step, opens),
   ].filter(
     (chapter): chapter is Unnumbered => chapter !== undefined,
   );

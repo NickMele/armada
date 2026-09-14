@@ -1,0 +1,141 @@
+/* Held flag — the card a gaming flag holds a step with. #1079.
+
+   No hue of its own. It sits in the stopped band, which already carries the
+   step's, and a flag is not a verdict: --step-failed here would draw a refused
+   criterion. Weight and order carry it instead — what it means, the lines,
+   what it asked, then the two answers. */
+.armada-held-flag {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-held-flag__finding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Two flags on one step are two findings, and the rule says there are two. */
+.armada-held-flag__finding + .armada-held-flag__finding {
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+/* The registry's headline. A sentence, so sans, and the one line on the card
+   at full contrast and weight. */
+.armada-held-flag__headline {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+/* The wire spelling, where no headline arrived. A value, so mono. */
+.armada-held-flag__pattern {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+/* What it means. --fg-muted and never --fg-subtle: this is the sentence a
+   person decides on, not metadata. */
+.armada-held-flag__explanation,
+.armada-held-flag__means {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-held-flag__cited {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  min-width: 0;
+}
+
+/* A path. Mono, and it wraps rather than clipping: a location cut short is a
+   location nobody can use. */
+.armada-held-flag__at {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow-wrap: anywhere;
+}
+
+.armada-held-flag__asked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-held-flag__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+/* The check's own question quoted back, ruled the way GamingFlags rules it. */
+.armada-held-flag__question {
+  margin: 0;
+  padding-left: var(--space-2);
+  border-left: var(--border-width) solid var(--border-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The two answers, stacked. Stacked rather than side by side, so the card
+   holds its shape at the window floor without a width of its own. */
+.armada-held-flag__decide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+.armada-held-flag__answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-held-flag__answer-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-held-flag__press {
+  display: flex;
+}
+
+.armada-held-flag__withheld {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

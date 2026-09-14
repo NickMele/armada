@@ -222,3 +222,41 @@
   color: var(--fg-muted);
   text-wrap: pretty;
 }
+
+/* --- Folded, as a card of its own ----------------------------------------- */
+
+/* On a step something else stopped, out of the band and framed apart from it:
+   the refusals are kept and are not the reason. The card's own edge and
+   ground, and no hue — nothing here is the step's state. #1079. */
+.armada-refusals[data-folded] {
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.armada-refusals__fold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
+  row-gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+.armada-refusals__summary {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+/* That this is not why the step stopped. Metadata contrast, because it is a
+   note about the card rather than a finding. */
+.armada-refusals__aside {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+}
