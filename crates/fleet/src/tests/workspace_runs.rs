@@ -163,3 +163,62 @@ async fn every_run_route_refuses_both_names() {
     }
     assert!(!Path::new(&root).join("apps/web/said.txt").exists());
 }
+
+/// **A root Manifest's own page lists its workspaces' Commands too**, and the
+/// directories are walked once: a workspace added later appears once they are
+/// let go, as a re-read or a write lets them go.
+#[tokio::test]
+async fn a_root_manifests_sheet_lists_its_workspaces_once_walked() {
+    let home = TempDir::new();
+    let fleet = a_checkout(&home);
+    std::fs::write(home.path().join("apps/web/package.json"), "{}").expect("a package");
+
+    let sheet = fleet
+        .checkout_run_sheet(fleet.first())
+        .await
+        .expect("a sheet");
+    assert_eq!(
+        sheet.checks.len(),
+        1,
+        "the root's own Checks are still there"
+    );
+    let dirs: Vec<&str> = sheet
+        .workspaces
+        .iter()
+        .map(|one| one.dir.as_str())
+        .collect();
+    assert_eq!(
+        dirs,
+        ["apps/web"],
+        "`apps/broken` holds no package file Scan finds"
+    );
+
+    let api = home.path().join("apps/api");
+    std::fs::create_dir_all(&api).expect("a second workspace");
+    std::fs::write(api.join("package.json"), "{}").expect("its package");
+    std::fs::write(
+        api.join("armada.yml"),
+        "version: 1\nid: 01APIMANIFEST\ncommands:\n  say:\n    run: /usr/bin/true\n",
+    )
+    .expect("its Manifest");
+    let kept = fleet
+        .checkout_run_sheet(fleet.first())
+        .await
+        .expect("a sheet");
+    assert_eq!(kept.workspaces.len(), 1, "the walk is kept between reads");
+
+    fleet
+        .rehearsals()
+        .workspace_dirs()
+        .forget(Some(fleet.first().root()));
+    let walked = fleet
+        .checkout_run_sheet(fleet.first())
+        .await
+        .expect("a sheet");
+    let dirs: Vec<&str> = walked
+        .workspaces
+        .iter()
+        .map(|one| one.dir.as_str())
+        .collect();
+    assert_eq!(dirs, ["apps/api", "apps/web"]);
+}

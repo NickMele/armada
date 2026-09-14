@@ -15,7 +15,7 @@
 // one thing on one surface and another on the next is the drift the one scheme
 // exists to prevent.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ConsoleOutputProps,
   RunPageEntry,
@@ -41,7 +41,17 @@ import type {
   StartCheckoutRun,
 } from "@armada/protocol";
 import { checkoutChangedOf, checkoutRunDiffReadingOf } from "./checkout-run-diff";
-import { checkoutEntryOf, checkoutRunLabelOf, checkoutStartOf, sameCheckoutEntry, workspaceEntryOf } from "./checkout-workspace";
+import {
+  checkoutEntryOf,
+  checkoutResultRunOf,
+  checkoutRunLabelOf,
+  checkoutStartOf,
+  followedWorkspaceOf,
+  runningEntryOf,
+  workspaceEntryOf,
+} from "./checkout-workspace";
+
+export { checkoutResultRunOf, runningEntryOf };
 import { absoluteOf, clockOf, span } from "./duration";
 import { openServerLink } from "./opening";
 import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
@@ -163,15 +173,18 @@ function statusOf(instance: ServerState | undefined, now: number): RunPageServer
  * **Keyed to the selection, so it cannot outlive it** — `runOutputOf`'s rule
  * and the case that produced it: selecting a server and starting it brought
  * the serving bar up live while the pane beneath still read the Command run
- * before it. `selectedName` absent is the one case this does not gate, which
+ * before it. `selected` absent is the one case this does not gate, which
  * reads as "nothing to compare against" rather than "compare against nothing".
  */
 export function checkoutOutputOf(
   followed: CheckoutRunFollowed,
-  selectedName?: string,
+  selected?: { name: string; workspace?: string },
+  followedWorkspace?: string,
 ): ConsoleOutputProps | undefined {
   if (followed.state !== "following") return undefined;
-  if (selectedName !== undefined && followed.name !== selectedName) return undefined;
+  if (selected !== undefined && (followed.name !== selected.name || followedWorkspace !== selected.workspace)) {
+    return undefined;
+  }
   return {
     rows: followed.lines.map((text, at) => ({ row: "line" as const, at: followed.fromLine + at, text })),
     region: { says: followed.name, path: followed.path },
@@ -335,7 +348,11 @@ export function useManifestRuns(
   const runningNow = checkoutRunningOf(data, now);
   const diffRun = diffOpen === null ? undefined : runs.find((record) => record.id === diffOpen.runId);
   const server = checkoutServerStatusOf(data, shown, now);
-  const live = checkoutOutputOf(followed, shown === null ? undefined : checkoutEntryOf(shown).name);
+  // A followed run carries only its name; its workspace is the one the page saw it out in.
+  const seen = useRef(new Map<string, string | undefined>());
+  if (data?.running !== undefined) seen.current.set(data.running.id, data.running.workspace);
+  const followedIn = followedWorkspaceOf(followed, seen.current, runs);
+  const live = checkoutOutputOf(followed, shown === null ? undefined : checkoutEntryOf(shown), followedIn);
   const output = dismissed ? undefined : (viewing?.output ?? live);
   // Which run the result line is about: the one opened from *Earlier runs*, or
   // the newest finished one while the live pane is what is showing. **Never
@@ -448,34 +465,6 @@ export function useManifestRuns(
   }
 }
 
-/** The entry id a run in flight is for, off its bare Manifest name. Servers
- * start with `start_server` rather than as a run, so they never match. */
-export function runningEntryOf(
-  groups: readonly RunPageGroup[],
-  runningName: string | undefined,
-  workspace?: string,
-): string | undefined {
-  if (runningName === undefined) return undefined;
-  const run = workspace === undefined ? { name: runningName } : { name: runningName, workspace };
-  return groups
-    .flatMap((group) => group.entries)
-    .find((entry) => !isServerEntry(entry.id) && sameCheckoutEntry(entry.id, run))?.id;
-}
-
-/**
- * Which finished run the result line is about: one opened from *Earlier runs*, else the selected
- * entry's newest. **A server has none** — it is not a run, and `gate`'s result under it read as the server's.
- */
-export function checkoutResultRunOf(
-  runs: readonly CheckoutRunRecord[],
-  shown: string | null,
-  viewing: string | undefined,
-): CheckoutRunRecord | undefined {
-  if (viewing !== undefined) return runs.find((record) => record.id === viewing);
-  if (shown === null) return runs[0];
-  if (isServerEntry(shown)) return undefined;
-  return runs.find((record) => sameCheckoutEntry(shown, record));
-}
 
 /** An ended server. A stop somebody pressed is not "on its own", and no code is not `exit 0`. */
 export function exitedOf(instance: ServerState): RunPageServerStatus {

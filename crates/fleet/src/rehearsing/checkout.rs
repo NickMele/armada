@@ -54,7 +54,8 @@ where
             None => Default::default(),
         };
         let root = place.checkout.root().to_string();
-        let workspaces = tokio::task::spawn_blocking(move || workspace::listed(&root))
+        let known = self.rehearsals().workspace_dirs().clone();
+        let workspaces = tokio::task::spawn_blocking(move || workspace::listed(&root, &known))
             .await
             .unwrap_or_default();
         Ok(ipc::CheckoutRunSheet {

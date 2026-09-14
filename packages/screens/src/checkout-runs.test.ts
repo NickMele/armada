@@ -18,7 +18,7 @@ import {
   exitedOf,
   runningEntryOf,
 } from "./checkout-runs";
-import { checkoutStartOf } from "./checkout-workspace";
+import { checkoutStartOf, followedWorkspaceOf } from "./checkout-workspace";
 
 function entry(name: string, run: string, over: Partial<RunEntry> = {}): RunEntry {
   return {
@@ -87,11 +87,11 @@ describe("the output pane, keyed to the selection", () => {
   it("draws nothing where what is followed is not what is selected", () => {
     // `rehearsal.test.ts`'s finding, one surface over: a server's bar came up
     // live while the pane beneath still read the Command run before it.
-    expect(checkoutOutputOf(FMT, "storybook_dev")).toBeUndefined();
+    expect(checkoutOutputOf(FMT, { name: "storybook_dev" })).toBeUndefined();
   });
 
   it("draws the run where the two agree", () => {
-    expect(checkoutOutputOf(FMT, "fmt")?.rows).toHaveLength(1);
+    expect(checkoutOutputOf(FMT, { name: "fmt" })?.rows).toHaveLength(1);
   });
 
   it("draws a run already under way when nothing is selected yet", () => {
@@ -177,5 +177,43 @@ describe("a workspace's own Commands", () => {
       "dev in apps/web",
       "dev in apps/api",
     ]);
+  });
+});
+
+describe("two Commands of one name in different workspaces", () => {
+  const DEV_IN_API: CheckoutRunFollowed = {
+    state: "following",
+    runId: "crun_api",
+    name: "dev",
+    path: ".armada/runs/main/crun_api/output.log",
+    fromLine: 1,
+    lines: ["listening"],
+  };
+  const followedIn = followedWorkspaceOf(DEV_IN_API, new Map([["crun_api", "apps/api"]]), []);
+
+  it("draw only the selected one's output, never the other's", () => {
+    expect(checkoutOutputOf(DEV_IN_API, { name: "dev", workspace: "apps/web" }, followedIn)).toBeUndefined();
+    expect(checkoutOutputOf(DEV_IN_API, { name: "dev", workspace: "apps/api" }, followedIn)?.rows).toHaveLength(1);
+    expect(checkoutOutputOf(DEV_IN_API, { name: "dev" }, followedIn)).toBeUndefined();
+  });
+
+  it("know a finished run's workspace from its record once the sheet no longer has it out", () => {
+    const runs = [{ id: "crun_api", name: "dev", workspace: "apps/api" }] as CheckoutRunRecord[];
+    expect(followedWorkspaceOf(DEV_IN_API, new Map(), runs)).toBe("apps/api");
+  });
+});
+
+describe("a root Manifest with workspaces of its own", () => {
+  const groups = checkoutGroupsOf({
+    ...SHEET,
+    workspaces: [{ dir: "apps/web", commands: [entry("fmt", "pnpm format")] }],
+  });
+
+  it("keeps the root's three groups and lists the workspace's Commands after the root's", () => {
+    expect(groups.map((group) => group.label)).toEqual(["Setup", "Checks", "Commands"]);
+    const commands = groups[2]!.entries;
+    const fmt = commands.filter((row) => row.name === "fmt").map((row) => row.note ?? "root");
+    expect(fmt).toEqual(["root", "In apps/web."]);
+    expect(runningEntryOf(groups, "fmt")).toBe("command:fmt");
   });
 });

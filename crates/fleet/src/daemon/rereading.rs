@@ -34,6 +34,7 @@ impl<H, V, W> Fleet<H, V, W> {
         if let Some(repository) = self.repositories.at(root) {
             repository.read(reading.clone());
         }
+        self.rehearsals.workspace_dirs().forget(Some(root));
         self.events.publish(ipc::Event::ManifestReread(reading));
     }
 }

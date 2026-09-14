@@ -16,6 +16,7 @@ use tokio::sync::watch;
 use super::owner::Owner;
 use super::record::{Record, Underway};
 use super::verifying::Verifies;
+use super::workspace::WorkspaceDirs;
 
 type Stopping = (Arc<watch::Sender<bool>>, watch::Receiver<Option<Record>>);
 
@@ -26,6 +27,7 @@ pub(crate) struct Rehearsals {
     /// Each repository's latest Verify. Here rather than on `Fleet`: it is this
     /// one-run-at-a-time state, one sequence up — `super::verifying`.
     verifies: Verifies,
+    workspace_dirs: WorkspaceDirs,
 }
 
 struct InFlight {
@@ -40,6 +42,10 @@ struct InFlight {
 impl Rehearsals {
     pub(super) fn verifies(&self) -> &Verifies {
         &self.verifies
+    }
+
+    pub(crate) fn workspace_dirs(&self) -> &WorkspaceDirs {
+        &self.workspace_dirs
     }
 
     pub(super) fn in_flight(&self, owner: &Owner) -> Option<Underway> {
