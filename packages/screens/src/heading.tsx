@@ -21,6 +21,7 @@ import { JOB_LIFECYCLE, JOB_STATUS, type JobDetailHeading } from "@armada/compon
 import type { FileReport, JobDetail as JobWhole, JobSummary, Outcome } from "@armada/protocol";
 import { Acts, type ConfirmableAct } from "./Acts";
 import { factsOf } from "./facts";
+import type { ActingAct } from "./pending";
 import { settingsButtonOf } from "./settings";
 import { openPullRequest, type OpenPullRequest } from "./opening";
 import { leading, readingOf } from "./reading";
@@ -36,6 +37,8 @@ export type Heading = {
   render: Render;
   stale: boolean;
   acting: boolean;
+  /** Which act `acting` is, so the control that sent it is the one that waits. #1117. */
+  actingAct?: ActingAct | undefined;
   approving: boolean;
   /** Whether the report dialog is up. Held by the screen; `b` opens it too. */
   reporting: boolean;
@@ -75,6 +78,7 @@ export function headingOf({
   render,
   stale,
   acting,
+  actingAct,
   approving,
   reporting,
   onReporting,
@@ -129,6 +133,7 @@ export function headingOf({
           whole={whole}
           render={render}
           acting={acting}
+          actingAct={actingAct}
           approving={approving}
           stale={stale}
           onAct={onAct}
