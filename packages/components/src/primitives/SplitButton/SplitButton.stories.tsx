@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { SplitButton } from "./SplitButton";
 
 const meta: Meta<typeof SplitButton> = {
@@ -173,4 +174,51 @@ export const FocusedOnPrimary: Story = {
       </div>
     </div>
   ),
+};
+
+/**
+ * Tonal — chrome, not a list row's act. `--accent-muted` fill and
+ * `--accent-hover` text, no outer border, only the inner divider. Drawn on
+ * `--bg-sunken`, the title row's own ground, since tonal reads against that
+ * surface and nowhere else yet.
+ */
+export const Tonal: Story = {
+  render: () => (
+    <Row>
+      <SplitButton items={reviewActions} variant="tonal">
+        Dispatch
+      </SplitButton>
+    </Row>
+  ),
+};
+
+/**
+ * Nothing behind the caret yet. `items={[]}` is a real mode, not an empty
+ * menu: the caret calls `onAction` directly rather than popping a floating
+ * box with nothing in it. The title row's Dispatch is the one caller — both
+ * segments read as the same control because they are.
+ */
+export const TonalNoMenu: Story = {
+  args: {
+    items: [],
+    variant: "tonal",
+    menuLabel: "Dispatch a job",
+    onAction: fn(),
+  },
+  render: (args) => (
+    <Row>
+      <SplitButton {...args}>Dispatch</SplitButton>
+    </Row>
+  ),
+  /** What a rendering cannot show: the caret does not open a menu, it fires
+   *  the same handler the label does. Asserted by call count and by the
+   *  menu's absence, never by reading `noMenu` off the markup. */
+  play: async ({ canvas, userEvent, args }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Dispatch a job" }));
+    await expect(args.onAction).toHaveBeenCalledTimes(1);
+    expect(canvas.queryByRole("menu")).toBeNull();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Dispatch" }));
+    await expect(args.onAction).toHaveBeenCalledTimes(2);
+  },
 };

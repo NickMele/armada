@@ -268,13 +268,19 @@ export const BothListed: Story = {
   args: TWO,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const picker = canvas.getByRole("combobox", { name: "Project" });
-    // A set-up repository reads as its Manifest id.
-    await expect(within(picker).getByRole("option", { name: MANIFEST_ID })).toBeInTheDocument();
-    const notSetUp = within(picker).getByRole("group", { name: "Not set up" });
-    await expect(within(notSetUp).getByRole("option", { name: "scratch" })).toBeInTheDocument();
-    await expect(within(notSetUp).queryByRole("option", { name: MANIFEST_ID })).toBeNull();
-    await expect(picker).toHaveValue("/Users/user/armada");
+    // `repository()` is `listed[0]`, so it is where the picker opens.
+    const picker = canvas.getByRole("button", { name: MANIFEST_ID });
+    await userEvent.click(picker);
+    // A set-up repository reads as its Manifest id, once each: `getByRole`
+    // throws on more than one match, which is what stands in for the
+    // `<select>`'s own optgroup keeping it out of "Not set up".
+    await expect(canvas.getByRole("menuitem", { name: MANIFEST_ID })).toBeInTheDocument();
+    // Scoped to the open menu: the left column's Stats panel reads the same
+    // two words for a repository's own setup state, #1088.
+    const menu = canvas.getByRole("menu");
+    await expect(within(menu).getByText("Not set up")).toBeVisible();
+    await expect(within(menu).getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
     await expect(canvas.queryByRole("region", { name: "Workspaces" })).toBeNull();
   },
 };
@@ -285,7 +291,8 @@ export const VerifyWorkspaceAlone: Story = {
   args: { ...TWO, onVerify: fn() },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByRole("combobox", { name: "Project" }), SCRATCH.root);
+    await userEvent.click(canvas.getByRole("button", { name: MANIFEST_ID }));
+    await userEvent.click(canvas.getByRole("menuitem", { name: "scratch" }));
     const list = await canvas.findByRole("region", { name: "Workspaces" });
     await userEvent.click(within(list).getByRole("button", { name: "Open apps/web" }));
     const sheet = await canvas.findByRole("dialog", { name: "Proposal for apps/web" });
@@ -303,8 +310,8 @@ export const PickNotSetUp: Story = {
   args: TWO,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const picker = canvas.getByRole("combobox", { name: "Project" });
-    await userEvent.selectOptions(picker, SCRATCH.root);
+    await userEvent.click(canvas.getByRole("button", { name: MANIFEST_ID }));
+    await userEvent.click(canvas.getByRole("menuitem", { name: "scratch" }));
     const list = await canvas.findByRole("region", { name: "Workspaces" });
     await expect(canvas.queryByRole("tab", { name: "Edit" })).toBeNull();
     await userEvent.click(within(list).getByRole("button", { name: "Open ." }));
@@ -312,9 +319,15 @@ export const PickNotSetUp: Story = {
     await userEvent.click(within(sheet).getByRole("button", { name: "Write armada.yml" }));
     const verify = await within(sheet).findByRole("region", { name: "Verify" });
     await expect(within(verify).getByRole("button", { name: "Verify" })).toBeEnabled();
-    await expect(within(picker).queryByRole("group", { name: "Not set up" })).toBeNull();
-    await expect(within(picker).getByRole("option", { name: "scratch" })).toBeInTheDocument();
-    await expect(picker).toHaveValue(SCRATCH.root);
+    const picker = canvas.getByRole("button", { name: "scratch" });
+    await userEvent.click(picker);
+    // Written, so it is set up now — no longer under "Not set up". Scoped to
+    // the open menu, since the left column's Stats panel reads the same two
+    // words for a repository's own setup state, #1088.
+    const menu = canvas.getByRole("menu");
+    await expect(within(menu).queryByText("Not set up")).toBeNull();
+    await expect(within(menu).getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
     await expect(canvas.getByRole("tab", { name: "Edit" })).toBeVisible();
   },
 };

@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import { repository } from "../../../fixtures/build/base";
+import { MANIFEST_ID, repository } from "../../../fixtures/build/base";
 import { CHOSEN, LocateFrom, TwoWindowsFrom } from "./Locate";
 
 /**
- * Locate — Journey 3's *Getting in* — from the rail's **Add a repository**: a folder added, or a
- * clone from a URL, landing on Setup for what Fleet now serves. Nothing native opens: the folder
- * dialog answers `/Users/user/scratch`.
+ * Locate — Journey 3's *Getting in* — from the picker's own **Add a repository**: a folder added,
+ * or a clone from a URL, landing on Setup for what Fleet now serves. Nothing native opens: the
+ * folder dialog answers `/Users/user/scratch`.
  */
 const meta = {
   title: "Screens/Locate",
@@ -21,14 +21,19 @@ type Story = StoryObj<typeof meta>;
 
 const URL = "https://forge.invalid/owner/storefront.git";
 
-async function opened(canvasElement: HTMLElement) {
+/** The default fixture's picker reads the fixed repository's own Manifest id. */
+const DEFAULT_LABEL = MANIFEST_ID;
+
+/** Add a repository sits inside the picker's own menu, below a separator — opening it is opening the picker first. */
+async function opened(canvasElement: HTMLElement, pickerLabel = DEFAULT_LABEL) {
   const canvas = within(canvasElement);
-  await userEvent.click(canvas.getByRole("button", { name: "Add a repository" }));
+  await userEvent.click(canvas.getByRole("button", { name: pickerLabel }));
+  await userEvent.click(canvas.getByRole("menuitem", { name: "Add a repository" }));
   return { canvas, dialog: canvas.getByRole("dialog", { name: "Add a repository" }) };
 }
 
-async function cloneFrom(canvasElement: HTMLElement) {
-  const { canvas, dialog } = await opened(canvasElement);
+async function cloneFrom(canvasElement: HTMLElement, pickerLabel = DEFAULT_LABEL) {
+  const { canvas, dialog } = await opened(canvasElement, pickerLabel);
   await userEvent.click(within(dialog).getByRole("button", { name: "Clone from a URL" }));
   await userEvent.type(within(dialog).getByLabelText("Repository URL"), URL);
   await userEvent.type(within(dialog).getByLabelText("Clone into"), "/Users/user/code");
@@ -49,22 +54,27 @@ export const AFolderAdded: Story = {
     await userEvent.click(within(dialog).getByRole("button", { name: /^Add repository/ }));
     await expect(args.onAdded).toHaveBeenCalledWith(CHOSEN);
     await waitFor(() => expect(canvas.queryByRole("dialog", { name: "Add a repository" })).toBeNull());
-    const picker = canvas.getByRole("combobox", { name: "Project" });
-    await expect(picker).toHaveValue(CHOSEN);
-    await expect(within(within(picker).getByRole("group", { name: "Not set up" })).getByRole("option", { name: "scratch" })).toBeInTheDocument();
+    // The added folder is nobody's Manifest yet, so it reads by its own name — the picker's label.
+    const picker = canvas.getByRole("button", { name: "scratch" });
+    await userEvent.click(picker);
+    // Scoped to the open menu: the left column's Stats panel reads the same
+    // two words for a repository's own setup state, #1088.
+    const menu = canvas.getByRole("menu");
+    await expect(within(menu).getByText("Not set up")).toBeVisible();
+    await expect(within(menu).getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
     await expect(await canvas.findByRole("region", { name: "Workspaces" })).toBeVisible();
   },
 };
 
-/** A fresh install: Fleet serves nothing, so the dialog opens by itself over a rail saying so, and nothing reads as a fault. */
+/** A fresh install: Fleet serves nothing, so the dialog opens by itself over a picker saying so, and nothing reads as a fault. */
 export const NothingServed: Story = {
   name: "Nothing served",
   args: { repositories: [] },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const dialog = await canvas.findByRole("dialog", { name: "Add a repository" });
-    const picker = canvas.getByRole("combobox", { name: "Project" });
-    await expect(within(picker).getByRole("option", { name: "Nothing set up yet" })).toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: "Nothing set up yet" })).toBeInTheDocument();
     await expect(canvas.getByText("Nothing is set up yet")).toBeInTheDocument();
     await expect(canvas.queryByText(/could not be read/)).toBeNull();
     await userEvent.type(within(dialog).getByLabelText("Project location"), CHOSEN);
@@ -72,7 +82,7 @@ export const NothingServed: Story = {
     await expect(args.onAdded).toHaveBeenCalledWith(CHOSEN);
     // The first repository added lands on Setup.
     await expect(await canvas.findByRole("region", { name: "Workspaces" })).toBeVisible();
-    await expect(canvas.getByRole("combobox", { name: "Project" })).toHaveValue(CHOSEN);
+    await expect(canvas.getByRole("button", { name: "scratch" })).toBeInTheDocument();
   },
 };
 
@@ -85,12 +95,11 @@ export const ACloneFinishedLate: Story = {
     await userEvent.click(within(dialog).getByRole("button", { name: /^Cancel/ }));
     await waitFor(() => expect(canvas.queryByRole("dialog", { name: "Add a repository" })).toBeNull());
     await expect(await canvas.findByText("storefront is ready to set up", {}, { timeout: 3000 })).toBeVisible();
-    const picker = canvas.getByRole("combobox", { name: "Project" });
-    await expect(picker).toHaveValue("/Users/user/armada");
+    await expect(canvas.getByRole("button", { name: DEFAULT_LABEL })).toBeInTheDocument();
     await expect(canvas.queryByRole("region", { name: "Workspaces" })).toBeNull();
     await userEvent.click(canvas.getByRole("button", { name: "Open Setup" }));
     await expect(await canvas.findByRole("region", { name: "Workspaces" })).toBeVisible();
-    await expect(picker).toHaveValue("/Users/user/code/storefront");
+    await expect(canvas.getByRole("button", { name: "storefront" })).toBeInTheDocument();
     await expect(canvas.queryByText("storefront is ready to set up")).toBeNull();
   },
 };
@@ -109,12 +118,12 @@ export const ACloneHeardInAnotherWindow: Story = {
     await expect(await within(other).findByText("storefront is ready to set up", {}, { timeout: 3000 })).toBeVisible();
     await expect(within(asked).getByText("storefront is ready to set up")).toBeVisible();
     for (const window of [asked, other]) {
-      await expect(within(window).getByRole("combobox", { name: "Project" })).toHaveValue("/Users/user/armada");
+      await expect(within(window).getByRole("button", { name: DEFAULT_LABEL })).toBeInTheDocument();
       await expect(within(window).queryByRole("region", { name: "Workspaces" })).toBeNull();
     }
     await userEvent.click(within(other).getByRole("button", { name: "Open Setup" }));
     await expect(await within(other).findByRole("region", { name: "Workspaces" })).toBeVisible();
-    await expect(within(other).getByRole("combobox", { name: "Project" })).toHaveValue("/Users/user/code/storefront");
+    await expect(within(other).getByRole("button", { name: "storefront" })).toBeInTheDocument();
     await userEvent.click(within(asked).getByRole("button", { name: "Dismiss" }));
     await expect(canvas.queryByText("storefront is ready to set up")).toBeNull();
   },
@@ -158,7 +167,7 @@ export const ACloneRefused: Story = {
     await expect(within(dialog).getByText(`git refused the clone: fatal: repository '${URL}' not found.`)).toBeVisible();
     await expect(within(dialog).queryByText("fleet.clone_refused")).toBeNull();
     await expect(within(dialog).getByRole("button", { name: /^Clone repository/ })).toBeEnabled();
-    await expect(canvas.getByRole("combobox", { name: "Project" })).toHaveValue("/Users/user/armada");
+    await expect(canvas.getByRole("button", { name: DEFAULT_LABEL })).toBeInTheDocument();
   },
 };
 
@@ -207,15 +216,18 @@ export const ThePickersNames: Story = {
   name: "The picker's names",
   args: { repositories: [SET_UP, SET_UP_API, LOOSE, API, OLD_API] },
   play: async ({ canvasElement }) => {
-    const picker = within(canvasElement).getByRole("combobox", { name: "Project" });
-    const setUp = within(picker).getByRole("option", { name: "storefront" });
-    await expect(setUp).toHaveAttribute("title", SET_UP.root);
-    await expect(within(picker).getByRole("option", { name: "api" })).toHaveAttribute("title", SET_UP_API.root);
-    await expect(within(picker).queryByRole("option", { name: "services/api" })).toBeNull();
-    const notSetUp = within(within(picker).getByRole("group", { name: "Not set up" }));
-    await expect(notSetUp.getByRole("option", { name: "scratch" })).toHaveAttribute("title", LOOSE.root);
-    await expect(notSetUp.getByRole("option", { name: "code/api" })).toHaveAttribute("title", API.root);
-    await expect(notSetUp.getByRole("option", { name: "old/api" })).toHaveAttribute("title", OLD_API.root);
-    await expect(within(picker).queryByRole("option", { name: "web-app" })).toBeNull();
+    const canvas = within(canvasElement);
+    // `SET_UP` is `listed[0]`, so it is where the picker opens.
+    await userEvent.click(canvas.getByRole("button", { name: "storefront" }));
+    await expect(canvas.getByRole("menuitem", { name: "storefront" })).toBeInTheDocument();
+    await expect(canvas.getByRole("menuitem", { name: "api" })).toBeInTheDocument();
+    await expect(canvas.queryByRole("menuitem", { name: "services/api" })).toBeNull();
+    // Scoped to the open menu: the left column's Stats panel reads the same
+    // two words for a repository's own setup state, #1088.
+    await expect(within(canvas.getByRole("menu")).getByText("Not set up")).toBeVisible();
+    await expect(canvas.getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
+    await expect(canvas.getByRole("menuitem", { name: "code/api" })).toBeInTheDocument();
+    await expect(canvas.getByRole("menuitem", { name: "old/api" })).toBeInTheDocument();
+    await expect(canvas.queryByRole("menuitem", { name: "web-app" })).toBeNull();
   },
 };

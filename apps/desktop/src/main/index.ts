@@ -144,11 +144,13 @@ function createWindow(): BrowserWindow {
     show: false,
     // Frameless: the title row Bridge draws itself — #1087 — replaces macOS's
     // grey bar, which said only "Armada" while the app's own controls sat
-    // lower. `trafficLightPosition` centres the lights in that row; the row's
-    // own height and left gutter are `TitleBar.css`'s, and there is no shared
-    // token for either figure yet, same gap that css already reports.
+    // lower. `x, y` is the top-left corner of the button cluster, not its
+    // centre — a 12px-diameter button 22px down a 44px row sits low, which is
+    // the correction pass's #1106 finding. 16 centres it: (44 - 12) / 2. The
+    // row's own height and `TitleBar.css`'s left gutter are read against this
+    // figure together, same gap that css already reports.
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 20, y: 22 },
+    trafficLightPosition: { x: 18, y: 16 },
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: true,

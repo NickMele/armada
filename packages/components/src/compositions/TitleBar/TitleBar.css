@@ -4,20 +4,22 @@
  * lower, under a grey bar that said only "Armada".
  *
  * NO TOKEN FOR THE HEIGHT OR THE TRAFFIC-LIGHT GUTTER, so both are composed
- * from the spacing scale rather than spelled as literals — the sidebar's own
- * drag region carried the same unspelled gap before this bar existed.
- * Reported alongside it rather than invented twice. 44px of height
- * (`--space-8` + `--space-2` + `--space-1`) clears the lights' ~28px with
- * room for the row's own border; ~80px of leading gutter (`--space-12` +
- * `--space-8`) clears the lights themselves before the picker starts. */
+ * from the spacing scale rather than spelled as literals. Reported alongside
+ * the gap rather than invented twice — see `__start` below for the gutter
+ * itself and its own note on where the figure came from. */
 .armada-title-bar {
-  display: flex;
+  display: grid;
+  /* Three regions, not one flex row with a trailing spacer: `minmax(0, 1fr)`
+   * on both sides gives the picker and Helm+logo groups an equal share of
+   * whatever is left over, so the center column — search and Dispatch — sits
+   * on the bar's true midpoint whatever either side measures. A flex row with
+   * two `flex: 1` spacers only centers the middle group when the two sides
+   * happen to be the same width, which picker+add-repo and Helm+logo are not. */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   flex: none;
-  gap: var(--space-3);
   height: calc(var(--space-8) + var(--space-2) + var(--space-1));
   padding-inline: var(--space-3);
-  padding-inline-start: calc(var(--space-12) + var(--space-8));
   border-bottom: var(--border-width) solid var(--border-subtle);
   background: var(--bg-sunken);
   -webkit-app-region: drag;
@@ -28,16 +30,43 @@
  * person actually grabs the window by. */
 .armada-title-bar__picker,
 .armada-title-bar__search,
-.armada-title-bar__dispatch,
 .armada-title-bar__helm {
   -webkit-app-region: no-drag;
+}
+
+/* The left region. The traffic-light gutter lives here rather than on the
+ * bar itself, so the grid's own three tracks divide the bar's full width and
+ * the gutter is just empty space inside this column's share of it — which is
+ * what keeps the center column on the bar's true midpoint rather than one
+ * shifted by an asymmetric outer padding.
+ *
+ * 96px (`--space-12` × 2) clears the three-button cluster macOS draws at
+ * `trafficLightPosition` in `apps/desktop/src/main/index.ts` — 18px in, ~52px
+ * wide at their standard 12px diameter and 8px gap — with a full `--space-6`
+ * of breathing room after it, not the 8px the previous 80px left. The two
+ * figures are read against the running app together, never calculated apart. */
+.armada-title-bar__start {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  min-width: 0;
+  padding-inline-start: calc(var(--space-12) * 2);
 }
 
 .armada-title-bar__picker {
   flex: none;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
+}
+
+/* The center region: search and Dispatch, as one group. */
+.armada-title-bar__center {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-self: center;
+  min-width: 0;
 }
 
 /* The search field is a button that opens the same palette ⌘K does — the
@@ -46,9 +75,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex: 1;
   min-width: 0;
-  max-width: var(--sidebar-max);
+  width: var(--sidebar-max);
   height: var(--h-control-sm);
   padding-inline: var(--space-3);
   border: var(--border-width) solid var(--border-default);
@@ -80,88 +108,16 @@
   text-align: left;
 }
 
-/* Dispatch. Tonal: `--accent-muted` fill and `--accent` text, never the solid
- * `--accent` fill a split button takes on Job detail — the top bar is chrome
- * on every screen, so one solid accent per screen stays the surface's own
- * decision (Approve on a Job), not this row's.
- *
- * **No `+` glyph.** The drawing calls for one and `packages/icons/icons.toml`
- * has no `plus` row — minting it here is exactly the second registry this
- * repository keeps finding and deleting. Reported rather than invented. */
-.armada-title-bar__dispatch {
-  display: inline-flex;
-  align-items: stretch;
-  flex: none;
-  height: var(--h-control-sm);
-  border-radius: var(--radius-sm);
-  border: var(--border-width) solid var(--accent);
-  background: var(--accent-muted);
-}
-
-.armada-title-bar__dispatch-action,
-.armada-title-bar__dispatch-caret {
+/* The right region: Helm's reopen control, drawn only while the caller says
+ * the dock is closed, and the logo. */
+.armada-title-bar__end {
   display: flex;
   align-items: center;
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease);
+  gap: var(--space-3);
+  justify-self: end;
+  min-width: 0;
 }
 
-.armada-title-bar__dispatch-action {
-  padding-inline: var(--space-3);
-  border-start-start-radius: calc(var(--radius-sm) - var(--border-width));
-  border-end-start-radius: calc(var(--radius-sm) - var(--border-width));
-}
-
-.armada-title-bar__dispatch-caret {
-  justify-content: center;
-  width: calc(var(--h-control-sm) - var(--space-2));
-  /* Faint: a tint of --accent rather than a second colour, so the divider
-   * reads as part of the fill and not as a border the fill happens to sit
-   * inside. */
-  border-inline-start: var(--border-width) solid
-    color-mix(in srgb, var(--accent) 35%, transparent);
-  border-start-end-radius: calc(var(--radius-sm) - var(--border-width));
-  border-end-end-radius: calc(var(--radius-sm) - var(--border-width));
-}
-
-.armada-title-bar__dispatch-action:hover,
-.armada-title-bar__dispatch-caret:hover {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
-.armada-title-bar__dispatch-action:focus-visible,
-.armada-title-bar__dispatch-caret:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-  position: relative;
-  z-index: 1;
-}
-
-.armada-title-bar__dispatch-action:disabled,
-.armada-title-bar__dispatch-caret:disabled {
-  color: var(--fg-subtle);
-  cursor: default;
-}
-
-.armada-title-bar__dispatch:has(.armada-title-bar__dispatch-action:disabled) {
-  border-color: var(--border-strong);
-  background: var(--bg-sunken);
-}
-
-.armada-title-bar__spacer {
-  flex: 1;
-}
-
-/* Helm's reopen control. Drawn only while the caller says the dock is closed
- * — the edge strip `TheShell` already draws stays too, until #1094 removes
- * it. */
 .armada-title-bar__helm {
   display: flex;
   align-items: center;

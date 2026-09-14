@@ -39,15 +39,20 @@ export type SplitButtonProps = {
    * error state rather than as an act. It is for a group whose every member
    * ends something, so that the caret cannot make a terminal act look like a
    * variant of the one on the face.
+   *
+   * `tonal` is chrome, not a list row's act: `--accent-muted` fill,
+   * `--accent-hover` text, no outer border — only the inner divider between
+   * segments. The title row's Dispatch is the one caller (#1087's correction
+   * pass), always paired with `items={[]}` below.
    */
-  variant?: "secondary" | "primary" | "destructive";
-  /** The surface underneath: `card` fills `--bg-sunken`, `sunken` `--bg-raised`. */
+  variant?: "secondary" | "primary" | "destructive" | "tonal";
+  /** The surface underneath: `card` fills `--bg-sunken`, `sunken` `--bg-raised`. Read by `secondary` only. */
   ground?: "card" | "sunken";
   /** Render with the menu open. Uncontrolled otherwise. */
   defaultOpen?: boolean;
   disabled?: boolean;
   onAction?: () => void;
-  /** Names the menu for a reader who cannot see the caret. */
+  /** Names the menu for a reader who cannot see the caret. Also the caret's own name where `items` is empty. */
   menuLabel?: string;
 };
 
@@ -62,6 +67,11 @@ export function SplitButton({
   menuLabel = "More actions",
 }: SplitButtonProps) {
   const [open, setOpen] = useState(defaultOpen);
+  // Nothing behind the caret yet — the title row's Dispatch has no menu, and
+  // both segments call the same handler. A menu with nothing in it is a floating
+  // empty box, not an absence, so the caret has to stop opening one rather than
+  // opening one with nothing to show.
+  const noMenu = items.length === 0;
 
   return (
     <div className="armada-split-button">
@@ -77,16 +87,16 @@ export function SplitButton({
         <button
           type="button"
           className="armada-split-button__caret"
-          aria-haspopup="menu"
-          aria-expanded={open}
+          aria-haspopup={noMenu ? undefined : "menu"}
+          aria-expanded={noMenu ? undefined : open}
           aria-label={menuLabel}
           disabled={disabled}
-          onClick={() => setOpen((was) => !was)}
+          onClick={() => (noMenu ? onAction?.() : setOpen((was) => !was))}
         >
           <ChevronDown size={16} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
-      {open && (
+      {!noMenu && open && (
         <div className="armada-split-button__menu" role="menu" aria-label={menuLabel}>
           {items.map((item) => (
             <button
