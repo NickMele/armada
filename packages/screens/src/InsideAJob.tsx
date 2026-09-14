@@ -29,7 +29,7 @@ import {
 } from "@armada/components";
 
 import type { PlanEditAnswer } from "./plan-edits";
-import { PlanWell } from "./PlanWell";
+import { PlanPending, PlanWell } from "./PlanWell";
 
 /**
  * Inside a Job — one arrangement, at every state.
@@ -155,6 +155,19 @@ export type PlanRegionData = {
   tasks: readonly PlanTaskRow[];
 };
 
+/**
+ * The Plan region's read of a Job: a plan recorded, or the step that will
+ * record one where none exists yet. `docs/concepts/plan.md`; `#1007`.
+ *
+ * **Absent draws no region at all** — a workflow that declares no step
+ * recording a plan. `recorded: false` is the state between that and a full
+ * `PlanRegionData`: the step is declared, and its own label is what the
+ * placeholder names.
+ */
+export type PlanRegionRead =
+  | ({ recorded: true } & PlanRegionData)
+  | { recorded: false; stepLabel: string };
+
 /** The panel while its step is read: what is already known of the step. */
 export type StepReading = {
   /** The step's name off the workflow. Absent draws a bar in its place. */
@@ -233,14 +246,17 @@ export type InsideAJobProps = {
   /**
    * The Job's plan, between The run and Pulse — shown whichever step is
    * selected, because the plan belongs to the Job and not to the step.
+   * `recorded: false` draws the quiet placeholder naming the step that will
+   * record it.
    */
-  plan?: PlanRegionData;
+  plan?: PlanRegionRead;
   /**
    * Add a task to the Job's plan, from the region's own eyebrow act — `Add
    * task`, the way Pulse carries `Details`. **Absent draws no act**, the same
-   * condition `plan` itself draws on: a Job whose workflow has no plan step.
-   * `jobId` is bound by the caller, `JobDetail`'s own convention for every act
-   * drawn inside this screen.
+   * condition the placeholder itself draws on: a Job whose workflow has no
+   * plan step, or one whose plan step has not recorded one yet — `add_task`
+   * is refused without a plan to add to. `jobId` is bound by the caller,
+   * `JobDetail`'s own convention for every act drawn inside this screen.
    */
   onAddTask?: (title: string, detail: string) => Promise<PlanEditAnswer>;
   /**
@@ -383,9 +399,19 @@ export function InsideAJob({
           )}
 
           {/* The plan, between the run and Pulse — the Job's own, not the
-              step's, so it stays put whichever step is selected. */}
-          {plan === undefined ? null : (
-            <PlanWell {...plan} onAddTask={onAddTask} onDropTask={onDropTask} onSaid={onSaid} />
+              step's, so it stays put whichever step is selected. Quiet
+              placeholder before it is recorded, nothing where no step
+              records one at all. */}
+          {plan === undefined ? null : plan.recorded ? (
+            <PlanWell
+              approach={plan.approach}
+              tasks={plan.tasks}
+              onAddTask={onAddTask}
+              onDropTask={onDropTask}
+              onSaid={onSaid}
+            />
+          ) : (
+            <PlanPending stepLabel={plan.stepLabel} />
           )}
 
           {/* Context for the run, so it reads after it — and before the

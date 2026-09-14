@@ -598,12 +598,13 @@ function OneJob({
       onOpenStep={keys.onOpenStep}
       plan={plan}
       // `after` is always the end: reordering is not in this milestone, the
-      // owner's own call — `#897`. Absent where there is no plan to add to,
-      // the same condition `plan` itself draws on.
+      // owner's own call — `#897`. Absent where there is no plan to add to —
+      // no plan step at all, or the placeholder before its step has recorded
+      // one — since `add_task` is refused without a plan.
       onAddTask={
-        plan === undefined
-          ? undefined
-          : (title, detail) => onAddTask(job.id, { title, detail, after: "" })
+        plan?.recorded === true
+          ? (title, detail) => onAddTask(job.id, { title, detail, after: "" })
+          : undefined
       }
       onDropTask={(taskId, reason) => onDropTask(job.id, { task: taskId, reason })}
       onSaid={onSaid}
