@@ -49,7 +49,7 @@ peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
-**Enforced**, through the same predicate as the row above — `Fleet::room_for_another`, which `admit_next` opens with and which the Board's `waiting_on_resources` label is answered from. The volume read is the repository root, because every worktree is cut beneath it.
+**Enforced per Job, on its own volume.** `admit_next` and the Board's `waiting_on_resources` both fold `Fleet::room_for` (the bound and memory) with `Fleet::volume_is_short`, which reads free space under the Job's own repository root, where its worktree is cut. A short volume holds back only the Jobs on it (#987). `get_capacity` still reads the one volume Fleet watches (#1025).
 
 **Bytes, and not a share, which is why it is its own row.** The row above is a percentage and a percentage cannot carry this: a tenth of a 4 TB volume reserves 400 GB against a worktree that needs three, and a tenth of a 60 GB volume leaves less than one build. What a Job costs in disk is absolute — a cut worktree plus its build output — so it is held against a number of gigabytes.
 
