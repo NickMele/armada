@@ -189,8 +189,12 @@ const THOUSAND_LINES: ConsoleRow[] = Array.from({ length: 1000 }, (_, i) => ({
 /**
  * The output panel fills the remaining height of the main column and scrolls
  * inside itself — the sheet never grows for it, whatever the reading holds.
+ *
+ * a11y is off here alone: axe over 1,000 rows timed this story out under load
+ * (#1061), and `Running` still scans the same row markup.
  */
 export const OutputWithAThousandLines: Story = {
+  parameters: { a11y: { test: "off" } },
   args: {
     open: true,
     ...HEADER,
