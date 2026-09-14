@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { JudgeQuestion } from "./JudgeQuestion";
+import { JudgeQuestion, type JudgeQuestionProps } from "./JudgeQuestion";
 
 /**
  * A Judge criterion refused and a person is being asked about it, rather than
@@ -66,11 +67,75 @@ export const WithANote: Story = {
   },
 };
 
-/** An answer already on its way. */
+/** An answer already on its way, from somewhere this block cannot name. */
 export const Sending: Story = {
   args: {
     ...DriftRefusal.args,
     disabled: true,
     disabledNote: "That answer is already on its way to Fleet.",
   } as Story["args"],
+};
+
+/** Stands in for the app: a press goes out, and Fleet answers or refuses it. */
+function Pressing({ answer }: { answer: "answered" | "refused" }) {
+  const [pending, setPending] = useState(false);
+  const [moved, setMoved] = useState(false);
+  if (moved) return <p>The step advances. Nothing else is asked about this criterion.</p>;
+  const args = DriftRefusal.args as JudgeQuestionProps;
+  return (
+    <JudgeQuestion
+      {...args}
+      pending={pending}
+      onAnswer={(sent) => {
+        setPending(true);
+        setTimeout(() => {
+          setPending(false);
+          setMoved(answer === "answered" && sent === "disagree_once");
+        }, 600);
+      }}
+    />
+  );
+}
+
+/**
+ * The pressed answer waits and says so; the other two go off with no mark of
+ * their own. #1117.
+ */
+export const WaitingOnFleet: Story = {
+  render: () => <Pressing answer="answered" />,
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Disagree, just this step" }));
+    await expect(canvas.getByRole("button", { name: "Disagreeing, just this step…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(canvas.getByRole("button", { name: "Agree with the refusal" })).toBeDisabled();
+    await expect(await canvas.findByText(/The step advances/)).toBeVisible();
+  },
+};
+
+/**
+ * Fleet refuses it. Nothing moved, so the controls are live again and the
+ * note is still there.
+ */
+export const FleetRefused: Story = {
+  render: () => <Pressing answer="refused" />,
+  play: async ({ canvas }) => {
+    await userEvent.type(canvas.getByLabelText("Note (optional)"), "reformatting only");
+    await userEvent.click(canvas.getByRole("button", { name: "Agree with the refusal" }));
+    await expect(canvas.getByRole("button", { name: "Agreeing…" })).toBeVisible();
+    const again = await canvas.findByRole("button", { name: "Agree with the refusal" });
+    await expect(again).toBeEnabled();
+    await expect(again).not.toHaveAttribute("aria-busy");
+    await expect(canvas.getByLabelText("Note (optional)")).toHaveValue("reformatting only");
+  },
+};
+
+/** Five seconds on and Fleet still has not answered, so the block says so. */
+export const StillWaitingOnFleet: Story = {
+  args: { ...DriftRefusal.args, onAnswer: () => {}, pending: true } as Story["args"],
+  play: async ({ canvas }) => {
+    const said = await canvas.findByRole("status", {}, { timeout: 7000 });
+    await expect(said).toHaveTextContent("Still waiting on Fleet.");
+  },
 };
