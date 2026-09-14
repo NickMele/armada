@@ -17,6 +17,7 @@ use core_model::Timestamp;
 
 use crate::checking::Going;
 use crate::converging::elapsed;
+use crate::reuse::KeptDryRun;
 use crate::working::Working;
 
 impl Working {
@@ -85,6 +86,24 @@ impl Working {
     /// How many fixes this step has asked for.
     pub(crate) fn fixes(&self) -> u32 {
         self.fixes
+    }
+
+    /// Keep what the step's latest dry run found, for the gate to weigh
+    /// against what it reads when this step is submitted.
+    ///
+    /// **The latest replaces whatever was kept before**, never merges with
+    /// it: a second dry run is a fresh reading of the same worktree, and a
+    /// Check that passed on the first and was never asked about on the second
+    /// has not been re-confirmed by it.
+    pub(crate) fn kept_dry_run(&mut self, kept: KeptDryRun) {
+        self.dry_run_kept = Some(kept);
+    }
+
+    /// What the step's last dry run found, where `run_checks` has been called
+    /// at all this step. `crate::reuse` is what decides whether any of it
+    /// still applies.
+    pub(crate) fn dry_run_kept(&self) -> Option<&KeptDryRun> {
+        self.dry_run_kept.as_ref()
     }
 
     /// How long of the window ending at `now` was Fleet running Checks.

@@ -270,6 +270,11 @@ fn spawn_the_run(
             // No Job, so no plan; `after_merge` cannot name `plan_recorded`.
             None,
             &checking::Stop::never(),
+            // No Drone and no dry run: a proof run after a merge is not
+            // anything a Drone asked about first.
+            None,
+            core_model::Attempt::FIRST,
+            None,
         )
         .await;
         let observed: Vec<verification::Observed> =

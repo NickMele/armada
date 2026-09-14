@@ -26,14 +26,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use checks_runner::{Attempt, Narrowed, Output, Writing};
-use core_model::{Prerequisite, ResolvedCheck, TaskCounts};
+use adapter_traits::Footprint;
+use checks_runner::{Attempt as RunAttempt, Narrowed, Output, Writing};
+use core_model::{Attempt, Prerequisite, ResolvedCheck, TaskCounts};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
 
 use crate::headroom::{Bytes, Headroom, Machine, Reading, Spare};
 use crate::ports::resolve_ports;
+use crate::reuse::{self, KeptDryRun};
 use crate::underway::Announcing;
 
 /// What ends a batch's commands before their budget does: each one's whole
@@ -417,6 +419,18 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 /// `plan` is the Job's plan counts off the store, handed in for `ports`' reason;
 /// `None` is a Job no plan was recorded for.
 /// `room` is asked before every Check after the first starts — [`Room`].
+///
+/// `dry_run`, `attempt` and `footprint_now` are what a gate hands in to reuse a
+/// Check instead of asking it again; a dry run itself, and `crate::proving`'s
+/// commit sweep, hand in `None` and answer every position by running it.
+///
+/// **Looked up by name, per Check, inside the loop below — never a second
+/// sequence.** [`reuse::trusted`] decides once whether `dry_run` is good for
+/// anything against `attempt` and `footprint_now`; [`KeptDryRun::passed`] is
+/// then asked once per Check, by the name that Check already carries. There is
+/// no parallel `Vec` here for that loop's length to disagree with, which is
+/// what a `zip` over one used to risk — see this module's own history on
+/// `#1014`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn ran(
     checks: &[ResolvedCheck],
@@ -431,24 +445,33 @@ pub(crate) async fn ran(
     env: &[(String, String)],
     plan: Option<TaskCounts>,
     stop: &Stop,
+    dry_run: Option<&KeptDryRun>,
+    attempt: Attempt,
+    footprint_now: Option<&Footprint>,
 ) -> Vec<Completed> {
+    let trusted = reuse::trusted(dry_run, attempt, footprint_now);
     let mut planned: Vec<Planned> = checks
         .iter()
-        .map(|check| match not_covered(check, touched) {
-            Some(skipped) => Planned::Already(skipped),
-            None => match check {
-                ResolvedCheck::ManifestCheck { name, run, .. } => {
-                    narrowed(check, name, run, touched, narrow)
-                }
-                ResolvedCheck::DiffNonempty => Planned::Already(Observed::Diff { moved }),
-                ResolvedCheck::ArtifactExists { target } => {
-                    Planned::Already(Observed::Artifact(looked_for(worktree, target)))
-                }
-                ResolvedCheck::PlanRecorded { .. } => Planned::Already(Observed::Plan {
-                    tasks: plan.map(|counts| counts.not_dropped()),
-                }),
+        .map(
+            |check| match trusted.and_then(|kept| kept.passed(check.label())) {
+                Some(row) => Planned::Already(Observed::Reused(row)),
+                None => match not_covered(check, touched) {
+                    Some(skipped) => Planned::Already(skipped),
+                    None => match check {
+                        ResolvedCheck::ManifestCheck { name, run, .. } => {
+                            narrowed(check, name, run, touched, narrow)
+                        }
+                        ResolvedCheck::DiffNonempty => Planned::Already(Observed::Diff { moved }),
+                        ResolvedCheck::ArtifactExists { target } => {
+                            Planned::Already(Observed::Artifact(looked_for(worktree, target)))
+                        }
+                        ResolvedCheck::PlanRecorded { .. } => Planned::Already(Observed::Plan {
+                            tasks: plan.map(|counts| counts.not_dropped()),
+                        }),
+                    },
+                },
             },
-        })
+        )
         .collect();
 
     // **Before the prerequisites**, so a Check waiting behind `migrate` reads
@@ -500,7 +523,7 @@ pub(crate) async fn ran(
         }
     }
 
-    let mut done: Vec<Option<(Attempt, Duration)>> = planned.iter().map(|_| None).collect();
+    let mut done: Vec<Option<(RunAttempt, Duration)>> = planned.iter().map(|_| None).collect();
     let mut queued = planned
         .iter()
         .enumerate()
@@ -525,7 +548,7 @@ pub(crate) async fn ran(
     // the slowest member of it, and a step whose Checks are 17s and 1s would
     // spend the fast slot idle for sixteen of them. **Room is asked before each
     // one after the first**, so a short machine waits for a finish, not a batch.
-    let mut running: JoinSet<(usize, Attempt, Duration)> = JoinSet::new();
+    let mut running: JoinSet<(usize, RunAttempt, Duration)> = JoinSet::new();
     loop {
         while !queued.is_empty() && room.for_another(running.len()).await {
             let Some((at, run)) = queued.pop_front() else {

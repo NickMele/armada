@@ -388,7 +388,8 @@ impl Store {
     ) -> Result<Vec<(StepId, Vec<StepCheck>)>, LoadJobError> {
         let rows = self
             .collect(
-                "SELECT step_id, name, outcome, expected, produced, output_path
+                "SELECT step_id, name, outcome, expected, produced, output_path,
+                        reused_from_dry_run
                  FROM job_step_checks AS c WHERE job_id = ?1
                    AND attempt = (SELECT max(attempt) FROM job_step_checks
                                   WHERE job_id = c.job_id AND step_id = c.step_id)
@@ -410,6 +411,8 @@ impl Store {
                             expected: maybe(row, "expected")?,
                             produced: maybe(row, "produced")?,
                             output_path: maybe(row, "output_path")?,
+                            reused_from_dry_run: maybe(row, "reused_from_dry_run")?
+                                .map(Timestamp::from_rfc3339),
                         },
                     ))
                 },

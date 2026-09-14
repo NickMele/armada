@@ -191,6 +191,12 @@ struct Readings {
     tasks: Option<TaskCounts>,
     attempt: Attempt,
     records_root: String,
+    /// What the worktree held before any Check started. **The reading
+    /// `crate::reuse::KeptDryRun` is built against**, never one taken once
+    /// the run has finished — a Drone may keep editing while its Checks run
+    /// (#1020), and a footprint taken then would vouch for content the
+    /// Checks never saw.
+    footprint: Footprint,
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -273,21 +279,26 @@ where
             });
         };
         let checks = declared.checks();
-        let moved = match checks
+        // **Read unconditionally, not only where the step declares
+        // `diff_nonempty`, and kept whole rather than folded to a bool.**
+        // `crate::reuse` needs this same reading beside whatever the run
+        // finds, so the gate can tell later whether the worktree it is
+        // looking at is the one this run measured — and it is taken here,
+        // before any Check starts, because a Drone may keep editing while
+        // they run (#1020). A reading taken at the end would vouch for
+        // content the Checks never saw, and the gate would reuse a pass
+        // against work that was never tested.
+        let footprint = self
+            .work()
+            .footprint(&plan.worktree)
+            .map_err(|cause| unread(cause.to_string()))?;
+        let moved = checks
             .iter()
             .any(|check| matches!(check, ResolvedCheck::DiffNonempty))
-        {
-            false => false,
-            true => {
-                let now = self
-                    .work()
-                    .footprint(&plan.worktree)
-                    .map_err(|cause| unread(cause.to_string()))?;
-                plan.entered_with
-                    .as_ref()
-                    .is_some_and(|before| now.differs_from(before))
-            }
-        };
+            && plan
+                .entered_with
+                .as_ref()
+                .is_some_and(|before| footprint.differs_from(before));
         // The gate's own skip, from the same reading; a narrowed run reads paths regardless.
         let touched: Vec<String> =
             match narrow || checks.iter().any(ResolvedCheck::needs_changed_paths) {
@@ -329,6 +340,7 @@ where
             tasks,
             attempt,
             records_root,
+            footprint,
         })
     }
 
@@ -365,12 +377,19 @@ where
 
     /// Take the mark off, give the clocks back and tell the Drone — **only where
     /// this is still the run in flight**, so a step that ended hears nothing.
+    ///
+    /// **What the run found is kept here too, on the same guard, and nowhere
+    /// else.** `at_work.checked(now, run)` is the one place this run is known
+    /// to be the one the slot is still waiting on: a submission, a kill or a
+    /// step boundary already cleared it and answers `false`, and a stopped
+    /// run's own `ran` is an `Err` in any case — `crate::checking::Stop`
+    /// cannot finish a batch it cut short. Neither road keeps anything.
     async fn dry_run_ends(
         &self,
         caller: &JobId,
         plan: &Plan,
         run: u64,
-        ran: Result<CheckReport, String>,
+        ran: Result<(CheckReport, crate::reuse::KeptDryRun), String>,
     ) -> Option<Result<CheckReport, String>> {
         let now = self.now();
         let slot = self.slot_of(caller).await?;
@@ -380,6 +399,13 @@ where
             .filter(|at_work| at_work.is(plan.record.id()))?;
         if !at_work.checked(now, run) {
             return None;
+        }
+        let (ran, kept) = match ran {
+            Ok((report, kept)) => (Ok(report), Some(kept)),
+            Err(cause) => (Err(cause), None),
+        };
+        if let Some(kept) = kept {
+            at_work.kept_dry_run(kept);
         }
         let told = ChecksReported::of(&ran);
         // Written down before the send, `Fleet::tell`'s order.
@@ -394,12 +420,17 @@ where
     }
 
     /// The run itself, with no lock held.
+    ///
+    /// **Returns what is kept beside what is told.** The report is the
+    /// Drone's; [`crate::reuse::KeptDryRun`] is Fleet's own, and
+    /// [`dry_run_ends`](Fleet::dry_run_ends) is what puts it where the gate
+    /// can find it — never here, which has no slot to write into.
     async fn dry_run(
         &self,
         plan: &Plan,
         read: &Readings,
         stop: &Stop,
-    ) -> Result<CheckReport, String> {
+    ) -> Result<(CheckReport, crate::reuse::KeptDryRun), String> {
         let Some(declared) = plan.record.workflow().step(&plan.step) else {
             return Err(format!(
                 "step `{}` is not in the workflow",
@@ -425,6 +456,13 @@ where
             &read.port_env,
             read.tasks,
             stop,
+            // **A dry run never reuses.** It is the reading `crate::reuse`
+            // keeps for the gate to trust later; trusting an earlier one of
+            // its own here would be a dry run measuring nothing and calling
+            // it a measurement.
+            None,
+            read.attempt,
+            None,
         )
         .await
         {
@@ -445,7 +483,23 @@ where
             &ran.recorded(),
             &printed,
         );
-        Ok(CheckReport {
+        // **Kept before the rows are consumed below**, and from the same
+        // `rows` and `narrowed_to` the report is about to render — a second
+        // reading of either here is a second place they could disagree.
+        // `read.footprint` is the reading `dry_run_reads` took before any
+        // Check started, never one taken here: the Drone may have kept
+        // editing while they ran (#1020), and a footprint taken now would
+        // vouch for content the Checks never saw. `KeptDryRun::of` is what
+        // decides which of these rows the gate may ever trust; everything
+        // not eligible is dropped there, not here.
+        let kept = crate::reuse::KeptDryRun::of(
+            read.attempt,
+            self.now(),
+            read.footprint.clone(),
+            rows.clone(),
+            &narrowed_to,
+        );
+        let report = CheckReport {
             ran: rows
                 .into_iter()
                 .enumerate()
@@ -468,7 +522,8 @@ where
                 })
                 .collect(),
             narrowed: read.narrow,
-        })
+        };
+        Ok((report, kept))
     }
 
     /// Write the run into the Job's log, as fields a query can count.

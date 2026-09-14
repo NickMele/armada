@@ -111,7 +111,8 @@ impl Store {
     ) -> Result<Vec<Attempted<Vec<StepCheck>>>, LoadJobError> {
         let rows = self
             .collect(
-                "SELECT step_id, attempt, ran_at, name, outcome, expected, produced, output_path
+                "SELECT step_id, attempt, ran_at, name, outcome, expected, produced, output_path,
+                        reused_from_dry_run
                  FROM job_step_checks WHERE job_id = ?1 ORDER BY step_id, attempt, ordinal",
                 job_id,
                 "reading check results",
@@ -402,6 +403,7 @@ fn check(row: &Row<'_>) -> Result<StepCheck, RowError> {
         expected: maybe(row, "expected")?,
         produced: maybe(row, "produced")?,
         output_path: maybe(row, "output_path")?,
+        reused_from_dry_run: maybe(row, "reused_from_dry_run")?.map(Timestamp::from_rfc3339),
     })
 }
 

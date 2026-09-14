@@ -76,6 +76,7 @@ async fn ruled_on_a_deliverable(judge: Arc<FakeJudge>, contents: Option<&str>) -
         core_model::WhenRefused::default(),
         &[],
         None,
+        None,
     )
     .await
 }
@@ -196,6 +197,7 @@ async fn a_deliverable_that_is_not_text_decides_neither_way() {
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
         None,
     )
     .await;

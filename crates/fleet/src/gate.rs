@@ -107,6 +107,7 @@ pub use crate::ruling::Ruling;
 /// | `refusal_policy` | This Job's `WhenRefused` setting, off the store. **Handed in for `lifted`'s reason** — a step cannot ask the store for a Job-level setting, and a setting read here for itself would be a second reader of the value `crate::asking::answer_judge` writes |
 /// | `tolerated` | Every criterion this repository has stood down with "always disagree", off the store. **Handed in and read once per pass**, so a criterion answered before this Job existed is never asked about again without a second query per criterion |
 /// | `plan` | The Job's plan as its history stands, off the store, or `None` where none was recorded. `plan_recorded` reads its counts; the step that records it — whether that is its whole product or `records_plan: true` beside another — and a later step naming `<step_id>.evidence` for it, are handed the same record rendered as text, beside whatever the step also delivers rather than in place of it. `#1006`. **A task's state never gates a submission**, which is `plan_recorded`'s own rule and not this one's to relax |
+/// | `dry_run` | What the Drone's own `run_checks` last found for this step, off its slot, or `None` where it never asked. **Handed in for `entered_with`'s reason** — kept in `Working` rather than derived here, and only ever this process's own. `crate::reuse` decides what of it, if anything, this call may trust instead of running a Check again. `#1014` |
 #[allow(clippy::too_many_arguments)]
 pub async fn rule_on<W>(
     at: AtStep<'_>,
@@ -128,6 +129,7 @@ pub async fn rule_on<W>(
     refusal_policy: WhenRefused,
     tolerated: &[CriterionId],
     plan: Option<&WorkPlan>,
+    dry_run: Option<&crate::reuse::KeptDryRun>,
 ) -> Ruling
 where
     W: WorkProduct,
@@ -184,14 +186,18 @@ where
     // **Read before the Checks run rather than among them**, which is where
     // `changed` above is read and for its reason: a Check's own artifacts must
     // not be part of what the diff sees, and one reading answers both questions.
-    let moved = match step
+    let wants_diff = step
         .checks()
         .iter()
-        .any(|check| matches!(check, ResolvedCheck::DiffNonempty))
-    {
-        false => false,
+        .any(|check| matches!(check, ResolvedCheck::DiffNonempty));
+    // **Read here whenever there is a dry run to weigh it against too**, not
+    // only where the step declares `diff_nonempty`: `crate::reuse` needs this
+    // same reading to tell whether the worktree the gate is looking at is the
+    // one the dry run measured.
+    let footprint_now = match wants_diff || dry_run.is_some() {
+        false => None,
         true => match work.footprint(at.worktree()) {
-            Ok(now) => entered_with.is_some_and(|before| now.differs_from(before)),
+            Ok(now) => Some(now),
             Err(cause) => {
                 return Ruling::CouldNotDecide {
                     artifact: "the Job's diff",
@@ -202,6 +208,10 @@ where
             }
         },
     };
+    let moved = wants_diff
+        && footprint_now
+            .as_ref()
+            .is_some_and(|now| entered_with.is_some_and(|before| now.differs_from(before)));
     // **Several at a time, in declaration order, each with its own budget.**
     // `crate::checking` owns all three properties; what matters here is that
     // what comes back is one entry per declared Check, skips included, so the
@@ -224,6 +234,9 @@ where
         port_env,
         plan.map(WorkPlan::counts),
         &checking::Stop::never(),
+        dry_run,
+        at.attempt(),
+        footprint_now.as_ref(),
     )
     .await
     {

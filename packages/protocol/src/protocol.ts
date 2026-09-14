@@ -250,6 +250,12 @@ export type CheckRun = {
    * `artifacts.ts`, which owns that rule for all three kept records.
    */
   output_path?: string;
+  /**
+   * When a Drone's own dry run answered this Check, rather than the gate
+   * running it again. Absent on every Check the gate ran itself. Since
+   * protocol 13.39.
+   */
+  reused_from_dry_run?: string;
 };
 
 /**

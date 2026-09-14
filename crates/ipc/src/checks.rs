@@ -166,6 +166,11 @@ pub struct CheckRun {
     /// cannot tell those from a Check whose output Fleet lost.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_path: Option<String>,
+    /// When a Drone's own dry run answered this Check, rather than the gate's
+    /// own run. Absent on every Check the gate ran itself. Since protocol
+    /// 13.39. `#1014`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reused_from_dry_run: Option<crate::ids::Instant>,
 }
 
 impl CheckRun {
@@ -184,6 +189,7 @@ impl CheckRun {
             expected: check.expected.clone(),
             produced: check.produced.clone(),
             output_path: check.output_path.clone(),
+            reused_from_dry_run: check.reused_from_dry_run.as_ref().map(Into::into),
         }
     }
 }

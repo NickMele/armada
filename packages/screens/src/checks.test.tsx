@@ -12,9 +12,9 @@ import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { AssertionSet, type CheckRun as CheckRunRow } from "@armada/components";
-import type { StepDetail } from "@armada/protocol";
+import type { CheckRun, StepDetail } from "@armada/protocol";
 
-import { checkSheetOf, checksChapter } from "./checks";
+import { checkSheetOf, checksChapter, saidOf } from "./checks";
 import type { Opens } from "./phases";
 
 const OPENS: Opens = {
@@ -157,5 +157,15 @@ describe("what a Check's output sheet should read", () => {
 
   it("reads nothing for a Check nobody declared", () => {
     expect(checkSheetOf(gating(), "nonexistent")).toBeUndefined();
+  });
+});
+
+describe("a Check the gate reused from the Drone's own dry run", () => {
+  const passed: CheckRun = { attempt: 1, name: "build", outcome: "passed" };
+  const reused: CheckRun = { ...passed, reused_from_dry_run: "2026-09-13T09:00:00Z" };
+
+  it("says it was reused, and a Check the gate ran itself does not", () => {
+    expect(saidOf(reused)).toBe("Passed — reused from the drone's run");
+    expect(saidOf(passed)).toBe("Passed");
   });
 });

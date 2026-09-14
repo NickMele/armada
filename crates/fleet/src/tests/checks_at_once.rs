@@ -85,6 +85,7 @@ async fn ruled(room: &Room) -> (Ruling, Duration) {
         core_model::WhenRefused::default(),
         &[],
         None,
+        None,
     )
     .await;
     (ruling, began.elapsed())

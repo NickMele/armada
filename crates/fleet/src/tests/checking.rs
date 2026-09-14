@@ -81,6 +81,7 @@ async fn ruled_with_ports<'a>(
         core_model::WhenRefused::default(),
         &[],
         None,
+        None,
     )
     .await
 }
@@ -276,6 +277,7 @@ async fn ruled_on_a_file(target: &str, write: impl FnOnce(&std::path::Path)) -> 
         &[],
         core_model::WhenRefused::default(),
         &[],
+        None,
         None,
     )
     .await

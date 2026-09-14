@@ -480,8 +480,8 @@ impl Store {
             tx.execute(
                 "INSERT INTO job_step_checks (
                      job_id, step_id, attempt, ordinal, name, outcome, expected, produced,
-                     ran_at, output_path
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                     ran_at, output_path, reused_from_dry_run
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
@@ -493,6 +493,7 @@ impl Store {
                     check.produced.as_deref(),
                     at.as_str(),
                     check.output_path.as_deref(),
+                    check.reused_from_dry_run.as_ref().map(Timestamp::as_str),
                 ],
             )
             .map_err(fault("writing a check result"))

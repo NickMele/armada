@@ -377,6 +377,7 @@ pub async fn gated_on_the_plan(planned: &Planned, plan: Option<WorkPlan>) -> Rul
         WhenRefused::default(),
         &[],
         plan.as_ref(),
+        None,
     )
     .await
 }
@@ -438,6 +439,7 @@ pub async fn gated_on_implement(
         &[],
         WhenRefused::default(),
         &[],
+        None,
         None,
     )
     .await

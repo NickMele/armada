@@ -105,6 +105,8 @@ fn check(row: &Row<'_>) -> Result<StepCheck, RowError> {
         expected: maybe(row, "expected")?,
         produced: maybe(row, "produced")?,
         output_path: maybe(row, "output_path")?,
+        // A commit is proved with no Drone and no dry run to have answered it.
+        reused_from_dry_run: None,
     })
 }
 

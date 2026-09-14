@@ -43,6 +43,7 @@ fn what_a_step_s_checks_did_survives_the_process_that_ran_them() {
                     expected: Some("`suite` can be run".to_string()),
                     produced: Some("`suite` is not installed".to_string()),
                     output_path: Some(".armada/checks/01CHK/reproduce.0.log".to_string()),
+                    reused_from_dry_run: None,
                 },
                 StepCheck {
                     name: "diff_nonempty".to_string(),
@@ -50,6 +51,7 @@ fn what_a_step_s_checks_did_survives_the_process_that_ran_them() {
                     expected: None,
                     produced: None,
                     output_path: None,
+                    reused_from_dry_run: None,
                 },
             ],
             &created_at(),
@@ -327,6 +329,7 @@ fn a_second_ruling_on_one_run_of_a_step_replaces_the_first_rather_than_joining_i
         expected: Some("`suite` exits 0".to_string()),
         produced: Some("it exited 1".to_string()),
         output_path: Some(".armada/checks/01AGAIN/reproduce.0.log".to_string()),
+        reused_from_dry_run: None,
     }];
     let passed = [StepCheck {
         name: "suite".to_string(),
@@ -334,6 +337,7 @@ fn a_second_ruling_on_one_run_of_a_step_replaces_the_first_rather_than_joining_i
         expected: None,
         produced: None,
         output_path: Some(".armada/checks/01AGAIN/reproduce.0.log".to_string()),
+        reused_from_dry_run: None,
     }];
     store
         .record_step_checks(&job_id("01AGAIN"), &step, &failed, &created_at())

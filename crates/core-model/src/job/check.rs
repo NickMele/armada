@@ -15,6 +15,8 @@
 
 use alloc::string::String;
 
+use crate::envelope::Timestamp;
+
 /// How one declared Check ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CheckOutcome {
@@ -124,4 +126,12 @@ pub struct StepCheck {
     /// keep: a built-in assertion runs no command, and a Check that never
     /// started printed nothing.
     pub output_path: Option<String>,
+    /// When the Drone's own dry run answered this, rather than the gate's own
+    /// run. `None` on every Check the gate ran for itself.
+    ///
+    /// **A `Timestamp`, not a `bool`.** A reader's next question after "was
+    /// this reused" is "reused from when", and a bit that answered the first
+    /// would leave the second to a second field that could disagree with it —
+    /// `#1014`.
+    pub reused_from_dry_run: Option<Timestamp>,
 }
