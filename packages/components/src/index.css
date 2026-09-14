@@ -41,7 +41,9 @@
 @import "./compositions/JobRowStacked/JobRowStacked.narrow.css";
 @import "./compositions/ActiveJobsList/ActiveJobsList.css";
 @import "./compositions/Sidebar/Sidebar.css";
-@import "./compositions/StatusBar/StatusBar.css";
+@import "./compositions/Panel/Panel.css";
+@import "./compositions/StatsPanel/StatsPanel.css";
+@import "./compositions/FleetPanel/FleetPanel.css";
 @import "./compositions/JobLogReference/JobLogReference.css";
 @import "./compositions/EvidenceTrail/EvidenceTrail.css";
 @import "./compositions/EvidenceCard/EvidenceCard.css";

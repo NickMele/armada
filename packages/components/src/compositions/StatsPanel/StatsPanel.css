@@ -1,0 +1,29 @@
+.armada-stats-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: var(--space-1);
+  column-gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-1);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-stats-panel__label {
+  color: var(--fg-muted);
+}
+
+.armada-stats-panel__value {
+  margin: 0;
+  font-family: var(--font-mono);
+  text-align: right;
+  color: var(--fg-default);
+}
+
+.armada-stats-panel__value[data-tone="warn"] {
+  color: var(--status-awaiting-review);
+}
+
+.armada-stats-panel__value[data-tone="hot"] {
+  color: var(--status-escalated);
+}

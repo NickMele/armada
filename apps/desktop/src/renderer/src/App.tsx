@@ -113,6 +113,8 @@ import {
   watchOverview,
 } from "./commands";
 import { useWhereOpen } from "./where-open";
+import { usePanelOpen } from "./panel-open";
+import { statsOf, fleetPanelOf } from "./left-column";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
@@ -228,6 +230,9 @@ export function App() {
   // Where things are' own open choice — held locally so a press moves it at
   // once, `#927`'s round trip off the critical path of a toggle.
   const [whereOpen, pressWhereOpen] = useWhereOpen(state.preferences.where_things_are_open);
+  // The left column's own fold, remembered across a restart — Bridge/1088.
+  const [statsOpen, setStatsOpen] = usePanelOpen("stats");
+  const [fleetOpen, setFleetOpen] = usePanelOpen("fleet");
 
   // The open Job, read out of the list rather than copied beside it. A Job that
   // leaves the list — superseded, or gone from a resync — closes its own detail
@@ -275,11 +280,14 @@ export function App() {
     watchManifestDrift(manifesting);
   }, [manifesting]);
 
-  // Overview's own free reads — Fleet's health and every repository's drift
-  // in scope — held open only while its tiles are on screen.
+  // Fleet's health and every repository's drift in scope. Held for the life
+  // of the window rather than only while Overview is showing — Bridge/1088's
+  // Stats and Fleet panels draw the same two reads on every surface now.
   useEffect(() => {
-    watchOverview(overviewing);
-  }, [overviewing]);
+    watchOverview(true);
+    return () => watchOverview(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The Manifest file and an edit of it. **Held here rather than by the
   // screen**, which unmounts whenever the rail moves: an unsaved correction the
@@ -512,7 +520,6 @@ export function App() {
     <>
       <Shell
         connection={state.connection}
-        statement={statement}
         repositories={repositories}
         listed={listed}
         scope={state.repository}
@@ -520,7 +527,6 @@ export function App() {
         onAddRepository={locate.onOpen}
         onCompose={() => setComposing(true)}
         onSearch={palette.onOpen}
-        jobs={state.jobs}
         boardJobs={boardJobs}
         questions={questions}
         helm={
@@ -539,7 +545,16 @@ export function App() {
             onApprove={(jobId) => void commands.approve(jobId)}
           />
         }
-        capacity={state.capacity}
+        stats={{
+          rows: statsOf(state.connection, state.jobs, state.capacity, repositories, state.repository, state.drifts),
+          open: statsOpen,
+          onOpenChange: setStatsOpen,
+        }}
+        fleet={{
+          ...fleetPanelOf(state.connection, statement, state.health),
+          open: fleetOpen,
+          onOpenChange: setFleetOpen,
+        }}
         title={head?.title}
         summary={
           manifesting && settingUp
@@ -560,7 +575,6 @@ export function App() {
                 : SURFACE.board
         }
         onSurface={goTo}
-        onOpenLimits={() => setFleetSettingsOpen(true)}
       >
         {/* Real CSS, not utilities: nothing Tailwind spells emits a rule in
             this app, so the class that bounds this box lives in the app's own

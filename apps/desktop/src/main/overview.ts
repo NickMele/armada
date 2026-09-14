@@ -1,8 +1,9 @@
-// Overview's readings no other surface holds: Fleet's health, and drift for every repository in the
-// scope — each one served on All, or the one picked.
+// Fleet's health, and drift for every repository in the scope — each one served on All, or the
+// one picked. Read by Overview's own tiles, and by the left column's Stats and Fleet panels
+// (Bridge/1088), which is why `watchOverview` now holds this open for the life of the window
+// rather than only while Overview is showing.
 //
-// **Held while a surface wants them, `holding.ts`'s shape.** Health is a pull by Doctor's own terms,
-// and drift on All is one read per repository, so nothing pays for either while Overview is closed.
+// **Held while a surface wants them, `holding.ts`'s shape.** Health is a pull by Doctor's own terms.
 // Read again when what they answer about may have moved: a listing or a pick (`repositories.ts`),
 // a `manifest.reread` (`arrivals.ts`), and Refresh — which lists again, so it arrives as the first.
 //

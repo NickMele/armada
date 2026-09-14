@@ -1,19 +1,20 @@
-// What Fleet is, in the words the design contract settles. The status bar
+// What Fleet is, in the words the design contract settles. The Fleet panel
 // draws them; this decides them.
 //
-// **A healthy status is stated out loud**, because an empty bar reads the same
-// whether Fleet is healthy or dead.
+// **A healthy status is stated out loud**, because an empty panel reads the
+// same whether Fleet is healthy or dead.
 //
 // Four runtime-file answers, not one message. "Fleet is not running" is three
 // different facts underneath — no file, a dead pid, and a pid something else
 // now holds — and the third is the one that must never become a socket.
 //
-// This was `FleetBar.tsx` and drew the bar itself. The bar is
-// `Compositions/Status bar` now, so what is left is the reading.
+// This was `FleetBar.tsx`, then `Compositions/Status bar`. Bridge/1088 moved
+// the drawing to `Compositions/FleetPanel`; what is left here is the reading.
 
 import type { Connection } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
+import type { FleetState } from "@armada/components";
 
 /** Sentence, detail and hue. The detail is machine-derived and renders in mono. */
 export type Statement = {
@@ -146,3 +147,38 @@ function absence(why: NotRunning): string {
 }
 
 type NotRunning = Extract<Connection, { state: "not_running" }>["absence"];
+
+/**
+ * Which of the Fleet panel's dot hues this reading takes.
+ *
+ * Four of Bridge's seven connection states are none of the contract's three —
+ * reading, connecting, a refused runtime file and a protocol Bridge does not
+ * speak. They keep the neutral dot; `shortLabelOf` names each one instead.
+ */
+export function fleetStateOf(connection: Connection): FleetState {
+  switch (connection.state) {
+    case "connected":
+      return "running";
+    case "not_running":
+      return "not-running";
+    case "unreachable":
+      return "unreachable";
+    default:
+      return "unknown";
+  }
+}
+
+const SHORT_LABEL: Record<Connection["state"], string> = {
+  reading: "Reading",
+  not_running: "Not running",
+  runtime_file_refused: "Refused",
+  connecting: "Connecting",
+  unreachable: "Unreachable",
+  version_skew: "Version mismatch",
+  connected: "Running",
+};
+
+/** The Fleet panel's own big word — short, because the panel already says "Fleet". */
+export function shortLabelOf(connection: Connection): string {
+  return SHORT_LABEL[connection.state];
+}

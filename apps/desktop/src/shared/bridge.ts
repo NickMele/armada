@@ -374,14 +374,16 @@ export type BridgeState = {
   manifestDrift: ManifestDriftRead;
   /**
    * `GET /health` — what Fleet can say of its own health, and what it did not probe. Overview's
-   * Doctor tile. **Held open by that surface alone**, `held`'s terms: Doctor's health is a pull.
+   * Doctor tile, and the left column's Fleet panel. **Held open for the life of the window**
+   * since Bridge/1088: the Fleet panel draws it on every surface, not only Overview's.
    *
-   * **This window's own** — `PickedView` — held open only where this window's Overview is.
+   * **This window's own** — `PickedView`.
    */
   health: HealthRead;
   /**
    * Drift for every repository in the scope — each served on All, or the one picked — beside
-   * `manifestDrift`, which is the Manifest surface's one. Overview's drift tile, held open by it.
+   * `manifestDrift`, which is the Manifest surface's one. Overview's drift tile, and the left
+   * column's Manifest row. Held open for the life of the window, `health`'s reason.
    *
    * **This window's own**, `health`'s reason: the scope is this window's own pick.
    */

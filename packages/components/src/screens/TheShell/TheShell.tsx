@@ -1,28 +1,26 @@
 import { MessageSquare } from "lucide-react";
 import type { ReactNode } from "react";
 import { BoardEmptyState } from "../../compositions/BoardEmptyState/BoardEmptyState";
+import { FleetPanel, type FleetPanelProps } from "../../compositions/FleetPanel/FleetPanel";
 import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
-import { StatusBar, type StatusBarProps } from "../../compositions/StatusBar/StatusBar";
+import { StatsPanel, type StatsPanelProps } from "../../compositions/StatsPanel/StatsPanel";
 import { TitleBar } from "../../compositions/TitleBar/TitleBar";
 import { Button } from "../../primitives/Button/Button";
 import { Kbd, KbdChord } from "../../primitives/Kbd/Kbd";
 import { Sheet } from "../../primitives/Sheet/Sheet";
 
 /**
- * The shell — rail, panel, status bar. The frame every journey mounts inside.
- *
- * **The status bar spans beneath the rail, not inside the panel.** The drawing
- * insets it to the content area; `docs/contracts/design-system.md` says the
- * opposite in as many words, on the grounds that the bar is app-level and
- * appears on Helm too. The contract wins and the disagreement is reported.
+ * The shell — the left column, panel and dock. Bridge/1088 replaced the rail
+ * and the status bar with three rounded panels — Navigation, Stats and
+ * Fleet — stacked in one column. Spend and advice left with the bar and
+ * appear nowhere here.
  *
  * **The roster is the caller's.** One surface is in the rail because one
- * surface exists — six disabled rows would be a promise Armada does not keep —
- * so the surfaces arrive as a prop and this component counts nothing.
+ * surface exists, so the surfaces arrive as a prop and this component counts
+ * nothing.
  *
- * The panel scrolls; the rail and the bar do not. `min-height: 0` on the
- * scrolling child is what stops the window growing instead, which is v1's
- * "layout broke on resize" restated in CSS.
+ * The panel scrolls; the left column and the dock do not. `min-height: 0` on
+ * the scrolling child is what stops the window growing instead.
  */
 export type TheShellProps = {
   /** Beneath the rail's own section label — nothing draws here since #1087
@@ -64,7 +62,10 @@ export type TheShellProps = {
   children: ReactNode;
   /** Helm's dock, on every surface. Absent draws none. */
   dock?: TheShellDock;
-  status: StatusBarProps;
+  /** The left column's second panel. Open state is the surface's to persist. */
+  stats: Omit<StatsPanelProps, "narrow">;
+  /** The left column's third panel, what the status bar used to read. */
+  fleet: Omit<FleetPanelProps, "narrow">;
 };
 
 /** Helm's dock (#948). Closed draws the edge strip at any width, so both arrangements share one way back. */
@@ -97,7 +98,8 @@ export function TheShell({
   actions,
   children,
   dock,
-  status,
+  stats,
+  fleet,
 }: TheShellProps) {
   return (
     <div className="armada-shell">
@@ -109,13 +111,18 @@ export function TheShell({
         helm={helmButtonOf(dock)}
       />
       <div className="armada-shell__body">
-        <Sidebar
-          header={railHeader}
-          surfaces={surfaces}
-          activeId={activeId}
-          collapsed={collapsed}
-          onSelect={onSelect}
-        />
+        <div className="armada-shell__left">
+          <Sidebar
+            header={railHeader}
+            sectionLabel={null}
+            surfaces={surfaces}
+            activeId={activeId}
+            collapsed={collapsed}
+            onSelect={onSelect}
+          />
+          <StatsPanel {...stats} narrow={collapsed} />
+          <FleetPanel {...fleet} narrow={collapsed} />
+        </div>
         <div className="armada-shell__work">
           <div className="armada-shell__panel">
             {title === undefined ? null : (
@@ -136,7 +143,6 @@ export function TheShell({
           {dock === undefined ? null : <Dock {...dock} />}
         </div>
       </div>
-      <StatusBar {...status} />
     </div>
   );
 }

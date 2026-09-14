@@ -10,15 +10,11 @@ import { Select } from "../../primitives/Select/Select";
 import { TheShell } from "./TheShell";
 
 /**
- * Rail, panel, status bar — with the surfaces in the rail that are built,
- * which is two of the five the concept page fixes. The rest hold their place
- * in the order and their digit and draw nothing.
+ * The left column, panel and dock — with the surfaces in Navigation that are
+ * built, which is two of the five the concept page fixes.
  *
  * The values are the drawing's own: pid 4417, port 7411, six jobs, one of them
- * waiting on you. **Two of the drawing's are not here.** `today ~$4.80` has
- * nothing behind it — nothing measures spend — and `1 drone` has nothing
- * behind it either, because `assigned_drone` has no event that sets it. Both
- * are left out rather than drawn as a labelled blank.
+ * waiting on you. `today ~$4.80` is left out — nothing measures spend.
  */
 const meta: Meta<typeof TheShell> = {
   title: "Screens/The shell",
@@ -49,12 +45,25 @@ const shell: ComponentProps<typeof TheShell> = {
   title: "Job Board",
   actions: <Button variant="primary">Dispatch</Button>,
   children: <div className="armada-screen__mount">The list mounts here — 1d</div>,
-  status: {
-    fleet: "running",
-    fleetLabel: "Fleet running",
+  stats: {
+    rows: [
+      { id: "approval", label: "Awaiting approval", value: 1, tone: "warn" },
+      { id: "review", label: "Needs review", value: 0 },
+      { id: "escalated", label: "Escalated", value: 0 },
+      { id: "jobs", label: "Jobs", value: 6 },
+      { id: "drones", label: "Drones", value: "1 of 2" },
+      { id: "manifest", label: "Manifest", value: "Current" },
+    ],
+    open: true,
+    onOpenChange: () => {},
+  },
+  fleet: {
+    state: "running",
+    label: "Running",
     detail: "pid 4417 · port 7411",
-    items: ["6 jobs"],
-    approvals: 1,
+    doctor: { outcome: "pass", checked: "Fleet, SQLite, Manifest, System stats" },
+    open: true,
+    onOpenChange: () => {},
   },
 };
 
@@ -79,9 +88,9 @@ export const CollapsedRail: Story = {
 };
 
 /**
- * Fleet down. The bar is present when Fleet is, and says which of the two
- * failures this is — a missing runtime file and a live pid that does not
- * answer call for different things.
+ * Fleet down. The Fleet panel says which of the two failures this is — a
+ * missing runtime file and a live pid that does not answer call for
+ * different things.
  */
 export const FleetIsNotRunning: Story = {
   args: {
@@ -91,11 +100,12 @@ export const FleetIsNotRunning: Story = {
       { id: "board", label: "Job Board", icon: ClipboardList, count: 0 },
       { id: "worktrees", label: "Cleanup", icon: HardDrive },
     ],
-    status: {
-      fleet: "not-running",
-      fleetLabel: "Fleet is not running",
+    fleet: {
+      state: "not-running",
+      label: "Not running",
       detail: "no runtime file at ~/Library/Application Support/Armada/fleet.json",
-      advice: "Start Fleet. Bridge reconnects on its own.",
+      open: true,
+      onOpenChange: () => {},
     },
   },
   render: Shell.render,
@@ -107,13 +117,12 @@ export const FleetIsNotRunning: Story = {
  * This is the story that was missing, and its absence is why the layout kept
  * reading right here and wrong in the app. Every other screen story mounts a
  * screen on its own, into a box the story sized. Bridge mounts it into the
- * shell — under a head, over a status bar, inside a rail — and the chain from
- * the window down to the screen is exactly the part that was broken.
+ * shell — under a head, beside the left column — and the chain from the
+ * window down to the screen is exactly the part that was broken.
  *
- * **Nothing outside a pane scrolls.** The rail holds, the status bar holds, and
- * the tall content moves inside its own box. If this story ever scrolls the
- * whole shell — if the status bar leaves the bottom of the frame — the chain is
- * broken again, and it is broken in Bridge with it.
+ * **Nothing outside a pane scrolls.** The left column holds, and the tall
+ * content moves inside its own box. If this story ever scrolls the whole
+ * shell, the chain is broken again, and it is broken in Bridge with it.
  *
  * No head, which is the shape a Job read whole takes: the screen's own header
  * is the top of the window.
