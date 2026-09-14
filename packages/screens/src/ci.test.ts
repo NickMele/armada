@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ciOf, saidOf } from "./ci";
+import { ciOf, ciShown, saidOf } from "./ci";
 
 describe("saidOf", () => {
   it("counts what failed out of what ran", () => {
@@ -24,5 +24,17 @@ describe("ciOf", () => {
     expect(ci.said).toBe("The branch conflicts with main.");
     expect(ci.failed).toEqual([]);
     expect(ci.conflicted).toBe(true);
+  });
+});
+
+describe("ciShown", () => {
+  it("draws nothing where nothing ran against the pull request", () => {
+    expect(ciShown({ kind: "nothing_ran", checks: 0 }, false)).toBe(false);
+    expect(ciShown(undefined, false)).toBe(false);
+  });
+
+  it("draws the row where CI ran, or where the branch conflicts whatever ran", () => {
+    expect(ciShown({ kind: "all_passed", checks: 3, finished: 3 }, false)).toBe(true);
+    expect(ciShown({ kind: "nothing_ran", checks: 0 }, true)).toBe(true);
   });
 });

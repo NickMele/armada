@@ -42,3 +42,11 @@ export function saidOf(checks: PullRequestChecks | undefined): string {
       return "The forge would not say what ran.";
   }
 }
+
+/**
+ * Whether the row is drawn at all: a conflict with main, or CI that ran or is being read.
+ * **Nothing ran draws nothing**, and neither does a pull request Fleet has not read.
+ */
+export function ciShown(checks: PullRequestChecks | undefined, conflicted: boolean): boolean {
+  return conflicted || (checks !== undefined && checks.kind !== "nothing_ran");
+}

@@ -30,7 +30,7 @@ import {
   type VerdictSheetProps,
 } from "@armada/components";
 import { ReviewedGate, type PendingChanges } from "./confidence";
-import { ciOf } from "./ci";
+import { ciOf, ciShown } from "./ci";
 import type {
   Diff,
   Evidence,
@@ -703,7 +703,7 @@ export function verdictSlotAtGate({
             onDismissFinding: (finding: string, reason: string) =>
               onDismissFinding(job.id, finding, reason),
           })}
-      {...(detail?.checks === undefined && !conflicted
+      {...(!ciShown(detail?.checks, conflicted)
         ? {}
         : {
             ci: ciOf(detail?.checks, conflicted, {
