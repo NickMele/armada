@@ -50,10 +50,10 @@ import {
   ReviewComments,
   ReviewDecision,
   UnifiedDiff,
-  type DecisionAct,
   type DecisionChange,
   type UnifiedDiffProps,
 } from "@armada/components";
+import { isDecision, type DecidingAct } from "./pending";
 import { noteWithChanges } from "./changes";
 
 import type { Diff, Evidence, Remarks } from "@armada/protocol";
@@ -108,7 +108,7 @@ export type DecideProps = {
    * and says so; `deciding` without it is another act at this gate, and the
    * group is off with the sentence. #1117.
    */
-  decidingAct?: DecisionAct | undefined;
+  decidingAct?: DecidingAct | undefined;
   /**
    * The address of the pull request this Job's branch went out on, where it
    * has one. **Absent is a Job with nothing to merge**, and it is what decides
@@ -216,7 +216,7 @@ export function Decide({
   const off = stale || deciding;
   const why = stale ? NOT_LIVE : deciding ? IN_FLIGHT : undefined;
   // The answer pressed, drawn on its own control. Not while stale: nothing live can answer it.
-  const waiting = !stale && deciding ? decidingAct : undefined;
+  const waiting = !stale && deciding && isDecision(decidingAct) ? decidingAct : undefined;
 
   // **Read off the same address the merge control's own presence is decided
   // from.** `pullRequest` is undefined exactly where `onMerge` is absent below,

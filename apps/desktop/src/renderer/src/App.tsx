@@ -514,6 +514,7 @@ export function App() {
     jobs: boardJobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
     onForgetTerminal: (jobIds) => void commands.forgetTerminal(jobIds),
+    sweeping: commands.sweeping,
   });
 
   return (
@@ -631,6 +632,7 @@ export function App() {
                 stale={!live}
                 now={now}
                 acting={commands.acting === reading.id}
+                actingAct={commands.acting === reading.id ? (commands.actingAct ?? undefined) : undefined}
                 rerunningChecks={commands.rerunningChecks === reading.id}
                 approving={state.approving.includes(reading.id)}
                 deciding={commands.deciding === reading.id}

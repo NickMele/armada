@@ -113,6 +113,7 @@ function OneJob({
   stale,
   now,
   acting,
+  actingAct,
   rerunningChecks,
   approving,
   deciding,
@@ -505,7 +506,7 @@ function OneJob({
   // Job's own place, whichever of the three arrangements the render is —
   // `verdictSlotOf`, in `verdict-answered.tsx`.
   const atGate = render === "reviewing";
-  const question = questionOf(whole, job.id, now, stale, acting, onAnswer);
+  const question = questionOf(whole, job.id, now, stale, acting, onAnswer, actingAct);
   const verdictSlot = verdictSlotOf({
     job,
     whole,
@@ -519,6 +520,8 @@ function OneJob({
     onNeedMaterial,
     onNeedRemarks,
     stale,
+    acting,
+    actingAct,
     deciding,
     decidingAct,
     onMergePullRequest,
@@ -543,9 +546,9 @@ function OneJob({
 
   // One way to answer a command the Drone was not given, for both places a
   // person meets one: the command it is waiting on, and a refused row.
-  const answering = answeringOf(job.id, stale, acting, onAnswerCommand);
+  const answering = answeringOf(job.id, stale, acting, onAnswerCommand, actingAct);
   // What the card a gaming flag holds a step with draws from and sends. #1079.
-  const flagAnswers: Deciding = { diff: recorded.diff, stale, acting, onOverrule, onSendBack, onRedirect };
+  const flagAnswers: Deciding = { diff: recorded.diff, stale, acting, actingAct, onOverrule, onSendBack, onRedirect };
   const refusedAside = open === undefined ? undefined : refusedAsideOf(whole, open, answering);
   // Bound to the Job being read, so nothing downstream carries an id back.
   const explain =
@@ -563,6 +566,7 @@ function OneJob({
     render,
     stale,
     acting,
+    actingAct,
     approving,
     reporting,
     onReporting: setReporting,
@@ -690,6 +694,7 @@ function OneJob({
                   opens={opensRecords}
                   render={render}
                   acting={acting}
+                  actingAct={actingAct}
                   rerunningChecks={rerunningChecks}
                   stale={stale}
                   onAct={onAct}
@@ -762,7 +767,7 @@ function OneJob({
             }}
             // Every setting a person can change on this Job, and what each sends.
             settings={{
-              models, stale, acting, onSetWhenBlocked, onSetWhenRefused, onSetModel, onSetReviewModel,
+              models, stale, acting, actingAct, onSetWhenBlocked, onSetWhenRefused, onSetModel, onSetReviewModel,
               onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
             }}
             run={runHook.slot}

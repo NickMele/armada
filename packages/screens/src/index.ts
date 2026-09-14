@@ -30,6 +30,7 @@ export * from "./freeze";
 export * from "./Sheets";
 export * from "./Worktrees";
 export * from "./FleetSettings";
+export * from "./pending";
 export * from "./board";
 // On All repositories, the question a surface that needs one repository asks first.
 export * from "./AskRepository";

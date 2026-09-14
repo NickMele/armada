@@ -22,7 +22,6 @@ import { GitPullRequest, Minus } from "lucide-react";
 import {
   Button,
   CheckRuns,
-  type DecisionAct,
   JudgeQuestion,
   Tooltip,
   VerdictSheet,
@@ -54,6 +53,7 @@ import { Decide } from "./Decide";
 import { checksOf, didNotPass, mechanicalRunsOf, panelsOf } from "./gates";
 import { basename, keptOf, type Opens } from "./phases";
 import type { Render } from "./render";
+import type { ActingAct, DecidingAct } from "./pending";
 
 /**
  * Whether this Job's frozen workflow ever opens a pull request.
@@ -537,9 +537,13 @@ export type VerdictSlotAtGateArgs = {
   onNeedMaterial: (jobId: string | null) => void;
   onNeedRemarks: (jobId: string | null) => void;
   stale: boolean;
+  /** Something sent under `acting` is out on this Job. #1117. */
+  acting: boolean;
   deciding: boolean;
-  /** Which of the four answers is out, where `deciding` is one of them. #1117. */
-  decidingAct?: DecisionAct | undefined;
+  /** Which act at this gate is out, where `deciding` is set. #1117. */
+  decidingAct?: DecidingAct | undefined;
+  /** Which act `acting` is. #1117. */
+  actingAct?: ActingAct | undefined;
   onMergePullRequest: (jobId: string) => void;
   /** Send the branch back for a Drone that can edit files. `#663`. */
   onResolvePullRequestConflict: (jobId: string) => void;
@@ -587,6 +591,8 @@ export function verdictSlotAtGate({
   onNeedMaterial,
   onNeedRemarks,
   stale,
+  acting,
+  actingAct,
   deciding,
   decidingAct,
   onMergePullRequest,
