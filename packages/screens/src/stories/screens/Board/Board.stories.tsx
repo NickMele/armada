@@ -68,7 +68,7 @@ export const TwoRepositories: Story = {
   name: "Two repositories",
   args: { jobs: acrossTwo(), repositories: [ARMADA, STOREFRONT] },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByRole("combobox", { name: "Project" })).toHaveValue("");
+    await expect(within(canvasElement).getByRole("button", { name: "All repositories" })).toBeInTheDocument();
     await rowsNaming(canvasElement, /^(armada|storefront)$/);
     await expect(within(canvasElement).getAllByText("Repository").length).toBeGreaterThan(0);
     await userEvent.click(within(canvasElement).getByRole("button", { name: "Table" }));

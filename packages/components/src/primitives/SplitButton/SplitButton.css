@@ -179,6 +179,40 @@
   color: var(--status-completed-failed);
 }
 
+/* Tonal — chrome, not a list row's act. `--accent-muted` fill and
+ * `--accent-hover` text (never `--accent`, which reads too dim on the muted
+ * fill), and no outer border: only the inner divider between the two
+ * segments, tinted from `--accent` the way the primary fill's divider is
+ * tinted from `--accent-hover` above. The title row's Dispatch is the one
+ * caller, #1087's correction pass.
+ *
+ * The hover fill has no token of its own — the sheet's hover colours
+ * (#24486A, #8CC7F0) are raw hex with nothing in `packages/tokens` close
+ * enough to stand in for either, so this composes one from `--accent` and
+ * `--accent-muted` rather than spelling the hex. Reported rather than
+ * matched exactly. */
+.armada-split-button__control[data-variant="tonal"] {
+  background: var(--accent-muted);
+  border-color: transparent;
+}
+
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__action,
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret {
+  color: var(--accent-hover);
+}
+
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret {
+  border-inline-start-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__action:hover,
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__action[data-preview-hover],
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret:hover,
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret[data-preview-hover],
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--accent) 24%, var(--accent-muted));
+}
+
 /* Disabled is --fg-subtle with hover suppressed. Never opacity. */
 .armada-split-button__control:has(.armada-split-button__action:disabled) {
   background: var(--bg-sunken);
