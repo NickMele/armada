@@ -99,6 +99,14 @@
 #                  measured figure — `FleetCapacity` carries no headroom
 #                  number over the wire at all (`crates/ipc/src/capacity.rs`),
 #                  so the sentence names what is short and claims no percentage
+#   headline     - on `gaming_pattern` alone, and on every row of it: the plain
+#                  sentence the card holding a stopped step leads with. The
+#                  verb is what was found; this is what a person should worry
+#                  about. #1079
+#   explanation  - beside `headline`: what the flag means and why a person has
+#                  to look. Hedged where a model judged it ("The gaming check
+#                  thinks") and flat where the diff decided it. Codegen stops
+#                  on a `gaming_pattern` row missing either
 #   verb_and_icon_from
 #                - names the enum a variant borrows both from, where it has
 #                  neither of its own. Carried by no row today — see below
@@ -691,6 +699,8 @@ notes = "Its own glyph, and that is the whole point of the row. Reusing never_ra
 
 [verbs.gaming_pattern.assertion_weakened]
 verb = "an assertion now asserts less"
+headline = "A test may have been weakened to make this step pass"
+explanation = "The gaming check thinks the Drone changed an existing test so it checks less than before, and nothing else in this change checks what was dropped. Code that should fail can then pass, so a person has to look at the lines below."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -699,6 +709,8 @@ notes = "Neither glyph nor token, and that is the vocabulary's decision rather t
 
 [verbs.gaming_pattern.test_scope_narrowed]
 verb = "the tests cover less than they did"
+headline = "The tests may cover less than they did before this step"
+explanation = "The gaming check thinks the Drone changed the tests so they exercise less of the code than they did at the baseline step. Behaviour nothing tests any more can break without a Check noticing, so a person has to look at the lines below."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -707,6 +719,8 @@ notes = "Both halves are a comparison, because that is what the check makes: the
 
 [verbs.gaming_pattern.tautological_test]
 verb = "a test that passes whatever the code does"
+headline = "A test may pass whatever the code does"
+explanation = "The gaming check thinks this change leaves a test that cannot fail, because what it checks does not depend on the code under it. A green run of that test proves nothing, so a person has to look at the lines below."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -715,6 +729,8 @@ notes = "The enum's word is the one a reader is least likely to know, so the ver
 
 [verbs.gaming_pattern.test_skipped]
 verb = "a test that ran is now skipped"
+headline = "A test that used to run is now skipped"
+explanation = "This change adds a skip marker to a test that ran before it. A skipped test reads as passing without running, so a person has to decide whether it should be skipped."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -723,6 +739,8 @@ notes = "`is now skipped` rather than `was skipped`, which reads as the runner h
 
 [verbs.gaming_pattern.test_deleted]
 verb = "a test file was removed whole"
+headline = "A test file was deleted in this step"
+explanation = "This change removes a whole test file, so nothing runs the tests it held. A person has to decide whether it should have gone."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -731,6 +749,8 @@ notes = "`whole` is load-bearing and says exactly what the scan answers — a `d
 
 [verbs.gaming_pattern.check_config_edited]
 verb = "the change edits what a Check runs through"
+headline = "This step changed how a Check runs"
+explanation = "This change edits a file a Check's command runs through, such as a test script or its configuration. A Check can then pass while running less than it did, so a person has to look at the lines below."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -739,6 +759,8 @@ notes = "Names what the file does rather than the file, which is already in the 
 
 [verbs.gaming_pattern.no_findings_on_substantial_diff]
 verb = "a review that found nothing in a substantial change"
+headline = "A review found nothing in a large change"
+explanation = "The gaming check thinks a change this size is unlikely to hold nothing worth raising, so the review may not have read it. A person has to read the change before trusting the clean review."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -747,6 +769,8 @@ notes = "The one pattern whose finding is an absence, which is also why it is th
 
 [verbs.gaming_pattern.findings_not_tied_to_changed_lines]
 verb = "findings that name nothing this change touched"
+headline = "A review's findings may not be about this change"
+explanation = "The gaming check thinks the findings name nothing this change touched, so they may have been written without reading it. A person has to check the findings against the change."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"
@@ -755,6 +779,8 @@ notes = "A claim about the findings and never about whoever wrote them, which is
 
 [verbs.gaming_pattern.findings_generic]
 verb = "findings that would fit any change"
+headline = "A review's findings may fit any change"
+explanation = "The gaming check thinks the findings would read the same written about a different change, so they may not come from reading this one. A person has to check the findings against the change."
 icon = ""
 status_token = ""
 vocabulary = "Gaming pattern"

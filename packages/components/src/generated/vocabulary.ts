@@ -210,6 +210,23 @@ export const SILENCE: Readonly<Record<string, Rendering | undefined>> = {
   "nothing_writing": { verb: "no drone is writing this transcript", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
+/**
+ * What a gaming pattern means to the person reading a step it stopped: a plain
+ * headline, and what it means in a sentence or two. From `enum-verbs.toml`,
+ * beside the verb, so all nine read the same on every surface. #1079.
+ */
+export const GAMING_PATTERN_MEANING: Readonly<Record<string, { readonly headline: string; readonly explanation: string } | undefined>> = {
+  "assertion_weakened": { headline: "A test may have been weakened to make this step pass", explanation: "The gaming check thinks the Drone changed an existing test so it checks less than before, and nothing else in this change checks what was dropped. Code that should fail can then pass, so a person has to look at the lines below." },
+  "test_scope_narrowed": { headline: "The tests may cover less than they did before this step", explanation: "The gaming check thinks the Drone changed the tests so they exercise less of the code than they did at the baseline step. Behaviour nothing tests any more can break without a Check noticing, so a person has to look at the lines below." },
+  "tautological_test": { headline: "A test may pass whatever the code does", explanation: "The gaming check thinks this change leaves a test that cannot fail, because what it checks does not depend on the code under it. A green run of that test proves nothing, so a person has to look at the lines below." },
+  "test_skipped": { headline: "A test that used to run is now skipped", explanation: "This change adds a skip marker to a test that ran before it. A skipped test reads as passing without running, so a person has to decide whether it should be skipped." },
+  "test_deleted": { headline: "A test file was deleted in this step", explanation: "This change removes a whole test file, so nothing runs the tests it held. A person has to decide whether it should have gone." },
+  "check_config_edited": { headline: "This step changed how a Check runs", explanation: "This change edits a file a Check's command runs through, such as a test script or its configuration. A Check can then pass while running less than it did, so a person has to look at the lines below." },
+  "no_findings_on_substantial_diff": { headline: "A review found nothing in a large change", explanation: "The gaming check thinks a change this size is unlikely to hold nothing worth raising, so the review may not have read it. A person has to read the change before trusting the clean review." },
+  "findings_not_tied_to_changed_lines": { headline: "A review's findings may not be about this change", explanation: "The gaming check thinks the findings name nothing this change touched, so they may have been written without reading it. A person has to check the findings against the change." },
+  "findings_generic": { headline: "A review's findings may fit any change", explanation: "The gaming check thinks the findings would read the same written about a different change, so they may not come from reading this one. A person has to check the findings against the change." },
+};
+
 /** Where a Job is in its life, from `job-statuses.toml`. Not a rendering. */
 export type Lifecycle = {
   /** Whether the Job is over here. */
