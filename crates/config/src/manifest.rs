@@ -72,9 +72,18 @@ const TOP_LEVEL: &[&str] = &[
 /// here as a workflow step spells it**, for the reason `drone:` below gives
 /// about its own two: one value written under two names is a vocabulary split,
 /// and this one is moving from the step to here.
-const CHECK_KEYS: &[&str] = &["run", "expect_exit_code", "when", "requires", "narrow"];
+const CHECK_KEYS: &[&str] = &[
+    "run",
+    "expect_exit_code",
+    "when",
+    "requires",
+    "narrow",
+    "one_test",
+];
 /// The keys M1 reads inside `checks.<name>.narrow`.
 const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
+/// The keys read inside `checks.<name>.one_test`. #999.
+const ONE_TEST_KEYS: &[&str] = &["run"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive", "serve", "ready", "links"];
 /// The keys M1 reads inside `ports.<name>`.
@@ -601,6 +610,7 @@ pub(super) struct DraftCheck {
     /// outright: `requires: []` is a key to delete rather than a list to read.
     requires: Option<Vec<(String, String)>>,
     narrow: Option<Narrowing>,
+    one_test: Option<String>,
 }
 
 /// `checks.<name>.narrow`, the second question a Check answers about paths.
@@ -704,6 +714,9 @@ fn check_entry(
     let narrow = table
         .optional("narrow")
         .and_then(|value| narrowing(&table.at("narrow"), value, out));
+    let one_test = table
+        .optional("one_test")
+        .and_then(|value| one_test(&table.at("one_test"), value, out));
     table.close(known, out);
     Some(DraftCheck {
         run: run?,
@@ -711,7 +724,28 @@ fn check_entry(
         when: when.ok()?,
         requires,
         narrow,
+        one_test,
     })
+}
+
+/// `checks.<name>.one_test`: how this Check runs one test by name, which Fleet
+/// runs against main before a Drone's report of a broken test drafts a fix.
+/// `run` is a whole command with `{}` where the name goes. #999.
+fn one_test(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<String> {
+    let mut table = Table::open(at, value, out)?;
+    let run_key = table.at("run");
+    let run = table
+        .required("run", out)
+        .and_then(|value| yaml::text(&run_key, value, out))
+        .and_then(|written| match written.contains("{}") {
+            true => Some(written),
+            false => {
+                out.push(Refusal::new(&run_key, Fault::NothingToSubstitute));
+                None
+            }
+        });
+    table.close(ONE_TEST_KEYS, out);
+    run
 }
 
 /// `checks.<name>.when`, as a non-empty list of readable patterns.

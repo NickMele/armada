@@ -129,9 +129,11 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 })),
             })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
-                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow } => json!({
+                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow, one_test } => json!({
                     "type": MANIFEST_CHECK,
                     "check": name,
+                    // Null where the Check declares no `one_test`, which reads back as none. #999.
+                    "one_test": one_test,
                     "run": run,
                     "expect_exit_code": expect_exit_code,
                     // Absent where the Check requires nothing, which is every
@@ -638,6 +640,11 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
             when: read_when(entry)?,
             requires: read_requires(entry)?,
             narrow: read_narrow(entry)?,
+            // Absent and null both read as none, for `read_narrow`'s reason. #999.
+            one_test: match entry.get("one_test") {
+                None | Some(Value::Null) => None,
+                Some(_) => Some(text(entry, "one_test")?),
+            },
         }),
         DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),
         ARTIFACT_EXISTS => Ok(ResolvedCheck::ArtifactExists {

@@ -149,6 +149,8 @@ pub fn workflow() -> FrozenWorkflow {
                             Some("crates".to_string()),
                             vec!["acceptance".to_string()],
                         )),
+                        // Carried so every round trip here walks a Check that runs one test by name. #999.
+                        one_test: Some("cargo nextest run -E test(={})".to_string()),
                     },
                     ResolvedCheck::DiffNonempty,
                     // Carried on the shared fixture for `when`'s reason: every

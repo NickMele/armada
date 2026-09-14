@@ -119,3 +119,14 @@ fn quoted(value: &str) -> String {
         false => value.to_string(),
     }
 }
+
+/// The command that runs one test by name, or `None` where the name cannot be
+/// one argument. The name is a Drone's, so it gets the guard a narrowed value
+/// gets and no other. #999.
+pub fn one_test(run: &str, test: &str) -> Option<String> {
+    let test = test.trim();
+    if test.is_empty() || !spellable(test) {
+        return None;
+    }
+    Some(run.replace("{}", &quoted(test)))
+}

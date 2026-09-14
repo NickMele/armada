@@ -37,6 +37,6 @@ mod serving;
 #[cfg(test)]
 mod tests;
 
-pub use narrow::{narrowed, Narrowed};
+pub use narrow::{narrowed, one_test, Narrowed};
 pub use run::{run, run_until, run_writing, run_writing_with_env, split, Attempt, Output, Writing};
 pub use serving::Served;

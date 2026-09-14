@@ -465,3 +465,41 @@ mod narrowing {
         );
     }
 }
+
+/// Running one test by name, which Fleet does against main before a Drone's
+/// report of a broken test drafts a fix. The name is a Drone's words. #999.
+mod one_test {
+    use crate::narrow::one_test;
+
+    const RUN: &str = "cargo nextest run -E test(={})";
+
+    #[test]
+    fn the_name_goes_where_the_command_says() {
+        assert_eq!(
+            one_test(RUN, "  store::reads_the_last_row "),
+            Some("cargo nextest run -E test(=store::reads_the_last_row)".to_string())
+        );
+    }
+
+    #[test]
+    fn a_blank_name_runs_nothing() {
+        assert_eq!(one_test(RUN, "   "), None);
+    }
+
+    /// **The guard a narrowed value gets.** A quote has no spelling that
+    /// survives the splitter, so a Drone cannot write its way out of the one
+    /// argument its name is.
+    #[test]
+    fn a_name_holding_a_quote_runs_nothing() {
+        assert_eq!(one_test(RUN, "x' --workspace '"), None);
+        assert_eq!(one_test(RUN, "x\" --workspace \""), None);
+    }
+
+    #[test]
+    fn a_name_holding_a_space_stays_one_argument() {
+        assert_eq!(
+            one_test("run {}", "reads the last row"),
+            Some("run \"reads the last row\"".to_string())
+        );
+    }
+}

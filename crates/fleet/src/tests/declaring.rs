@@ -39,6 +39,7 @@ fn a_check(name: &str) -> ResolvedCheck {
         when: None,
         requires: Vec::new(),
         narrow: None,
+        one_test: None,
     }
 }
 

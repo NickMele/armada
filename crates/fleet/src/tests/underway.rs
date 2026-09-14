@@ -33,6 +33,7 @@ fn named(name: &str, run: &str) -> ResolvedCheck {
         when: None,
         requires: Vec::new(),
         narrow: None,
+        one_test: None,
     }
 }
 
