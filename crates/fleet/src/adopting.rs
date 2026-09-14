@@ -310,6 +310,13 @@ impl LiveSession for Session {
         }
     }
 
+    async fn peers(&self, news: &crate::peers::PeersChanged) -> Result<(), io::Error> {
+        match self {
+            Session::Spawned(session) => session.peers(news).await,
+            Session::Adopted(_) => Err(io::Error::other(NOTHING_TO_SPEAK_INTO)),
+        }
+    }
+
     async fn interrupt(&self, directive: &ReportNow) -> Result<(), io::Error> {
         match self {
             Session::Spawned(session) => session.interrupt(directive).await,

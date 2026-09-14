@@ -138,6 +138,8 @@ pub mod noticing;
 pub mod overlap;
 pub mod overruling;
 pub mod peer;
+/// What a working Drone is told about other Jobs writing where it writes. #998.
+pub mod peers;
 pub mod permitting;
 pub mod policy;
 pub mod ports;

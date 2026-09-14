@@ -469,6 +469,8 @@ function opening(occasion: string): string {
       return "Armada sent back what the gate came to.";
     case "redirect":
       return "Armada carried in a person's redirect.";
+    case "peers":
+      return "Armada said which other Jobs are writing here.";
     case "answer":
       return "Armada carried in a person's answer.";
     case "drift":

@@ -203,6 +203,15 @@ impl Opening {
         }
     }
 
+    /// The same opening, plus what other Jobs writing here claimed or landed
+    /// while no Drone was there to be told. #998.
+    pub(crate) fn told_of_peers(self, peers: Option<crate::peers::PeersChanged>) -> Opening {
+        Opening {
+            crossed: self.crossed.and_peers(peers),
+            ..self
+        }
+    }
+
     /// The whole opening turn: the four blocks, what stopped the last attempt
     /// where there was one, and what the rebase came to where it came to
     /// anything.
@@ -622,6 +631,11 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     // Drone is told rather than the Job stopped.
     if let Some(overtaken) = crossed.overtaken() {
         blocks.headed(&overtaken.text(), ipc::BlockKind::AboutThisJob);
+    }
+    // Beside what a sibling landed, and for its reason: a fact about the base
+    // this part starts from and the Jobs writing beside it. #998.
+    if let Some(peers) = crossed.peers() {
+        blocks.headed(peers.text(), ipc::BlockKind::AboutThisJob);
     }
     // Before the step, so a review pass reads what was ruled out before it reviews. #907.
     if let Some(dismissed) = crossed.dismissed() {

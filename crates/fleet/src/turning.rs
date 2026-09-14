@@ -271,6 +271,10 @@ where
         // its reason: this touches no slot and starts nothing, so what it
         // wants is only to run once for the turn rather than once per Drone.
         turned.noticed = self.notice_a_merge().await?;
+        // **After the notice**, so a Job owed news of a landing read this turn
+        // is told on this turn. It takes each slot for one write, the way
+        // `crate::work_plan` delivers. #998.
+        self.tell_peers().await;
         // **After the notice, so a run started this turn is not drained on it.**
         // What this writes down came back from a task spawned turns or minutes
         // ago; the store is Fleet's to write and a detached task has no handle

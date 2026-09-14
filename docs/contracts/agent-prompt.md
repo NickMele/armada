@@ -326,6 +326,7 @@ which is an assembled prompt and therefore governed here.
 | Turn | Fires when | Wording |
 | --- | --- | --- |
 | **The plan change turn** | A person's `add_task` or `drop_task` reaches a Job with a working Drone | Drafted, not sanctioned |
+| **The peer turn** | Another Job in the same repository first claims, or lands a change to, a path this Job claims. Rides the next opening brief where no Drone is live | Drafted, not sanctioned |
 | **The poke** | Liveness nudge, bounded by `poke_limit` | Drafted, not sanctioned |
 | **The clarification reprompt** | Evidence arrived but was insufficient | Drafted, not sanctioned |
 | **The force-interrupt directive** | A thrashing verdict | Drafted, not sanctioned |
@@ -462,6 +463,47 @@ transcript back.
 │ settled, not a question to raise — the task
 │ stays dropped unless a person adds it back.
 │ Carry on with the part you were given.
+└────────────────────────────────────────────────
+```
+
+## The peer turn
+
+Fires when another unfinished Job in the same repository first claims a path
+this Job claims, or lands a change to one (#998). Either side's claim counts:
+a step's declared plan, or the Job's `write_targets`. A path already
+announced for a pair is not said again.
+
+**Queued, then spaced.** News waits until the Drone has gone `fleet::peers::SPACING`
+without a peer turn, and one turn names at most `fleet::peers::AT_MOST` items. Where no
+Drone is live, it rides the next opening brief as a block, and the landing
+line says the rebase has already run.
+
+**It informs and never holds.** Nothing on the dispatch path reads it, for the
+reason `docs/concepts/fleet.md`, Write-scope overlap, gives.
+
+**Fleet's own sentence.** Titles and paths are the only words from elsewhere,
+and both are Armada's record. `fleet::PeersChanged` is the one constructor.
+Its own `Occasion`, `Peers`.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ OTHER JOBS WRITING WHERE YOU ARE ─────────────
+│ Other Jobs in this repository change files
+│ this Job changes too. Nothing is stopped, and
+│ nobody waits on you.
+│
+│ - "renumber migrations" has said it will change
+│   `crates/store/src/migrations.rs`.
+│ - "fix the writer" landed, changing
+│   `crates/store/src/write.rs`.
+│
+│ What landed reaches your branch when your next
+│ part starts, not now. Where a shared file hands
+│ out the next number or name, such as a migration
+│ or a version, assume theirs takes it first and
+│ take the one after. Carry on with the part you
+│ were given.
 └────────────────────────────────────────────────
 ```
 

@@ -193,6 +193,8 @@ This sentence used to say the opposite, and the overlap warning below was writte
 
 **Surfaced, never serialised.** Where two unfinished Jobs claim the same paths, Fleet says so on each one's detail — naming the other Job, its status, and the paths both reach. Nothing is held back and nothing is refused: approving anyway is allowed and is the common case.
 
+**The working Drones are told too, and only within one repository.** When a Job first claims a path another claims, both Drones hear which Job and which paths; when one lands, the other hears what it changed there. News is spaced so a busy repository does not interrupt a Drone every few seconds, and a Job with no live Drone hears it in its next opening brief. `docs/contracts/agent-prompt.md`, The peer turn, has the wording. It is the same comparison as the warning on detail, and it holds nothing either.
+
 **It is deliberately not a lease.** Why: `write_targets` is a declaration and a Drone's worktree is a whole-repo checkout, so a hold over declared paths would serialise the Jobs that declared honestly and miss the one that wrote somewhere it never named — which is the collision nobody saw coming.
 
 **It compares what two Jobs claimed, and a claim is not a write.** The Job that never names a path and writes there anyway produces nothing here, and cannot: that is the same whole-repo checkout the paragraph above turns on. The check that reads a real diff is the per-step drift check, and it measures one step against its own plan.

@@ -57,7 +57,12 @@ where
         let (loaded, _) = self.every_job().await?;
         let mut found = Vec::new();
         for other in &loaded.jobs {
-            if other.id() == job.id() || other.status().is_terminal() {
+            // **One repository.** One Fleet serves many, and two Jobs writing
+            // `src/lib.rs` in different repositories collide on nothing. #998.
+            if other.id() == job.id()
+                || other.status().is_terminal()
+                || !self.same_repository(job.id(), other.id())
+            {
                 continue;
             }
             let theirs = self.scope_claims(other).await?;
@@ -97,7 +102,7 @@ where
     /// scope tool again is how a Drone corrects its plan, so an earlier run's
     /// paths are a promise that was withdrawn — counting them would name a
     /// collision over a path nobody intends to write any more.
-    async fn scope_claims(&self, job: &Job) -> Result<Vec<ScopeClaim>, Adrift> {
+    pub(crate) async fn scope_claims(&self, job: &Job) -> Result<Vec<ScopeClaim>, Adrift> {
         let mut claims = Vec::new();
         if let Some(targets) = job.write_targets() {
             claims.push(ScopeClaim::by_the_job(targets.paths().to_vec()));

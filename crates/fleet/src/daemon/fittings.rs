@@ -329,6 +329,7 @@ where
             reclaiming: fittings.reclaiming,
             swept: Mutex::new(None),
             sweeping: Mutex::new(Sweep::default()),
+            peering: Mutex::new(crate::peers::Peering::default()),
             proving: Arc::new(Mutex::new(crate::proving::Proving::default())),
             pressing: crate::showing_again::Pressing::default(),
             rehearsals: crate::rehearsing::Rehearsals::default(),

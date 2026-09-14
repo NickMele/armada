@@ -34,6 +34,7 @@ use verification::OutcomeTurn;
 
 use crate::converging::ReportNow;
 use crate::group::{end_the_group, run_is_over};
+use crate::peers::PeersChanged;
 use crate::permitting::Permitted;
 use crate::questioning::Answer;
 use crate::resume::Redirection;
@@ -126,6 +127,14 @@ pub trait LiveSession {
         &self,
         note: &PlanChanged,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Inject what other Jobs writing where this one writes have claimed or
+    /// landed. `#998`.
+    ///
+    /// **Its own method for [`plan_changed`](LiveSession::plan_changed)'s
+    /// reason**: Fleet's own sentence about other Jobs, and
+    /// [`PeersChanged`] is the only way to build one.
+    fn peers(&self, news: &PeersChanged) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Interrupt with a directive to stop and report.
     ///
@@ -251,6 +260,12 @@ impl Turn {
         Turn::of(note.text())
     }
 
+    /// What other Jobs writing here claimed or landed, injected into a session
+    /// already running. The wording is [`PeersChanged`]'s. `#998`.
+    pub fn peers(news: &PeersChanged) -> Turn {
+        Turn::of(news.text())
+    }
+
     /// Fleet's own stop-and-report directive, injected into a session already
     /// running. The wording is `ReportNow`'s and there is no way to send other
     /// text under it.
@@ -324,11 +339,14 @@ pub enum Occasion {
     Poke,
     /// A person's answer to a permission question, after its call returned.
     Permission,
+    /// What other Jobs writing here claimed or landed. `#998`.
+    Peers,
 }
 
 impl Occasion {
     pub fn as_wire(&self) -> &'static str {
         match self {
+            Occasion::Peers => "peers",
             Occasion::Opening => "opening",
             Occasion::Outcome => "outcome",
             Occasion::Redirect => "redirect",
@@ -480,6 +498,10 @@ impl LiveSession for DroneSession {
 
     async fn plan_changed(&self, note: &PlanChanged) -> Result<(), io::Error> {
         self.say(&Turn::plan_changed(note)).await
+    }
+
+    async fn peers(&self, news: &PeersChanged) -> Result<(), io::Error> {
+        self.say(&Turn::peers(news)).await
     }
 
     async fn interrupt(&self, directive: &ReportNow) -> Result<(), io::Error> {
