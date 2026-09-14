@@ -375,6 +375,14 @@ vocabulary = "Resumption"
 in_code = ""
 notes = "The word the repository already uses for this act — Overrule on the surface, `Overruled` on the wire, `overruling` in Fleet. Overridden would be a fourth spelling of one thing."
 
+[verbs.escalation_reason.ask_unanswered]
+verb = "the ask went unanswered"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = ""
+notes = "No glyph. Iconography names an icon for every escalation reason it lists, and this trigger is not among them. Sibling to `drone_killed` and `run_ended` in `escalation-triggers.toml`'s reasoning, so it ships drawing its verb alone beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `drone_killed`, `evidence_too_large`, `no_report`, `no_worktree`, `not_configurable`, `not_prepared`, `resource_exhausted`, `run_ended`, `scope_refused` and `would_not_start`."
+
 [verbs.escalation_reason.blocked_by_policy]
 verb = "blocked by policy"
 icon = ""

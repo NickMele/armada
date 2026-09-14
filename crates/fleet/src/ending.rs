@@ -9,6 +9,7 @@
 //! |---|---|---|---|
 //! | [`kill_drone`](Fleet::kill_drone) | a person | the process, and the step it was on | the Job, its worktree, every step that advanced |
 //! | [`drone_at_rest`](Fleet::drone_at_rest) | Fleet | the same two | the same three |
+//! | [`ended_unanswered`](Fleet::ended_unanswered) | Fleet | the same two | the same three |
 //! | [`kill_job`](Fleet::kill_job) | a person | the Job, at `killed` | the record, and the worktree until `armada clean` |
 //! | [`forget_job`](Fleet::forget_job) | a person | the record | nothing this owns; the worktree is `armada clean`'s |
 //!
@@ -17,9 +18,10 @@
 //! a deletion that is not a way to stop something still running, and a reap
 //! nobody asked for.
 //!
-//! **That last one needs defending, and `Ended` is the defence.** Fleet takes
-//! no process away on a judgement of its own; it takes away one whose own
-//! terminating event says its run is over.
+//! **That last one needs defending, and `Ended` is the defence — for
+//! `drone_at_rest`.** [`ended_unanswered`](Fleet::ended_unanswered) is the one
+//! exception, argued on its own doc: what it takes away was never the Drone's
+//! silence to answer for.
 //!
 //! [`stopped_by_hand`](Fleet::stopped_by_hand) is here because `kill_drone` is
 //! its only caller and the two are one act as an operator means it.
@@ -32,6 +34,7 @@ use core_model::{
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending};
+use crate::permitting::{Refusing, Waiting};
 use crate::working::{StoodDown, Working};
 
 impl<H, V, W> Fleet<H, V, W>
@@ -232,6 +235,46 @@ where
         let dropped = self.empty_the_inbox(&job_id);
         self.dropped_with_the_job(&job_id, dropped);
         Ok(Some(stood_down))
+    }
+
+    /// Take away a Drone whose outstanding permission ask nobody answered
+    /// past its own bound, stop the step it was on, and escalate the Job
+    /// under the same trigger. `#801`.
+    ///
+    /// **A third rung beside [`kill_drone`](Fleet::kill_drone) and
+    /// [`drone_at_rest`](Fleet::drone_at_rest), Fleet's own act like the
+    /// second.** Unlike either, nothing here needs `crate::drone::aftermath`
+    /// to classify what happened: a person's silence is the whole of why the
+    /// Job stopped, so the step and the Job take the one trigger rather than
+    /// folding an ending's classification into a step-level row apart from a
+    /// Job-level reading.
+    ///
+    /// **The refusal is written before the process ends**, the same
+    /// `refused_by_fleet` write the ordinary deny path uses, so the command
+    /// is on the transcript beside this row's own `stopped` line.
+    pub(crate) async fn ended_unanswered(
+        &self,
+        working: &mut Option<Working>,
+        waiting: Waiting,
+    ) -> Result<(), Adrift> {
+        let Some(at_work) = working.as_ref() else {
+            return Ok(());
+        };
+        let job_id = at_work.standing().0;
+        let words = Refusing::Unanswered.to_the_drone(&waiting.command);
+        at_work.refused_by_fleet(&waiting.tool, &waiting.call, &words);
+        self.end_the_drone(working).await;
+        let job = self.load(&job_id).await?;
+        let why = StepLevelTrigger::of(EscalationTrigger::AskUnanswered)
+            .expect("`ask_unanswered` is step-level in the registry");
+        let job = self.stopped_step_under(&job, why, Actor::Fleet).await?;
+        self.move_job(
+            &job,
+            Target::Escalated(EscalationTrigger::AskUnanswered),
+            Actor::Fleet,
+        )
+        .await?;
+        Ok(())
     }
 
     /// Stop the step Fleet has just taken a finished Drone off.

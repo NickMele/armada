@@ -229,6 +229,11 @@ pub struct Fittings<H, V, W> {
     /// [`JudgeBudget`]'s reason — and which the composition root writes as the
     /// harness-derived [`crate::permitting::HOLD`].
     pub permission_hold: crate::permitting::PermissionHold,
+    /// How long a permission ask may go unanswered before Fleet ends the
+    /// Drone and escalates the Job, reclaiming its concurrency slot. See
+    /// [`crate::permitting::UnansweredAskLimit`], which has no default for
+    /// [`JudgeBudget`]'s reason. `#801`.
+    pub unanswered_ask_limit: crate::permitting::UnansweredAskLimit,
     /// What a step naming no model of its own is judged by. **Resolved by the
     /// composition root**, like every other input here — which model is cheap
     /// is a vendor's fact, and nothing below Fleet may spell one.
@@ -318,6 +323,7 @@ where
             proposer_budget: fittings.proposer_budget,
             command_budget: fittings.command_budget,
             permission_hold: fittings.permission_hold,
+            unanswered_ask_limit: fittings.unanswered_ask_limit,
             aloft: Aloft::default(),
             underway: Underway::default(),
             proposals: Proposals::new(),

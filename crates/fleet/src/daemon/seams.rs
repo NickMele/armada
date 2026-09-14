@@ -126,6 +126,12 @@ where
     pub(crate) fn permission_hold(&self) -> crate::permitting::PermissionHold {
         self.permission_hold
     }
+    /// How long a permission ask may go unanswered before Fleet ends the
+    /// Drone and escalates the Job. See
+    /// [`crate::permitting::UnansweredAskLimit`].
+    pub(crate) fn unanswered_ask_limit(&self) -> crate::permitting::UnansweredAskLimit {
+        self.unanswered_ask_limit
+    }
     /// What this Job may spend: the composition root's constant, then
     /// `armada.yml`'s `drone.cost_cap_micros_per_job`, then the Job's own
     /// column. `Allowance::at` is where the order is written.

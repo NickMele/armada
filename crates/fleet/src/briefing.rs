@@ -557,6 +557,15 @@ impl Stopped {
                 "An earlier attempt at this part was refused a tool or a command it needed, \
                  and stopped without submitting anything."
             }
+            // **Not `BlockedByPolicy`'s line.** Nothing was refused there; a
+            // person was asked and nobody answered before the limit on
+            // waiting ran out, so Fleet ended the run rather than a policy
+            // denying the call.
+            EscalationTrigger::AskUnanswered => {
+                "An earlier attempt at this part asked a person whether it could run a \
+                 command, and nobody answered before the limit on waiting ran out. It was \
+                 stopped there, and nothing it did was checked."
+            }
             EscalationTrigger::LoopCap => {
                 "An earlier attempt at this part used every round it is allowed. Nothing it \
                  did was refused."

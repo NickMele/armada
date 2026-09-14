@@ -21,8 +21,11 @@
 //! answers. **The one exception is an ending that is not one** — a Drone holding
 //! background work is waiting, not finished, and gets [`Vigil::PokedAtRest`].
 //!
-//! **Two silences are declined outright**: evidence at the gate, and a question
-//! waiting on a person — see `crate::questioning`. **No model is asked.**
+//! **Evidence at the gate and a Drone's own question are declined outright**,
+//! and never reach a model — see `crate::questioning`. **A permission ask is
+//! declined the same way, but only until its own limit runs out**: past that,
+//! nobody answering is itself the finding, and [`Vigil::EndedUnanswered`] ends
+//! the Drone without ever reaching the poke ladder. `#801`.
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -33,6 +36,7 @@ use core_model::{
 };
 
 use crate::adrift::Adrift;
+use crate::converging::elapsed;
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, awaiting_background, Aftermath, Ending};
 use crate::session::{LiveSession, Occasion};
@@ -275,6 +279,16 @@ pub enum Vigil {
     /// that answers this and does it again reaches [`Vigil::AtRest`] on the
     /// next ending rather than being told the same thing forever.
     PokedAtRest { spent: u32 },
+    /// A person's permission ask on this Drone ran past its own bound with
+    /// nobody answering, so it was reaped, its step stopped and the Job
+    /// escalated as `ask_unanswered` — without a poke being spent and before
+    /// its own run ever ended.
+    ///
+    /// **The one road onto this ladder that ends a Drone still working.**
+    /// Every other rung waits for the Drone to say something, one way or
+    /// another, first; this one does not, because what it was waiting on was
+    /// never the Drone's to say. `#801`.
+    EndedUnanswered,
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -326,6 +340,32 @@ where
         // Free, and read second only because the evidence reading is cheaper
         // still: this is a field on the slot already in hand. See
         // `crate::questioning`.
+        //
+        // **A permission ask is checked first, against its own bound.** It is
+        // still not poked below — the Drone is correctly waiting, and poking
+        // it would blame it for a person's silence rather than its own — but
+        // unlike the Drone's own question, a person's silence on a call is
+        // one Fleet stops waiting on. `#801`.
+        let now = self.now();
+        let overrun = at_work
+            .permission()
+            .map(|waiting| elapsed(&waiting.asked_at, &now))
+            .filter(|after| *after >= self.unanswered_ask_limit().duration());
+        if let Some(after) = overrun {
+            let (job, step, _) = at_work.standing();
+            let waiting = at_work
+                .permission_settled()
+                .expect("just read as `Some` under this same lock");
+            self.ended_unanswered(working, waiting).await?;
+            let said = Vigil::EndedUnanswered;
+            self.noted_quiet(&job, &step, after, &said, None, &Refusals::none());
+            return Ok(Some(Quiet {
+                job,
+                step,
+                after,
+                said,
+            }));
+        }
         if crate::questioning::waiting_on_an_answer(at_work) {
             at_work.waiting(self.now());
             return Ok(None);
@@ -631,6 +671,10 @@ where
                 Level::Info,
                 "the Drone's run ended waiting on work it had backgrounded, and it was given a turn back",
             ),
+            Vigil::EndedUnanswered => (
+                Level::Warn,
+                "a permission ask went unanswered past its own limit, and the Drone was ended",
+            ),
         };
         let mut envelope = Envelope::new(
             self.now(),
@@ -652,7 +696,7 @@ where
                 // **Zero, and it is the interesting number.** What this line
                 // says is that the escalation was reached without spending the
                 // ladder at all.
-                Vigil::AtRest { .. } => 0,
+                Vigil::AtRest { .. } | Vigil::EndedUnanswered => 0,
             })),
         );
         // **The trigger the escalation was actually raised under.** It was
@@ -700,6 +744,7 @@ where
 fn escalated_as(said: &Vigil) -> Option<EscalationTrigger> {
     match said {
         Vigil::Escalated { found, .. } | Vigil::AtRest { found } => Some(found.clone()),
+        Vigil::EndedUnanswered => Some(EscalationTrigger::AskUnanswered),
         Vigil::Poked { .. } | Vigil::NotPoked { .. } | Vigil::PokedAtRest { .. } => None,
     }
 }

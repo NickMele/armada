@@ -34,7 +34,7 @@ use crate::headroom::{Bytes, Headroom, Polling, Spare};
 use crate::holding::Reclaiming;
 use crate::judging::JudgeBudget;
 use crate::noticing::Noticing;
-use crate::permitting::PermissionHold;
+use crate::permitting::{PermissionHold, UnansweredAskLimit};
 use crate::ports::PortRange;
 use crate::slots::Concurrency;
 use crate::tests::tmp::TempDir;
@@ -184,6 +184,12 @@ pub fn fitted_over<V>(
         // loaded machine to end the hold under a case that was never about it.
         // The hold cases plant their own, short enough to outlive.
         permission_hold: PermissionHold::of(Duration::from_secs(30)),
+        // Out of reach for the same reason `permission_hold` is: no fixture
+        // here is about a permission ask running unanswered, and a bound this
+        // fixture could actually cross would escalate a Job under a case that
+        // was never about it. The cases that are plant their own, short
+        // enough to outlive.
+        unanswered_ask_limit: UnansweredAskLimit::of(Duration::from_secs(3600)),
         judge_model: Model::named("the-cheap-model").expect("a model name"),
         proposer_model: Model::named("the-cheap-model").expect("a model name"),
         // Resolves nothing, so every fixture but `proposing`'s own behaves
