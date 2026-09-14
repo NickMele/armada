@@ -29,6 +29,8 @@
 mod allowing;
 mod asking;
 mod attempt;
+/// A test broken on main, and the Job drafted to fix it. #999.
+mod breakages;
 mod columns;
 /// The Drone pointer, where it now lives: one column per step.
 mod delivery;
