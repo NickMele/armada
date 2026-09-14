@@ -218,7 +218,8 @@ pub use journal::{
 };
 pub use judged::{Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable};
 pub use limits::{
-    DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent, SaveLimits, Within,
+    ChecksAtOnce, DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent,
+    SaveLimits, Within,
 };
 pub use manifest_proposal::{
     Band, EditManifestProposal, ManifestProposal, ManifestProposals, PolicyKey, ProposalEdit,

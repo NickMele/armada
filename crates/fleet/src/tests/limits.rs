@@ -71,6 +71,7 @@ fn saving(concurrency: Option<u32>, memory: Option<u32>, disk: Option<u32>) -> S
         concurrency: concurrency.map(|v| DronesAtOnce::new(v).expect("in range")),
         memory_spare_percent: memory.map(|v| MemorySparePercent::new(v).expect("in range")),
         disk_floor_gib: disk.map(|v| DiskFloorGib::new(v).expect("in range")),
+        checks_at_once: None,
     }
 }
 
@@ -96,6 +97,7 @@ const SHIPPED: LimitValues = LimitValues {
     concurrency: 1,
     memory_spare_percent: 15,
     disk_floor_gib: 10,
+    checks_at_once: 4,
 };
 
 #[tokio::test]
@@ -202,6 +204,7 @@ async fn a_saved_limit_survives_a_restart_and_an_unsaved_one_follows_what_ships(
             concurrency: 3,
             memory_spare_percent: 25,
             disk_floor_gib: 20,
+            checks_at_once: 4,
         }
     );
     assert_eq!(limits.shipped.memory_spare_percent, 25);

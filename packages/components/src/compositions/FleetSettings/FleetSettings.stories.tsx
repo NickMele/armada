@@ -4,7 +4,7 @@ import { expect, fn } from "storybook/test";
 import { FleetSettings, type FleetSettingsRow } from "./FleetSettings";
 
 /**
- * Fleet's three admission limits, on the layer Job settings already draws
+ * Fleet's four limits, on the layer Job settings already draws
  * from. Window-fixed rather than `contained`: it opens from the status bar and
  * the rail, not from one screen — every story draws a positioned ancestor
  * anyway, so the geometry is checkable without a real window behind it.
@@ -40,6 +40,7 @@ export const AtRest: Story = {
     concurrency: { ...SHIPPED, onSave: fn() },
     memorySparePercent: { value: 15, shipped: 15, min: 0, max: 50, unit: "%", onSave: fn() },
     diskFloorGib: { value: 10, shipped: 10, min: 0, max: 100, unit: "GiB", onSave: fn() },
+    checksAtOnce: { value: 4, shipped: 4, min: 1, max: 8, onSave: fn() },
   },
   /**
    * **What goes to Fleet is the row's own number, never a string it typed
@@ -72,6 +73,7 @@ export const ChangedFromShipped: Story = {
     },
     memorySparePercent: { value: 15, shipped: 15, min: 0, max: 50, unit: "%", onSave: fn() },
     diskFloorGib: { value: 10, shipped: 10, min: 0, max: 100, unit: "GiB", onSave: fn() },
+    checksAtOnce: { value: 4, shipped: 4, min: 1, max: 8, onSave: fn() },
   },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(
@@ -88,6 +90,7 @@ export const OutOfRange: Story = {
     concurrency: { ...SHIPPED, onSave: fn() },
     memorySparePercent: { value: 15, shipped: 15, min: 0, max: 50, unit: "%", onSave: fn() },
     diskFloorGib: { value: 10, shipped: 10, min: 0, max: 100, unit: "GiB", onSave: fn() },
+    checksAtOnce: { value: 4, shipped: 4, min: 1, max: 8, onSave: fn() },
   },
   play: async ({ args, canvas, userEvent }) => {
     const field = canvas.getByLabelText("Memory to keep free");
@@ -118,6 +121,7 @@ export const RefusedByFleet: Story = {
       refused: "memory_spare_percent: 45 is outside 0 to 40",
     },
     diskFloorGib: { value: 10, shipped: 10, min: 0, max: 100, unit: "GiB", onSave: fn() },
+    checksAtOnce: { value: 4, shipped: 4, min: 1, max: 8, onSave: fn() },
   },
 };
 
@@ -128,6 +132,7 @@ export const ControlsOff: Story = {
     concurrency: { ...SHIPPED, onSave: fn() },
     memorySparePercent: { value: 15, shipped: 15, min: 0, max: 50, unit: "%", onSave: fn() },
     diskFloorGib: { value: 10, shipped: 10, min: 0, max: 100, unit: "GiB", onSave: fn() },
+    checksAtOnce: { value: 4, shipped: 4, min: 1, max: 8, onSave: fn() },
     disabled: true,
     disabledNote: "Fleet is not connected, so nothing can be changed.",
   },

@@ -143,6 +143,7 @@ where
             base,
             ports,
             port_env,
+            self.room(),
         );
     }
 
@@ -241,6 +242,7 @@ fn spawn_the_run(
     base: String,
     ports: BTreeMap<String, u16>,
     port_env: Vec<(String, String)>,
+    room: crate::checking::Room,
 ) {
     tokio::spawn(async move {
         // `touched` is empty and `moved` is false, and neither is consulted:
@@ -256,6 +258,7 @@ fn spawn_the_run(
             false,
             std::path::Path::new(&repo_root),
             budget,
+            &room,
             // A commit is proved with no step and no Job anybody has open.
             &crate::underway::Announcing::nowhere(),
             // The main checkout's own claim — `docs/concepts/fleet.md`'s

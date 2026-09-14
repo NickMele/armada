@@ -68,9 +68,9 @@ A route of its own rather than a field on `list_jobs`, which is read on every Bo
 kind = "query"
 transport = "HTTP"
 agent_access = "No"
-description = "The Drones-at-once bound, the memory share and the disk floor in force, and the values Fleet shipped with"
+description = "The Drones-at-once bound, the memory share, the disk floor and Checks at once in force, and the values Fleet shipped with"
 notes = """
-What `get_capacity` is measured against. A route of its own because the three change only when a person saves, where capacity moves every time a Drone starts or finishes.
+What `get_capacity` is measured against. A route of its own because the four change only when a person saves, where capacity moves every time a Drone starts or finishes.
 
 `shipped` rides beside the values in force so a surface can say which of them somebody changed, and offer the way back, without a second read.
 
@@ -81,13 +81,13 @@ What `get_capacity` is measured against. A route of its own because the three ch
 kind = "command"
 transport = "HTTP"
 agent_access = "No"
-description = "Save any of the three limits, and answer with what is now in force"
+description = "Save any of the four limits, and answer with what is now in force"
 notes = """
 **Changed while Fleet runs, and kept across a restart.** The save is written to the store before anything in memory moves, and the next admission turn reads the new values; no restart, and nothing already running is stopped. A bound lowered below how many Drones are working holds new starts until enough finish.
 
 **An omitted field keeps its current value**, saved or shipped. A stored field nobody saved stays unsaved, so a later build shipping a different number still reaches it.
 
-**A value out of range is a 400 and nothing is saved** — including an in-range field sent beside it. The body does not decode, because `ipc::SaveLimits` cannot hold such a value; the daemon is never asked. Concurrency is 1 to 8, the memory share 0 to 50 percent, the disk floor 0 to 100 GiB.
+**A value out of range is a 400 and nothing is saved** — including an in-range field sent beside it. The body does not decode, because `ipc::SaveLimits` cannot hold such a value; the daemon is never asked. Concurrency is 1 to 8, the memory share 0 to 50 percent, the disk floor 0 to 100 GiB, Checks at once 1 to 8. A saved Checks at once counts from the next gate; a gate already running keeps the value it began with.
 
 No event. `get_capacity` is computed at every read, so it reflects a saved bound the moment the save answers, and the limits themselves persist as a reading a surface asks for.
 """

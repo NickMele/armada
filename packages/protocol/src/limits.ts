@@ -1,4 +1,4 @@
-// The three limits a person changes while Fleet runs.
+// The four limits a person changes while Fleet runs.
 // `crates/ipc/src/limits.rs`.
 //
 // **A saved value applies at Fleet's next admission turn**, with no restart,
@@ -12,7 +12,7 @@
 // The header rules in `protocol.ts` hold here: these are hand-written, and they
 // drift the day a field moves.
 
-/** One value for each of the three limits. */
+/** One value for each of the four limits. */
 export type LimitValues = {
   /** Drones at once, 1 to 8. */
   concurrency: number;
@@ -20,6 +20,8 @@ export type LimitValues = {
   memory_spare_percent: number;
   /** The GiB that must be free on the worktree volume, 0 to 100. */
   disk_floor_gib: number;
+  /** How many of one step's Checks run at once, 1 to 8. Since 13.39. */
+  checks_at_once: number;
 };
 
 /** The limits in force — `GET /limits` — and the ones Fleet shipped with. */

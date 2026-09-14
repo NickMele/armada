@@ -1,5 +1,5 @@
-// Fleet's three admission limits: drones at once, and the memory and disk
-// Fleet keeps free before starting another.
+// Fleet's four limits: drones at once, the memory and disk Fleet keeps free
+// before starting another, and how many of a job's checks run at once.
 //
 // Beside `command.ts` rather than inside it, `clearing.ts`'s reason: it named
 // no Job and had reached the length the gate warns about, and this is a seam
@@ -30,7 +30,7 @@ export class Limits {
   }
 
   /**
-   * Change one or more of the three. **Fleet-wide, and never a Job's act.**
+   * Change one or more of the four. **Fleet-wide, and never a Job's act.**
    * Applies the next time a Job is ready to start; nothing running stops. The
    * status bar's count and its hold both read `/capacity`, so a save re-reads
    * it rather than guessing what changed.

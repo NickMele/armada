@@ -19,6 +19,7 @@ fn a_save_survives_a_reopen_and_an_unsaved_field_stays_absent() {
         concurrency: Some(4),
         memory_spare_percent: None,
         disk_floor_gib: Some(20),
+        checks_at_once: Some(3),
     };
     store.save_limits(&saved).expect("saved");
     drop(store);
@@ -37,12 +38,14 @@ fn a_second_save_replaces_the_first_whole() {
             concurrency: Some(4),
             memory_spare_percent: Some(30),
             disk_floor_gib: Some(20),
+            checks_at_once: None,
         })
         .expect("first");
     let second = SavedLimits {
         concurrency: Some(1),
         memory_spare_percent: None,
         disk_floor_gib: Some(0),
+        checks_at_once: None,
     };
     store.save_limits(&second).expect("second");
 

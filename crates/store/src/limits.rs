@@ -1,5 +1,5 @@
-//! The three Fleet limits a person changed while it ran: Drones at once, the
-//! memory share, the disk floor.
+//! The four Fleet limits a person changed while it ran: Drones at once, the
+//! memory share, the disk floor, and how many of a step's Checks run at once.
 //!
 //! **One row or none, and a `NULL` is the shipped value.** A column nobody set
 //! stays `NULL` rather than being written as today's constant, so a later build
@@ -23,6 +23,14 @@ CREATE TABLE fleet_limits (
 ) STRICT;
 "#;
 
+/// Version 67 — how many of a step's Checks run at once, beside the other three. #284.
+///
+/// **A column on the one row, `NULL` until saved**, so every store saved into
+/// before this reads the shipped number.
+pub(crate) const V67: &str = r#"
+ALTER TABLE fleet_limits ADD COLUMN checks_at_once INTEGER;
+"#;
+
 /// What a person saved, field by field. `None` is nobody having saved one.
 ///
 /// **`Default` is honest here**, unlike Fleet's dials: it is the empty record,
@@ -32,13 +40,14 @@ pub struct SavedLimits {
     pub concurrency: Option<u32>,
     pub memory_spare_percent: Option<u32>,
     pub disk_floor_gib: Option<u32>,
+    pub checks_at_once: Option<u32>,
 }
 
 impl Store {
     /// The saved limits. **No row reads as nothing saved**, not as a fault.
     pub fn saved_limits(&self) -> Result<SavedLimits, DatabaseFault> {
         let read = self.conn.query_row(
-            "SELECT concurrency, memory_spare_percent, disk_floor_gib
+            "SELECT concurrency, memory_spare_percent, disk_floor_gib, checks_at_once
              FROM fleet_limits WHERE id = 1",
             [],
             |row| {
@@ -46,6 +55,7 @@ impl Store {
                     concurrency: row.get(0)?,
                     memory_spare_percent: row.get(1)?,
                     disk_floor_gib: row.get(2)?,
+                    checks_at_once: row.get(3)?,
                 })
             },
         );
@@ -61,16 +71,19 @@ impl Store {
     pub fn save_limits(&mut self, limits: &SavedLimits) -> Result<(), WriteError> {
         self.conn
             .execute(
-                "INSERT INTO fleet_limits (id, concurrency, memory_spare_percent, disk_floor_gib)
-                 VALUES (1, ?1, ?2, ?3)
+                "INSERT INTO fleet_limits
+                     (id, concurrency, memory_spare_percent, disk_floor_gib, checks_at_once)
+                 VALUES (1, ?1, ?2, ?3, ?4)
                  ON CONFLICT (id) DO UPDATE SET
                      concurrency = excluded.concurrency,
                      memory_spare_percent = excluded.memory_spare_percent,
-                     disk_floor_gib = excluded.disk_floor_gib",
+                     disk_floor_gib = excluded.disk_floor_gib,
+                     checks_at_once = excluded.checks_at_once",
                 (
                     limits.concurrency,
                     limits.memory_spare_percent,
                     limits.disk_floor_gib,
+                    limits.checks_at_once,
                 ),
             )
             .map_err(fault("saving the fleet limits"))

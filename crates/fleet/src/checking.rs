@@ -21,8 +21,9 @@
 //! Command, and splitting by function would separate a Check from the
 //! prerequisite it waits behind.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use checks_runner::{Attempt, Narrowed, Output};
@@ -31,35 +32,97 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
 
+use crate::headroom::{Bytes, Headroom, Machine, Reading, Spare};
 use crate::ports::resolve_ports;
 use crate::underway::Announcing;
 
-/// How many of a step's Checks may run at once.
+/// How many of a step's Checks may run at once. **The `settings.checks-at-once`
+/// row**, shipped by the composition root and replaced by one a person saves —
+/// `crate::limits`. #284.
 ///
-/// **Four, and the number is about the machine rather than about the step.**
-/// It was measured when Fleet worked one Job at a time, so it was the whole of
-/// Armada's concurrency; `#50` made it a share of it, bounded by
-/// `Concurrency` — with the cap at two, two gates running at once is eight
-/// Checks and two Drones on one machine.
+/// **No `Default`**, for [`Concurrency`](crate::Concurrency)'s reason: the
+/// shipped number is a measurement, and `armada::serve` says what it measured.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChecksAtOnce(usize);
+
+impl ChecksAtOnce {
+    /// At least one: a gate that could start no Check would never rule.
+    pub const fn of(checks: usize) -> ChecksAtOnce {
+        ChecksAtOnce(if checks == 0 { 1 } else { checks })
+    }
+
+    pub const fn get(&self) -> usize {
+        self.0
+    }
+}
+
+/// What is asked before another of a step's Checks starts: whether a slot is
+/// free, and whether the machine has the memory and disk for it. #284.
 ///
-/// **Nothing has re-measured it under two**, and the number is left where the
-/// measurement put it rather than halved on an argument. **`#44` landed and
-/// did not answer it**: the headroom read is pre-spawn, and two gates already
-/// running are past the point anything is asked.
-///
-/// Measured on this repository's own six Checks, ten cores, warm target
-/// directory: 28.5s one at a time against 16.5s at four. Bounds of two, three,
-/// four and six were within noise of each other, because the floor is set by
-/// the slowest single Check and by `build` and `test` contending for one Cargo
-/// target lock however many slots exist. Four rather than two because that
-/// floor is this repository's and not every step's, and four rather than six
-/// because six leaves nothing for the Drone the step belongs to.
-///
-/// **A constant rather than a dial.** `CheckBudget` and `DryRuns` have no
-/// default because what they bound is policy a person owns; this bounds how
-/// many processes one machine should host, which nobody has asked to set. It
-/// becomes a `Fittings` field the first time a machine disagrees with it.
-pub(crate) const AT_ONCE: usize = 4;
+/// **The first Check always starts**, so a short machine slows a gate and never
+/// stops one. A further Check waits for a running one to finish and asks again.
+/// Taken when a gate begins, so a limit saved mid-gate counts from the next one.
+#[derive(Clone)]
+pub struct Room {
+    at_once: ChecksAtOnce,
+    machine: Arc<dyn Machine>,
+    headroom: Headroom,
+}
+
+impl Room {
+    pub fn of(at_once: ChecksAtOnce, machine: Arc<dyn Machine>, headroom: Headroom) -> Room {
+        Room {
+            at_once,
+            machine,
+            headroom,
+        }
+    }
+
+    /// Bounded by `at_once` and nothing else: the machine is never read. For a
+    /// caller with no machine to ask, such as a test or the acceptance bench.
+    pub fn ignoring_the_machine(at_once: ChecksAtOnce) -> Room {
+        Room::of(
+            at_once,
+            Arc::new(Unread),
+            Headroom::of(Spare::percent(0), Bytes::gibibytes(0)),
+        )
+    }
+
+    /// Whether another Check may start beside `running`, reading the machine only
+    /// where the answer turns on it. **A machine that cannot be read has room**,
+    /// for `crate::headroom::Machine`'s reason.
+    async fn for_another(&self, running: usize) -> bool {
+        if running == 0 || running >= self.at_once.get() {
+            return may_start(running, self.at_once, false);
+        }
+        let machine = Arc::clone(&self.machine);
+        let reading = tokio::task::spawn_blocking(move || machine.read())
+            .await
+            .ok()
+            .flatten();
+        let short = reading.is_some_and(|now| self.headroom.short_of(&now).is_some());
+        may_start(running, self.at_once, short)
+    }
+}
+
+/// Whether another Check may start beside `running`, given whether the machine
+/// is short: the pure half of [`Room::for_another`].
+pub(crate) fn may_start(running: usize, at_once: ChecksAtOnce, short: bool) -> bool {
+    running == 0 || (running < at_once.get() && !short)
+}
+
+/// A machine that never answers, so it never holds a Check back.
+struct Unread;
+
+impl Machine for Unread {
+    fn read(&self) -> Option<Reading> {
+        None
+    }
+
+    fn disk_free_at(&self, _path: &Path) -> Option<Bytes> {
+        None
+    }
+}
 
 /// Whether the gate declines to run this Check, and what it writes down when it
 /// does.
@@ -313,6 +376,8 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 ///
 /// `plan` is the Job's plan counts off the store, handed in for `ports`' reason;
 /// `None` is a Job no plan was recorded for.
+///
+/// `room` is asked before every Check after the first starts — [`Room`].
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn ran(
     checks: &[ResolvedCheck],
@@ -321,6 +386,7 @@ pub(crate) async fn ran(
     narrow: bool,
     worktree: &Path,
     budget: Duration,
+    room: &Room,
     announcing: &Announcing,
     ports: &BTreeMap<String, u16>,
     env: &[(String, String)],
@@ -409,18 +475,20 @@ pub(crate) async fn ran(
                 resolve_ports(&narrowed_to.clone().unwrap_or_else(|| run.clone()), ports),
             )),
             Planned::Already(_) | Planned::Blocked { .. } => None,
-        });
+        })
+        .collect::<VecDeque<(usize, String)>>();
     let worktree = worktree.to_path_buf();
     // Owned, so each spawned Check can move its own copy — the env slice this
     // function borrows does not outlive the batch, and a spawned future must.
     let env: Vec<(String, String)> = env.to_vec();
-    // Refilled as each one finishes rather than run in batches of four: a batch
-    // costs the slowest member of it, and a step whose Checks are 17s and 1s
-    // would spend the fast slot idle for sixteen of them.
+    // Refilled as each one finishes rather than run in batches: a batch costs
+    // the slowest member of it, and a step whose Checks are 17s and 1s would
+    // spend the fast slot idle for sixteen of them. **Room is asked before each
+    // one after the first**, so a short machine waits for a finish, not a batch.
     let mut running: JoinSet<(usize, Attempt, Duration)> = JoinSet::new();
     loop {
-        while running.len() < AT_ONCE {
-            let Some((at, run)) = queued.next() else {
+        while !queued.is_empty() && room.for_another(running.len()).await {
+            let Some((at, run)) = queued.pop_front() else {
                 break;
             };
             let worktree: PathBuf = worktree.clone();

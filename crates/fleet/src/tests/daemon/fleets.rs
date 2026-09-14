@@ -138,6 +138,9 @@ pub fn fitted_over<V>(
         // The production threshold, so the cases that trip it trip the one that
         // ships. See `armada::serve::PROVISIONAL_HEADROOM`.
         headroom: Headroom::of(Spare::percent(15), Bytes::gibibytes(10)),
+        // The number that ships, so a gate here runs its Checks as a real one
+        // does; the machine is `Plentiful`, so none is held back for room.
+        checks_at_once: crate::ChecksAtOnce::of(4),
         // No interval, so a fixture that moves the machine sees it move. The
         // one case about the interval sets its own.
         polling: Polling::every(Duration::ZERO),

@@ -201,6 +201,7 @@ pub fn limits() -> ipc::FleetLimits {
         concurrency: 2,
         memory_spare_percent: 15,
         disk_floor_gib: 10,
+        checks_at_once: 4,
     };
     ipc::FleetLimits {
         values: shipped,

@@ -67,6 +67,7 @@ pub async fn gate_against(
         &recorded,
         &bench.work,
         bench.budget,
+        &fleet::Room::ignoring_the_machine(fleet::ChecksAtOnce::of(4)),
         &bench.judging,
         // [`Bench::gate`]'s note applies: inert, because no step here declares
         // a deliverable.

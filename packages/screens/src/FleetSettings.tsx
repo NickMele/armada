@@ -1,4 +1,4 @@
-// Fleet's three admission limits, fed from the wire — what `FleetSettings` in
+// Fleet's four limits, fed from the wire — what `FleetSettings` in
 // the component library is drawn from, what each row sends, and when a change
 // is said to have taken.
 
@@ -6,13 +6,14 @@ import { FleetSettings, type FleetSettingsRow } from "@armada/components";
 import type { FleetLimits, Outcome, SaveLimits } from "@armada/protocol";
 import { useState } from "react";
 
-/** One of the three fields a row may send, by its wire name. */
+/** One of the four fields a row may send, by its wire name. */
 type Field = keyof SaveLimits;
 
 const ROWS: readonly { field: Field; min: number; max: number; unit?: string }[] = [
   { field: "concurrency", min: 1, max: 8 },
   { field: "memory_spare_percent", min: 0, max: 50, unit: "%" },
   { field: "disk_floor_gib", min: 0, max: 100, unit: "GiB" },
+  { field: "checks_at_once", min: 1, max: 8 },
 ];
 
 /** Said under a row once its own save takes. */
@@ -32,7 +33,7 @@ export type FleetSettingsSheetProps = {
  * The panel, fed.
  *
  * **One save in flight for the whole panel**, on Job settings' terms: the
- * three rows are one act's worth of controls and a second set here could only
+ * four rows are one act's worth of controls and a second set here could only
  * ever refuse a press the sheet never sends. A refusal is read against the row
  * that sent it and cleared the next time that row is edited.
  */
@@ -69,9 +70,9 @@ export function FleetSettingsSheet({ limits, live, floor, onClose, onSave }: Fle
     onSave: (value) => send(field, value),
   });
 
-  const [concurrency, memorySparePercent, diskFloorGib] = ROWS.map((row) =>
+  const [concurrency, memorySparePercent, diskFloorGib, checksAtOnce] = ROWS.map((row) =>
     rowOf(row.field, row.unit, row.min, row.max),
-  ) as [FleetSettingsRow, FleetSettingsRow, FleetSettingsRow];
+  ) as [FleetSettingsRow, FleetSettingsRow, FleetSettingsRow, FleetSettingsRow];
 
   return (
     <FleetSettings
@@ -88,6 +89,7 @@ export function FleetSettingsSheet({ limits, live, floor, onClose, onSave }: Fle
       concurrency={concurrency}
       memorySparePercent={memorySparePercent}
       diskFloorGib={diskFloorGib}
+      checksAtOnce={checksAtOnce}
       onClose={onClose}
     />
   );

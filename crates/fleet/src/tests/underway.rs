@@ -15,13 +15,15 @@ use std::time::Duration;
 
 use core_model::{Attempt, ResolvedCheck, StepId};
 
-use crate::checking::{ran, AT_ONCE};
+use crate::checking::{ran, ChecksAtOnce, Room};
 use crate::tests::gate::Stopped;
 use crate::tests::tmp::TempDir;
 use crate::underway::{Announcing, Underway};
 
 const JOB: &str = "01JOB";
 const STEP: &str = "implement";
+/// The bound these cases run under, on a room that never reads the machine.
+const AT_ONCE: usize = 4;
 
 fn named(name: &str, run: &str) -> ResolvedCheck {
     ResolvedCheck::ManifestCheck {
@@ -61,6 +63,7 @@ async fn heard_over(checks: &[ResolvedCheck], repo: &TempDir) -> (Vec<ipc::JobCh
         false,
         repo.path(),
         Duration::from_secs(30),
+        &Room::ignoring_the_machine(ChecksAtOnce::of(AT_ONCE)),
         &announcing,
         &std::collections::BTreeMap::new(),
         &[],
@@ -210,6 +213,7 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
             false,
             repo.path(),
             Duration::from_secs(30),
+            &Room::ignoring_the_machine(ChecksAtOnce::of(AT_ONCE)),
             &announcing,
             &std::collections::BTreeMap::new(),
             &[],
@@ -224,6 +228,7 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
         false,
         repo.path(),
         Duration::from_secs(30),
+        &Room::ignoring_the_machine(ChecksAtOnce::of(AT_ONCE)),
         &Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],

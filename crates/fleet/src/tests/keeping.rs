@@ -165,6 +165,7 @@ impl Repo {
             &[],
             &FakeWorkProduct::changed(&[]),
             budget(),
+            &crate::checking::Room::ignoring_the_machine(crate::checking::ChecksAtOnce::of(4)),
             &judged_by_shared(judge),
             &Keeping::of(&self.root().to_string_lossy(), HANDLE),
             Policies::unstated(),

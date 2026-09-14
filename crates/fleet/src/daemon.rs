@@ -149,6 +149,9 @@ pub struct Fleet<H, V, W> {
     /// for `drones`' reason — never held across an `.await`. See
     /// [`crate::limits`], which is the only writer.
     headroom: std::sync::Mutex<Headroom>,
+    /// How many of a step's Checks run at once: shipped, or what a person saved.
+    /// A `std` lock for `headroom`'s reason. #284.
+    checks_at_once: std::sync::Mutex<crate::checking::ChecksAtOnce>,
     /// What the composition root handed in, kept so a save can say what
     /// shipped and an omitted field can fall back to it.
     shipped: crate::limits::Limits,

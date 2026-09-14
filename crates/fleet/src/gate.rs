@@ -101,6 +101,7 @@ pub use crate::ruling::Ruling;
 /// | `lifted` | The excluded paths a Judge has already cleared for this Job, off its own scope revisions. **Handed in rather than derived** because this function is given a step and not a Job, and because [`Lifted`] has one constructor: a caller with a record in hand can produce one and nothing else can. A gate that re-refused a path `declare_scope` had accepted would fail the step for being the plan Fleet took, which is `#417`'s own complaint |
 /// | `entered_with` | What the worktree held when this step began, **after the boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s to place and not this function's. `diff_nonempty` is decided by comparing it against a second reading taken here — which is what catches the step that advanced having written nothing, where the check used to read the whole branch and count an earlier step's file as this step's work |
 /// | `policies` | What this repository has said about `auto_merge` and `review_gate`, folded across the Job's gating Manifests. **Handed in and never read here**, for `lifted`'s reason and one more: both settings are `Live`, so the answer is only true at the instant it is taken, and a gate that read the file for itself would be a second reader of a value the caller has already resolved. `crate::policy` is where it is built |
+/// | `room` | What is asked before each Check after the first starts: how many run at once, and whether the machine has the memory and disk. **Handed in for `lifted`'s reason** — the limits in force are the Fleet's to read, and a gate that began keeps them. `crate::checking::Room` |
 /// | `announcing` | Where each Check is said to start and to finish while it runs. **Told, never read**: nothing below decides on it, and the ruling is what `crate::checking` hands back. Handed in because the entry it writes has to stand until the caller has written the ruling down, which is after this returns — `crate::underway` |
 /// | `ports`, `port_env` | The Job's claimed span, resolved to a name-to-port map and to the environment it sets. **Handed in for `lifted`'s reason** — this function is given a step and not a Job, and only a caller holding one can ask the store for its claim. `crate::ports` |
 /// | `refusal_policy` | This Job's `WhenRefused` setting, off the store. **Handed in for `lifted`'s reason** — a step cannot ask the store for a Job-level setting, and a setting read here for itself would be a second reader of the value `crate::asking::answer_judge` writes |
@@ -117,6 +118,7 @@ pub async fn rule_on<W>(
     recorded: &[(StepId, StepEvidence)],
     work: &W,
     budget: CheckBudget,
+    room: &crate::checking::Room,
     judging: &Judging,
     keeping: &Keeping,
     policies: Policies,
@@ -216,6 +218,7 @@ where
         false,
         Path::new(at.worktree().path()),
         budget.duration(),
+        room,
         announcing,
         ports,
         port_env,
