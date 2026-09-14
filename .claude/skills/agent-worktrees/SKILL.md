@@ -39,6 +39,13 @@ rust-analyzer starts building there. `git worktree remove --force` then
 deregisters the tree and leaves a gigabyte behind. Once the three checks below
 pass, `rm -rf` what is left. Confirmed 2026-09-11.
 
+**zsh does not split an unquoted variable, so a cleanup loop can report work it
+never did.** Confirmed 14 Sep 2026: `for pair in "<dir> <branch>"; do set --
+$pair` kept both words as one argument, every `git -C` pointed at a path that did
+not exist, and the loop printed `removed` for two worktrees still registered.
+Loop over one name, quote every path, and read `git worktree list` afterwards
+rather than the loop's own output.
+
 ## Three things that must survive
 
 Check all three before removing anything. Merged-ness alone is not enough.

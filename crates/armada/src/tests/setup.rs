@@ -199,7 +199,7 @@ fn a_drones_run_here_skips_storybook_and_the_story_tests_and_the_gate_does_not()
 }
 
 /// **`every_manifest_check` expands in the order `armada.yml` writes, and that
-/// order is the order the gate runs.**
+/// order is the order the gate reports.**
 ///
 /// The seven names the shipped steps spell out are moving out of the workflow
 /// files, and until they did, the workflow file was the only place this
@@ -208,12 +208,11 @@ fn a_drones_run_here_skips_storybook_and_the_story_tests_and_the_gate_does_not()
 /// `bridge_build, bridge_test, build, …`: the same set, and the two slowest
 /// Checks leading.
 ///
-/// **What that costs is a schedule, not a report.** `fleet::checking` starts
-/// four at a time and cancels nothing when one fails, and it writes each result
-/// into a slot sized from the declaration — so a Drone is told the same seven
-/// things in the same order however they raced. The order decides which four
-/// start, which is worth pinning because it is `armada.yml`'s to decide, and
-/// not because it makes anything arrive sooner.
+/// **What the order still decides is the report, and where untimed Checks
+/// start.** `fleet::checking` starts Checks fastest first by their recorded
+/// durations (#1062), and one with none keeps its written position. Each result
+/// lands in a slot sized from the declaration, so a Drone reads the same order
+/// however they raced.
 ///
 /// **Asserted against the real Manifest and a definition written here**, rather
 /// than by editing a shipped file: the claim is about the expansion, and it has
