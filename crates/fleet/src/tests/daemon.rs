@@ -25,7 +25,7 @@
 use std::time::Duration;
 
 use adapter_traits::WorktreeSpec;
-use core_model::{JobStatus, StepState};
+use core_model::{EscalationTrigger, JobStatus, StepState};
 use store::Store;
 use testkit::FakeWorkProduct;
 
@@ -350,6 +350,61 @@ async fn a_drone_that_leaves_without_submitting_does_not_leave_the_job_running()
         "escalated holds the worktree until a person answers — it does not end the Job"
     );
     assert!(fleet.working_on().await.is_empty(), "the slot came free");
+}
+
+/// **`#792`: the step stops too, and that is what makes the Job restartable
+/// rather than only redispatchable.**
+///
+/// The Drone above ends its own run and leaves without submitting, which
+/// escalates the Job through `dispatch::reap`'s `JobMoves` arm. Before the
+/// fix that arm moved the Job and never stopped the step it was on, so the
+/// step stayed `running` beneath an `escalated` Job — and `restart_step`
+/// refuses a step that is not `stopped`, leaving redispatch as the only act.
+#[tokio::test]
+async fn a_drone_that_ends_its_run_on_its_own_leaves_a_step_restart_step_accepts() {
+    let home = TempDir::new();
+    let fleet = a_fleet_whose_drone_leaves(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job = fleet
+        .propose(a_proposal("say nothing and go"))
+        .await
+        .unwrap();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.unwrap();
+
+    let mut after = None;
+    for _ in 0..200 {
+        let turned = fleet.turn().await.unwrap();
+        if let Some(aftermath) = turned.each.into_iter().find_map(|worked| worked.after) {
+            after = Some(aftermath);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(
+        matches!(after, Some(crate::Aftermath::JobMoves(_))),
+        "a Drone that is gone having left nothing moves the Job"
+    );
+
+    let escalated = fleet.load(job.id()).await.unwrap();
+    assert_eq!(escalated.status(), JobStatus::Escalated);
+    let (_, trigger) = escalated
+        .stopped_on()
+        .expect("the step the Drone was on stopped when it did");
+    assert_eq!(
+        trigger.trigger(),
+        EscalationTrigger::RunEnded,
+        "Fleet acted on the Drone's own last word, not a person's"
+    );
+
+    let restarted = fleet
+        .restart_step(job.id(), None)
+        .await
+        .expect("a step stopped under `run_ended` is one `restart_step` accepts");
+    assert_ne!(
+        restarted.status(),
+        JobStatus::Escalated,
+        "restarting put the Job back to work rather than leaving it stuck"
+    );
 }
 
 /// **The boundary is read, and a step is gated on what it did rather than on

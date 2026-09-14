@@ -488,6 +488,12 @@ where
                 // record that already says no Drone is on it.
                 self.drone_left(&job_id, &spawned_on).await?;
                 let job = self.load(&job_id).await?;
+                // **The step, then the Job — `Fleet::kill_drone`'s order and
+                // load-bearing for the same reason.** The inner machine freezes
+                // the moment the Job leaves `running`, so a step stopped after
+                // the move would be refused and left `running` under a Job that
+                // has already gone. `#792`.
+                let job = self.stopped_at_rest(&job).await?;
                 self.move_job(&job, target.clone(), Actor::Fleet).await?;
                 working.take();
                 // Ordinarily nothing: `left` answers `Left::Evidence` when a
@@ -498,6 +504,12 @@ where
             }
             // The idle Drone of a Job a person is already holding. Its going is
             // the only fact, and it is what turns a redirect into a restart.
+            //
+            // **Not `stopped_at_rest`, unlike `kill_drone`'s arm.**
+            // `taken_from_a_person` admits `Stopped(DroneKilled)` past the
+            // freeze and not `Stopped(RunEnded)` — that call refuses
+            // `StepsAreFrozen` on `stalled`'s ordinary case. `#792`'s "In"
+            // leaves this one a decision.
             Aftermath::AlreadyStopped => {
                 self.drone_left(&job_id, &spawned_on).await?;
                 working.take();
