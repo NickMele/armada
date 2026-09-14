@@ -375,6 +375,10 @@ where
                 // answered. Absent on the three patterns the patch decides.
                 out.detail("asked", flag.asked.as_deref());
                 out.detail("brief", flag.brief_path.as_deref());
+                out.detail(
+                    "cleared",
+                    flag.cleared.as_ref().map(|cleared| cleared.why.as_str()),
+                );
             }
         }
         if flagged.is_empty() {

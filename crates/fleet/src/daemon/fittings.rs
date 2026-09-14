@@ -238,6 +238,9 @@ pub struct Fittings<H, V, W> {
     /// composition root**, like every other input here — which model is cheap
     /// is a vendor's fact, and nothing below Fleet may spell one.
     pub judge_model: Model,
+    /// What a judged gaming flag is read a second time on. **Resolved by the
+    /// composition root**, for `judge_model`'s reason.
+    pub second_opinion_model: Model,
     /// What a dispatch request is read by. **Its own dial and not the Judge's**
     /// — this call fires on every dispatch rather than on every criterion, so
     /// the two are raised for different reasons and at different prices.
@@ -328,6 +331,7 @@ where
             underway: Underway::default(),
             proposals: Proposals::new(),
             judge_model: fittings.judge_model,
+            second_opinion_model: fittings.second_opinion_model,
             proposer_model: fittings.proposer_model,
             links: fittings.links,
             ci_configuration: fittings.ci_configuration,

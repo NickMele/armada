@@ -12,25 +12,17 @@
 //!
 //! # The diff answers three of the patterns, and no call is spent on them
 //!
-//! [`in_the_diff`] scans the patch for the three
-//! [`DecidedBy::Diff`](core_model::DecidedBy) patterns. The other six need the
-//! change to be understood, so each is one narrow question.
-//!
-//! # `check_config_edited` is a name match, never a command expansion
-//!
-//! Armada refuses to model what `pnpm test` resolves to, so this does not try.
-//! It answers the weaker, honest question — did the step edit a file that
-//! configures how commands run — and lets a legitimate edit flag rather than
-//! block. See `docs/concepts/workflow.md`, Evidence gaming.
+//! [`in_the_diff`](crate::in_the_diff), in `scanned`, reads the patch for the
+//! three [`DecidedBy::Diff`](core_model::DecidedBy) patterns. The other six need
+//! the change to be understood, so each is one narrow question here, and a
+//! flag one of them raises is read again by [`SecondOpinion`](crate::SecondOpinion)
+//! before it can stop a step.
 
-use core_model::{
-    CitedAt, DecidedBy, GamingFlag, GamingPattern, RepoPath, ResolvedStep, StepEvidence,
-};
+use core_model::{DecidedBy, GamingFlag, GamingPattern, ResolvedStep, StepEvidence};
 
 use adapter_traits::Patch;
 
 use crate::judge::Unreadable;
-use crate::located::{header_path, hunk_start};
 
 /// The two words a gaming answer may use, and the citation a flag owes.
 ///
@@ -97,190 +89,6 @@ that was already there and that this change leaves exactly as it found it.
 
 ";
 
-/// Files that configure how a command runs.
-///
-/// **A name match, and deliberately not an expansion of the step's `run:`
-/// string** — see this module's comment. The set is the ecosystems Armada is
-/// pointed at rather than a claim to be exhaustive; a repository whose gate
-/// resolves through something not named here is not covered, which is the
-/// honest state of the open question this pattern was raised against.
-const CHECK_CONFIG_FILES: &[&str] = &[
-    "package.json",
-    "pnpm-workspace.yaml",
-    "turbo.json",
-    "nx.json",
-    "makefile",
-    "gnumakefile",
-    "justfile",
-    "rakefile",
-    "taskfile.yml",
-    "cargo.toml",
-    "pyproject.toml",
-    "pytest.ini",
-    "tox.ini",
-    "setup.cfg",
-    "go.mod",
-    "pom.xml",
-    "build.gradle",
-    "phpunit.xml",
-    ".rspec",
-];
-
-/// Filename fragments that make a configuration file, whatever it is called
-/// around them — `jest.config.ts`, `vitest.config.mjs`, `.mocharc.json`.
-const CHECK_CONFIG_FRAGMENTS: &[&str] = &[".config.", "mocharc", "karma.conf"];
-
-/// What a skip marker looks like, across the ecosystems a Manifest points at.
-const SKIP_MARKERS: &[&str] = &[
-    ".skip(",
-    ".todo(",
-    "xit(",
-    "xdescribe(",
-    "#[ignore]",
-    "@ignore",
-    "@disabled",
-    "pytest.mark.skip",
-    "unittest.skip",
-    "t.skip(",
-    "t.skipnow(",
-];
-
-/// What makes a path a test file.
-const TEST_MARKERS: &[&str] = &["test", "spec", "__tests__"];
-
-/// Every flag the patch alone establishes, for the patterns the step declared.
-///
-/// **No model is called.** A pattern the diff answers and a pattern a Judge
-/// answers are told apart by [`GamingPattern::decided_by`], so a call site
-/// cannot spend money on one of these by accident.
-///
-/// **Every flag from here names a file**, because the scan found it by walking
-/// one — and only the skip marker names a line, because only it is about a
-/// line the change leaves behind. [`located`](mod@crate::located) is the same
-/// question asked of a judged answer.
-pub fn in_the_diff(patch: &Patch, patterns: &[GamingPattern]) -> Vec<GamingFlag> {
-    let wanted = |pattern: GamingPattern| patterns.contains(&pattern);
-    let mut flags = Vec::new();
-    let mut path = String::new();
-    let mut deleted = false;
-    // Which post-image line the next added or context line is. `None` until a
-    // hunk header sets it, so no line number is offered before one has.
-    let mut post: Option<u32> = None;
-    for line in patch.as_str().lines() {
-        if let Some(named) = header_path(line) {
-            path = named;
-            deleted = false;
-            post = None;
-            continue;
-        }
-        if let Some(start) = hunk_start(line) {
-            post = Some(start);
-            continue;
-        }
-        if line.starts_with("deleted file mode") {
-            deleted = true;
-            // The header order is `diff --git`, then the mode line, so the path
-            // is already known by the time this is read.
-            if wanted(GamingPattern::TestDeleted) && is_test_path(&path) {
-                flags.push(GamingFlag {
-                    pattern: GamingPattern::TestDeleted,
-                    cited: format!("`{path}` is removed whole"),
-                    // The file and never a line: there is no post image of a
-                    // file the change removes, so every line in it is gone.
-                    at: Some(CitedAt::in_file(RepoPath::new(&path))),
-                    // Nothing was asked and nothing was kept: the patch said
-                    // it, and there is no call for a person to read back.
-                    asked: None,
-                    brief_path: None,
-                });
-            }
-            continue;
-        }
-        let Some(added) = line.strip_prefix('+') else {
-            if line.starts_with(' ') {
-                post = post.map(|n| n + 1);
-            }
-            continue;
-        };
-        if added.starts_with("++") {
-            continue;
-        }
-        let at = post;
-        post = post.map(|n| n + 1);
-        if deleted {
-            continue;
-        }
-        if wanted(GamingPattern::TestSkipped) {
-            if let Some(marker) = skip_marker(added) {
-                flags.push(GamingFlag {
-                    pattern: GamingPattern::TestSkipped,
-                    cited: format!("`{path}` gains `{marker}`: {}", added.trim()),
-                    // The marker is on a line the change writes, so the change
-                    // leaves it in the file and the number is navigable.
-                    at: Some(match at {
-                        Some(line) => CitedAt::at_line(RepoPath::new(&path), line),
-                        None => CitedAt::in_file(RepoPath::new(&path)),
-                    }),
-                    asked: None,
-                    brief_path: None,
-                });
-            }
-        }
-    }
-    if wanted(GamingPattern::CheckConfigEdited) {
-        flags.extend(config_edits(patch));
-    }
-    flags.sort_by_key(|flag| flag.pattern);
-    flags
-}
-
-/// Every configuration file the patch touches, once each.
-fn config_edits(patch: &Patch) -> Vec<GamingFlag> {
-    let mut seen: Vec<String> = Vec::new();
-    for line in patch.as_str().lines() {
-        let Some(path) = header_path(line) else {
-            continue;
-        };
-        if is_check_config(&path) && !seen.contains(&path) {
-            seen.push(path);
-        }
-    }
-    seen.into_iter()
-        .map(|path| GamingFlag {
-            pattern: GamingPattern::CheckConfigEdited,
-            cited: format!("`{path}` configures how a command runs, and this change edits it"),
-            // The file and no line. The finding is that this file was edited
-            // at all, so naming one of its lines would narrow a claim that is
-            // about the whole of it.
-            at: Some(CitedAt::in_file(RepoPath::new(&path))),
-            asked: None,
-            brief_path: None,
-        })
-        .collect()
-}
-
-fn is_test_path(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    TEST_MARKERS.iter().any(|marker| lower.contains(marker))
-}
-
-fn is_check_config(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    let name = lower.rsplit('/').next().unwrap_or(&lower);
-    CHECK_CONFIG_FILES.contains(&name)
-        || CHECK_CONFIG_FRAGMENTS
-            .iter()
-            .any(|fragment| name.contains(fragment))
-}
-
-fn skip_marker(line: &str) -> Option<&'static str> {
-    let lower = line.to_ascii_lowercase();
-    SKIP_MARKERS
-        .iter()
-        .copied()
-        .find(|marker| lower.contains(marker))
-}
-
 /// What an earlier step established, handed to the Judge as the yardstick.
 ///
 /// **Held rather than passed as a string** so that "there is no baseline" is a
@@ -310,6 +118,10 @@ pub struct GamingBrief {
     /// again from `pattern`**: a wording that moves would rewrite what an
     /// existing flag says it was asked.
     asked: &'static str,
+    /// Everything above the question: the step, the baseline and the diff.
+    /// **What a second reading is shown too**, so it reads the same material
+    /// and nothing the first call was not shown.
+    shown: String,
     question: String,
 }
 
@@ -327,15 +139,10 @@ impl GamingBrief {
         baseline: Option<Baseline<'_>>,
     ) -> Option<GamingBrief> {
         let asked = pattern.question()?;
-        let mut question = String::new();
-        question.push_str(
-            "You are checking whether a change was made to look finished rather than to be \
-             finished. Answer only the question at the end.\n\n",
-        );
-        question.push_str(&format!("Step: {}\n\n", step.label()));
+        let mut shown = format!("Step: {}\n\n", step.label());
         match baseline {
             Some(baseline) => {
-                question.push_str(&format!(
+                shown.push_str(&format!(
                     "What the earlier step `{}` established, which this change is measured \
                      against:\n\n  it now does: {}\n  shown by: {}\n  not claimed: {}\n\n",
                     baseline.step,
@@ -349,21 +156,23 @@ impl GamingBrief {
             }
             // Said rather than left out. A Judge handed no baseline and not
             // told so would invent the comparison it was asked to make.
-            None => question.push_str(
+            None => shown.push_str(
                 "There is no earlier step to measure this against. Judge the change on its \
                  own.\n\n",
             ),
         }
-        question.push_str(HOW_TO_READ_THE_DIFF);
-        question.push_str("The change, as a diff:\n\n");
-        question.push_str(patch.as_str());
-        question.push_str("\n\nThe question, which is yes or no:\n\n");
-        question.push_str(asked);
-        question.push_str("\n\n");
-        question.push_str(ANSWER_FORMAT);
+        shown.push_str(HOW_TO_READ_THE_DIFF);
+        shown.push_str("The change, as a diff:\n\n");
+        shown.push_str(patch.as_str());
+        let question = format!(
+            "You are checking whether a change was made to look finished rather than to be \
+             finished. Answer only the question at the end.\n\n{shown}\n\nThe question, \
+             which is yes or no:\n\n{asked}\n\n{ANSWER_FORMAT}"
+        );
         Some(GamingBrief {
             pattern,
             asked,
+            shown,
             question,
         })
     }
@@ -375,6 +184,12 @@ impl GamingBrief {
     /// The question at the end of the brief, without the diff above it.
     pub fn asked(&self) -> &'static str {
         self.asked
+    }
+
+    /// What the question is put with — the step, the baseline and the diff —
+    /// without the question or the answer format.
+    pub fn shown(&self) -> &str {
+        &self.shown
     }
 
     pub fn question(&self) -> &str {
@@ -419,7 +234,13 @@ impl GamingBrief {
         // Located from what the model wrote, before the note below is appended
         // to it — the note quotes a span the patch does not have, and looking
         // it up would be looking up the failure itself.
-        let at = crate::located::in_the_patch(patch, &cited);
+        let found = crate::located::in_the_patch(patch, &cited);
+        // **A comment is never an assertion**, so a test-content flag quoting
+        // one is not raised, whatever the call answered.
+        if self.pattern.about_test_code() && found.as_ref().is_some_and(|found| found.commented) {
+            return Ok(None);
+        }
+        let at = found.map(|found| found.at);
         Ok(Some(GamingFlag {
             pattern: self.pattern,
             cited: match crate::quoted::invented(&cited, &self.question) {
@@ -432,8 +253,10 @@ impl GamingBrief {
             // `yes` above was a `yes` to.
             asked: Some(self.asked.to_string()),
             // The caller's, because only it knows whether a file was written
-            // and where. See `fleet::judging::looks::gaming`.
+            // and where. See `fleet::judging::flagging`.
             brief_path: None,
+            // Only a second reading clears a flag. See `SecondOpinion`.
+            cleared: None,
         }))
     }
 }
@@ -448,7 +271,8 @@ fn unchecked(cited: &str, span: &str) -> String {
     format!("{cited} [unchecked: this quotes \"{span}\", which is in nothing the call was shown]")
 }
 
-/// Every gaming pattern one pass over a step found. **Never empty.**
+/// Every gaming pattern one pass over a step found. **Never without one that
+/// stands.**
 ///
 /// There is no constructor taking a list that might be empty and no `Default`,
 /// for [`Refusals`](crate::Refusals)' reason: holding one is the fact that
@@ -459,23 +283,32 @@ pub struct Flagged {
 }
 
 impl Flagged {
-    /// Fold what one pass found into a finding, or none.
+    /// Fold what one pass found into a finding, or hand every flag back.
     ///
-    /// **Any single flag is a finding.** There is no threshold and no counting,
-    /// because there is nothing here to grant — a flag asks a person to look,
-    /// and one that needed a second flag to agree with it would be a vote.
-    pub fn among(flags: Vec<GamingFlag>) -> Option<Flagged> {
-        (!flags.is_empty()).then_some(Flagged { flags })
+    /// **Any single standing flag is a finding**, so a `Flagged` holds at least
+    /// one flag no second reading cleared, and cleared ones ride beside it to be
+    /// recorded. No threshold beyond that: a second standing flag agreeing with
+    /// the first would be a vote. `Err` is a pass with nothing standing,
+    /// carrying whatever a second reading cleared.
+    pub fn among(flags: Vec<GamingFlag>) -> Result<Flagged, Vec<GamingFlag>> {
+        match flags.iter().any(GamingFlag::stands) {
+            true => Ok(Flagged { flags }),
+            false => Err(flags),
+        }
     }
 
-    /// Every flag, with what it cites.
+    /// Every flag, standing and cleared, with what it cites.
     pub fn cited(&self) -> &[GamingFlag] {
         &self.flags
     }
 
-    /// Which patterns fired. What the escalation payload names.
+    /// Which patterns stood. What the escalation payload names.
     pub fn patterns(&self) -> Vec<GamingPattern> {
-        self.flags.iter().map(|flag| flag.pattern).collect()
+        self.flags
+            .iter()
+            .filter(|flag| flag.stands())
+            .map(|flag| flag.pattern)
+            .collect()
     }
 }
 

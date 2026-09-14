@@ -43,6 +43,7 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         client: Arc::new(judge),
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
+        second_opinion_model: Model::named("the-second-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: marking(aloft.clone(), events.clone()),
         asked: Asked::nowhere(),

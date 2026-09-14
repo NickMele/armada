@@ -244,11 +244,11 @@ where
 
     /// The Judge refused, a person disagrees, and the step advances anyway.
     ///
-    /// **A blank reason is refused here rather than recorded**, for the reason
-    /// `request_changes` refuses a blank note, turned around: nothing is
-    /// delivered to a Drone, so what an empty string would lose is the only
-    /// account of why a verdict was overruled — and an override that says
-    /// nothing is how this becomes the act somebody uses to quiet a gate.
+    /// **A blank reason is refused on a refusal and taken on a gaming flag**, and
+    /// `Fleet::override_verdict` decides which, because only it reads what
+    /// stopped the step. On a refusal an empty string loses the only account of
+    /// why the Judge was wrong; a flag's own record already names what was
+    /// disagreed with.
     ///
     /// **Included**, for [`Commands::approve_review`]'s reason: the step it
     /// advances may also be the workflow's last.
@@ -257,14 +257,10 @@ where
         job_id: JobId,
         overruling: Overruled,
     ) -> Result<JobSummary, Refusal> {
-        let said = Overruling::saying(&overruling.reason).ok_or_else(|| {
-            self.refusal(Adrift::Unreasoned {
-                job: job_id.to_domain(),
-            })
-        })?;
+        let said = Overruling::saying(&overruling.reason);
         let job = budgeted_for(self.command_budget(), job_id.clone(), {
             let fleet = Arc::clone(&self);
-            async move { Fleet::override_verdict(&fleet, &job_id.to_domain(), &said).await }
+            async move { Fleet::override_verdict(&fleet, &job_id.to_domain(), said.as_ref()).await }
         })
         .await
         .map_err(|why| self.refusal(why))?;

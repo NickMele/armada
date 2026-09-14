@@ -297,6 +297,7 @@ pub fn detail(job: JobSummary) -> JobDetail {
                     criteria: 2,
                     panel_size: Some(3),
                     gaming_check: true,
+                    gaming_patterns: Vec::new(),
                 }],
             ),
             step_rail("handoff", 1, "human_always", Vec::new()),
@@ -648,6 +649,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
                     criteria: 2,
                     panel_size: None,
                     gaming_check: false,
+                    gaming_patterns: Vec::new(),
                 }],
                 advance_gate: ipc::AdvanceGate::from_wire("auto_if_judge_passes")
                     .expect("a gate the registry has"),

@@ -223,7 +223,7 @@ pub use job::{
 pub use journal::{
     JobLog, JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
-pub use judged::{Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable};
+pub use judged::{Citation, CitedAt, Cleared, Flagged, Given, Judged, KeptDeliverable};
 pub use limits::{
     ChecksAtOnce, DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent,
     SaveLimits, Within,

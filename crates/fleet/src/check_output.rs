@@ -109,7 +109,8 @@ where
             .map_err(Adrift::Writing)
     }
 
-    /// Write down which gaming patterns the step's evidence tripped.
+    /// Write down which gaming patterns the step's evidence tripped, standing or
+    /// cleared — a cleared flag is the record of the first look being wrong.
     ///
     /// **Only where something was flagged.** A step whose gaming check found
     /// nothing has nothing to say and nothing to clear; the writer replaces a
@@ -125,13 +126,14 @@ where
         step: &StepId,
         ruling: &Ruling,
     ) -> Result<(), Adrift> {
-        let Some(flagged) = ruling.flagged() else {
+        let flags = ruling.gaming_flags();
+        if flags.is_empty() {
             return Ok(());
-        };
+        }
         self.store()
             .lock()
             .await
-            .record_step_gaming_flags(job_id, step, flagged.cited(), &self.now())
+            .record_step_gaming_flags(job_id, step, flags, &self.now())
             .map_err(Adrift::Writing)
     }
 

@@ -24,8 +24,8 @@
 //! acts from each other; it stopped separating anything here.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, Component, Envelope, FieldValue, Job, JobId, JobStatus, Level, StepId, StepLevelTrigger,
-    StepTarget, Target,
+    Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
+    StepId, StepLevelTrigger, StepTarget, Target,
 };
 use verification::OutcomeTurn;
 
@@ -39,11 +39,12 @@ use crate::daemon::Fleet;
 /// never leaves the record. The Drone did nothing wrong and is told only that
 /// the step was accepted.
 ///
-/// It is required rather than optional because a person disagreeing with a
+/// It is required on a refusal because a person disagreeing with a
 /// Judge is the strongest signal there is that a criterion is mis-stated, and a
 /// count of overrides with no reasons beside it gives the rate and never the
 /// cause. An override that says nothing is also how the act this module keeps
-/// visible becomes the one somebody reaches for to quiet a gate.
+/// visible becomes the one somebody reaches for to quiet a gate. **A gaming
+/// flag is overruled with or without one**: see [`Fleet::override_verdict`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Overruling(String);
 
@@ -93,7 +94,7 @@ where
     pub async fn override_verdict(
         &self,
         job_id: &JobId,
-        overruling: &Overruling,
+        overruling: Option<&Overruling>,
     ) -> Result<Job, Adrift> {
         // Opened rather than looked up: the Job whose Drone has gone has no
         // slot in the roster, and `completed` may still have work to land
@@ -103,6 +104,15 @@ where
         let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
         let (step, overruled) = self.overridable(&job).await?;
+        // **Blank is refused on a refusal and taken on a gaming flag.** A flag's
+        // record already names the pattern, the question and the brief a person
+        // disagreed with; a refusal overruled in silence leaves nothing saying
+        // why the Judge was wrong.
+        if overruling.is_none() && overruled.trigger() != EscalationTrigger::EvidenceSuspect {
+            return Err(Adrift::Unreasoned {
+                job: job_id.clone(),
+            });
+        }
         // Read before anything moves, and discarded. A worktree that is gone
         // is a Job whose earlier steps' work is not on disk, and what is being
         // asked for there is a redispatch — the same refusal `restart_step`
@@ -253,7 +263,7 @@ where
         job: &JobId,
         step: &StepId,
         overruled: StepLevelTrigger,
-        overruling: &Overruling,
+        overruling: Option<&Overruling>,
     ) {
         let envelope = Envelope::new(
             self.now(),
@@ -267,8 +277,13 @@ where
         .with_field(
             "overruled",
             FieldValue::Str(overruled.as_wire().to_string()),
-        )
-        .with_field("said", FieldValue::Str(overruling.text().to_string()));
+        );
+        // Absent rather than blank where a flag was overruled without a word, so
+        // a count of `said` is a count of reasons.
+        let envelope = match overruling {
+            Some(said) => envelope.with_field("said", FieldValue::Str(said.text().to_string())),
+            None => envelope,
+        };
         self.noted_in_the_log(job, &envelope);
     }
 }

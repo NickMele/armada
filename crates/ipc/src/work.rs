@@ -288,9 +288,10 @@ pub struct ChangesRequested {
 /// gives the rate and never the cause.
 ///
 /// Blank is refused at the Fleet boundary rather than here, for
-/// [`ChangesRequested`]'s reason. It is refused at all because an override that
-/// says nothing is how the act this route exists to keep visible becomes the
-/// one somebody reaches for to make a gate stop complaining.
+/// [`ChangesRequested`]'s reason, and only on a refusal: an override that says
+/// nothing is how the act becomes the one somebody reaches for to make a gate
+/// stop complaining. **On a gaming flag blank is taken** — the flag already
+/// names what was disagreed with, and a preset arrives as this text.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Overruled {
     /// Why the verdict is wrong, in the person's own words. It is not sent to

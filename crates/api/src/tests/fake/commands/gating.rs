@@ -119,10 +119,10 @@ impl FakeDaemon {
     pub(super) async fn fake_reject_job(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.move_to(&job_id, "awaiting_review", "rejected", "human")
     }
-    /// The one act on a refused step, faked on the one thing the route refuses
-    /// on that the transport can see: **a blank reason is not an override.**
-    /// Which trigger stopped the step is Fleet's to read off the record and
-    /// nothing a `JobSummary` carries, so the fake does not pretend to know it.
+    /// The one act on a refused step, faked on the one refusal the transport can
+    /// see: **a blank reason on a refusal is not an override.** Fleet takes a
+    /// blank one on a gaming flag, by the trigger it reads off the record — and
+    /// a `JobSummary` carries no trigger, so the fake does not pretend to know.
     pub(super) async fn fake_override_verdict(
         &self,
         job_id: JobId,

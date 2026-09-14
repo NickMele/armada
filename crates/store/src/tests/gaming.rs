@@ -3,7 +3,7 @@
 //! Its own file rather than more of `roundtrip`, which is already one of the
 //! longest in the crate.
 
-use core_model::{CitedAt, GamingFlag, GamingPattern, RepoPath, StepId};
+use core_model::{CitedAt, ClearedFlag, GamingFlag, GamingPattern, RepoPath, StepId};
 
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
 
@@ -35,6 +35,7 @@ fn the_patterns_a_step_tripped_survive_with_what_each_cited() {
                     // was kept.
                     asked: None,
                     brief_path: None,
+                    cleared: None,
                 },
                 GamingFlag {
                     pattern: GamingPattern::AssertionWeakened,
@@ -44,6 +45,7 @@ fn the_patterns_a_step_tripped_survive_with_what_each_cited() {
                     brief_path: Some(
                         ".armada/briefs/01GAME/fix.1.gaming.assertion_weakened.txt".to_string(),
                     ),
+                    cleared: None,
                 },
             ],
             &created_at(),
@@ -94,6 +96,60 @@ fn the_patterns_a_step_tripped_survive_with_what_each_cited() {
     );
 }
 
+/// **A cleared flag is kept, with the reason it was cleared for**, through both
+/// readers; one that stands reads back standing, which is what null says for
+/// every row written before V73 as well.
+#[test]
+fn a_cleared_flag_survives_with_the_reason_it_was_cleared_for() {
+    let dir = TempDir::new();
+    let step = StepId::new("implement");
+    let mut store = open(&dir);
+    store
+        .insert_job(&top_level("01CLEARED"), &created_at())
+        .expect("stored");
+    let flag = |cleared: Option<ClearedFlag>| GamingFlag {
+        pattern: GamingPattern::AssertionWeakened,
+        cited: "the test removes `assert_eq!(rows.len(), 3);`".to_string(),
+        at: Some(CitedAt::in_file(RepoPath::new("src/tests/reader.rs"))),
+        asked: Some(ASKED.to_string()),
+        brief_path: None,
+        cleared,
+    };
+    let cleared = ClearedFlag {
+        why: "The earlier step's evidence called for this assertion to go.".to_string(),
+        brief_path: Some(
+            ".armada/briefs/01CLEARED/implement.1.gaming.assertion_weakened.second.txt".to_string(),
+        ),
+    };
+    store
+        .record_step_gaming_flags(
+            &job_id("01CLEARED"),
+            &step,
+            &[flag(Some(cleared.clone())), flag(None)],
+            &created_at(),
+        )
+        .expect("recorded");
+    drop(store);
+
+    let reopened = open(&dir);
+    let latest = reopened
+        .step_gaming_flags(&job_id("01CLEARED"))
+        .expect("loads");
+    assert_eq!(latest[0].1[0].cleared.as_ref(), Some(&cleared));
+    assert_eq!(
+        latest[0].1[1].cleared, None,
+        "a standing flag reads back standing"
+    );
+    let every = reopened
+        .step_gaming_flags_every_attempt(&job_id("01CLEARED"))
+        .expect("loads");
+    assert_eq!(
+        every[0].record[0].cleared.as_ref(),
+        Some(&cleared),
+        "and through the history reader too"
+    );
+}
+
 /// A flag with nowhere to point round-trips as one, rather than as a file
 /// named the empty string.
 ///
@@ -122,6 +178,7 @@ fn a_flag_with_nowhere_to_point_reads_back_with_nowhere_to_point() {
                         .to_string(),
                 ),
                 brief_path: None,
+                cleared: None,
             }],
             &created_at(),
         )
@@ -158,6 +215,7 @@ fn a_second_look_at_the_same_run_of_a_step_supersedes_the_first() {
                     at: Some(CitedAt::at_line(RepoPath::new("src/lib.rs"), 1)),
                     asked: None,
                     brief_path: None,
+                    cleared: None,
                 }],
                 &created_at(),
             )

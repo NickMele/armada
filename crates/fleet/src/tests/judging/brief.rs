@@ -41,6 +41,7 @@ async fn the_call_carries_the_patch_and_the_facts_and_nothing_the_drone_wrote() 
         client: Arc::clone(&judge) as Arc<_>,
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
+        second_opinion_model: Model::named("the-second-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
         asked: Asked::nowhere(),

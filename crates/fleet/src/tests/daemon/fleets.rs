@@ -191,6 +191,7 @@ pub fn fitted_over<V>(
         // enough to outlive.
         unanswered_ask_limit: UnansweredAskLimit::of(Duration::from_secs(3600)),
         judge_model: Model::named("the-cheap-model").expect("a model name"),
+        second_opinion_model: Model::named("the-second-model").expect("a model name"),
         proposer_model: Model::named("the-cheap-model").expect("a model name"),
         // Resolves nothing, so every fixture but `proposing`'s own behaves
         // exactly as it did before this seam existed. The cases about it

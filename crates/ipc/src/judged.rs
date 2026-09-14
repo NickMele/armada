@@ -295,6 +295,25 @@ pub struct Flagged {
     /// written.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub brief_path: Option<String>,
+    /// What a second reading said where it disagreed with this flag. Since
+    /// 13.50.
+    ///
+    /// **Absent is a flag that stands**, and only a standing flag stops a step —
+    /// so a step whose every flag carries this advanced, and the flags are here
+    /// because they are the record of how often the first look is wrong.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub cleared: Option<Cleared>,
+}
+
+/// What a second reading said about a flag it cleared.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cleared {
+    /// The second reading's reason, in its own words.
+    pub why: String,
+    /// Where that call's brief was kept, under `.armada/briefs/`, as
+    /// [`Flagged::brief_path`] spells it. Absent where nothing could be written.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub brief_path: Option<String>,
 }
 
 /// Where in the change a flag points, for the flags that point anywhere.
@@ -337,6 +356,10 @@ impl Flagged {
             at: flag.at.as_ref().map(CitedAt::from),
             asked: flag.asked.clone(),
             brief_path: flag.brief_path.clone(),
+            cleared: flag.cleared.as_ref().map(|cleared| Cleared {
+                why: cleared.why.clone(),
+                brief_path: cleared.brief_path.clone(),
+            }),
         }
     }
 }

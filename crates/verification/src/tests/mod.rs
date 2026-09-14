@@ -20,6 +20,8 @@
 //! call about a plan rather than about work.
 //! [`answered`] is the Check tier of a brief — the two outcomes a Judge can
 //! actually be shown, and the bound on how much of a run travels with them.
+//! [`second_opinion`] is a gaming flag read a second time, and the comment a
+//! first look cites.
 
 mod answered;
 mod converging;
@@ -32,6 +34,7 @@ mod product;
 mod quoted;
 mod request;
 mod review;
+mod second_opinion;
 mod shown;
 mod submission;
 mod widening;

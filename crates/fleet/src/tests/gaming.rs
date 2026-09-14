@@ -78,6 +78,7 @@ fn judging() -> Judging {
         client: Arc::new(FakeJudge::saying("flag: yes\ncited: everything")),
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
+        second_opinion_model: Model::named("the-second-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
         asked: Asked::nowhere(),
@@ -302,6 +303,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         client: Arc::new(FakeJudge::answering(&[("Does the fix", "verdict: met")])),
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
+        second_opinion_model: Model::named("the-second-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
         asked: Asked::nowhere(),
@@ -399,15 +401,15 @@ async fn a_gaming_finding_names_its_patterns_on_the_detail_view() {
     );
 }
 
-/// The diff a Drone submits when it softens a sentence rather than an
-/// assertion. What the flag is *about* does not matter to this case; what
-/// matters is that a person can read what was claimed about it.
+/// The diff a Drone submits when it loosens an assertion. What the flag is
+/// *about* does not matter to this case; what matters is that a person can read
+/// what was claimed about it. A code line, because a comment is never cited.
 const REWORDED: &str = "diff --git a/src/retain.rs b/src/retain.rs\n\
                         --- a/src/retain.rs\n\
                         +++ b/src/retain.rs\n\
                         @@ -40,1 +40,1 @@\n\
-                        -/// touch nothing that is its record\n\
-                        +/// touch nothing that is its record but the mark that says so\n";
+                        -    assert_eq!(kept.len(), record.len());\n\
+                        +    assert!(kept.len() <= record.len());\n";
 
 /// What the Job is called, which is what its brief directory is named after.
 const HANDLE: &str = "580-say-why-a-flag-fired";
@@ -440,7 +442,7 @@ async fn a_judged_flag_carries_the_question_it_answered_and_the_call_it_came_fro
         ("Does the change do what the note asked?", "verdict: met"),
         (
             "asserts less",
-            "flag: yes\ncited: \"/// touch nothing that is its record\"",
+            "flag: yes\ncited: \"assert_eq!(kept.len(), record.len());\"",
         ),
     ]));
     let worktree = worktree();
@@ -461,6 +463,7 @@ async fn a_judged_flag_carries_the_question_it_answered_and_the_call_it_came_fro
             client: Arc::clone(&judge) as _,
             budget: JudgeBudget::of(Duration::from_secs(20)),
             default_model: Model::named("the-cheap-model").expect("a model name"),
+            second_opinion_model: Model::named("the-second-model").expect("a model name"),
             environment: Environment::nothing(),
             marking: Marking::detached(),
             asked: Asked::under(root, HANDLE.to_string()),
@@ -531,7 +534,7 @@ async fn a_judged_flag_reaches_the_detail_view_with_the_question_it_answered() {
         &home,
         FakeWorkProduct::changed(&["src/retain.rs"]).showing(REWORDED),
         one_step_watching_for_a_weakened_assertion(),
-        FakeJudge::saying("flag: yes\ncited: \"/// touch nothing that is its record\""),
+        FakeJudge::saying("flag: yes\ncited: \"assert_eq!(kept.len(), record.len());\""),
     );
     let job = fleet
         .propose(a_proposal("reword the retention note"))

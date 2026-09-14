@@ -9,7 +9,9 @@
 
 use rusqlite::Row;
 
-use core_model::{CitedAt, GamingFlag, GamingPattern, JobId, RepoPath, StepId, Timestamp};
+use core_model::{
+    CitedAt, ClearedFlag, GamingFlag, GamingPattern, JobId, RepoPath, StepId, Timestamp,
+};
 
 use crate::attempt::attempt_now;
 use crate::error::{fault, LoadJobError, RowError, WriteError};
@@ -59,6 +61,18 @@ ALTER TABLE job_step_gaming_flags ADD COLUMN asked TEXT;
 ALTER TABLE job_step_gaming_flags ADD COLUMN brief_path TEXT;
 "#;
 
+/// Version 73 — what a second reading said about a flag it cleared.
+///
+/// Beside the table it changes, like [`V24`] and [`V39`]. **A null
+/// `cleared_why` is a flag that stands**: every row before this, every flag a
+/// second reading agreed with, and every flag the patch decided. A brief path
+/// with no reason beside it reads as standing, because a clearance is its
+/// reason. Nothing is backfilled, V5's rule.
+pub(crate) const V73: &str = r#"
+ALTER TABLE job_step_gaming_flags ADD COLUMN cleared_why TEXT;
+ALTER TABLE job_step_gaming_flags ADD COLUMN cleared_brief_path TEXT;
+"#;
+
 impl Store {
     /// Record which patterns one run of one step tripped, replacing whatever an
     /// earlier pass **over that same run** wrote.
@@ -99,8 +113,8 @@ impl Store {
             tx.execute(
                 "INSERT INTO job_step_gaming_flags (
                      job_id, step_id, attempt, ordinal, pattern, cited, flagged_at,
-                     cited_file, cited_line, asked, brief_path
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                     cited_file, cited_line, asked, brief_path, cleared_why, cleared_brief_path
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
@@ -113,6 +127,10 @@ impl Store {
                     flag.at.as_ref().and_then(CitedAt::line),
                     flag.asked,
                     flag.brief_path,
+                    flag.cleared.as_ref().map(|cleared| cleared.why.as_str()),
+                    flag.cleared
+                        .as_ref()
+                        .and_then(|cleared| cleared.brief_path.as_deref()),
                 ],
             )
             .map_err(fault("writing a gaming flag"))
@@ -142,7 +160,8 @@ impl Store {
     ) -> Result<Vec<(StepId, Vec<GamingFlag>)>, LoadJobError> {
         let rows = self
             .collect(
-                "SELECT step_id, pattern, cited, cited_file, cited_line, asked, brief_path
+                "SELECT step_id, pattern, cited, cited_file, cited_line, asked, brief_path,
+                        cleared_why, cleared_brief_path
                  FROM job_step_gaming_flags AS f
                  WHERE job_id = ?1
                    AND attempt = (SELECT max(attempt) FROM job_step_gaming_flags
@@ -165,6 +184,7 @@ impl Store {
                             at: cited_at(row)?,
                             asked: maybe(row, "asked")?,
                             brief_path: maybe(row, "brief_path")?,
+                            cleared: cleared(row)?,
                         },
                     ))
                 },
@@ -189,6 +209,18 @@ pub(crate) fn cited_at(row: &Row<'_>) -> Result<Option<CitedAt>, RowError> {
             None => CitedAt::in_file(path),
         }
     }))
+}
+
+/// What a second reading cleared, out of the two columns that hold it. **The
+/// reason decides**, for [`V73`]'s reason.
+pub(crate) fn cleared(row: &Row<'_>) -> Result<Option<ClearedFlag>, RowError> {
+    let why: Option<String> = row
+        .get("cleared_why")
+        .map_err(column(TABLE, "cleared_why"))?;
+    let brief_path: Option<String> = row
+        .get("cleared_brief_path")
+        .map_err(column(TABLE, "cleared_brief_path"))?;
+    Ok(why.map(|why| ClearedFlag { why, brief_path }))
 }
 
 /// One list per step, in the order the rows came back. A linear pass rather

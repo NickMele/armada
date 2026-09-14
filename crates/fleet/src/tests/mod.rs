@@ -147,6 +147,7 @@ mod reviewing;
 mod reviewing_brief;
 mod runtime;
 mod scope;
+mod second_opinion;
 pub(crate) mod seeding;
 mod sending_back;
 pub(crate) mod servers;

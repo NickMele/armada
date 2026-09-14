@@ -34,6 +34,11 @@ use crate::harness::HeadlessAgent;
 /// row was decided.
 const PROPOSER_MODEL: &str = "haiku";
 
+/// The model a judged gaming flag is read a second time on. **Named rather than
+/// derived**, and held to the roster by a test: stronger than the first look's,
+/// and paid only where a flag was raised.
+const SECOND_OPINION_MODEL: &str = "sonnet";
+
 impl HeadlessAgent {
     /// The model a step that names none is judged by: **the cheapest alias on
     /// the roster**, which is what `crates/config/settings.toml`'s
@@ -64,6 +69,11 @@ impl HeadlessAgent {
     /// The model a dispatch request is read by when nothing names one.
     pub fn proposer_model() -> &'static str {
         PROPOSER_MODEL
+    }
+
+    /// The model a judged gaming flag is read a second time on.
+    pub fn second_opinion_model() -> &'static str {
+        SECOND_OPINION_MODEL
     }
 }
 

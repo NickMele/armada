@@ -75,7 +75,7 @@ Why: a detector that polls is the wrong design — the Judge costs money, and a 
 | Trigger | What is asked | Gates advancement? |
 | --- | --- | --- |
 | Step evidence gate | Does this evidence satisfy the step's criteria | Yes — a refusal is a gate failure, standard retry flow |
-| Gaming check | Baseline comparison against an earlier step's evidence | No — routes as its own `evidence_suspect` escalation |
+| Gaming check | Baseline comparison against an earlier step's evidence, and a second reading of anything it flags | No — a flag a second reading agrees with routes as its own `evidence_suspect` escalation |
 | Declared plan drift | Did live edits fall outside the declared `context_paths` | No — tags the step for a mandatory Judge look |
 | Thrashing ceiling | Converging, justified drift, or thrashing? | No — force-interrupts with a report-now directive |
 | Final review | What this diff does, and what a human should look at closely | No — `gates_advancement: false`, advisory only |
@@ -87,6 +87,8 @@ Per row:
 - **Step evidence gate** runs only after the mechanical check has passed.
 - **Gaming check** names its baseline with `baseline_ref`. `flag_if` names the patterns that make work look green while gutting it, and not all of them reach the Judge. A pattern the patch text itself settles — a test file removed whole, a skip marker added to a test that used to run, a change to the configuration a Check's command resolves through — costs no call, because paying a model for an answer `git diff` already gives is money for nothing. The rest need the change understood before they can be answered — an assertion that now asserts less, tests still running but covering less than they did, a test that would pass whatever the code under it did — and each of those is one narrow Judge question. The config-edit pattern was added because editing `package.json` `scripts.test` honours a frozen `run:` string exactly while narrowing the gate, and a diff catches that without needing the change understood. [Workflow](workflow.md) carries the set and the same split.
 - **Gaming check routes as `evidence_suspect`, not gate-failure.** Why: resubmission under the same instructions likely reproduces the same gaming.
+- **A flag stops a step only once a second reading agrees with it.** Each judged pattern is one first look on the step's own model, allowed no reasoning. A flag it raises goes to a second call on a stronger model, shown the same baseline and diff plus the flag and the question it answered, and allowed to reason before it answers. Where that call agrees, or cannot be read, or fails, the flag stands and the step stops. Where it disagrees and says why, the step advances and the flag is kept as cleared, with that reason — the record of how often the first look is wrong. Why only on a flag: raising every first look to the stronger model would cost on every step, and a second reading costs only where it can change the outcome. Both calls keep this contract — one turn, no tools, no repository — and neither is shown what the Drone said about its work. A pattern the diff decides is a fact about the patch and is not read again.
+- **A comment is never an assertion.** A test-content flag whose cited line is a comment is not raised, decided mechanically off the located line after the answer and at no cost. The test-content questions say so too, and ask whether the earlier step's evidence called for the change.
 - **Declared plan drift** does not fail the step, because legitimate investigation sometimes moves the work. It measures the step's own declaration and never the Job's `write_targets` — of the two lists called a Job's scope, the declaration is the one that meets a diff. [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds the pair.
 - **Thrashing ceiling** fires when turn count or wall-clock exceeded the step norm. A Drone that goes quiet after the report-now directive has its step stopped, and the step's stated reason is a `forced_report` row naming the report that never came. A Drone still writing inside its declared plan is not stopped for it.
 - **Final review** pre-digests the diff for the human and never replaces them.
@@ -166,7 +168,7 @@ The product also stopped being fixed at Job creation: `acceptance_criteria[]` ma
 | Verdict + citation | Job `evidence[]`, step-and-timestamp attributed |
 | A refusal's content | Named fields inside the Judge record |
 | Pass/fail | `workflow_status.last_step_verdict` |
-| Gaming flag | `escalated` with reason `evidence_suspect` |
+| Gaming flag | `escalated` with reason `evidence_suspect` once a second reading agrees; kept as cleared, with its reason, where it does not |
 | Prior judgments | Escalation payload, carrying **all** prior Judge summaries |
 | UI surface | `evidence_suspect` renders as **evidence disputed** |
 | Summary prose | Governed by `../contracts/agent-copy.md` |

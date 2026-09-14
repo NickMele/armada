@@ -124,6 +124,7 @@ pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when
                 at: None,
                 asked: None,
                 brief_path: None,
+                cleared: None,
             }],
             &at(when),
         )

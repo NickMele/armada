@@ -1,4 +1,5 @@
-//! The five looks, and what each one asks about.
+//! Four of the five looks, and what each one asks about. The gaming look is
+//! `flagging`'s.
 //!
 //! **The only half that knows what is being asked.** A brief is built here, a
 //! model is chosen here, and the answer is read back into a verdict here — the
@@ -15,20 +16,15 @@
 //! criterion asking about the request whose author forgot the key is #169 one
 //! dial smaller. The cost is unmeasured: a few hundred characters beside a brief
 //! already carrying a whole diff, times `panel_size` — the dial to reach for.
-//!
-//! **Past 500 lines since `docs/concepts/judge.md`'s asking design.** `fold`
-//! and its two small readers belong beside `judged`, the one place a step's
-//! judgments exist as a list before a `Ruling` is chosen from them — a second
-//! file would be a second place that list is walked.
 
 use adapter_traits::{Ask, Model, Patch};
 use core_model::{
-    CriterionId, DeclaredPaths, GamingFlag, Given, JudgeCheck, Judgment, OnRefusal, RepoPath,
-    ResolvedStep, StepCheck, StepEvidence, StepId, WhenRefused,
+    CriterionId, DeclaredPaths, Given, JudgeCheck, Judgment, OnRefusal, RepoPath, ResolvedStep,
+    StepCheck, StepEvidence, StepId, WhenRefused,
 };
 use verification::{
-    Accepted, Answered, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged,
-    GamingBrief, Product, Reference, Refusals, Request, Widened, WideningBrief,
+    Accepted, Answered, Brief, Convergence, ConvergenceBrief, Delivered, Product, Reference,
+    Refusals, Request, Widened, WideningBrief,
 };
 
 use crate::at_step::AtStep;
@@ -336,87 +332,6 @@ fn measured_against<'a, 'e>(
         .unwrap_or_default()
 }
 
-/// Look a second time, and answer with what was flagged or with nothing.
-///
-/// **Called only where the step would otherwise advance.** Gaming is what a
-/// Mechanical Check passes by design, so this is the one place it can matter,
-/// and a step already stopped by a Check or a refusal spends nothing here.
-///
-/// The mechanical half runs first and costs nothing. The judged half is one
-/// call per declared pattern the diff cannot answer — **and no panel**, because
-/// this check has no veto for a panel to make stricter.
-///
-/// **What was asked is kept, exactly as the two loops above keep theirs.** A
-/// flag used to reach a person as a pattern spelling and a quoted line, with
-/// the question it answered thrown away — so telling a real finding from a
-/// wrong one meant reading the whole diff, which is the work the call had
-/// already been paid to do. The flag carries the question and the loop writes
-/// the brief; neither changes what a flag *does*, which is nothing.
-pub(crate) async fn gaming(
-    at: AtStep<'_>,
-    patch: &Patch,
-    baseline: Option<Baseline<'_>>,
-    judging: &Judging,
-) -> Result<Option<Flagged>, CallFailed> {
-    let step = at.step();
-    let mut flags: Vec<GamingFlag> = Vec::new();
-    // Every judged pattern the step declares. A pattern whose brief cannot be
-    // built is skipped below, so `nth` can finish short of this — `of` is what
-    // was declared and `nth` is what actually went out, which is the honest
-    // pair when the two differ.
-    let of: u32 = step
-        .judge_checks()
-        .iter()
-        .filter_map(JudgeCheck::gaming)
-        .map(core_model::GamingCheck::calls)
-        .sum();
-    let mut nth = 0;
-    for check in step.judge_checks() {
-        let Some(gaming) = check.gaming().filter(|gaming| gaming.fires()) else {
-            continue;
-        };
-        flags.extend(verification::in_the_diff(patch, gaming.flag_if()));
-        let model = model_for(check, &judging.default_model)?;
-        for pattern in verification::judged_patterns(gaming.flag_if()) {
-            let Some(brief) = GamingBrief::about(step, pattern, patch, baseline) else {
-                continue;
-            };
-            // Before the call, on `Asked::kept`'s rule: a call that times out
-            // or answers in prose produces no flag, and those are the calls a
-            // calibration record has to be able to look at. One file per
-            // pattern per attempt, beside the criteria briefs of the same step.
-            let kept =
-                judging
-                    .asked
-                    .kept_gaming(step.id(), at.attempt(), pattern, brief.question());
-            let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
-                .map_err(|_| CallFailed::NothingToAsk)?;
-            nth += 1;
-            let _out = judging.marking.out(
-                step.id(),
-                Calling {
-                    look: Look::Gaming,
-                    // A gaming look is about a pattern rather than a criterion,
-                    // and the pattern joins to `flagged` exactly as a criterion
-                    // joins to `judged`.
-                    criterion: None,
-                    pattern: Some(pattern.as_wire()),
-                    model: &model,
-                    nth,
-                    of,
-                },
-            );
-            let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
-            let mut flag = brief.read(&said, patch).map_err(CallFailed::Unreadable)?;
-            if let Some(flag) = flag.as_mut() {
-                flag.brief_path.clone_from(&kept);
-            }
-            flags.extend(flag);
-        }
-    }
-    Ok(Flagged::among(flags))
-}
-
 /// Look part-way through a step, and answer with where the work stands.
 ///
 /// **Called only once a mechanical tripwire fired**, which is the caller's to
@@ -519,7 +434,7 @@ fn fleets_model(step: &ResolvedStep, default: &Model) -> Result<Model, CallFaile
 }
 
 /// The step's own model dial, or the fleet default where it names none.
-fn model_for(check: &JudgeCheck, default: &Model) -> Result<Model, CallFailed> {
+pub(super) fn model_for(check: &JudgeCheck, default: &Model) -> Result<Model, CallFailed> {
     match check.model() {
         Some(named) => Model::named(named.as_str()).map_err(|_| CallFailed::NothingToAsk),
         None => Ok(default.clone()),

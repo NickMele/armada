@@ -216,6 +216,10 @@ export type DeclaredJudge = {
   /** Whether a second look asks whether the evidence was gamed. It does not
    * gate; what it found arrives as an escalation, not as a verdict. */
   gaming_check: boolean;
+  /** Which patterns that look watches for, spelled as `flag_if` spells them and
+   * in its order. Since 13.50. **Absent where the entry declares no gaming
+   * check.** */
+  gaming_patterns?: string[];
 };
 
 /**

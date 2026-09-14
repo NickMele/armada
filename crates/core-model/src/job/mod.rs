@@ -79,7 +79,9 @@ pub use fields::{
     GateOutcome, NotRunDisposition, NotRunReason, Origin, QueuedReason, Resumption, ScopeRevision,
     ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
-pub use gaming::{CitedAt, DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};
+pub use gaming::{
+    CitedAt, ClearedFlag, DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern,
+};
 pub use guard::Guard;
 pub use handle::{handle_of, names_a_credential, JobNumber, JobReference, CREDENTIAL_NAMES};
 pub use ids::{
