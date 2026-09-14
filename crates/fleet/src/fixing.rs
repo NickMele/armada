@@ -340,6 +340,15 @@ where
             None,
         )
         .await;
+        // Kept apart from a whole run of this Check — the test alone is
+        // seconds where the Check is minutes. #1072.
+        if let Some(took) = completed.iter().find_map(|done| match &done.observed {
+            Observed::Command(Exit::Code(_)) => Some(done.took),
+            _ => None,
+        }) {
+            self.kept_one_test_timing(&request.repository, request.run.label(), took)
+                .await;
+        }
         let exit = completed
             .iter()
             .rev()
