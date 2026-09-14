@@ -241,6 +241,16 @@ pub enum WriteError {
     NoSuchJob {
         job_id: JobId,
     },
+    /// A transition was recorded against a Job that has moved since the
+    /// caller loaded it. Two callers loading the same Job and each computing
+    /// a legal move from that snapshot is the race this refuses — the loser's
+    /// write is rejected before its event is appended, rather than landing
+    /// and leaving the log unable to fold.
+    StatusChanged {
+        job_id: JobId,
+        expected: JobStatus,
+        found: JobStatus,
+    },
     /// A step move was recorded against a `job_steps` row that is not there.
     /// The rows are written at creation and never added to, so this is a move
     /// against a step of some other Job.
@@ -427,6 +437,17 @@ display!(WriteError, |self, f| match self {
         job_id.as_str()
     ),
     WriteError::NoSuchJob { job_id } => write!(f, "job {} was never inserted", job_id.as_str()),
+    WriteError::StatusChanged {
+        job_id,
+        expected,
+        found,
+    } => write!(
+        f,
+        "job {} was expected to be at {} and is at {}",
+        job_id.as_str(),
+        expected.as_wire(),
+        found.as_wire()
+    ),
     WriteError::NoSuchStep { job_id, step_id } => write!(
         f,
         "job {} has no step {}",

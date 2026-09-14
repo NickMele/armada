@@ -35,6 +35,10 @@ use crate::proposing::NotProposed;
 /// The set is closed by collection rather than by authorship — a central
 /// registry would put every code far from the failure it names.
 const NO_SUCH_JOB: &str = "fleet.no_such_job";
+/// A transition recorded against a Job that moved between the caller's load
+/// and its write. A 409 like the other status conflicts — the machine was
+/// asked and the row it was asked about is no longer the one it read. `#793`.
+const STATUS_CHANGED: &str = "fleet.status_changed";
 /// A Job another repository owns, named by a caller scoped to one. A 404.
 pub(crate) const JOB_ELSEWHERE: &str = "fleet.job_in_another_repository";
 const ILLEGAL_MOVE: &str = "fleet.illegal_move";
@@ -255,6 +259,15 @@ where
             Adrift::Writing(WriteError::UnknownPreference { name }) => Refusal::Unacceptable(
                 WireError::raised(UNKNOWN_PREFERENCE, said, self.run_id())
                     .with_field("name", WireValue::Str(name.clone())),
+            ),
+            // Two acts raced the same Job from one loaded snapshot; the
+            // machine was asked and the status it was asked about had already
+            // moved. A 409, not the `FAULT` catch-all — a caller acting for a
+            // person answers this the way it answers any other status
+            // conflict, by reloading and deciding again. `#793`.
+            Adrift::Writing(WriteError::StatusChanged { job_id, .. }) => Refusal::IllegalMove(
+                WireError::raised(STATUS_CHANGED, said, self.run_id())
+                    .about_job(ipc::JobId::from(job_id)),
             ),
             // The same 404 one segment earlier, and with no Job on it: what the
             // caller said resolved to nothing, so there is no id to name. A
