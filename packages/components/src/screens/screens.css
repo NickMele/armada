@@ -747,13 +747,12 @@
   padding-top: var(--space-2);
 }
 
-/* The whole run's elapsed. A figure, never a chart. */
-.armada-inside__elapsed {
-  font-family: var(--font-mono);
+/* A region head's trailing word — "The run"'s own workflow name since #1093,
+   sans and muted rather than the mono a measured figure would take. */
+.armada-inside__region-meta {
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 /* The Plan region's well — the same surface Pulse and Where things are draw

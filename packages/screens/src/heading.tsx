@@ -18,13 +18,7 @@
 // back to.
 
 import { JOB_LIFECYCLE, JOB_STATUS, type JobDetailHeading } from "@armada/components";
-import type {
-  FileReport,
-  JobDetail as JobWhole,
-  JobSummary,
-  Outcome,
-  WorkflowSummary,
-} from "@armada/protocol";
+import type { FileReport, JobDetail as JobWhole, JobSummary, Outcome } from "@armada/protocol";
 import { Acts, type ConfirmableAct } from "./Acts";
 import { factsOf } from "./facts";
 import { settingsButtonOf } from "./settings";
@@ -37,7 +31,6 @@ export type Heading = {
   job: JobSummary;
   /** `GET /jobs/:job_id`, or `null` while it has not arrived. */
   whole: JobWhole | null;
-  workflow: WorkflowSummary | undefined;
   /** Now, injected. A whole-Job elapsed is read, so it has to move. */
   now: number;
   render: Render;
@@ -66,6 +59,8 @@ export type Heading = {
   onCopied: (value: string) => void;
   /** Say a sentence to the person. Only ever a failure — see `opening.ts`. */
   onSaid: (sentence: string) => void;
+  /** The trail's first segment, pressed. Absent draws `from` as plain text. */
+  onLeave?: () => void;
 };
 
 /**
@@ -76,7 +71,6 @@ export type Heading = {
 export function headingOf({
   job,
   whole,
-  workflow,
   now,
   render,
   stale,
@@ -97,10 +91,15 @@ export function headingOf({
   onOpenPullRequest,
   onCopied,
   onSaid,
+  onLeave,
 }: Heading): JobDetailHeading | null {
   const reading = readingOf(job);
   if (reading.as !== "badge") return null;
   return {
+    // Fixed to Overview, the screen Bridge opens on — #1093's own trail does
+    // not yet know which screen actually opened this Job.
+    from: "Overview",
+    onLeave,
     status: reading.status,
     statusIcon: reading.icon,
     // The registry's own verb, opening a line. `enum-verbs.toml` spells it
@@ -114,7 +113,7 @@ export function headingOf({
     // still names every request the screen makes; it is just not the thing a
     // person is asked to read.
     jobId: job.handle,
-    fields: factsOf(job, whole, workflow, now),
+    fields: factsOf(job, whole, now),
     // The acts that end or replace the Job. **Pilot's slot is this one**, left
     // of the kill group — #250, and it lands without this line changing.
     //

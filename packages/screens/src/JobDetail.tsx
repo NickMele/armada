@@ -37,7 +37,7 @@ import { landingsOf, stepTimelineOf, turnsOfAttempt, wroteIn } from "./timeline"
 import type { AttemptRead } from "./timeline";
 import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
-import { elapsedSince, span } from "./duration";
+import { span } from "./duration";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
@@ -157,6 +157,7 @@ function OneJob({
   onOpenRemarkLink,
   onCopied,
   onSaid,
+  onLeave,
   onAddTask,
   onDropTask,
   rehearsal,
@@ -554,7 +555,6 @@ function OneJob({
   const heading = headingOf({
     job,
     whole,
-    workflow,
     now,
     render,
     stale,
@@ -575,6 +575,7 @@ function OneJob({
     onOpenPullRequest,
     onCopied,
     onSaid,
+    onLeave,
   });
 
   // The badge is the header, so a Job the registry has no glyph or verb for
@@ -592,10 +593,9 @@ function OneJob({
     <InsideAJob
       heading={heading}
       run={run.map(named)}
-      // Absent while the Job has never run — `started_at` is not set until
-      // its first Drone starts, and waiting for approval or a slot must not
-      // count.
-      runElapsed={elapsedSince(job.started_at, now)}
+      // The name Fleet holds, the id where it does not — a Job older than the
+      // check that refuses a workflow-less proposal at creation.
+      runWorkflowLabel={workflow?.name ?? job.workflow_id}
       runAbsent={whyNoSteps(watched, job.id)}
       runReading={reading?.run}
       unreachable={whyUnreachable(watched, job.id)}

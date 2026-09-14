@@ -51,7 +51,7 @@ function detail(delivery: JobDetail["delivery"]): JobDetail {
 
 /** The run, as the header would build it. */
 function run(whole: JobDetail | null): JobDetailField[] {
-  return factsOf(job(), whole, undefined, Date.parse("2026-08-31T09:05:00Z"));
+  return factsOf(job(), whole, Date.parse("2026-08-31T09:05:00Z"));
 }
 
 /** The labels the run drew, in order. */
@@ -176,17 +176,12 @@ describe("Elapsed", () => {
   const now = Date.parse("2026-08-31T09:05:00Z");
 
   it("draws nothing for a Job that has never run", () => {
-    const drawn = factsOf(job({ status: "awaiting_approval", started_at: undefined }), null, undefined, now);
+    const drawn = factsOf(job({ status: "awaiting_approval", started_at: undefined }), null, now);
     expect(drawn.find((field) => field.label === "Elapsed")).toBeUndefined();
   });
 
   it("draws the span from started_at once the Job has run", () => {
-    const drawn = factsOf(
-      job({ status: "running", started_at: "2026-08-31T09:00:00Z" }),
-      null,
-      undefined,
-      now,
-    );
+    const drawn = factsOf(job({ status: "running", started_at: "2026-08-31T09:00:00Z" }), null, now);
     expect(drawn.find((field) => field.label === "Elapsed")?.value).toBe("5m 00s");
   });
 });

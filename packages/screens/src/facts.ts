@@ -6,11 +6,12 @@
 // another. Nothing in this file decides how a fact looks; `JobDetailField` is
 // the design system's shape and this only fills it in.
 //
-// # Four, and it used to be ten
+// # Three, and it used to be ten
 //
-// The workflow, the branch, how long it has been alive and what it has spent.
-// A fifth joins them the moment Fleet opens a pull request, and says what
-// became of it once somebody has merged or closed it.
+// The branch, how long it has been alive and what it has spent. A fourth
+// joins them the moment Fleet opens a pull request, and says what became of
+// it once somebody has merged or closed it. **The workflow left for "The run"
+// panel's own head since #1093** — a Job already carries its own name here.
 // Step, Manifest, Model, Origin, Urgency, Drone, Scope and the write-scope
 // overlap were all in here as well, over two lines, and none of them is in the
 // drawing's header. The ones worth reaching are under *Where things are*, which
@@ -36,32 +37,27 @@
 import type { JobDetailField } from "@armada/components";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
-import type { WorkflowSummary } from "@armada/protocol";
 import { elapsedSince } from "./duration";
 import { freezeLineOf } from "./freeze";
 import { leading } from "./reading";
 import { LANDED } from "./Row";
 
 /**
- * The run, in the order the drawing runs it: what workflow this is, what branch
- * it writes to, how long it has been alive, what it has cost, and how many
- * turns it has taken.
+ * The run, in the order the drawing runs it: what branch this Job writes to,
+ * how long it has been alive, what it has cost, and how many turns it has
+ * taken. **Not the workflow** — #1093 moved that to "The run" panel's own
+ * head, which names it beside the steps it governs rather than beside a Job
+ * that already carries its own name.
  *
  * Elapsed is read off the row rather than off the detail. Both carry it and
  * cannot disagree — the detail's is built from the same record — and the row is
  * already in hand, so the fact is there on the first frame instead of appearing
  * when `GET /jobs/:job_id` lands.
  */
-export function factsOf(
-  job: JobSummary,
-  whole: JobWhole | null,
-  workflow: WorkflowSummary | undefined,
-  now: number,
-): JobDetailField[] {
+export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): JobDetailField[] {
   const address = whole?.delivery?.pull_request;
   return [
     ...freezeFact(job),
-    ...workflowFact(job, workflow, whole?.workflow_source),
     ...branchFact(job),
     ...pullRequestFact(address),
     ...landedFact(whole, address !== undefined),
@@ -69,20 +65,6 @@ export function factsOf(
     ...spendFact(whole),
     ...turnsFact(whole),
   ];
-}
-
-/**
- * Which workflow this Job is running, as a phrase rather than a labelled value:
- * `Bug workflow`, not `Workflow bug`. The name where Fleet holds it, the id
- * where it does not — which after the refusal at creation means a Job older
- * than the check.
- */
-function workflowFact(job: JobSummary, workflow: WorkflowSummary | undefined, source?: string): JobDetailField[] {
-  const suffix = ` workflow${sourceOf(source)}`;
-  if (workflow === undefined) {
-    return [{ value: job.workflow_id, mono: true, suffix, copyValue: job.workflow_id }];
-  }
-  return [{ value: workflow.name, suffix, copyValue: job.workflow_id }];
 }
 
 /** Where a workflow came from, in Fleet's own words for `WorkflowSource` — #425. */

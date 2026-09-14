@@ -182,8 +182,11 @@ export type InsideAJobProps = {
   /** The run, in order. One row per step of the frozen workflow. */
   run: RunTreeStep[];
   runLabel?: ReactNode;
-  /** The whole Job's elapsed, beside the label. A figure, never a chart. */
-  runElapsed?: ReactNode;
+  /**
+   * The workflow's own name, beside the label — `Bug`. #1093 moved it here
+   * from the header's facts, which already named the Job; this names the run.
+   */
+  runWorkflowLabel?: ReactNode;
   /** Why there is no run to draw, where there is none. */
   runAbsent?: string;
   /**
@@ -335,7 +338,7 @@ export function InsideAJob({
   heading,
   run,
   runLabel = "The run",
-  runElapsed,
+  runWorkflowLabel,
   runAbsent = "Steps unknown",
   runReading,
   machine,
@@ -375,8 +378,8 @@ export function InsideAJob({
         <div className="armada-inside__run">
           <div className="armada-inside__region-head">
             <Eyebrow>{runLabel}</Eyebrow>
-            {runElapsed === undefined ? null : (
-              <span className="armada-inside__elapsed">{runElapsed}</span>
+            {runWorkflowLabel === undefined ? null : (
+              <span className="armada-inside__region-meta">{runWorkflowLabel}</span>
             )}
           </div>
           {runReading !== undefined ? (

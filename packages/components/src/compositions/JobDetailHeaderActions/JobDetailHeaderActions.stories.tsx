@@ -44,6 +44,8 @@ export const ARunningJob: Story = {
     statusLabel: "Running",
     headline: "Split the settings reducer",
     jobId: "job_2d90bb",
+    from: "Overview",
+    onLeave: fn(),
     fields: [
       { label: "Step", value: "2 of 4", mono: true },
       {
@@ -62,6 +64,11 @@ export const ARunningJob: Story = {
         <Button variant="destructive">Kill job</Button>
       </>
     ),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    // The trail's first segment leaves; its name never does — #1093.
+    await userEvent.click(canvas.getByRole("button", { name: "Overview" }));
+    await expect(args.onLeave).toHaveBeenCalledTimes(1);
   },
 };
 
@@ -89,6 +96,10 @@ export const ARunningJobWithSettings: Story = {
  *
  * No action here either. What you can do with a dead end is read its log and
  * its worktree, and those sit beside the branch further down the screen.
+ *
+ * **`from` with no `onLeave`**, so the trail's first segment draws as plain
+ * text — the shape to look for when a caller has named where "back" goes and
+ * not yet wired the way there.
  */
 export const AFailedJob: Story = {
   args: {
@@ -97,6 +108,7 @@ export const AFailedJob: Story = {
     statusLabel: "Failed",
     headline: "Cache the manifest read",
     jobId: "job_91ab",
+    from: "Overview",
     fields: [
       { label: "Stopped at", value: "Run tests" },
       { label: "step", value: "3 of 4", mono: true, continues: true },
@@ -129,6 +141,7 @@ export const AFinishedJob: Story = {
     statusLabel: "Done",
     headline: "Add a retry ceiling to the poke loop",
     jobId: "job_4f10",
+    from: "Overview",
     fields: [
       { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
       { label: "Branch", value: "fix/poke-ceiling", mono: true, copyValue: "fix/poke-ceiling" },
@@ -269,6 +282,7 @@ export const StoppedWithARedispatch: Story = {
     statusLabel: "stalled",
     headline: "Cache the manifest read",
     jobId: "job_91ab04",
+    from: "Overview",
     fields: [
       { label: "Step", value: "3 of 4", mono: true },
       { label: "at", value: "verify", mono: true, continues: true },
@@ -309,6 +323,7 @@ export const AtTheApprovalGate: Story = {
     statusLabel: "needs approval",
     headline: "Cache the manifest read",
     jobId: "job_91ab04",
+    from: "Overview",
     fields: [
       { label: "Step", value: "1 of 4", mono: true },
       { label: "at", value: "plan", mono: true, continues: true },
@@ -337,8 +352,8 @@ export const AtTheApprovalGate: Story = {
  *
  * `--window-floor` is the narrowest window Bridge opens, and the two below it
  * are what the panel is given inside one — the header is not the window.
- * **Nothing is dropped at any of them**, which is the rule this block has
- * carried from the start.
+ * **Below `--w-sheet` the trailing two facts give way**, since #1093 replaced
+ * the rule that nothing here was ever dropped.
  */
 export const AsTheWindowNarrows: Story = {
   args: AtTheApprovalGate.args,

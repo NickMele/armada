@@ -3,14 +3,16 @@
 // current step carries it and this badge does not. Two breathing marks on one
 // screen would be two answers to "what is still working".
 //
-// **The facts are a labelled run, not a table.** Step, branch, elapsed and
-// spend are what a person needs to decide whether to leave a job alone, and
-// they are on screen without a click. None is dropped at any width.
+// **The trail is the title, since #1093** — it replaced a title block that
+// said what the badge already did, and never carries the repository, a fact
+// below rather than a place this goes.
 //
-// **The run changes with the state, the block does not.** A running job reports
-// the step it is on and the branch it writes to; a stopped one reports where it
-// stopped and what it ran. The facts are the caller's; their type, spacing and
-// order are not.
+// **The facts are a labelled run, not a table**, on screen without a click.
+// They wrap first, and past this file's measured floor the least urgent
+// gives way — #1093 dropped the rule that none ever did.
+//
+// **The run changes with the state, the block does not.** The facts are the
+// caller's; their type, spacing and order are not.
 
 // **Hedge by source.** Elapsed is measured and speaks flatly; spend is
 // estimated and is marked approximate. Rendering the two alike would destroy
@@ -22,13 +24,16 @@
 // acts that end a Job. So `href` makes a fact a link in place, beside the
 // facts it is about, and nothing moves to the other end of the header.
 
-// **This component does not navigate, and no fact here ever will.** The
-// anchor's default is cancelled and the address goes back to the caller,
-// because a surface that let a click load a page would be a surface that could
-// be steered off the app by a value that arrived on a wire. Where a caller sets
-// `href` and no `onFollowed`, the fact draws as a link and the click does
-// nothing — which is a caller wiring only half of it, and is the one shape to
-// look for when a link goes dead.
+// **No fact here ever navigates.** The anchor's default is cancelled and the
+// address goes back to the caller, because a surface that let a click load a
+// page would be a surface that could be steered off the app by a value that
+// arrived on a wire. Where a caller sets `href` and no `onFollowed`, the fact
+// draws as a link and the click does nothing — a caller wiring only half of
+// it, and the one shape to look for when a link goes dead.
+//
+// **The trail's first segment is the one exception**, and it never carries a
+// wire value: `from` is words the caller chose, not an address a Job brought
+// in, so `onLeave` is a plain callback rather than the guarded `onFollowed`.
 
 // **What the header offers changes with the state; how it is arranged does
 // not.** The set is the caller's, and which state carries what is written where
@@ -37,7 +42,7 @@
 // destructive group, and the one primary a Job detail ever carries last, at the
 // trailing edge where the shell head puts its own.
 
-import type { LucideIcon } from "lucide-react";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import { Fragment, useCallback } from "react";
 import { conceptSaid } from "../../concepts";
@@ -97,14 +102,21 @@ export type JobDetailHeaderActionsProps = {
   statusIcon: LucideIcon;
   /** The verb, from the enum→verb map. Never written by hand where it ships. */
   statusLabel: ReactNode;
-  /** The Job's title, in the person's own words. Sans. */
+  /** The Job's title, in the person's own words. Sans. Truncates in the
+   *  trail; the untruncated title is the element's own `title`. */
   headline: ReactNode;
   /** The job id, in mono and set back. It identifies, it does not describe. */
   jobId?: ReactNode;
+  /** The trail's first segment. Absent draws no trail. */
+  from?: ReactNode;
+  /** The trail's first segment, pressed. Absent draws `from` as plain text. */
+  onLeave?: () => void;
   /** The facts, in the order the drawing runs them. */
   fields: JobDetailField[];
   /**
-   * The controls at the trailing edge. None on a terminal Job.
+   * The controls at the trailing edge. **A terminal Job still carries one
+   * where Fleet offers redispatch** — #1093 dropped the rule that this was
+   * always empty there.
    *
    * **A running Job's settings open from here too**, left of the acts — they
    * had a line of their own under the facts, which read as the screen's main
@@ -133,6 +145,8 @@ export function JobDetailHeaderActions({
   actions,
   onCopied,
   onFollowed,
+  from,
+  onLeave,
 }: JobDetailHeaderActionsProps) {
   // The anchor is a real one so it reads as a link and carries the address on
   // hover, and its default is cancelled so nothing here can navigate. See
@@ -170,61 +184,81 @@ export function JobDetailHeaderActions({
 
   return (
     <div className="armada-job-head">
-      <div className="armada-job-head__ident">
-        <div className="armada-job-head__line">
+      <div className="armada-job-head__top">
+        <div className="armada-job-head__lead">
+          {/* The trail: where this Job was opened from, then its name. Never
+              the repository — that is a fact below, not a place this goes. */}
+          <nav className="armada-job-head__trail" aria-label="Where this Job is">
+            {from === undefined ? null : onLeave === undefined ? (
+              <span className="armada-job-head__crumb">{from}</span>
+            ) : (
+              <button type="button" className="armada-job-head__crumb armada-job-head__back" onClick={onLeave}>
+                {from}
+              </button>
+            )}
+            {from === undefined ? null : (
+              <ChevronRight size={12} strokeWidth={2} className="armada-job-head__chevron" aria-hidden="true" />
+            )}
+            <span className="armada-job-head__here" title={typeof headline === "string" ? headline : undefined}>
+              {headline}
+            </span>
+          </nav>
           {/* No `pulsing`. The rail beneath takes the one pulse on this
               screen, and this badge stays still. */}
           <Badge status={status} icon={statusIcon}>
             {statusLabel}
           </Badge>
-          <span className="armada-job-head__title">{headline}</span>
-          {jobId ? <span className="armada-job-head__id">{jobId}</span> : null}
         </div>
-        <div className="armada-job-head__facts">
-          {runs.map((run, i) => (
-            <span className="armada-job-head__fact" key={i}>
-              {run.map((field, j) => (
-                <Fragment key={j}>
-                  {j > 0 ? ", " : null}
-                  {field.label ? (
-                    <>
-                      <FactLabel>{field.label}</FactLabel>
-                      {field.value !== undefined ? " " : null}
-                    </>
-                  ) : null}
-                  {field.value === undefined ? null : field.href !== undefined ? (
-                    <a
-                      className="armada-job-head__value"
-                      data-mono={field.mono || undefined}
-                      data-opens=""
-                      href={field.href}
-                      title={field.href}
-                      onClick={(e) => follow(e, field.href as string)}
-                    >
-                      {field.value}
-                    </a>
-                  ) : (
-                    <span
-                      className="armada-job-head__value"
-                      data-mono={field.mono || undefined}
-                      data-copies={field.copyValue !== undefined || undefined}
-                      onClick={
-                        field.copyValue !== undefined
-                          ? (e) => copy(e, field.copyValue as string)
-                          : undefined
-                      }
-                    >
-                      {field.value}
-                    </span>
-                  )}
-                  {field.suffix ? <> {field.suffix}</> : null}
-                </Fragment>
-              ))}
-            </span>
-          ))}
-        </div>
+        {actions ? <div className="armada-job-head__actions">{actions}</div> : null}
       </div>
-      {actions ? <div className="armada-job-head__actions">{actions}</div> : null}
+      <div className="armada-job-head__facts">
+        {jobId ? (
+          <span className="armada-job-head__fact armada-job-head__id" data-mono>
+            {jobId}
+          </span>
+        ) : null}
+        {runs.map((run, i) => (
+          <span className="armada-job-head__fact" key={i}>
+            {run.map((field, j) => (
+              <Fragment key={j}>
+                {j > 0 ? ", " : null}
+                {field.label ? (
+                  <>
+                    <FactLabel>{field.label}</FactLabel>
+                    {field.value !== undefined ? " " : null}
+                  </>
+                ) : null}
+                {field.value === undefined ? null : field.href !== undefined ? (
+                  <a
+                    className="armada-job-head__value"
+                    data-mono={field.mono || undefined}
+                    data-opens=""
+                    href={field.href}
+                    title={field.href}
+                    onClick={(e) => follow(e, field.href as string)}
+                  >
+                    {field.value}
+                  </a>
+                ) : (
+                  <span
+                    className="armada-job-head__value"
+                    data-mono={field.mono || undefined}
+                    data-copies={field.copyValue !== undefined || undefined}
+                    onClick={
+                      field.copyValue !== undefined
+                        ? (e) => copy(e, field.copyValue as string)
+                        : undefined
+                    }
+                  >
+                    {field.value}
+                  </span>
+                )}
+                {field.suffix ? <> {field.suffix}</> : null}
+              </Fragment>
+            ))}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

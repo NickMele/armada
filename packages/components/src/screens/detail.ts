@@ -32,6 +32,19 @@ export type JobDetailHeading = {
    * spread the fields do, and no render in between has to know it exists.
    */
   onFollowed?: (href: string) => void;
+  /**
+   * The trail's first segment — the screen this Job was opened from,
+   * `Overview`. Absent draws no trail: the badge and the title alone, for a
+   * caller that has not said where "back" goes.
+   */
+  from?: ReactNode;
+  /**
+   * The trail's first segment, pressed. Absent draws `from` as plain text
+   * rather than a control — a caller that names where the person came from
+   * without yet wiring a way there is the one shape to look for when this
+   * segment does nothing on a click.
+   */
+  onLeave?: () => void;
 };
 
 /**
