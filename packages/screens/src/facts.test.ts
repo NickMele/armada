@@ -185,3 +185,29 @@ describe("Elapsed", () => {
     expect(drawn.find((field) => field.label === "Elapsed")?.value).toBe("5m 00s");
   });
 });
+
+describe("repository", () => {
+  it("leads the run, named by the Manifest id", () => {
+    expect(run(null)[0]).toEqual({ value: "01M1CNPKTV0018H2M1CXDNBK06", mono: true });
+  });
+});
+
+describe("who dispatched it", () => {
+  const now = Date.now();
+  // The fixture's own origin, `dispatched`, has no row — a baseline with no
+  // dispatched-by fact to compare the rest against.
+  const baseline = factsOf(job({ origin: "dispatched" }), null, now);
+
+  it("closes the run with the registry's own sentence", () => {
+    const drawn = factsOf(job({ origin: "auto_detected" }), null, now);
+    expect(drawn.at(-1)).toEqual({ value: "Found by Fleet" });
+  });
+
+  it("draws nothing for sub_dispatched, since Bridge carries no dispatched_by yet", () => {
+    expect(factsOf(job({ origin: "sub_dispatched" }), null, now)).toEqual(baseline);
+  });
+
+  it("draws nothing for a wire origin the registry has no row for", () => {
+    expect(factsOf(job({ origin: "unknown-origin" }), null, now)).toEqual(baseline);
+  });
+});

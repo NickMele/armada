@@ -210,6 +210,16 @@ export const SILENCE: Readonly<Record<string, Rendering | undefined>> = {
   "nothing_writing": { verb: "no drone is writing this transcript", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
+/** `origin`, keyed by the wire value. */
+export const ORIGIN: Readonly<Record<string, Rendering | undefined>> = {
+  "auto_detected": { verb: "Found by Fleet", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "manual": { verb: "Dispatched by you", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "helm_drafted": { verb: "Drafted in Helm", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "workflow_triggered": { verb: "Workflow-triggered", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "sub_dispatched": { verb: "Sub-dispatched by {dispatched_by.job_id}", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "drone_drafted": { verb: "Drafted by a Drone", icon: null, badgeStatus: null, statusToken: null, hint: null },
+};
+
 /**
  * What a gaming pattern means to the person reading a step it stopped: a plain
  * headline, and what it means in a sentence or two. From `enum-verbs.toml`,
@@ -362,4 +372,10 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "drone_presence", variant: "drone_exited", missing: ["icon", "token"] },
   { vocabulary: "silence", variant: "drone_ended", missing: ["icon", "token"] },
   { vocabulary: "silence", variant: "nothing_writing", missing: ["icon", "token"] },
+  { vocabulary: "origin", variant: "auto_detected", missing: ["icon", "token"] },
+  { vocabulary: "origin", variant: "manual", missing: ["icon", "token"] },
+  { vocabulary: "origin", variant: "helm_drafted", missing: ["icon", "token"] },
+  { vocabulary: "origin", variant: "workflow_triggered", missing: ["icon", "token"] },
+  { vocabulary: "origin", variant: "sub_dispatched", missing: ["icon", "token"] },
+  { vocabulary: "origin", variant: "drone_drafted", missing: ["icon", "token"] },
 ];
