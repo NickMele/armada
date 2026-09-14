@@ -1283,8 +1283,7 @@ layering doing its job.
 # 5a. The Helm brief
 
 **Added Sep 2026**, for `#940`. `fleet::helm::brief` assembles it from the
-selected Manifest, the resolved authority and Voice, once per session. Nothing
-hosts a session yet.
+selected Manifest, the resolved authority and Voice, once per session.
 
 | Block | Action it names | Why it is in the brief |
 | --- | --- | --- |
@@ -1305,10 +1304,10 @@ predicate, so it cannot name a different set from the one the door enforces.
 multiple. A number here would be a second copy, and the refusal already names
 the ceiling.
 
-**Drafting Jobs is decided and not listed.** `propose_job` and
-`propose_from_request` read `Drafts only`, and the door offers `Yes` rows only,
-so a session has no tool to draft with. The predicate admits both, and the brief
-lists them once the door offers them.
+**Drafting Jobs is listed.** The door offers a Helm session every `Yes` row and
+the `Drafts only` rows besides — `propose_job` and `propose_from_request`, and
+no other agent's door session sees either. `fleet::helm::may` admits both, so
+the brief lists them the same as any other act it admits.
 
 **The Manifest is named, not quoted:** its id and its folder. Everything else in
 it is for `get_manifest` to answer, which stays current where a copy in the

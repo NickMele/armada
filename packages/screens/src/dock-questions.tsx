@@ -1,7 +1,7 @@
 // Every question waiting on a person, as the dock's cards (#935). Main gathers them from every
 // repository Fleet serves; this decides what each card says.
 
-import type { DockAnswer, DockQuestion } from "@armada/components";
+import { JUDGE_ANSWER, type DockAnswer, type DockQuestion } from "@armada/components";
 import type { JobSummary, JudgeAnswer, Outcome, RepositorySummary } from "@armada/protocol";
 import { manifestLabel } from "@armada/shell/src/repository-label";
 import { offeredOf, said } from "./copy";
@@ -24,25 +24,6 @@ export type DockActs = {
 export function refusalWords(outcome: Outcome): string {
   return outcome.ok ? "" : outcome.why === "refused" ? outcome.error.message : said(outcome);
 }
-
-/**
- * The Judge's three answers. **The words `JudgeQuestion` draws on job detail**, retyped because
- * that composition holds them as literals; #938 writes the dock down once and is where they meet.
- */
-export const JUDGE_ANSWER: Record<JudgeAnswer, { label: string; means: string }> = {
-  agree: {
-    label: "Agree with the refusal",
-    means: "The step fails, as it would where the criterion is marked refuse.",
-  },
-  disagree_once: {
-    label: "Disagree, just this step",
-    means: "The step advances. The next job's gate asks about this criterion again.",
-  },
-  disagree_always: {
-    label: "Always disagree",
-    means: "The step advances, and no later job in this repository is asked about this criterion.",
-  },
-};
 
 /** When it was asked, whichever kind it is. */
 export function askedAt(question: Outstanding): string {

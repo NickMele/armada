@@ -1,6 +1,6 @@
 # Helm
 
-**What it is:** Orchestrator Agent session assisting with the Fleet — conversational, not a Drone.
+**What it is:** A dock beside the content on every Bridge surface, holding the questions waiting on you and one running conversation per repository — not a Drone.
 
 ---
 
@@ -26,11 +26,17 @@ Cross-Job reasoning covers every Job in the selected Manifest, not one Job at a 
 
 ## Placement
 
-Inside Bridge, **scoped to the selected Manifest**. Selecting a Manifest opens a Helm session for it; Helm sees that Manifest's Jobs, Drones, evidence and escalations, and nothing outside it.
+**Helm is a dock, not a surface.** It sits beside the content on every Bridge screen at 1100px and wider, folding to an edge strip that opens as a sheet below that; `⌘J` toggles it from anywhere, including from inside a field. It carries no rail digit and does not appear in the sidebar. See `../contracts/design-system.md`, Two tiers, for the layout and `../concepts/job-board.md` for how a question on the Board relates to a question on the dock.
 
-**Fleet-wide reasoning is not a Helm capability.** Why: a Helm session belongs to the Manifest selected when it opened, so a Fleet-wide Helm would be the only thing in the product ignoring that selection.
+The dock's upper zone lists every question waiting on a person, from every repository Fleet serves — a Drone question, a held command, a Judge refusal — each card naming its own repository. Answering one there settles it on that Job's own detail too. The lower zone holds Helm's conversation.
+
+**One running conversation per repository, with Start fresh.** Which repository Helm answers for is set by the most recent explicit act — picking a repository, "Discuss with Helm" on a card, or the dock's own switch — never by the picker moving on its own. Helm is hosted by Fleet and resumed from the stored session when a message needs it; no process idles between messages. A conversation clears after 30 quiet days (`settings.helm-session-retention-expiry`, Machine-scoped).
+
+**Fleet-wide reasoning is not a Helm capability.** Why: a conversation belongs to the repository it is pointed at, so a Fleet-wide Helm would be the only thing in the product ignoring that.
 
 Anything genuinely cross-Manifest stays a Bridge job.
+
+**Built to change.** Conversations are looked up by a key that is a repository today, and Helm's host sits behind one interface — a key per topic, or a host inside Bridge instead of Fleet, is a switch on either, not a rebuild.
 
 ## Tools
 
@@ -77,9 +83,7 @@ The line sits at rung 1 because stopping or redirecting something already approv
 
 ## Session model
 
-**Session per Manifest.** Selecting a Manifest in Bridge opens its Helm session; the session belongs to that Manifest rather than to a question. Why: Manifest selection is a boundary that already exists, and a session per topic would require deciding when a topic has ended — a judgement nobody wants to make mid-investigation.
-
-Session retention and expiry stay Machine-configurable.
+**One conversation per repository, not per topic.** See Placement above for how it is reached and retained. A session per topic would require deciding when a topic has ended — a judgement nobody wants to make mid-investigation — so the boundary is the repository, which already exists, rather than a question.
 
 ## Budget & cost
 

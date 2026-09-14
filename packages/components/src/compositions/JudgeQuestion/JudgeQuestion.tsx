@@ -1,9 +1,30 @@
 import { useId, useState } from "react";
 
+import type { JudgeAnswer } from "@armada/protocol";
 import { JUDGE_FINDING, JUDGE_FINDING_LABEL, JUDGE_FINDING_SAID } from "../../judge-record";
 import { Button } from "../../primitives/Button/Button";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
+
+/**
+ * The Judge's three answers, named once. **The one source** — the dock draws
+ * the same three from every repository's questions (#938), and used to carry
+ * its own copy of the labels below.
+ */
+export const JUDGE_ANSWER: Record<JudgeAnswer, { label: string; means: string }> = {
+  agree: {
+    label: "Agree with the refusal",
+    means: "The step fails, as it would where the criterion is marked refuse.",
+  },
+  disagree_once: {
+    label: "Disagree, just this step",
+    means: "The step advances. The next job's gate asks about this criterion again.",
+  },
+  disagree_always: {
+    label: "Always disagree",
+    means: "The step advances, and no later job in this repository is asked about this criterion.",
+  },
+};
 
 /**
  * A Judge criterion refused and a person is being asked about it, rather than
@@ -92,13 +113,13 @@ export function JudgeQuestion({
 
       <div className="armada-judge-question__answers" role="group" aria-label="Your answer">
         <Button variant="secondary" disabled={disabled} onClick={() => send("agree")}>
-          Agree with the refusal
+          {JUDGE_ANSWER.agree.label}
         </Button>
         <Button variant="primary" disabled={disabled} onClick={() => send("disagree_once")}>
-          Disagree, just this step
+          {JUDGE_ANSWER.disagree_once.label}
         </Button>
         <Button variant="secondary" disabled={disabled} onClick={() => send("disagree_always")}>
-          Always disagree
+          {JUDGE_ANSWER.disagree_always.label}
         </Button>
       </div>
 
