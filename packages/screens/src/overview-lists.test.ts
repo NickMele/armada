@@ -11,17 +11,41 @@ const manifest = (id: string) => ({ id, repository: id, path: `${id}/armada.yml`
 const SHOP: RepositorySummary = { root: "/Users/user/shop", records_root: "/records/shop", manifest: manifest("shop") };
 
 describe("overviewListsOf", () => {
-  it("draws needs-you, running and queued, in that order, and leaves Done off", () => {
+  it("draws needs-you, running, queued and recently-ended, in that order, and leaves Done off", () => {
     const jobs = [
       job("completed_success", { id: "done" }),
       job("queued", { id: "q" }),
       job("running", { id: "r" }),
       job("awaiting_approval", { id: "ny" }),
+      job("killed", { id: "k" }),
     ];
     expect(overviewListsOf(jobs, null).sections.map((section) => section.id)).toEqual([
       "needs-you",
       "running",
       "queued",
+      "recently-ended",
+    ]);
+  });
+
+  // Overview 28 (#1092)'s own claim: a Job killed to redispatch no longer
+  // vanishes, and one actually redispatched still folds away as any
+  // lineage does — `foldLineages` did not need to change for this.
+  it("draws a killed job under recently-ended until a redispatch folds it away", () => {
+    const killed = job("killed", { id: "k", created_at: "2026-09-10T00:00:00Z" });
+    const { sections } = overviewListsOf([killed], null);
+    expect(sections.find((section) => section.id === "recently-ended")?.jobs.map((one) => one.id)).toEqual([
+      "k",
+    ]);
+
+    const redispatched = job("running", {
+      id: "replacement",
+      created_at: "2026-09-11T00:00:00Z",
+      redispatched_from: "k",
+    });
+    const after = overviewListsOf([killed, redispatched], null);
+    expect(after.sections.find((section) => section.id === "recently-ended")).toBeUndefined();
+    expect(after.sections.find((section) => section.id === "running")?.jobs.map((one) => one.id)).toEqual([
+      "replacement",
     ]);
   });
 

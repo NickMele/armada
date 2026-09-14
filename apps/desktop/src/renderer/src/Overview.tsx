@@ -15,7 +15,7 @@ import { Boundary } from "@armada/shell";
 import type { BridgeState } from "../../shared/bridge";
 import { usePanelOpen } from "./panel-open";
 
-type StripSection = "needs-you" | "running" | "queued";
+type StripSection = "needs-you" | "running" | "queued" | "recently-ended";
 
 export function Overview({
   state,
@@ -26,6 +26,8 @@ export function Overview({
   selected,
   onOpen,
   onKill,
+  onRedispatch,
+  onClear,
   onCopied,
   onCursor,
 }: {
@@ -40,28 +42,35 @@ export function Overview({
   selected: string | null;
   onOpen: (jobId: string) => void;
   onKill: (jobId: string) => void;
+  /** Ask to redispatch — Recently ended's own control, Overview 28 (#1092). Asks; never redispatches. */
+  onRedispatch: (jobId: string) => void;
+  /** Ask to clear — Recently ended's caret, beside Redispatch. Asks; never clears. */
+  onClear: (jobId: string) => void;
   onCopied: (value: string) => void;
   /** Where the cursor is, reported up — `OverviewLists`' own state, mirrored. #1075. */
   onCursor?: (jobId: string | null) => void;
 }) {
   const guarded = { bridge: state.bridge, onCopied };
 
-  // Overview 24's mechanism (#1088), widened past the left column to Overview's own four panels —
+  // Overview 24's mechanism (#1088), widened past the left column to Overview's own five panels —
   // a fold survives a restart because it is a layout choice, not a fact Fleet holds.
   const [needsYouOpen, setNeedsYouOpen] = usePanelOpen("needs-you");
   const [runningOpen, setRunningOpen] = usePanelOpen("running");
   const [queuedOpen, setQueuedOpen] = usePanelOpen("queued");
+  const [recentlyEndedOpen, setRecentlyEndedOpen] = usePanelOpen("recently-ended");
   const [otherOpen, setOtherOpen] = usePanelOpen("other");
   const setters: Record<StripSection | "other", (open: boolean) => void> = {
     "needs-you": setNeedsYouOpen,
     running: setRunningOpen,
     queued: setQueuedOpen,
+    "recently-ended": setRecentlyEndedOpen,
     other: setOtherOpen,
   };
   const openSections: Partial<Record<BoardSection, boolean>> = {
     "needs-you": needsYouOpen,
     running: runningOpen,
     queued: queuedOpen,
+    "recently-ended": recentlyEndedOpen,
     other: otherOpen,
   };
   const onSectionOpenChange = (section: BoardSection, open: boolean) => {
@@ -101,6 +110,8 @@ export function Overview({
           onSectionOpenChange={onSectionOpenChange}
           onOpen={onOpen}
           onKill={onKill}
+          onRedispatch={onRedispatch}
+          onClear={onClear}
           onCopied={onCopied}
           onCursor={onCursor}
         />

@@ -153,6 +153,38 @@ function frozenRow(canvasElement: HTMLElement, handle: string): string {
   return row?.textContent ?? "";
 }
 
+/** The row itself, found by its handle — `frozenRow`'s own query, kept as an element rather than flattened to text. */
+function rowNaming(canvasElement: HTMLElement, handle: string): HTMLElement {
+  const row = Array.from(canvasElement.querySelectorAll<HTMLElement>("[data-job-id]")).find((one) =>
+    one.textContent?.includes(handle),
+  );
+  if (row === undefined) throw new Error(`no row named ${handle} on this board`);
+  return row;
+}
+
+/**
+ * Overview 28 (#1092): Recently ended's own split act. `killed` and
+ * `completed_failed` lead with Redispatch, Clear in the caret; `rejected`
+ * never ran, so `crates/fleet/src/redispatch.rs` refuses it by name and the
+ * row keeps the plain verb instead — offering an act guaranteed to fail is
+ * worse than the section's usual one.
+ */
+export const RecentlyEnded: Story = {
+  name: "Recently ended — redispatch, and the one row that cannot",
+  play: async ({ canvasElement }) => {
+    const redispatchable = within(canvasElement).getAllByRole("button", { name: "Redispatch as a new job" });
+    await expect(redispatchable.length).toBe(2);
+
+    const rejected = rowNaming(canvasElement, "11-widen-the-search-index");
+    await expect(within(rejected).getByRole("button", { name: "Open" })).toBeVisible();
+    await expect(within(rejected).queryByRole("button", { name: "Redispatch as a new job" })).toBeNull();
+
+    // Clear is in every Recently ended row's caret, the rejected one included.
+    await userEvent.click(within(rejected).getByRole("button", { name: /More for/ }));
+    await expect(within(rejected).getByRole("menuitem", { name: "Clear" })).toBeVisible();
+  },
+};
+
 /**
  * `armada` frozen. The queued row reads frozen and names it; the row at review keeps its own
  * status and says nothing lands. Neither badge is invented: `frozen` is the registry's word.

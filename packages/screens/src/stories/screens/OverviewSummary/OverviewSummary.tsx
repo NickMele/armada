@@ -18,7 +18,7 @@ export function OverviewSummaryFrom({
   repositories?: readonly RepositorySummary[];
   /** The rail's pick, by root. `null` is All repositories. */
   picked?: string | null;
-  onJump?: (section: "needs-you" | "running" | "queued") => void;
+  onJump?: (section: "needs-you" | "running" | "queued" | "recently-ended") => void;
 }) {
   return <OverviewSummary jobs={jobs} repositories={repositories} picked={picked} onJump={onJump} />;
 }

@@ -26,7 +26,7 @@ export function OverviewSurfaceFrom({ jobs = JOBS }: { jobs?: readonly JobSummar
   // App.tsx's own two moves, stood in here: Overview 24's fold survives a restart through
   // `localStorage`; this story survives only a render, `useState` standing in for it.
   const [openSections, setOpenSections] = useState<Partial<Record<BoardSection, boolean>>>({});
-  const onJump = (section: "needs-you" | "running" | "queued") => {
+  const onJump = (section: "needs-you" | "running" | "queued" | "recently-ended") => {
     setOpenSections((was) => ({ ...was, [section]: true }));
     document.getElementById(overviewPanelId(section))?.scrollIntoView({ behavior: "smooth", block: "start" });
   };

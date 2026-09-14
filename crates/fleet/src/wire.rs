@@ -434,6 +434,32 @@ pub(crate) fn job_started_at(
     )
 }
 
+/// The instant this Job arrived at a terminal status —
+/// [`JobSummary::of`](ipc::JobSummary::of)'s `ended_at`, read the same log
+/// [`job_started_at`] reads and beside it, Overview 28 (#1092).
+///
+/// **Any arrival, not the first** — `ipc::ended_at` says why there is never
+/// more than one to choose between.
+pub(crate) fn job_ended_at(
+    store: &Store,
+    job: &core_model::JobId,
+) -> Result<Option<core_model::Timestamp>, LoadJobError> {
+    let events = store.events_for(job).map_err(LoadJobError::Unreadable)?;
+    let job_moves: Vec<(&'static str, ipc::Instant)> = events
+        .iter()
+        .filter_map(|event| match event.moved() {
+            Moved::Job { to, .. } => Some((to.as_wire(), event.at().into())),
+            Moved::Step { .. } | Moved::Drone { .. } => None,
+        })
+        .collect();
+    Ok(ipc::ended_at(job_moves.iter().map(|entry| ipc::Move {
+        to: entry.0,
+        why: None,
+        at: &entry.1,
+    }))
+    .map(|instant| instant.to_domain()))
+}
+
 /// What Fleet knows about a Job's steps beyond the `job_steps` rows.
 ///
 /// **Nothing here is read off the Job.** That row carries the trigger the gate

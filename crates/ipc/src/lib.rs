@@ -167,7 +167,7 @@ pub use amending::{
 };
 pub use approval_ask::AskedApproval;
 pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, WhenRefused};
-pub use attempt::{first_started_at, Move, StepAttempt};
+pub use attempt::{ended_at, first_started_at, Move, StepAttempt};
 pub use breakage::{ClaimedBreakage, WaitingOnFix};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};

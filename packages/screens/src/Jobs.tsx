@@ -136,6 +136,15 @@ export type JobsProps = {
    */
   onKill: (jobId: string) => void;
   /**
+   * Ask to redispatch the Job under the cursor — the Recently ended section's
+   * own control, Overview 28 (#1092). **It asks; it never redispatches**,
+   * `onKill`'s own reason: `App` confirms, through the same dialog
+   * `JobDetail`'s header already goes through for this act.
+   */
+  onRedispatch: (jobId: string) => void;
+  /** Ask to clear the Job under the cursor — Recently ended's caret, beside Redispatch. Asks; never clears. */
+  onClear: (jobId: string) => void;
+  /**
    * Open the composer — `n`, the one key in the contextual tier that acts on
    * nothing on screen. The Board holds the binding because the Board is where
    * the cursor is; what it opens is `App`'s.
@@ -171,6 +180,8 @@ export function Jobs({
   selected,
   onOpen,
   onKill,
+  onRedispatch,
+  onClear,
   onCompose,
   onCopied,
   onCursor,
@@ -378,6 +389,8 @@ export function Jobs({
       focused={job.id === cursor}
       onOpen={onOpen}
       onKill={onKill}
+      onRedispatch={onRedispatch}
+      onClear={onClear}
       onCopied={onCopied}
     />
   );

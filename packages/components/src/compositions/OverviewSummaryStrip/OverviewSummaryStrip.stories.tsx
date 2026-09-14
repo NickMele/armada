@@ -52,8 +52,20 @@ export const FourItems: Story = {
       { id: "needs-you", label: "Needs you", count: 1, tone: "awaiting-review", onPress: fn() },
       { id: "running", label: "Running", count: 2, onPress: fn() },
       { id: "queued", label: "Queued", count: 0, onPress: fn() },
-      { id: "ended", label: "Recently ended", count: 3, tone: "completed-failed", onPress: fn() },
+      {
+        id: "recently-ended",
+        label: "Recently ended",
+        count: 3,
+        tone: "completed-failed",
+        onPress: fn(),
+      },
     ],
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const endedItem = canvas.getByRole("button", { name: "3 Recently ended" });
+    await expect(endedItem).toBeVisible();
+    await userEvent.click(endedItem);
+    await expect(args.items[3]!.onPress).toHaveBeenCalledOnce();
   },
 };
 

@@ -80,7 +80,8 @@ import { Layers } from "lucide-react";
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
-import { taskBarSegmentsOf, taskFigureOf } from "./board";
+import { sectionOf, taskBarSegmentsOf, taskFigureOf } from "./board";
+import { ACT_LABEL } from "./copy";
 import { absoluteOf, elapsedSince } from "./duration";
 import { activityFor } from "./frozen";
 import { rowFreezeOf } from "./freeze";
@@ -126,6 +127,8 @@ export function Row({
   focused,
   onOpen,
   onKill,
+  onRedispatch,
+  onClear,
   onCopied,
 }: {
   job: JobSummary;
@@ -141,6 +144,22 @@ export function Row({
   focused: boolean;
   onOpen: (jobId: string) => void;
   onKill: (jobId: string) => void;
+  /**
+   * Ask to redispatch the Job — Overview 28 (#1092)'s own control, on a
+   * Recently ended row. **It asks; it never redispatches** — `onKill`'s own
+   * rule, and for the same reason: `App` owns the confirmation, the same one
+   * `JobDetail`'s header already goes through for this act.
+   */
+  onRedispatch: (jobId: string) => void;
+  /**
+   * Ask to clear the Job — the caret beside Redispatch on that same row.
+   * **It asks; it never clears.** `App` confirms through `reclaim_worktree`,
+   * the act `JobDetail`'s own header already offers under a different word:
+   * the Board has called this act Clear since `BOARD_TABS`' own `Cleared`
+   * tab, and a row here keeps that word rather than the detail's `Reclaim
+   * worktree`.
+   */
+  onClear: (jobId: string) => void;
   onCopied: (value: string) => void;
 }) {
   const reading = readingOf(job);
@@ -184,6 +203,22 @@ export function Row({
   const freeze = rowFreezeOf(job);
   const elapsedNow = elapsedOf(job, now);
   const createdAt = absoluteOf(job.created_at) ?? undefined;
+  // **When it ended, preferred over when it was created.** `ended_at` is what
+  // Overview 28 (#1092) added for exactly this row: a terminal Job's "Run
+  // time" slot had nothing but its creation time to fall back to, which reads
+  // as though the run itself took no time rather than as the fact it is —
+  // when the Job stopped. Absent only on a build old enough to have cached a
+  // row from before the field existed, which is why `createdAt` still backs
+  // it up rather than leaving the slot blank.
+  const endedAt = (job.ended_at === undefined ? null : absoluteOf(job.ended_at)) ?? createdAt;
+  // Recently ended's own two rows: `killed` and `completed_failed` both
+  // redispatch cleanly, and `rejected` never ran — `crates/fleet/src/
+  // redispatch.rs` refuses it by name, `Adrift::NeverRan`, so a row offering
+  // the act there would be a button that always fails. `sectionOf` is read
+  // rather than restated: it already excludes a cleared Job, on the same
+  // `reclaimed_at` check `tabOf` makes first.
+  const recentlyEnded = sectionOf(job) === "recently-ended";
+  const canRedispatch = recentlyEnded && job.status !== "rejected";
 
   // **The row's facts, in the order `BOARD_COLUMNS` names them, and both views
   // read them.** Three, then Repository and Tasks only where `columnsFor` names
@@ -228,12 +263,13 @@ export function Row({
     },
     {
       label: "Run time",
-      // **A Job that has never run draws nothing here, not `createdAt`.** The
+      // **A Job that has never run draws nothing here, not `endedAt`.** The
       // fallback is for a terminal Job whose elapsed has nothing left to
       // answer; a Job still waiting for approval or a slot has never run at
-      // all, and a creation time in this column would read as a run that
-      // happened.
-      value: elapsedNow ?? (isTerminal(job) ? createdAt : undefined) ?? "—",
+      // all, and an end time in this column would read as a run that
+      // happened. `endedAt` already falls back to `createdAt` itself, for a
+      // row old enough to predate the field — see where it is computed.
+      value: elapsedNow ?? (isTerminal(job) ? endedAt : undefined) ?? "—",
       mono: true,
       quiet: elapsedNow === undefined,
     },
@@ -293,11 +329,37 @@ export function Row({
         // buttons on a row is two controls whatever they are called, and the
         // menu is where the drawing already put it.
         //
-        // A job that is over gets the plain button: there is nothing to kill,
-        // and `Split button` draws its caret whether or not the menu has
-        // anything in it — so a caret over an empty menu is a control that does
-        // not respond.
-        isTerminal(job) ? (
+        // **Recently ended is the one section where the row leads with
+        // something other than Open.** Overview 28 (#1092): a Job sitting
+        // there is one somebody still owes a decision, same as a Job Kill
+        // waits beside — so it gets the same shape, Clear standing in for
+        // Kill in the caret. `rejected` keeps the plain verb: it never ran,
+        // Fleet refuses to redispatch it by name, and a button that always
+        // fails is worse than the section's usual act.
+        canRedispatch ? (
+          <SplitButton
+            ground="card"
+            disabled={stale}
+            onAction={() => onRedispatch(job.id)}
+            menuLabel={`More for ${job.title}`}
+            items={[{ label: "Clear", onSelect: () => onClear(job.id) }]}
+          >
+            {ACT_LABEL.redispatch}
+          </SplitButton>
+        ) : recentlyEnded ? (
+          <SplitButton
+            ground="card"
+            disabled={stale}
+            onAction={() => onOpen(job.id)}
+            menuLabel={`More for ${job.title}`}
+            items={[{ label: "Clear", onSelect: () => onClear(job.id) }]}
+          >
+            {ROW_VERBS[verb].label}
+          </SplitButton>
+        ) : isTerminal(job) ? (
+          // Every other job that is over: there is nothing to kill and
+          // nothing recently ended offers, so `Split button` would draw a
+          // caret over an empty menu — a control that does not respond.
           <Button size="sm" onClick={() => onOpen(job.id)} disabled={stale}>
             {ROW_VERBS[verb].label}
           </Button>
@@ -315,9 +377,13 @@ export function Row({
           </SplitButton>
         )
       }
-      // The key that fires the verb, drawn on the cursor's row only. The
-      // component holds that rule; this only says which key.
-      actionKey={ROW_VERBS[verb].key}
+      // The key that fires the verb, drawn on the cursor's row only. **Absent
+      // where the face is Redispatch**: `actions.toml` binds it to `e` on
+      // "list and detail", but nothing on the Board reads that key yet — a
+      // keycap promising a press this build does not answer would be worse
+      // than none. The component holds the display rule; this only says
+      // which key, or that there is none.
+      actionKey={canRedispatch ? undefined : ROW_VERBS[verb].key}
     />
   );
 }

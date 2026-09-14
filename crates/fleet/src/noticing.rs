@@ -512,9 +512,13 @@ where
         //
         // **`started_at` is read, not left `None`.** A landed Job has run —
         // `From` would say otherwise, `crate::dispatch::Fleet::published`'s
-        // own reason.
+        // own reason. `ended_at` is read beside it: landing does not always
+        // mean over — a Job still at `awaiting_review` can land — so this
+        // reads the log rather than assuming either way.
         let started_at = self.job_started_at(job.id()).await?;
-        let mut summary = ipc::JobSummary::of(&job, None, None, None, false, None, started_at);
+        let ended_at = self.job_ended_at(job.id()).await?;
+        let mut summary =
+            ipc::JobSummary::of(&job, None, None, None, false, None, started_at, ended_at);
         summary.landed = Some(state);
         // A client replaces the row with this one, so it keeps its task counts.
         summary.tasks = self.task_counts(&noticed.job).await?;

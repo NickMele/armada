@@ -372,6 +372,17 @@ where
         crate::wire::job_started_at(&store, job_id).map_err(Adrift::Reading)
     }
 
+    /// The instant this Job arrived at a terminal status —
+    /// [`JobSummary`](ipc::JobSummary)'s `ended_at`. Absent until the Job is
+    /// over. Overview 28 (#1092).
+    pub async fn job_ended_at(
+        &self,
+        job_id: &JobId,
+    ) -> Result<Option<core_model::Timestamp>, Adrift> {
+        let store = self.store.lock().await;
+        crate::wire::job_ended_at(&store, job_id).map_err(Adrift::Reading)
+    }
+
     /// Which Jobs are being worked. Empty where none is.
     ///
     /// **A list rather than an `Option`**, which is `#50` arriving on the one

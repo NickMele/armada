@@ -832,6 +832,11 @@ export function App() {
               selected={openJob}
               onOpen={setOpenJob}
               onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
+              // Recently ended's own two, reusing the same confirmation
+              // `JobDetail`'s header already goes through for both acts —
+              // `reclaim_worktree` is that header's own word for Clear.
+              onRedispatch={(jobId) => setConfirming({ act: "redispatch", jobId })}
+              onClear={(jobId) => setConfirming({ act: "reclaim_worktree", jobId })}
               onCopied={setCopied}
               onCursor={setOverviewCursor}
             />
@@ -867,6 +872,10 @@ export function App() {
                   // detail's own kill goes through, which is what keeps "Cancel
                   // holds initial focus" a rule with one implementation.
                   onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
+                  // Recently ended's own two, `Overview`'s own reason: one
+                  // shared confirmation, whichever screen a row is asked from.
+                  onRedispatch={(jobId) => setConfirming({ act: "redispatch", jobId })}
+                  onClear={(jobId) => setConfirming({ act: "reclaim_worktree", jobId })}
                   onCompose={() => setComposing(true)}
                   actions={boardActions}
                   onCopied={setCopied}
