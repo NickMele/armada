@@ -17,11 +17,13 @@
 // failure is on screen, and `palette.ts` for what the palette can reach.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { dockQuestionsOf, ofPicked } from "@armada/screens";
+import { dockQuestionsOf, jobNumber, ofPicked } from "@armada/screens";
 import type { Outstanding } from "@armada/screens";
-import type { JobSummary } from "@armada/protocol";
+import type { HelmContext, JobSummary } from "@armada/protocol";
 import { useDockAnswering } from "./dock-answering";
 import { HelmDock } from "./HelmDock";
+import { chippedJobId, contextOf, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
+import type { ChipState } from "./helm-context";
 import { Dialog, Textarea } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
@@ -203,6 +205,11 @@ export function App() {
   // on. Two cursors would drift.
   const palette = useCommandPalette();
   const [cursor, setCursor] = useState<string | null>(null);
+  // The Job chipped above Helm's message box — #1075. Opening a Job's detail
+  // chips it and points Helm at its repository; leaving the Job or its own ×
+  // drops the chip, and reopening the Job restores it. `helm-context.ts` is
+  // the fold, tested on its own.
+  const [chip, setChip] = useState<ChipState>(NO_CHIP);
   // What the palette can reach on the Board: the state filter, and the search
   // field. Both belong to that surface and stay there — see `BoardReach`.
   const reach = useRef<BoardReach | null>(null);
@@ -231,6 +238,19 @@ export function App() {
   // What main is asked to hold open for the Job being read: the Job itself, what
   // it holds on this machine, and its turns.
   useWatching(openJob);
+
+  // Opening or leaving a Job's detail folds the chip and, on opening, points
+  // Helm at that Job's repository without moving the rail's own pick — #1075.
+  // **Keyed on `openJob` alone.** `chip` is read as of the render this ran
+  // in, not listed as a dependency: the chip's own × must never re-run this
+  // and re-point Helm or un-dismiss what was just dismissed.
+  useEffect(() => {
+    const target = reading === null ? null : { id: reading.id, manifestId: reading.owner_manifest_id };
+    const { state: next, point } = opened(chip, target);
+    setChip(next);
+    if (point !== null) pointHelm(point);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openJob]);
 
   // `⌘1`…`⌘n`, the binding the contract publishes and nothing answered until
   // the Manifest surface needed `⌘5`. One roster, read by the rail, the
@@ -440,6 +460,17 @@ export function App() {
   const all = pickedRepository === null && repositories.length > 0;
   // The Board's Jobs follow the pick. The status bar, the palette and held worktrees read every Job.
   const boardJobs = useMemo(() => ofPicked(state.jobs, pickedRepository), [state.jobs, pickedRepository]);
+  // Where the person is, for Helm — #1075. `cursor` is the Board's own row
+  // and stale off it, so only the Board sends it; Overview has no roving row
+  // of its own to send in its place.
+  const helmScreen = screenOf({ reading: reading !== null, clearing, manifesting, overviewing });
+  const chippedJob = state.jobs.find((job) => job.id === chippedJobId(chip));
+  const helmContext: HelmContext = contextOf({
+    screen: helmScreen,
+    picked: scoped?.id ?? null,
+    chip: chippedJob?.id ?? null,
+    cursor: helmScreen === "board" ? cursor : null,
+  });
   // Helm's dock lists every repository's questions, whatever the pick. Answering is #936, Helm #944.
   const dockAnswering = useDockAnswering(commands);
   // "Discuss with Helm" points it at the card's own repository. The picker never moves for it.
@@ -494,7 +525,10 @@ export function App() {
             jobs={state.jobs}
             workflows={state.holds.workflows}
             live={live}
-            onAsk={(text) => void askHelm(text)}
+            chip={chippedJob === undefined ? undefined : { jobHandle: jobNumber(chippedJob), title: chippedJob.title }}
+            onRemoveChip={() => setChip(dismissed)}
+            onAsk={(text, context) => void askHelm(text, context)}
+            context={helmContext}
             onStartFresh={() => void startHelmFresh()}
             onSwitch={(manifestId) => pointHelm(manifestId)}
             onApprove={(jobId) => void commands.approve(jobId)}

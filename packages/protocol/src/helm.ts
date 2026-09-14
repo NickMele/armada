@@ -17,7 +17,26 @@ import type { ProtocolVersion } from "./version";
 /** `POST /helm/ask` — what a person says to Helm. Blank is refused before this is sent. */
 export type AskHelm = {
   text: string;
+  /** Where the person is in Bridge, sent with every ask. `#1075`. */
+  context?: HelmContext;
 };
+
+/**
+ * Where the person is in Bridge, as one ask carries it — a snapshot of the
+ * moment it was sent, never a subscription. `crates/ipc/src/helm.rs`.
+ */
+export type HelmContext = {
+  screen: HelmScreen;
+  /** The repository the rail has picked. Absent for All repositories. */
+  picked?: string;
+  /** The Job chipped above Helm's message box — present only while the chip stands. */
+  chip?: string;
+  /** The row the cursor is on, in the Board or in Overview. Neither always has one. */
+  cursor?: string;
+};
+
+/** Which screen is showing. `App.tsx` is the one place that decides between them. */
+export type HelmScreen = "overview" | "board" | "manifest" | "cleanup" | "job_detail";
 
 /**
  * What `POST /helm/ask` and `POST /helm/start_fresh` answer with. **Not the

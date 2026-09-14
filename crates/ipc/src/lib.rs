@@ -207,8 +207,8 @@ pub use explaining::CommandExplained;
 pub use files::FilesFound;
 pub use health::{FleetHealth, Probe, Unprobed};
 pub use helm::{
-    AskHelm, Blank, Freshness, HelmAsked, HelmClosed, HelmConversation, HelmFresh, HelmMessage,
-    HelmOpened, HelmSilence, HelmText, HelmUnanswered,
+    AskHelm, Blank, Freshness, HelmAsked, HelmClosed, HelmContext, HelmConversation, HelmFresh,
+    HelmMessage, HelmOpened, HelmScreen, HelmSilence, HelmText, HelmUnanswered,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};

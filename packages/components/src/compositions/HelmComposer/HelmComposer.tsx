@@ -1,10 +1,14 @@
 import type { FormEvent } from "react";
+import { AttachmentChip } from "../../primitives/AttachmentChip/AttachmentChip";
 import { Button } from "../../primitives/Button/Button";
 import { Select } from "../../primitives/Select/Select";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 
 /** One repository the switch may point Helm at — id is the Manifest id. */
 export type HelmRepositoryOption = { id: string; label: string };
+
+/** The open Job chipped above the message box — `#1075`. */
+export type HelmComposerChip = { jobHandle: string; title: string };
 
 /**
  * The composer under Helm's thread — #944. **Typing never answers a pending
@@ -21,6 +25,10 @@ export type HelmComposerProps = {
   onStartFresh?: () => void;
   /** Refused while a reply is being written — Fleet's own rule, not a guess drawn here. */
   startFreshDisabled?: boolean;
+  /** The open Job, while its chip stands. Absent off a Job, or once its `×` has been pressed. */
+  chip?: HelmComposerChip;
+  /** The chip's own `×`. Omitted with no `chip` draws nothing to remove. */
+  onRemoveChip?: () => void;
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
@@ -34,6 +42,8 @@ export function HelmComposer({
   onSwitch,
   onStartFresh,
   startFreshDisabled = false,
+  chip,
+  onRemoveChip,
   value,
   onChange,
   onSend,
@@ -49,6 +59,9 @@ export function HelmComposer({
 
   return (
     <form className="armada-helm-composer" onSubmit={submit}>
+      {chip === undefined ? null : (
+        <AttachmentChip filename={`Job ${chip.jobHandle} · ${chip.title}`} onRemove={onRemoveChip} />
+      )}
       <div className="armada-helm-composer__head">
         <span className="armada-helm-composer__repository">
           {label ?? "No repository to ask yet"}

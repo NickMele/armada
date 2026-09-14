@@ -13,8 +13,8 @@ use adapter_traits::{AgentHarness, Delivery, DroneEvent, Vcs, WorkProduct};
 use api::{Conversations as Surface, ObservedHelm, Refusal};
 use core_model::StepId;
 use ipc::{
-    AskHelm, Freshness, HelmAsked, HelmConversation, HelmFresh, HelmMessage, HelmUnanswered,
-    Instant, ManifestId, Shown, WireError,
+    AskHelm, Freshness, HelmAsked, HelmContext, HelmConversation, HelmFresh, HelmMessage,
+    HelmScreen, HelmUnanswered, Instant, ManifestId, Shown, WireError,
 };
 
 use super::conversation::{Conversation, ConversationKey};
@@ -72,10 +72,11 @@ where
             resumes,
         };
         conversation.taken();
+        let context = asked.context;
         let fleet = Arc::clone(&self);
         tokio::spawn(async move {
             fleet
-                .reply(served, key, conversation, String::from(asked.text))
+                .reply(served, key, conversation, String::from(asked.text), context)
                 .await;
         });
         Ok(answered)
@@ -159,6 +160,7 @@ where
         key: ConversationKey,
         conversation: Arc<Conversation>,
         text: String,
+        context: Option<HelmContext>,
     ) {
         let _turn = conversation.turn.lock().await;
         self.swept_stale_helm_sessions().await;
@@ -170,7 +172,10 @@ where
             conversation: Arc::clone(&conversation),
             clock: Arc::clone(self.clock()),
         };
-        if let Err(why) = self.replied(&served, &key, &text, &heard).await {
+        if let Err(why) = self
+            .replied(&served, &key, &text, context.as_ref(), &heard)
+            .await
+        {
             conversation
                 .thread
                 .say(HelmMessage::Unanswered(HelmUnanswered {
@@ -186,6 +191,7 @@ where
         served: &Served,
         key: &ConversationKey,
         text: &str,
+        context: Option<&HelmContext>,
         heard: &Rows,
     ) -> Result<(), String> {
         let stored = self
@@ -197,7 +203,10 @@ where
         let host = self.helm().host();
         let authority = self.helm_authority();
         let mut carried = host
-            .carry(carrying(served, text, stored.clone(), authority), heard)
+            .carry(
+                carrying(served, text, context, stored.clone(), authority),
+                heard,
+            )
             .await;
         if carried == Carried::NoSuchSession && stored.is_some() {
             self.store()
@@ -210,7 +219,7 @@ where
                 because: Freshness::SessionNotFound,
             }));
             carried = host
-                .carry(carrying(served, text, None, authority), heard)
+                .carry(carrying(served, text, context, None, authority), heard)
                 .await;
         }
         match carried {
@@ -229,12 +238,24 @@ where
 }
 
 /// A message as its session is told it: after Helm's brief on a new session,
-/// alone on one that already heard the brief.
-fn carrying(served: &Served, text: &str, resuming: Option<String>, authority: Authority) -> Carry {
+/// alone on one that already heard the brief — and, on every turn, `where`'s
+/// line ahead of what the person typed. `#1075`.
+fn carrying(
+    served: &Served,
+    text: &str,
+    context: Option<&HelmContext>,
+    resuming: Option<String>,
+    authority: Authority,
+) -> Carry {
+    let said = context.map(where_they_are);
+    let with_where = match &said {
+        Some(said) => format!("{said}\n\n{text}"),
+        None => text.to_string(),
+    };
     let turn = match resuming {
-        Some(_) => text.to_string(),
+        Some(_) => with_where,
         None => format!(
-            "{}\n\n{text}",
+            "{}\n\n{with_where}",
             brief(served.manifest(), authority, None).as_str()
         ),
     };
@@ -242,6 +263,38 @@ fn carrying(served: &Served, text: &str, resuming: Option<String>, authority: Au
         directory: served.root().to_string(),
         turn,
         resuming,
+    }
+}
+
+/// One line naming where the person is, ahead of what they typed — never
+/// stored, and never a Job's contents. Helm's brief says to read a named Job
+/// through its own tools rather than trust this for more than its name.
+fn where_they_are(context: &HelmContext) -> String {
+    let mut said = format!("The person is on {}", screen_phrase(context.screen));
+    match &context.picked {
+        Some(picked) => said.push_str(&format!(", picked on {}", picked.as_str())),
+        None => said.push_str(", picked on All repositories"),
+    }
+    if let Some(chip) = &context.chip {
+        said.push_str(&format!(
+            ". Job {} is chipped to Helm's message box",
+            chip.as_str()
+        ));
+    }
+    if let Some(cursor) = &context.cursor {
+        said.push_str(&format!(". The cursor is on Job {}", cursor.as_str()));
+    }
+    said.push('.');
+    said
+}
+
+fn screen_phrase(screen: HelmScreen) -> &'static str {
+    match screen {
+        HelmScreen::Overview => "Overview",
+        HelmScreen::Board => "the Job Board",
+        HelmScreen::Manifest => "the Manifest",
+        HelmScreen::Cleanup => "Cleanup",
+        HelmScreen::JobDetail => "a Job's detail",
     }
 }
 

@@ -1337,6 +1337,7 @@ selected Manifest, the resolved authority and Voice, once per session.
 | **Opening** | Make a tool call rather than say a thing was done | The Drone's reporting clause, for the same failure: a model holding tools and a conversation narrates acts it did not take |
 | **This repository** | Say a question about another repository cannot be answered here | The scope is the door's, and a session cannot see it. Without the block a refusal arrives as an empty tool answer |
 | **Each turn** | Call `get_events_since` first, and fetch detail only where it bears | Fleet never wakes a session, so the poll is the only way a turn is current |
+| **Where they are** | Read one line naming the screen, the pick, a chipped Job and the cursor row — ahead of what was typed — and call `get_job` for a named Job's own contents | `#1075`: Bridge sends this with every ask, so the person never has to say which Job they mean |
 | **What you may do** | Act only through the listed tools, and leave every other act to the person | The door offers every `Yes` row, and `#73` drew Helm's line inside that set. Until the door refuses on it, the brief is the line |
 | **How you answer** | Answer first, add at most one flagged observation, say "I" only for Helm's own acts, hedge by source | [Helm](../concepts/helm.md)'s Voice & conduct, and the Design System's P3 and P4 |
 | **Voice** | None. It tunes length and formality | Rendered only where the setting is set. It comes last, so it adjusts what is above it and does not contradict it |
@@ -1369,6 +1370,11 @@ nothing; only their own press moves the Job.
 it is for `get_manifest` to answer, which stays current where a copy in the
 brief would go stale over a long conversation.
 
+**Where they are is named, not quoted, the same way.** `fleet::helm::serving`
+composes one line ahead of what a person typed — the screen, the repository
+picked, a chipped Job's id, the cursor row's — and never a Job's own contents.
+The thread's `asked` row keeps only what was typed; this line is never stored.
+
 **Read-only says why.** A session holding tools that act, and told not to use
 them with no reason given, reads the instruction as an error to work around.
 
@@ -1398,6 +1404,15 @@ them with no reason given, reads the instruction as an error to work around.
 │ only where it bears on what you were asked.
 │ Everything a tool returns stays in this
 │ conversation for the rest of it.
+└────────────────────────────────────────────────
+┌─ WHERE THEY ARE ───────────────────────────────
+│ Before what a person typed, one line says where
+│ they are in Bridge: the screen, the repository
+│ picked, a Job chipped to the message box, and
+│ the row the cursor is on. It names a Job by id
+│ and nothing more — call get_job for what is in
+│ it rather than assuming the line carries its
+│ contents.
 └────────────────────────────────────────────────
 ┌─ WHAT YOU MAY DO ──────────────────────────────
 │ You may call every tool that reads. Of the tools

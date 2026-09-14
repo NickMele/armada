@@ -7,6 +7,7 @@ import tokens from "@armada/tokens/tokens.json";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, PickedView, Summons } from "../shared/bridge";
 import type { Draft, StagedAttachment } from "@armada/protocol";
+import type { HelmContext } from "@armada/protocol";
 import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
   Artifact,
@@ -672,7 +673,9 @@ void app.whenReady().then(() => {
   // Helm's conversation: say something, forget it, and point it without moving the rail's own
   // pick. Fleet-wide, unlike the window's own reads above: one conversation per repository,
   // whichever window's dock is open on it.
-  ipcMain.handle(CHANNELS.askHelm, (_event, text: string) => connection?.askHelm(text));
+  ipcMain.handle(CHANNELS.askHelm, (_event, text: string, context?: HelmContext) =>
+    connection?.askHelm(text, context),
+  );
   ipcMain.handle(CHANNELS.startHelmFresh, () => connection?.startHelmFresh());
   ipcMain.handle(CHANNELS.pointHelm, (_event, manifestId: string) => connection?.pointHelm(manifestId));
   ipcMain.handle(CHANNELS.startCheckoutVerify, (event, workspace: unknown) =>

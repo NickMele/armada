@@ -56,6 +56,42 @@ export const StartFreshRefusedWhileReplying: Story = {
 /** Nothing is servable yet — no repository has a Manifest for Helm to answer for. */
 export const NothingToAskYet: Story = { args: { disabled: true } };
 
+/** A Job's detail is open: the chip names it, above the message box. #1075. */
+export const ChipOnAJob: Story = {
+  args: {
+    current: repositories[0]!.id,
+    repositories: [repositories[0]!],
+    chip: { jobHandle: "12", title: "Fix the poke loop" },
+    onRemoveChip: fn(),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Remove Job 12 · Fix the poke loop" })).toBeInTheDocument();
+  },
+};
+
+/** The chip's own `×` — dropped from the next ask's context, without closing the Job. #1075. */
+export const ChipRemovedWithX: Story = {
+  args: {
+    current: repositories[0]!.id,
+    repositories: [repositories[0]!],
+    chip: { jobHandle: "12", title: "Fix the poke loop" },
+    onRemoveChip: fn(),
+  },
+  play: async ({ args, canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Remove Job 12 · Fix the poke loop" }));
+    await expect(args.onRemoveChip).toHaveBeenCalled();
+  },
+};
+
+/** Off a Job, nothing is chipped — the composer draws no differently than any other ask. #1075. */
+export const NoChipOffAJob: Story = {
+  args: { current: repositories[0]!.id, repositories: [repositories[0]!] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByText(/^Job \d/)).not.toBeInTheDocument();
+  },
+};
+
 function Typed(): ReactElement {
   const [value, setValue] = useState("");
   return (

@@ -11,7 +11,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer, type WebSocket as Client } from "ws";
 
-import type { HelmThread, RepositorySummary } from "@armada/protocol";
+import type { HelmContext, HelmThread, RepositorySummary } from "@armada/protocol";
 import { HelmConnection, HelmSocket } from "./helm";
 
 const MANIFEST = "01M2ARMADA0000000000000000";
@@ -24,15 +24,24 @@ afterEach(() => {
   while (opened.length > 0) opened.pop()?.();
 });
 
-/** A Fleet serving `/helm/observe`, `/helm/ask` and `/helm/start_fresh` on one port. */
+/**
+ * A Fleet serving `/helm/observe`, `/helm/ask` and `/helm/start_fresh` on one
+ * port. `bodies` collects each request's raw text, parallel to `requests`.
+ */
 async function serving(
   requests: { url: string; method: string }[] = [],
+  bodies: string[] = [],
 ): Promise<{ port: number; helmSide: () => Promise<Client>; server: Server }> {
   const socket = new WebSocketServer({ noServer: true });
   const server = createServer((request, response) => {
     requests.push({ url: request.url ?? "", method: request.method ?? "" });
-    response.writeHead(202, { "content-type": "application/json" });
-    response.end(JSON.stringify({ manifest_id: MANIFEST, replying: true, resumes: true }));
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk: Buffer) => chunks.push(chunk));
+    request.on("end", () => {
+      bodies.push(Buffer.concat(chunks).toString("utf8"));
+      response.writeHead(202, { "content-type": "application/json" });
+      response.end(JSON.stringify({ manifest_id: MANIFEST, replying: true, resumes: true }));
+    });
   });
   server.on("upgrade", (request: IncomingMessage, raw: Socket, head: Buffer) => {
     socket.handleUpgrade(request, raw, head, (client) => socket.emit("connection", client, request));
@@ -150,6 +159,23 @@ describe("Helm's socket", () => {
       { url: `/helm/ask?manifest_id=${MANIFEST}`, method: "POST" },
       { url: `/helm/start_fresh?manifest_id=${MANIFEST}`, method: "POST" },
     ]);
+  });
+
+  // #1075: Bridge sends where the person is with every ask.
+  it("sends the context with an ask, and sends none where none was given", async () => {
+    const bodies: string[] = [];
+    const fleet = await serving([], bodies);
+    const helm = new HelmSocket(() => {});
+    opened.push(() => helm.close());
+    helm.open(fleet.port, MANIFEST);
+    await fleet.helmSide();
+
+    const context: HelmContext = { screen: "job_detail", chip: "01JOB0000000000000000000A" };
+    expect(await helm.askHelm(MANIFEST, "what is this stuck on?", context)).toEqual({ ok: true });
+    expect(await helm.askHelm(MANIFEST, "and this one?")).toEqual({ ok: true });
+
+    expect(JSON.parse(bodies[0]!)).toEqual({ text: "what is this stuck on?", context });
+    expect(JSON.parse(bodies[1]!)).toEqual({ text: "and this one?" });
   });
 });
 

@@ -50,7 +50,7 @@ import type {
   WhenBlocked,
   WhenRefused,
 } from "@armada/protocol";
-import type { JobSummary } from "@armada/protocol";
+import type { HelmContext, JobSummary } from "@armada/protocol";
 import type { Answered, ConfirmableAct, Taken, TakenAct } from "@armada/screens";
 import { takenNotice, takenStands } from "@armada/screens";
 import { proposeRequest } from "./dispatch";
@@ -127,8 +127,9 @@ export const watchManifestDrift = (want: boolean): void =>
 export const watchOverview = (want: boolean): void => void window.armada.watchOverview(want);
 export const startCheckoutVerify = (workspace?: string) => window.armada.startCheckoutVerify(workspace);
 export const pickRepository = (root: string | null): void => void window.armada.pickRepository(root);
-// Helm's conversation — #944. The reply, and the thread it joins, arrive on `BridgeState.helm`.
-export const askHelm = (text: string) => window.armada.askHelm(text);
+// Helm's conversation — #944. The reply, and the thread it joins, arrive on
+// `BridgeState.helm`. `context` names where the person is — #1075.
+export const askHelm = (text: string, context?: HelmContext) => window.armada.askHelm(text, context);
 export const startHelmFresh = () => window.armada.startHelmFresh();
 export const pointHelm = (manifestId: string): void => void window.armada.pointHelm(manifestId);
 // Locate: a folder from the OS dialog, and a repository added or cloned. The window picks what it located.

@@ -32,6 +32,8 @@ The dock's upper zone lists every question waiting on a person, from every repos
 
 **One running conversation per repository, with Start fresh.** Which repository Helm answers for is set by the most recent explicit act — picking a repository, "Discuss with Helm" on a card, or the dock's own switch — never by the picker moving on its own. Helm is hosted by Fleet and resumed from the stored session when a message needs it; no process idles between messages. A conversation clears after 30 quiet days (`settings.helm-session-retention-expiry`, Machine-scoped).
 
+**Every ask names where the person is.** Bridge sends the screen, the picked repository, the open Job chipped above the message box, and the Board or Overview cursor row with each message; Fleet hands the session one line naming it ahead of what was typed, and the thread keeps only what the person wrote. `#1075`.
+
 **Fleet-wide reasoning is not a Helm capability.** Why: a conversation belongs to the repository it is pointed at, so a Fleet-wide Helm would be the only thing in the product ignoring that.
 
 Anything genuinely cross-Manifest stays a Bridge job.

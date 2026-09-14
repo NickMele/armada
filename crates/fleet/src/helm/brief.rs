@@ -46,6 +46,14 @@ line per kind of event since that cursor. Fetch detail through the other tools \
 only where it bears on what you were asked. Everything a tool returns stays in \
 this conversation for the rest of it.";
 
+const WHERE_THEY_ARE: &str = "\
+WHERE THEY ARE
+
+Before what a person typed, one line says where they are in Bridge: the \
+screen, the repository picked, a Job chipped to the message box, and the row \
+the cursor is on. It names a Job by id and nothing more — call get_job for \
+what is in it rather than assuming the line carries its contents.";
+
 const MAY_ACT: &str = "\
 WHAT YOU MAY DO
 
@@ -99,6 +107,7 @@ pub fn brief(manifest: &Manifest, authority: Authority, voice: Option<&Voice>) -
         OPENING.to_string(),
         this_repository(manifest),
         EACH_TURN.to_string(),
+        WHERE_THEY_ARE.to_string(),
         what_you_may_do(authority),
         HOW_YOU_ANSWER.to_string(),
     ];

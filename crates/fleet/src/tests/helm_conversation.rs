@@ -18,7 +18,9 @@ use std::time::Duration;
 
 use adapters::HeadlessAgent;
 use api::{Conversations, HelmSeen, HelmWatch, Refusal};
-use ipc::{AskHelm, Freshness, HelmMessage, HelmSilence, HelmText, Saw};
+use ipc::{
+    AskHelm, Freshness, HelmContext, HelmMessage, HelmScreen, HelmSilence, HelmText, JobId, Saw,
+};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
@@ -97,6 +99,7 @@ fn hosted(home: &TempDir) -> Arc<Hosted> {
 fn asking(text: &str) -> AskHelm {
     AskHelm {
         text: HelmText::said(text).expect("not blank"),
+        context: None,
     }
 }
 
@@ -237,6 +240,45 @@ async fn a_new_session_is_told_helms_brief_before_the_message_and_only_then() {
     );
     assert!(turns[0].contains("\\n\\ngrackle"), "{}", turns[0]);
     assert!(!turns[1].contains("You are Helm"), "{}", turns[1]);
+}
+
+/// `#1075`: the context Bridge sends with an ask reaches the session ahead of
+/// what was typed, and the thread's `asked` row never carries it.
+#[tokio::test]
+async fn the_context_reaches_the_session_and_not_the_thread() {
+    let home = TempDir::new();
+    let fleet = hosted(&home);
+    let mut live = fleet.observe_helm(None).await.expect("a conversation").live;
+
+    let context = HelmContext {
+        screen: HelmScreen::JobDetail,
+        picked: None,
+        chip: Some(JobId::carried("01JOB0000000000000000000A")),
+        cursor: None,
+    };
+    Arc::clone(&fleet)
+        .ask_helm(
+            AskHelm {
+                text: HelmText::said("what is this stuck on?").expect("not blank"),
+                context: Some(context),
+            },
+            None,
+        )
+        .await
+        .expect("the message is taken");
+    let first = reply(&mut live).await;
+
+    let turns = std::fs::read_to_string(state(&home).join("turns.log")).expect("turns");
+    let turn = turns.lines().next().expect("one turn logged");
+    assert!(
+        turn.contains("Job 01JOB0000000000000000000A is chipped"),
+        "the session is told where the person is: {turn}"
+    );
+
+    assert!(
+        matches!(&first[0], HelmMessage::Asked(asked) if asked.text == "what is this stuck on?"),
+        "the thread keeps only what was typed: {first:?}"
+    );
 }
 
 #[tokio::test]
