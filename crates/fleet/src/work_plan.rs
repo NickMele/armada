@@ -135,10 +135,20 @@ pub(crate) fn permitted(step: &ResolvedStep, change: &PlanChange) -> Result<(), 
     }
 }
 
-/// What `<plan_step_id>.evidence` reads: the plan as it stands when the gate
-/// runs, replacing whatever a Drone submitted about it. `reference_docs` and
-/// `baseline_ref` both reach this through `AtStep::baseline`, so one write
-/// here reaches both. `#895`.
+/// What `<recording_step_id>.evidence` reads: the plan as it stands when the
+/// gate runs, put beside whatever a Drone submitted about the step's own
+/// product. `reference_docs` and `baseline_ref` both reach this through
+/// `AtStep::baseline`, so one write here reaches both. `#895`, widened by
+/// `#1006`.
+///
+/// **The plan is never the whole of the record where the step has a product
+/// of its own.** A plan-product step's own submission already *is* the plan,
+/// so that case still replaces whole, exactly as before `#1006` — there is
+/// nothing beside it to lose. A step that declared `records_plan: true`
+/// beside another product keeps that submission and gets the plan appended
+/// after it: Epic's `dispatch` and `roll_up` still read `plan.evidence` as
+/// the split document `plan` produced, with the plan added rather than
+/// standing in its place.
 pub(crate) fn with_the_plan(
     mut recorded: Vec<(StepId, StepEvidence)>,
     workflow: &FrozenWorkflow,
@@ -150,16 +160,32 @@ pub(crate) fn with_the_plan(
     ) else {
         return recorded;
     };
-    recorded.retain(|(id, _)| id != step.id());
-    recorded.push((
-        step.id().clone(),
-        StepEvidence {
+    let own = recorded
+        .iter()
+        .position(|(id, _)| id == step.id())
+        .map(|at| recorded.remove(at).1);
+    let with_the_plan = match own {
+        // The step's own product is not the plan: keep what it submitted and
+        // put the plan after it, labelled apart, so a later step's
+        // `<step>.evidence` reads both rather than losing one.
+        Some(own) if own.evidence_type != EvidenceType::Plan => StepEvidence {
+            claimed: format!(
+                "{}\n\nThe Job's plan, as Fleet recorded it:\n\n{}",
+                own.claimed,
+                plan.rendered()
+            ),
+            ..own
+        },
+        // The step's own product is the plan, or nothing was recorded for it
+        // yet: the plan is the whole of what there is to read.
+        Some(_) | None => StepEvidence {
             evidence_type: EvidenceType::Plan,
             claimed: plan.rendered(),
             shown_by: String::from("Fleet's own record of the plan"),
             not_claimed: String::new(),
         },
-    ));
+    };
+    recorded.push((step.id().clone(), with_the_plan));
     recorded
 }
 

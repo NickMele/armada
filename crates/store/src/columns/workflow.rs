@@ -44,6 +44,12 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             // Absent rather than `false`, for `captured`'s reason: every row
             // frozen before a step could work a plan reads back as one that did not.
             "follows_plan": step.follows_plan().then_some(true),
+            // Absent rather than `false`, for `follows_plan`'s reason. The
+            // value already folds in a step whose product is `plan` —
+            // `ResolvedStep::records_plan` never disagrees with
+            // `evidence_type` — so `read_step` can OR this back in without
+            // asking which of the two ways made it true. `#1006`.
+            "records_plan": step.records_plan().then_some(true),
             "advance_gate": step.advance_gate().as_wire(),
             "retry_limit": step.retry_limit(),
             // The loop, written as the pair it is read as. Absent rather than
@@ -292,7 +298,22 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
     .looping(read_verdict_routing(entry)?, read_iteration_cap(entry)?)
     .quiet_after(read_patience(entry, "quiet_after_seconds")?)
     .poking(read_patience(entry, "poke_limit")?)
-    .following_plan(read_follows_plan(entry)?))
+    .following_plan(read_follows_plan(entry)?)
+    .also_recording_the_plan(read_records_plan(entry)?))
+}
+
+/// Whether the step declared `records_plan: true` beside its own product.
+/// **Absent and null read as no** — which includes every row frozen before
+/// the key existed, and every row where a plan step's own product already
+/// says so: `ResolvedStep::frozen` reads that off `evidence_type` and
+/// `also_recording_the_plan` only ever widens, so a `false` here never turns
+/// a real plan step's flag back off.
+fn read_records_plan(entry: &Map<String, Value>) -> Result<bool, Malformed> {
+    match entry.get("records_plan") {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(set)) => Ok(*set),
+        Some(other) => Err(format!("`records_plan` is {}", kind(other))),
+    }
 }
 
 /// Whether the step works the plan. **Absent and null read as no.**

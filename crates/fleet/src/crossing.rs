@@ -226,10 +226,15 @@ This Job and another were read off one              request, so neither waits on
     }
 }
 
-/// The Job's plan, on every step after the one that records it.
+/// The Job's plan, on every step after the one that records it, and on the
+/// recording step itself where it also follows the plan.
 ///
-/// **Never on the step that records it** — that one is asked through
-/// `record_plan`'s own description — **and never "step", "workflow" or
+/// **Absent on a step that only records** — that one is asked to record
+/// through `record_plan`'s own description, and its retry re-records rather
+/// than reading a plan it is not holding tasks for. **Present on a step that
+/// records and follows**, like `revert`'s one step, because a retry there is
+/// holding `update_task` for tasks it needs to see — `fleet::spawning` is
+/// where the two are told apart. **Never "step", "workflow" or
 /// `follows_plan`.** A Job with no recorded plan gets no block at all, per
 /// [`Crossed`]'s own rule. **Drafted**, like [`Overtaken`] beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -245,7 +250,9 @@ impl ThePlan {
             true => {
                 "\n\nKeep it current as you work: call update_task when you \
                  start a task and when it is done, and add_task for work the \
-                 plan missed. Drop a task with a reason rather than leaving \
+                 plan missed. The checks each part must pass run on their \
+                 own when that part is submitted, so do not add a task for \
+                 running them. Drop a task with a reason rather than leaving \
                  it open. A done task may move back; a dropped one stays \
                  dropped. A task's state decides nothing on its own — it is \
                  your account of the work, and the diff is what is checked."

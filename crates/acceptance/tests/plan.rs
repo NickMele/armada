@@ -2,6 +2,9 @@
 //! assertion is made against what crossed [`ipc::encode`], as `board.rs`'s are,
 //! and the apparatus is [`bench::plan`]. Every step of the claim is carried:
 //! #893 to #895 and #897 here, and #896 and #898 as the values their screens draw.
+//! #1006 widens it: a step may keep its own product and record the plan
+//! beside it, and neither a plan step nor a following one is ever told to plan
+//! a task for the checks that already run on their own.
 //!
 //! | Not proved here | Why not, and what proves it |
 //! |---|---|
@@ -26,8 +29,9 @@ use testkit::FakeJudge;
 
 use bench::board::{detail, received_detail, step_facts};
 use bench::plan::{
-    called, gated_on_implement, gated_on_the_plan, received_event, received_row, refused, Planned,
-    IMPLEMENT, PLAN,
+    bug_workflow_with_a_plan_beside_a_product, called, gated_on_implement, gated_on_the_plan,
+    received_event, received_row, refused, revert_shaped_workflow, Planned, IMPLEMENT, PLAN,
+    REVERT_SHAPED,
 };
 
 const FOUR_TASKS: &str = r#"{"approach":"Stop the reader at the end, then cover the bound",
@@ -120,6 +124,87 @@ fn the_plan_steps_brief_asks_it_to_record_the_plan() {
         !said.contains("THE PLAN\n"),
         "the recording step is not shown a plan it has not recorded: {said}"
     );
+    assert!(
+        said.contains(
+            "The checks each part must pass run on their own when that \
+             part is submitted, so the plan carries no task for running them."
+        ),
+        "the plan step is told not to plan a task for the checks that already run on their own: {said}"
+    );
+}
+
+/// **`#1006`'s widening: a step keeps its own product and records the plan
+/// beside it.** `read`'s brief asks for both — `WHAT THIS PART DELIVERS`
+/// still names `read.md`, and `RECORDING THE PLAN` is a second block beside
+/// it, carrying the same "no task for the checks" sentence as a pure plan
+/// step's. `implement`'s brief still shows THE PLAN, so `follows_plan` on a
+/// later step reads a plan recorded by a step whose own product was not
+/// `plan`.
+#[test]
+fn a_step_that_keeps_its_own_product_may_also_record_the_plan_beside_it() {
+    let planned = Planned::created_with(
+        "fix the reader's bound",
+        bug_workflow_with_a_plan_beside_a_product(),
+    );
+
+    let step = StepId::new("read");
+    let brief = briefing::first_turn(
+        &planned.job,
+        planned.job.workflow(),
+        &step,
+        &Crossed::nothing(),
+    )
+    .expect("a brief assembles");
+    let said = brief.as_str();
+
+    assert!(said.contains("WHAT THIS PART DELIVERS"), "{said}");
+    assert!(said.contains(".armada/artifacts/read.md"), "{said}");
+    assert!(said.contains("RECORDING THE PLAN"), "{said}");
+    assert!(said.contains("record_plan"), "{said}");
+    assert!(
+        said.contains(
+            "The checks each part must pass run on their own when that \
+             part is submitted, so the plan carries no task for running them."
+        ),
+        "{said}"
+    );
+}
+
+/// **The owner's follow-up, 13 Sep 2026: a step that records the plan and
+/// also follows it must still see THE PLAN on a retry.** `revert`'s shape —
+/// one step, `records_plan: true` and `follows_plan: true` together. Attempt
+/// 1 records the plan and marks a task done; attempt 2's opening brief must
+/// carry THE PLAN with that task's state, not a bare record instruction —
+/// without it a retried Drone holding `update_task` cannot see what it is
+/// updating. A step that only records, with no `follows_plan`, still gets no
+/// THE PLAN block; `the_plan_steps_brief_asks_it_to_record_the_plan` above
+/// pins that half.
+#[test]
+fn a_step_that_records_and_follows_the_plan_sees_it_on_a_retry() {
+    let mut planned = Planned::created_with("undo the change", revert_shaped_workflow());
+    planned.kept(called("record_plan", THREE_TASKS), REVERT_SHAPED, 1);
+    let plan = planned.kept(
+        called("update_task", r#"{"task":"T1","state":"done","reason":""}"#),
+        REVERT_SHAPED,
+        1,
+    );
+
+    let step = StepId::new(REVERT_SHAPED);
+    let follows = planned
+        .job
+        .workflow()
+        .step(&step)
+        .expect("revert_shaped is a real step")
+        .follows_plan();
+    assert!(follows, "the fixture step follows the plan it records");
+    let crossed = Crossed::nothing().and_the_plan(Some(ThePlan::of(&plan, follows)));
+    let brief = briefing::first_turn(&planned.job, planned.job.workflow(), &step, &crossed)
+        .expect("attempt 2's brief assembles");
+    let said = brief.as_str();
+
+    assert!(said.contains("THE PLAN"), "{said}");
+    assert!(said.contains("T1 [done]"), "{said}");
+    assert!(said.contains("update_task"), "{said}");
 }
 
 /// #894's other half of the same row: **a step that does not follow the plan

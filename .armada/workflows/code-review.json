@@ -28,6 +28,11 @@
 # nothing would otherwise reach `assess` and `deliver` unnoticed. The designed
 # targets are a registry name and `REVIEW.md`; M1 has no artifact registry, so
 # both are paths.
+#
+# **`read` records the plan, `#1006`.** It keeps `read.md` as its own product —
+# `records_plan: true` sits beside `evidence.submitted`, never inside it — and
+# `assess` follows. Code Review had no plan step before this; now a person
+# watching one sees the same task-by-task progress every other workflow shows.
 {
   "version": 1,
   "workflow_id": "code_review",
@@ -37,6 +42,7 @@
     {
       "id": "read",
       "label": "Read the diff",
+      "records_plan": true,
       "evidence": {
         "submitted": { "type": "facts_note" }
       },
@@ -44,6 +50,9 @@
         {
           "type": "artifact_exists",
           "target": ".armada/artifacts/read.md"
+        },
+        {
+          "type": "plan_recorded"
         }
       ],
       "delivers": false,
@@ -52,6 +61,7 @@
     {
       "id": "assess",
       "label": "Assess",
+      "follows_plan": true,
       "evidence": {
         "submitted": { "type": "review" }
       },

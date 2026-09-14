@@ -105,7 +105,7 @@ pub use crate::ruling::Ruling;
 /// | `ports`, `port_env` | The Job's claimed span, resolved to a name-to-port map and to the environment it sets. **Handed in for `lifted`'s reason** — this function is given a step and not a Job, and only a caller holding one can ask the store for its claim. `crate::ports` |
 /// | `refusal_policy` | This Job's `WhenRefused` setting, off the store. **Handed in for `lifted`'s reason** — a step cannot ask the store for a Job-level setting, and a setting read here for itself would be a second reader of the value `crate::asking::answer_judge` writes |
 /// | `tolerated` | Every criterion this repository has stood down with "always disagree", off the store. **Handed in and read once per pass**, so a criterion answered before this Job existed is never asked about again without a second query per criterion |
-/// | `plan` | The Job's plan as its history stands, off the store, or `None` where none was recorded. `plan_recorded` reads its counts; a step whose own product is `plan`, and a later step naming `<step_id>.evidence` for it, are handed the same record rendered as text — **a task's state never gates a submission**, which is `plan_recorded`'s own rule and not this one's to relax |
+/// | `plan` | The Job's plan as its history stands, off the store, or `None` where none was recorded. `plan_recorded` reads its counts; the step that records it — whether that is its whole product or `records_plan: true` beside another — and a later step naming `<step_id>.evidence` for it, are handed the same record rendered as text, beside whatever the step also delivers rather than in place of it. `#1006`. **A task's state never gates a submission**, which is `plan_recorded`'s own rule and not this one's to relax |
 #[allow(clippy::too_many_arguments)]
 pub async fn rule_on<W>(
     at: AtStep<'_>,
@@ -353,18 +353,7 @@ where
                     }
                 }
             };
-            // **A plan step delivers no file, and is handed the plan
-            // instead.** `step.deliverable()` answers `None` on it — its
-            // mechanical check is `plan_recorded`, never `artifact_exists` —
-            // so without this a step whose product is `plan` would reach its
-            // Judge with only the three lines a Drone submitted about it,
-            // never the approach and the tasks Fleet actually holds. `#895`.
-            let plan_text = plan.filter(|_| step.records_plan()).map(WorkPlan::rendered);
-            let target_and_bytes = match step.deliverable().zip(read.as_deref()) {
-                Some(found) => Some(found),
-                None => plan_text.as_deref().map(|text| ("the Job's plan", text)),
-            };
-            let delivered = match target_and_bytes {
+            let delivered = match step.deliverable().zip(read.as_deref()) {
                 None => None,
                 Some((target, bytes)) => match Delivered::read(target, bytes) {
                     Ok(delivered) => {
@@ -396,6 +385,40 @@ where
                     }
                 },
             };
+            // **A step that records the plan is handed the plan, beside
+            // whatever it also delivers.** `step.deliverable()` names its own
+            // product, where it has one — its mechanical tier gates on
+            // `plan_recorded`, never `artifact_exists`, for the plan itself —
+            // so without this a step recording the plan would reach its Judge
+            // with only the three lines a Drone submitted about it, never the
+            // approach and the tasks Fleet actually holds. `#895`, widened by
+            // `#1006` to run whether or not the step also delivers a file.
+            let plan_text = plan.filter(|_| step.records_plan()).map(WorkPlan::rendered);
+            let plan_delivered = match plan_text.as_deref() {
+                None => None,
+                Some(text) => match Delivered::read("the Job's plan", text) {
+                    Ok(delivered) => {
+                        // Kept for `delivered`'s reason, under its own target
+                        // so a step keeping a real deliverable does not have
+                        // the plan's copy overwrite it or be overwritten by it.
+                        keeping.kept(
+                            step.id(),
+                            at.attempt(),
+                            delivered.target(),
+                            delivered.contents(),
+                        );
+                        Some(delivered)
+                    }
+                    Err(cause) => {
+                        return Ruling::CouldNotDecide {
+                            artifact: "the Job's plan",
+                            cause: Box::new(cause),
+                            checks,
+                            output,
+                        }
+                    }
+                },
+            };
             let answered = Answered::of(&checks, &printed);
             match judging::judged(
                 at,
@@ -403,6 +426,7 @@ where
                 accepted,
                 &patch,
                 delivered,
+                plan_delivered,
                 answered,
                 &off_plan,
                 recorded,

@@ -82,28 +82,52 @@ impl Delivering {
     }
 }
 
-/// [`Delivering`]'s counterpart on the step it never fires for: a plan step
-/// declares no `deliverable`, so this fills the gap for spike 6's reason — a
-/// tool's own description does not make a Drone call it. **Drafted**, like
+/// [`Delivering`]'s counterpart on the step it never fires for on its own: a
+/// step that records the plan and nothing else declares no `deliverable`, so
+/// this fills the gap for spike 6's reason — a tool's own description does
+/// not make a Drone call it. **Since `#1006`, this may also fire beside
+/// [`Delivering`]**, on a step that keeps its own product and records the
+/// plan too — the text says which case it is, rather than always claiming the
+/// plan is the whole of what this part produces. **Drafted**, like
 /// [`Delivering`] and [`Checking`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecordingThePlan(String);
 
 impl RecordingThePlan {
-    /// `Some` on the step whose product is the Job's plan — the same switch
+    /// `Some` on the step that records the Job's plan — the same switch
     /// `crate::work_plan::plan_grants` reads to grant the tool at all.
     pub fn at(step: &ResolvedStep) -> Option<RecordingThePlan> {
         if !step.records_plan() {
             return None;
         }
-        Some(RecordingThePlan(String::from(
-            "WHAT THIS PART DELIVERS\n\nThis part's product is the Job's \
-             plan. Record it with record_plan: an approach in a paragraph, \
-             then the tasks it breaks into, in the order they will be \
-             done. Recording again replaces the whole plan, so correct one \
-             by recording it again. Recording does not finish this part — \
-             submit_evidence still does.",
-        )))
+        let text = match step.deliverable().is_some() {
+            // Beside a real deliverable, the plan is not the product —
+            // `Delivering` already told the Drone what is, and this says
+            // there is a second thing to record besides it.
+            true => {
+                "RECORDING THE PLAN\n\nBeside what this part delivers, it \
+                 also records the Job's plan. Record it with record_plan: \
+                 an approach in a paragraph, then the tasks it breaks into, \
+                 in the order they will be done. Recording again replaces \
+                 the whole plan, so correct one by recording it again. The \
+                 checks each part must pass run on their own when that \
+                 part is submitted, so the plan carries no task for \
+                 running them. Recording the plan does not finish this \
+                 part — submit_evidence still does."
+            }
+            false => {
+                "WHAT THIS PART DELIVERS\n\nThis part's product is the Job's \
+                 plan. Record it with record_plan: an approach in a \
+                 paragraph, then the tasks it breaks into, in the order \
+                 they will be done. Recording again replaces the whole \
+                 plan, so correct one by recording it again. The checks \
+                 each part must pass run on their own when that part is \
+                 submitted, so the plan carries no task for running them. \
+                 Recording does not finish this part — submit_evidence \
+                 still does."
+            }
+        };
+        Some(RecordingThePlan(String::from(text)))
     }
 
     /// The block, exactly as it reaches a Drone.

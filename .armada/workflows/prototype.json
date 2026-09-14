@@ -4,7 +4,14 @@
 #
 # The designed `prototype.json` is already linear, already three steps, and
 # already the one workflow carrying gateless steps by design: `frame` and
-# `write_up` have no mechanical tier and no Judge in the designed form either.
+# `write_up` have no Judge in the designed form either, and neither had a
+# mechanical tier until `frame` gained `plan_recorded` for `#1006` — the one
+# check `plan_recorded` ever needs on a step with no deliverable of its own.
+# `write_up` is still gateless.
+#
+# **`frame` records the plan, `#1006`.** It keeps its own `facts_note`
+# product — a Drone's three lines about what it is about to try — and
+# `build` follows. Prototype had no plan step before this.
 #
 # **This workflow carries no Judge, and that is a decision rather than an
 # omission.** The designed file carries none either. A prototype is built to
@@ -30,15 +37,22 @@
     {
       "id": "frame",
       "label": "Frame",
+      "records_plan": true,
       "evidence": {
         "submitted": { "type": "facts_note" }
       },
+      "mechanical_checks": [
+        {
+          "type": "plan_recorded"
+        }
+      ],
       "delivers": false,
       "advance_gate": "auto"
     },
     {
       "id": "build",
       "label": "Build",
+      "follows_plan": true,
       "evidence": {
         "submitted": { "type": "diff" }
       },

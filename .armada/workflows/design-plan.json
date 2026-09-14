@@ -24,6 +24,12 @@
 #
 # The deliverable stays under `.armada/`. Where one *should* live is
 # `[deliverable-location]` in `docs/OPEN.md`, and is a different question.
+#
+# **`draft` records the plan, `#1006`.** It keeps `draft.md`, and `present`
+# follows. `draft` is also the step a loop returns to, so each round records
+# again — `WorkPlan::after` replaces a `Recorded` change whole, so a second
+# round's recording is not a second plan beside the first, and
+# `crates/fleet/src/tests/looping.rs` drives this file round twice to prove it.
 {
   "version": 1,
   "workflow_id": "design_plan",
@@ -33,6 +39,7 @@
     {
       "id": "draft",
       "label": "Draft",
+      "records_plan": true,
       "evidence": {
         "submitted": { "type": "document" }
       },
@@ -40,6 +47,9 @@
         {
           "type": "artifact_exists",
           "target": ".armada/artifacts/draft.md"
+        },
+        {
+          "type": "plan_recorded"
         }
       ],
       "delivers": false,
@@ -48,6 +58,7 @@
     {
       "id": "present",
       "label": "Present",
+      "follows_plan": true,
       "evidence": {
         "submitted": { "type": "document" }
       },

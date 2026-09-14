@@ -92,7 +92,8 @@ pub(super) fn brief_told(
     let submitted = submitted();
     let patch = patch();
     let accepted = Accepted::of(step, &submitted).expect("the step asks for a diff");
-    let product = Product::of(step, &patch, accepted, None).expect("the step changed something");
+    let product =
+        Product::of(step, &patch, accepted, None, None).expect("the step changed something");
     Brief::about(
         step,
         &step.judge_checks()[0].criteria()[0],

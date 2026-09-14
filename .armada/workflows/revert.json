@@ -21,6 +21,12 @@
 #
 # `revert` carries the designed `regression_verify`'s `test` check, dropping its
 # `lint` check, which this repository's Manifest does not declare.
+#
+# **`revert` records the plan and follows it, on the one step there is,
+# `#1006`.** A revert has one step and no plan step to put ahead of it, and
+# `#1006` is what makes that legal: `follows_plan: true` on the same step
+# that declares `records_plan: true` was refused before this, and is now the
+# shape this workflow needs.
 {
   "version": 1,
   "workflow_id": "revert",
@@ -30,6 +36,8 @@
     {
       "id": "revert",
       "label": "Undo the change",
+      "records_plan": true,
+      "follows_plan": true,
       "evidence": {
         "submitted": { "type": "diff" }
       },
@@ -40,6 +48,9 @@
         },
         {
           "type": "diff_nonempty"
+        },
+        {
+          "type": "plan_recorded"
         }
       ],
       "declare_plan_at": "step_start",

@@ -15,8 +15,7 @@
 use std::num::NonZeroU32;
 
 use core_model::{
-    EvidenceType, ARTIFACT_EXISTS, DIFF_NONEMPTY, EVERY_MANIFEST_CHECK, MANIFEST_CHECK,
-    PLAN_RECORDED,
+    ARTIFACT_EXISTS, DIFF_NONEMPTY, EVERY_MANIFEST_CHECK, MANIFEST_CHECK, PLAN_RECORDED,
 };
 use serde_yaml_ng::Value;
 
@@ -125,12 +124,13 @@ const MIN_TASKS_DEFAULT: NonZeroU32 = NonZeroU32::MIN;
 /// An absent key and `mechanical_checks: []` are the same empty list, which is
 /// what a gateless step wrote either way.
 ///
-/// `produces` is the step's own `evidence.submitted.type`, read before this is
-/// called — it is what tells `plan_recorded` from every other check whose
-/// step must be the one that records a plan.
+/// `may_record_plan` is whether this step records the Job's plan at all —
+/// `evidence.submitted.type: "plan"`, `records_plan: true`, or both — read
+/// before this is called. It is what tells `plan_recorded` from every other
+/// check whose step must be one that records a plan. `#1006`.
 pub(crate) fn checks(
     table: &mut Table<'_>,
-    produces: Option<EvidenceType>,
+    may_record_plan: bool,
     out: &mut Vec<Refusal>,
 ) -> Vec<MechanicalCheck> {
     table
@@ -150,7 +150,7 @@ pub(crate) fn checks(
             let mut named_at: Option<usize> = None;
             let mut checks = Vec::with_capacity(items.len());
             for (n, (at, item)) in items.iter().enumerate() {
-                let Some(check) = check(at, item, produces, out) else {
+                let Some(check) = check(at, item, may_record_plan, out) else {
                     continue;
                 };
                 if let MechanicalCheck::ArtifactExists { target } = &check {
@@ -238,7 +238,7 @@ fn artifact_target(at: &str, target: String, out: &mut Vec<Refusal>) -> Option<S
 fn check(
     at: &str,
     value: &Value,
-    produces: Option<EvidenceType>,
+    may_record_plan: bool,
     out: &mut Vec<Refusal>,
 ) -> Option<MechanicalCheck> {
     let mut table = Table::open(at, value, out)?;
@@ -285,11 +285,12 @@ fn check(
         }
         PLAN_RECORDED => {
             // **Refused here, at the check, and not only at the step.** A
-            // `plan_recorded` on a step whose product is not `plan` is an
+            // `plan_recorded` on a step that does not record the plan — its
+            // product is not `plan` and it declares no `records_plan` — is an
             // assertion about a record nothing here freezes for that step —
             // `docs/concepts/plan.md` is one Plan per Job, held by the Job
             // and not by a step.
-            if produces != Some(EvidenceType::Plan) {
+            if !may_record_plan {
                 out.push(Refusal::new(
                     table.at("type"),
                     Fault::PlanRecordedNotOnAPlanStep,
@@ -307,7 +308,7 @@ fn check(
                 Some(value) => yaml::positive(&min_tasks_key, value, out).and_then(NonZeroU32::new),
             };
             table.close(PLAN_RECORDED_KEYS, out);
-            match produces == Some(EvidenceType::Plan) {
+            match may_record_plan {
                 true => Some(MechanicalCheck::PlanRecorded {
                     min_tasks: min_tasks?,
                 }),

@@ -23,7 +23,9 @@
 //! and a test in which nothing is ever written proves it by never running it.
 
 use adapter_traits::WorktreeSpec;
-use core_model::{EvidenceType, JobId, JobStatus, Origin, StepId, StepState};
+use core_model::{
+    Approach, EvidenceType, JobId, JobStatus, NewTask, Origin, PlanChange, StepId, StepState,
+};
 use ipc::mcp::DispatchJob;
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct};
 use verification::{Claimed, NotClaimed, ShownBy};
@@ -164,8 +166,23 @@ async fn planning_a_wave(home: &TempDir) -> (Fixture, JobId) {
     (fleet, id)
 }
 
-/// The plan is submitted and the Job stands at the gate a person answers.
-async fn presented_the_plan(fleet: &Fixture) {
+/// One recording of the wave's plan — `plan` keeps its split, `plan.md`, and
+/// records the plan beside it, `#1006`, so `plan_recorded` gates its advance
+/// exactly as it gates a step whose whole product is the plan.
+fn a_wave_plan() -> PlanChange {
+    PlanChange::Recorded {
+        approach: Approach::new("Dispatch the one piece the split names").expect("an approach"),
+        tasks: vec![NewTask::new("Port the parser", "").expect("a title")],
+    }
+}
+
+/// The plan is recorded, submitted, and the Job stands at the gate a person
+/// answers.
+async fn presented_the_plan(fleet: &Fixture, job: &JobId) {
+    fleet
+        .change_plan(job, &a_wave_plan())
+        .await
+        .expect("the planning step may record the wave's plan");
     submitted_by_the_one(fleet, document("The split is drawn."))
         .await
         .expect("the plan is reported");
@@ -226,7 +243,7 @@ async fn only_the_dispatching_step_may_create_jobs() {
         "the planning step has no tool and no call: {refused:?}",
     );
 
-    presented_the_plan(&fleet).await;
+    presented_the_plan(&fleet, &job).await;
     approved_the_plan(&fleet, &job, &home).await;
     let standing = fleet.load(&job).await.expect("the Job reads back");
     assert_eq!(standing.current_step_id(), Some(&dispatching()));
@@ -256,7 +273,7 @@ async fn only_the_dispatching_step_may_create_jobs() {
 async fn one_approval_dispatches_a_wave_and_the_parent_returns_to_roll_it_up() {
     let home = TempDir::new();
     let (fleet, job) = planning_a_wave(&home).await;
-    presented_the_plan(&fleet).await;
+    presented_the_plan(&fleet, &job).await;
     approved_the_plan(&fleet, &job, &home).await;
 
     let child = fleet
@@ -308,7 +325,7 @@ async fn one_approval_dispatches_a_wave_and_the_parent_returns_to_roll_it_up() {
 async fn a_roll_up_that_asks_for_another_wave_re_enters_the_plan() {
     let home = TempDir::new();
     let (fleet, job) = planning_a_wave(&home).await;
-    presented_the_plan(&fleet).await;
+    presented_the_plan(&fleet, &job).await;
     approved_the_plan(&fleet, &job, &home).await;
 
     let child = fleet

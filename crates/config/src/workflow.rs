@@ -291,30 +291,42 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
         }
     }
 
-    // **A workflow holds one plan, or none.** A second step whose product is
-    // `plan` would be a second record nothing after either could tell from
-    // the first — `TwoDeliveringSteps`'s shape, for the same reason: reported
-    // on the second and naming the first.
+    // **A workflow holds one plan, or none.** A second step that records the
+    // plan — whether its whole product is `plan` or it declares
+    // `records_plan: true` beside another — would be a second record nothing
+    // after either could tell from the first — `TwoDeliveringSteps`'s shape,
+    // for the same reason: reported on the second and naming the first.
     //
     // **This is also where `follows_plan` is checked against position**,
     // rather than on the step alone: a step cannot know, by itself, whether
-    // anything earlier in the file records a plan. One pass answers all three
-    // ways `follows_plan` can be wrong — on the plan step itself, on a step
-    // before it, or in a workflow with no plan step at all — because each of
-    // those is exactly "no step at an earlier index has `plan` as its
-    // product."
+    // anything at or before it in the file records a plan. One pass answers
+    // both ways `follows_plan` can still be wrong — on a step strictly
+    // before the recording step, or in a workflow with no recording step at
+    // all — because each is exactly "no step at this index or earlier
+    // records the plan." **The recording step itself is no longer one of
+    // them**: `first_at > *n` rather than `>=` is what lets `revert` both
+    // record the plan and work it in the same step. `#1006`.
     let mut plan_at: Option<usize> = None;
     for (n, step) in &placed {
-        if step.evidence_type() == Some(EvidenceType::Plan) {
+        // **Named at whichever key said so.** A step whose whole product is
+        // `plan` is refused at that key, exactly as before this field
+        // existed; a step that declared `records_plan: true` beside another
+        // product is refused at that one instead.
+        let plan_key = match step.evidence_type() == Some(EvidenceType::Plan) {
+            true => Some(format!("steps[{n}].evidence.submitted.type")),
+            false => step
+                .records_plan()
+                .then(|| format!("steps[{n}].records_plan")),
+        };
+        if let Some(plan_key) = plan_key {
             match plan_at {
-                Some(first_at) => out.push(Refusal::new(
-                    format!("steps[{n}].evidence.submitted.type"),
-                    Fault::TwoPlanSteps { first_at },
-                )),
+                Some(first_at) => {
+                    out.push(Refusal::new(plan_key, Fault::TwoPlanSteps { first_at }))
+                }
                 None => plan_at = Some(*n),
             }
         }
-        if step.follows_plan() && plan_at.is_none_or(|first_at| first_at >= *n) {
+        if step.follows_plan() && plan_at.is_none_or(|first_at| first_at > *n) {
             out.push(Refusal::new(
                 format!("steps[{n}].follows_plan"),
                 Fault::FollowsPlanWithNoPlanStep,

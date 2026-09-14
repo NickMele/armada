@@ -1094,8 +1094,11 @@ file path.
 │ with record_plan: an approach in a paragraph, then
 │ the tasks it breaks into, in the order they will be
 │ done. Recording again replaces the whole plan, so
-│ correct one by recording it again. Recording does
-│ not finish this part — submit_evidence still does.
+│ correct one by recording it again. The checks each
+│ part must pass run on their own when that part is
+│ submitted, so the plan carries no task for running
+│ them. Recording does not finish this part —
+│ submit_evidence still does.
 └──────────────────────────────────────────────
 ```
 

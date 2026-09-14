@@ -158,7 +158,7 @@ What the Judge receives for each value, and what `context_paths` is for in each 
 
 **`shown` was a value here and is not one now.** Every value in this set is a claim a Drone hands in and the gate measures; `shown` was never a claim by anybody — it meant *Fleet, run the repository's harness* — which is why it could not sit beside `diff`. `captured` is where that instruction lives. `#777`.
 
-**`plan` joined the set with `#895`.** It is Fleet's own record — an approach and a list of tasks, recorded through the `record_plan` tool rather than written to a file — and the step that declares it is the one `plan_recorded` and `follows_plan` both point at. `crate::WorkPlan`.
+**`plan` joined the set with `#895`.** It is Fleet's own record — an approach and a list of tasks, recorded through the `record_plan` tool rather than written to a file — and the step that declares it is the one `plan_recorded` and `follows_plan` both point at. `crate::WorkPlan`. **`#1006`** gave a step recording the plan beside another product a second way to say so, `records_plan`, without needing `plan` here at all — see that row.
 
 Whether the field earns its place at all is still a person's question, open at `[evidence-mcp-submission-schema]`, which also defers the typed payloads for `bundle`, `document` and `review_findings`.
 """
@@ -202,9 +202,26 @@ purpose = "Whether this step works the Job's plan. Optional, and absent means it
 notes = """
 **The one thing that grants `add_task` and `update_task`.** A step declaring it is handed the two tools that keep the plan current — `crate::WorkPlan` is the record they change — beside whatever the step already asks a Drone for. `#895`.
 
-**Legal only on a step strictly after the one whose product is `plan`.** On the plan step itself, on a step before it, or in a workflow declaring no plan step at all, it is a step asked to work a plan that does not exist yet from where it stands — refused at load, one rule covering all three, because each is exactly the same missing fact: no earlier step recorded one.
+**Legal on the step that records the plan, and on any step after it.** On a step strictly before the recording step, or in a workflow declaring no recording step at all, it is a step asked to work a plan that does not exist yet from where it stands — refused at load, one rule covering both, because each is exactly the same missing fact: no step at or before this one records one. **`#1006` widened this**: it used to refuse the recording step itself too, which stopped a single step planning and keeping its own tasks current in the same breath — `revert`'s shape, where one step records the plan and works it.
 
-**False on every step written before the key existed.** A workflow with no plan step grants neither tool to anybody, which is what every step did before this key could be written at all.
+**False on every step written before the key existed.** A workflow with no recording step grants neither tool to anybody, which is what every step did before this key could be written at all.
+"""
+
+[fields.records_plan]
+type = "bool"
+concern = "Gating"
+parent = "steps[]"
+purpose = "Whether this step records the Job's plan beside its own product. Optional, and absent means it does not."
+notes = """
+**`#1006`.** Before this, only a step whose whole product was `plan` could record one — costing Code Review its `read.md`, Epic its split, and adding a whole extra step to Design Plan and Revert, each just to hold a plan. This key lets any step keep its own product and record the plan too: the step is given `record_plan`, exactly as a `plan`-product step is, and must declare `plan_recorded` — refused as `PlanStepWithoutPlanRecorded` where it does not, the same fault a `plan`-product step draws.
+
+**`submitted.type: "plan"` still works, unchanged.** A step whose whole product is the plan does not need this key — declaring both would say the same thing twice, and nothing refuses the redundancy because nothing needs to: `ResolvedStep::records_plan` reads the two together, so a caller asking "does this step record the plan" never has to pick which spelling answered.
+
+**At most one step per workflow may record the plan, whichever spelling it uses.** A second one — `plan` product or `records_plan: true` — is `TwoPlanSteps`, named at whichever key the second step wrote.
+
+**Legal on a step that also declares `follows_plan: true`.** The two used to be mutually exclusive by construction, because `follows_plan` was refused on the plan step itself; `#1006` allows both on one step, so a single step may plan and keep its own tasks current — `revert`'s shape, the one carried workflow with no room for a second step.
+
+**The five workflows this closes:** Code Review's `read` keeps `read.md`; Design Plan's `draft` keeps its draft, and records again each time the loop returns to it; Epic's `plan` keeps its split, and the same; Prototype's `frame` keeps its `facts_note`; Revert's one step, `revert`, both records and follows.
 """
 
 [fields.for_requests]
@@ -359,9 +376,9 @@ This is what makes a step's product a file rather than a claim about one. A step
 [[fields.mechanical_checks.types]]
 type = "plan_recorded"
 asserts = "The Job's plan holds at least `min_tasks` tasks not dropped. Carries `min_tasks`, default 1"
-used_by = []
+used_by = ["Bug", "Refactor", "Feature", "Code Review", "Design Plan", "Epic", "Prototype", "Revert"]
 notes = """
-**Legal only on the step whose product is `plan`, and required there.** The check reads Fleet's own record — never the Drone's word about it — so it has nothing to read on any other step; a step naming `plan` and declaring none of these is refused the other way, for the reason `delivers` is required rather than defaulted: neither absence is safe. `#895`.
+**Legal on the step that records the plan, and required there.** The check reads Fleet's own record — never the Drone's word about it — so it has nothing to read on any other step; a recording step declaring none of these is refused the other way, for the reason `delivers` is required rather than defaulted: neither absence is safe. `#895`. **A step records the plan two ways**, since `#1006`: its whole product is `plan`, or it declares `records_plan: true` beside another — `PlanRecordedNotOnAPlanStep` is refused against the same test either way.
 
 **`min_tasks` defaults to 1 and refuses 0.** A step that says nothing is held to the plan existing at all; a stated zero asked for a check nothing could ever fail, which is not the shape a default takes — so it is refused rather than carried.
 
@@ -551,7 +568,7 @@ No sample carries one yet.
 [fields."steps[]"]
 type = "array[step]"
 concern = "Structure"
-sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence", "advance_gate", "delivers", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit", "follows_plan"]
+sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence", "advance_gate", "delivers", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit", "follows_plan", "records_plan"]
 purpose = "The ordered set of steps. Everything nested under this row is a field of a step, not of the WorkflowDef."
 notes = """
 Ordered, and loop-capable: `structure: "loop"` means a step returns to an earlier one by `verdict_routing`, not that the array is unordered.

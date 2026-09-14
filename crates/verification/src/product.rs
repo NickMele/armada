@@ -200,6 +200,13 @@ pub struct Product<'a> {
     written: Option<Written<'a>>,
     delivered: Option<Delivered<'a>>,
     changed: Option<&'a Patch>,
+    /// The Job's plan, where this step records one **beside** its own
+    /// product. **Never the same slot as [`delivered`](Self::delivered)** —
+    /// a step whose whole product is the plan reads it through `written`,
+    /// off its own submission, exactly as before `#1006`; this is only the
+    /// companion reading, on a step that keeps a deliverable or a diff of
+    /// its own and records the plan too. `crate::gate` for who fills it in.
+    plan: Option<Delivered<'a>>,
 }
 
 impl<'a> Product<'a> {
@@ -209,11 +216,17 @@ impl<'a> Product<'a> {
     /// not the step's declared product, and it is not dropped either: the
     /// mandatory drift look asks whether files this step changed were its task
     /// to change, and an answer to that needs the change.
+    ///
+    /// `plan` is read alongside `delivered` and never in place of it — a step
+    /// that records the plan beside its own product must show a Judge both,
+    /// labelled apart, so a criterion about one is never answered against the
+    /// other. `#1006`.
     pub fn of(
         step: &ResolvedStep,
         patch: &'a Patch,
         accepted: Accepted<'a>,
         delivered: Option<Delivered<'a>>,
+        plan: Option<Delivered<'a>>,
     ) -> Result<Product<'a>, NothingToJudge> {
         let moved = (!patch.as_str().trim().is_empty()).then_some(patch);
         match Written::of(step, accepted) {
@@ -221,6 +234,7 @@ impl<'a> Product<'a> {
                 written: Some(written),
                 delivered,
                 changed: moved,
+                plan,
             }),
             // A step whose product is the change, and no change. Not a refusal:
             // the mechanical tier is where an empty diff is answered, by a
@@ -232,6 +246,7 @@ impl<'a> Product<'a> {
                     written: None,
                     delivered,
                     changed: Some(patch),
+                    plan,
                 }),
             },
         }
@@ -250,6 +265,11 @@ impl<'a> Product<'a> {
     /// The diff, where anything changed on disk.
     pub fn changed(&self) -> Option<&'a Patch> {
         self.changed
+    }
+
+    /// The Job's plan, where this step records one beside its own product.
+    pub fn plan(&self) -> Option<Delivered<'a>> {
+        self.plan
     }
 
     /// The work product, laid out for one call, in labelled parts.
@@ -278,8 +298,23 @@ impl<'a> Product<'a> {
             told.push('\n');
             parts.push((String::from(DELIVERABLE), told));
         }
+        // **After the deliverable and before the summary, and its own
+        // label.** A step that records the plan beside its own product must
+        // never have the two conflated — a criterion about the deliverable is
+        // never answered against the plan, and the reverse. `#1006`.
+        if let Some(plan) = self.plan {
+            let mut told = String::from(
+                "The Job's plan, as Fleet's own record holds it now. Read \
+                 separately from what this step delivers, and never in \
+                 place of it:\n\n",
+            );
+            told.push_str(plan.contents);
+            told.push('\n');
+            parts.push((String::from(PLAN), told));
+        }
         if let Some(written) = self.written {
-            let mut told = String::from(match self.delivered.is_some() {
+            let big_document_above = self.delivered.is_some() || self.plan.is_some();
+            let mut told = String::from(match big_document_above {
                 true => {
                     "\nThe summary submitted with it. The document is above; \
                      these three lines are not it:\n\n"
@@ -298,7 +333,9 @@ impl<'a> Product<'a> {
             parts.push((String::from(SUMMARY), told));
         }
         if let Some(patch) = self.changed {
-            let mut told = String::from(match self.written.is_some() || self.delivered.is_some() {
+            let big_document_above =
+                self.written.is_some() || self.delivered.is_some() || self.plan.is_some();
+            let mut told = String::from(match big_document_above {
                 // Said plainly, so a Judge weighing a written deliverable does
                 // not read the files beside it as the thing it was asked about.
                 true => "\nThe step also changed these files:\n\n",
@@ -314,6 +351,10 @@ impl<'a> Product<'a> {
 
 /// What the document a step was asked for is called on a citation.
 const DELIVERABLE: &str = "deliverable";
+
+/// What the Job's plan is called on a citation, where a step records it
+/// beside another product. `#1006`.
+const PLAN: &str = "plan";
 
 /// What the three lines submitted with it are called. Never `deliverable`: on
 /// a step that wrote a document they are a summary *of* it, and a citation that

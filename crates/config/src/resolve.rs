@@ -320,9 +320,13 @@ fn resolve_step(
     .quiet_after(step.quiet_after_seconds())
     .poking(step.poke_limit())
     // Read straight off the step: `super::workflow` already refused a
-    // `follows_plan` with no plan step before it, so there is nothing left
-    // to decide here.
+    // `follows_plan` with no recording step at or before it, so there is
+    // nothing left to decide here.
     .following_plan(step.follows_plan())
+    // The step's own product already told `ResolvedStep::frozen` whether
+    // this is a plan step; this is the other way one can be, folded in
+    // beside it rather than replacing it. `#1006`.
+    .also_recording_the_plan(step.records_plan())
 }
 
 /// What a step's work stays out of where nothing above it said.

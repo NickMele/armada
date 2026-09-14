@@ -57,7 +57,7 @@ Picking one by hand stays available and is the override, not the path. That docu
 
 **Three places, merged by `workflow_id`, the most specific winning**: the set Armada carries, then [Kit](kit.md)'s Workflows at `~/.armada/workflows/`, then the repository's own `.armada/workflows/`. A repository with no workflows of its own dispatches on the carried set, and one file in either later place replaces a carried definition by id. `config::Catalogue` holds the rule. #425.
 
-**The carried set is this repository's eight definitions, compiled in**, and is judged against a repository with tests — Armada's built-in support is for code-with-tests repositories, the owner's decision. None of the eight names a Check: they gate on `every_manifest_check`, `artifact_exists`, `plan_recorded`, `diff_nonempty` and Judge checks, so each resolves against any Manifest, and a repository declaring no Checks runs that gate as nothing. See The plan step, below: Bug, Refactor and Feature use `plan_recorded` on their planning step, and `epic`, `code_review`, `design_plan`, `prototype` and `revert` do not have one yet.
+**The carried set is this repository's eight definitions, compiled in**, and is judged against a repository with tests — Armada's built-in support is for code-with-tests repositories, the owner's decision. None of the eight names a Check: they gate on `every_manifest_check`, `artifact_exists`, `plan_recorded`, `diff_nonempty` and Judge checks, so each resolves against any Manifest, and a repository declaring no Checks runs that gate as nothing. See The plan step, below: all eight now use `plan_recorded` on the step that records their plan.
 
 **That is Armada holding an opinion it used to refuse.** An empty `.armada/workflows/` was refused because a repository declares how its own work is done, and a carried set is Armada saying how work is done by default. The trade is accepted, and overriding is one file so that the default does not become the only way.
 
@@ -75,28 +75,40 @@ A Job instance references `workflow_id` and carries its own `status`, `current_s
 
 ### The plan step
 
-**A workflow may name at most one step as its plan step**, by giving it
-`evidence.submitted.type: "plan"` and a `plan_recorded` mechanical check
-declaring `min_tasks`. `plan_recorded` passes when a
-[Plan](plan.md) exists with at least that many tasks, and resolves against
-any Manifest the same way `every_manifest_check`, `artifact_exists` and
-`diff_nonempty` do, since a Plan is not manifest-specific.
+**A workflow may name at most one step as its recording step**, the one
+that keeps [Plan](plan.md). It names itself either of two ways: giving the
+step `evidence.submitted.type: "plan"`, where the plan is the whole of its
+product, or giving it `records_plan: true` beside another product — Code
+Review's `read` keeps `read.md` and records the plan too, Epic's `plan`
+keeps its split. Either way it needs a `plan_recorded` mechanical check
+declaring `min_tasks`. `plan_recorded` passes when a Plan exists with at
+least that many tasks, and resolves against any Manifest the same way
+`every_manifest_check`, `artifact_exists` and `diff_nonempty` do, since a
+Plan is not manifest-specific. A second step recording a plan, whichever
+spelling it uses, is refused.
 
 **A later step follows the plan by declaring `follows_plan: true`.** It is
 shown the plan in its brief and may add or update a task; a step without it
-may read the plan but not change it. `follows_plan` is refused on or before
-the plan step, and in a workflow with no plan step at all.
+may read the plan but not change it. `follows_plan` is legal on the
+recording step itself — Revert's one step both records the plan and works
+it, since Revert has no earlier step to put a recording step on — and on
+any step after it. It is refused on a step strictly before the recording
+step, and in a workflow with no recording step at all.
 
-**Its Judge reads the plan rendered as text** — the approach, then every
-task with its id, title, state and a dropped task's reason — where
-`submitted.type` is `plan`. `context_paths` is not the point on a plan
-step: task states are, so the whole payload is handed over rather than a
-scoped slice.
+**Its Judge reads the plan rendered as text, beside whatever the step
+delivers or changes, labelled apart** — the approach, then every task with
+its id, title, state and a dropped task's reason. `context_paths` is not
+the point on the plan half: task states are, so the whole payload is
+handed over rather than a scoped slice. The plan never replaces a step's
+own deliverable or diff, and `<recording_step>.evidence` reads the same
+pairing for a later step's `reference_docs` — [Plan](plan.md) has the rest.
 
 Built as the Plan milestone. #895 wires these fields into the loader;
 #893 gives a Drone the `record_plan`, `add_task` and `update_task` tools
 that fill them; #894 switches Bug, Refactor and Feature onto a plan step and
-puts THE PLAN in every brief after it.
+puts THE PLAN in every brief after it. #1006 let any step record the plan
+beside its own product, so Code Review, Design Plan, Epic, Prototype and
+Revert could each keep one without adding or reshaping a step.
 
 ## Evidence scope object
 
