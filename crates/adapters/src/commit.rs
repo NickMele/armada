@@ -38,6 +38,7 @@ pub(crate) fn commit_all(
     at: CommitTime,
 ) -> Result<Committed, CommitWorkError> {
     let repo = open(worktree)?;
+    refuse_unmerged(&repo, worktree)?;
     let tree_id = stage_everything(&repo, worktree.path())?;
     let parent = tip(&repo);
     if parent.as_ref().is_some_and(|tip| tip.tree_id() == tree_id) {
@@ -66,6 +67,7 @@ pub(crate) fn commit_paths(
         });
     }
     let repo = open(worktree)?;
+    refuse_unmerged(&repo, worktree)?;
     let staged = |cause| CommitWorkError::NotStaged {
         worktree: worktree.path().to_string(),
         cause,
@@ -91,6 +93,34 @@ pub(crate) fn commit_paths(
         return Ok(Committed::NothingToCommit);
     }
     made(&repo, worktree, tree_id, parent.as_ref(), message, at)
+}
+
+/// Refuse a worktree whose index still holds unmerged paths — a conflict a
+/// rebase or a stash pop left behind and nobody resolved. `add_all` and
+/// `git add` alike would stage the marker text as ordinary file content and
+/// call it resolved; this runs first so that never happens. `#1097`.
+fn refuse_unmerged(repo: &Repository, worktree: &Worktree) -> Result<(), CommitWorkError> {
+    let index = repo.index().map_err(|cause| CommitWorkError::NotStaged {
+        worktree: worktree.path().to_string(),
+        cause,
+    })?;
+    if !index.has_conflicts() {
+        return Ok(());
+    }
+    let mut paths: Vec<String> = index
+        .conflicts()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|conflict| conflict.our.or(conflict.their).or(conflict.ancestor))
+        .map(|entry| String::from_utf8_lossy(&entry.path).into_owned())
+        .collect();
+    paths.sort();
+    paths.dedup();
+    Err(CommitWorkError::UnmergedPaths {
+        worktree: worktree.path().to_string(),
+        paths,
+    })
 }
 
 /// Stage everything git can see, and answer with the tree it makes.
