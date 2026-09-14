@@ -73,6 +73,11 @@ checks:
       under: crates
       except:
         - acceptance
+    # One test by exact name, which Fleet runs against a checkout of main before
+    # a Drone's `draft_fix` drafts anything. The whole run's exclusion stays, so a
+    # test this Check never runs cannot be named. #999.
+    one_test:
+      run: cargo nextest run --workspace --exclude acceptance -E test(={})
 
   # The Bridge half — `build` and `test` say nothing about `apps/` or
   # `packages/`. Three, because none subsumes another. All need `node_modules`,

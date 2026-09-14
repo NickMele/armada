@@ -275,6 +275,42 @@ Rules that follow:
   edit to `armada.yml` changes the next Job rather than what a running Drone is
   told about its own work.
 
+## Running one test by name
+
+Added 13 September 2026, with `checks.<name>.one_test` and `#999`. A Drone that
+says a test is broken on main, not by its change, is asking a question, and Fleet
+answers it by running just that test against a checkout of main before any fix
+is drafted. A Check could only run whole or narrowed by paths, so nothing could
+name one test.
+
+The block, and its one key:
+
+| Key | Required | What it says |
+| --- | --- | --- |
+| `run` | yes | The whole command that runs one test. `{}` is the test's name, and a command without one is refused |
+
+```yaml
+checks:
+  test:
+    run: cargo nextest run --workspace --exclude acceptance
+    one_test:
+      run: cargo nextest run --workspace --exclude acceptance -E test(={})
+```
+
+Rules that follow:
+
+- **The Drone names the test and never the command.** `draft_fix` takes the
+  Check and the test's name; the command is the repository's.
+- **The name gets the guard a narrowed value gets.** A name that cannot be one
+  argument runs nothing, so a Drone cannot write its way out of it.
+- **Absent means nothing can be confirmed.** A Check with no `one_test` is
+  refused by name when a Drone reports a test under it, and nothing is drafted.
+- **A run against main gates nothing.** A test that fails there drafts a Job
+  that waits for a person, and the Drone's own step is still decided by its
+  Checks.
+- **It is frozen with the workflow**, and `after_merge` drops it for the reason
+  it drops `narrow`.
+
 ## What a passing run of a Check looks like
 
 Added 8 September 2026, with `checks.<name>.expect_exit_code`. The key was on

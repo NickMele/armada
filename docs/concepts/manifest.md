@@ -238,6 +238,28 @@ Rules that follow:
 - **`except` restates an exclusion the whole run already makes.** Dropping `--workspace` so `-p` means something drops `--exclude` with it, and a narrowed `test` that pulled `acceptance` back in would show a Drone a bar the gate deliberately does not apply — the one case where a narrowed run is misleading rather than merely smaller.
 - **It is frozen with the workflow**, beside the Check's command.
 
+### Running one test by name
+
+**A Check may declare `one_test`, and it is what Fleet runs against a checkout of main before a Drone's `draft_fix` drafts anything.** The Configuration contract holds the syntax.
+
+```yaml
+checks:
+  test:
+    run: cargo nextest run --workspace --exclude acceptance
+    one_test:
+      run: cargo nextest run --workspace --exclude acceptance -E test(={})
+```
+
+Decided 13 Sep 2026 for #999, after several running Jobs each fixed the same flaky test inside their own change. A Drone that says a test is broken on main is asking a question: Fleet runs just that test there, drafts the fix only where it fails there too, and claims the test for that fix so a second report drafts nothing.
+
+Rules that follow:
+
+- **Absent means a report cannot be confirmed.** A Check with no `one_test` gives Fleet no way to run one test, so a Drone naming a test under it is refused and nothing is drafted.
+- **`{}` is the test's name, and a command without it is refused at load**, the way every template with nowhere to substitute is.
+- **The name is the Drone's.** It gets the guard a narrowed value gets: a name that cannot be one argument runs nothing.
+- **The run gates nothing.** A test that fails on main drafts a Job that waits for a person, and the Drone's own step is still decided by its Checks.
+- **It is frozen with the workflow**, beside the Check's command, and `after_merge` drops it for the reason it drops `narrow`.
+
 ### Proving what merged
 
 **A Manifest may name Checks to run against the tree a merge left behind, and absent means none run.**
