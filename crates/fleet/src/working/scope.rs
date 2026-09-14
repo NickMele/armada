@@ -1,9 +1,11 @@
 //! What the step said it would touch, and what the worktree actually holds.
 //!
 //! **The slot's half of `crate::scope` and `crate::footprint`.** A declaration
-//! replaces rather than widens the one before it, the drift is kept in the
-//! order first seen so the live check says a thing once, and the baseline the
-//! step entered with is written at dispatch and never again.
+//! replaces rather than widens the one before it, a path outside the plan is
+//! confirmed on its second consecutive reading before it is kept as drift, the
+//! drift is kept in the order first seen so the live check says a thing once,
+//! and the baseline the step entered with is written at dispatch and never
+//! again.
 //!
 //! **Nothing here reads a disk.** Every value below arrives from a caller that
 //! already looked, which is what keeps a worktree read on the two crate
@@ -22,6 +24,7 @@ impl Working {
     pub(crate) fn declares(&mut self, paths: DeclaredPaths) {
         self.declared = Some(paths);
         self.drifted.clear();
+        self.pending.clear();
     }
 
     pub(crate) fn declared(&self) -> Option<&DeclaredPaths> {
@@ -44,16 +47,28 @@ impl Working {
         &self.drifted
     }
 
-    /// Add paths seen outside the plan, and answer with the ones that are new.
-    /// Empty on every turn after the first that saw them, which is what keeps
-    /// the live check from saying the same thing every tick.
+    /// Add paths seen outside the plan **twice in a row**, and answer with the
+    /// ones just confirmed.
+    ///
+    /// A path seen once and gone by the next reading is a build tool's own
+    /// temporary file, not drift — electron-vite's bundled config is the one
+    /// that was caught writing and removing one inside a single turn — and it
+    /// is dropped rather than carried: `#1049`. A path already in `drifted`
+    /// has been told once, which stays true here for
+    /// [`Working::drifting`](Working::drifting)'s caller's reason: the Drone
+    /// is not told twice.
     pub(crate) fn drifting(&mut self, seen: Vec<RepoPath>) -> Vec<RepoPath> {
-        let fresh: Vec<RepoPath> = seen
+        let waiting = std::mem::take(&mut self.pending);
+        let confirmed: Vec<RepoPath> = waiting
+            .into_iter()
+            .filter(|path| seen.contains(path))
+            .collect();
+        self.drifted.extend(confirmed.iter().cloned());
+        self.pending = seen
             .into_iter()
             .filter(|path| !self.drifted.contains(path))
             .collect();
-        self.drifted.extend(fresh.iter().cloned());
-        fresh
+        confirmed
     }
 
     /// When the worktree was last read for the live file list. **Mutable, and

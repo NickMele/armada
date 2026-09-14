@@ -48,23 +48,20 @@ impl Declared {
 
 /// One step's work seen outside the plan it declared.
 ///
-/// Reported on the turn that first saw it, so a person watching sees the drift
-/// while it is happening rather than at the gate — **and so does the Drone**,
-/// which for as long as this check existed it did not. "Call the tool again"
-/// was the sanctioned answer to drift from the day the tool shipped, and the
-/// only place it was ever said was the Job's log, which no Drone reads. The
-/// mechanism was real, tested and unreachable, and a Job that drifted carried
-/// its outgrown declaration to its gate.
+/// Reported on the turn that saw it **twice in a row** — not the first, so a
+/// build tool's own temporary file (electron-vite's bundled config, `#1049`)
+/// is gone before the second reading and never becomes one of these — so a
+/// person watching sees real drift while it is happening rather than at the
+/// gate, and so does the Drone.
 ///
 /// [`Redeclaring`] is what is said. **Once per path**, because
 /// [`Working::drifting`](crate::working::Working::drifting) already answers
-/// only what is new and this rides that rather than keeping a second memory of
-/// what a Drone has been told.
+/// only what is newly confirmed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Drifting {
     pub job: JobId,
     pub step: StepId,
-    /// Never empty. Paths seen for the first time this turn.
+    /// Never empty. Paths confirmed outside the plan this turn.
     pub paths: Vec<RepoPath>,
 }
 

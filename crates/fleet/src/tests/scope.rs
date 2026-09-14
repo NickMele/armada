@@ -372,8 +372,16 @@ async fn a_step_editing_outside_its_plan_is_caught_while_it_runs() {
     .await
     .expect("the step declares a scope");
 
+    // The first reading only starts the clock — a single sighting is what a
+    // build tool's own temporary file looks like too, `#1049`.
+    assert!(
+        fleet.turn().await.unwrap().drifting().is_none(),
+        "one reading is not drift yet"
+    );
     let turned = fleet.turn().await.unwrap();
-    let drifting = turned.drifting().expect("the live check saw the edit");
+    let drifting = turned
+        .drifting()
+        .expect("the second reading confirms the edit");
     assert_eq!(drifting.job, *job.id());
     assert_eq!(drifting.step.as_str(), "implement");
     assert_eq!(
@@ -384,6 +392,44 @@ async fn a_step_editing_outside_its_plan_is_caught_while_it_runs() {
         fleet.load(job.id()).await.unwrap().status(),
         core_model::JobStatus::Running,
         "a live mismatch does not auto-fail — the Drone may declare again"
+    );
+}
+
+/// **The read of `#1049` this test exists for.** A file present for one
+/// reading and gone by the next — exactly what electron-vite's bundled config
+/// looks like from the worktree — never becomes drift and the Drone is never
+/// told.
+#[tokio::test]
+async fn a_path_gone_by_the_next_reading_is_never_reported_as_drift() {
+    let home = TempDir::new();
+    let fleet = a_watching_fleet(
+        &home,
+        FakeWorkProduct::changed(&["docs/plan.md", "apps/desktop/electron.vite.config.mjs"]),
+    );
+    let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.unwrap();
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
+            context_paths: vec!["docs".to_string()],
+        },
+    )
+    .await
+    .expect("the step declares a scope");
+
+    assert!(
+        fleet.turn().await.unwrap().drifting().is_none(),
+        "the first reading only starts the clock"
+    );
+
+    // The build tool has already removed its temporary file by the next turn.
+    fleet
+        .work()
+        .forgot(&["apps/desktop/electron.vite.config.mjs"]);
+    assert!(
+        fleet.turn().await.unwrap().drifting().is_none(),
+        "gone before the second reading, so it was never drift"
     );
 }
 
@@ -405,6 +451,10 @@ async fn the_same_drift_is_reported_once_and_not_every_turn() {
     .await
     .unwrap();
 
+    assert!(
+        fleet.turn().await.unwrap().drifting().is_none(),
+        "the first reading only starts the clock"
+    );
     assert!(fleet.turn().await.unwrap().drifting().is_some());
     assert!(fleet.turn().await.unwrap().drifting().is_none());
 }
@@ -434,6 +484,10 @@ async fn a_drifting_drone_is_told_once_per_path_and_not_again() {
     .await
     .unwrap();
 
+    assert!(
+        fleet.turn().await.unwrap().drifting().is_none(),
+        "the first reading only starts the clock"
+    );
     assert!(fleet.turn().await.unwrap().drifting().is_some());
     let told = turns_sent(&fleet, 2).await;
     assert!(
@@ -443,11 +497,15 @@ async fn a_drifting_drone_is_told_once_per_path_and_not_again() {
     );
 
     // Nothing new this turn, so nothing is said. The Drone then edits a second
-    // file outside the plan, which is new and is.
+    // file outside the plan, which needs two readings of its own before it is.
     assert!(fleet.turn().await.unwrap().drifting().is_none());
     fleet
         .work()
         .wrote(&[("src/reader.rs", adapter_traits::Change::Modified)]);
+    assert!(
+        fleet.turn().await.unwrap().drifting().is_none(),
+        "the first reading of the second file only starts its clock"
+    );
     assert!(fleet.turn().await.unwrap().drifting().is_some());
 
     let told = turns_sent(&fleet, 3).await;
@@ -477,6 +535,10 @@ async fn declaring_again_replaces_the_plan_and_clears_what_drifted() {
     )
     .await
     .unwrap();
+    assert!(
+        fleet.turn().await.unwrap().drifting().is_none(),
+        "the first reading only starts the clock"
+    );
     assert!(fleet.turn().await.unwrap().drifting().is_some());
 
     declared_by_the_one(
