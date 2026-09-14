@@ -264,6 +264,8 @@ export function JobRowStacked({
   // One animated mark per screen. `pulsing` says this Job is running; the
   // cursor says which running row is being read, and only that one breathes.
   const pulses = pulsing && onCursor;
+  // Long enough that the badge needs its own line at the 720px floor (#984).
+  const badgeWide = typeof statusLabel === "string" && statusLabel.length > 24;
 
   return (
     <div
@@ -279,6 +281,7 @@ export function JobRowStacked({
       data-focused={focused || undefined}
       data-selected={selected || undefined}
       data-dimmed={dimmed || undefined}
+      data-badge-wide={badgeWide || undefined}
       onClick={onOpen}
       onKeyDown={opens ? handleKeyDown : undefined}
     >

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement } from "react";
 import { cloneElement } from "react";
-import { Check, CircleDot, Cpu, GitBranch, Layers, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Cpu, GitBranch, Layers, OctagonAlert, Power, UserCheck, X } from "lucide-react";
 import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
@@ -419,10 +419,11 @@ const TABLE_ROWS = [
   { status: "completed-failed", icon: X, label: "Failed", headline: "Cache the manifest read", handle: "14-cache-the-manifest-read", act: "Open" },
 ] as const;
 
+/** Every drawn row opens a Job on the real Board (`selectable`), which is what lets a row's cursor reveal what its own columns gave up. */
 function TableAt({ width }: { width: string }) {
   return (
     <div style={{ width }}>
-      <ActiveJobsList heading="Job Board" summary="3 jobs." view="table" columns={["Workflow", "Progress", "Run time"]}>
+      <ActiveJobsList heading="Job Board" summary="3 jobs." view="table" selectable label="Job Board" columns={["Workflow", "Progress", "Run time"]}>
         {TABLE_ROWS.map((row) => (
           <JobRowStacked
             key={row.handle}
@@ -432,6 +433,7 @@ function TableAt({ width }: { width: string }) {
             headline={row.headline}
             jobId={row.handle}
             handle={row.handle}
+            onOpen={() => {}}
             fields={[
               { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
               {
@@ -471,14 +473,91 @@ async function everyRowReads(canvasElement: HTMLElement) {
   }
 }
 
+/** Reachable by mouse or keyboard — hover or focus floats it free of its cramped column (#984). */
+async function workflowReveals(frame: DOMRect, row: HTMLElement) {
+  const value = row.querySelector<HTMLElement>(".armada-job-row__field-value")!;
+  await expect(value).toHaveTextContent("Bug, 6 steps");
+  await expect(value.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
+}
+
+/** At rest the name is in the accessibility tree but not painted — icon alone, never a clipped fragment (#984). */
+async function workflowHiddenAtRest(row: HTMLElement) {
+  const value = row.querySelector<HTMLElement>(".armada-job-row__field-value")!;
+  await expect(value).toHaveTextContent("Bug, 6 steps");
+  await expect(value.getBoundingClientRect().width).toBeLessThanOrEqual(1);
+}
+
 /** The table at the narrowest window, 768px less the rail: the facts give way, and the title, handle and action do not. */
 export const TableAtTheWidthFloor: StoryObj = {
   render: () => <TableAt width="calc(var(--window-floor) - var(--sidebar-rail))" />,
-  play: async ({ canvasElement }) => everyRowReads(canvasElement),
+  play: async ({ canvasElement, userEvent }) => {
+    await everyRowReads(canvasElement);
+    const frame = canvasElement.querySelector(".armada-active-jobs__frame")!.getBoundingClientRect();
+    const rows = canvasElement.querySelectorAll<HTMLElement>('[role="option"]');
+    await workflowHiddenAtRest(rows[2]!);
+    await userEvent.hover(rows[0]!);
+    await workflowReveals(frame, rows[0]!);
+    await userEvent.unhover(rows[0]!);
+    rows[1]!.focus();
+    await workflowReveals(frame, rows[1]!);
+  },
 };
 
 /** The table at the 1100px breakpoint, where the title used to give way to nothing beside a whole handle. */
 export const TableAtTheBreakpoint: StoryObj = {
   render: () => <TableAt width="calc(var(--layout-breakpoint) - var(--sidebar-rail))" />,
   play: async ({ canvasElement }) => everyRowReads(canvasElement),
+};
+
+/** The badge, the title, the handle and the action all stay inside the frame — no ellipsis, and nothing off its right edge. */
+async function escalatedRowStaysInFrame(canvasElement: HTMLElement) {
+  const frame = canvasElement.querySelector(".armada-active-jobs__frame")!.getBoundingClientRect();
+  const row = canvasElement.querySelector<HTMLElement>(".armada-job-row")!;
+  const badge = row.querySelector<HTMLElement>(".armada-badge")!;
+  await expect(badge).toHaveTextContent("A required command did not succeed");
+  await expect(badge.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
+  const title = row.querySelector<HTMLElement>(".armada-job-row__title")!;
+  await expect(title).toHaveTextContent("Reconcile orphaned drones on Fleet start");
+  await expect(row.querySelector(".armada-job-row__action")!.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
+}
+
+/** The registry's longest verb (34 chars), inside a real list at the 720px floor: stays whole, own line, inside the frame (#984, #914). */
+export const EscalatedBadgeInTheTableAtTheWidthFloor: StoryObj = {
+  render: () => (
+    <div style={{ width: "calc(var(--window-floor) - var(--sidebar-rail))" }}>
+      <ActiveJobsList
+        heading="Job Board"
+        summary="1 job."
+        view="table"
+        selectable
+        label="Job Board"
+        columns={["Workflow", "Progress", "Run time"]}
+      >
+        <JobRowStacked
+          status="escalated"
+          statusIcon={OctagonAlert}
+          statusLabel="A required command did not succeed"
+          headline="Reconcile orphaned drones on Fleet start"
+          jobId="job_31c7"
+          handle="31-reconcile-orphaned-drones-fleet-start"
+          onOpen={() => {}}
+          fields={[
+            { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+            {
+              label: "Progress",
+              value: (
+                <>
+                  <StepBar total={6} current={2} activity="running" label="Step 2 of 6" />
+                  <span className="armada-row-step">regression_verify</span>
+                </>
+              ),
+            },
+            { label: "Run time", value: "1h 12m", mono: true },
+          ]}
+          action={<SplitButton ground="card" items={menu}>Open</SplitButton>}
+        />
+      </ActiveJobsList>
+    </div>
+  ),
+  play: async ({ canvasElement }) => escalatedRowStaysInFrame(canvasElement),
 };
