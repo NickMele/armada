@@ -543,7 +543,7 @@ export function App() {
             context={helmContext}
             onStartFresh={() => void startHelmFresh()}
             onSwitch={(manifestId) => pointHelm(manifestId)}
-            onApprove={(jobId) => void commands.approve(jobId)}
+            onApprove={commands.approve}
           />
         }
         stats={{

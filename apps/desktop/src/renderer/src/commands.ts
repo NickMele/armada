@@ -269,10 +269,35 @@ export function useCommands(sending: Sending) {
     return read;
   }
 
-  async function approve(jobId: string): Promise<void> {
+  /** Hold `acting` on a Job, with the act named, for as long as `work` is out. #1117. */
+  async function acted<T>(jobId: string, act: ActingAct, work: () => Promise<T>): Promise<T> {
+    setActing(jobId);
+    setActingAct(act);
+    try {
+      return await work();
+    } finally {
+      setActing(null);
+      setActingAct(null);
+    }
+  }
+
+  /** `acted`, for the acts at the review gate that `deciding` guards. */
+  async function decided<T>(jobId: string, act: DecidingAct, work: () => Promise<T>): Promise<T> {
+    setDeciding(jobId);
+    setDecidingAct(act);
+    try {
+      return await work();
+    } finally {
+      setDeciding(null);
+      setDecidingAct(null);
+    }
+  }
+
+  async function approve(jobId: string): Promise<Outcome> {
     const answer = await window.armada.approveDispatch(jobId);
     setOutcome(answer);
     took(jobId, "approve", answer);
+    return answer;
   }
 
   /**
@@ -339,9 +364,7 @@ export function useCommands(sending: Sending) {
    * putting the dialog away and reading what it holds is the render's too.
    */
   async function act(act: ConfirmableAct, jobId: string, note?: string): Promise<void> {
-    setActing(jobId);
-    setActingAct(act);
-    try {
+    return acted(jobId, act, async () => {
       const answer =
         act === "redispatch"
           ? await window.armada.redispatchJob(jobId)
@@ -358,10 +381,7 @@ export function useCommands(sending: Sending) {
       if (act === "restart_step") took(jobId, "restart", answer);
       if (answer.ok && answer.reclaimed !== undefined) setGivenBack([answer.reclaimed]);
       if (answer.ok && answer.jobId !== undefined) sending.onOpen(answer.jobId);
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -370,14 +390,9 @@ export function useCommands(sending: Sending) {
    * confirm here, only to send.
    */
   async function redirect(jobId: string, instruction: string): Promise<void> {
-    setActing(jobId);
-    setActingAct("redirect");
-    try {
+    return acted(jobId, "redirect", async () => {
       setOutcome(await window.armada.redirectDrone(jobId, instruction));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -389,16 +404,11 @@ export function useCommands(sending: Sending) {
    * waiting rather than ending anything.
    */
   async function answer(jobId: string, questionId: string, chose: string): Promise<Outcome> {
-    setActing(jobId);
-    setActingAct("answer");
-    try {
+    return acted(jobId, "answer", async () => {
       const answered = await window.armada.answerQuestion(jobId, questionId, chose);
       setOutcome(answered);
       return answered;
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -413,16 +423,11 @@ export function useCommands(sending: Sending) {
     note?: string,
     rule?: string,
   ): Promise<Outcome> {
-    setActing(jobId);
-    setActingAct("answer_command");
-    try {
+    return acted(jobId, "answer_command", async () => {
       const answered = await window.armada.answerCommand(jobId, call, chose, note, rule);
       setOutcome(answered);
       return answered;
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -432,14 +437,9 @@ export function useCommands(sending: Sending) {
    * is out rather than sending a second change over the first.
    */
   async function setWhenBlocked(jobId: string, whenBlocked: WhenBlocked): Promise<void> {
-    setActing(jobId);
-    setActingAct("set_when_blocked");
-    try {
+    return acted(jobId, "set_when_blocked", async () => {
       setOutcome(await window.armada.setWhenBlocked(jobId, whenBlocked));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -453,28 +453,18 @@ export function useCommands(sending: Sending) {
     answer: JudgeAnswer,
     note?: string,
   ): Promise<Outcome> {
-    setActing(jobId);
-    setActingAct("answer_judge");
-    try {
+    return acted(jobId, "answer_judge", async () => {
       const answered = await window.armada.answerJudge(jobId, askedAt, answer, note);
       setOutcome(answered);
       return answered;
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /** Change how the job meets the next judge criterion that refuses. On `setWhenBlocked`'s terms. */
   async function setWhenRefused(jobId: string, whenRefused: WhenRefused): Promise<void> {
-    setActing(jobId);
-    setActingAct("set_when_refused");
-    try {
+    return acted(jobId, "set_when_refused", async () => {
       setOutcome(await window.armada.setWhenRefused(jobId, whenRefused));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -483,26 +473,16 @@ export function useCommands(sending: Sending) {
    * `acting` so the panel is off while it is out.
    */
   async function setModel(jobId: string, model: string | null): Promise<void> {
-    setActing(jobId);
-    setActingAct("set_model");
-    try {
+    return acted(jobId, "set_model", async () => {
       setOutcome(await window.armada.setModel(jobId, model));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /** The review step's model, on `setModel`'s terms. #903. */
   async function setReviewModel(jobId: string, model: string | null): Promise<void> {
-    setActing(jobId);
-    setActingAct("set_review_model");
-    try {
+    return acted(jobId, "set_review_model", async () => {
       setOutcome(await window.armada.setReviewModel(jobId, model));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -510,14 +490,9 @@ export function useCommands(sending: Sending) {
    * ends nothing, and the command can be allowed again from the next refusal.
    */
   async function removeAllowedCommand(jobId: string, run: string): Promise<void> {
-    setActing(jobId);
-    setActingAct("remove_allowed_command");
-    try {
+    return acted(jobId, "remove_allowed_command", async () => {
       setOutcome(await window.armada.removeAllowedCommand(jobId, run));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -527,14 +502,9 @@ export function useCommands(sending: Sending) {
    * objected to — this one answers a gate that refused.
    */
   async function overrule(jobId: string, reason: string): Promise<void> {
-    setActing(jobId);
-    setActingAct("override_verdict");
-    try {
+    return acted(jobId, "override_verdict", async () => {
       setOutcome(await window.armada.overrideVerdict(jobId, reason));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -545,14 +515,9 @@ export function useCommands(sending: Sending) {
    * this answers one that could not.
    */
   async function rerun(jobId: string): Promise<void> {
-    setActing(jobId);
-    setActingAct("rerun_gate");
-    try {
+    return acted(jobId, "rerun_gate", async () => {
       setOutcome(await window.armada.rerunGate(jobId));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -580,14 +545,9 @@ export function useCommands(sending: Sending) {
    * refused for money.
    */
   async function raiseCap(jobId: string, costCapMicros: number): Promise<void> {
-    setActing(jobId);
-    setActingAct("raise_cost_cap");
-    try {
+    return acted(jobId, "raise_cost_cap", async () => {
       setOutcome(await window.armada.raiseCostCap(jobId, costCapMicros));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -596,14 +556,9 @@ export function useCommands(sending: Sending) {
    * is that the next dispatch is not refused for turns.
    */
   async function raiseTurns(jobId: string, turnCap: number): Promise<void> {
-    setActing(jobId);
-    setActingAct("raise_turn_cap");
-    try {
+    return acted(jobId, "raise_turn_cap", async () => {
       setOutcome(await window.armada.raiseTurnCap(jobId, turnCap));
-    } finally {
-      setActing(null);
-      setActingAct(null);
-    }
+    });
   }
 
   /**
@@ -668,9 +623,7 @@ export function useCommands(sending: Sending) {
     what: "approve" | "changes" | "reject" | "merge",
     note = "",
   ): Promise<void> {
-    setDeciding(jobId);
-    setDecidingAct(what);
-    try {
+    return decided(jobId, what, async () => {
       const answer =
         what === "merge"
           ? await window.armada.mergePullRequest(jobId)
@@ -681,10 +634,7 @@ export function useCommands(sending: Sending) {
               : await window.armada.rejectWork(jobId);
       setOutcome(answer);
       if (what === "merge" || what === "approve") took(jobId, what, answer);
-    } finally {
-      setDeciding(null);
-      setDecidingAct(null);
-    }
+    });
   }
 
   /**
@@ -699,50 +649,30 @@ export function useCommands(sending: Sending) {
    * so far, like `changes` beside it.
    */
   async function takeUpRemarks(jobId: string, remarks: string[]): Promise<void> {
-    setDeciding(jobId);
-    setDecidingAct("take_up_remarks");
-    try {
+    return decided(jobId, "take_up_remarks", async () => {
       setOutcome(await window.armada.takeUpRemarks(jobId, remarks));
-    } finally {
-      setDeciding(null);
-      setDecidingAct(null);
-    }
+    });
   }
 
   /** Dismiss a finding the review raised, with the reason. #907. */
   async function dismissFinding(jobId: string, finding: string, reason: string): Promise<void> {
-    setDeciding(jobId);
-    setDecidingAct("dismiss_finding");
-    try {
+    return decided(jobId, "dismiss_finding", async () => {
       setOutcome(await window.armada.dismissFinding(jobId, finding, reason));
-    } finally {
-      setDeciding(null);
-      setDecidingAct(null);
-    }
+    });
   }
 
   /** Queue a Job after this one lands, from a For context finding. #906. */
   async function queueAfterFinding(jobId: string, finding: string): Promise<void> {
-    setDeciding(jobId);
-    setDecidingAct("queue_after_finding");
-    try {
+    return decided(jobId, "queue_after_finding", async () => {
       setOutcome(await window.armada.queueAfterFinding(jobId, finding));
-    } finally {
-      setDeciding(null);
-      setDecidingAct(null);
-    }
+    });
   }
 
   /** File the issue a person confirmed from a For context finding. #906. */
   async function fileFindingIssue(jobId: string, finding: string, title: string, body: string): Promise<void> {
-    setDeciding(jobId);
-    setDecidingAct("file_finding_issue");
-    try {
+    return decided(jobId, "file_finding_issue", async () => {
       setOutcome(await window.armada.fileFindingIssue(jobId, finding, title, body));
-    } finally {
-      setDeciding(null);
-      setDecidingAct(null);
-    }
+    });
   }
 
   /**
@@ -751,38 +681,23 @@ export function useCommands(sending: Sending) {
    * `takeUpRemarks`'s reason: it leaves `awaiting_review` the same way.
    */
   async function resolvePullRequestConflict(jobId: string): Promise<void> {
-    setDeciding(jobId);
-    setDecidingAct("resolve_conflict");
-    try {
+    return decided(jobId, "resolve_conflict", async () => {
       setOutcome(await window.armada.resolvePullRequestConflict(jobId));
-    } finally {
-      setDeciding(null);
-      setDecidingAct(null);
-    }
+    });
   }
 
   /** Start the pull request's failed CI runs again. #905. */
   async function rerunFailedChecks(jobId: string): Promise<void> {
-    setDeciding(jobId);
-    setDecidingAct("rerun_failed_checks");
-    try {
+    return decided(jobId, "rerun_failed_checks", async () => {
       setOutcome(await window.armada.rerunFailedChecks(jobId));
-    } finally {
-      setDeciding(null);
-      setDecidingAct(null);
-    }
+    });
   }
 
   /** Send the branch back for a Drone to find out why CI failed. #905. */
   async function investigateFailedChecks(jobId: string): Promise<void> {
-    setDeciding(jobId);
-    setDecidingAct("investigate_failed_checks");
-    try {
+    return decided(jobId, "investigate_failed_checks", async () => {
       setOutcome(await window.armada.investigateFailedChecks(jobId));
-    } finally {
-      setDeciding(null);
-      setDecidingAct(null);
-    }
+    });
   }
 
   /**
