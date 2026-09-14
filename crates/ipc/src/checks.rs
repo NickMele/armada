@@ -103,6 +103,14 @@ pub struct DeclaredJudge {
     /// advances on its mechanical tier, and what the look found arrives as
     /// [`Flagged`](crate::Flagged).
     pub gaming_check: bool,
+    /// Which patterns that look watches for, spelled as `flag_if` spells them
+    /// and in its order. Since 13.50.
+    ///
+    /// **Absent where the entry declares no gaming check**, this crate's rule
+    /// for an empty list. It is what lets a reader list every pattern a step
+    /// was watched for, `not seen` included, beside the ones that were flagged.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gaming_patterns: Vec<String>,
 }
 
 impl DeclaredJudge {
@@ -136,6 +144,16 @@ impl From<&core_model::JudgeCheck> for DeclaredJudge {
             // Never `Some(1)`: the field's whole meaning is "more than one".
             panel_size: Some(check.panel_size()).filter(|size| *size > 1),
             gaming_check: check.gaming().is_some_and(core_model::GamingCheck::fires),
+            gaming_patterns: check
+                .gaming()
+                .map(|gaming| {
+                    gaming
+                        .flag_if()
+                        .iter()
+                        .map(|pattern| pattern.as_wire().to_string())
+                        .collect()
+                })
+                .unwrap_or_default(),
         }
     }
 }

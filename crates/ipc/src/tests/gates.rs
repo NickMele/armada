@@ -62,7 +62,10 @@ fn gated_workflow() -> FrozenWorkflow {
                     vec![criterion("c3")],
                     Some(GamingCheck::declared(
                         None,
-                        vec![GamingPattern::AssertionWeakened],
+                        vec![
+                            GamingPattern::TautologicalTest,
+                            GamingPattern::AssertionWeakened,
+                        ],
                     )),
                 )],
             ),
@@ -171,11 +174,20 @@ fn a_declared_judge_check_crosses_as_counts_and_a_panel_only_above_one() {
         "one judge is the default and is not a panel"
     );
     assert!(!judged[1][0].gaming_check);
+    assert!(
+        judged[1][0].gaming_patterns.is_empty(),
+        "no gaming check, so no list"
+    );
     assert_eq!(judged[2][0].criteria, 1);
     assert_eq!(judged[2][0].panel_size, Some(3));
     assert!(
         judged[2][0].gaming_check,
         "the second look rides along and is worth saying so"
+    );
+    assert_eq!(
+        judged[2][0].gaming_patterns,
+        ["tautological_test", "assertion_weakened"],
+        "every pattern the look watches for, in `flag_if`'s order and not the enum's"
     );
     assert!(
         judged[3].is_empty(),
