@@ -4,28 +4,31 @@
 //!
 //! **The screen half is not a Rust question.** What is reachable is the seam
 //! the surface is drawn from: that a received Job names its Manifest, so a
-//! client can sort a mixed list without a second query, and that the tiles'
-//! readings survive [`ipc::encode`] and back. The apparatus is
-//! [`bench::overview`]. **A green run here is not the milestone** — the two
-//! tables below name what still is not proved.
+//! client can sort a mixed list without a second query, that the tiles'
+//! readings survive [`ipc::encode`] and back, and that each kind of open
+//! question is carried on the `JobDetail` it belongs to and named by the id an
+//! answer would send back. The apparatus is [`bench::overview`]. **A green run
+//! here is not the milestone** — the two tables below name what still is not
+//! proved.
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the four below.
 #[allow(dead_code)]
 mod bench;
 
-use core_model::AdmissionHold;
+use core_model::{AdmissionHold, Job};
 use ipc::{
-    Declaration, Drift, FleetCapacity, FleetHealth, JobList, JobSummary, ManifestDrift, Probe,
-    Unfollowed, Unprobed,
+    AnswerCommand, AskedOption, ChosenAnswer, CommandAnswer, CommandInFlight, Declaration, Drift,
+    FleetCapacity, FleetHealth, JobDetail, JobList, JobSummary, JudgeAnswer, JudgeAnswered,
+    JudgeQuestion, ManifestDrift, Probe, QuestionId, QuestionInFlight, Unfollowed, Unprobed,
 };
 
 use bench::overview::{created_under, done_under, queued_under, running_under};
 
 // | Not proved here | Why not, and what would prove it |
 // |---|---|
-// | Answering a question — a Drone's, a held command, a Judge refusal — by id, and a stale id refused | Helm's session host is still being built; #936 |
-// | A session taking two turns, the second remembering the first, and a resumed one remembering both | Same reason; #939 |
+// | That answering names a stale id and is refused — `NotAnswered::Superseded`, `NotAnswered::NothingIsAsking`, `Adrift::NotAnswerable` | Each is read off a live slot and `self.store()` inside `fleet::questioning`, `fleet::asking` and `fleet::permitting::holding` — a real `Fleet` over a real store. `crates/acceptance/Cargo.toml`'s own header says why this crate holds neither: "the loop cannot admit a Job without spawning a Drone, so the loop is proven in `fleet`'s own tests and not here" |
+// | A Helm session taking two turns, the second remembering the first, and a resumed one remembering both | `crates/fleet/src/tests/helm_conversation.rs` proves exactly this, against a stand-in agent run as a real child process (`ProcessHost` over `HeadlessAgent`) — but it lives behind `#[cfg(test)]` in `fleet`, unreachable from here, and this crate's own manifest forbids spawning one regardless. Reaching it would mean changing `fleet` to expose test-only apparatus, which is outside this file's scope — reported rather than done |
 // | That a person reading the surface learns anything, and Bridge's own pick | Nothing here renders — `needs-you.ts` and `board.ts` own the rule; `ofPicked` is not a Rust question |
 
 // ---------------------------------------------------------------------------
@@ -314,6 +317,171 @@ fn drift_survives_the_wire_and_is_read_per_repository() {
 }
 
 // ---------------------------------------------------------------------------
+// Each kind of question, served on the Job it belongs to
+// ---------------------------------------------------------------------------
+
+// | Not proved here | Why not, and what would prove it |
+// |---|---|
+// | That a person reading a card learns anything, or that pressing an answer reaches Fleet | Nothing here renders and nothing here opens a connection — see the file header |
+// | That the three are mutually exclusive on one Job | Nothing in `core_model` or `ipc` says so; `JobDetail` carries all three as independent optional fields, and each test below sets exactly one |
+
+/// A Drone's own question, a command it reached for and was not given, and a
+/// Judge criterion that refused — each carried on the `JobDetail` of the Job
+/// it belongs to, under whichever Manifest that Job is, and surviving
+/// `ipc::encode` and back with the id an answer would name.
+///
+/// **`command_waiting` and `judge_question` are filled in after
+/// [`ipc::JobDetail::of`], never through it.** `crates/ipc/src/detail.rs`
+/// says so on both fields: `of` hardcodes them absent, because it is called
+/// with only what a Job's record and its frozen workflow say, and both of
+/// these live on a slot or a store row instead. This is that filling — the
+/// same shape `api`'s own daemon uses — not a second constructor.
+#[test]
+fn every_kind_of_question_is_served_on_the_job_it_belongs_to_across_two_manifests() {
+    let storefront = "01MANIFESTOVERVIEWSTOREFRONT";
+    let mailer = "01MANIFESTOVERVIEWMAILERXXXX";
+
+    // A Drone's own question, on a storefront Job — `asking` is a constructor
+    // argument, per `JobDetail::of`'s own comment: "the question lives on the
+    // working slot for as long as it is unanswered".
+    let job = running_under(storefront, "01JOBOVERVIEWASKEDQ0000A", "waiting on a drone");
+    let question = QuestionInFlight {
+        question_id: QuestionId::carried("01QUESTIONOVERVIEWDRONEA"),
+        step_id: ipc::StepId::carried("fix"),
+        asked_at: ipc::Instant::carried("2026-09-13T09:05:00.000Z"),
+        question: "which cursor should the fix touch?".to_string(),
+        options: vec![
+            AskedOption {
+                label: "the read cursor".to_string(),
+                consequence: "fixes the reader only".to_string(),
+            },
+            AskedOption {
+                label: "both".to_string(),
+                consequence: "fixes the reader and the writer".to_string(),
+            },
+        ],
+    };
+    let detail = detail_of(&job, Some(question.clone()));
+    let received = round_trip_detail(&detail);
+    assert_eq!(received.job.owner_manifest_id.as_str(), storefront);
+    let served = received
+        .asking
+        .expect("the drone's own question is served on its Job");
+    assert_eq!(served.question_id, question.question_id);
+    assert_eq!(served.question, question.question);
+
+    // A command a Drone reached for and was not given, on a mailer Job.
+    let job = running_under(mailer, "01JOBOVERVIEWHELDCMD000B", "waiting on a command");
+    let mut detail = detail_of(&job, None);
+    detail.command_waiting = Some(CommandInFlight {
+        call: "call-01QUESTIONOVERVIEWCMDB".to_string(),
+        step_id: ipc::StepId::carried("fix"),
+        asked_at: ipc::Instant::carried("2026-09-13T09:06:00.000Z"),
+        tool: "Bash".to_string(),
+        detail: "rm -rf node_modules".to_string(),
+        truncated: false,
+        length: None,
+        offers: vec![CommandAnswer::AllowForJob, CommandAnswer::Reject],
+        rules: Vec::new(),
+        suggested_rule: None,
+    });
+    let received = round_trip_detail(&detail);
+    assert_eq!(received.job.owner_manifest_id.as_str(), mailer);
+    let waiting = received
+        .command_waiting
+        .expect("the held command is served on its Job");
+    assert_eq!(waiting.call, "call-01QUESTIONOVERVIEWCMDB");
+
+    // A Judge criterion that refused, on a second storefront Job.
+    let job = running_under(
+        storefront,
+        "01JOBOVERVIEWJUDGEQ0000C",
+        "waiting on a judge answer",
+    );
+    let mut detail = detail_of(&job, None);
+    detail.judge_question = Some(JudgeQuestion {
+        step_id: ipc::StepId::carried("fix"),
+        criterion_id: ipc::CriterionId::carried("c1"),
+        question: "does the fix address the cause the note named?".to_string(),
+        expected: "a change to read.rs's bound".to_string(),
+        produced: "a change to an unrelated bound".to_string(),
+        consequence: "the reported symptom still occurs".to_string(),
+        asked_at: ipc::Instant::carried("2026-09-13T09:07:00.000Z"),
+        brief_path: None,
+    });
+    let received = round_trip_detail(&detail);
+    assert_eq!(received.job.owner_manifest_id.as_str(), storefront);
+    let asked = received
+        .judge_question
+        .expect("the judge question is served on its Job");
+    assert_eq!(asked.criterion_id.as_str(), "c1");
+}
+
+/// Each answer names the id it was served with — `ChosenAnswer::question_id`,
+/// `AnswerCommand::call`, `JudgeAnswered::asked_at` — and every one of the
+/// three routes is a route Fleet serves. **Not that a stale one is refused**:
+/// see the file header.
+#[test]
+fn each_answer_names_the_id_it_was_served_with_and_the_route_is_served() {
+    for operation in ["answer_question", "answer_command", "answer_judge"] {
+        assert!(
+            api::SERVED.iter().any(|route| route.operation == operation),
+            "`{operation}` is offered on a Job's detail and nothing serves it"
+        );
+    }
+
+    let chosen = ChosenAnswer {
+        question_id: QuestionId::carried("01QUESTIONOVERVIEWDRONEA"),
+        chose: "the read cursor".to_string(),
+    };
+    let received = round_trip_chosen_answer(&chosen);
+    assert_eq!(received.question_id, chosen.question_id);
+
+    let answered_command = AnswerCommand {
+        call: "call-01QUESTIONOVERVIEWCMDB".to_string(),
+        answer: CommandAnswer::Reject,
+        note: Some("not on this job".to_string()),
+        rule: None,
+    };
+    let received = round_trip_answer_command(&answered_command);
+    assert_eq!(received.call, answered_command.call);
+
+    let answered_judge = JudgeAnswered {
+        answer: JudgeAnswer::Agree,
+        asked_at: Some(ipc::Instant::carried("2026-09-13T09:07:00.000Z")),
+        note: None,
+    };
+    let received = round_trip_judge_answered(&answered_judge);
+    assert_eq!(
+        received.asked_at, answered_judge.asked_at,
+        "the id the answer names back, for `answer_judge`'s own Superseded check"
+    );
+}
+
+/// A `JobDetail` over one bench Job, with no step facts and no classification
+/// — everything `board.rs` and `recovery.rs` already assert is out of scope
+/// here, so only `asking` is a constructor argument.
+fn detail_of(job: &Job, asking: Option<QuestionInFlight>) -> JobDetail {
+    JobDetail::of(
+        job,
+        None,
+        None,
+        None,
+        None,
+        None,
+        &[],
+        None,
+        None,
+        asking,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+}
+
+// ---------------------------------------------------------------------------
 // The round trip every assertion above is made through
 // ---------------------------------------------------------------------------
 
@@ -340,4 +508,24 @@ fn round_trip_health(value: &FleetHealth) -> FleetHealth {
 fn round_trip_drift(value: &ManifestDrift) -> ManifestDrift {
     let body = ipc::encode(value).expect("a drift reading that serialises");
     ipc::decode("a drift reading", body.as_bytes()).expect("a reading that reads back")
+}
+
+fn round_trip_detail(value: &JobDetail) -> JobDetail {
+    let body = ipc::encode(value).expect("a detail that serialises");
+    ipc::decode("a Job detail", body.as_bytes()).expect("a detail that reads back")
+}
+
+fn round_trip_chosen_answer(value: &ChosenAnswer) -> ChosenAnswer {
+    let body = ipc::encode(value).expect("a chosen answer that serialises");
+    ipc::decode("a chosen answer", body.as_bytes()).expect("an answer that reads back")
+}
+
+fn round_trip_answer_command(value: &AnswerCommand) -> AnswerCommand {
+    let body = ipc::encode(value).expect("an answered command that serialises");
+    ipc::decode("an answered command", body.as_bytes()).expect("an answer that reads back")
+}
+
+fn round_trip_judge_answered(value: &JudgeAnswered) -> JudgeAnswered {
+    let body = ipc::encode(value).expect("a judge answer that serialises");
+    ipc::decode("a judge answer", body.as_bytes()).expect("an answer that reads back")
 }
