@@ -167,6 +167,7 @@ export function SettingsSheet({
                 cap: cap(spend.cost_cap_micros),
                 used: money(spend.cost_micros),
                 onRaise: () => setRaising("cost"),
+                pending: acting && actingAct === "raise_cost_cap",
                 said: saidOf("cost"),
               }
         }
@@ -177,6 +178,7 @@ export function SettingsSheet({
                 cap: String(spend.turn_cap),
                 used: String(spend.turns),
                 onRaise: () => setRaising("turns"),
+                pending: acting && actingAct === "raise_turn_cap",
                 said: saidOf("turns"),
               }
         }

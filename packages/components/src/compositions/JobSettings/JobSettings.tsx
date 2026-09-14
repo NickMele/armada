@@ -104,6 +104,8 @@ export type JobSettingsCeiling = {
   used: string;
   /** Opens the raise. The dialog that collects the figure is the caller's. */
   onRaise: () => void;
+  /** A raise of this ceiling was sent and Fleet has not answered. Its Raise waits. #1117. */
+  pending?: boolean;
   /** The line under the row once a raise took. */
   said?: ReactNode;
 };
@@ -470,11 +472,12 @@ function Ceiling({
           variant="secondary"
           size="sm"
           ground="sunken"
+          pending={ceiling.pending === true}
           disabled={disabled}
-          aria-label={raiseLabel}
+          aria-label={ceiling.pending === true ? `${raiseLabel}, waiting on Fleet` : raiseLabel}
           onClick={ceiling.onRaise}
         >
-          Raise
+          {ceiling.pending === true ? "Raising…" : "Raise"}
         </Button>
       </div>
       <Said>{ceiling.said}</Said>

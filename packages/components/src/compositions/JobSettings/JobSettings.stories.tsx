@@ -277,6 +277,26 @@ export const WaitingOnFleet: Story = {
   },
 };
 
+/** A raise of the cost cap sent, and Fleet has not answered. Its own Raise waits; the other is off. #1117. */
+export const RaisingTheCostCap: Story = {
+  args: {
+    costCap: { ...COST, pending: true },
+    turnCap: TURNS,
+    choices: CHOICES,
+    whenBlocked: "refuse_and_hold",
+    models: MODELS,
+    model: null,
+    allowed: [],
+    disabled: true,
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole("button", { name: "Raise the cost cap, waiting on Fleet" }),
+    ).toHaveAttribute("aria-busy", "true");
+    await expect(canvas.getByRole("button", { name: "Raise the turn cap" })).toBeDisabled();
+  },
+};
+
 /**
  * The header's way in. **Quiet at rest, and a count once anything differs** from
  * how a Job starts — here a model and one allowed command.
