@@ -323,20 +323,23 @@ function overlapRows(whole: JobWhole): JobLogReferenceRow[] {
 }
 
 /**
- * Tests broken on main this Job reported or is fixing — #999. The test is the
- * value, so it reads in full; who is fixing it is the note beside it.
+ * Tests broken on main this Job reported, is fixing, or is waiting on — #999,
+ * #1001. The test is the value, so it reads in full; who is fixing it, or how
+ * many Jobs wait on this one's fix, is the note beside it. **A count, never
+ * the list**, for `overlapRows`' reason.
  */
 function breakageRows(whole: JobWhole, jobId: string): JobLogReferenceRow[] {
   return (whole.breakages ?? []).map((broken, at) => {
-    const fixing = broken.fix === jobId;
+    const waiting = broken.waiting?.length ?? 0;
+    const row = { value: broken.test, copyValue: broken.test, separated: at === 0 };
+    if (broken.fix === jobId) {
+      const also = waiting === 0 ? "" : ` · ${waiting} ${waiting === 1 ? "Job waits" : "Jobs wait"} on it`;
+      return { ...row, iconLabel: "Fixing", meta: `broken on main under ${broken.check}${also}` };
+    }
     return {
-      iconLabel: fixing ? "Fixing" : "Reported",
-      value: broken.test,
-      copyValue: broken.test,
-      meta: fixing
-        ? `broken on main under ${broken.check}`
-        : `broken on main · ${broken.fix_title} is fixing it`,
-      separated: at === 0,
+      ...row,
+      iconLabel: broken.reported_by === jobId ? "Reported" : "Waiting",
+      meta: `broken on main · ${broken.fix_title} is fixing it`,
     };
   });
 }

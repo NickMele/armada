@@ -14,8 +14,10 @@
 
 mod claims;
 mod refusal;
+mod waiting;
 
 pub use refusal::NotFixed;
+pub(crate) use waiting::{failures_said, FixStands};
 
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -154,6 +156,11 @@ where
             .ok()
             .flatten();
         if let Some(claim) = claimed {
+            // Pointed at the fix, and hears when it lands. #1001. The receipt is
+            // what tells it now, so nothing is queued.
+            if claim.fix != *caller && claim.reported_by != *caller {
+                self.point_at(caller, &claim, false).await;
+            }
             return Ok(FixAnswer::AlreadyClaimed(claim.fix));
         }
         // One counter with the dry runs, so a run one ended cannot end the other.

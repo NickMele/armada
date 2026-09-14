@@ -26,20 +26,47 @@ where
         let mut claims = store
             .breakages_claimed_by(job.id())
             .map_err(Adrift::Reading)?;
-        claims.extend(
-            store
-                .breakages_reported_by(job.id())
-                .map_err(Adrift::Reading)?,
-        );
+        for reported in store
+            .breakages_reported_by(job.id())
+            .map_err(Adrift::Reading)?
+        {
+            if !claims.contains(&reported) {
+                claims.push(reported);
+            }
+        }
+        // The claims this Job is pointed at, where they still stand. #1001.
+        for pointer in store
+            .fixes_waited_on_by(job.id())
+            .map_err(Adrift::Reading)?
+        {
+            let standing = store
+                .breakage_claimed(&pointer.repository, &pointer.check, &pointer.test)
+                .map_err(Adrift::Reading)?;
+            if let Some(claim) = standing.filter(|claim| !claims.contains(claim)) {
+                claims.push(claim);
+            }
+        }
         let title = |id: &JobId| {
             store
                 .load_job(id)
                 .ok()
                 .map(|found| found.title().as_str().to_string())
         };
-        Ok(claims
-            .into_iter()
-            .map(|claim| ipc::ClaimedBreakage {
+        let mut drawn = Vec::with_capacity(claims.len());
+        for claim in claims {
+            let waiting = store
+                .waiting_on_fix(&claim.fix)
+                .map_err(Adrift::Reading)?
+                .into_iter()
+                .filter(|pointer| {
+                    pointer.check == claim.breakage.check && pointer.test == claim.breakage.test
+                })
+                .map(|pointer| ipc::WaitingOnFix {
+                    title: title(&pointer.waiting),
+                    job_id: ipc::JobId::from(&pointer.waiting),
+                })
+                .collect();
+            drawn.push(ipc::ClaimedBreakage {
                 fix_title: title(&claim.fix).unwrap_or_default(),
                 reported_by_title: title(&claim.reported_by),
                 fix: ipc::JobId::from(&claim.fix),
@@ -47,12 +74,9 @@ where
                 check: claim.breakage.check,
                 test: claim.breakage.test,
                 failure: claim.breakage.failure,
-            })
-            .collect())
-    }
-
-    /// Give back every breakage a Job that just ended was claiming.
-    pub(crate) async fn released_breakages(&self, job: &Job) {
-        let _ = self.store().lock().await.release_breakages(job.id());
+                waiting,
+            });
+        }
+        Ok(drawn)
     }
 }

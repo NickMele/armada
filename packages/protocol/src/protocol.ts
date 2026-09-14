@@ -446,6 +446,18 @@ export type ClaimedBreakage = {
   reported_by: string;
   /** What that Job is called. Absent where it has been forgotten. */
   reported_by_title?: string;
+  /**
+   * The Jobs pointed at this fix because their Checks failed on the test.
+   * Since protocol 13.42; absent is none. #1001.
+   */
+  waiting?: WaitingOnFix[];
+};
+
+/** One Job pointed at a fix, waiting for it to land. `crates/ipc/src/breakage.rs`. */
+export type WaitingOnFix = {
+  job_id: string;
+  /** What the Job is called. Absent where it could not be read. */
+  title?: string;
 };
 
 export type ProposedCriterion = { text: string; source: string };

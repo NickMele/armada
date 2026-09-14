@@ -388,6 +388,7 @@ where
         drop(working);
         if let Ok(report) = &ran {
             self.noted_dry_run(plan, report);
+            self.pointed_at_fixes_in(plan.record.id(), report).await;
         }
         Some(ran)
     }

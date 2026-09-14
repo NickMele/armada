@@ -5,6 +5,8 @@
 //! `/usr/bin/true` passes, so what the run came to is what the case is about.
 //! The call answers once the run has started; [`came_to`] waits for the rest.
 
+mod waiting;
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

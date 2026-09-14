@@ -3,7 +3,7 @@
 //! The last case is the one the table's shape exists for: the reporter is an id
 //! and not a key, so forgetting it leaves the fix's claim standing.
 
-use core_model::{Breakage, BreakageClaim, ManifestId, Ulid};
+use core_model::{Breakage, BreakageClaim, FixWaiter, ManifestId, Ulid};
 
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
 use crate::Store;
@@ -157,4 +157,78 @@ fn forgetting_the_reporter_leaves_the_claim_and_forgetting_the_fix_removes_it() 
         .breakages_claimed_by(&job_id(FIX))
         .expect("read")
         .is_empty());
+}
+
+/// `SECOND_FIX` stands in for a Job whose Check failed on the claimed test.
+fn waiter(on: &ManifestId) -> FixWaiter {
+    FixWaiter {
+        waiting: job_id(SECOND_FIX),
+        fix: job_id(FIX),
+        repository: on.clone(),
+        check: "test".to_string(),
+        test: "store::reads_the_last_row".to_string(),
+    }
+}
+
+#[test]
+fn a_job_is_pointed_at_a_fix_once_and_read_from_both_sides() {
+    let dir = TempDir::new();
+    let mut store = with_jobs(&dir);
+    let here = repository("01REPOAAAAAAAAAAAAAAAAAAAA");
+
+    assert!(store
+        .point_at_fix(&waiter(&here), &created_at())
+        .expect("written"));
+    assert!(
+        !store
+            .point_at_fix(&waiter(&here), &created_at())
+            .expect("written"),
+        "a second failure on the same test points nothing new"
+    );
+    assert_eq!(
+        store.waiting_on_fix(&job_id(FIX)).expect("read"),
+        vec![waiter(&here)]
+    );
+    assert_eq!(
+        store.fixes_waited_on_by(&job_id(SECOND_FIX)).expect("read"),
+        vec![waiter(&here)]
+    );
+
+    store.release_waiters(&job_id(FIX)).expect("released");
+    assert!(store.waiting_on_fix(&job_id(FIX)).expect("read").is_empty());
+}
+
+#[test]
+fn every_claim_in_a_repository_reads_and_no_other() {
+    let dir = TempDir::new();
+    let mut store = with_jobs(&dir);
+    let here = repository("01REPOAAAAAAAAAAAAAAAAAAAA");
+    store
+        .claim_breakage(&claim(FIX, &here), &created_at())
+        .expect("written");
+    store
+        .claim_breakage(
+            &claim(SECOND_FIX, &repository("01ELSEWHEREAAAAAAAAAAAAAAA")),
+            &created_at(),
+        )
+        .expect("written");
+
+    let claimed = store.breakages_claimed_in(&here).expect("read");
+    assert_eq!(claimed.len(), 1);
+    assert_eq!(claimed[0].fix, job_id(FIX));
+}
+
+#[test]
+fn forgetting_a_waiting_job_counts_its_pointer_by_name() {
+    let dir = TempDir::new();
+    let mut store = with_jobs(&dir);
+    let here = repository("01REPOAAAAAAAAAAAAAAAAAAAA");
+    store
+        .point_at_fix(&waiter(&here), &created_at())
+        .expect("written");
+
+    let removed = store
+        .forget_job(&job_id(SECOND_FIX))
+        .expect("the waiting Job is forgotten");
+    assert_eq!(removed.fix_waiters, 1);
 }
