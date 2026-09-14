@@ -1170,7 +1170,7 @@ read_by = "fleet"
 notes = """
 How many times in a row Fleet sends a Job back from its review gate to clear its pull request's conflicts with the base before a person decides; the conflict after that many escalates as `loop_cap`. #1131.
 
-**Only passes that came back unpushed count.** A pass whose delivery pushed a clean merge starts the count again, so a Job that cleared one conflict and waits at review while main moves is sent again; a base that keeps conflicting pass after pass is not. The count is Fleet's send-backs in the Job's event log, zeroed where its latest delivery pushed. No record says which earlier pass pushed, so a run broken by an older clean push counts in full and escalates sooner.
+**Only passes that came back unpushed count.** A pass whose delivery pushed a clean merge starts the count again, so a Job that cleared one conflict and waits at review while main moves is sent again; a base that keeps conflicting pass after pass is not. The count is a column on the Job's delivery record, raised by each send and zeroed by a delivery that pushed.
 
 **Not `iteration_cap`**, which bounds a verdict's loop and reads zero where a step declares none. `crates/fleet/src/conflict_resolution.rs` hard-codes this as `CLEARING_SENDS` and carries the argument for the number: three passes that each still conflicted is a base moving faster than a Drone can follow.
 """

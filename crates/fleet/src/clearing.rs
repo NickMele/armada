@@ -7,7 +7,7 @@
 //! of Fleet's walks a return: a verdict routed back is always a person's answer.
 
 use core_model::{Actor, Job, StepId, StepState};
-use store::{Delivery, Moved, RecordedEvent};
+use store::{Moved, RecordedEvent};
 
 /// Where a conflict-clearing pass stands.
 pub(crate) struct Clearing<'a> {
@@ -50,27 +50,4 @@ pub(crate) fn clearing<'a>(
     });
     let on_it = job.step(step)?.ordinal() <= job.step(gate)?.ordinal();
     (!held_again && on_it).then_some(Clearing { redoing })
-}
-
-/// Fleet's clearing sends past `gate` that count toward its cap.
-///
-/// **Zero where the latest delivery pushed**: a clean push starts the count
-/// again. Otherwise every send of Fleet's counts, because no record says which
-/// earlier pass pushed — so a run broken by an older clean push counts in full,
-/// and escalates sooner rather than going round longer.
-pub(crate) fn sends_in_a_row(events: &[RecordedEvent], gate: &StepId, latest: &Delivery) -> u32 {
-    if latest.unpushed.is_none() {
-        return 0;
-    }
-    let sent = events
-        .iter()
-        .filter(|event| {
-            event.actor() == Actor::Fleet
-                && matches!(
-                    event.moved(),
-                    Moved::Step { returned_by: Some(by), .. } if by == gate
-                )
-        })
-        .count();
-    u32::try_from(sent).unwrap_or(u32::MAX)
 }

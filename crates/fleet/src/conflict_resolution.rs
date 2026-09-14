@@ -51,9 +51,10 @@ where
     /// The same act, with the actor named.
     ///
     /// **Fleet's sends are bounded and a person's are not.** A base that keeps
-    /// moving while a Drone clears it would send the Job round for ever, so
-    /// once [`CLEARING_SENDS`] passes have come back unpushed, the next
-    /// conflict escalates as `loop_cap` instead — `crate::clearing::sends_in_a_row`.
+    /// moving while a Drone clears it would send the Job round for ever, so once
+    /// [`CLEARING_SENDS`] sends stand in a row the next conflict escalates as
+    /// `loop_cap` instead. The count is on the delivery record: each send raises
+    /// it and a delivery that pushed zeroes it.
     ///
     /// **Fleet does not read the branch before moving the Job.** The merge
     /// happens where every catch-up on this Job happens — inside
@@ -97,13 +98,12 @@ where
         };
 
         if by == Actor::Fleet {
-            let events = self
+            let in_a_row = self
                 .store()
                 .lock()
                 .await
-                .events_for(job_id)
-                .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
-            let in_a_row = crate::clearing::sends_in_a_row(&events, &gate, &delivery);
+                .clearing_sends_for(job_id)
+                .map_err(Adrift::Reading)?;
             let spent = StepLevelTrigger::of(EscalationTrigger::LoopCap);
             if let Some(spent) = spent.filter(|_| in_a_row >= CLEARING_SENDS) {
                 self.logged(
@@ -141,6 +141,15 @@ where
             return Err(Adrift::NoDroneToTell {
                 job: job_id.clone(),
             });
+        }
+        // Counted before the Job moves, so a count that will not write sends
+        // nothing rather than a send the cap never hears of.
+        if by == Actor::Fleet {
+            self.store()
+                .lock()
+                .await
+                .record_clearing_send(job_id)
+                .map_err(Adrift::Writing)?;
         }
 
         let said = match by {

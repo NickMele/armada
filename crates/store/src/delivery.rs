@@ -71,6 +71,16 @@ pub(crate) const V51: &str = r#"
 ALTER TABLE jobs ADD COLUMN delivery_unpushed_reason TEXT;
 "#;
 
+/// Version 75 — how many times in a row Fleet has sent a Job back from its
+/// review gate to clear its pull request's conflicts. `#1131`.
+///
+/// **A count, not a history.** Each send raises it and a delivery that pushed
+/// zeroes it, so it reads as passes in a row with nothing to fold. Zero is the
+/// default and every Job written before it, which has never been sent.
+pub(crate) const V75: &str = r#"
+ALTER TABLE jobs ADD COLUMN delivery_clearing_sends INTEGER NOT NULL DEFAULT 0;
+"#;
+
 /// Version 48 — the base a pull request's branch was last brought up to,
 /// where main moved under it. `#663`, in place of the close-and-reopen it
 /// replaced.
@@ -224,6 +234,9 @@ impl Store {
     /// method that could only set would leave clearing to a second spelling of
     /// the same `UPDATE`, and a redispatched Job delivering again must not
     /// inherit the last run's URL.
+    ///
+    /// **A delivery that pushed zeroes Fleet's clearing count**, which
+    /// [`record_clearing_send`](Store::record_clearing_send) raises. `#1131`.
     pub fn record_delivery(
         &mut self,
         job_id: &core_model::JobId,
@@ -234,7 +247,9 @@ impl Store {
             .execute(
                 "UPDATE jobs SET delivery_commit = ?2, delivery_pushed = ?3, \
                  delivery_pull_request = ?4, delivery_landed = ?5, \
-                 delivery_unpushed_reason = ?6 WHERE job_id = ?1",
+                 delivery_unpushed_reason = ?6, delivery_clearing_sends = \
+                 CASE WHEN ?3 IS NOT NULL AND ?6 IS NULL THEN 0 \
+                 ELSE delivery_clearing_sends END WHERE job_id = ?1",
                 (
                     job_id.as_str(),
                     delivery.commit.as_deref(),
@@ -406,6 +421,46 @@ impl Store {
             }
         }
         Ok(held)
+    }
+
+    /// Raise the count of Fleet's sends in a row to clear conflicts. `#1131`.
+    pub fn record_clearing_send(&mut self, job_id: &JobId) -> Result<(), WriteError> {
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE jobs SET delivery_clearing_sends = delivery_clearing_sends + 1 \
+                 WHERE job_id = ?1",
+                (job_id.as_str(),),
+            )
+            .map_err(fault("counting a send to clear conflicts"))
+            .map_err(WriteError::Database)?;
+        if updated == 0 {
+            return Err(WriteError::NoSuchJob {
+                job_id: job_id.clone(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Fleet's sends in a row to clear conflicts since a delivery last pushed.
+    /// Zero for a Job the file does not hold, as [`delivery_for`](Store::delivery_for)
+    /// reads one as nothing to say.
+    pub fn clearing_sends_for(&self, job_id: &JobId) -> Result<u32, crate::error::LoadJobError> {
+        self.conn
+            .query_row(
+                "SELECT delivery_clearing_sends FROM jobs WHERE job_id = ?1",
+                (job_id.as_str(),),
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|sends| u32::try_from(sends.max(0)).unwrap_or(u32::MAX))
+            .or_else(|why| match why {
+                rusqlite::Error::QueryReturnedNoRows => Ok(0),
+                other => Err(crate::error::LoadJobError::Unreadable(
+                    crate::error::RowError::Database(fault(
+                        "reading how many times Fleet sent a Job back to clear conflicts",
+                    )(other)),
+                )),
+            })
     }
 
     pub fn delivery_for(

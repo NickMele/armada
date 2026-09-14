@@ -27,7 +27,6 @@ use crate::tests::tools::submitted_by_the_one;
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 const FIRST_BASE: &str = "8c2ce68100000000000000000000000000000000";
-const SECOND_BASE: &str = "9d3df79200000000000000000000000000000000";
 
 /// The two-step fixture, gated on `summarise`, over a harness that echoes back
 /// what it is told, because these cases read a Drone's own opening brief.
@@ -265,27 +264,28 @@ async fn the_sweep_sends_a_conflicted_job_at_its_gate_back_as_fleet_once_per_bas
     );
 }
 
-/// **A second conflict is sent again.** A Job that cleared one conflict waits at
-/// review while main moves again — two branches bumping one protocol number is
-/// the common case — and Fleet sends it round a second time.
+/// **Clean clears do not add up.** A long-lived Job clears two conflicts, both
+/// pushed, then one pass comes back still conflicting: that is one in a row.
 #[tokio::test]
-async fn a_second_conflict_after_a_cleared_one_is_sent_again() {
+async fn two_clean_clears_then_one_conflicted_pass_is_sent_again() {
     let home = TempDir::new();
     let judge = Arc::new(FakeJudge::with_no_objection());
     let fleet = a_fleet_sweeping(&home, &judge);
     let job_id = a_job_at_its_handoff_gate(&home, &fleet).await;
+    let base = |n: u32| format!("{n:040x}");
 
-    main_moved_with_a_conflict(&fleet, FIRST_BASE);
+    for n in 1..=2 {
+        main_moved_with_a_conflict(&fleet, &base(n));
+        until_a_drone_is_on(&fleet, &job_id, "implement").await;
+        cleared_and_back_at_review(&fleet, &job_id).await;
+    }
+    main_moved_with_a_conflict(&fleet, &base(3));
     until_a_drone_is_on(&fleet, &job_id, "implement").await;
-    cleared_and_back_at_review(&fleet, &job_id).await;
+    still_conflicting_back_at_review(&fleet, &job_id).await;
 
-    main_moved_with_a_conflict(&fleet, SECOND_BASE);
+    main_moved_with_a_conflict(&fleet, &base(4));
     until_a_drone_is_on(&fleet, &job_id, "implement").await;
-    assert_eq!(
-        returns_by(&fleet, &job_id).await,
-        vec![Actor::Fleet, Actor::Fleet],
-        "sent back a second time, not escalated"
-    );
+    assert_eq!(returns_by(&fleet, &job_id).await, vec![Actor::Fleet; 4]);
 }
 
 /// The same pass, but the base moved again while it ran: the delivering step's

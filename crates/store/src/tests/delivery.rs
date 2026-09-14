@@ -359,3 +359,43 @@ fn a_job_that_has_never_needed_a_rebase_has_nothing_to_say() {
         .expect("nothing recorded is not a failure to read");
     assert_eq!(read, Currency::default());
 }
+
+/// **`#1131`: Fleet's clearing sends, in a row.** Each send raises the count, a
+/// delivery that did not push leaves it standing, and one that pushed zeroes it.
+#[test]
+fn clearing_sends_count_in_a_row_until_a_delivery_pushes() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01CLEARING000000000000001");
+    let id = crate::tests::job_id("01CLEARING000000000000001");
+    let delivered = |unpushed: Option<&str>| Delivery {
+        commit: Some("9698bb2d".to_string()),
+        pushed: Some("origin/armada/01CLEARING000000000000001".to_string()),
+        pull_request: Some("https://example.invalid/armada/pull/1131".to_string()),
+        landed: None,
+        unpushed: unpushed.map(str::to_string),
+    };
+    assert_eq!(store.clearing_sends_for(&id).unwrap(), 0, "never sent");
+
+    store.record_clearing_send(&id).expect("a send is counted");
+    store
+        .record_clearing_send(&id)
+        .expect("a second is counted");
+    store
+        .record_delivery(&id, &delivered(Some("the merge conflicted")))
+        .expect("an unpushed delivery is recorded");
+    assert_eq!(
+        store.clearing_sends_for(&id).unwrap(),
+        2,
+        "unpushed keeps it"
+    );
+
+    store
+        .record_delivery(&id, &delivered(None))
+        .expect("a pushed delivery is recorded");
+    assert_eq!(
+        store.clearing_sends_for(&id).unwrap(),
+        0,
+        "a push zeroes it"
+    );
+}
