@@ -37,6 +37,15 @@ pub struct AtStep<'a> {
     worktree: &'a Worktree,
     attempt: Attempt,
     spent: Spent,
+    looks: Looks,
+}
+
+/// Whether a pass puts the work to the Judge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Looks {
+    Asked,
+    /// A pass Fleet opened to clear conflicts with the base. `#1131`.
+    NotThisPass,
 }
 
 impl<'a> AtStep<'a> {
@@ -48,6 +57,7 @@ impl<'a> AtStep<'a> {
             worktree,
             attempt: Attempt::FIRST,
             spent: Spent::FIRST,
+            looks: Looks::Asked,
         })
     }
 
@@ -64,6 +74,7 @@ impl<'a> AtStep<'a> {
             worktree,
             attempt: Attempt::FIRST,
             spent: Spent::FIRST,
+            looks: Looks::Asked,
         })
     }
 
@@ -79,6 +90,21 @@ impl<'a> AtStep<'a> {
             spent,
             ..self
         }
+    }
+
+    /// The same position, on a pass Fleet opened to clear conflicts with the
+    /// base: the change was judged already, so only its Checks gate it.
+    pub fn clearing_conflicts(self) -> AtStep<'a> {
+        AtStep {
+            looks: Looks::NotThisPass,
+            ..self
+        }
+    }
+
+    /// Whether this pass may put the work to the Judge — a criterion, the drift
+    /// look and the gaming look alike.
+    pub fn asks_the_judge(&self) -> bool {
+        self.looks == Looks::Asked
     }
 
     /// Which run of this step is being ruled on. One-based. **The coordinate
@@ -117,6 +143,7 @@ impl<'a> AtStep<'a> {
             // budget it has not spent.
             attempt: Attempt::FIRST,
             spent: Spent::FIRST,
+            looks: Looks::Asked,
         })
     }
 

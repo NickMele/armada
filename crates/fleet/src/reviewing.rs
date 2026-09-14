@@ -201,7 +201,8 @@ where
                 true
             }
             SentBack::NowhereLeft(spent) => {
-                self.loop_is_spent(&job, &step, spent, &mut working).await?;
+                self.loop_is_spent(&job, &step, spent, &mut working, Actor::Human)
+                    .await?;
                 true
             }
         };
@@ -349,20 +350,20 @@ where
     /// then stops and the Job takes the default `running -> escalated` — every
     /// trigger without an edge of its own fires it, step first, since the
     /// inner machine freezes the moment the Job leaves an advancing status.
-    async fn loop_is_spent(
+    pub(crate) async fn loop_is_spent(
         &self,
         job: &Job,
         gate: &StepId,
         spent: core_model::StepLevelTrigger,
         working: &mut Option<crate::working::Working>,
+        by: Actor,
     ) -> Result<Job, Adrift> {
         if working.as_ref().is_some_and(|at_work| at_work.is(job.id())) {
             self.end_the_drone(working).await;
         }
-        // The actor is the person: they answered, and leaving the gate is what
-        // their answer did. What happened next is Fleet's and is recorded as
-        // Fleet's, two rows down.
-        let job = self.move_job(job, Target::Running, Actor::Human).await?;
+        // Whoever answered at the gate: a person, or Fleet sending a conflict
+        // round again (`#1131`). What happened next is Fleet's, two rows down.
+        let job = self.move_job(job, Target::Running, by).await?;
         let job = self
             .move_step_by(&job, gate, StepTarget::Stopped(spent), Actor::Fleet)
             .await?;

@@ -1,14 +1,15 @@
 //! Getting a Job's work back to the branch it merges into.
 //!
-//! # Rebasing is Fleet's, on every path, and it is one call
+//! # Catching up is Fleet's, on every path, and it is one call
 //!
 //! `docs/concepts/fleet.md`, *Catching a branch up*, is the rule.
 //! [`caught_up_onto`](Fleet::caught_up_onto) is the only place a boundary
-//! rebases, and every path that starts, resumes or advances a step reaches it.
+//! merges its base in, and every path that starts, resumes or advances a step
+//! reaches it.
 //!
 //! # Two moments, and they used to be three
 //!
-//! At a **spawn** the rebase runs before the process exists and what moved
+//! At a **spawn** the catch-up runs before the process exists and what moved
 //! rides the opening brief — `crate::spawning`. On the step the workflow says
 //! delivers, and as it is entered, the branch is committed, pushed and opened
 //! for review — `crate::landing`, which owns why that is an entry and not an
@@ -21,7 +22,7 @@
 //! Asking the Drone whether its branch is behind would be asking it to manage
 //! its own state, which `docs/concepts/drone.md` says it cannot be trusted to
 //! do — and it has just submitted, so git can answer on its own. What the
-//! worktree is *holding* is not checked either: the rebase carries uncommitted
+//! worktree is *holding* is not checked either: the merge carries uncommitted
 //! work across and puts it back. See `adapters`' delivery module.
 
 use adapter_traits::{
@@ -76,8 +77,8 @@ impl Delivered {
                  was not pushed"
             )),
             BroughtUpToDate::PutBack { base, .. } => Some(format!(
-                "the branch's own commits would not replay onto `{base}`, so they were put back \
-                 exactly as they were and the commit was not pushed"
+                "the branch could not take `{base}`, so it was left exactly as it was and the \
+                 commit was not pushed"
             )),
         }
     }
@@ -102,7 +103,7 @@ where
     ///
     /// **Nothing is created and nothing is discarded.** The worktree named here
     /// is the one that already exists, holding whatever a previous Drone left
-    /// in it; a clean rebase updates it in place and a conflicted one writes
+    /// in it; a clean merge updates it in place and a conflicted one writes
     /// markers into it. That is what makes this compatible with `#62`, where a
     /// restart exists precisely so the earlier attempt's work survives.
     ///
@@ -179,31 +180,20 @@ where
                 let replayed = matches!(moved, BroughtUpToDate::Clean { .. });
                 delivered.caught_up = Some(moved);
                 // A branch known to conflict with what it merges into is not
-                // pushed. The work is committed and the worktree is held; a
-                // person resolves it, and a pull request opened over it would
-                // be a review request nobody can act on.
+                // pushed. Its markers stay, and the sweep sends the Job back to
+                // clear them once it waits at its gate — `crate::currency`.
                 if !replayed {
                     return Ok(delivered);
                 }
             }
         }
 
-        // **`--force-with-lease`, unconditionally, not only where this call's
-        // own rebase moved anything.** `#663` is the first thing in this
-        // codebase that can reach this call a second time for one branch —
-        // `crate::conflict_resolution` sends a Job's delivering step back
-        // through here once a Drone has resolved a conflict — and by the time
-        // the delivering step is *entered* again, the rebase that rewrote its
-        // history already happened, at the earlier step's own spawn-time
-        // catch-up, not here. What a plain push refuses on is exactly the
-        // shape that redelivery leaves behind, so this is the one push and
-        // not a choice between two: `armada/*` is a namespace nothing but
-        // Fleet ever pushes to, and the lease that guards a rewrite guards an
-        // ordinary push identically to a plain one — see `adapters`' own
-        // test proving a brand-new branch's first push takes it the same way.
+        // **The ordinary push.** Fleet merges and never rewrites, so a branch
+        // this Job pushed before is a fast-forward, and one the remote holds
+        // more of is refused rather than overwritten. `#1131`.
         let pushed = self
             .vcs()
-            .push_forcing(worktree)
+            .push(worktree)
             .map_err(|why| Adrift::from_delivery(&job_id, why))?;
         let reached_a_remote = pushed != Pushed::NoRemote;
         delivered.pushed = Some(pushed);

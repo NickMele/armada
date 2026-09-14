@@ -370,7 +370,8 @@ where
     // mechanical tier held and either the step declares a criterion or the step
     // drifted — the second being the one look `judge.md` calls mandatory, which
     // fires on a step that declares no criterion of its own.
-    let asked = step.asks_the_judge() || !off_plan.is_empty();
+    // Nothing is asked on a pass clearing conflicts: the change was judged already.
+    let asked = at.asks_the_judge() && (step.asks_the_judge() || !off_plan.is_empty());
     let (judged, verdict) = match mechanical.advanced() && asked {
         false => (Vec::new(), mechanical),
         true => {
@@ -522,7 +523,7 @@ where
     // failing the step — it routes elsewhere entirely. A flag a second reading
     // cleared stops nothing, and rides on the advance to be written down.
     let mut cleared = Vec::new();
-    if verdict.advanced() {
+    if verdict.advanced() && at.asks_the_judge() {
         match suspect(at, work, recorded, judging, &checks, &output, &judged).await {
             ControlFlow::Break(stopped) => return stopped,
             ControlFlow::Continue(flags) => cleared = flags,

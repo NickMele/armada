@@ -43,13 +43,14 @@ pub mod briefing;
 mod budget;
 mod check_output;
 mod checking;
+/// One Manifest as Fleet resolved it, for the caller asking what a Job here
+/// will be held to.
+mod clearing;
 pub mod clock;
 /// `api::Commands`, implemented over a real Fleet — the write half of the seam
 /// `serving` holds the read half of. Three traits, three impl blocks, three
 /// files, and no delegating signature between them.
 pub mod commanding;
-/// One Manifest as Fleet resolved it, for the caller asking what a Job here
-/// will be held to.
 mod configured;
 /// What an upstream's terminal status does to the Job waiting behind it — the
 /// one place a dependency edge is weighed, for both admission and the Board.
