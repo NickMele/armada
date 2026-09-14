@@ -797,9 +797,15 @@ export const CheckOutputRowOpensSheetLive: Story = {
     <JobDetailFrom fixture={gateChecksStreaming()} on={{ onFollowCheckOutput: fn() }} />
   ),
   play: async ({ canvas, userEvent }) => {
-    // No recorded run for this Check yet, so there is no second control on
-    // the screen naming the same file — one button, found by its text.
-    await userEvent.click(await canvas.findByText("regression_verify.1.cargo_nextest.live.log"));
+    // `aria-pressed` is `CheckRuns`' own row control — the same query the
+    // kept story uses. #1045: this used to time out because the Checks phase
+    // was not the timeline's default-open row while a Check streamed.
+    await userEvent.click(
+      await canvas.findByRole("button", {
+        name: "regression_verify.1.cargo_nextest.live.log",
+        pressed: false,
+      }),
+    );
     const body = within(document.body);
     const dialog = within(await body.findByRole("dialog", { name: "Console output" }));
     // No `followed` state was wired for this story, so main has not answered

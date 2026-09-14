@@ -132,7 +132,17 @@ export function timelineOf(
         .map((one) => one.path),
       ...(step.frames ?? []).filter((one) => one.attempt === attempt.attempt).map((one) => one.name),
     ];
-    const working = current && ended === undefined && WORKING.has(step.state);
+    // Not once the gate has taken the step: `checking` and `judging` are the
+    // step's own "right now" once the Drone has handed off, and a step whose
+    // Working and Checks rows are both live left `whereItIs` opening the
+    // first it found — Working — with the Checks row, and its output button,
+    // hidden underneath. #1045.
+    const working =
+      current &&
+      ended === undefined &&
+      WORKING.has(step.state) &&
+      step.checking === undefined &&
+      step.judging === undefined;
     // What this attempt wrote, as Fleet read it at the step boundary. The last
     // reading in the window wins, for the reason `run.ts` states: a step read
     // three times has three rows and only the newest describes the work.
