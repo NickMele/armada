@@ -105,6 +105,17 @@ export type SettingsSheetProps = SettingsCalls & {
 /** A row a change was sent from. */
 type Row = "cost" | "turns" | "model" | "review-model" | "blocked" | "refused" | "allowed";
 
+/** The rows with no button of their own, and the act each sends. Raise and Remove wait on their buttons. */
+const SENT_BY: Partial<Record<Row, ActingAct>> = {
+  model: "set_model",
+  "review-model": "set_review_model",
+  blocked: "set_when_blocked",
+  refused: "set_when_refused",
+};
+
+/** What such a row says while its change is out. */
+const SAVING = "Saving…";
+
 /** What a row says once its change took, and how to tell that it did. */
 type Told = { row: Row; says: ReactNode; took: (whole: JobWhole) => boolean };
 
@@ -149,7 +160,10 @@ export function SettingsSheet({
     setTold((was) => [...was.filter((one) => one.row !== row), { row, says, took }]);
   const saidOf = (row: Row): ReactNode => {
     const one = told.find((each) => each.row === row);
-    return one !== undefined && one.took(whole) ? one.says : undefined;
+    if (one === undefined) return undefined;
+    if (one.took(whole)) return one.says;
+    // A choice or a picker has no control to wait on, so its line does until Fleet answers. #1117.
+    return acting && actingAct !== undefined && actingAct === SENT_BY[row] ? SAVING : undefined;
   };
 
   const off = stale || acting;
