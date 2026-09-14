@@ -157,6 +157,15 @@ impl Tree {
         self
     }
 
+    /// A split sibling beside a component's own story — #1044. The component
+    /// directory and its `.tsx` must already exist.
+    fn split_story(self, group: &str, name: &str, suffix: &str, title: &str) -> Tree {
+        let dir = self.0.join(ROOT).join(group).join(name);
+        fs::write(dir.join(format!("{name}.{suffix}.stories.tsx")), story(title))
+            .expect("a split story");
+        self
+    }
+
     /// One story and its component under the screens package's own root.
     fn screen(self, group: &str, name: &str, title: &str) -> Tree {
         let dir = self.0.join(SCREENS).join(group).join(name);
@@ -233,6 +242,47 @@ fn a_title_in_the_wrong_group_names_both() {
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].contains("group `Compositions`"), "{lines:?}");
     assert!(lines[0].contains("`primitives/`"), "{lines:?}");
+}
+
+/// A component split across sibling files — #1044 — passes as long as every
+/// sibling's title still resolves to the same directory.
+#[test]
+fn a_component_split_into_siblings_passes() {
+    let lines = Tree::new("split")
+        .component(
+            "compositions",
+            "JobRowStacked",
+            Some("Compositions/Job row (stacked)"),
+            true,
+        )
+        .split_story(
+            "compositions",
+            "JobRowStacked",
+            "meta",
+            "Compositions/Job row (stacked)",
+        )
+        .run();
+    assert!(lines.is_empty(), "{lines:?}");
+}
+
+/// One sibling naming the wrong directory is caught on its own line, not
+/// hidden by the canonical file beside it passing.
+#[test]
+fn a_mistitled_sibling_names_itself() {
+    let lines = Tree::new("split-mismatch")
+        .component(
+            "compositions",
+            "JobRowStacked",
+            Some("Compositions/Job row (stacked)"),
+            true,
+        )
+        .split_story("compositions", "JobRowStacked", "meta", "Compositions/Wrong")
+        .run();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].contains("JobRowStacked.meta.stories.tsx"),
+        "{lines:?}"
+    );
 }
 
 #[test]

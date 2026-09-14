@@ -1,8 +1,8 @@
-// The Plan region's own fixture data, beside `JobDetail.stories.tsx` rather
-// than inside it — moved out when the Plan stories pushed that file over the
-// gate's 900-line rule. **Not a `.stories.tsx` file on purpose**: the gate's
-// one-story-per-directory rule reads every file with that suffix, and this is
-// data rather than a story.
+// The Plan region's own fixture data, beside the Job detail story files
+// (split across several by #1044) rather than inside one of them — moved out
+// when the Plan stories pushed the original file over the gate's 900-line
+// rule. **Not a `.stories.tsx` file on purpose**: the gate reads every file
+// with that suffix as a story, and this is data rather than one.
 
 import type { DeclaredCheck, WorkPlan } from "@armada/protocol";
 import type { JobFixture } from "../../../fixtures/fixture";

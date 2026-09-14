@@ -152,12 +152,15 @@ fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-/// One component directory: its story, its component file, and whether the
-/// title in the first agrees with the name of the directory.
+/// One component directory: its story or stories, its component file, and
+/// whether every title agrees with the name of the directory.
+///
+/// **A component may split into several files**, `<component>.stories.tsx`
+/// and any `<component>.<group>.stories.tsx` beside it — #1044. Each is
+/// checked the same way; a component with none fails as it always did.
 fn check(src: &Path, base: &str, group: &str, component: &str, report: &mut Report) {
     let on_disk = src.join(group).join(component);
     let dir = format!("{base}/{group}/{component}");
-    let story = format!("{dir}/{component}.stories.tsx");
 
     if !on_disk.join(format!("{component}.tsx")).is_file() {
         report.fail(format!(
@@ -167,15 +170,49 @@ fn check(src: &Path, base: &str, group: &str, component: &str, report: &mut Repo
         ));
     }
 
-    let Ok(text) = fs::read_to_string(on_disk.join(format!("{component}.stories.tsx"))) else {
+    let files = story_files(&on_disk, component);
+    if files.is_empty() {
         report.fail(format!(
             "{dir}/ — a component with no `{component}.stories.tsx`. \
              A component the registry does not draw is one nobody can see drift. {SKILL}"
         ));
         return;
-    };
+    }
 
-    let Some((title, line)) = meta_title(&text) else {
+    for name in files {
+        let story = format!("{dir}/{name}");
+        let Ok(text) = fs::read_to_string(on_disk.join(&name)) else {
+            continue;
+        };
+        check_title(&story, &text, group, component, report);
+    }
+}
+
+/// Every `.stories.tsx` file in a component directory that names it: the
+/// canonical `<component>.stories.tsx`, or a split sibling —
+/// `<component>.<group>.stories.tsx`. Sorted, so a report reads in one order.
+fn story_files(on_disk: &Path, component: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    if let Ok(entries) = fs::read_dir(on_disk) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+                continue;
+            };
+            let Some(stem) = name.strip_suffix(".stories.tsx") else {
+                continue;
+            };
+            if stem == component || stem.starts_with(&format!("{component}.")) {
+                found.push(name);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// One story file's own `title`, checked against the directory it sits in.
+fn check_title(story: &str, text: &str, group: &str, component: &str, report: &mut Report) {
+    let Some((title, line)) = meta_title(text) else {
         report.fail(format!(
             "{story} — no quoted `title` in its `const meta`. \
              The title is where the component's real name lives. {SKILL}"
@@ -215,9 +252,10 @@ fn check(src: &Path, base: &str, group: &str, component: &str, report: &mut Repo
     }
 }
 
-/// A story anywhere but `<group>/<Name>/<Name>.stories.tsx` has no directory to
-/// be checked against, so it is invisible to the rule above while still being
-/// picked up by Storybook's glob.
+/// A story anywhere but `<group>/<Name>/<Name>.stories.tsx`, or a split
+/// sibling `<group>/<Name>/<Name>.<word>.stories.tsx` — #1044 — has no
+/// directory to be checked against, so it is invisible to the rule above
+/// while still being picked up by Storybook's glob.
 fn stories_are_in_a_component_directory(root: &Path, src: &Path, base: &str, report: &mut Report) {
     for path in files_with_ext(root, src, &["tsx"]) {
         let Some(rest) = path.strip_prefix(&format!("{base}/")) else {
@@ -227,7 +265,7 @@ fn stories_are_in_a_component_directory(root: &Path, src: &Path, base: &str, rep
         let Some(stem) = parts.last().and_then(|n| n.strip_suffix(".stories.tsx")) else {
             continue;
         };
-        if parts.len() == 3 && parts[1] == stem {
+        if parts.len() == 3 && (parts[1] == stem || stem.starts_with(&format!("{}.", parts[1]))) {
             continue;
         }
         report.fail(format!(
