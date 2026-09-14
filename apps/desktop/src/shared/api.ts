@@ -298,8 +298,8 @@ export type BridgeApi = {
    * the evidence untrustworthy. Both are a machine's decision, which is what a
    * person may overrule. Fleet refuses 409 for `gate_undecided`, where nothing
    * weighed the work, and for a step that stopped on anything else; 422 for a
-   * blank reason. Whether the Drone is still there decides only how the Job
-   * carries on.
+   * blank reason except on `evidence_suspect`. Whether the Drone is still there
+   * decides only how the Job carries on.
    */
   overrideVerdict: (jobId: string, reason: string) => Promise<Outcome>;
   /**

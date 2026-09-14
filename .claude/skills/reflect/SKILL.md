@@ -278,6 +278,11 @@ surface decides where a follow-up lives, not whether the session is done.
   `fatal: Not possible to fast-forward` and deleted the branch. The commit was
   recoverable by sha, but only because the sha was in the output. **Never pipe a
   command whose exit code an `&&` depends on.**
+- **`set -e` does not stop on a failed `test … && echo`.** Confirmed 2026-09-14:
+  a merge script checked `main unchanged since the tests` that way, the check
+  failed silently — a docs PR had landed — and `gh pr merge` ran on the next
+  line. The move turned out harmless; the confirmation never happened. A guard
+  a merge depends on is `test … || { echo why; exit 1; }`, or an `if`.
 - **Parallel agents collide in vocabulary, not only in files.** Confirmed
   2026-08-31: two agents independently added a type named `Keeping` on one
   evening — different subjects, one name, caught only at the merge build. Tell
