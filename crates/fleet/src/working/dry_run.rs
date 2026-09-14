@@ -8,19 +8,19 @@
 //! Drone waiting on Fleet is neither silent nor failing to converge, and what
 //! that costs the two readings is stated once, here.
 //!
-//! It is also the refusal that stops two runs overlapping — a second
-//! `cargo build` in one worktree is two processes fighting over one target
-//! directory, and neither answer would be about the work.
+//! **The slot holds what keeps the run going** (#1020), so whatever ends the
+//! slot — a kill, a Drone gone, a step boundary — stops its Checks too.
 
 use std::time::Duration;
 
 use core_model::Timestamp;
 
+use crate::checking::Going;
 use crate::converging::elapsed;
 use crate::working::Working;
 
 impl Working {
-    /// Fleet has started running this step's Checks for the Drone, at this
+    /// Fleet has started run `run` of this step's Checks for the Drone, at this
     /// instant.
     ///
     /// **The clocks suspend from here.** The Drone is not working and not
@@ -28,19 +28,38 @@ impl Working {
     /// for — `#58` suspends the silence clock while evidence sits at the gate
     /// for the same reason, and this is the same mechanism on a different
     /// trigger.
-    pub(crate) fn checking(&mut self, at: Timestamp) {
+    pub(crate) fn checking(&mut self, at: Timestamp, run: u64, going: Going) {
         self.checking_since = Some(at);
+        self.in_flight = Some((run, going));
         self.dry_runs += 1;
     }
 
-    /// The run has finished, at this instant. **The clocks start again from
+    /// Run `run` has finished, at this instant. **The clocks start again from
     /// here** rather than from where they were: the Drone has been waiting, and
     /// the silence it owes an answer for begins when it gets one.
-    pub(crate) fn checked(&mut self, at: Timestamp) {
+    ///
+    /// `false` where `run` is not the run in flight: the step already ended it.
+    pub(crate) fn checked(&mut self, at: Timestamp, run: u64) -> bool {
+        if !self
+            .in_flight
+            .as_ref()
+            .is_some_and(|(held, _)| *held == run)
+        {
+            return false;
+        }
+        self.checks_cut_short(at);
+        true
+    }
+
+    /// End the run in flight, where there is one: its Checks are stopped, and
+    /// it reports nothing. **A submission does this** — the gate is about to run
+    /// the same Checks in the same worktree.
+    pub(crate) fn checks_cut_short(&mut self, at: Timestamp) {
+        self.in_flight = None;
         if let Some(began) = self.checking_since.take() {
             self.checked_for += elapsed(&began, &at);
+            self.waiting(at);
         }
-        self.waiting(at);
     }
 
     /// Whether a dry run is in flight. **The refusal a second call gets**, and

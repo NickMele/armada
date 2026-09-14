@@ -31,7 +31,7 @@ async fn a_drone_asking_for_the_checks_is_told_what_each_one_did() {
     let job = started(&fleet, &home).await;
     let handle = fleet.load(&job).await.expect("the Job").handle();
 
-    let said = ask(&app).await;
+    let said = ask(&app, &fleet, &home).await;
     assert!(!said.is_error, "{}", said.text);
     assert!(
         said.text.contains("suite") && said.text.contains("FAILED"),
@@ -142,7 +142,7 @@ async fn every_check_the_step_declares_gets_a_row_however_many_there_are() {
     let app = router(&fleet);
     started(&fleet, &home).await;
 
-    let said = ask(&app).await;
+    let said = ask(&app, &fleet, &home).await;
     assert!(!said.is_error, "{}", said.text);
     for named in ["build", "typecheck", "bridge_build", "storybook"] {
         assert!(
@@ -174,7 +174,7 @@ async fn a_failing_checks_own_output_rides_the_report_and_names_no_file_to_open(
     let app = router(&fleet);
     let _job = started(&fleet, &home).await;
 
-    let said = ask(&app).await;
+    let said = ask(&app, &fleet, &home).await;
     assert!(!said.is_error, "{}", said.text);
     // The whole of the claim: this is the Check's own stderr, read out of the
     // capture `checks_runner` already held rather than off any path — the
@@ -200,7 +200,7 @@ async fn a_passing_checks_output_does_not_ride_the_report() {
     let app = router(&fleet);
     let _job = started(&fleet, &home).await;
 
-    let said = ask(&app).await;
+    let said = ask(&app, &fleet, &home).await;
     assert!(!said.is_error, "{}", said.text);
     assert!(
         !said.text.contains("a-passing-checks-own-marker"),
@@ -247,7 +247,7 @@ async fn a_dry_run_skips_the_same_check_the_gate_would() {
     let app = router(&fleet);
     let _job = started(&fleet, &home).await;
 
-    let said = ask(&app).await;
+    let said = ask(&app, &fleet, &home).await;
     assert!(!said.is_error, "{}", said.text);
     // The command exits 1. A row that is not FAILED is a Check that never ran.
     assert!(

@@ -1,48 +1,42 @@
 //! A Drone asking whether its work passes, and Fleet running the step's Checks
-//! to answer.
+//! to answer. **A signal, and no path to a pass**: nothing here writes a Check
+//! row or moves a step, and output goes to `<step>.dry.<n>.log`, never the
+//! gate's `<step>.<n>.log`.
 //!
-//! **The allowlist is why this exists and is not the fix.** `--allowedTools` is
-//! a permission list rather than a toolset, so a Drone granted `cargo fmt` and
-//! nothing else has every other invocation denied *silently*, which reads as a
-//! tool that does not work. Widening it would run a command the workflow did
-//! not freeze. Fleet runs the Checks; a Drone can now ask it to.
-//!
-//! **A signal, and no path from here to a pass.** Nothing below writes a Check
-//! row, records evidence or moves a step, and the gate runs every Check again
-//! for itself. Output goes to `<step>.dry.<n>.log` and never to the gate's
-//! `<step>.<n>.log`, so no record ends up naming a file no gate wrote.
-//!
-//! **The clocks suspend while it runs, which is what needs two bounds.** A
-//! Drone waiting on Fleet is not silent and is not thrashing — `#58` settled
-//! that for evidence at the gate — but they were also the only thing bounding
-//! the cost, and `cargo build --workspace` is minutes.
+//! **The call answers at once, and the report is a later turn** (#1020). A
+//! build outlasts what the agent CLI waits on one call, and a run tied to the
+//! request died with the connection and left the slot marked. So the run is
+//! Fleet's, and the task [`Fleet::run_checks`] starts takes the mark off.
 //!
 //! | Bound | What it stops |
 //! |---|---|
-//! | A refusal while one runs | Two builds in one worktree, neither answer about the work |
-//! | [`DryRuns`], per step | Ask, change a line, ask again, for as long as the step lasts |
-//!
-//! **The call chooses neither the Checks nor the bar** — [`Fleet::run_checks`].
+//! | A refusal while one runs | Two builds in one worktree |
+//! | [`DryRuns`], per step | Ask, change a line, ask again, for the whole step |
+//! | A step that ends mid-run | A report on whatever follows; its Checks stop |
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Footprint, Vcs, WorkProduct, Worktree};
-use core_model::{Component, Envelope, FieldValue, Job, JobId, Level, ResolvedCheck, StepId};
+use core_model::{
+    Attempt, Component, Envelope, FieldValue, Job, JobId, Level, ResolvedCheck, StepId, TaskCounts,
+};
 use ipc::mcp::{CheckRan, CheckReport};
+use tokio::task::JoinHandle;
 use verification::Ran;
 
 use crate::check_output;
+use crate::checking::Stop;
 use crate::daemon::Fleet;
+use crate::session::{LiveSession, Occasion};
+use crate::working::Working;
 
-/// How many times one step may ask.
-///
-/// **A newtype with one constructor and no `Default`**, for [`CheckBudget`]'s
-/// reason: a threshold invented at a call site is a threshold nobody can find.
-/// The composition root names it once and says there what it is worth.
-///
-/// [`CheckBudget`]: crate::CheckBudget
+/// How many times one step may ask. **One constructor and no `Default`**, for
+/// [`CheckBudget`](crate::CheckBudget)'s reason.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DryRuns(u32);
 
@@ -56,55 +50,29 @@ impl DryRuns {
     }
 }
 
-/// Why the Checks were not run.
-///
-/// **No variant is a gate failure**, and none of them stops or advances
-/// anything: the call was aimed at nothing, at a step with no Checks, or at a
-/// budget that is spent. Every one reaches the Drone as a tool error it can
-/// read and act on.
-///
-/// Its own type rather than a variant of `Adrift` or a sibling of
-/// `NotSubmitted`: those are `crate::adrift`'s, this refuses a different act,
-/// and a module that has to be opened to add a refusal is a module two changes
-/// collide in.
+/// Why the Checks were not run. **None is a gate failure**, none moves
+/// anything, and each reaches the Drone at once as a tool error it can act on.
 #[derive(Debug)]
 pub enum NotRun {
     /// No Job is being worked, so there is no step whose Checks these would be.
     NothingIsWorking,
-    /// The Job is standing at a step its frozen workflow does not name. **A
-    /// fault in Fleet, not in the call.**
+    /// The Job stands at a step its frozen workflow does not name: Fleet's fault.
     NoSuchStep { step: StepId },
-    /// The step declares no mechanical Checks. Refused rather than answered
-    /// with an empty report: a report with no rows reads as a run that found
-    /// nothing wrong.
+    /// Refused, not answered empty: a report with no rows reads as a clean run.
     StepHasNoChecks { step: StepId },
-    /// A run is already in flight for this step. **Refused rather than
-    /// queued** — two builds in one worktree contend for one target directory,
-    /// and neither result would be about the work.
+    /// Refused, not queued: two builds in one worktree answer about neither.
     AlreadyRunning,
-    /// The Drone has already submitted, and the gate is about to run the same
-    /// Checks itself.
-    ///
-    /// **The third bound, and the only one that is not about cost.** The gate
-    /// runs in the worktree the dry run would run in, so answering here would
-    /// be two builds in one directory the same way a second dry run would — and
-    /// the answer the Drone is waiting for is the gate's, which arrives as a
-    /// turn. It does not close the case the other way round: a Drone that
-    /// submits while a run is in flight is a real ordering and the gate does
-    /// not refuse it.
+    /// The gate is about to run the same Checks in the same worktree. The other
+    /// way round, a submission stops a run already going.
     AlreadySubmitted,
     /// The step has spent its allowance.
     Spent { allowed: u32 },
-    /// A narrowed run of a worktree holding no change. **Refused before
-    /// anything is spent**: a Drone asking what its own change broke, having
-    /// changed nothing, has an answer that costs no Check at all — and a run
-    /// narrowed to an empty list would either measure nothing or, worse,
-    /// measure everything under a command that read as narrow.
+    /// Fleet holds no pipe into this Drone, adopted after a restart, so the
+    /// report could never arrive. Refused before anything is spent.
+    Unheard,
+    /// A narrowed run of a worktree holding no change, refused before anything is spent.
     NothingChanged,
-    /// The worktree could not be read, so `diff_nonempty` has no answer.
-    /// **Refused before anything is spent**, which is why the reading is taken
-    /// first: a report that guessed at this would tell a Drone its work changed
-    /// nothing on the strength of a failed read.
+    /// A reading failed. Refused before anything is spent: every read precedes the mark.
     CouldNotRead { cause: String },
 }
 
@@ -128,9 +96,10 @@ impl fmt::Display for NotRun {
                 step.as_str()
             ),
             NotRun::AlreadyRunning => out.write_str(
-                "the checks are already running for this part. Wait for the call \
-                 you have made to come back — a second run would be two builds \
-                 in one worktree and neither answer would be about your work",
+                "the checks are already running for this part. Wait for their \
+                 report — it arrives as a later turn, and a second run would be \
+                 two builds in one worktree and neither answer would be about \
+                 your work",
             ),
             NotRun::AlreadySubmitted => out.write_str(
                 "you have submitted, and the checks are about to be run against \
@@ -142,6 +111,11 @@ impl fmt::Display for NotRun {
                 "this part has already asked for the checks {allowed} times, \
                  which is all it gets. Finish the work and submit — the checks \
                  are run again then, and that run is the one that decides"
+            ),
+            NotRun::Unheard => out.write_str(
+                "Fleet restarted while this part was going and can no longer send \
+                 you a later turn, so the checks were not run and nothing has been \
+                 spent. Finish the work and submit — the checks are run again then",
             ),
             NotRun::NothingChanged => out.write_str(
                 "you asked for the checks against what you have changed, and \
@@ -160,19 +134,63 @@ impl fmt::Display for NotRun {
 
 impl std::error::Error for NotRun {}
 
-/// What one dry run is against: read under the slot lock, held while the lock
-/// is not.
-///
-/// **A value rather than a borrow**, because the Checks are minutes and the
-/// slot lock is read four times a second. A run that held it would stop Fleet
-/// turning at all — no gate, no vigil, no live file list — for the length of a
-/// `cargo build`.
+/// A run Fleet has started and owns. **Dropping this leaves it going.**
+#[derive(Debug)]
+pub struct ChecksRunning(JoinHandle<Option<Result<CheckReport, String>>>);
+
+impl ChecksRunning {
+    /// What the Drone was told, or `None` where the step ended before the run.
+    pub async fn finished(self) -> Option<Result<CheckReport, String>> {
+        self.0.await.ok().flatten()
+    }
+}
+
+/// The later turn a run's report arrives as, built from the run and nothing else.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChecksReported(String);
+
+impl ChecksReported {
+    fn of(ran: &Result<CheckReport, String>) -> ChecksReported {
+        const HEADING: &str = "THE CHECKS YOU ASKED FOR";
+        ChecksReported(match ran {
+            Ok(report) => {
+                format!("{HEADING}\n\nThey have finished. This is what each one did:\n\n{report}")
+            }
+            Err(cause) => format!(
+                "{HEADING}\n\nThey ran, and no report could be made of them: {cause}. \
+                 This is a fault in Fleet and not in your work. Ask again, or submit \
+                 when the work is done."
+            ),
+        })
+    }
+
+    /// The turn, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Which run is in flight, so the task ending one cannot end another.
+static RUNS: AtomicU64 = AtomicU64::new(0);
+
+/// What one dry run is against: read under the slot lock, held while it is not.
 struct Plan {
     record: Job,
     step: StepId,
     worktree: Worktree,
-    /// What the worktree held when the step began, for `diff_nonempty`.
     entered_with: Option<Footprint>,
+}
+
+/// What the run reads before anything is spent, so a failed read refuses at once.
+struct Readings {
+    narrow: bool,
+    moved: bool,
+    touched: Vec<String>,
+    ports: BTreeMap<String, u16>,
+    port_env: Vec<(String, String)>,
+    tasks: Option<TaskCounts>,
+    attempt: Attempt,
+    records_root: String,
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -185,62 +203,46 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Run the step's Checks and say what each one did. **Nothing moves.**
-    ///
-    /// The Drone names no Job, no step and no Check; all three are read out of
-    /// **its own** slot and the Job's own frozen workflow, which is
-    /// `Fleet::declare_scope`'s binding and for the same reason. Which slot is
-    /// `crate::peer`'s answer.
-    ///
-    /// `only_what_changed` is the one thing the Drone does say, and it names
-    /// nothing either: the step's Checks run under both answers, and what moves
-    /// is how much of the tree each opens — against this worktree's own diff,
-    /// read here, only where the Manifest declared a narrower way to run it.
-    /// `#504`, and `docs/contracts/configuration.md` holds the syntax.
-    ///
-    /// **A narrowed answer is the smaller claim and the report says which it
-    /// is** — its own closing sentence, and the narrowed command on every row
-    /// that ran one. The gate goes on reading the whole of every Check.
+    /// Start the step's Checks for the Drone, or say why not. **Nothing moves.**
+    /// Job, step and Checks come from the caller's own slot and frozen workflow;
+    /// `only_what_changed` narrows what each Check opens (`#504`). **It returns
+    /// once the run has started**, and the report is a later turn.
     pub async fn run_checks(
-        &self,
+        self: &Arc<Self>,
         caller: &JobId,
         only_what_changed: bool,
-    ) -> Result<CheckReport, NotRun> {
-        let plan = self.dry_run_begins(caller).await?;
-        let ran = self.dry_run(&plan, only_what_changed).await;
-        // **Before the result is returned, on both roads out.** A run that
-        // failed to end would leave the clocks suspended for the rest of the
-        // step, which is the tripwires switched off by an error path.
-        self.dry_run_ends(caller, &plan).await;
-        let report = ran?;
-        self.noted_dry_run(&plan, &report);
-        Ok(report)
+    ) -> Result<ChecksRunning, NotRun> {
+        let plan = self.dry_run_looks(caller).await?;
+        let read = self.dry_run_reads(&plan, only_what_changed).await?;
+        self.dry_run_begins(caller, plan, read).await
     }
 
-    /// Everything decided under the slot lock: whether there is a run to make,
-    /// and what it is against.
-    ///
-    /// **The mark goes on here**, inside the same lock that read the count, so
-    /// two calls arriving together cannot both find the budget unspent.
-    async fn dry_run_begins(&self, caller: &JobId) -> Result<Plan, NotRun> {
+    /// The slot's refusals, asked when the call arrives and again at the mark.
+    fn dry_run_refused(&self, caller: &JobId, at_work: &Working) -> Option<NotRun> {
+        if at_work.session().unheard() {
+            return Some(NotRun::Unheard);
+        }
+        if at_work.is_checking() {
+            return Some(NotRun::AlreadyRunning);
+        }
+        if self.evidence_waiting_for(caller) > 0 {
+            return Some(NotRun::AlreadySubmitted);
+        }
+        let allowed = self.dry_runs().allowed();
+        (at_work.dry_runs() >= allowed).then_some(NotRun::Spent { allowed })
+    }
+
+    /// Whether there is a run to make, and what it is against.
+    async fn dry_run_looks(&self, caller: &JobId) -> Result<Plan, NotRun> {
         let Some(slot) = self.slot_of(caller).await else {
             return Err(NotRun::NothingIsWorking);
         };
-        let mut working = slot.lock().await;
-        let Some(at_work) = working.as_mut() else {
+        let working = slot.lock().await;
+        let Some(at_work) = working.as_ref() else {
             return Err(NotRun::NothingIsWorking);
         };
-        if at_work.is_checking() {
-            return Err(NotRun::AlreadyRunning);
-        }
-        // Cheaper than the rest and true regardless of them: the gate is about
-        // to run these same Checks in this same worktree.
-        if self.evidence_waiting_for(caller) > 0 {
-            return Err(NotRun::AlreadySubmitted);
-        }
-        let allowed = self.dry_runs().allowed();
-        if at_work.dry_runs() >= allowed {
-            return Err(NotRun::Spent { allowed });
+        if let Some(why) = self.dry_run_refused(caller, at_work) {
+            return Err(why);
         }
         let (job, step, worktree) = at_work.standing();
         let entered_with = at_work.entered_with().cloned();
@@ -254,7 +256,6 @@ where
         if declared.checks().is_empty() {
             return Err(NotRun::StepHasNoChecks { step });
         }
-        at_work.checking(self.now());
         Ok(Plan {
             record,
             step,
@@ -263,120 +264,166 @@ where
         })
     }
 
-    /// Take the mark off and give the clocks back the time.
-    ///
-    /// **Guarded on the step**, because the gate can advance one while a run is
-    /// in flight: `Working::now_on` has already cleared the mark for the step
-    /// that ended, and crediting the new step with the old one's minutes would
-    /// hand it a wall clock it did not earn.
-    async fn dry_run_ends(&self, caller: &JobId, plan: &Plan) {
-        let now = self.now();
-        let Some(slot) = self.slot_of(caller).await else {
-            return;
-        };
-        let mut working = slot.lock().await;
-        if let Some(at_work) = working.as_mut() {
-            let (job, step, _) = at_work.standing();
-            if job == *plan.record.id() && step == plan.step {
-                at_work.checked(now);
-            }
-        }
-    }
-
-    /// The run itself, with no lock held.
-    async fn dry_run(&self, plan: &Plan, narrow: bool) -> Result<CheckReport, NotRun> {
+    /// Every reading the run needs, with no lock held.
+    async fn dry_run_reads(&self, plan: &Plan, narrow: bool) -> Result<Readings, NotRun> {
+        let unread = |cause: String| NotRun::CouldNotRead { cause };
         let Some(declared) = plan.record.workflow().step(&plan.step) else {
             return Err(NotRun::NoSuchStep {
                 step: plan.step.clone(),
             });
         };
-        // **First, and before anything is spent.** It is the one observation
-        // that can fail to be made at all, and a Drone told its work changed
-        // nothing on the strength of a failed read has been told something
-        // false about its own worktree.
-        let moved = match declared
-            .checks()
+        let checks = declared.checks();
+        let moved = match checks
             .iter()
             .any(|check| matches!(check, ResolvedCheck::DiffNonempty))
         {
             false => false,
-            true => match self.work().footprint(&plan.worktree) {
-                Ok(now) => plan
-                    .entered_with
+            true => {
+                let now = self
+                    .work()
+                    .footprint(&plan.worktree)
+                    .map_err(|cause| unread(cause.to_string()))?;
+                plan.entered_with
                     .as_ref()
-                    .is_some_and(|before| now.differs_from(before)),
-                Err(cause) => {
-                    return Err(NotRun::CouldNotRead {
-                        cause: cause.to_string(),
-                    })
-                }
-            },
+                    .is_some_and(|before| now.differs_from(before))
+            }
         };
-        // **The same skip the gate takes, from the same reading.** A dry run
-        // that ran a Check the gate will not run would tell a Drone its work
-        // failed something no gate is going to ask — and this report's closing
-        // sentence promises the opposite: the same Checks, run by Fleet.
-        //
-        // **A narrowed run reads them whatever the Checks declare**, because
-        // the narrowing is what they feed. So the condition is the union of the
-        // two reasons rather than the `when` one alone.
-        let touched: Vec<String> = match narrow
-            || declared
-                .checks()
-                .iter()
-                .any(ResolvedCheck::needs_changed_paths)
-        {
-            false => Vec::new(),
-            true => match self.work().changed_files(&plan.worktree) {
-                Ok(changed) => changed.paths(),
-                Err(cause) => {
-                    return Err(NotRun::CouldNotRead {
-                        cause: cause.to_string(),
-                    })
-                }
-            },
-        };
-        // **After the reading and before any Check.** A narrowed run over an
-        // empty diff has nothing to narrow to, and answering it with a report
-        // of skips would spend one of the step's asks to say what this sentence
-        // says for nothing.
+        // The gate's own skip, from the same reading; a narrowed run reads paths regardless.
+        let touched: Vec<String> =
+            match narrow || checks.iter().any(ResolvedCheck::needs_changed_paths) {
+                false => Vec::new(),
+                true => self
+                    .work()
+                    .changed_files(&plan.worktree)
+                    .map_err(|cause| unread(cause.to_string()))?
+                    .paths(),
+            };
         if narrow && touched.is_empty() {
             return Err(NotRun::NothingChanged);
         }
-        // **The same batch the gate runs**, several at a time and in the step's
-        // order, which matters more here than at the gate: this is the call a
-        // Drone is sitting idle inside, and the report it reads back has to name
-        // the same Checks in the same order every time it asks.
-        let mut observed = Vec::with_capacity(declared.checks().len());
-        let mut printed = Vec::new();
-        let mut took = Vec::with_capacity(declared.checks().len());
-        let mut narrowed_to = Vec::with_capacity(declared.checks().len());
-        let ports = self.port_map(&plan.record).await;
-        let port_env = self.port_env(&plan.record).await;
-        // The same reading the gate takes, so `plan_recorded` answers alike.
         let tasks = self
             .store()
             .lock()
             .await
             .work_plan(plan.record.id())
-            .map_err(|cause| NotRun::CouldNotRead {
-                cause: cause.to_string(),
-            })?
+            .map_err(|cause| unread(cause.to_string()))?
             .map(|recorded| recorded.counts());
+        // The attempt keeps a reattempt's dry runs from overwriting earlier ones.
+        let attempt = self
+            .store()
+            .lock()
+            .await
+            .step_attempt(plan.record.id(), &plan.step)
+            .map_err(|cause| unread(cause.to_string()))?;
+        let records_root = self
+            .served_by(&plan.record)
+            .map_err(|cause| unread(cause.to_string()))?
+            .records_root()
+            .to_string();
+        Ok(Readings {
+            narrow,
+            moved,
+            touched,
+            ports: self.port_map(&plan.record).await,
+            port_env: self.port_env(&plan.record).await,
+            tasks,
+            attempt,
+            records_root,
+        })
+    }
+
+    /// Put the mark on and start the run, inside the lock that read the count.
+    async fn dry_run_begins(
+        self: &Arc<Self>,
+        caller: &JobId,
+        plan: Plan,
+        read: Readings,
+    ) -> Result<ChecksRunning, NotRun> {
+        let Some(slot) = self.slot_of(caller).await else {
+            return Err(NotRun::NothingIsWorking);
+        };
+        let mut working = slot.lock().await;
+        let Some(at_work) = working
+            .as_mut()
+            .filter(|at_work| at_work.is(plan.record.id()) && at_work.standing().1 == plan.step)
+        else {
+            return Err(NotRun::NothingIsWorking);
+        };
+        if let Some(why) = self.dry_run_refused(caller, at_work) {
+            return Err(why);
+        }
+        let run = RUNS.fetch_add(1, Ordering::Relaxed);
+        let (going, stop) = Stop::when_dropped();
+        at_work.checking(self.now(), run, going);
+        let fleet = Arc::clone(self);
+        let caller = caller.clone();
+        Ok(ChecksRunning(tokio::spawn(async move {
+            let ran = fleet.dry_run(&plan, &read, &stop).await;
+            fleet.dry_run_ends(&caller, &plan, run, ran).await
+        })))
+    }
+
+    /// Take the mark off, give the clocks back and tell the Drone — **only where
+    /// this is still the run in flight**, so a step that ended hears nothing.
+    async fn dry_run_ends(
+        &self,
+        caller: &JobId,
+        plan: &Plan,
+        run: u64,
+        ran: Result<CheckReport, String>,
+    ) -> Option<Result<CheckReport, String>> {
+        let now = self.now();
+        let slot = self.slot_of(caller).await?;
+        let mut working = slot.lock().await;
+        let at_work = working
+            .as_mut()
+            .filter(|at_work| at_work.is(plan.record.id()))?;
+        if !at_work.checked(now, run) {
+            return None;
+        }
+        let told = ChecksReported::of(&ran);
+        // Written down before the send, `Fleet::tell`'s order.
+        at_work.instructed(Occasion::Checks, told.text());
+        let _ = at_work.session().checks(&told).await;
+        drop(working);
+        if let Ok(report) = &ran {
+            self.noted_dry_run(plan, report);
+        }
+        Some(ran)
+    }
+
+    /// The run itself, with no lock held.
+    async fn dry_run(
+        &self,
+        plan: &Plan,
+        read: &Readings,
+        stop: &Stop,
+    ) -> Result<CheckReport, String> {
+        let Some(declared) = plan.record.workflow().step(&plan.step) else {
+            return Err(format!(
+                "step `{}` is not in the workflow",
+                plan.step.as_str()
+            ));
+        };
+        // The same batch the gate runs, so the rows keep the step's own order.
+        let mut observed = Vec::with_capacity(declared.checks().len());
+        let mut printed = Vec::new();
+        let mut took = Vec::with_capacity(declared.checks().len());
+        let mut narrowed_to = Vec::with_capacity(declared.checks().len());
         for done in crate::checking::ran(
             declared.checks(),
-            &touched,
-            moved,
-            narrow,
+            &read.touched,
+            read.moved,
+            read.narrow,
             Path::new(plan.worktree.path()),
             self.budget().duration(),
             &self.room(),
-            // A Drone asking about its own change is not a gate a person is
-            // watching, and a live log here would sit beside the gate's own.
+            // Not a gate a person is watching, so no live log beside the gate's.
             &crate::underway::Announcing::nowhere(),
-            &ports,
-            &port_env,
-            tasks,
+            &read.ports,
+            &read.port_env,
+            read.tasks,
+            stop,
         )
         .await
         {
@@ -387,36 +434,13 @@ where
                 printed.push(pair);
             }
         }
-        // Unreachable while `checking::ran` answers one observation per check,
-        // in order, of the kind that check takes. Carried rather than unwrapped
-        // for `gate::rule_on`'s reason: an unreachable `expect` on the Drone's
-        // own call path is where a panic takes Fleet down mid-Job.
-        let ran = Ran::of(declared, &observed).map_err(|cause| NotRun::CouldNotRead {
-            cause: cause.to_string(),
-        })?;
-        // Which run of this step the output belongs to. A reattempt's dry runs
-        // must not overwrite the ones before it, for the reason the gate's own
-        // path carries the attempt: `job_step_checks` is keyed by attempt, and
-        // a file named without one leaves an earlier row pointing at a later
-        // run's output.
-        let on = self
-            .store()
-            .lock()
-            .await
-            .step_attempt(plan.record.id(), &plan.step)
-            .map_err(|cause| NotRun::CouldNotRead {
-                cause: cause.to_string(),
-            })?;
-        let served = self
-            .served_by(&plan.record)
-            .map_err(|cause| NotRun::CouldNotRead {
-                cause: cause.to_string(),
-            })?;
+        // Unreachable while `ran` answers one per Check; carried, as a panic ends Fleet.
+        let ran = Ran::of(declared, &observed).map_err(|cause| cause.to_string())?;
         let rows = check_output::kept_dry(
-            served.records_root(),
+            &read.records_root,
             &plan.record.handle(),
             &plan.step,
-            on,
+            read.attempt,
             &ran.recorded(),
             &printed,
         );
@@ -425,10 +449,7 @@ where
                 .into_iter()
                 .enumerate()
                 .map(|(at, row)| {
-                    // `#737`: a path named on this row and nothing to read it
-                    // with. The tail rides on the row itself now, and only
-                    // where the Check did not advance — a pass has nothing to
-                    // explain.
+                    // `#737`: the tail rides on a row that did not advance.
                     let output = (!row.outcome.advances())
                         .then(|| printed.iter().find(|(name, _)| *name == row.name))
                         .flatten()
@@ -436,31 +457,20 @@ where
                     CheckRan {
                         name: row.name,
                         outcome: row.outcome.into(),
-                        // The failure's own sentence, kept rather than
-                        // re-derived — which lines of a run were the failure
-                        // is not a question anything here answers.
                         detail: row.produced,
                         took: took.get(at).copied().unwrap_or(Duration::ZERO),
                         log: row.output_path,
-                        // The command that actually ran, where it was not the
-                        // Check's own. A Drone reading a narrowed pass has to
-                        // be able to see what it was narrowed to, or the row
-                        // claims more than the run measured.
+                        // The command that ran, where it was not the Check's own.
                         narrowed_to: narrowed_to.get(at).cloned().flatten(),
                         output,
                     }
                 })
                 .collect(),
-            narrowed: narrow,
+            narrowed: read.narrow,
         })
     }
 
-    /// Write the run into the Job's log. **Fields, never an interpolated
-    /// message**, so a query can find every step that asked and how often.
-    ///
-    /// It is a log line and not an event: a Check running is not a transition,
-    /// and one run for the Drone's own information is less of one than the
-    /// gate's.
+    /// Write the run into the Job's log, as fields a query can count.
     fn noted_dry_run(&self, plan: &Plan, report: &CheckReport) {
         let envelope = Envelope::new(
             self.now(),
@@ -473,18 +483,13 @@ where
         .at_step(plan.step.as_str())
         .with_field("ran", FieldValue::Int(report.ran.len() as i64))
         .with_field("failed", FieldValue::Int(report.failed() as i64))
-        // Which of the two runs was asked for, as a field: a query for every
-        // step that asked has to be able to tell them apart, and the two cost
-        // very different amounts of a machine.
         .with_field("narrowed", FieldValue::Bool(report.narrowed));
-        // A log line that will not write does not fail the call: the Drone has
-        // its answer, and nothing about the Job moved either way.
+        // A line that will not write fails nothing: the Drone has its answer.
         self.noted_in_the_log(plan.record.id(), &envelope);
     }
 }
 
-/// The refusal a Drone reads, from the tool's own error. **Beside the refusal**,
-/// which is where `crate::questioning` and `crate::widening` keep theirs.
+/// The refusal a Drone reads, beside the refusal, as `crate::questioning` keeps its own.
 impl From<NotRun> for ipc::mcp::NotRecorded {
     fn from(why: NotRun) -> ipc::mcp::NotRecorded {
         ipc::mcp::NotRecorded {

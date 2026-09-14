@@ -564,12 +564,10 @@ async fn a_declaration_with_nothing_working_is_a_tool_error() {
     assert!(answered.is_error());
 }
 
-/// **A report naming a failed Check is a tool call that worked.** `isError`
-/// would tell the client the server is broken and put the one answer the Drone
-/// asked for behind a retry — so the failure is in the text and the call is a
-/// success.
+/// **The call answers once the run has started, and says where the report
+/// comes from** — a build outlasts what a client waits on one call. #1020.
 #[tokio::test]
-async fn a_report_carrying_a_failure_is_not_a_tool_error() {
+async fn a_checks_call_answers_at_once_that_the_report_is_a_later_turn() {
     let daemon = FakeDaemon::new(Broadcaster::new());
     running(&daemon, "01JOB0");
     let app = wired(daemon);
@@ -583,12 +581,10 @@ async fn a_report_carrying_a_failure_is_not_a_tool_error() {
     assert_eq!(answered.status, StatusCode::OK);
     assert!(!answered.is_error(), "{}", answered.text());
     let said = answered.text();
-    assert!(said.contains("tests") && said.contains("FAILED"), "{said}");
-    assert!(said.contains("exit code 101, expected 0"), "{said}");
-    assert!(said.contains("implement.dry.1.log"), "{said}");
+    assert!(said.contains("later turn"), "{said}");
     assert!(
-        said.contains("not a verdict"),
-        "the answer says so itself, not only the briefing: {said}"
+        said.contains("rather than running the checks yourself"),
+        "{said}"
     );
 }
 

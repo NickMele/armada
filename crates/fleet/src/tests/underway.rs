@@ -68,6 +68,7 @@ async fn heard_over(checks: &[ResolvedCheck], repo: &TempDir) -> (Vec<ipc::JobCh
         &std::collections::BTreeMap::new(),
         &[],
         None,
+        &crate::checking::Stop::never(),
     )
     .await;
     drop(announcing);
@@ -218,6 +219,7 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
             &std::collections::BTreeMap::new(),
             &[],
             None,
+            &crate::checking::Stop::never(),
         )
         .await
     };
@@ -233,6 +235,7 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
         &std::collections::BTreeMap::new(),
         &[],
         None,
+        &crate::checking::Stop::never(),
     )
     .await;
 

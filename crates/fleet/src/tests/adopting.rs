@@ -93,12 +93,17 @@ fn a_drone_that_keeps_working() -> FakeHarness {
 /// reason: a Judge that answered would let a regression into the free half pass
 /// unseen.
 fn a_fleet(home: &TempDir, harness: FakeHarness) -> Fixture {
+    a_fleet_on(home, harness, one_step())
+}
+
+/// The same, over a workflow the case chooses.
+fn a_fleet_on(home: &TempDir, harness: FakeHarness, workflow: ResolvedWorkflow) -> Fixture {
     let mut fittings = fitted_with(
         home,
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.starting().workflows = one(one_step());
+    fittings.starting().workflows = one(workflow);
     fittings.liveness = Liveness::of(Duration::from_secs(120), 2);
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about an adoption"));
     Fleet::assembled(fittings)
@@ -633,14 +638,22 @@ async fn past_the_threshold(fleet: &Fixture, clock: &Held, waiting_for: &str) ->
 /// it is reached — and each of them still needs a real orphan, for this
 /// module's own reason.
 async fn adopted(home: &TempDir) -> (Fixture, JobId, u32) {
-    let first = a_fleet(home, a_drone_that_keeps_working());
+    adopted_on(home, one_step).await
+}
+
+/// [`adopted`], over a workflow the case chooses.
+pub(crate) async fn adopted_on(
+    home: &TempDir,
+    workflow: fn() -> ResolvedWorkflow,
+) -> (Fixture, JobId, u32) {
+    let first = a_fleet_on(home, a_drone_that_keeps_working(), workflow());
     let job = started(&first, home).await;
     assert!(spoke(&first, 1).await, "the Drone never said anything");
     let pid = pid_of(&first).await;
     drop(first);
     assert!(alive(pid), "the Drone was meant to outlive its Fleet");
 
-    let second = a_fleet(home, a_drone_that_keeps_working());
+    let second = a_fleet_on(home, a_drone_that_keeps_working(), workflow());
     assert_eq!(
         second.reconcile().await.expect("the boot read").adopted,
         vec![job.clone()],

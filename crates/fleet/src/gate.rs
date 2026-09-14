@@ -223,6 +223,7 @@ where
         ports,
         port_env,
         plan.map(WorkPlan::counts),
+        &checking::Stop::never(),
     )
     .await
     {

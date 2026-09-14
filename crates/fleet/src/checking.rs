@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use checks_runner::{Attempt, Narrowed, Output};
+use checks_runner::{Attempt, Narrowed, Output, Writing};
 use core_model::{Prerequisite, ResolvedCheck, TaskCounts};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -35,6 +35,37 @@ use verification::{Artifact, Exit, NeverRan, Observed};
 use crate::headroom::{Bytes, Headroom, Machine, Reading, Spare};
 use crate::ports::resolve_ports;
 use crate::underway::Announcing;
+
+/// What ends a batch's commands before their budget does: each one's whole
+/// group, through the runner's own stop. The gate's and a proof's never fire.
+#[derive(Clone, Debug)]
+pub(crate) struct Stop(Option<tokio::sync::watch::Receiver<()>>);
+
+/// Holding this keeps a batch going. Dropped, every command in it is stopped.
+#[derive(Debug)]
+pub(crate) struct Going {
+    _going: tokio::sync::watch::Sender<()>,
+}
+
+impl Stop {
+    pub(crate) fn never() -> Stop {
+        Stop(None)
+    }
+
+    /// A stop that fires when the [`Going`] beside it is dropped. #1020.
+    pub(crate) fn when_dropped() -> (Going, Stop) {
+        let (going, watched) = tokio::sync::watch::channel(());
+        (Going { _going: going }, Stop(Some(watched)))
+    }
+
+    async fn stopped(mut self) {
+        match &mut self.0 {
+            None => std::future::pending().await,
+            // Nothing is ever sent, so this returns only once the sender is gone.
+            Some(watched) => while watched.changed().await.is_ok() {},
+        }
+    }
+}
 
 /// How many of a step's Checks may run at once. **The `settings.checks-at-once`
 /// row**, shipped by the composition root and replaced by one a person saves —
@@ -301,6 +332,7 @@ async fn beforehand(
     budget: Duration,
     ports: &BTreeMap<String, u16>,
     env: &[(String, String)],
+    stop: &Stop,
 ) -> (Vec<String>, Option<NotMet>) {
     let mut met = Vec::new();
     for prerequisite in needed {
@@ -308,7 +340,15 @@ async fn beforehand(
             continue;
         }
         let run = resolve_ports(prerequisite.run(), ports);
-        let attempt = checks_runner::run_writing_with_env(&run, worktree, budget, None, env).await;
+        let attempt = checks_runner::run_until(
+            &run,
+            worktree,
+            budget,
+            Writing::Nowhere,
+            env,
+            stop.clone().stopped(),
+        )
+        .await;
         // **Nothing but zero passes**, for `prepare`'s reason: `expect_exit_code`
         // is a Check's field, and there is no reading of *the fix failed and
         // that was expected* that leaves a worktree the Check can measure.
@@ -390,6 +430,7 @@ pub(crate) async fn ran(
     ports: &BTreeMap<String, u16>,
     env: &[(String, String)],
     plan: Option<TaskCounts>,
+    stop: &Stop,
 ) -> Vec<Completed> {
     let mut planned: Vec<Planned> = checks
         .iter()
@@ -435,7 +476,7 @@ pub(crate) async fn ran(
         .collect();
     let (met, not_met) = match needed.is_empty() {
         true => (Vec::new(), None),
-        false => beforehand(&needed, worktree, budget, ports, env).await,
+        false => beforehand(&needed, worktree, budget, ports, env, stop).await,
     };
     // A Check whose prerequisites all ran still runs, even where another
     // Check's did not: a broken `migrate` is not a reason to stop asking `lint`.
@@ -494,14 +535,16 @@ pub(crate) async fn ran(
             let env = env.clone();
             let log = announcing.log_for(at);
             let writing = log.clone();
+            let stop = stop.clone();
             running.spawn(async move {
                 let began = Instant::now();
-                let attempt = checks_runner::run_writing_with_env(
+                let attempt = checks_runner::run_until(
                     &run,
                     &worktree,
                     budget,
-                    writing.as_deref(),
+                    writing.as_deref().map_or(Writing::Nowhere, Writing::Fresh),
                     &env,
+                    stop.stopped(),
                 )
                 .await;
                 (at, attempt, began.elapsed())

@@ -33,6 +33,7 @@ use tokio::sync::Mutex;
 use verification::OutcomeTurn;
 
 use crate::converging::ReportNow;
+use crate::dry_run::ChecksReported;
 use crate::group::{end_the_group, run_is_over};
 use crate::peers::PeersChanged;
 use crate::permitting::Permitted;
@@ -135,6 +136,16 @@ pub trait LiveSession {
     /// reason**: Fleet's own sentence about other Jobs, and
     /// [`PeersChanged`] is the only way to build one.
     fn peers(&self, news: &PeersChanged) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Inject the report of the Checks the Drone asked for. `#1020`.
+    ///
+    /// **Its own method for [`plan_changed`](LiveSession::plan_changed)'s
+    /// reason**: Fleet's own report, and [`ChecksReported`] is the only way to
+    /// build one.
+    fn checks(
+        &self,
+        reported: &ChecksReported,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Interrupt with a directive to stop and report.
     ///
@@ -266,6 +277,12 @@ impl Turn {
         Turn::of(news.text())
     }
 
+    /// The report of the Checks the Drone asked for, injected once they have
+    /// finished. The wording is [`ChecksReported`]'s. `#1020`.
+    pub fn checks(reported: &ChecksReported) -> Turn {
+        Turn::of(reported.text())
+    }
+
     /// Fleet's own stop-and-report directive, injected into a session already
     /// running. The wording is `ReportNow`'s and there is no way to send other
     /// text under it.
@@ -341,12 +358,15 @@ pub enum Occasion {
     Permission,
     /// What other Jobs writing here claimed or landed. `#998`.
     Peers,
+    /// The report of the Checks the Drone asked for. `#1020`.
+    Checks,
 }
 
 impl Occasion {
     pub fn as_wire(&self) -> &'static str {
         match self {
             Occasion::Peers => "peers",
+            Occasion::Checks => "checks",
             Occasion::Opening => "opening",
             Occasion::Outcome => "outcome",
             Occasion::Redirect => "redirect",
@@ -502,6 +522,10 @@ impl LiveSession for DroneSession {
 
     async fn peers(&self, news: &PeersChanged) -> Result<(), io::Error> {
         self.say(&Turn::peers(news)).await
+    }
+
+    async fn checks(&self, reported: &ChecksReported) -> Result<(), io::Error> {
+        self.say(&Turn::checks(reported)).await
     }
 
     async fn interrupt(&self, directive: &ReportNow) -> Result<(), io::Error> {

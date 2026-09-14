@@ -17,7 +17,7 @@ use std::future::Future;
 
 use crate::mcp::Caller;
 use ipc::mcp::{
-    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, PlanCall,
+    AskQuestion, ChecksStarted, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, PlanCall,
     Receipt, RequestScope, ServerReport, SubmitEvidence,
 };
 
@@ -62,7 +62,7 @@ pub trait Tools: Send + Sync + 'static {
     /// # The receipt is not the answer
     ///
     /// It returns as soon as Fleet has taken the question, like submitting and
-    /// unlike [`Tools::run_checks`]. Holding it open was rejected twice over: a
+    /// [`Tools::run_checks`]. Holding it open was rejected twice over: a
     /// person's wait has no budget that could bound an HTTP call, and an injected
     /// turn is consumed when the current tool call returns — so a Drone blocked
     /// inside this would swallow every redirect sent to unstick it. The answer
@@ -125,31 +125,22 @@ pub trait Tools: Send + Sync + 'static {
     ///
     /// # It is not the gate, and the signature is what says so
     ///
-    /// What comes back is [`CheckReport`], which has no verdict on it and no
-    /// method that could become one. Nothing here advances a step, records
-    /// evidence, or writes a Check row — the gate runs the same Checks again
-    /// for itself when evidence is submitted, and only that run decides
-    /// anything.
+    /// What comes back is [`ChecksStarted`]: no verdict, and no report either.
+    /// Nothing here advances a step or writes a Check row; the gate runs the
+    /// same Checks again for itself, and only that run decides anything.
     ///
-    /// # It blocks, where submitting does not
+    /// # It answers at once, and the report is a later turn
     ///
-    /// A receipt is returned before the Checks run because the outcome is not
-    /// known yet; here the outcome *is* the answer, so the call is held open
-    /// while they run. What that costs is bounded by the implementation — a cap
-    /// per step, and a refusal while one is already running — because the
-    /// convergence clocks are suspended for the duration and cannot bound it.
+    /// A build outlasts what a client waits on one call, and a run held by the
+    /// request ended with the connection (#1020). The run is the
+    /// implementation's, by `Arc`; refusals are still answered here, at once.
     ///
-    /// `only_what_changed` narrows what each Check reads and never which Checks
-    /// run. Paths on the wire would be a scope the Drone chose, and are refused.
-    ///
-    /// Bound to a Job and a step the caller never names, for
-    /// [`submit_evidence`](Tools::submit_evidence)'s reason: neither is a
-    /// parameter.
+    /// `only_what_changed` narrows what each Check reads and never which run.
     fn run_checks(
-        &self,
+        self: std::sync::Arc<Self>,
         caller: Caller,
         only_what_changed: bool,
-    ) -> impl Future<Output = Result<CheckReport, NotRecorded>> + Send;
+    ) -> impl Future<Output = Result<ChecksStarted, NotRecorded>> + Send;
 
     /// `declare_scope` — where the working Drone says its work for this step
     /// will be. **The one call that arrives before the work rather than
@@ -178,11 +169,11 @@ pub trait Tools: Send + Sync + 'static {
     ///
     /// # It blocks, and what bounds the wait is a Judge budget
     ///
-    /// [`run_checks`](Tools::run_checks) is the other call held open, and this
-    /// is held open for the same reason: the outcome *is* the answer. What it
-    /// is **not** is [`ask_question`](Tools::ask_question) — that one cannot
-    /// be waited for because a person's wait has no budget, and this one is a
-    /// model call with one on it.
+    /// It is held open because the outcome *is* the answer, and a model call
+    /// has a budget to wait against. [`ask_question`](Tools::ask_question)
+    /// cannot be waited for because a person's wait has none, and
+    /// [`run_checks`](Tools::run_checks) is not because a build's outlasts the
+    /// client.
     ///
     /// **Nothing moves while the call is out.** The Job is `running` when it is
     /// made and `running` when it returns, so the Drone keeps its session and

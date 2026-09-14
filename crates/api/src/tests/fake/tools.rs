@@ -11,12 +11,11 @@
 //! and belongs to Fleet.
 
 use ipc::mcp::{
-    CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt, SubmitEvidence,
+    ChecksStarted, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt, SubmitEvidence,
 };
 use std::sync::atomic::Ordering;
 
 use super::FakeDaemon;
-use crate::tests::shapes;
 use crate::{PermissionAnswer, Tools};
 
 impl Tools for FakeDaemon {
@@ -118,19 +117,13 @@ impl Tools for FakeDaemon {
     }
 
     async fn run_checks(
-        &self,
+        self: std::sync::Arc<Self>,
         _caller: crate::Caller,
-        only_what_changed: bool,
-    ) -> Result<CheckReport, NotRecorded> {
+        _only_what_changed: bool,
+    ) -> Result<ChecksStarted, NotRecorded> {
         self.while_working("checks to run")?;
         self.checked.fetch_add(1, Ordering::SeqCst);
-        // The flag is answered back rather than dropped, so a router test can
-        // tell that what the Drone asked for reached the daemon. What a
-        // narrowed run actually runs is `fleet::dry_run`'s and is tested there.
-        Ok(CheckReport {
-            narrowed: only_what_changed,
-            ..shapes::check_report()
-        })
+        Ok(ChecksStarted)
     }
 
     /// One minted id, and the call recorded. **The fake decides nothing about

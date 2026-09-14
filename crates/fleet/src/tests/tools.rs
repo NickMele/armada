@@ -9,6 +9,8 @@
 //! a fixture uses is a fixture's, and the production types carry no affordance
 //! that exists for a test.
 
+use std::sync::Arc;
+
 use ipc::mcp::{CheckReport, DeclareScope};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
@@ -50,18 +52,24 @@ pub async fn declared_by_the_one(
     fleet.declare_scope(&job, declaration).await
 }
 
-/// Run the Checks as the Drone of the one Job being worked, whole.
-pub async fn checked_by_the_one(fleet: &Fixture) -> Result<CheckReport, NotRun> {
+/// Run the Checks as the Drone of the one Job being worked, whole, and wait for
+/// the report the Drone is sent.
+pub async fn checked_by_the_one(fleet: &Arc<Fixture>) -> Result<CheckReport, NotRun> {
     narrowly_checked_by_the_one(fleet, false).await
 }
 
 /// The same, saying which of the two runs is wanted.
 pub async fn narrowly_checked_by_the_one(
-    fleet: &Fixture,
+    fleet: &Arc<Fixture>,
     only_what_changed: bool,
 ) -> Result<CheckReport, NotRun> {
     let Some(job) = fleet.working_on().await.first().cloned() else {
         return Err(NotRun::NothingIsWorking);
     };
-    fleet.run_checks(&job, only_what_changed).await
+    let underway = fleet.run_checks(&job, only_what_changed).await?;
+    Ok(underway
+        .finished()
+        .await
+        .expect("the step did not end while the run was going")
+        .expect("a report"))
 }
