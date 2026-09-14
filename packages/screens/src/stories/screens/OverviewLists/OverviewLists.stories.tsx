@@ -75,7 +75,7 @@ export const PanelRowsAligned: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("img", { name: "0 of 6 tasks" })).toBeVisible();
-    await expect(canvas.getByRole("option", { name: /Unanswered permission ask/ })).toBeVisible();
+    await expect(canvas.getByRole("option", { name: /unanswered permission ask/ })).toBeVisible();
     await expect(canvas.getByRole("option", { name: /shows "queued"/ })).toBeVisible();
   },
 };

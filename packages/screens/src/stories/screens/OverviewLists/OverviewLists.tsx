@@ -36,7 +36,7 @@ export const RUNNING_ONE_WITH_A_PLAN: JobSummary[] = [
   job("running", {
     id: "01M2C1TJ8G00RUNNINGWITHTASK",
     handle: "16-fix-801-unanswered-permission-ask-holds-dr",
-    title: "Fix #801 - Unanswered permission ask holds Drone slot, 2nd dispatch",
+    title: "Fix 801: unanswered permission ask holds Drone slot, 2nd dispatch",
     workflow_id: "implement",
     owner_manifest_id: "armada",
     current_step_id: "fix",
