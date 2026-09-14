@@ -107,10 +107,10 @@ export class Clearing {
    * `clearTerminal` above is this one, sent over a whole set at once.
    *
    * **A kept branch comes back as a success.** Fleet always runs this with the
-   * safe setting and there is no force on this seam, so a branch holding
-   * commits the base cannot reach survives and says so — which is a true answer
-   * to the act, not a refusal of it. The caller reads `reclaimed.branch` to
-   * find out which half happened.
+   * safe setting, and `deleteBranch` below is the separate act that forces,
+   * so a branch holding commits the base cannot reach survives and says so —
+   * which is a true answer to the act, not a refusal of it. The caller reads
+   * `reclaimed.branch` to find out which half happened.
    */
   async reclaim(jobId: string): Promise<Outcome> {
     if (this.reclaiming.has(jobId)) return { ok: false, why: "already_reclaiming" };
