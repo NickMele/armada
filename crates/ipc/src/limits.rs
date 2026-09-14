@@ -52,7 +52,7 @@ pub type MemorySparePercent = Within<0, 50>;
 /// The gibibytes that must be free on the worktree volume.
 /// `settings.disk-headroom-floor-for-spawning`.
 pub type DiskFloorGib = Within<0, 100>;
-/// How many of one step's Checks run at once. `settings.checks-at-once`. Since 13.39, #284.
+/// How many of one step's Checks run at once. `settings.checks-at-once`. Since 13.40, #284.
 pub type ChecksAtOnce = Within<1, 8>;
 
 /// One value for each of the four limits.
@@ -61,7 +61,7 @@ pub struct LimitValues {
     pub concurrency: u32,
     pub memory_spare_percent: u32,
     pub disk_floor_gib: u32,
-    /// Since 13.39, #284.
+    /// Since 13.40, #284.
     pub checks_at_once: u32,
 }
 
@@ -85,7 +85,7 @@ pub struct SaveLimits {
     pub memory_spare_percent: Option<MemorySparePercent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disk_floor_gib: Option<DiskFloorGib>,
-    /// Since 13.39, #284.
+    /// Since 13.40, #284.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checks_at_once: Option<ChecksAtOnce>,
 }

@@ -20,7 +20,7 @@ export type LimitValues = {
   memory_spare_percent: number;
   /** The GiB that must be free on the worktree volume, 0 to 100. */
   disk_floor_gib: number;
-  /** How many of one step's Checks run at once, 1 to 8. Since 13.39. */
+  /** How many of one step's Checks run at once, 1 to 8. Since 13.40. */
   checks_at_once: number;
 };
 
