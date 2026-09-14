@@ -67,6 +67,12 @@ pub enum Asking {
     FixDraft,
     /// A proof after a merge. Nobody waits on it, and it only writes a record.
     Proof,
+    /// Warming a seed's build directories at a new base commit. #1064. Nobody
+    /// waits on this the way a Drone waits on its run or a Job on its gate — a
+    /// Job cut while it runs simply starts cold (`crate::seeding`). **Last of
+    /// all, behind a proof**: a proof records a specific Job's outcome, and a
+    /// seed only makes some later Job's first Check faster.
+    SeedWarmup,
 }
 
 impl Asking {
@@ -75,6 +81,7 @@ impl Asking {
             Asking::DronesRun => 0,
             Asking::Gate | Asking::FixDraft => 1,
             Asking::Proof => 2,
+            Asking::SeedWarmup => 3,
         }
     }
 }
