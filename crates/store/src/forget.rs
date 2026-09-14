@@ -106,6 +106,8 @@ pub struct Forgotten {
     pub review_parts: usize,
     /// The tests broken on main this Job was drafted to fix, one row each. #999.
     pub breakage_claims: usize,
+    /// The fixes this Job was pointed at, one row each. #1001.
+    pub fix_waiters: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -162,6 +164,7 @@ impl Forgotten {
             | "job_review_dismissals"
             | "job_review_followups" => &mut self.review_parts,
             "job_breakage_claims" => &mut self.breakage_claims,
+            "job_fix_waiters" => &mut self.fix_waiters,
             _ => return None,
         })
     }
