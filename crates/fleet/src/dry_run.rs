@@ -3,9 +3,8 @@
 //! row or moves a step, and output goes to `<step>.dry.<n>.log`, never the
 //! gate's `<step>.<n>.log`.
 //!
-//! **The call answers at once, and the report is a later turn** (#1020). A
-//! build outlasts what the agent CLI waits on one call, and a run tied to the
-//! request died with the connection and left the slot marked. So the run is
+//! **The call answers at once, and each result is a later turn** (#1020,
+//! #1062): a build outlasts what the agent CLI waits on one call, so the run is
 //! Fleet's, and the task [`Fleet::run_checks`] starts takes the mark off.
 //!
 //! | Bound | What it stops |
@@ -14,9 +13,6 @@
 //! | [`DryRuns`], per step | Ask, change a line, ask again, for the whole step |
 //! | A step that ends mid-run | A report on whatever follows; its Checks stop |
 //! | A Check that fails | The rest of the run; the Drone hears the failure at once |
-//!
-//! **A turn per result, and the report is the last** (#1062). [`landed`] tells
-//! each one that lands while others still run.
 
 mod landed;
 

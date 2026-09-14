@@ -8,12 +8,10 @@
 //!
 //! # Bookkeeping about a run, not a record of it
 //!
-//! Nothing here is stored and the gate reads none of it. The ruling is decided
-//! from what `crate::checking` hands back, and `job_step_checks` is written
-//! from the ruling afterwards, exactly as before any of this existed. What this
-//! holds is what a person staring at a step needs while the gate is working:
-//! which Check is waiting, which is running and since when, and what each
-//! finished one came to.
+//! Nothing here is stored and the gate reads none of it: the ruling is decided
+//! from what `crate::checking` hands back. What this holds is what a person
+//! staring at a step needs: which Check is waiting, which is running and since
+//! when, and what each finished one came to.
 //!
 //! # Held until the ruling is written down, not until the Checks end
 //!
@@ -21,6 +19,9 @@
 //! somebody can read in those three minutes, and `check_runs` does not hold it
 //! until the ruling does. So the entry stands across the Judge's calls and is
 //! lowered only when the caller drops the writer — after `recorded_checks`.
+//!
+//! **Over 500 lines**: a Drone's own run (#1062) is a second writer, and both
+//! share one lock and one token rule that a split would put in two places.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
