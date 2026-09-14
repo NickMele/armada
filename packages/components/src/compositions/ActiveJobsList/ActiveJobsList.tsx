@@ -49,6 +49,21 @@ export type ActiveJobsListProps = {
    */
   action?: ReactNode;
   /**
+   * A row count, drawn at the head's trailing edge opposite the heading —
+   * Overview's own panels, one per section, each naming how many rows it
+   * holds. `undefined` draws none; the Board passes nothing and is unchanged.
+   */
+  count?: ReactNode;
+  /**
+   * `flat` is the Board's own list: the rows are the pane, drawn with no edge
+   * of their own — see the frame's rule in `ActiveJobsList.css`. `panel` is a
+   * bordered, rounded card with its own padding, for a list that stands beside
+   * others rather than filling the region alone — Overview's `Needs you`,
+   * `Running` and `Queued`. It does not scroll itself; the surface around it
+   * does.
+   */
+  variant?: "flat" | "panel";
+  /**
    * Where a surface's filter set mounts — `Board controls` on the Job Board.
    *
    * **Between the heading and the frame, and never inside it.** A control that
@@ -79,14 +94,15 @@ export type ActiveJobsListProps = {
   label?: string;
   /**
    * Which arrangement every row is drawn in. `card` stacks each row's headline
-   * over its facts; `table` puts them on one line beneath `columns`.
+   * over its facts; `table` puts them on one line beneath `columns`; `panel`
+   * is Overview's own row — one line, no header, the handle under the title.
    *
    * **The list decides, never the row.** A list holding rows in two
    * arrangements is not a thing anybody wants and the tracks could not be
    * shared across it, so the view is set once here and the rows read it off
    * the frame.
    */
-  view?: "card" | "table";
+  view?: "card" | "table" | "panel";
   /**
    * What each column is called, in order, drawn once above the rows. Table
    * view only; a card labels its facts by where they sit in a run.
@@ -115,6 +131,8 @@ export function ActiveJobsList({
   heading,
   summary,
   action,
+  count,
+  variant = "flat",
   controls,
   children,
   sections,
@@ -180,13 +198,14 @@ export function ActiveJobsList({
   const roving = selectable && !isEmpty;
 
   return (
-    <section className="armada-active-jobs">
-      {heading || summary || action ? (
+    <section className="armada-active-jobs" data-variant={variant === "panel" ? "panel" : undefined}>
+      {heading || summary || action || count !== undefined ? (
         <header className="armada-active-jobs__header">
           <div className="armada-active-jobs__titles">
             {heading ? <h2 className="armada-active-jobs__heading">{heading}</h2> : null}
             {summary ? <p className="armada-active-jobs__summary">{summary}</p> : null}
           </div>
+          {count !== undefined ? <span className="armada-active-jobs__count">{count}</span> : null}
           {action ? <div className="armada-active-jobs__action">{action}</div> : null}
         </header>
       ) : null}
@@ -197,7 +216,7 @@ export function ActiveJobsList({
       <div
         ref={frame}
         className={`armada-active-jobs__frame ${JOB_ROW_LIST}`}
-        data-view={view === "table" ? "table" : undefined}
+        data-view={view === "card" ? undefined : view}
         data-columns={columns?.length}
         role={roving ? "listbox" : "list"}
         aria-label={label}

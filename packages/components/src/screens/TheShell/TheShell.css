@@ -9,15 +9,24 @@
   min-height: 0;
 }
 
-/* A fixed width; the panel takes the slack. Chrome, so the rail's ground and edge. */
+/* A fixed width; the panel takes the slack.
+
+   **A panel beside the content, not chrome flush to it.** It was the rail's
+   own ground and a hairline on one edge, which read as part of the window's
+   frame rather than as a region of its own — the drawing draws it bordered on
+   every side, rounded, and held off the content by a gap, the same recipe
+   `DriftPanel` and `VerifyPanel` draw a standalone panel with. */
 .armada-shell__dock {
   flex: none;
   display: flex;
   flex-direction: column;
   width: var(--w-dock);
   min-height: 0;
-  background: var(--bg-sunken);
-  border-left: var(--border-width) solid var(--border-subtle);
+  margin: var(--space-4);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  overflow: hidden;
 }
 
 .armada-shell__dock-head {

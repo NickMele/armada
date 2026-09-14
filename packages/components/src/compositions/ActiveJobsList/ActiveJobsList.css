@@ -68,6 +68,48 @@
   flex: none;
 }
 
+/* The head's row count, opposite the heading. Muted and tabular: a fact read
+   at a glance, not a value compared across rows. */
+.armada-active-jobs__count {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+
+/* `panel` — a list that stands beside others rather than filling the region
+   alone. Overview's `Needs you`, `Running` and `Queued`: a border, rounded
+   corners and the card ground, so the panel reads as its own region rather
+   than one long list wearing three labels.
+
+   **It does not scroll itself.** `flat`'s frame fills its box and scrolls
+   inside it because it is the only region on the pane; a panel sits in a
+   stack of panels and sizes to its own rows, and the stack around it is what
+   scrolls. `overflow: hidden` on the panel is what keeps the header's and the
+   frame's square corners inside the panel's own radius, without asking either
+   of them to draw one. */
+.armada-active-jobs[data-variant="panel"] {
+  flex: none;
+  min-height: auto;
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.armada-active-jobs[data-variant="panel"] > .armada-active-jobs__header {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-active-jobs[data-variant="panel"] > .armada-active-jobs__frame {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+
 /* Where the surface's filter set sits: under the heading, over the frame. It
    draws no edge of its own — the frame beneath it is the boundary, and a
    second box around the controls would read as a second list. */
@@ -150,8 +192,16 @@
   grid-template-columns: var(--armada-job-table-tracks-3);
 }
 
-.armada-active-jobs__frame[data-columns="3"]:not([data-view="table"]) {
+.armada-active-jobs__frame[data-columns="3"]:not([data-view="table"], [data-view="panel"]) {
   grid-template-columns: var(--armada-job-row-tracks-3);
+}
+
+/* `panel` reserves no fact tracks at all — a row's own facts are flex chips
+   now, sized to their content rather than to a floor the Board's full-width
+   pane can afford and a narrower one cannot (Overview's own finding). One
+   column, the frame's real width, and the row does the rest. */
+.armada-active-jobs__frame[data-view="panel"] {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The column names, once, above the rows. `--bg-sunken` rather than the row's

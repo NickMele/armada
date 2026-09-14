@@ -358,6 +358,41 @@
   min-height: var(--armada-screen-empty);
 }
 
+/* ---- overview ------------------------------------------------------------
+
+   The tile band and the lists beneath it, held off the window's edge and
+   spaced by the drawing's own rule: `--space-4` between the tiles and the
+   first panel, and between panels — the drawing's ~16px, not the wider
+   `--gap-section` a screen uses to part unrelated regions.
+
+   **No right padding.** Helm's dock carries its own `--space-4` margin on
+   every side (`TheShell.css`), so padding this surface's right edge as well
+   doubled the gap between the content and the dock to 32px. The other three
+   edges still pad — the dock's margin says nothing about the rail or the
+   head above. */
+.armada-screen__overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4) 0 var(--space-4) var(--space-4);
+}
+
+/* Overview's own lists: `Needs you`, `Running` and `Queued`, each a panel in
+   `ActiveJobsList`'s `panel` variant. The gap between them is the surface's
+   own rule above, not the Board's `--space-2` — three bordered cards read as
+   one list wearing a hairline, and the drawing gives them the same room the
+   tile band gets. */
+.armada-screen__overview-lists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
 /* ---- job detail --------------------------------------------------------- */
 
 .armada-screen__detail {
