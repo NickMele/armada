@@ -41,7 +41,9 @@ pub use serving::{Link, Server};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use core_model::{Covers, ManifestId, Narrowing, PathPattern, RepoPath, ResolvedCheck, Ulid};
+use core_model::{
+    Covers, ManifestId, Narrowing, PathPattern, RepoPath, ResolvedCheck, RunsAt, Ulid,
+};
 use serde_yaml_ng::Value;
 
 mod drone;
@@ -81,7 +83,11 @@ const CHECK_KEYS: &[&str] = &[
     "requires",
     "narrow",
     "one_test",
+    "runs_at",
 ];
+/// The values `checks.<name>.runs_at` takes, spelled as `core_model::RunsAt`
+/// spells them. #849.
+const RUNS_AT_LEGAL: &[&str] = &["everywhere", "gate", "handoff"];
 /// The keys M1 reads inside `checks.<name>.narrow`.
 const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 /// The keys read inside `checks.<name>.one_test`. #999.
@@ -621,6 +627,7 @@ pub(super) struct DraftCheck {
     requires: Option<Vec<(String, String)>>,
     narrow: Option<Narrowing>,
     one_test: Option<String>,
+    runs_at: RunsAt,
 }
 
 /// `checks.<name>.narrow`, the second question a Check answers about paths.
@@ -727,6 +734,25 @@ fn check_entry(
     let one_test = table
         .optional("one_test")
         .and_then(|value| one_test(&table.at("one_test"), value, out));
+    // Absent is everywhere; a word outside the set refuses the Check rather
+    // than running it somewhere the author did not say. #849.
+    let runs_key = table.at("runs_at");
+    let runs_at = match table.optional("runs_at") {
+        None => Some(RunsAt::Everywhere),
+        Some(value) => yaml::text(&runs_key, value, out).and_then(|written| {
+            let found = RunsAt::from_wire(&written);
+            if found.is_none() {
+                out.push(Refusal::new(
+                    &runs_key,
+                    Fault::NotInTheSchema {
+                        value: written,
+                        legal: RUNS_AT_LEGAL,
+                    },
+                ));
+            }
+            found
+        }),
+    };
     table.close(known, out);
     Some(DraftCheck {
         run: run?,
@@ -735,6 +761,7 @@ fn check_entry(
         requires,
         narrow,
         one_test,
+        runs_at: runs_at?,
     })
 }
 

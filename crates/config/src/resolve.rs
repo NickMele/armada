@@ -27,7 +27,7 @@
 use std::path::PathBuf;
 
 use core_model::{
-    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, WorkflowId,
+    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, RunsAt, WorkflowId,
     WorkflowSource,
 };
 
@@ -65,10 +65,12 @@ impl ResolvedWorkflow {
         let mut unknown = Vec::new();
         let mut disagreements = Vec::new();
 
-        for step in def.steps() {
+        let handoff_at = runs_handoff_checks(def.steps());
+        for (at, step) in def.steps().iter().enumerate() {
             steps.push(resolve_step(
                 step,
                 manifest,
+                handoff_at == Some(at),
                 &mut unknown,
                 &mut disagreements,
             ));
@@ -178,6 +180,7 @@ impl ResolvedWorkflow {
 fn resolve_step(
     step: &Step,
     manifest: &Manifest,
+    runs_handoff: bool,
     unknown: &mut Vec<UnknownCheck>,
     disagreements: &mut Vec<Disagreement>,
 ) -> ResolvedStep {
@@ -232,6 +235,11 @@ fn resolve_step(
                     let declared = manifest
                         .check(name)
                         .expect("`checks_as_written` holds the keys of `checks`");
+                    // A handoff-only Check is left to the one step that runs it
+                    // before handoff; `held_for_handoff` names it on the rest.
+                    if declared.runs_at() == RunsAt::Handoff && !runs_handoff {
+                        continue;
+                    }
                     checks.push(lifted(name.clone(), declared, declared.expect_exit_code()));
                 }
             }
@@ -414,5 +422,23 @@ fn lifted(name: String, declared: &Check, expect_exit_code: i64) -> ResolvedChec
         requires: declared.requires().to_vec(),
         narrow: declared.narrow().cloned(),
         one_test: declared.one_test().map(str::to_string),
+        runs_at: declared.runs_at(),
     }
+}
+
+/// Which step's `every_manifest_check` takes the handoff-only Checks: the last
+/// one before the step that delivers, or the last one at all where none comes
+/// before it. **Never none while any step gates on every Check**, so a Check
+/// declared for handoff always runs somewhere. #849.
+fn runs_handoff_checks(steps: &[Step]) -> Option<usize> {
+    let every = |step: &Step| {
+        step.mechanical_checks()
+            .iter()
+            .any(|check| matches!(check, MechanicalCheck::EveryManifestCheck))
+    };
+    let delivers = steps.iter().position(Step::delivers).unwrap_or(steps.len());
+    steps[..delivers]
+        .iter()
+        .rposition(every)
+        .or_else(|| steps.iter().rposition(every))
 }

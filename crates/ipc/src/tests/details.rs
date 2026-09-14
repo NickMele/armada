@@ -25,6 +25,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
         &job,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
+            held_for_handoff: Vec::new(),
             label: Some("Reproduce it".to_string()),
             declares: Some(Vec::new()),
             ran: Vec::new(),
@@ -47,6 +48,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
         &job,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
+            held_for_handoff: Vec::new(),
             label: None,
             declares: None,
             ran: Vec::new(),
@@ -82,6 +84,7 @@ fn a_step_with_no_label_reads_as_its_id() {
         &job(),
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
+            held_for_handoff: Vec::new(),
             label: Some("   ".to_string()),
             declares: None,
             ran: Vec::new(),
@@ -110,9 +113,11 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
         &job(),
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
+            held_for_handoff: Vec::new(),
             label: Some("Reproduce it".to_string()),
             declares: Some(vec![DeclaredCheck {
                 kind: "manifest_check".to_string(),
+                runs_at: None,
                 name: Some("suite".to_string()),
                 run: Some("cargo nextest run --workspace".to_string()),
                 expect_exit_code: Some(0),
@@ -167,6 +172,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
         &job(),
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
+            held_for_handoff: Vec::new(),
             label: Some("Reproduce it".to_string()),
             declares: Some(Vec::new()),
             ran: Vec::new(),
@@ -315,6 +321,7 @@ fn a_note_waiting_for_the_next_drone_crosses_until_it_is_delivered() {
 fn a_check_covering_everything_carries_no_when() {
     let declared = DeclaredCheck {
         kind: "manifest_check".to_string(),
+        runs_at: None,
         name: Some("build".to_string()),
         run: Some("cargo build --workspace --locked".to_string()),
         expect_exit_code: Some(0),
@@ -573,6 +580,7 @@ fn a_gate_running_its_checks_rides_beside_the_state() {
     let job = job();
     let facts = |checking| StepFacts {
         step_id: crate::StepId::carried("repro"),
+        held_for_handoff: Vec::new(),
         label: None,
         declares: Some(Vec::new()),
         ran: Vec::new(),
@@ -668,6 +676,7 @@ fn a_drones_own_run_rides_apart_from_the_gates() {
     };
     let facts = StepFacts {
         step_id: crate::StepId::carried("repro"),
+        held_for_handoff: Vec::new(),
         label: None,
         declares: Some(Vec::new()),
         ran: Vec::new(),

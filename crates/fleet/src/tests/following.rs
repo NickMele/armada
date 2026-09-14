@@ -92,6 +92,7 @@ fn only_a_log_a_running_check_is_writing_can_be_followed() {
         requires: Vec::new(),
         narrow: None,
         one_test: None,
+        runs_at: core_model::RunsAt::Everywhere,
     };
     announcing.began(std::slice::from_ref(&check), &[None]);
     let log = announcing.log_for(0).expect("a live log for the Check");

@@ -89,6 +89,11 @@ pub struct WorkflowStep {
     /// `false` on every step of a workflow that delivers nothing.
     #[serde(default)]
     pub delivers: bool,
+    /// Checks declared `runs_at: handoff` that this step's gate leaves to a
+    /// later step, by name. [`StepDetail`](crate::StepDetail)'s own field,
+    /// before a dispatch. Since 13.48, #849.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub held_for_handoff: Vec<String>,
 }
 
 /// One workflow Fleet holds, as a picker offers it.

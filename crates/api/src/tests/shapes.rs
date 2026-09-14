@@ -125,6 +125,7 @@ fn step_rail(
         judge_checks: Some(judge_checks),
         advance_gate: Some(ipc::AdvanceGate::from_wire(gate).expect("a gate the registry has")),
         delivers: Some(false),
+        held_for_handoff: Vec::new(),
         pass: None,
         last_verdict: None,
         overridden: false,
@@ -634,6 +635,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
                 step_id: StepId::carried("implement"),
                 label: "Implement the change".to_string(),
                 checks: vec![ipc::DeclaredCheck {
+                    runs_at: None,
                     kind: "manifest_check".to_string(),
                     name: Some("build".to_string()),
                     run: Some("cargo build --workspace --locked".to_string()),
@@ -650,6 +652,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
                 advance_gate: ipc::AdvanceGate::from_wire("auto_if_judge_passes")
                     .expect("a gate the registry has"),
                 delivers: false,
+                held_for_handoff: Vec::new(),
             },
             ipc::WorkflowStep {
                 step_id: StepId::carried("handoff"),
@@ -659,6 +662,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
                 advance_gate: ipc::AdvanceGate::from_wire("human_always")
                     .expect("a gate the registry has"),
                 delivers: true,
+                held_for_handoff: Vec::new(),
             },
         ],
         manifest_id: ManifestId::carried("01MF"),

@@ -213,6 +213,7 @@ async fn every_declared_check_gets_a_row_whatever_the_dry_run_names() {
             requires: Vec::new(),
             narrow: None,
             one_test: None,
+            runs_at: core_model::RunsAt::Everywhere,
         },
         ResolvedCheck::ManifestCheck {
             name: "test".to_string(),
@@ -222,6 +223,7 @@ async fn every_declared_check_gets_a_row_whatever_the_dry_run_names() {
             requires: Vec::new(),
             narrow: None,
             one_test: None,
+            runs_at: core_model::RunsAt::Everywhere,
         },
     ];
     let footprint = Footprint::nothing();

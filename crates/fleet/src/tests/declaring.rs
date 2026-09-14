@@ -40,6 +40,7 @@ fn a_check(name: &str) -> ResolvedCheck {
         requires: Vec::new(),
         narrow: None,
         one_test: None,
+        runs_at: core_model::RunsAt::Everywhere,
     }
 }
 

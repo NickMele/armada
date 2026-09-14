@@ -129,9 +129,12 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 })),
             })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
-                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow, one_test } => json!({
+                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow, one_test, runs_at } => json!({
                     "type": MANIFEST_CHECK,
                     "check": name,
+                    // Absent where it runs everywhere, which is how every row
+                    // written before the key reads back. #849.
+                    "runs_at": (*runs_at != core_model::RunsAt::Everywhere).then(|| runs_at.as_wire()),
                     // Null where the Check declares no `one_test`, which reads back as none. #999.
                     "one_test": one_test,
                     "run": run,
@@ -644,6 +647,14 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
             one_test: match entry.get("one_test") {
                 None | Some(Value::Null) => None,
                 Some(_) => Some(text(entry, "one_test")?),
+            },
+            runs_at: match entry.get("runs_at") {
+                None | Some(Value::Null) => core_model::RunsAt::Everywhere,
+                Some(_) => {
+                    let written = text(entry, "runs_at")?;
+                    core_model::RunsAt::from_wire(&written)
+                        .ok_or_else(|| format!("`runs_at` holds `{written}`"))?
+                }
             },
         }),
         DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),

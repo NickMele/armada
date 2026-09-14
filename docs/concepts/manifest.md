@@ -242,6 +242,25 @@ Rules that follow:
 - **`except` restates an exclusion the whole run already makes.** Dropping `--workspace` so `-p` means something drops `--exclude` with it, and a narrowed `test` that pulled `acceptance` back in would show a Drone a bar the gate deliberately does not apply — the one case where a narrowed run is misleading rather than merely smaller.
 - **It is frozen with the workflow**, beside the Check's command.
 
+### Where a Check runs
+
+**A Check may declare `runs_at: gate` to stay out of a Drone's own run, or `runs_at: handoff` to run once before the work is handed off.** The Configuration contract holds the rules.
+
+```yaml
+checks:
+  storybook:
+    run: pnpm -C packages/components build-storybook
+    runs_at: gate
+```
+
+Decided 14 Sep 2026 for #849. A slow Check that mirrors CI cost its whole run on every retry and on every ask. Absent is `everywhere`, which is what every Check did before the key existed.
+
+Rules that follow:
+
+- **A Drone's run leaves out a `gate` or `handoff` Check**, and its brief names each one and where it runs instead, so a clean run does not read as the whole bar.
+- **A `handoff` Check runs on one step only**, the last one gating on every Check before handoff, and starts only once every other Check there has passed. A failure goes back to that step's Drone under its retry budget.
+- **A narrowed run still gates nothing**, and neither does this: the gate runs every Check it holds, whatever a Drone asked for.
+
 ### Running one test by name
 
 **A Check may declare `one_test`, and it is what Fleet runs against a checkout of main before a Drone's `draft_fix` drafts anything.** The Configuration contract holds the syntax.

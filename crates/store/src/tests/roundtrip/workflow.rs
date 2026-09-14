@@ -65,6 +65,7 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
                     vec!["acceptance".to_string()],
                 )),
                 one_test: Some("cargo nextest run -E test(={})".to_string()),
+                runs_at: core_model::RunsAt::Handoff,
             },
             ResolvedCheck::DiffNonempty,
             ResolvedCheck::ArtifactExists {

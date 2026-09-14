@@ -64,6 +64,8 @@ pub enum NotRun {
     NoSuchStep { step: StepId },
     /// Refused, not answered empty: a report with no rows reads as a clean run.
     StepHasNoChecks { step: StepId },
+    /// Every Check here runs only at the gate or before handoff. #849.
+    NoneRunMidStep { step: StepId },
     /// Refused, not queued: two builds in one worktree answer about neither.
     AlreadyRunning,
     /// The gate is about to run the same Checks in the same worktree. The other
@@ -97,6 +99,12 @@ impl fmt::Display for NotRun {
                 out,
                 "step `{}` declares no mechanical checks, so there is nothing to \
                  run. Get on with the work and submit when it is done",
+                step.as_str()
+            ),
+            NotRun::NoneRunMidStep { step } => write!(
+                out,
+                "every check on step `{}` runs only when you submit, so there is \
+                 nothing to run now. Get on with the work and submit when it is done",
                 step.as_str()
             ),
             NotRun::AlreadyRunning => out.write_str(
@@ -276,6 +284,9 @@ where
         if declared.checks().is_empty() {
             return Err(NotRun::StepHasNoChecks { step });
         }
+        if declared.mid_step_checks().is_empty() {
+            return Err(NotRun::NoneRunMidStep { step });
+        }
         Ok(Plan {
             record,
             step,
@@ -292,7 +303,7 @@ where
                 step: plan.step.clone(),
             });
         };
-        let checks = declared.checks();
+        let checks = declared.mid_step_checks();
         // **Read unconditionally, not only where the step declares
         // `diff_nonempty`, and kept whole rather than folded to a bool.**
         // `crate::reuse` needs this same reading beside whatever the run
@@ -471,18 +482,20 @@ where
                 plan.step.as_str()
             ));
         };
-        // The same batch the gate runs, so the rows keep the step's own order.
-        let mut observed = Vec::with_capacity(declared.checks().len());
+        // The gate's batch less what runs only there or before handoff (#849),
+        // so the rows keep the step's own order.
+        let checks = declared.mid_step_checks();
+        let mut observed = Vec::with_capacity(checks.len());
         let mut printed = Vec::new();
-        let mut took = Vec::with_capacity(declared.checks().len());
-        let mut narrowed_to = Vec::with_capacity(declared.checks().len());
-        let mut stopped = Vec::with_capacity(declared.checks().len());
+        let mut took = Vec::with_capacity(checks.len());
+        let mut narrowed_to = Vec::with_capacity(checks.len());
+        let mut stopped = Vec::with_capacity(checks.len());
         // Fastest first, by this repository's past runs. #1062.
         let room = self
             .checks_room_for(&plan.record, crate::places::Asking::DronesRun)
             .await;
         let running = crate::checking::ran(
-            declared.checks(),
+            &checks,
             &read.touched,
             read.moved,
             read.narrow,
@@ -513,7 +526,7 @@ where
             }
         }
         // Unreachable while `ran` answers one per Check; carried, as a panic ends Fleet.
-        let ran = Ran::of(declared, &observed).map_err(|cause| cause.to_string())?;
+        let ran = Ran::against(&checks, &observed).map_err(|cause| cause.to_string())?;
         let rows = check_output::kept_dry(
             &read.records_root,
             &plan.record.handle(),

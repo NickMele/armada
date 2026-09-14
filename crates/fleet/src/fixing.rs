@@ -247,6 +247,7 @@ where
                 requires,
                 narrow: None,
                 one_test: None,
+                runs_at: core_model::RunsAt::Everywhere,
             },
             expect_exit_code,
             record,

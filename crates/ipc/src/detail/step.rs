@@ -5,15 +5,8 @@
 //! and what the latest run came to. [`StepFacts`] is the other side of the
 //! same seam and never crosses — it is what Fleet assembles, because the
 //! declaration is the workflow's and the result is the store's, and the frozen
-//! `job_steps` row carries neither.
-//!
-//! **Two of a step's four declared facts are read rather than handed in.**
-//! `advance_gate` and `judge_checks` come off the Job's own frozen workflow
-//! inside [`crate::JobDetail::of`], so a caller cannot forget to pass them;
-//! [`StepFacts`] says why the split falls where it does.
-//!
-//! Empty and absent are two different sentences on nearly every list here,
-//! which is the rule the parent module states for the detail as a whole.
+//! `job_steps` row carries neither. [`StepFacts`] says which declared facts are
+//! read off the Job instead of handed in.
 
 use serde::{Deserialize, Serialize};
 
@@ -57,6 +50,8 @@ pub struct StepFacts {
     /// workflow this Fleet does not hold, or holds one that no longer declares
     /// the step. Empty is the ungated step, which is the common case.
     pub declares: Option<Vec<DeclaredCheck>>,
+    /// The handoff-only Checks this step leaves to a later one, by name. #849.
+    pub held_for_handoff: Vec<String>,
     /// What each declared Check did, in the step's order. Empty until the gate
     /// has run them.
     pub ran: Vec<CheckRun>,
@@ -145,6 +140,9 @@ pub struct StepDetail {
     /// one a gap is — which is the whole reason this field exists.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checks: Option<Vec<DeclaredCheck>>,
+    /// Handoff-only Checks a later step runs instead of this one. Since 13.48, #849.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub held_for_handoff: Vec<String>,
     /// What each declared Check did, **every attempt's rows, oldest first**.
     /// Empty until the gate has run them, which is not the same as declaring
     /// none. Join to [`attempts`](StepDetail::attempts) by `attempt` — a step
@@ -404,6 +402,7 @@ impl StepDetail {
             ordinal: step.ordinal(),
             state: step.state().into(),
             checks: facts.and_then(|facts| facts.declares.clone()),
+            held_for_handoff: facts.map_or_else(Vec::new, |facts| facts.held_for_handoff.clone()),
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
             judge_checks: declared.map(|declared| DeclaredJudge::firing(declared.judge_checks())),
             advance_gate: declared.map(|declared| declared.advance_gate().into()),

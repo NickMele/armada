@@ -56,7 +56,23 @@ pub(crate) fn declared_check(check: &core_model::ResolvedCheck) -> DeclaredCheck
                 .map(|pattern| pattern.as_str().to_string())
                 .collect()
         }),
+        // Absent where it runs everywhere, for `when`'s reason. #849.
+        runs_at: Some(check.runs_at())
+            .filter(|runs| *runs != core_model::RunsAt::Everywhere)
+            .map(|runs| runs.as_wire().to_string()),
     }
+}
+
+/// The handoff-only Checks a step leaves to a later one, by name. #849.
+pub(crate) fn held_for_handoff(
+    workflow: &core_model::FrozenWorkflow,
+    step: &core_model::StepId,
+) -> Vec<String> {
+    workflow
+        .held_for_handoff(step)
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 /// Every Check a step declares, as a reader sees them.
@@ -84,6 +100,7 @@ pub(crate) fn declared_checks(step: &core_model::ResolvedStep) -> Vec<DeclaredCh
         run: None,
         expect_exit_code: None,
         when: None,
+        runs_at: None,
     });
     sweeping
         .into_iter()
@@ -125,6 +142,7 @@ pub(crate) fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep>
             judge_checks: DeclaredJudge::firing(step.judge_checks()),
             advance_gate: step.advance_gate().into(),
             delivers: step.delivers(),
+            held_for_handoff: held_for_handoff(workflow.frozen(), step.id()),
         })
         .collect()
 }
@@ -477,6 +495,7 @@ pub(crate) fn step_facts(
                     .step(step.step_id())
                     .map(|declared| declared.label().to_string()),
                 declares: job.workflow().step(step.step_id()).map(declared_checks),
+                held_for_handoff: held_for_handoff(job.workflow(), step.step_id()),
                 ran: ran
                     .iter()
                     .filter(|group| &group.step_id == step.step_id())

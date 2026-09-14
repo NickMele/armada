@@ -231,15 +231,16 @@ impl Checking {
     /// the guessing the tool exists to replace, a step earlier. A label is the
     /// word the report comes back carrying, so offer and answer line up row
     /// for row; a `run` string is what `docs/concepts/drone.md` keeps out of
-    /// every block. One ask runs the whole declaration, because a Drone that
-    /// could pick could skip the Check that would have caught its mistake.
+    /// every block. One ask runs all it may ask, because a Drone that could
+    /// pick could skip the Check that would have caught its mistake; what the
+    /// repository keeps out of asking is named, with where it runs (#849).
     ///
     /// **And the caveat rides only where it is true.** A named list a Drone
     /// acts on is worse than the vague sentence it replaces if what runs is
     /// sometimes less, so a step holding a path-scoped Check says so — on the
     /// same reading `crate::dry_run` skips by, and never in schema words.
-    pub fn at(step: &ResolvedStep) -> Option<Checking> {
-        if step.checks().is_empty() {
+    pub fn at(workflow: &FrozenWorkflow, step: &ResolvedStep) -> Option<Checking> {
+        if step.mid_step_checks().is_empty() {
             return None;
         }
         let mut block = String::from(
@@ -250,15 +251,18 @@ impl Checking {
             block.push_str("\n  - ");
             block.push_str(check.label());
         }
-        block.push_str(
+        let whole = match step.mid_step_checks().len() == step.checks().len() {
+            true => "One ask runs the whole list",
+            false => "One ask runs every one of them but those named below",
+        };
+        block.push_str(&format!(
             "\n\nYou can ask for them to be run against your worktree, and you \
              will be told what each one did. A check that fails carries its \
              own output back with the answer — you do not need to run the \
-             command yourself or go looking for a log to read it. One ask \
-             runs the whole list and you do not choose from it. A build or \
-             test command run directly is not granted; asking is how you \
-             get the same answer.",
-        );
+             command yourself or go looking for a log to read it. {whole} \
+             and you do not choose from it. A build or test command run \
+             directly is not granted; asking is how you get the same answer.",
+        ));
         if step.checks().iter().any(ResolvedCheck::needs_changed_paths) {
             block.push_str(
                 " A check on this list that covers only certain files comes \
@@ -272,8 +276,11 @@ impl Checking {
              guessing. The call comes back at once, and each check's result \
              arrives as a later turn as it finishes, however long they take. \
              The first one that fails stops the rest, and the last turn says \
-             the run is over. Wait for them rather than running them yourself.\n\n\
-             It is not a verdict and it advances nothing. A run in which \
+             the run is over. Wait for them rather than running them yourself.",
+        );
+        block.push_str(&not_asked(workflow, step));
+        block.push_str(
+            "\n\nIt is not a verdict and it advances nothing. A run in which \
              everything passes does not finish this part; the checks are run \
              again when you submit, and that run is the one that decides. \
              Submitting is still the only way to report. There is a limit on \
@@ -286,6 +293,69 @@ impl Checking {
     /// The block, exactly as it reaches a Drone.
     pub fn text(&self) -> &str {
         &self.0
+    }
+}
+
+/// The checks asking leaves out and where each runs instead, so a clean run
+/// does not read as the whole bar. Empty where asking runs every one. #849.
+fn not_asked(workflow: &FrozenWorkflow, step: &ResolvedStep) -> String {
+    let named = |runs_at: core_model::RunsAt| -> Vec<&str> {
+        step.checks()
+            .iter()
+            .filter(|check| check.runs_at() == runs_at)
+            .map(ResolvedCheck::label)
+            .collect()
+    };
+    let mut said = String::new();
+    let at_gate = named(core_model::RunsAt::Gate);
+    if !at_gate.is_empty() {
+        said.push_str(&format!(
+            "\n\nAsking does not run {}: {} only when you submit.",
+            quoted(&at_gate),
+            if at_gate.len() == 1 {
+                "it runs"
+            } else {
+                "they run"
+            },
+        ));
+    }
+    let last = named(core_model::RunsAt::Handoff);
+    if !last.is_empty() {
+        said.push_str(&format!(
+            "\n\nAsking does not run {} either: when you submit, {} only once \
+             every other check here has passed, before the work is handed off.",
+            quoted(&last),
+            if last.len() == 1 {
+                "it runs"
+            } else {
+                "they run"
+            },
+        ));
+    }
+    let later = workflow.held_for_handoff(step.id());
+    if !later.is_empty() {
+        said.push_str(&format!(
+            "\n\n{} {} not checked on this part at all, when you ask or when you \
+             submit. {} once, before the work is handed off.",
+            quoted(&later),
+            if later.len() == 1 { "is" } else { "are" },
+            if later.len() == 1 {
+                "It runs"
+            } else {
+                "They run"
+            },
+        ));
+    }
+    said
+}
+
+/// Names as a reader lists them: `a`, `a` and `b`, `a`, `b` and `c`.
+fn quoted(names: &[&str]) -> String {
+    let each: Vec<String> = names.iter().map(|name| format!("`{name}`")).collect();
+    match each.split_last() {
+        None => String::new(),
+        Some((only, [])) => only.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
     }
 }
 

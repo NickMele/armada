@@ -275,6 +275,52 @@ Rules that follow:
   edit to `armada.yml` changes the next Job rather than what a running Drone is
   told about its own work.
 
+## Where a Check runs
+
+Added 14 September 2026, with `checks.<name>.runs_at` and `#849`. Every retry of
+a coding step reran every Check in full, and every time a Drone asked for its
+Checks it got every one — in this repository `storybook` and the components
+story tests on every ask.
+
+| Value | A Drone's own run | Each step's gate | Before handoff |
+| --- | --- | --- | --- |
+| `everywhere`, and absent | runs | runs | — |
+| `gate` | not asked | runs | — |
+| `handoff` | not asked | not run | runs |
+
+```yaml
+checks:
+  e2e:
+    run: pnpm test:e2e
+    runs_at: handoff
+```
+
+**The repository declares it once, and every workflow inherits it**, the rule
+`when` and `narrow` follow. There is no step-level key, and a Drone chooses
+nothing.
+
+Rules that follow:
+
+- **`every_manifest_check` places a handoff-only Check on one step**: the last
+  step gating on every Check before the step that delivers, or the last one at
+  all where none comes before it. So a Check declared for handoff runs somewhere
+  whenever any step gates on every Check. The other steps name it as held for
+  handoff, and a Drone on one is told it is not checked there.
+- **On that step it starts last.** It runs only once every other answer on the
+  gate lets the step through. Where one does not, it records `skipped` with a
+  sentence saying why, which is never a pass.
+- **A failure goes back to the Drone under the step's own `retry_limit`**, the
+  road every other failed Check takes. A spent budget stands the same way.
+- **A step naming a Check by `manifest_check` gates on it there**, and a
+  handoff-only one still starts last on that gate. `runs_at` still keeps it out
+  of a Drone's run.
+- **A Drone's run leaves out `gate` and `handoff` Checks entirely**, rather than
+  reporting them skipped: it never stops early on one and never orders by one.
+  Its brief names both, and where each runs instead.
+- **`after_merge` drops it**, for `when`'s reason: after a merge there is no
+  step and no handoff, only the whole tree.
+- **It is frozen with the workflow**, beside the Check's command.
+
 ## Running one test by name
 
 Added 13 September 2026, with `checks.<name>.one_test` and `#999`. A Drone that
