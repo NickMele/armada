@@ -35,6 +35,10 @@ packages/components/src/primitives/<PascalName>/
     <PascalName>.css
 ```
 
+**A stories file heading for the 1200-line refusal splits into siblings**,
+`<PascalName>.<group>.stories.tsx`, keeping every story id. `JobDetail` sat 25
+lines under the limit before #1044 split it into eight.
+
 **A component owns its own stylesheet and nothing else touches it.** Parallel
 authorship of one shared stylesheet is how two agents overwrite each other.
 Register it with one `@import` line appended to `src/index.css` — that file is

@@ -78,7 +78,7 @@ owner's machine was unusable.
 | A crate under `crates/` | `cargo nextest run -p <crate>` for it and each crate that depends on it (`cargo tree -i <crate> -e normal --depth 1`) |
 | Any Rust | `cargo fmt --all --check`, and `cargo build --workspace --all-targets 2>&1 \| grep -c '^warning'` once — **the same count as `main`**, whatever the exit code |
 | What a milestone's claim reads | `cargo test -p acceptance` |
-| `apps/` or `packages/` | `armada check typecheck`, and `pnpm exec vitest run <files>` for the tests and stories you touched. `bridge_build` and `storybook` only where their `when:` matches |
+| `apps/` or `packages/` | `armada check typecheck`, and `pnpm exec vitest run <files>` for the tests and stories you touched. **Every story, `screens`' included, runs from `-C packages/components`**; `packages/screens` has only its `.test.ts` and `.test.tsx` projects, and a story filter there finds no files. `bridge_build` and `storybook` only where their `when:` matches |
 | `docs/`, or `crates/ipc/operations.toml` | `cargo xtask verify-docs` |
 | Anything | `cargo xtask verify-foundations` once, before the PR — **no worse than the baseline you took off `main`.** Read what each line names; never chase a colour |
 
