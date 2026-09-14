@@ -17,6 +17,10 @@ use core_model::{
     AcceptanceCriterion, Actor, Facts, Job, JobId, JobNumber, ManifestId, ModelName, NewJob,
     StepSeed, Target, Timestamp, Title, TopLevelOrigin, Ulid, Urgency,
 };
+use ipc::{
+    AnswerCommand, ChosenAnswer, FleetCapacity, FleetHealth, JobDetail, JobList, JobSummary,
+    JudgeAnswered, ManifestDrift, QuestionInFlight,
+};
 
 use super::bug_workflow_as_far_as_m1_expresses_it;
 
@@ -99,4 +103,119 @@ pub fn done_under(manifest_id: &str, ulid: &str, title: &str) -> Job {
 
 fn at() -> Timestamp {
     Timestamp::from_rfc3339("2026-09-13T09:00:00.000Z")
+}
+
+// ---------------------------------------------------------------------------
+// Which of Overview's three drawn sections a row belongs to
+// ---------------------------------------------------------------------------
+
+/// Copied from `domain/job-statuses.toml`'s `who_is_acting`/`mode` columns:
+/// `core_model` exposes neither to read, so the lists below are hand kept —
+/// `overview.rs`'s
+/// `every_status_the_registry_names_is_classified_or_excluded_as_terminal` is
+/// what catches them drifting from `JobStatus::ALL`.
+pub const NEEDS_YOU: &[&str] = &[
+    "awaiting_approval",
+    "awaiting_attestation",
+    "awaiting_repair",
+    "awaiting_review",
+    "escalated",
+];
+pub const RUNNING: &[&str] = &["running", "piloted"];
+pub const QUEUED: &[&str] = &["queued"];
+
+/// Overview's three drawn sections — Needs you, Running and Queued — read off
+/// one row, with **Other named as the section this build never populates.**
+/// `asking` is read first because it is not a status at all — `board.ts`
+/// reads it the same way, ahead of every status-derived rule.
+pub fn section_of(row: &JobSummary) -> Option<&'static str> {
+    if row.asking {
+        return Some("needs-you");
+    }
+    let status = row.status.as_wire();
+    if NEEDS_YOU.contains(&status) {
+        Some("needs-you")
+    } else if RUNNING.contains(&status) {
+        Some("running")
+    } else if QUEUED.contains(&status) {
+        Some("queued")
+    } else {
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The JobDetail a Job's open question is served on
+// ---------------------------------------------------------------------------
+
+/// A `JobDetail` over one bench Job, with no step facts and no classification
+/// — everything `board.rs` and `recovery.rs` already assert is out of scope
+/// here, so only `asking` is a constructor argument.
+pub fn detail_of(job: &Job, asking: Option<QuestionInFlight>) -> JobDetail {
+    JobDetail::of(
+        job,
+        None,
+        None,
+        None,
+        None,
+        None,
+        &[],
+        None,
+        None,
+        asking,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// The round trip every assertion in `overview.rs` is made through
+// ---------------------------------------------------------------------------
+
+/// Written once per type rather than generically: `ipc::encode` and
+/// `ipc::decode` already carry the bounds, and naming `serde` here would be a
+/// dependency this crate does not otherwise need.
+pub fn round_trip_jobs(value: &JobList) -> JobList {
+    let body = ipc::encode(value).expect("a list that serialises");
+    ipc::decode("a Job list", body.as_bytes()).expect("a list that reads back")
+}
+
+pub fn round_trip_capacity(value: &FleetCapacity) -> (FleetCapacity, String) {
+    let body = ipc::encode(value).expect("a capacity that serialises");
+    let read =
+        ipc::decode("a capacity reading", body.as_bytes()).expect("a reading that reads back");
+    (read, body)
+}
+
+pub fn round_trip_health(value: &FleetHealth) -> FleetHealth {
+    let body = ipc::encode(value).expect("a health reading that serialises");
+    ipc::decode("a health reading", body.as_bytes()).expect("a reading that reads back")
+}
+
+pub fn round_trip_drift(value: &ManifestDrift) -> ManifestDrift {
+    let body = ipc::encode(value).expect("a drift reading that serialises");
+    ipc::decode("a drift reading", body.as_bytes()).expect("a reading that reads back")
+}
+
+pub fn round_trip_detail(value: &JobDetail) -> JobDetail {
+    let body = ipc::encode(value).expect("a detail that serialises");
+    ipc::decode("a Job detail", body.as_bytes()).expect("a detail that reads back")
+}
+
+pub fn round_trip_chosen_answer(value: &ChosenAnswer) -> ChosenAnswer {
+    let body = ipc::encode(value).expect("a chosen answer that serialises");
+    ipc::decode("a chosen answer", body.as_bytes()).expect("an answer that reads back")
+}
+
+pub fn round_trip_answer_command(value: &AnswerCommand) -> AnswerCommand {
+    let body = ipc::encode(value).expect("an answered command that serialises");
+    ipc::decode("an answered command", body.as_bytes()).expect("an answer that reads back")
+}
+
+pub fn round_trip_judge_answered(value: &JudgeAnswered) -> JudgeAnswered {
+    let body = ipc::encode(value).expect("a judge answer that serialises");
+    ipc::decode("a judge answer", body.as_bytes()).expect("an answer that reads back")
 }
