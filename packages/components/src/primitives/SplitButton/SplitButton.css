@@ -191,6 +191,48 @@
   cursor: default;
 }
 
+/* Pending — the face's own act is out and Fleet has not answered. Every
+ * variant collapses onto one rendering, as disabled does, but with
+ * --fg-default text: it is the one control in its group that is not greyed
+ * out. The bar reuses `armada-button-waiting`, `Button.css`'s own keyframe —
+ * one sweep, drawn the same way everywhere it appears. #1117.
+ */
+.armada-split-button__control:has(.armada-split-button__action[data-pending]) {
+  background: var(--bg-sunken);
+  border-color: var(--border-strong);
+}
+
+.armada-split-button__control:has(.armada-split-button__action[data-pending])
+  .armada-split-button__action,
+.armada-split-button__control:has(.armada-split-button__action[data-pending])
+  .armada-split-button__caret {
+  color: var(--fg-default);
+}
+
+.armada-split-button__action[data-pending] {
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+}
+
+.armada-split-button__action[data-pending]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 40%;
+  height: var(--pending-bar);
+  background: var(--status-running);
+  animation: armada-button-waiting var(--duration-pulse) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .armada-split-button__action[data-pending]::after {
+    width: 100%;
+    animation: none;
+  }
+}
+
 /* The menu is a floating layer, so it takes --bg-overlay and a shadow — one
  * of the few places a shadow is legal, and it is positioned out of flow. A
  * menu that pushed layout would move every row beneath the one being acted
