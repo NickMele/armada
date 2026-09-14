@@ -56,6 +56,18 @@ impl Names {
         Some(self.0.read().ok()?.get(job)?.0.clone())
     }
 
+    /// Every Job `manifest_id` owns.
+    pub(crate) fn owned_by(&self, manifest_id: &str) -> Vec<JobId> {
+        let Ok(names) = self.0.read() else {
+            return Vec::new();
+        };
+        names
+            .iter()
+            .filter(|(_, (_, owner))| owner == manifest_id)
+            .map(|(job, _)| job.clone())
+            .collect()
+    }
+
     /// The Manifest this Job was created against, which names its repository.
     pub(crate) fn owner_of(&self, job: &JobId) -> Option<String> {
         Some(self.0.read().ok()?.get(job)?.1.clone())

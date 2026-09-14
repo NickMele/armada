@@ -24,7 +24,7 @@
 //! arrives — and that trade is deliberate: a duplicate `job.state_changed` is
 //! detectable from its `from` status, and a missing one is not detectable.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -53,23 +53,48 @@ pub const TALLIED: usize = 4096;
 /// **Names and positions, never events.** Holding the events would be a second
 /// unbounded copy of the stream behind the bounded one.
 struct Tallies {
-    seen: VecDeque<(u64, String)>,
+    seen: VecDeque<(u64, String, About)>,
+}
+
+/// The Job and the Manifest an event names, where it names either.
+type About = (Option<String>, Option<String>);
+
+/// Which events one repository's caller is counted: those about its Manifest,
+/// about a Job it owns, and those naming neither, which are the machine's.
+pub struct Within<'a> {
+    pub manifest_id: &'a str,
+    pub owned: &'a BTreeSet<String>,
+}
+
+impl Within<'_> {
+    fn keeps(&self, (job, manifest): &About) -> bool {
+        match (job, manifest) {
+            (_, Some(manifest)) => manifest == self.manifest_id,
+            (Some(job), None) => self.owned.contains(job),
+            (None, None) => true,
+        }
+    }
 }
 
 impl Tallies {
-    fn note(&mut self, at: u64, kind: String) {
+    fn note(&mut self, at: u64, kind: String, about: About) {
         if self.seen.len() == TALLIED {
             self.seen.pop_front();
         }
-        self.seen.push_back((at, kind));
+        self.seen.push_back((at, kind, about));
     }
 
     /// Counts by kind since `from`, and how many were dropped before they
     /// could be counted.
-    fn since(&self, from: u64, upto: u64) -> EventsSince {
-        let oldest = self.seen.front().map(|(at, _)| *at).unwrap_or(upto);
+    fn since(&self, from: u64, upto: u64, within: Option<&Within>) -> EventsSince {
+        let oldest = self.seen.front().map(|(at, ..)| *at).unwrap_or(upto);
         let mut counts: BTreeMap<&str, u64> = BTreeMap::new();
-        for (_, kind) in self.seen.iter().filter(|(at, _)| *at >= from) {
+        let kept = |about: &About| within.is_none_or(|within| within.keeps(about));
+        for (_, kind, _) in self
+            .seen
+            .iter()
+            .filter(|(at, _, about)| *at >= from && kept(about))
+        {
             *counts.entry(kind.as_str()).or_default() += 1;
         }
         EventsSince {
@@ -134,7 +159,7 @@ impl Broadcaster {
         // reads a window that is behind rather than one missing a row it was
         // told about.
         if let Ok(mut tallies) = self.tallies.lock() {
-            tallies.note(cursor.position(), event.kind());
+            tallies.note(cursor.position(), event.kind(), event.about());
         }
         let _ = self.outbound.send(Delivered { cursor, event });
         cursor
@@ -146,9 +171,14 @@ impl Broadcaster {
     /// this channel's own, so a daemon method would be asking Fleet about a
     /// counter `api` holds.
     pub fn since(&self, from: Cursor) -> EventsSince {
+        self.since_within(from, None)
+    }
+
+    /// [`Broadcaster::since`], counting only what `within` keeps.
+    pub fn since_within(&self, from: Cursor, within: Option<&Within>) -> EventsSince {
         let upto = self.next.load(Ordering::SeqCst);
         match self.tallies.lock() {
-            Ok(tallies) => tallies.since(from.position().min(upto), upto),
+            Ok(tallies) => tallies.since(from.position().min(upto), upto, within),
             // A poisoned lock is a panic in a `note` above, which holds no
             // await and cannot. Answered as an empty window rather than
             // propagated: a poller told nothing is a poller that stops.

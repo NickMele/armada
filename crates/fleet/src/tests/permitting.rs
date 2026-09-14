@@ -449,7 +449,7 @@ async fn the_board_says_a_job_waits_on_a_command() {
 
     let (_, waiting) = tokio::join!(fleet.permission(&job, &asking), async {
         until_waiting(&fleet, &job).await;
-        let board = Queries::list_jobs(&fleet).await.expect("a board");
+        let board = Queries::list_jobs(&fleet, None).await.expect("a board");
         let waiting = board
             .jobs
             .iter()
@@ -462,7 +462,7 @@ async fn the_board_says_a_job_waits_on_a_command() {
     });
 
     assert!(waiting, "a Job waiting on a command waits on a person");
-    let after = Queries::list_jobs(&fleet).await.expect("a board");
+    let after = Queries::list_jobs(&fleet, None).await.expect("a board");
     assert!(
         after.jobs.iter().all(|row| !row.asking),
         "answered, so no longer"

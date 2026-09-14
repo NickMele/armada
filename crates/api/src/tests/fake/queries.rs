@@ -70,7 +70,7 @@ impl FakeDaemon {
 
 impl FakeDaemon {
     /// The fake's own rows, kept where their status is one of `wanted`.
-    fn narrowed(&self, wanted: &[&str]) -> Result<JobList, Refusal> {
+    fn narrowed(&self, wanted: &[&str], within: Option<&ManifestId>) -> Result<JobList, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
@@ -79,9 +79,24 @@ impl FakeDaemon {
             jobs: jobs
                 .iter()
                 .filter(|job| wanted.contains(&job.status.as_wire()))
+                .filter(|job| within.is_none_or(|id| &job.owner_manifest_id == id))
                 .cloned()
                 .collect(),
             unreadable: self.unreadable.lock().expect("not poisoned").clone(),
+        })
+    }
+}
+
+impl FakeDaemon {
+    /// Whether a Job the fake holds belongs to `within`; everything does where
+    /// none is named.
+    fn owns(&self, within: Option<&ManifestId>, job_id: &JobId) -> bool {
+        within.is_none_or(|named| {
+            self.jobs
+                .lock()
+                .expect("not poisoned")
+                .iter()
+                .any(|job| &job.id == job_id && &job.owner_manifest_id == named)
         })
     }
 }
@@ -91,69 +106,119 @@ impl Queries for FakeDaemon {
     /// daemon asks the store; this asks the list, which is the same three
     /// answers and lets a route test drive a handle through the extractor
     /// without a store behind it.
-    async fn resolve_job(&self, named: String) -> Result<Resolved, Refusal> {
+    async fn resolve_job(
+        &self,
+        named: String,
+        within: Option<ManifestId>,
+    ) -> Result<Resolved, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
-        let found = jobs.iter().find(|job| {
-            job.id.as_str() == named
-                || job.handle == named
-                || job.handle.split('-').next() == Some(named.as_str())
-        });
+        let found = jobs
+            .iter()
+            .filter(|job| {
+                within
+                    .as_ref()
+                    .is_none_or(|id| &job.owner_manifest_id == id)
+            })
+            .find(|job| {
+                job.id.as_str() == named
+                    || job.handle == named
+                    || job.handle.split('-').next() == Some(named.as_str())
+            });
         match found {
             Some(job) => Ok(Resolved::of(job.id.clone(), job.handle.clone())),
             None => Err(self.no_such_job(&JobId::carried(named))),
         }
     }
 
-    async fn list_jobs(&self) -> Result<JobList, Refusal> {
+    async fn list_jobs(&self, manifest_id: Option<ManifestId>) -> Result<JobList, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
         Ok(JobList {
-            jobs: self.jobs.lock().expect("not poisoned").clone(),
+            jobs: self
+                .jobs
+                .lock()
+                .expect("not poisoned")
+                .iter()
+                .filter(|job| {
+                    manifest_id
+                        .as_ref()
+                        .is_none_or(|id| &job.owner_manifest_id == id)
+                })
+                .cloned()
+                .collect(),
             unreadable: self.unreadable.lock().expect("not poisoned").clone(),
         })
     }
 
-    /// The one Manifest the fake holds, which is what every answer is inside.
-    async fn scope(&self) -> Result<ManifestId, Refusal> {
-        Ok(shapes::manifests()[0].id.clone())
+    /// The Manifest named, where the fake holds it; the first where none was.
+    async fn scope(&self, named: Option<ManifestId>) -> Result<ManifestId, Refusal> {
+        let held = shapes::manifests();
+        match named {
+            None => Ok(held[0].id.clone()),
+            Some(named) if held.iter().any(|one| one.id == named) => Ok(named),
+            Some(named) => Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.no_such_manifest",
+                format!("this Fleet serves no Manifest `{}`", named.as_str()),
+                run_id(),
+            ))),
+        }
     }
 
     /// **The narrowings are the real rule applied to the fake's own rows.** A
     /// fixed list here would let a route pass while the predicate behind it
     /// said something else.
-    async fn list_job_board(&self) -> Result<JobList, Refusal> {
-        self.narrowed(&["awaiting_approval", "queued"])
+    async fn list_job_board(&self, manifest_id: Option<ManifestId>) -> Result<JobList, Refusal> {
+        self.narrowed(&["awaiting_approval", "queued"], manifest_id.as_ref())
     }
 
-    async fn list_reviews(&self) -> Result<JobList, Refusal> {
-        self.narrowed(&["awaiting_review", "awaiting_attestation"])
+    async fn list_reviews(&self, manifest_id: Option<ManifestId>) -> Result<JobList, Refusal> {
+        self.narrowed(
+            &["awaiting_review", "awaiting_attestation"],
+            manifest_id.as_ref(),
+        )
     }
 
-    async fn get_activity_feed(&self) -> Result<JobList, Refusal> {
-        self.narrowed(&[
-            "completed_success",
-            "completed_failed",
-            "killed",
-            "rejected",
-            "superseded",
-        ])
+    async fn get_activity_feed(&self, manifest_id: Option<ManifestId>) -> Result<JobList, Refusal> {
+        self.narrowed(
+            &[
+                "completed_success",
+                "completed_failed",
+                "killed",
+                "rejected",
+                "superseded",
+            ],
+            manifest_id.as_ref(),
+        )
     }
 
-    async fn list_alerts(&self) -> Result<AlertList, Refusal> {
+    async fn list_alerts(&self, _manifest_id: Option<ManifestId>) -> Result<AlertList, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
         Ok(shapes::alerts())
     }
 
-    async fn list_drones(&self) -> Result<DroneList, Refusal> {
+    async fn list_drones(&self, manifest_id: Option<ManifestId>) -> Result<DroneList, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
         Ok(DroneList {
-            drones: vec![shapes::drone()],
+            drones: vec![shapes::drone()]
+                .into_iter()
+                .filter(|drone| self.owns(manifest_id.as_ref(), &drone.job_id))
+                .collect(),
         })
+    }
+
+    async fn owned_jobs(&self, manifest_id: ManifestId) -> Result<Vec<JobId>, Refusal> {
+        let manifest_id = self.scope(Some(manifest_id)).await?;
+        let jobs = self.jobs.lock().expect("not poisoned");
+        Ok(jobs
+            .iter()
+            .filter(|job| job.owner_manifest_id == manifest_id)
+            .map(|job| job.id.clone())
+            .collect())
     }
 
     /// **The refusal is what matters**: an id naming no live Drone is a 404,
@@ -519,9 +584,16 @@ impl Queries for FakeDaemon {
 
     /// **The fake holds no server**, so the list is empty and every id names
     /// nothing. What holding one means is `fleet::servers`', tested there.
-    async fn list_servers(&self) -> Result<ipc::ServerList, Refusal> {
+    async fn list_servers(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> Result<ipc::ServerList, Refusal> {
+        let servers = self.servers.lock().expect("not poisoned").clone();
         Ok(ipc::ServerList {
-            servers: Vec::new(),
+            servers: servers
+                .into_iter()
+                .filter(|one| manifest_id.is_none() || one.manifest_id == manifest_id)
+                .collect(),
         })
     }
 
@@ -604,9 +676,16 @@ impl Queries for FakeDaemon {
         Ok(shapes::models())
     }
 
-    async fn list_worktrees(&self) -> Result<WorktreesHeld, Refusal> {
+    async fn list_worktrees(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> Result<WorktreesHeld, Refusal> {
+        let held = self.held.lock().expect("not poisoned").clone();
         Ok(WorktreesHeld {
-            worktrees: self.held.lock().expect("not poisoned").clone(),
+            worktrees: held
+                .into_iter()
+                .filter(|one| self.owns(manifest_id.as_ref(), &one.job_id))
+                .collect(),
         })
     }
 

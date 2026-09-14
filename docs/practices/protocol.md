@@ -894,6 +894,10 @@ cannot work.
 
 `JobConfidence.followed`, additive: each For context finding a person turned into a Job queued behind this one, by its id, or into an issue, by its address (#906). Two commands: `queue_after_finding` takes the finding and proposes a Job created waiting on this one, and `file_finding_issue` takes the finding with the title and body a person confirmed and files it on the forge. **Neither posts anything on the pull request.**
 
+## Protocol 13.37: the agent door answers about the repository a session stands in
+
+`?manifest_id=`, optional and additive, on `list_jobs`, `list_job_board`, `list_reviews`, `get_activity_feed`, `list_alerts`, `list_drones`, `list_worktrees`, `list_servers` and `get_events_since`: absent is every repository, as before, so Bridge's All view is unchanged (#987). A named `get_events_since` counts events about that Manifest, about a Job it owns, and those naming neither, which are the machine's. `armada mcp` names the Manifest it walked to on every call to `/agent/mcp`, and the door names it on each of those routes and on the Manifest reads. Through the door, a `:job_id` another Manifest owns is refused as `fleet.job_in_another_repository`, a call naming another Manifest is refused, and `propose_job` takes its owner from the scope. Bridge's own routes are unscoped.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

@@ -56,6 +56,12 @@ pub enum ResolveJobError {
     NoManifest {
         named: String,
     },
+    /// A Job that exists and belongs to another repository than the one the
+    /// caller is scoped to. Resolved to nothing for that caller, on purpose.
+    ElsewhereOwned {
+        named: String,
+        within: String,
+    },
 }
 
 impl core::fmt::Display for ResolveJobError {
@@ -67,6 +73,11 @@ impl core::fmt::Display for ResolveJobError {
                 out,
                 "`{named}` counts within a Manifest and none was given, so it names \
                  no one Job"
+            ),
+            ResolveJobError::ElsewhereOwned { named, within } => write!(
+                out,
+                "`{named}` belongs to another repository, and this session is answered \
+                 only about Manifest `{within}`, the one it stands in"
             ),
         }
     }

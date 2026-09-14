@@ -36,11 +36,16 @@ pub(crate) struct Which {
 pub(crate) struct From {
     #[serde(default)]
     since: u64,
+    #[serde(default)]
+    manifest_id: Option<String>,
 }
 
 /// Every Drone Fleet holds a slot for.
-pub(crate) async fn list_drones<D: Queries>(State(served): State<Served<D>>) -> Response {
-    match served.daemon().list_drones().await {
+pub(crate) async fn list_drones<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().list_drones(scope.manifest()).await {
         Ok(drones) => answer(StatusCode::OK, &drones, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -107,8 +112,27 @@ pub(crate) async fn get_manifest<D: Queries>(
 /// that has lost rows says how many rather than failing.
 pub(crate) async fn get_events_since<D: Queries>(
     State(served): State<Served<D>>,
-    Query(From { since }): Query<From>,
+    Query(From { since, manifest_id }): Query<From>,
 ) -> Response {
-    let counted = served.events().since(Cursor::at(since));
+    let Some(manifest_id) = manifest_id else {
+        let counted = served.events().since(Cursor::at(since));
+        return answer(StatusCode::OK, &counted, served.run_id());
+    };
+    // Named, it is one repository's window; a Manifest not served is refused.
+    let owned = match served
+        .daemon()
+        .owned_jobs(ManifestId::carried(manifest_id.clone()))
+        .await
+    {
+        Ok(owned) => owned.iter().map(|id| id.as_str().to_string()).collect(),
+        Err(refusal) => return refused(refusal),
+    };
+    let within = crate::stream::Within {
+        manifest_id: &manifest_id,
+        owned: &owned,
+    };
+    let counted = served
+        .events()
+        .since_within(Cursor::at(since), Some(&within));
     answer(StatusCode::OK, &counted, served.run_id())
 }

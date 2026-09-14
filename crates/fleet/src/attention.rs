@@ -7,7 +7,7 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::Refusal;
 use core_model::{Job, JobStatus};
-use ipc::{Alert, AlertList, JobList, JobSummary};
+use ipc::{Alert, AlertList, JobList, JobSummary, ManifestId};
 use store::Moved;
 
 use crate::adrift::Adrift;
@@ -55,13 +55,13 @@ where
     W::Error: std::error::Error + Send + Sync + 'static,
 {
     /// `list_job_board` — the open queue.
-    pub(crate) async fn job_board(&self) -> Result<JobList, Refusal> {
-        self.selected(not_yet_started, false).await
+    pub(crate) async fn job_board(&self, within: Option<&ManifestId>) -> Result<JobList, Refusal> {
+        self.selected(not_yet_started, false, within).await
     }
 
     /// `list_reviews` — what is waiting to be signed off.
-    pub(crate) async fn reviews(&self) -> Result<JobList, Refusal> {
-        self.selected(awaiting_sign_off, false).await
+    pub(crate) async fn reviews(&self, within: Option<&ManifestId>) -> Result<JobList, Refusal> {
+        self.selected(awaiting_sign_off, false, within).await
     }
 
     /// `get_activity_feed` — what is over, newest first.
@@ -69,8 +69,12 @@ where
     /// **Terminal by the registry's own column**, never by a list of status
     /// names kept here: a status added to `job-statuses.toml` joins this answer
     /// with nothing in this workspace edited.
-    pub(crate) async fn activity_feed(&self) -> Result<JobList, Refusal> {
-        self.selected(|job| job.status().is_terminal(), true).await
+    pub(crate) async fn activity_feed(
+        &self,
+        within: Option<&ManifestId>,
+    ) -> Result<JobList, Refusal> {
+        self.selected(|job| job.status().is_terminal(), true, within)
+            .await
     }
 
     /// `list_alerts` — what is waiting on a person, in two buckets.
@@ -78,10 +82,11 @@ where
     /// **One board read for both.** Two calls would be two readings of one
     /// board at two instants, which is how a Job comes to be in neither bucket
     /// or in both.
-    pub(crate) async fn alerts(&self) -> Result<AlertList, Refusal> {
+    pub(crate) async fn alerts(&self, within: Option<&ManifestId>) -> Result<AlertList, Refusal> {
+        let owned = self.owned_by(within)?;
         let (loaded, _) = self.every_job().await.map_err(|why| self.refusal(why))?;
         let (mut blocked, mut waiting) = (Vec::new(), Vec::new());
-        for job in &loaded.jobs {
+        for job in loaded.jobs.iter().filter(|job| owned(job)) {
             let stopped = stopped_mid_flight(job);
             let resting = awaiting_sign_off(job) || job.status() == JobStatus::AwaitingApproval;
             if !stopped && !resting {
@@ -97,6 +102,23 @@ where
             }
         }
         Ok(AlertList { blocked, waiting })
+    }
+
+    /// Which Jobs a list narrowed to `within` keeps. **A Manifest Fleet does
+    /// not serve is refused**, never answered as an empty list.
+    pub(crate) fn owned_by(
+        &self,
+        within: Option<&ManifestId>,
+    ) -> Result<impl Fn(&Job) -> bool, Refusal> {
+        let wanted = match within {
+            None => None,
+            Some(named) => Some(self.served_named(Some(named))?.manifest().id().clone()),
+        };
+        Ok(move |job: &Job| {
+            wanted
+                .as_ref()
+                .is_none_or(|id| job.owner_manifest_id() == id)
+        })
     }
 
     /// One row, with when the Job stopped where it is.
@@ -134,7 +156,9 @@ where
         &self,
         keep: impl Fn(&Job) -> bool,
         newest_first: bool,
+        within: Option<&ManifestId>,
     ) -> Result<JobList, Refusal> {
+        let owned = self.owned_by(within)?;
         let (loaded, unreadable) = self.every_job().await.map_err(|why| self.refusal(why))?;
         let landed = self
             .store()
@@ -143,7 +167,7 @@ where
             .landed_by_job()
             .map_err(|why| self.refusal(Adrift::Reading(why)))?;
         let mut jobs = Vec::new();
-        for job in loaded.jobs.iter().filter(|job| keep(job)) {
+        for job in loaded.jobs.iter().filter(|job| owned(job) && keep(job)) {
             let mut summary = self.summarised(job).await?;
             summary.landed = landed.get(job.id()).and_then(crate::noticing::settled);
             jobs.push(summary);

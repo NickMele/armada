@@ -66,6 +66,8 @@ pub struct FakeDaemon {
     /// has a repository to read a checkout out of — the derivation is Fleet's
     /// and the route only carries it.
     pub held: Mutex<Vec<ipc::WorktreeHeld>>,
+    /// What `list_servers` answers with, narrowed by Manifest. Set by a test.
+    pub servers: Mutex<Vec<ipc::ServerState>>,
     /// When set, every call answers with a fault. The stream closing on a
     /// daemon that cannot answer is a behaviour worth a test.
     pub mute: Mutex<bool>,
@@ -112,6 +114,7 @@ impl FakeDaemon {
             checked: AtomicU64::new(0),
             reports: Mutex::new(Vec::new()),
             held: Mutex::new(Vec::new()),
+            servers: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
             live: Mutex::new(None),
             limits: Mutex::new(shapes::limits()),
@@ -211,6 +214,14 @@ impl FakeDaemon {
 /// A Job already running, so the Drone kill has something to kill.
 pub fn running(daemon: &FakeDaemon, id: &str) {
     at(daemon, id, "running");
+}
+
+/// A running Job another Manifest owns, for a case about scope.
+pub fn owned_by(daemon: &FakeDaemon, id: &str, handle: &str, manifest_id: &str) {
+    let mut job = shapes::job_at(id, "running");
+    job.handle = handle.to_string();
+    job.owner_manifest_id = ipc::ManifestId::carried(manifest_id);
+    daemon.jobs.lock().expect("not poisoned").push(job);
 }
 
 /// A Job put straight into the record at any status the registry has, without

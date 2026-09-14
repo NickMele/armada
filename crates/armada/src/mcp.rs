@@ -8,8 +8,8 @@
 //! Three things decide whether a session is answered — the runtime file, the
 //! repository the caller stands in, and the Manifest Fleet says it serves. The
 //! second is a walk up from this process's own working directory, ending at a
-//! repository root or the home directory; none of the three is a request field,
-//! which is what keeps a Job id off every Drone tool.
+//! repository root or the home directory, and every call names what it found
+//! as `?manifest_id=`. No Job id is a request field on any tool.
 //!
 //! **None of it is authentication.** The listener is loopback with nothing in
 //! front of it, so this selects a Manifest rather than granting one.
@@ -55,11 +55,11 @@ const PROGRAM: &str = "armada";
 /// below — including "Armada is not running" — is an MCP session that opened.
 pub fn speak() -> ExitCode {
     match reached() {
-        Ok((fleet, adopted)) => {
+        Ok((fleet, door, adopted)) => {
             if let Some(said) = &adopted {
                 eprintln!("armada mcp: {said}");
             }
-            carried(&fleet, adopted.as_deref())
+            carried(&fleet, &door, adopted.as_deref())
         }
         Err(why) => {
             // Said on stderr as well, once: the person who started the session
@@ -70,9 +70,9 @@ pub fn speak() -> ExitCode {
     }
 }
 
-/// The Fleet this session may talk to and what the walk adopted, or the
-/// sentence saying why there is not one.
-fn reached() -> Result<(Loopback, Option<String>), String> {
+/// The Fleet this session may talk to, the door path naming its Manifest, and
+/// what the walk adopted — or the sentence saying why there is not one.
+fn reached() -> Result<(Loopback, String, Option<String>), String> {
     let cwd = std::env::current_dir()
         .map_err(|why| format!("the working directory could not be read: {why}"))?;
     let standing = standing_in(&cwd)?;
@@ -87,7 +87,7 @@ fn reached() -> Result<(Loopback, Option<String>), String> {
         None => why,
     })?;
     answering(&fleet)?;
-    Ok((fleet, adopted))
+    Ok((fleet, api::door_within(standing.id()), adopted))
 }
 
 /// The Manifest a session resolved to, and where it was found.
@@ -340,9 +340,9 @@ const PING: &str = r#"{"jsonrpc":"2.0","id":0,"method":"ping"}"#;
 ///
 /// `adopted` is the one thing this adds to what Fleet said: a session resolved
 /// upward from a subdirectory says so at its handshake, and nowhere else.
-fn carried(fleet: &Loopback, adopted: Option<&str>) -> ExitCode {
+fn carried(fleet: &Loopback, door: &str, adopted: Option<&str>) -> ExitCode {
     each_message(|message| {
-        match fleet.post(api::DOOR_PATH, message) {
+        match fleet.post(door, message) {
             // A notification: acknowledged with 202 and no body, because
             // answering one is what JSON-RPC forbids.
             Ok(answer) if answer.status == 202 => None,

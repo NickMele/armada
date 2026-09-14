@@ -52,6 +52,7 @@ mod delivery;
 mod detach;
 mod detail;
 mod dismissing;
+mod door_per_repository;
 mod drifting;
 mod drone;
 mod dry_run;

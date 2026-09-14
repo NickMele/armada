@@ -35,6 +35,8 @@ use crate::proposing::NotProposed;
 /// The set is closed by collection rather than by authorship — a central
 /// registry would put every code far from the failure it names.
 const NO_SUCH_JOB: &str = "fleet.no_such_job";
+/// A Job another repository owns, named by a caller scoped to one. A 404.
+pub(crate) const JOB_ELSEWHERE: &str = "fleet.job_in_another_repository";
 const ILLEGAL_MOVE: &str = "fleet.illegal_move";
 const FAULT: &str = "fleet.fault";
 /// A Job whose repository this Fleet does not serve. A 422.
@@ -257,6 +259,9 @@ where
             // database that would not answer is the fault it always was.
             Adrift::Unresolvable(ResolveJobError::Database(_)) => {
                 Refusal::Fault(WireError::raised(FAULT, said, self.run_id()))
+            }
+            Adrift::Unresolvable(ResolveJobError::ElsewhereOwned { .. }) => {
+                Refusal::NoSuchJob(WireError::raised(JOB_ELSEWHERE, said, self.run_id()))
             }
             Adrift::Unresolvable(_) => {
                 Refusal::NoSuchJob(WireError::raised(NO_SUCH_JOB, said, self.run_id()))
