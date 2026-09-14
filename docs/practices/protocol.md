@@ -910,6 +910,10 @@ cannot work.
 
 `CheckRun.reused_from_dry_run`, additive: when a Check's result came from the Drone's own `run_checks` instead of the gate running it again, rather than absent for a Check the gate ran itself (#1014).
 
+## Protocol 13.44: Helm puts an approval card in front of the person
+
+`ask_person_to_approve`, additive: a new command, `POST /jobs/:job_id/ask_person_to_approve`, answering `AskedApproval { job_id, handle }`. `agent_access = "Drafts only"`, the door offers it to a Helm session alone (#1041). It writes nothing — `Resolved` already turns a Job id that names nothing into the ordinary 404, and past that the route hands the id and handle back untouched. `approve_dispatch` stays `agent_access = "No"` for every agent; this only names which Job `HelmThread` draws a card for, and the person's own press on it is still what releases the Job.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

@@ -252,6 +252,12 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/examine",
     },
+    // `#1041`. Helm's own approval-card ask. Writes nothing; see the operation.
+    Route {
+        operation: "ask_person_to_approve",
+        method: "POST",
+        path: "/jobs/:job_id/ask_person_to_approve",
+    },
     // One call's arguments, and a member read rather than an act — the same
     // shape as `get_job` under `/jobs`, which is why the last segment is the id
     // and not the key. The socket sends the line and the size; this is what a

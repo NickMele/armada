@@ -9,7 +9,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::Router;
 use http_body_util::BodyExt;
-use ipc::{JobList, JobSummary, StreamMessage, WireError};
+use ipc::{JobDetail, JobList, JobSummary, StreamMessage, WireError};
 use tower::ServiceExt;
 
 use crate::tests::fake::{at, running, FakeDaemon};
@@ -345,6 +345,31 @@ async fn what_a_job_holds_is_read_and_examined_under_the_job() {
         let (status, _) = call(&app, method, uri, "").await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{method} {uri}");
     }
+}
+
+/// `#1041`. The route Helm's approval-card ask answers off: the id and handle
+/// back, a 404 on a Job that names nothing, and the Job itself untouched —
+/// still `awaiting_approval`. There is no daemon method behind this route for
+/// a mutation to have gone through.
+#[tokio::test]
+async fn asking_for_approval_answers_the_job_and_moves_nothing() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    at(&daemon, "01ASKED", "awaiting_approval");
+    let app = wired(daemon, events);
+
+    let (status, body) = call(&app, "POST", "/jobs/01ASKED/ask_person_to_approve", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let asked: ipc::AskedApproval = ipc::decode("an ask", &body).expect("an answer");
+    assert_eq!(asked.job_id.as_str(), "01ASKED");
+
+    let (status, _) = call(&app, "POST", "/jobs/01NOSUCH/ask_person_to_approve", "").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Still exactly where it was.
+    let (_, body) = call(&app, "GET", "/jobs/01ASKED", "").await;
+    let job: JobDetail = ipc::decode("the Job", &body).expect("a detail");
+    assert_eq!(job.job.status.as_wire(), "awaiting_approval");
 }
 
 /// **The case that proves the two operations are not one.** A Job at the

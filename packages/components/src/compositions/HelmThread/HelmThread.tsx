@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "../../primitives/Button/Button";
 
 /**
  * Helm's own conversation, under the dock's questions — #944.
@@ -8,6 +9,34 @@ import type { ReactNode } from "react";
  * answers a different question, about a step nobody typed into.
  */
 export type HelmRowActor = "you" | "helm";
+
+/**
+ * What one `ask_person_to_approve` call draws as, within Helm's reply.
+ * `#1041`.
+ *
+ * **Never the model's own words.** `jobHandle`, `workflow` and `stepCount`
+ * come from `BridgeState.jobs` at render time, resolved by whoever builds
+ * this prop — never from anything Helm's tool call said, and never frozen at
+ * the moment Helm asked: a card re-renders `elsewhere` the instant the Board
+ * says the Job moved by any other road. `unknown` is the one exception: a
+ * Job id the caller could not resolve at all, drawn in words rather than a
+ * card missing the facts a card promises.
+ */
+export type HelmApprovalCardState = "ready" | "approved" | "dismissed" | "elsewhere" | "unknown";
+
+export type HelmApprovalCard = {
+  /** Stable across re-renders — the call's own id. */
+  id: string;
+  /** The raw Job id, where the caller could not resolve a handle for it. */
+  jobHandle: string;
+  /** Absent where the workflow is not known — drawn without it rather than blocking the card. */
+  workflow?: string;
+  stepCount?: number;
+  state: HelmApprovalCardState;
+  /** Present only where `state` is `"ready"`. */
+  onApprove?: () => void;
+  onDismiss?: () => void;
+};
 
 /** One line of the thread, already worded — `packages/screens` folds the wire into this. */
 export type HelmThreadRow = {
@@ -20,7 +49,43 @@ export type HelmThreadRow = {
   mono?: boolean;
   /** A trailing caption — the reply's own cost, `$0.02 · 3 turns`. */
   meta?: ReactNode;
+  /** An approval Helm asked for, placed within this reply. */
+  cards?: HelmApprovalCard[];
 };
+
+function ApprovalCard({ jobHandle, workflow, stepCount, state, onApprove, onDismiss }: HelmApprovalCard) {
+  const named = [jobHandle, workflow, stepCount === undefined ? undefined : plural(stepCount)]
+    .filter((part): part is string => part !== undefined)
+    .join(" · ");
+  return (
+    <div className="armada-helm-approval-card" data-state={state}>
+      <p className="armada-helm-approval-card__job">{named}</p>
+      {state === "ready" ? (
+        <div className="armada-helm-approval-card__actions">
+          <Button variant="primary" size="sm" ground="sunken" onClick={onApprove}>
+            Approve
+          </Button>
+          <Button variant="secondary" size="sm" ground="sunken" onClick={onDismiss}>
+            Not now
+          </Button>
+        </div>
+      ) : (
+        <p className="armada-helm-approval-card__state">{STATE_SAID[state]}</p>
+      )}
+    </div>
+  );
+}
+
+const STATE_SAID: Record<Exclude<HelmApprovalCardState, "ready">, string> = {
+  approved: "Approved.",
+  dismissed: "Dismissed.",
+  elsewhere: "No longer awaiting approval.",
+  unknown: "There is no Job with that id.",
+};
+
+function plural(stepCount: number): string {
+  return `${stepCount} ${stepCount === 1 ? "step" : "steps"}`;
+}
 
 export type HelmThreadProps = {
   rows: HelmThreadRow[];
@@ -62,6 +127,9 @@ export function HelmThread({
                   ? row.message.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)
                   : row.message}
               </div>
+              {row.cards === undefined
+                ? null
+                : row.cards.map((card) => <ApprovalCard key={card.id} {...card} />)}
               {row.meta === undefined ? null : <p className="armada-helm-thread__meta">{row.meta}</p>}
             </li>
           ))}

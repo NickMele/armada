@@ -128,6 +128,37 @@ describe("helmRowsOf", () => {
     });
   });
 
+  it("folds an approval ask's called row to the open reply's asks, and leaves every other called row drawing nothing", () => {
+    // The real shape: a session's own tool names arrive prefixed by the MCP
+    // server, `mcp__armada-fleet__...` — never bare. #1041's own defect: a
+    // fold matching the bare name alone drew nothing in the real app.
+    const ask = called("a", "mcp__armada-fleet__ask_person_to_approve", "01JOB9");
+    const other = called("b", "mcp__armada-fleet__get_job", "job_id=12");
+    const reply: HelmThreadItem = {
+      kind: "row",
+      id: "c",
+      turn: { ts: "2026-09-13T10:00:02.000Z", seq: 2, by: "drone", saw: { event: "said", text: "Here is the card." } },
+    };
+    const rows = helmRowsOf([ASKED, other, ask, reply]);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({
+      message: "Here is the card.",
+      asks: [{ id: "a", jobId: "01JOB9" }],
+    });
+  });
+
+  it("opens a reply for an approval ask that arrives with no said text of its own", () => {
+    const rows = helmRowsOf([ASKED, called("a", "mcp__armada-fleet__ask_person_to_approve", "01JOB9"), ENDED]);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ asks: [{ id: "a", jobId: "01JOB9" }] });
+  });
+
+  it("also folds the bare tool name, the inventory's own spelling", () => {
+    const rows = helmRowsOf([ASKED, called("a", "ask_person_to_approve", "01JOB9"), ENDED]);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ asks: [{ id: "a", jobId: "01JOB9" }] });
+  });
+
   it("reads several said turns, with a tool call between them, as one reply", () => {
     const first: HelmThreadItem = {
       kind: "row",

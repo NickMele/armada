@@ -30,6 +30,9 @@ mod alerts;
 /// A form's edits to `armada.yml`, as edits — the half of Journey 9's *Editing*
 /// that changes only the lines it touches.
 mod amending;
+/// What `ask_person_to_approve` answers with. **Nothing moves**, so the Job's
+/// own facts are drawn again at render time and never frozen here.
+mod approval_ask;
 /// How many times a step was worked, and what each run came to. **The record
 /// held it and nothing served it** — see the module.
 mod asking;
@@ -161,6 +164,7 @@ pub use amending::{
     ManifestEdit, ManifestEdited, NamedCheck, NamedCommand, NamedPort, NarrowingDraft, PolicyWords,
     PortDraft,
 };
+pub use approval_ask::AskedApproval;
 pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, WhenRefused};
 pub use attempt::{first_started_at, Move, StepAttempt};
 pub use breakage::{ClaimedBreakage, WaitingOnFix};

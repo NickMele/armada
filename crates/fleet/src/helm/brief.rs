@@ -53,6 +53,13 @@ You may call every tool that reads. Of the tools that act, you may call these \
 and no others:
 ";
 
+const APPROVAL_ASK: &str = "\
+Approving a Job is never yours, whatever you are asked. Call \
+ask_person_to_approve instead, naming the Job, when you are asked to approve \
+one or a Job you drafted has reached the approval gate. It puts a card in \
+front of the person and decides nothing itself; only their own press on it \
+sends the Job on.";
+
 const LEFT_TO_THE_PERSON: &str = "\
 Any other act is the person's, including a tool you have been given that is \
 not listed here. Where one would help, say which and why, and leave it to \
@@ -130,6 +137,8 @@ fn what_you_may_do(authority: Authority) -> String {
                 block.push_str("\n  ");
                 block.push_str(row.operation);
             }
+            block.push_str("\n\n");
+            block.push_str(APPROVAL_ASK);
             block.push_str("\n\n");
             block.push_str(LEFT_TO_THE_PERSON);
             block

@@ -1339,10 +1339,19 @@ predicate, so it cannot name a different set from the one the door enforces.
 multiple. A number here would be a second copy, and the refusal already names
 the ceiling.
 
-**Drafting Jobs is listed.** The door offers a Helm session every `Yes` row and
-the `Drafts only` rows besides — `propose_job` and `propose_from_request`, and
-no other agent's door session sees either. `fleet::helm::may` admits both, so
-the brief lists them the same as any other act it admits.
+**Drafting Jobs, and asking for approval, are listed.** The door offers a Helm
+session every `Yes` row and the `Drafts only` rows besides — `propose_job`,
+`propose_from_request` and `ask_person_to_approve` (`#1041`), and no other
+agent's door session sees any of the three. `fleet::helm::may` admits them
+all, so the brief lists them the same as any other act it admits.
+
+**Approving is never listed, and is named anyway.** `approve_dispatch` stays
+`No` for every agent, so it never reaches the generated list — but a session
+told nothing about approval reads a refusal as a gap to work around. The block
+names `ask_person_to_approve` by hand, once, under `Acting` authority alone:
+call it, naming the Job, when asked to approve one or when a Job the session
+drafted reaches the gate. It puts a card in front of the person and decides
+nothing; only their own press moves the Job.
 
 **The Manifest is named, not quoted:** its id and its folder. Everything else in
 it is for `get_manifest` to answer, which stays current where a copy in the
@@ -1383,6 +1392,14 @@ them with no reason given, reads the instruction as an error to work around.
 │ that act, you may call these and no others:
 │
 │   [one line per tool name fleet::helm::may admits]
+│
+│ Approving a Job is never yours, whatever you are
+│ asked. Call ask_person_to_approve instead, naming
+│ the Job, when you are asked to approve one or a
+│ Job you drafted has reached the approval gate. It
+│ puts a card in front of the person and decides
+│ nothing itself; only their own press on it sends
+│ the Job on.
 │
 │ Any other act is the person's, including a tool
 │ you have been given that is not listed here.
