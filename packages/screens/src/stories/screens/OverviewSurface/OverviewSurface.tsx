@@ -1,4 +1,5 @@
 import { ClipboardList, HardDrive } from "lucide-react";
+import type { JobSummary } from "@armada/protocol";
 import { DockQuestions, TheShell } from "@armada/components";
 import { OverviewListsFrom } from "../OverviewLists/OverviewLists";
 import { OverviewTilesFrom } from "../OverviewTiles/OverviewTiles";
@@ -12,8 +13,12 @@ const noop = () => {};
  * **Not routed yet, so this composes what the app renders rather than what mounts it.** The rail
  * roster and the head are stand-ins — #921 is what puts Overview in the rail — and the dock's
  * questions are `DockQuestions`'s own fixture, not this surface's arithmetic.
+ *
+ * `jobs` overrides `OverviewListsFrom`'s own fixture, where a story needs a specific roster in the
+ * shell's own width — the rail and Helm's dock beside it, which the lists' own story stands alone
+ * without.
  */
-export function OverviewSurfaceFrom() {
+export function OverviewSurfaceFrom({ jobs }: { jobs?: readonly JobSummary[] } = {}) {
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <TheShell
@@ -61,7 +66,7 @@ export function OverviewSurfaceFrom() {
         <div className="armada-screen__mounted">
           <div className="armada-screen__overview">
             <OverviewTilesFrom />
-            <OverviewListsFrom />
+            {jobs === undefined ? <OverviewListsFrom /> : <OverviewListsFrom jobs={jobs} />}
           </div>
         </div>
       </TheShell>

@@ -67,3 +67,56 @@
     white-space: nowrap;
   }
 }
+
+/* The card's fields are fixed-floor tracks — Progress alone is 188px — so a
+   box narrower than their sum overflows rather than shrinks, and the frame
+   hides that overflow (#984's own scrolling rule). The action sits past the
+   last track, so it is the first thing to run off the edge and the last
+   thing anyone can act on — measured on Overview's own panel beside Helm's
+   open dock at 1284px, four named facts wide, action gone.
+
+   **Two reflows were tried first and both broke the Board.** Flex-wrap
+   measures against the row's full allocated width, not the frame's narrower
+   box, so it never wrapped where it needed to; a second grid row on the row
+   itself needed a taller row-track than the frame's own auto-sizing gave it;
+   `position: sticky` needs an ancestor with real overflow to clamp against
+   and Overview's own panel frame draws `overflow: visible` on purpose, so it
+   had none to find. All three changed how tall the row is or where the
+   action sits without changing the one thing actually too wide: the tracks
+   themselves. Every measurement below is against `Screens/Board` at 1284px
+   and Overview's own panel beside Helm's open dock, not assumed.
+
+   **Shrink the tracks instead, from the one ancestor allowed to.** A
+   container cannot restyle itself, so `ActiveJobsList.css` puts a second
+   container on `.armada-active-jobs`, the frame's own parent, and this reads
+   that one to override the frame's `--armada-track-*` custom properties —
+   legal, because the frame is that container's descendant and not the
+   container itself. Progress gives up its step name's own track and keeps
+   only the bar; Run time and the fourth fact (Repository or Tasks, or both)
+   give up their tracks entirely. The matching text is hidden alongside each,
+   because a floor a column no longer reserves is not one a value should
+   still try to sit in.
+
+   `:not(:nth-child(-n+2))` on the field selector is what keeps this off
+   Workflow and Progress themselves — the two facts nearer the front of the
+   run than Run time and past it, which the row's own drawn order already
+   settles once for every view.
+
+   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   900px clears the row's own floor sum, shrunk, with room for Overview's own panel beside Helm's dock — docs/contracts/design-system.md */
+@container (max-width: 900px) {
+  .armada-job-row-list:not([data-view="table"]) {
+    --armada-track-progress: var(--armada-track-bar);
+    --armada-track-time: 0px;
+    --armada-track-provenance: 0px;
+  }
+
+  .armada-job-row-list:not([data-view="table"]) > .armada-job-row > .armada-job-row__body .armada-row-step {
+    display: none;
+  }
+
+  .armada-job-row-list:not([data-view="table"]) > .armada-job-row
+    .armada-job-row__field:nth-last-child(-n + 3):not(:nth-child(-n + 2)) {
+    display: none;
+  }
+}

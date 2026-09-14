@@ -94,15 +94,16 @@ export type ActiveJobsListProps = {
   label?: string;
   /**
    * Which arrangement every row is drawn in. `card` stacks each row's headline
-   * over its facts; `table` puts them on one line beneath `columns`; `panel`
-   * is Overview's own row — one line, no header, the handle under the title.
+   * over its facts; `table` puts them on one line beneath `columns`.
+   * Overview's own lists draw `card`, the same row the Board does, not a
+   * third arrangement of their own — see `Job row (stacked)`'s own note.
    *
    * **The list decides, never the row.** A list holding rows in two
    * arrangements is not a thing anybody wants and the tracks could not be
    * shared across it, so the view is set once here and the rows read it off
    * the frame.
    */
-  view?: "card" | "table" | "panel";
+  view?: "card" | "table";
   /**
    * What each column is called, in order, drawn once above the rows. Table
    * view only; a card labels its facts by where they sit in a run.

@@ -5,6 +5,11 @@
    in Armada; a list that fills the panel is not a card, it is the panel's
    middle. See the frame's own rule below. */
 .armada-active-jobs {
+  /* An outer container, so a narrow-width rule can shrink the frame's own
+     card-row tracks (`--armada-track-*`) from here — the frame cannot read
+     its own container query to restyle itself, and this is its parent.
+     `JobRowStacked.narrow.css` is what queries it. */
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -192,16 +197,8 @@
   grid-template-columns: var(--armada-job-table-tracks-3);
 }
 
-.armada-active-jobs__frame[data-columns="3"]:not([data-view="table"], [data-view="panel"]) {
+.armada-active-jobs__frame[data-columns="3"]:not([data-view="table"]) {
   grid-template-columns: var(--armada-job-row-tracks-3);
-}
-
-/* `panel` reserves no fact tracks at all — a row's own facts are flex chips
-   now, sized to their content rather than to a floor the Board's full-width
-   pane can afford and a narrower one cannot (Overview's own finding). One
-   column, the frame's real width, and the row does the rest. */
-.armada-active-jobs__frame[data-view="panel"] {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The column names, once, above the rows. `--bg-sunken` rather than the row's

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { ARMADA, acrossTwo, OverviewListsFrom, STOREFRONT } from "./OverviewLists";
+import { ARMADA, RUNNING_ONE_WITH_A_PLAN, acrossTwo, OverviewListsFrom, STOREFRONT } from "./OverviewLists";
 
 /**
  * Overview's lists, drawn by the app's own `OverviewLists`: Needs you, Running, Queued and Other,
@@ -60,6 +60,23 @@ export const Disconnected: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByText("Needs you")).toBeVisible();
     await expect(canvasElement.querySelectorAll("[data-job-id]").length).toBeGreaterThan(0);
+  },
+};
+
+/**
+ * Two running rows, one with a plan and one without — the owner's own report against this panel.
+ * The row is the Board's own `card` view, so its shared columns line the two up whether or not
+ * either row carries a plan; screenshotted rather than measured here — geometry is what the
+ * screenshot is for.
+ */
+export const PanelRowsAligned: Story = {
+  name: "Panel rows aligned",
+  args: { jobs: RUNNING_ONE_WITH_A_PLAN, repositories: [ARMADA, STOREFRONT] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("img", { name: "0 of 6 tasks" })).toBeVisible();
+    await expect(canvas.getByRole("option", { name: /unanswered permission ask/ })).toBeVisible();
+    await expect(canvas.getByRole("option", { name: /shows "queued"/ })).toBeVisible();
   },
 };
 
