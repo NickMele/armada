@@ -129,12 +129,15 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 })),
             })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
-                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow, one_test, runs_at } => json!({
+                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow, one_test, runs_at, places } => json!({
                     "type": MANIFEST_CHECK,
                     "check": name,
                     // Absent where it runs everywhere, which is how every row
                     // written before the key reads back. #849.
                     "runs_at": (*runs_at != core_model::RunsAt::Everywhere).then(|| runs_at.as_wire()),
+                    // Absent where it takes one place, which is how every row
+                    // written before the key existed reads back. #1102.
+                    "places": (places.get() != 1).then(|| places.get()),
                     // Null where the Check declares no `one_test`, which reads back as none. #999.
                     "one_test": one_test,
                     "run": run,
@@ -655,6 +658,15 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
                     core_model::RunsAt::from_wire(&written)
                         .ok_or_else(|| format!("`runs_at` holds `{written}`"))?
                 }
+            },
+            // Absent and null both read as one, for `runs_at`'s reason. #1102.
+            places: match entry.get("places") {
+                None | Some(Value::Null) => std::num::NonZeroU32::MIN,
+                Some(_) => field(entry, "places")?
+                    .as_u64()
+                    .and_then(|n| u32::try_from(n).ok())
+                    .and_then(std::num::NonZeroU32::new)
+                    .ok_or_else(|| "`places` is not a count of one or more".to_string())?,
             },
         }),
         DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),
