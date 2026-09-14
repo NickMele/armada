@@ -33,6 +33,7 @@ import { AskRepository } from "@armada/screens";
 import { FleetSettingsSheet } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Composing } from "./Composing";
+import { Overview } from "./Overview";
 import { Worktrees } from "@armada/screens";
 import { Manifest, checkoutRunnablesOf, useManifestEditing, useManifestForm } from "@armada/screens";
 import { Setup, useSetup } from "@armada/screens";
@@ -101,6 +102,7 @@ import {
   watchRunSheet,
   watchCheckoutRunSheet,
   watchManifestDrift,
+  watchOverview,
 } from "./commands";
 import { useWhereOpen } from "./where-open";
 import { Palette, useCommandPalette } from "@armada/shell";
@@ -164,6 +166,10 @@ export function App() {
   // already holds, which is what lets a person run this project's lint with
   // the Board empty.
   const [manifesting, setManifesting] = useState(false);
+  // Whether Overview is open. **True from the first render**: Overview is
+  // where Bridge opens (#921), so the Board is what a press away from it
+  // reaches rather than the surface a fresh window starts on.
+  const [overviewing, setOverviewing] = useState(true);
   // The Check or Command the palette picked, or `null`. **It selects rather
   // than runs**, which is what Journey 9's own table says the palette does.
   const [picked, setPicked] = useState<string | null>(null);
@@ -221,7 +227,7 @@ export function App() {
   useWatching(openJob);
 
   // `⌘1`…`⌘n`, the binding the contract publishes and nothing answered until
-  // the Manifest surface needed `⌘4`. One roster, read by the rail, the
+  // the Manifest surface needed `⌘5`. One roster, read by the rail, the
   // palette and now the keyboard.
   useSurfaceKeys(goTo);
 
@@ -239,6 +245,12 @@ export function App() {
   useEffect(() => {
     watchManifestDrift(manifesting);
   }, [manifesting]);
+
+  // Overview's own free reads — Fleet's health and every repository's drift
+  // in scope — held open only while its tiles are on screen.
+  useEffect(() => {
+    watchOverview(overviewing);
+  }, [overviewing]);
 
   // The Manifest file and an edit of it. **Held here rather than by the
   // screen**, which unmounts whenever the rail moves: an unsaved correction the
@@ -401,6 +413,7 @@ export function App() {
     setAuditing(false);
     setClearing(surfaceId === SURFACE.worktrees);
     setManifesting(surfaceId === SURFACE.manifest);
+    setOverviewing(surfaceId === SURFACE.overview);
     if (surfaceId !== SURFACE.manifest) setPicked(null);
     if (surfaceId !== SURFACE.manifest) setSettingUp(false);
   }
@@ -442,6 +455,7 @@ export function App() {
     onOpenLimits: () => setFleetSettingsOpen(true),
     // Which Manifest view is up, so the head describes the one on screen.
     manifest: manifesting ? editing.view : false,
+    overviewing,
     onRefresh: () => void commands.refresh(),
     jobs: boardJobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
@@ -473,7 +487,13 @@ export function App() {
         // other than the Board that draws, so everything else — a Job, the
         // composer, the reports — is the Board with something over it.
         showing={
-          clearing ? SURFACE.worktrees : manifesting ? SURFACE.manifest : SURFACE.board
+          clearing
+            ? SURFACE.worktrees
+            : manifesting
+              ? SURFACE.manifest
+              : overviewing
+                ? SURFACE.overview
+                : SURFACE.board
         }
         onSurface={goTo}
         onOpenLimits={() => setFleetSettingsOpen(true)}
@@ -727,6 +747,24 @@ export function App() {
               onPick={pick}
               onOpen={setOpenJob}
               onClose={() => setComposing(false)}
+              onCopied={setCopied}
+            />
+          ) : overviewing ? (
+            <Overview
+              state={state}
+              now={now}
+              live={live}
+              repositories={repositories}
+              disconnected={live ? null : statement.headline}
+              selected={openJob}
+              onOpen={setOpenJob}
+              onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
+              onOpenFleetSettings={() => setFleetSettingsOpen(true)}
+              onOpenQueued={() => {
+                goTo(SURFACE.board);
+                setLanding("queued");
+              }}
+              onOpenManifest={() => goTo(SURFACE.manifest)}
               onCopied={setCopied}
             />
           ) : (

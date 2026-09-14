@@ -19,7 +19,7 @@ import {
 } from "./Manifest";
 
 /**
- * Bridge's Manifest surface, at `⌘4` — Journey 9's *Running one*, with no Job
+ * Bridge's Manifest surface, at `⌘5` — Journey 9's *Running one*, with no Job
  * in existence.
  *
  * **Drawn from this repository's own `armada.yml`**, in the shape

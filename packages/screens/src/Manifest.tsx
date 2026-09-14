@@ -12,7 +12,7 @@
 // ad-hoc path was Verify's dry-run, which runs all of them.
 //
 // The rail has carried a Manifest row since it shipped, which is what gives
-// this `⌘4`. Until now it reached nothing.
+// this `⌘5`. Until now it reached nothing.
 //
 // # Two views, and the toggle between them is named by the file's path
 //

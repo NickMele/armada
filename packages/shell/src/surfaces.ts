@@ -6,9 +6,9 @@
 // disagrees with itself is worse than one that is missing.
 //
 // **The digit is computed from the rail order, never typed.** The contract
-// binds `⌘1–⌘5` to Bridge surfaces *in rail order*, so a digit is a place in
-// the rail and nothing else. A surface added at the end takes the next digit by
-// arithmetic rather than by somebody remembering to renumber.
+// binds `⌘1–⌘6` to Bridge surfaces *in rail order*, so a digit is a place in
+// the rail and nothing else. A surface added at the end takes the next digit
+// by arithmetic — Overview is the one exception, joining first instead (#921).
 //
 // **The order below is transcribed by hand, and it is the only transcription.**
 // Nothing generated carries it: `actions.toml` holds the whole rail as one
@@ -17,24 +17,32 @@
 // `docs/concepts/bridge.md`, and every digit falls out of it.
 
 import { useEffect, useRef } from "react";
-import { ClipboardList, FileCog, HardDrive } from "lucide-react";
+import { ClipboardList, FileCog, HardDrive, LayoutDashboard } from "lucide-react";
 
 import type { PaletteSurface } from "./Palette";
 
 /**
  * Bridge's surfaces in rail order. A surface's place in here is its digit.
  *
- * Three of these draw no row yet and they keep their place anyway. A rail that
- * renumbered as surfaces were built would move a learned key every time — which
- * is the thing moving Helm to `⌘6` was allowed to do exactly once, with the
- * reason recorded in `actions.toml` beside the binding.
+ * **Overview goes first, not last.** Every other surface here joined at the
+ * end of the rail and took the next digit; Overview is where Bridge opens
+ * (#921), so it took `⌘1` and every other digit moved down one instead —
+ * the one deliberate exception to "a surface joins at the end", decided with
+ * the owner on 13 Sep.
+ *
+ * Two of the rest draw no row yet and they keep their place anyway. A rail
+ * that renumbered as surfaces were built would move a learned key every time
+ * — which is the thing moving Helm to `⌘6`, and then off the rail entirely
+ * for `⌘J`, was allowed to do, with the reason recorded in `actions.toml`
+ * beside the binding.
  */
-const RAIL = ["board", "alerts", "doctor", "manifest", "worktrees"] as const;
+const RAIL = ["overview", "board", "alerts", "doctor", "manifest", "worktrees"] as const;
 
 type SurfaceId = (typeof RAIL)[number];
 
 /** The ids Bridge routes on. Here, so a typo cannot be a dead row. */
 export const SURFACE = {
+  overview: "overview",
   board: "board",
   manifest: "manifest",
   worktrees: "worktrees",
@@ -50,7 +58,7 @@ function digitOf(id: SurfaceId): string {
  *
  * **What is not built is not in here.** A row a person presses and gets nothing
  * from is worse than one that is absent, which is the contract's own rule about
- * a registered binding nothing answers. So the digits skip: `⌘2` and `⌘3` are
+ * a registered binding nothing answers. So the digits skip: `⌘3` and `⌘4` are
  * owed to Alerts and Doctor and reach nothing today.
  *
  * `held disk` is an alias because that is the word on the control this screen
@@ -58,6 +66,14 @@ function digitOf(id: SurfaceId): string {
  * have to learn a second.
  */
 export const SURFACES: readonly PaletteSurface[] = [
+  {
+    id: SURFACE.overview,
+    label: "Overview",
+    shortcut: digitOf(SURFACE.overview),
+    // No alias, for the same reason Manifest carries none: this is the first
+    // surface built at this name, so there is no earlier word to keep.
+    icon: LayoutDashboard,
+  },
   {
     id: SURFACE.board,
     label: "Job Board",
@@ -90,8 +106,8 @@ export const SURFACES: readonly PaletteSurface[] = [
  * reads and presses to no effect is the thing `dormant` exists to prevent, and
  * it had been true of `⌘1` since the rail shipped.
  *
- * **Only the surfaces that draw.** `SURFACES` is what is built, so `⌘2` and
- * `⌘3` — Alerts and Doctor — reach nothing and are not bound; the digit stays
+ * **Only the surfaces that draw.** `SURFACES` is what is built, so `⌘3` and
+ * `⌘4` — Alerts and Doctor — reach nothing and are not bound; the digit stays
  * theirs, because `digitOf` reads the rail and not this list.
  *
  * **A modified key, so a focused field does not suppress it.** `⌘K` is bound

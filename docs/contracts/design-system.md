@@ -695,7 +695,7 @@ is the back-fill by hand that this section existed to prevent.
 
 ```
 ⌘K       command palette
-⌘1–⌘5    Bridge surfaces, in rail order
+⌘1–⌘6    Bridge surfaces, in rail order
 ⌘J       Helm, toggles the dock on every surface
 ⌘\       toggle sidebar
 ⌘[ ⌘]    back / forward
@@ -780,10 +780,11 @@ Three reversals against what stood before, each with a reason:
 **`x` for kill and every safety rule below are unchanged.** Neither was
 in play, and the destructive-key rule is what kept `x` off `k`.
 
-**`⌘1`–`⌘5` follow the rail** — Job Board, Alerts, Doctor, Manifest,
-Held worktrees — since Active Jobs, Reviews and the Activity Feed folded
-into the Board and Held worktrees joined at the end of it. The digits
-shift if the rail does; the rule is rail order, not the numbers.
+**`⌘1`–`⌘6` follow the rail** — Overview, Job Board, Alerts, Doctor,
+Manifest, Held worktrees — since Active Jobs, Reviews and the Activity
+Feed folded into the Board and Held worktrees joined at the end of it.
+The digits shift if the rail does; the rule is rail order, not the
+numbers.
 
 **Helm moved from `⌘6` to `⌘J` on 2026-09-13**, when it left the rail
 for a dock on every Bridge surface (#948). A digit is a place in the rail,
@@ -793,7 +794,15 @@ digit. The palette displays the binding beside every entry — which is
 where a person finds out. A learned key does not move quietly, and this
 paragraph is the noise.
 
-**`1`–`5` and `⌘1`–`⌘5` are different acts on one row of keys.** One is
+**Overview joined the rail first rather than last, on the same day** —
+it is where Bridge opens (#921), so it took `⌘1` and pushed every other
+surface's digit down by one rather than taking the next free one. The
+rule stays rail order; only the arrival was the exception, and it is the
+one recorded against `bridge_surfaces` in `actions.toml` rather than
+against a surface's own row, because no single surface's binding moved —
+the rail's shape did.
+
+**`1`–`5` and `⌘1`–`⌘6` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
 that way deliberately rather than by omission.
 
