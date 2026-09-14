@@ -87,6 +87,11 @@ pub struct CheckUnderway {
     /// and once it starts. Since 13.47, #1063.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub waiting_behind: Option<u32>,
+    /// How many of the machine's places this Check takes while it runs.
+    /// **Absent where it takes one**, which is every Check written before
+    /// `checks.<name>.places` existed and most that will be. Since 13.51, #1102.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub places: Option<u32>,
 }
 
 /// One message on a running Check's log socket.

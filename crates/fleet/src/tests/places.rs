@@ -2,6 +2,7 @@
 //! place ahead of a gate, a proof waits behind both, and nothing waiting is
 //! passed over more than `OVERTAKEN_AT_MOST` times. #1063.
 
+use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -178,6 +179,107 @@ async fn a_raised_limit_wakes_an_ask_already_waiting() {
     let _started = tokio::time::timeout(SOON, waiting)
         .await
         .expect("it starts once the limit rises")
+        .expect("it did not panic");
+    assert_eq!(places.held(), 2);
+}
+
+/// #1102 — a Check heavier than one place waits for every place it wants,
+/// not just the first that frees.
+#[tokio::test]
+async fn a_weighted_ask_waits_until_enough_places_are_free() {
+    let places = Places::of(ChecksAtOnce::of(4));
+    let a = asking(&places, Asking::Gate);
+    let b = asking(&places, Asking::Gate);
+    let heavy = asking(&places, Asking::Gate);
+    let held_a = a.place().await;
+    let held_b = b.place().await;
+    let mut heavy_turn = heavy.ask_for(NonZeroU32::new(3).unwrap());
+    assert!(
+        soon(&heavy, &mut heavy_turn).await.is_none(),
+        "two held, three more do not fit in four"
+    );
+    drop(held_a);
+    let granted = soon(&heavy, &mut heavy_turn)
+        .await
+        .expect("one held, three more fit");
+    assert_eq!(places.held(), 4);
+    drop(granted);
+    drop(held_b);
+}
+
+/// #1102 — declared wider than `checks-at-once`, a Check still runs: it takes
+/// every place the machine has rather than waiting for room that can never
+/// exist.
+#[tokio::test]
+async fn a_check_wider_than_the_limit_takes_every_place_there_is() {
+    let places = Places::of(ChecksAtOnce::of(2));
+    let gate = asking(&places, Asking::Gate);
+    let mut ask = gate.ask_for(NonZeroU32::new(5).unwrap());
+    let held = soon(&gate, &mut ask)
+        .await
+        .expect("wider than the limit still runs, alone");
+    assert_eq!(places.held(), 2, "clamped to every place there is");
+    drop(held);
+    assert_eq!(places.held(), 0);
+}
+
+/// #1102 — the [`OVERTAKEN_AT_MOST`] bound holds the same way for a heavy ask
+/// as for the single-place gate `a_gate_behind_a_stream_of_drones_runs_starts_within_the_bound` pins.
+#[tokio::test]
+async fn a_heavy_gate_behind_a_stream_of_drones_runs_starts_within_the_bound() {
+    let places = Places::of(ChecksAtOnce::of(3));
+    let gate = asking(&places, Asking::Gate);
+    let drone = asking(&places, Asking::DronesRun);
+    let mut held = drone.place().await;
+    let mut gates_turn = gate.ask_for(NonZeroU32::new(3).unwrap());
+    let mut passed_over = 0;
+    loop {
+        let mut drones_turn = drone.ask();
+        drop(held);
+        match soon(&drone, &mut drones_turn).await {
+            Some(place) => {
+                passed_over += 1;
+                assert!(
+                    passed_over <= OVERTAKEN_AT_MOST,
+                    "the heavy gate was passed over {passed_over} times"
+                );
+                held = place;
+            }
+            None => break,
+        }
+    }
+    let granted = soon(&gate, &mut gates_turn)
+        .await
+        .expect("the gate takes every place once it goes");
+    assert_eq!(passed_over, OVERTAKEN_AT_MOST);
+    assert_eq!(places.held(), 3);
+    drop(granted);
+}
+
+/// #1102 — lowering the limit below what is already held does not strand an
+/// ask that was already waiting: it starts once enough frees against the new,
+/// lower limit.
+#[tokio::test]
+async fn a_lowered_limit_still_grants_an_ask_once_enough_frees() {
+    let places = Places::of(ChecksAtOnce::of(4));
+    let gate = asking(&places, Asking::Gate);
+    let mut held: Vec<Place> = Vec::new();
+    for _ in 0..4 {
+        held.push(gate.place().await);
+    }
+    let waiting = {
+        let gate = gate.clone();
+        tokio::spawn(async move { gate.place().await })
+    };
+    tokio::time::sleep(SOON).await;
+    assert!(!waiting.is_finished(), "the machine is full");
+    places.limit(ChecksAtOnce::of(2));
+    tokio::time::sleep(SOON).await;
+    assert!(!waiting.is_finished(), "still over the lowered limit");
+    held.truncate(1);
+    let _started = tokio::time::timeout(SOON, waiting)
+        .await
+        .expect("it starts once held is at or under the lowered limit")
         .expect("it did not panic");
     assert_eq!(places.held(), 2);
 }

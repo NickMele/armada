@@ -133,6 +133,9 @@ checks:
     run: pnpm -C packages/components build-storybook
     # Built at the gate, never in a Drone's run: see `runs_at` atop `checks`.
     runs_at: gate
+    # A dozen Chromium processes against a shipped limit of 5 timed out
+    # unrelated browser tests sharing the machine on 14 Sep. #1102.
+    places: 3
     # Shorter than the two above: nothing under `apps/` concerns it.
     when:
       - "packages/**"
@@ -149,6 +152,9 @@ checks:
     # Main's own state machines in node, against a `ws` server on a loopback
     # port — nothing else here runs main (#324).
     run: pnpm -C apps/desktop test
+    # Lighter than the two browser suites below, but still node processes
+    # against a real server: #1102.
+    places: 2
     when:
       - "apps/**"
       - "packages/**"
@@ -162,6 +168,9 @@ checks:
     # Pure modules in node, and screens in a browser project, because a screen
     # cannot be storied: `xtask/src/rules_layers.rs` refuses the import.
     run: pnpm -C packages/screens test
+    # A dozen Chromium processes against a shipped limit of 5 timed out
+    # unrelated browser tests sharing the machine on 14 Sep. #1102.
+    places: 3
     when:
       - "packages/**"
       - "crates/core-model/domain/**"
@@ -175,6 +184,9 @@ checks:
     # `@storybook/addon-vitest`; a `play` function has its assertions run.
     run: pnpm -C packages/components test
     runs_at: gate
+    # A dozen Chromium processes against a shipped limit of 5 timed out
+    # unrelated browser tests sharing the machine on 14 Sep. #1102.
+    places: 3
     when:
       - "packages/**"
       - "crates/core-model/domain/**"

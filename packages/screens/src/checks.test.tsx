@@ -135,6 +135,40 @@ describe("a gate waiting for room on the machine", () => {
   });
 });
 
+// #1102 — a heavier Check says how many places it takes, only where that is
+// more than one.
+describe("a Check that takes more than one place", () => {
+  it("names the places it needs, waiting behind other work", () => {
+    const heavy = gating({
+      checking: {
+        attempt: 1,
+        checks: [{ name: "build", waiting_behind: 2, places: 3 }],
+      },
+    });
+    expect(rowsOf(heavy).find((row) => row.id === "build")?.says).toBe(
+      "Waiting for room behind 2 other Checks on this machine. It takes 3 places.",
+    );
+  });
+
+  it("names the places it needs, waiting on nothing but its own run", () => {
+    const heavy = gating({
+      checking: { attempt: 1, checks: [{ name: "build", places: 3 }] },
+    });
+    expect(rowsOf(heavy).find((row) => row.id === "build")?.says).toBe(
+      "Waiting to start. It takes 3 places.",
+    );
+  });
+
+  it("says nothing extra for a Check that takes one place", () => {
+    const one = gating({
+      checking: { attempt: 1, checks: [{ name: "build", waiting_behind: 2, places: 1 }] },
+    });
+    expect(rowsOf(one).find((row) => row.id === "build")?.says).toBe(
+      "Waiting for room behind 2 other Checks on this machine.",
+    );
+  });
+});
+
 // #1021 — a press names the Check, and the sheet is what decides live or
 // kept. This file draws the chapter, not the sheet, so what is proved here is
 // narrower: pressing a row reports the pressed Check and nothing more, and

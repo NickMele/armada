@@ -204,7 +204,7 @@ where
             .workflow()
             .step(&step)
             .ok_or(NotFixed::NothingIsWorking)?;
-        let (expect_exit_code, requires, template) = declared
+        let (expect_exit_code, requires, template, places) = declared
             .checks()
             .iter()
             .find_map(|check| match check {
@@ -213,10 +213,14 @@ where
                     expect_exit_code,
                     requires,
                     one_test,
+                    places,
                     ..
-                } if *name == fix.check => {
-                    Some((*expect_exit_code, requires.clone(), one_test.clone()))
-                }
+                } if *name == fix.check => Some((
+                    *expect_exit_code,
+                    requires.clone(),
+                    one_test.clone(),
+                    *places,
+                )),
                 _ => None,
             })
             .ok_or_else(|| NotFixed::NoSuchCheck {
@@ -248,6 +252,7 @@ where
                 narrow: None,
                 one_test: None,
                 runs_at: core_model::RunsAt::Everywhere,
+                places,
             },
             expect_exit_code,
             record,

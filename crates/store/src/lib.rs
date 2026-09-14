@@ -24,6 +24,12 @@
 //! migration list and a version row, applied on open, and `job_events` is
 //! append-only in the database itself, by trigger.
 
+// `columns::workflow`'s `json!` of one frozen step nests deep enough on its
+// own — every Check, every judge criterion, every narrowing — that one more
+// key (`places`, #1102) crossed the default limit. Raised rather than
+// restructured: the nesting mirrors the record's own shape.
+#![recursion_limit = "256"]
+
 /// How a Job meets a command its Drone was not granted, and what a person
 /// allowed it.
 mod allowing;

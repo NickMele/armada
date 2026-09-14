@@ -11,6 +11,8 @@
 //! these and every reader outside this crate goes through an accessor — which
 //! is where what absence means is written down, and the one place it is.
 
+use std::num::NonZeroU32;
+
 use core_model::{Covers, Narrowing, Prerequisite, RunsAt};
 
 /// A command a change must pass to land or to advance a step.
@@ -28,6 +30,7 @@ pub struct Check {
     pub(super) narrow: Option<Narrowing>,
     pub(super) one_test: Option<String>,
     pub(super) runs_at: RunsAt,
+    pub(super) places: NonZeroU32,
 }
 
 impl Check {
@@ -97,6 +100,14 @@ impl Check {
     /// `runs_at`**, which is every Check written before the key existed. #849.
     pub fn runs_at(&self) -> RunsAt {
         self.runs_at
+    }
+
+    /// How many of the machine's places this Check takes while it runs.
+    /// **One where the file declares no `places`**, which is every Check
+    /// written before the key existed and stays right for most Checks: a
+    /// build or a lint costs what any other command costs. #1102.
+    pub fn places(&self) -> NonZeroU32 {
+        self.places
     }
 }
 

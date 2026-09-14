@@ -155,6 +155,7 @@ pub fn workflow() -> FrozenWorkflow {
                         one_test: Some("cargo nextest run -E test(={})".to_string()),
                         // Not the default, so the round trip carries a word. #849.
                         runs_at: core_model::RunsAt::Handoff,
+                        places: std::num::NonZeroU32::MIN,
                     },
                     ResolvedCheck::DiffNonempty,
                     // Carried on the shared fixture for `when`'s reason: every

@@ -58,6 +58,11 @@ export type CheckUnderway = {
    * waits for room. Absent while it waits on nothing but its own run. Since 13.47.
    */
   waiting_behind?: number;
+  /**
+   * How many of the machine's places this Check takes while it runs. Absent
+   * where it takes one. Since 13.51.
+   */
+  places?: number;
 };
 
 /** One message on a running Check's log socket. `observe_job_log`'s shape. */

@@ -930,6 +930,10 @@ cannot work.
 
 `DeclaredCheck.runs_at`, `StepDetail.held_for_handoff` and `WorkflowStep.held_for_handoff`, additive (#849). `runs_at` is `gate` for a Check a Drone's own run never asks and `handoff` for one that runs last, on the step before handoff, once every other Check there passes; absent is everywhere. `held_for_handoff` names the handoff-only Checks a step's gate leaves to a later step, so a step that passed is not read as having run them. A handoff-only Check that was not reached records `skipped`, with its own sentence in `produced`.
 
+## Protocol 13.51: a Check's own weight
+
+`CheckUnderway.places`, additive beside `waiting_behind`: how many of the machine's places this Check takes, absent where it takes one (#1102). A browser suite costing more than `format` now says so where its wait is; Bridge names it only for a Check taking more than one.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

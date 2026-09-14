@@ -122,16 +122,31 @@ fn fitted(home: &TempDir) -> Fittings<FakeHarness, FakeVcs, FakeWorkProduct> {
 fn another_check_starts_only_beside_a_free_slot_and_a_machine_with_room() {
     let four = ChecksAtOnce::of(4);
     assert!(
-        may_start(0, four, true),
+        may_start(0, 1, four, true),
         "the first on the machine always starts, however short it is"
     );
-    assert!(may_start(1, four, false));
+    assert!(may_start(1, 1, four, false));
     assert!(
-        !may_start(1, four, true),
+        !may_start(1, 1, four, true),
         "a short machine holds the second"
     );
-    assert!(!may_start(4, four, false), "a full bound holds the fifth");
+    assert!(
+        !may_start(4, 1, four, false),
+        "a full bound holds the fifth"
+    );
     assert_eq!(ChecksAtOnce::of(0).get(), 1, "a gate always has one slot");
+}
+
+/// A heavier ask counts every place it wants against the bound. #1102.
+#[test]
+fn a_heavier_ask_needs_every_place_it_wants_free() {
+    let four = ChecksAtOnce::of(4);
+    assert!(may_start(1, 3, four, false), "one held, three more fit");
+    assert!(!may_start(2, 3, four, false), "two held, three more do not");
+    assert!(
+        may_start(0, 6, four, false),
+        "nothing held, so a wider ask still starts alone"
+    );
 }
 
 /// **A short machine slows the gate and fails nothing.** The bound is four, so

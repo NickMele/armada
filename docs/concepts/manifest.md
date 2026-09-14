@@ -261,6 +261,26 @@ Rules that follow:
 - **A `handoff` Check runs on one step only**, the last one gating on every Check before handoff, and starts only once every other Check there has passed. A failure goes back to that step's Drone under its retry budget.
 - **A narrowed run still gates nothing**, and neither does this: the gate settles every Check it holds, whatever a Drone asked for. It reuses a Check only from a whole dry run that passed it on the same attempt, with nothing changed since, and runs the rest fresh.
 
+### How many places a Check takes
+
+**A Check may declare `places`, a positive integer, and it costs that many of the machine's places while it runs.**
+
+```yaml
+checks:
+  screens_test:
+    run: pnpm -C packages/screens test
+    places: 3
+```
+
+Decided 14 Sep 2026 for #1102. The machine queue held every Check to one place each, so a browser suite starting a dozen Chromium processes cost what `format` costs, and several sharing the machine's places timed each other out.
+
+Rules that follow:
+
+- **Absent means one**, which is what every Check did before the key existed and what most Checks still cost.
+- **Zero, a negative number and anything that is not a whole number are refused at load.**
+- **A Check wider than `checks-at-once` still runs**: it takes every place the machine has rather than waiting for room that can never exist, clamped at the moment it asks — the limit can change while Fleet runs.
+- **It is frozen with the workflow**, beside the Check's command, and `after_merge` keeps it: a proof still spends the machine for real.
+
 ### Running one test by name
 
 **A Check may declare `one_test`, and it is what Fleet runs against a checkout of main before a Drone's `draft_fix` drafts anything.** The Configuration contract holds the syntax.

@@ -292,6 +292,9 @@ impl Announcing {
                 output_path: None,
                 stopped_by: None,
                 waiting_behind: None,
+                // Absent where it takes one place, which is what `waiting_behind`
+                // is absent beside once it is meaningful. #1102.
+                places: (check.places().get() > 1).then(|| check.places().get()),
             })
             .collect();
         let running = Running {

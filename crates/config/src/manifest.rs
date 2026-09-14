@@ -1,7 +1,8 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
 //! **These keys, and nothing else.** `version`, `id`, `base`; `run`,
-//! `expect_exit_code`, `when`, `requires` and `narrow` under `checks.<name>`;
+//! `expect_exit_code`, `when`, `requires`, `narrow` and `places` under
+//! `checks.<name>`;
 //! `run`, `destructive`, `serve`, `ready` and `links` under `commands.<name>`;
 //! `container` and `env` under `ports.<name>`, a fourth registry;
 //! `setup.requires` and `setup.seed`, [`seed`]; the three keys [`drone`] reads, the one section here that
@@ -84,6 +85,7 @@ const CHECK_KEYS: &[&str] = &[
     "narrow",
     "one_test",
     "runs_at",
+    "places",
 ];
 /// The values `checks.<name>.runs_at` takes, spelled as `core_model::RunsAt`
 /// spells them. #849.
@@ -628,6 +630,7 @@ pub(super) struct DraftCheck {
     narrow: Option<Narrowing>,
     one_test: Option<String>,
     runs_at: RunsAt,
+    places: std::num::NonZeroU32,
 }
 
 /// `checks.<name>.narrow`, the second question a Check answers about paths.
@@ -753,6 +756,16 @@ fn check_entry(
             found
         }),
     };
+    // Absent is one, which is every Check written before the key existed and
+    // most that will be written after. Zero, negative and non-integer are
+    // refused by `yaml::positive`, the same reader `version` uses. #1102.
+    let places_key = table.at("places");
+    let places = match table.optional("places") {
+        None => Some(std::num::NonZeroU32::MIN),
+        Some(value) => yaml::positive(&places_key, value, out).map(|n| {
+            std::num::NonZeroU32::new(n).expect("yaml::positive answers only positive values")
+        }),
+    };
     table.close(known, out);
     Some(DraftCheck {
         run: run?,
@@ -762,6 +775,7 @@ fn check_entry(
         narrow,
         one_test,
         runs_at: runs_at?,
+        places: places?,
     })
 }
 
