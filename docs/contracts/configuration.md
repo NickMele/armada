@@ -460,15 +460,6 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   posture measurably changes the proposed shape for an otherwise-identical
   prompt, which is untestable until the setting has a schema.
 
-- **[commit-template-vs-copy-lint]** Which wins, a Manifest commit/PR
-  template or the Agent Copy Contract's lint?
-  A Manifest-level commit/PR message template is a per-project convention;
-  the lint is a fixed phrase blocklist. A project template could mandate a
-  format the lint rejects — a required bulleted body, for example.
-  Precedence is undecided: if the lint only warns, the collision is
-  cosmetic; if it gates, a project's own convention can block its own
-  Drones.
-
 - **[helm-budget-warning-threshold]** What is Helm's budget soft-warning
   threshold value?
   Helm has a soft-warning threshold and deliberately no hard cap — it is a
@@ -477,14 +468,14 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
 
 - **[copy-lint-surface-narrowing]** May a Manifest narrow which surfaces the
   Agent Copy Contract's lint covers?
-  PR descriptions, commit messages and Judge summaries are linted by
-  default; evidence summaries and Helm replies are deliberately excluded.
+  Judge summaries are linted by default; evidence summaries and Helm
+  replies are deliberately excluded, and Fleet composes PR descriptions and
+  commit messages from the record, so no lint reads them.
   The question originally leaned on the config direction rule — narrower or
   off is legal, wider is not — but that rule was withdrawn 22 Aug 2026 (see
   "Polarity is a description, not a legality rule" above), so it no longer
   settles anything here. Whether the linted set should be narrowable by a
-  Manifest at all is the live question, given that PR and commit text
-  leaves the app permanently once written. A parallel question — whether a
+  Manifest at all is the live question. A parallel question — whether a
   Voice setting can widen or narrow the same lint — is tracked separately in
   Notion.
 

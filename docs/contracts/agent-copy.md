@@ -32,12 +32,12 @@ copy, which is what a lint asserting every surface has copy would fail on.
 
 | Surface | Written by | Read by | Leaves | Enforcement | Shape | Samples |
 | --- | --- | --- | --- | --- | --- | --- |
-| Commit message | Drone | Whoever reads the history later, including people who did not ask | Yes | Hard gate | Prose | Worked |
-| PR description | Drone | A reviewer deciding where to spend attention | Yes | Hard gate | Four headings, then prose | Worked |
+| Commit message | Fleet | Whoever reads the history later, including people who did not ask | Yes | None, composed from the record | Prose | Worked |
+| PR description | Fleet | A reviewer deciding where to spend attention | Yes | None, composed from the record | Four headings, then prose | Worked |
 | Work submission | Drone | A person, on escalation and at review — never the Judge | No | Prompt only | Named fields | Worked |
 | Escape hatch narrative | Drone | The engineer taking over | No | Prompt only | Named fields | Worked |
-| Judge record — refusal | Judge | A person triaging, and a Drone on retry, each a different projection | No | Lint warning | Named fields | Worked |
-| Judge record — advisory review | Judge | A human reviewer at the gate | No | Lint warning | Prose | Worked |
+| Judge record — refusal | Judge | A person triaging, and a Drone on retry, each a different projection | No | Lint warning, not built | Named fields | Worked |
+| Judge record — advisory review | Judge | A human reviewer at the gate | No | Lint warning, not built | Prose | Worked |
 | Helm reply | Helm | The person, in real time | No | Prompt only | Prose | Worked |
 
 The commit message surface is written down in the `commit-message` skill, at
@@ -51,21 +51,13 @@ contracts.
 
 ## Enforcement by surface
 
-**PR descriptions and commit messages — prompt plus mechanical lint, hard
-gate.**
+**PR descriptions and commit messages — not linted.** Fleet composes both
+from the Job's record, in `crates/fleet/src/review.rs` and
+`crates/fleet/src/landing.rs`, and admits no Drone sentence to either. A
+Drone is denied `git`, so nothing it writes leaves Armada this way.
 
-The lint runs in the checks runner and fails the gate. **Split by
-destination, not by surface:** this text leaves Armada and is read by
-people who did not ask for it, which is what earns a gate.
-
-**A failure gets one free correction round that does not consume the
-retry budget.** That is what makes a hard gate safe here. Without it a
-style bounce spends `retry_count`, and a Job can escalate as
-`gate_failure` because of an em dash. It reuses the existing
-one-free-round mechanism for present-but-insufficient evidence.
-
-**Judge summaries — prompt plus lint, warning only.** Same phrase list, no
-gate. The text stays inside Armada, and style-scoring the verification
+**Judge summaries — prompt plus lint, warning only.** The lint is not
+built. The text stays inside Armada, and style-scoring the verification
 path risks bouncing a sound judgment for tone.
 
 The lint catches the phrase-level tells that cluster in generated text:
@@ -115,12 +107,12 @@ A summary that would read plausibly under a different job has failed.
 
 ## PR description
 
-Written by a [Drone](../concepts/drone.md), read by a reviewer deciding
-where to spend attention. It leaves Armada, so it draws the hard gate.
+Written by Fleet from the Job's record, read by a reviewer deciding where
+to spend attention. Fleet's body keeps the four headings below, and its
+outcome says what the record proves, because it admits no Drone sentence.
 
-Same rule and same gate as a commit message — say what the diff cannot —
-with one job a commit message does not have: telling a reviewer what needs
-them.
+Same rule as a commit message — say what the diff cannot — with one job a
+commit message does not have: telling a reviewer what needs them.
 
 ### Four headings, in this order, always
 
@@ -162,7 +154,7 @@ Rendered markdown scanned on a screen is a different medium from `git log`.
 ### A heading beats a colon reveal
 
 "Worth a look:" is a dramatic setup where a heading is the honest
-structure, and the lint bans colon reveals for exactly that reason. The
+structure, and this contract bans colon reveals for exactly that reason. The
 four above are the structure; a fifth heading inside one of them is legal
 and a colon reveal is not.
 
@@ -735,5 +727,3 @@ finds it by inspecting a window either side of the suspected boundary and
   requires thirty to exist first. Revisit once the corpus does.
 
 Also bearing on this document, and written where it belongs: `[copy-lint-surface-narrowing]` in `configuration.md` — whether a Manifest may narrow which surfaces this lint covers. It lives there because the answer turns on the config direction rule, which that document records as withdrawn.
-
-Also `[commit-template-vs-copy-lint]` in `configuration.md` — whether a Manifest's commit and PR template or this lint wins where they disagree. It bears on the commit-message and PR-description surfaces above.
