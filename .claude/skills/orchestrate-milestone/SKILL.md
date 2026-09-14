@@ -103,26 +103,21 @@ usually right — it has just read the code and you were working from memory.
 
 ## The merge bar
 
-All of it, every time:
-
 | | |
 |---|---|
-| **Every Check `armada.yml` declares** | run the Checks, not the gate. `format` is one of them — `cargo fmt --all --check` — and a merge that skipped it left `main` failing a declared Check on 2 Sep, found by the next agent rather than by the merge |
-| The gating check passes | `cargo nextest run --workspace --exclude acceptance` |
-| The acceptance tests pass | separately, and read by test name — rule one's line is the same whichever one fails. **No failing test is merged**, a milestone's own included: a test written first asserts what is carried and names the rest in its header |
-| Both halves build | Bridge too, if it was touched |
+| **The Checks the change can affect** | what `work-issue` step 4 names, once per branch and one heavy run at a time. `format` is one of them wherever Rust changed — a merge that skipped it left `main` failing a declared Check on 2 Sep |
+| The acceptance tests pass | where the change reaches what they read, by test name. **No failing test is merged**, a milestone's own included |
 | `verify-foundations` is no worse | against a baseline off `main`, not against zero — a `missing:` the branch added blocks |
-| `verify-docs` is green | a stale `docs/OPEN.md` fails it |
+| `verify-docs` is green | where `docs/` or `operations.toml` changed |
 | You have read the diff | not the report |
 
-**After a rebase, what moved decides what reruns.** Where every commit the
-branch crosses touches none of its files, no gate rule under `xtask/`, no
-`armada.yml`, no lockfile and no protocol version, run both gates and the
-acceptance run by test name again. Anything else, the whole bar again. Either
-way the whole bar has run once on the branch before its first merge attempt, and
-the gates always rerun: they are what a rebase breaks without touching the
-branch. Confirmed 12 Sep 2026, when `main` took a merge every 7–14 minutes and a
-whole bar on two branches outlasted every gap, so neither landed.
+**After a rebase, rerun only what the commits you crossed could break.** Where
+they touch none of the branch's files, no gate rule under `xtask/`, no
+`armada.yml`, no lockfile and no protocol version, rerun nothing. Otherwise rerun
+`verify-foundations`, and the Checks for the files both sides touched. Confirmed
+12 Sep 2026, when `main` took a merge every 7–14 minutes and a whole bar on two
+branches outlasted every gap, so neither landed; on 13 Sep the whole bar after
+every rebase made the owner's machine unusable.
 
 **Then give the worktree back** — see `agent-worktrees`. At the merge, not later.
 
