@@ -27,6 +27,7 @@ import {
   WHEN_REFUSED_MEANS,
 } from "./copy";
 import { money } from "./facts";
+import type { ActingAct } from "./pending";
 import { cap, RaiseCapControl } from "./RaiseCap";
 import { RaiseTurnCapControl } from "./RaiseTurnCap";
 
@@ -95,6 +96,8 @@ export type SettingsSheetProps = SettingsCalls & {
   models: ModelChoices | null;
   stale: boolean;
   acting: boolean;
+  /** Which act, where `acting` is true — `remove_allowed_command` is this panel's own row press. #1117. */
+  actingAct?: ActingAct;
   floor: boolean;
   onClose: () => void;
 };
@@ -124,6 +127,7 @@ export function SettingsSheet({
   models,
   stale,
   acting,
+  actingAct,
   floor,
   onClose,
   onSetWhenBlocked,
@@ -216,7 +220,8 @@ export function SettingsSheet({
         allowedSaid={saidOf("allowed")}
         repositoryAllowed={(whole.repository_allowed_commands ?? []).map((row) => row.run)}
         disabled={off}
-        disabledNote={stale ? NOT_LIVE : acting ? SENDING : undefined}
+        disabledNote={stale ? NOT_LIVE : undefined}
+        pending={acting && actingAct === "remove_allowed_command"}
         onWhenBlocked={(chose) => {
           tell("blocked", BLOCKED_TOOK, (next) => next.when_blocked === chose);
           onSetWhenBlocked(job.id, chose);
@@ -269,9 +274,6 @@ export function SettingsSheet({
 
 /** Why every control is off, where the reading is not live. */
 const NOT_LIVE = "This job is not live, so nothing can be changed.";
-
-/** Why they are off, where something sent to this Job has not come back. */
-const SENDING = "Something sent to this job is still on its way to Fleet.";
 
 /** A new choice for a command the drone was not given, once it took. */
 const BLOCKED_TOOK = "Changed. Applies the next time it reaches for a command.";

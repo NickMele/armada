@@ -41,6 +41,7 @@ import { span } from "./duration";
 import { heldByAFlag, heldFlagOf, type Deciding } from "./flag-held";
 import { flagsOf } from "./gaming";
 import { panelsOf, sentenceOf } from "./gates";
+import type { ActingAct } from "./pending";
 import { Opening, openKept, type Opens } from "./phases";
 import { recourseOf, type Recourse } from "./recovery";
 import { refusedIn, shownOf } from "./refused";
@@ -104,9 +105,6 @@ export function askingOf(whole: JobWhole | null): StepNotice | undefined {
 /** Why the answers are off, where the reading is not live. */
 const STALE_NOTE = "This Job is not live, so nothing can be sent. The drone is still waiting.";
 
-/** Why the answers are off, where one is already out. */
-const SENDING_NOTE = "That answer is already on its way to the drone.";
-
 /**
  * What a command's answer still does when it comes late. **Fleet holds a
  * command a little under what the harness waits**, then tells the drone to
@@ -134,6 +132,8 @@ export type Answering = {
   stale: boolean;
   /** An act on this job is already out. */
   acting: boolean;
+  /** Which act, where `acting` is true — `"answer_command"` is this box's own. #1117. */
+  actingAct?: ActingAct;
 };
 
 export function answeringOf(
@@ -147,19 +147,18 @@ export function answeringOf(
     note?: string,
     rule?: string,
   ) => void,
+  actingAct?: ActingAct,
 ): Answering {
   return {
     send: (call, answer, note, rule) => onAnswerCommand(jobId, call, answer, note, rule),
     stale,
     acting,
+    actingAct,
   };
 }
 
 /** Why a refused row's answers are off, where the reading is not live. */
 const REFUSED_STALE = "This Job is not live, so nothing can be sent.";
-
-/** Why they are off, where an answer is already out. */
-const REFUSED_SENDING = "That answer is already on its way to Fleet.";
 
 /**
  * The command a drone is waiting on a person to allow. `undefined` where
@@ -273,7 +272,8 @@ function CommandWaiting({
       }))}
       waiting={span(waiting.asked_at, now) ?? undefined}
       disabled={answering.stale || answering.acting}
-      disabledNote={answering.stale ? STALE_NOTE : answering.acting ? SENDING_NOTE : undefined}
+      disabledNote={answering.stale ? STALE_NOTE : undefined}
+      pending={answering.acting && answering.actingAct === "answer_command"}
       redirectNote={LATE_ANSWER}
       answersLabel="Your answers"
       explain={explain === undefined ? undefined : reading}
@@ -322,6 +322,7 @@ export function questionOf(
   stale: boolean,
   acting: boolean,
   onAnswer: (jobId: string, questionId: string, chose: string) => void,
+  actingAct?: ActingAct,
 ): ReactNode {
   const asking = whole?.asking;
   if (asking === undefined) return undefined;
@@ -331,7 +332,8 @@ export function questionOf(
       options={asking.options}
       waiting={span(asking.asked_at, now) ?? undefined}
       disabled={stale || acting}
-      disabledNote={stale ? STALE_NOTE : acting ? SENDING_NOTE : undefined}
+      disabledNote={stale ? STALE_NOTE : undefined}
+      pending={acting && actingAct === "answer"}
       onAnswer={(label) => onAnswer(jobId, asking.question_id, label)}
     />
   );
@@ -503,9 +505,8 @@ export function noticeOf(
               if (chose !== undefined) answering?.send(call, chose, undefined, rule);
             }}
             disabled={answering === undefined || answering.stale || answering.acting}
-            disabledNote={
-              answering?.stale ? REFUSED_STALE : answering?.acting ? REFUSED_SENDING : undefined
-            }
+            disabledNote={answering?.stale ? REFUSED_STALE : undefined}
+            pending={answering !== undefined && answering.acting && answering.actingAct === "answer_command"}
           />
         )}
         {recourse.sent === undefined ? null : <span className="block">{recourse.sent}</span>}

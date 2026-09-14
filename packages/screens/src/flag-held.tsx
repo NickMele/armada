@@ -11,13 +11,14 @@
 // where the Drone still holds its session, which is nearly every flag, and the
 // step restart where it has gone, which briefs the next Drone with the flag.
 
-import { GAMING_PATTERN_MEANING, HeldFlag, Refusals, type HeldFinding } from "@armada/components";
+import { GAMING_PATTERN_MEANING, HeldFlag, Refusals, type HeldFinding, type HeldFlagAnswer } from "@armada/components";
 import type { Diff, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { ReactNode } from "react";
 
 import { answerNamed } from "./copy";
 import { flagsOf, hunkFor, sentBackWords } from "./gaming";
 import { openKept, type Opens } from "./phases";
+import type { ActingAct } from "./pending";
 import { onwards, recourseOf } from "./recovery";
 import { refusedIn } from "./refused";
 import type { Answering } from "./step";
@@ -28,6 +29,8 @@ export type Deciding = {
   diff: Diff;
   stale: boolean;
   acting: boolean;
+  /** Which act, where `acting` is true — `override_verdict`, or the recourse act `Send back` sends. #1117. */
+  actingAct?: ActingAct;
   onOverrule: (jobId: string, reason: string) => void;
   /** The restart, where the Drone has gone. */
   onSendBack: (jobId: string, note?: string) => void;
@@ -62,7 +65,6 @@ const NEITHER = "Fleet offers neither a redirect nor a restart on this step.";
 const NO_OVERRIDE = "Fleet offers no override on this step.";
 
 const STALE = "This Job is not live, so nothing can be sent.";
-const SENDING = "That answer is already on its way to Fleet.";
 
 /**
  * The card, or `undefined` where the step is not held on a flag, or where the
@@ -99,6 +101,16 @@ export function heldFlagOf(
   // **Fleet's answer, never guessed**: a Drone still holding its session takes
   // a redirect, and one that has gone takes a restart.
   const sendsBy = recourse.act;
+  // Which of the two answers is out, named directly — `override_verdict` and
+  // `sendsBy` are two distinct acts, so nothing here has to remember which
+  // control sent it. #1117.
+  const pending: HeldFlagAnswer | undefined = !deciding.acting
+    ? undefined
+    : deciding.actingAct === "override_verdict"
+      ? "carryOn"
+      : sendsBy !== undefined && deciding.actingAct === sendsBy
+        ? "sendBack"
+        : undefined;
   return (
     <HeldFlag
       findings={findings}
@@ -119,7 +131,8 @@ export function heldFlagOf(
             : deciding.onSendBack(job.id, note),
       }}
       disabled={deciding.stale || deciding.acting}
-      disabledNote={deciding.stale ? STALE : deciding.acting ? SENDING : undefined}
+      disabledNote={deciding.stale ? STALE : undefined}
+      pending={pending}
     />
   );
 }
@@ -153,7 +166,8 @@ export function refusedAsideOf(
         if (chose !== undefined) answering?.send(call, chose, undefined, rule);
       }}
       disabled={answering === undefined || answering.stale || answering.acting}
-      disabledNote={answering?.stale ? STALE : answering?.acting ? SENDING : undefined}
+      disabledNote={answering?.stale ? STALE : undefined}
+      pending={answering !== undefined && answering.acting && answering.actingAct === "answer_command"}
     />
   );
 }
