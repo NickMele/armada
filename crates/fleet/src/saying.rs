@@ -164,6 +164,11 @@ impl fmt::Display for Adrift {
                 "the issue drafted from {}'s review has no title, so it was not filed",
                 job.as_str()
             ),
+            Adrift::FindingAlreadyQueued { job, finding } => write!(
+                out,
+                "\"{finding}\" on {}'s review already has a Job queued behind it, so no second one was proposed",
+                job.as_str()
+            ),
             Adrift::IssueNotFiled { job, said } => write!(
                 out,
                 "the forge did not file the issue drafted from {}'s review: {said}",
@@ -656,6 +661,7 @@ impl Adrift {
             | Adrift::FindingNotForContext { job, .. }
             | Adrift::NoIssueTitle { job }
             | Adrift::IssueNotFiled { job, .. }
+            | Adrift::FindingAlreadyQueued { job, .. }
             | Adrift::NoStepToRedo { job }
             | Adrift::UnpushedDelivery { job, .. }
             | Adrift::NotMerged { job, .. }
@@ -845,6 +851,7 @@ impl Error for Adrift {
             | Adrift::FindingNotForContext { .. }
             | Adrift::NoIssueTitle { .. }
             | Adrift::IssueNotFiled { .. }
+            | Adrift::FindingAlreadyQueued { .. }
             // The two a conflict resolution makes, on the same ground.
             | Adrift::NothingToResolve { .. }
             | Adrift::NoStepToRedo { .. }

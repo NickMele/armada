@@ -54,7 +54,7 @@ impl Store {
             .conn
             .prepare(
                 "SELECT finding, kind, target FROM job_review_followups
-                 WHERE job_id = ?1 ORDER BY at, finding",
+                 WHERE job_id = ?1 AND target != '' ORDER BY at, finding",
             )
             .map_err(unreadable)?;
         let rows = statement
@@ -74,5 +74,43 @@ impl Store {
             .map_err(unreadable)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(unreadable)
+    }
+}
+
+impl Store {
+    /// Claim a finding for a queued Job before one is proposed, so a second press finds it
+    /// taken. `false` where a Job is already queued, or being queued, from it.
+    ///
+    /// **One statement**, so two presses cannot both claim. The claim has no target until
+    /// [`record_followup`](Store::record_followup) names the Job, and is not read until then.
+    pub fn claim_followup(
+        &mut self,
+        job_id: &JobId,
+        finding: &str,
+        at: &Timestamp,
+    ) -> Result<bool, WriteError> {
+        self.conn
+            .execute(
+                "INSERT INTO job_review_followups (job_id, finding, kind, target, at)
+                 VALUES (?1, ?2, 'queued', '', ?3)
+                 ON CONFLICT (job_id, finding, kind) DO NOTHING",
+                rusqlite::params![job_id.as_str(), finding, at.as_str()],
+            )
+            .map(|claimed| claimed == 1)
+            .map_err(fault("claiming a follow-up"))
+            .map_err(WriteError::Database)
+    }
+
+    /// Give back a claim whose Job was never proposed, so the finding can be queued again.
+    pub fn release_followup(&mut self, job_id: &JobId, finding: &str) -> Result<(), WriteError> {
+        self.conn
+            .execute(
+                "DELETE FROM job_review_followups
+                 WHERE job_id = ?1 AND finding = ?2 AND kind = 'queued' AND target = ''",
+                rusqlite::params![job_id.as_str(), finding],
+            )
+            .map(|_| ())
+            .map_err(fault("releasing a follow-up"))
+            .map_err(WriteError::Database)
     }
 }

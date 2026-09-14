@@ -193,3 +193,30 @@ async fn an_issue_with_no_title_off_context_or_refused_by_the_forge_is_not_kept(
     ));
     assert_eq!(followed(&fleet, &job).await, Vec::new());
 }
+
+/// **A second press on a queued finding proposes nothing**, even when both presses arrive at once.
+#[tokio::test]
+async fn a_finding_already_queued_is_refused_and_proposes_no_second_job() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, Delivering::default());
+    let job = reviewed(&fleet, &home).await;
+    let press = || {
+        fleet.queue_after_finding(
+            ipc::JobId::from(&job),
+            ipc::FindingQueued {
+                finding: FINDING.to_string(),
+            },
+        )
+    };
+
+    let (first, second) = tokio::join!(press(), press());
+    assert!(
+        matches!(
+            (&first, &second),
+            (Ok(_), Err(Refusal::IllegalMove(_))) | (Err(Refusal::IllegalMove(_)), Ok(_))
+        ),
+        "one press queues a Job and the other is refused"
+    );
+    assert!(matches!(press().await, Err(Refusal::IllegalMove(_))));
+    assert_eq!(followed(&fleet, &job).await.len(), 1);
+}

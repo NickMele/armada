@@ -1481,7 +1481,7 @@ description = "A person turns a For context finding into a Job that starts when 
 notes = """
 **A new Job, created waiting on this one.** Fleet proposes it from the finding's words and why it was raised, on this Job's workflow and repository, with a `depends_on` edge to this Job written at creation. It goes to the approval gate like any proposal, and the hold keeps it queued until this Job lands. #906.
 
-**No edge is added to a Job that already exists**, so the rule that every edge points at an older Job stands. A finding the Job's latest review did not raise for context is refused, a 409.
+**No edge is added to a Job that already exists**, so the rule that every edge points at an older Job stands. A finding the Job's latest review did not raise for context is refused, a 409. So is a finding that already has a Job queued behind it, so a second press proposes nothing.
 
 The finding shows what it became under `confidence.followed`. What comes back is this Job as it stands.
 
