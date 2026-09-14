@@ -491,7 +491,6 @@ export function App() {
           <HelmDock
             helm={state.helm}
             repositories={repositories}
-            scope={state.repository}
             live={live}
             onAsk={(text) => void askHelm(text)}
             onStartFresh={() => void startHelmFresh()}

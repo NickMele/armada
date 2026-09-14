@@ -160,7 +160,7 @@ const REPOSITORIES: RepositorySummary[] = [
 ];
 
 describe("which repository Helm answers for", () => {
-  it("follows a specific rail pick over everything else", () => {
+  it("follows a pick made after a point", () => {
     const helm = new HelmConnection({ publish: () => {}, port: () => null });
     helm.onRepositoriesChanged(REPOSITORIES);
     helm.point(OTHER);
@@ -168,13 +168,33 @@ describe("which repository Helm answers for", () => {
     expect(helm.target()).toBe(MANIFEST);
   });
 
-  it("on All, an explicit point wins until the pick leaves All and comes back", () => {
+  // #948's bug: Discuss on another card was ignored whenever a specific
+  // repository was already picked, because the pick was given a fixed
+  // priority over a point rather than the two being compared by which was
+  // most recent.
+  it("lets Discuss point Helm at another repository while one stays picked", () => {
     const helm = new HelmConnection({ publish: () => {}, port: () => null });
     helm.onRepositoriesChanged(REPOSITORIES);
-    helm.onPicked(null);
+    helm.onPicked(REPOSITORIES[0]!.root);
+    expect(helm.target()).toBe(MANIFEST);
+
+    helm.point(OTHER);
+    expect(helm.target()).toBe(OTHER);
+  });
+
+  it("a pick made after Discuss is the most recent act again", () => {
+    const helm = new HelmConnection({ publish: () => {}, port: () => null });
+    helm.onRepositoriesChanged(REPOSITORIES);
     helm.point(OTHER);
     expect(helm.target()).toBe(OTHER);
 
+    helm.onPicked(REPOSITORIES[0]!.root);
+    expect(helm.target()).toBe(MANIFEST);
+  });
+
+  it("moving to All is not itself an act — the most recent pick or point still stands", () => {
+    const helm = new HelmConnection({ publish: () => {}, port: () => null });
+    helm.onRepositoriesChanged(REPOSITORIES);
     helm.onPicked(REPOSITORIES[0]!.root);
     helm.onPicked(null);
     expect(helm.target()).toBe(MANIFEST);

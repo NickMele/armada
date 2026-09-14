@@ -179,8 +179,8 @@ export class HelmSocket {
 /**
  * Which repository Helm answers for, and the socket onto it.
  *
- * A specific rail pick always wins; on All repositories an explicit point —
- * "Discuss with Helm", or the dock's own switch — wins next, and failing that
+ * The most recent explicit act wins — a pick to a specific repository, or a
+ * point ("Discuss with Helm", the dock's own switch) — and failing either,
  * Helm stays on the last repository it actually heard from this run, or the
  * first one Fleet lists.
  */
@@ -189,9 +189,20 @@ export class HelmConnection {
   private readonly port: () => number | null;
   private readonly socket: HelmSocket;
   private repositories: readonly RepositorySummary[] = [];
-  private pickedRoot: string | null = null;
-  /** An explicit point, on All repositories only — "Discuss with Helm", or the dock's own switch. */
-  private pointed: string | null = null;
+  /**
+   * The most recent explicit act — a pick to a specific repository, or a
+   * point ("Discuss with Helm", the dock's own switch) — whichever came
+   * last. `none` until either has ever happened.
+   *
+   * **Moving to All is not an act with a target of its own.** A pick to a
+   * repository sets this; a pick to All carries none to set, so it leaves
+   * whichever act was most recent standing — which is what lets a person
+   * pick a repository, look at All, and find Helm still on the one they
+   * picked, and what lets Discuss survive the rail moving under it.
+   */
+  private explicit: { kind: "picked"; root: string } | { kind: "pointed"; manifestId: string } | { kind: "none" } = {
+    kind: "none",
+  };
   /** The last repository a message was actually sent to. In memory for this run of Bridge —
    * surviving a quit needs a `crates/config` field or a new local store, neither of which this reaches. */
   private lastTalked: string | null = null;
@@ -212,18 +223,15 @@ export class HelmConnection {
     this.retarget();
   }
 
-  /** The rail's own pick moved. `null` is All repositories. */
+  /** The rail's own pick moved. `null` is All repositories, which names nothing to point at. */
   onPicked(root: string | null): void {
-    this.pickedRoot = root;
-    // A specific pick always wins, so a point made on All does not survive
-    // leaving it — coming back to All starts from "last talked to" again.
-    if (root !== null) this.pointed = null;
+    if (root !== null) this.explicit = { kind: "picked", root };
     this.retarget();
   }
 
   /** "Discuss with Helm" on a card, or the dock's own switch. The rail's pick does not move. */
   point(manifestId: string): void {
-    this.pointed = manifestId;
+    this.explicit = { kind: "pointed", manifestId };
     this.retarget();
   }
 
@@ -256,10 +264,13 @@ export class HelmConnection {
   }
 
   private targetManifestId(): string | null {
-    if (this.pickedRoot !== null) {
-      return this.repositories.find((one) => one.root === this.pickedRoot)?.manifest?.id ?? null;
+    const explicit = this.explicit;
+    if (explicit.kind === "picked") {
+      // Looked up live, not snapshotted: a repository picked before its
+      // Manifest finished reading is followed to it the moment it arrives.
+      return this.repositories.find((one) => one.root === explicit.root)?.manifest?.id ?? null;
     }
-    if (this.pointed !== null) return this.pointed;
+    if (explicit.kind === "pointed") return explicit.manifestId;
     if (this.lastTalked !== null) return this.lastTalked;
     return this.repositories.find((one) => one.manifest !== undefined)?.manifest?.id ?? null;
   }

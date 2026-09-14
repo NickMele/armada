@@ -11,15 +11,13 @@ import type { BridgeState } from "../../shared/bridge";
 export type HelmDockProps = {
   helm: BridgeState["helm"];
   repositories: readonly RepositorySummary[];
-  /** The rail's own pick. `null` is All repositories — the only scope the switch draws in. */
-  scope: string | null;
   live: boolean;
   onAsk: (text: string) => void;
   onStartFresh: () => void;
   onSwitch: (manifestId: string) => void;
 };
 
-export function HelmDock({ helm, repositories, scope, live, onAsk, onStartFresh, onSwitch }: HelmDockProps) {
+export function HelmDock({ helm, repositories, live, onAsk, onStartFresh, onSwitch }: HelmDockProps) {
   const [draft, setDraft] = useState("");
   const current = helm.state === "none" ? undefined : helm.manifestId;
   const options = repositories
@@ -55,7 +53,11 @@ export function HelmDock({ helm, repositories, scope, live, onAsk, onStartFresh,
       <HelmComposer
         current={current}
         repositories={options}
-        onSwitch={scope === null && options.length > 1 ? onSwitch : undefined}
+        // Drawn whenever there is somewhere else to point Helm — a specific
+        // pick does not hide it, because Discuss or the switch itself is
+        // what points Helm away from the picked repository without moving
+        // the picker.
+        onSwitch={options.length > 1 ? onSwitch : undefined}
         onStartFresh={onStartFresh}
         startFreshDisabled={replying}
         value={draft}
