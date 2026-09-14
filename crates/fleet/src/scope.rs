@@ -142,6 +142,8 @@ where
         at_work.declares(paths.clone());
         drop(working);
         self.kept_plan(&job, &step, &paths).await;
+        // After the record, which is what the comparison reads. #998.
+        self.claims_announced(&job).await;
         Ok(Declared)
     }
 

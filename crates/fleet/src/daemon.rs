@@ -165,6 +165,10 @@ pub struct Fleet<H, V, W> {
     /// process would name a position in a list that has since changed, and the
     /// answers it produces are on the record already.
     sweeping: Mutex<Sweep>,
+    /// What each Job is owed about other Jobs writing where it writes, and when
+    /// its Drone was last told. Never written down, for `sweeping`'s reason —
+    /// `crate::peers`.
+    peering: Mutex<crate::peers::Peering>,
     /// Which commit is being proved and what came back. Never written down, for
     /// `sweeping`'s reason; an `Arc` because the run is spawned — `crate::proving`.
     proving: Arc<Mutex<crate::proving::Proving>>,

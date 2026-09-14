@@ -44,9 +44,20 @@ pub struct Crossed {
     sent_back: Option<SentBack>,
     the_plan: Option<ThePlan>,
     dismissed: Option<Dismissed>,
+    peers: Option<crate::peers::PeersChanged>,
 }
 
 impl Crossed {
+    /// What other Jobs writing here claimed or landed while no Drone was there
+    /// to be told. Folded in by `crate::spawning`, like the redirect. #998.
+    pub(crate) fn and_peers(self, peers: Option<crate::peers::PeersChanged>) -> Crossed {
+        Crossed { peers, ..self }
+    }
+
+    pub(crate) fn peers(&self) -> Option<&crate::peers::PeersChanged> {
+        self.peers.as_ref()
+    }
+
     /// A boundary that carries nothing: a Job's first step, and every spawn
     /// that has not been taught to carry anything yet.
     pub fn nothing() -> Crossed {

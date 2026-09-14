@@ -297,6 +297,12 @@ where
             }
             _ => None,
         };
+        // Every merge, whether or not the forge named the branch: what is owed
+        // is news that the work landed, and the files are read off the Job's
+        // own record. #998.
+        if matches!(landed, Landing::Merged { .. }) {
+            self.landing_announced(job).await;
+        }
         let noticed = Noticed {
             job: job.clone(),
             landed,

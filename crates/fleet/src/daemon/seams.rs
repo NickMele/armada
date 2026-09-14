@@ -420,6 +420,9 @@ where
     pub(crate) fn sweeping(&self) -> &Mutex<Sweep> {
         &self.sweeping
     }
+    pub(crate) fn peering(&self) -> &Mutex<crate::peers::Peering> {
+        &self.peering
+    }
     pub(crate) fn polled(&self) -> &Mutex<Option<Polled>> {
         &self.polled
     }

@@ -114,6 +114,11 @@ where
         // the same kind of fact — what is true of this Job at the moment a
         // Drone starts, rather than what the act that reached this spawn knew.
         let overtaken = self.overtaken_by_a_sibling(job).await;
+        // This Job's own claims are announced first, so a Job dispatched with
+        // `write_targets` hears of its peers in this brief; then whatever it
+        // is owed and had no Drone to take. #998.
+        self.claims_announced(&job_id).await;
+        let peers = self.peer_news_for_the_brief(&job_id).await;
         // Asked of the record on every spawn and answered `None` unless a later
         // step still stands where it sent the work back. Its findings then go
         // to every Drone the walk forward puts on, not only the first.
@@ -140,6 +145,7 @@ where
         let opening = opening
             .also_carrying(waiting.clone())
             .overtaken_by(overtaken)
+            .told_of_peers(peers)
             .sent_back_by(sent_back)
             .carrying_the_plan(the_plan)
             .ruling_out(self.dismissed_for(job, step).await?);
