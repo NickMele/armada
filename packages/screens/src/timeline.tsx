@@ -22,6 +22,7 @@ import { Fragment, type ReactNode } from "react";
 import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
 import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/components";
 
+import { isSweepMarker } from "./declared";
 import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import { askedOf, didNotPass, judgeAsking } from "./gates";
@@ -342,7 +343,9 @@ function checksRow(
   runs: CheckRun[],
   current: boolean,
 ): TimelineRow | undefined {
-  const declared = step.checks?.length ?? 0;
+  // Without the sweep marker, which declares every Manifest Check and never
+  // runs: counted, it read `8 of 9` beside the rail's `8 of 8`. #1079.
+  const declared = (step.checks ?? []).filter((check) => !isSweepMarker(check)).length;
   const running = current && step.checking?.attempt === attempt.attempt;
   const failed = runs.filter(didNotPass);
   const mark: StepActivity =

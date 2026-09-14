@@ -40,6 +40,28 @@ function failedRun(attempt: number): CheckRun {
   return { attempt, name: "cargo_nextest", outcome: "failed", produced: "exit 101" };
 }
 
+// #1079: on the Job fixing #801 the rail read 8 of 8 and this row 8 of 9. The
+// ninth was Fleet's sweep marker, which declares every Manifest Check and is
+// never run, so it is not a Check to count.
+describe("the Checks row on a step Fleet gates on everything it declares", () => {
+  it("counts the Checks the rail counts, never the sweep marker ahead of them", () => {
+    const names = ["build", "test", "typecheck", "bridge_build", "storybook", "bridge_test", "format"];
+    const step: StepDetail = {
+      ...freshStep("implement", "Implement", 2),
+      state: "stopped",
+      checks: [
+        { kind: "every_manifest_check" },
+        ...names.map((name) => ({ kind: "manifest_check", name, run: name })),
+        { kind: "diff_nonempty" },
+      ],
+      check_runs: [...names, "diff_nonempty"].map((name) => ({ attempt: 1, name, outcome: "passed" })),
+      attempts: [{ attempt: 1, outcome: "stopped", started_at: "2026-09-10T14:22:18Z" }],
+    };
+    const [only] = timelineOf(step, [], NOW);
+    expect(only?.rows.find((row) => row.phase === "checks")?.meta).toBe("8 of 8 passed");
+  });
+});
+
 describe("an attempt is the spine", () => {
   it("draws one section per attempt, oldest first, the last one current", () => {
     const drawn = timelineOf(handedBack(), [], NOW);
