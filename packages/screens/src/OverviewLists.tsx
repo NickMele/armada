@@ -17,7 +17,7 @@
 import { ActiveJobsList } from "@armada/components";
 import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { BoardEmpty } from "./BoardEmpty";
-import { repositoryOf } from "./board";
+import { columnsFor, repositoryOf } from "./board";
 import { headlineOf } from "./lineage";
 import { overviewListsOf } from "./overview-lists";
 import { readingOf } from "./reading";
@@ -61,6 +61,9 @@ export function OverviewLists({
   const pickedRepository = repositories.find((one) => one.root === picked) ?? null;
   const all = picked === null;
   const { sections, dispatch, undrawable } = overviewListsOf(jobs, pickedRepository);
+  // Named, not drawn: `view` stays `card`, so this narrows the panel's own grid to the facts these
+  // rows actually carry rather than reserving a track nothing fills — `Jobs.tsx`'s own call.
+  const columns = columnsFor(jobs, repositories, all);
 
   const rowOf = (job: JobSummary) => (
     <Row
@@ -105,6 +108,7 @@ export function OverviewLists({
             count={section.jobs.length}
             selectable
             label={section.label}
+            columns={columns}
           >
             {section.jobs.map(rowOf)}
           </ActiveJobsList>

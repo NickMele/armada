@@ -195,11 +195,14 @@ function Copyable({
   copyValue,
   onCopied,
   className,
+  title,
 }: {
   value: ReactNode;
   copyValue?: string;
   onCopied?: (value: string) => void;
   className: string;
+  /** The full text, where the ground it sits on may clip it. Native, so it costs nothing to wire. */
+  title?: string;
 }) {
   const handleClick = useCallback(
     (event: MouseEvent<HTMLSpanElement>) => {
@@ -217,7 +220,12 @@ function Copyable({
   );
 
   return (
-    <span className={className} data-copies={copyValue !== undefined || undefined} onClick={handleClick}>
+    <span
+      className={className}
+      data-copies={copyValue !== undefined || undefined}
+      onClick={handleClick}
+      title={title}
+    >
       {value}
     </span>
   );
@@ -293,13 +301,18 @@ export function JobRowStacked({
 
       <div className="armada-job-row__body">
         <div className="armada-job-row__headline">
-          <span className="armada-job-row__title">{headline}</span>
+          {/* `title` only where `headline` is plain text — a status sentence carries no markup
+              worth restating, and a `ReactNode` cannot become an attribute's value. */}
+          <span className="armada-job-row__title" title={typeof headline === "string" ? headline : undefined}>
+            {headline}
+          </span>
           {handle ? (
             <Copyable
               className="armada-job-row__id"
               value={handle}
               copyValue={handle}
               onCopied={onCopied}
+              title={handle}
             />
           ) : null}
         </div>

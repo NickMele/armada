@@ -208,6 +208,7 @@
 }
 
 .armada-job-row__title {
+  min-width: 0;
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: var(--leading-base);
@@ -218,13 +219,22 @@
   white-space: nowrap;
 }
 
-/* The job id is metadata and machine-derived: set back, and mono. */
+/* The job id is metadata and machine-derived: set back, and mono.
+
+   **Shrinks and ellipses beside the title, rather than running past the row.**
+   `flex: none` held it at its full content width — invisible in a pane wide
+   enough to take it, and cut off mid-character inside a panel's own rounded
+   edge, which reads as broken rather than as a long name. `title` on the
+   element carries the full value the same way `armada-job-row__title` does. */
 .armada-job-row__id {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
