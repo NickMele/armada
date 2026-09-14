@@ -169,6 +169,8 @@ pub mod questioning;
 pub mod raising;
 pub mod readmitting;
 pub mod readopting;
+/// A person running a stopped step's Checks again, with no Drone — `#1105`.
+mod rechecking;
 mod reclaiming;
 /// What the boot read found and what the reconciliation did about it.
 mod reconciled;
@@ -267,7 +269,7 @@ pub use dry_run::{ChecksReported, DryRuns, NotRun};
 pub use evidence::{
     Call, Decline, EvidenceInbox, EvidenceTool, Landed, NotSubmitted, Recorded, Standing,
 };
-pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
+pub use gate::{apply, rule_on, Began, CheckBudget, CheckOutput, Ruling};
 pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spare, TheMachine};
 pub use holding::{GaveBack, Held, Holding, Reclaiming};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
@@ -285,6 +287,7 @@ pub use proposal::{proposed, Proposing};
 pub use proposing::{Brief, NotProposed, Proposal, ProposedJob, Unresolved};
 pub use questioning::{Answer, NotAnswered, NotAsked, Question, Told};
 pub use readopting::Recovered;
+pub use rechecking::Unrecheckable;
 pub use reconciled::Reconciled;
 pub use redaction::Redactor;
 pub use redispatch::Replacement;

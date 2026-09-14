@@ -1684,6 +1684,43 @@ Helm does not reach it, for `override_verdict`'s reason: it is not on the
 Intervention Ladder.
 """
 
+[operations.rerun_checks]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "A person runs a stopped step's Checks again on the worktree as it stands, where a failed Check held the Job for repair"
+notes = """
+**The act for a Check that failed where nothing needs redoing** (#1105). A
+Check can fail on something the change never touched — a suite timing out under
+load — and the acts at `awaiting_repair` each started a Drone to redo work that
+was already fine.
+
+**It re-runs, it does not retry.** No Drone starts, no attempt is opened and the
+retry budget is untouched: the gate runs on the worktree as it stands and the
+evidence already submitted, and its records are filed under the Drone's own run.
+`diff_nonempty` is decided on that run's recorded outcome, because the baseline
+the step began from went with the slot and a footprint read now would measure
+the step from where it stopped.
+
+**A failure moves nothing.** A reading that fails, or one with budget left to
+hand back, leaves the Job at `awaiting_repair` with the new runs on the record.
+Any other reading takes `awaiting_repair -> running` as a person's act and goes
+on as a first pass would: through the Judge and the advance gate, onto the next
+step, to a person's review, or to a stop of its own.
+
+**It takes no body and the request waits for the Checks.** The run is a task of
+its own, so a client that stops waiting does not stop it. The Checks wait for a
+place as any gate's do, and no timeout is added here.
+
+**Refused, each naming the act that applies instead:** a Job not held for
+repair, no step stopped, a step stopped on anything but a failed Check, a
+worktree that is gone, a Drone standing in the slot, and a re-run already in
+flight. While one is in flight `restart_step` and `redispatch_job` refuse too,
+since both would take the worktree the Checks are reading.
+
+Helm does not reach it, for `override_verdict`'s reason.
+"""
+
 [operations.show_again]
 kind = "command"
 transport = "HTTP"

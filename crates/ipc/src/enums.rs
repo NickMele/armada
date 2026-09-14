@@ -203,9 +203,10 @@ wire_enum! {
     /// different things. Pilot, the fifth act in `docs/concepts/job.md`, is
     /// absent because Fleet serves no route for it.
     ///
-    /// **A sixth act is a major bump**, by this seam's own table: the other
-    /// side matches on these, and an exhaustive match has no arm for a variant
-    /// it was built before.
+    /// **A new act is a minor bump.** Bridge types the field `string[]` and
+    /// offers only the acts it knows, so a spelling it was built before is
+    /// ignored rather than matched. The day it branches exhaustively on one,
+    /// this seam's table makes the next act a major.
     Recourse, core_model::Recourse, "a recourse"
 }
 wire_enum! {

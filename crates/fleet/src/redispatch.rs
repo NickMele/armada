@@ -68,6 +68,7 @@ where
     /// Job stops precisely where Fleet stopped deciding.
     pub async fn redispatch(&self, job_id: &JobId) -> Result<Replacement, Adrift> {
         let failed = self.load(job_id).await?;
+        self.not_while_checks_run_again(&failed)?;
         match failed.status() {
             JobStatus::Escalated
             | JobStatus::AwaitingRepair

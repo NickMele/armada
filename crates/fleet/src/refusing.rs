@@ -361,7 +361,11 @@ where
             | Adrift::CheckDidNotPass { job, .. }
             | Adrift::NotUndecided { job, .. }
             | Adrift::NotStandingThere { job }
-            | Adrift::NothingToRuleOn { job, .. } => Refusal::IllegalMove(
+            | Adrift::NothingToRuleOn { job, .. }
+            // A re-run of the Checks refused, and the two acts it refuses
+            // while it runs.
+            | Adrift::CannotRerunChecks { job, .. }
+            | Adrift::ChecksRunningAgain { job } => Refusal::IllegalMove(
                 WireError::raised(NOT_RESUMABLE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
@@ -371,7 +375,7 @@ where
             ),
             // A panic in the press's own task. Nothing about the request was
             // wrong and pressing again is reasonable, which is a fault's 500.
-            Adrift::PressAbandoned { job } => Refusal::Fault(
+            Adrift::PressAbandoned { job } | Adrift::RecheckAbandoned { job } => Refusal::Fault(
                 WireError::raised(FAULT, said, self.run_id()).about_job(ipc::JobId::from(job)),
             ),
             Adrift::NotRedispatchable { job, .. }

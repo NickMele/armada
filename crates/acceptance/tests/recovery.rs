@@ -441,6 +441,7 @@ fn everything_still_there() -> Standing {
         worktree_on_disk: true,
         checks_passed: true,
         workflow_held: true,
+        checks_rerunning: false,
     }
 }
 

@@ -486,6 +486,19 @@ pub enum Adrift {
     /// the second reading would answer a different question from the first.
     /// `restart_step` puts a fresh Drone on the worktree the last one left.
     NotStandingThere { job: JobId },
+    /// A person asked for a stopped step's Checks to run again and they
+    /// cannot. **Refused before anything runs**, naming the act that applies —
+    /// `crate::rechecking`.
+    CannotRerunChecks {
+        job: JobId,
+        why: crate::rechecking::Unrecheckable,
+    },
+    /// A restart or a redispatch was asked for while this Job's Checks are
+    /// running again. Both would take the worktree the Checks are reading.
+    ChecksRunningAgain { job: JobId },
+    /// The task a re-run of the Checks ran on ended without answering, which
+    /// only a panic in it does. The Job is pressable again, as a press is.
+    RecheckAbandoned { job: JobId },
     /// A person asked a Job to show its work and it cannot run. **Refused
     /// before anything runs**, and the reason names what is missing rather
     /// than the press failing on it — `crate::showing_again`.

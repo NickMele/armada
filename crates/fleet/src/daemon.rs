@@ -194,6 +194,9 @@ pub struct Fleet<H, V, W> {
     /// Which Jobs have a person's press out. Never written down, for
     /// `proving`'s reason; shared because the press's own task gives it back.
     pressing: crate::showing_again::Pressing,
+    /// Which Jobs have their Checks running again. Never written down, for
+    /// `pressing`'s reason — `crate::rechecking`.
+    rechecking: crate::rechecking::Rechecking,
     /// Which Jobs have a person's run out in their worktree, and how to stop
     /// it. Never written down, for `pressing`'s reason — `crate::rehearsing`.
     rehearsals: crate::rehearsing::Rehearsals,

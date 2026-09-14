@@ -161,6 +161,26 @@ impl FakeDaemon {
         }
         Ok(job.clone())
     }
+    /// A re-run of the Checks, faked on what the transport can see: **only a
+    /// Job held for repair has a failed Check to run again.** Which trigger
+    /// stopped the step and what the slot holds are Fleet's.
+    pub(super) async fn fake_rerun_checks(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if job.status.as_wire() != "awaiting_repair" {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.not_held_for_repair",
+                format!(
+                    "a Job at {} has no failed Check to run again",
+                    job.status.as_wire()
+                ),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
     /// A press, faked on the one thing the transport can see: the Job has to
     /// be there. This daemon holds no worktree and no harness, so the answer is
     /// the press having run and captured nothing — a 200 carrying why, which is

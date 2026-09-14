@@ -505,6 +505,21 @@ pub trait Commands: Send + Sync + 'static {
     fn rerun_gate(&self, job_id: JobId)
         -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `rerun_checks` — a failed Check held the Job for repair, and a person
+    /// runs the step's Checks again on the worktree as it stands.
+    ///
+    /// **By `Arc`, for [`Commands::show_again`]'s reason**: the Checks take
+    /// minutes and run as a task of their own, so a client that stops waiting
+    /// does not stop them. No Drone starts and no retry is spent.
+    ///
+    /// [`Refusal::IllegalMove`] on a Job not held for repair, a step stopped on
+    /// anything but a failed Check, a worktree that is gone, a Drone in the
+    /// slot, or a re-run already in flight.
+    fn rerun_checks(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
     /// `show_again` — run the repository's harness against this Job's worktree
     /// now, and keep what it captured as a set of its own.
     ///

@@ -123,6 +123,7 @@ pub fn standing(checks_passed: bool) -> Standing {
         worktree_on_disk: true,
         checks_passed,
         workflow_held: true,
+        checks_rerunning: false,
     }
 }
 

@@ -33,8 +33,8 @@ use crate::commands::{
     file_finding_issue, file_report, forget_job, kill_drone, kill_job, merge_pull_request,
     override_verdict, propose_from_request, propose_job, queue_after_finding, raise_cost_cap,
     raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job, reject_job, request_changes,
-    rerun_gate, resolve_pull_request_conflict, restart_step, set_when_blocked, set_when_refused,
-    show_again, stop_proposal, take_up_remarks,
+    rerun_checks, rerun_gate, resolve_pull_request_conflict, restart_step, set_when_blocked,
+    set_when_refused, show_again, stop_proposal, take_up_remarks,
 };
 use crate::conversing::{ask_helm, observe_helm, start_helm_fresh};
 use crate::daemon::Daemon;
@@ -192,6 +192,7 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             post(override_verdict::<D>),
         )
         .route("/jobs/:job_id/rerun_gate", post(rerun_gate::<D>))
+        .route("/jobs/:job_id/rerun_checks", post(rerun_checks::<D>))
         .route("/jobs/:job_id/show_again", post(show_again::<D>))
         .route("/jobs/:job_id/run_sheet", get(get_run_sheet::<D>))
         .route("/jobs/:job_id/runs", get(list_runs::<D>))
