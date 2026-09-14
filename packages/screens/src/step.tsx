@@ -383,9 +383,6 @@ export function noticeOf(
   /** How the card a gaming flag holds this step with draws its lines and answers. #1079. */
   deciding?: Deciding,
 ): StepNotice | undefined {
-  // **`reviewing` draws no notice of its own.** The header's Awaiting review
-  // badge already says why the step is on screen; a band repeating it was one
-  // more sentence between a person and the record beneath it. #1129.
   // **The one thing a redirect into a healthy drone leaves behind.** That job
   // is `running` before the send and `running` after the answer, so nothing
   // else on the screen says a person spoke to it — and a press that changed

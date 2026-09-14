@@ -113,7 +113,7 @@ test("the band names the trigger and Fleet's own reason for it, sentence-cased",
   await expect.element(page.getByText(UNDECIDED_SAID, { exact: false })).toBeVisible();
 });
 
-// #1129: the callout repeated the header's own Awaiting review badge.
+// The header's own Awaiting review badge already says why the step is on screen.
 test("reviewing draws no notice of its own", () => {
   const showing = step();
   expect(noticeOf(job(), whole(showing), "reviewing", showing, opens())).toBeUndefined();

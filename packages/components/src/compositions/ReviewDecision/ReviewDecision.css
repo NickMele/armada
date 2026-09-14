@@ -1,7 +1,5 @@
 /* Review decision — flush with the record above it rather than a card of its
-   own. The verdict sheet, Armada's review and this were three nested borders
-   for one thing a person reads top to bottom; one container is the panel
-   itself. #1129. */
+   own: the panel is the one container for a page read top to bottom. */
 .armada-decision {
   display: flex;
   flex-direction: column;

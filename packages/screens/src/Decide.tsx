@@ -231,6 +231,7 @@ export function Decide({
                   : `Merges the pull request on ${host}, then takes the work. Armada runs the ` +
                     `repository's after-merge checks against what landed; merging it on ${host} ` +
                     "yourself skips them.",
+              approveNote: "Takes the work without merging — the pull request stays open.",
               ...(conflicted ? { mergeBlockedReason: "Resolve the conflicts first." } : {}),
             })}
         changes={changes}

@@ -41,8 +41,7 @@ type Story = StoryObj<typeof ReviewDecision>;
  */
 export const NothingWrittenYet: Story = {
   args: { note: "" },
-  // #1129: what each act does was a paragraph above the group; it is each
-  // button's own tooltip now, and nothing sits above the buttons any more.
+  // What each act does is each button's own tooltip.
   play: async ({ canvas, userEvent }) => {
     const approve = canvas.getByRole("button", { name: "Approve the work" });
     await userEvent.hover(approve);
@@ -91,7 +90,7 @@ export const ChangesListed: Story = {
     ],
   },
   play: async ({ args, canvas, userEvent }) => {
-    // No count beside the label — #1129, it read as part of the sentence.
+    // No count beside the label — it read as part of the sentence.
     await expect(canvas.getByText("What should change")).toBeVisible();
 
     const send = canvas.getByRole("button", { name: "Request changes" });

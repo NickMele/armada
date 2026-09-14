@@ -633,9 +633,8 @@ export function verdictSlotAtGate({
   // Never `auto_merge`: approving here never merges regardless of that
   // policy, which holds a later, separate gate (`fleet::gate`, `reviewing`).
   //
-  // **Absent where there is a pull request to decide on.** What each act does
-  // used to be a paragraph here, above the buttons it described; each sentence
-  // is on its own button's tooltip now, in `ReviewDecision`. #1129.
+  // **Absent where there is a pull request to decide on** — each act's own
+  // sentence is a tooltip on its button in `ReviewDecision` instead.
   const note: ReactNode =
     never === true
       ? "Approving ends the Job here. Nothing is merged, and no pull request is waiting on it."

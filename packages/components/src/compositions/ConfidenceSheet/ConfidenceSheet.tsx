@@ -90,9 +90,6 @@ export function ConfidenceSheet({ confidence, onView, grounds, captured, ci, fol
   return (
     <section className="armada-confidence" aria-label="Armada's review">
       <div className="armada-confidence__block">
-        {/* No "Armada's review" eyebrow above this: the section's own
-            aria-label already carries it, and the step title beside the panel
-            already stands as the heading. #1129. */}
         <span className="armada-confidence__says" data-says={says}>
           {says === "confident" ? "Confident" : "Not confident"}
         </span>
@@ -202,10 +199,7 @@ function Fold({
   title: string;
   summary: ReactNode;
   opened?: ReactNode;
-  /**
-   * The row `opened` names is already in the table this section holds — a
-   * callout above it would say the same thing twice. #1129.
-   */
+  /** The row `opened` names is already in the table this section holds. */
   hideCallout?: boolean;
   children: ReactNode;
 }) {
