@@ -6,7 +6,8 @@
 // state somebody captured that nobody can look at, so it fails here rather
 // than sitting unseen.
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -17,10 +18,13 @@ import { renderFor } from "../render";
 import { propsFor } from "./props";
 import { RECORDED_SLUGS, recorded } from "./recorded";
 
-const STORIES = readFileSync(
-  new URL("../stories/screens/JobDetail/JobDetail.stories.tsx", import.meta.url),
-  "utf8",
-);
+// Split across sibling files by #1044, so every one of them is read rather
+// than the single file this test used to name.
+const STORIES_DIR = fileURLToPath(new URL("../stories/screens/JobDetail/", import.meta.url));
+const STORIES = readdirSync(STORIES_DIR)
+  .filter((name) => name.endsWith(".stories.tsx"))
+  .map((name) => readFileSync(`${STORIES_DIR}${name}`, "utf8"))
+  .join("\n");
 
 describe.each(RECORDED_SLUGS)("the recording %s", (slug) => {
   it("replays into a Job this build can render", () => {
