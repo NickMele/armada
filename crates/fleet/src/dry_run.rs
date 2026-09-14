@@ -171,7 +171,7 @@ impl ChecksReported {
 }
 
 /// Which run is in flight, so the task ending one cannot end another.
-static RUNS: AtomicU64 = AtomicU64::new(0);
+pub(crate) static RUNS: AtomicU64 = AtomicU64::new(0);
 
 /// What one dry run is against: read under the slot lock, held while it is not.
 struct Plan {

@@ -70,7 +70,9 @@ pub(super) fn fix_tool() -> Value {
              and waits for a person's approval; if that test already has a fix \
              drafted, nothing new is drafted and you are told which Job has it. If \
              it passes on main, the failure is in your change and nothing is \
-             drafted. This call waits while the test runs. It is not how you \
+             drafted. The call comes back at once, and what the test came to on \
+             main arrives as a later turn, however long it takes: carry on with \
+             your part meanwhile. It is not how you \
              report your work, which is submit_evidence, and it never passes your \
              own gate: your step's Checks still decide it.",
         "inputSchema": {

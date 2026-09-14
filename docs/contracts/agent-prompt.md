@@ -541,6 +541,35 @@ from the run and nothing else. Its own `Occasion`, `Checks`.
 └────────────────────────────────────────────────
 ```
 
+## The fix report
+
+Fires when the test a Drone said is broken on main has run there (#999). The
+`draft_fix` call answers once that run has started, for the checks report's
+reason, and what main showed arrives as this turn.
+
+**Only while the part is still going**, the checks report's rule: a submission,
+a kill or a Drone gone stops the run, and nothing is drafted from it.
+
+**Fleet's own report.** `fleet::FixReported` is the one constructor, built from
+the run and nothing else. Its own `Occasion`, `Fix`.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ THE TEST YOU SAID IS BROKEN ON MAIN ──────────
+│ `<test>` fails on main too, so the failure is
+│ not your change. A fix is drafted as Job <id>
+│ and waits for a person's approval. Carry on with
+│ your part: your own checks still fail on that
+│ test until the fix lands, so say so in your
+│ evidence.
+│
+│ (or, where it passes on main or could not run
+│ there, the sentence saying why nothing was
+│ drafted)
+└────────────────────────────────────────────────
+```
+
 ## The poke
 
 Fires when nothing structured has arrived at all. `poke_limit` is a

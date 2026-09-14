@@ -317,6 +317,13 @@ impl LiveSession for Session {
         }
     }
 
+    async fn fix(&self, reported: &crate::fixing::FixReported) -> Result<(), io::Error> {
+        match self {
+            Session::Spawned(session) => session.fix(reported).await,
+            Session::Adopted(_) => Err(io::Error::other(NOTHING_TO_SPEAK_INTO)),
+        }
+    }
+
     async fn checks(&self, reported: &crate::dry_run::ChecksReported) -> Result<(), io::Error> {
         match self {
             Session::Spawned(session) => session.checks(reported).await,

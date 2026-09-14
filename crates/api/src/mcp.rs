@@ -199,9 +199,10 @@ async fn called<D: Tools>(
             Ok(receipt) => Answered::Recorded { id, receipt },
             Err(why) => Answered::Refused { id, why },
         },
-        // **Held open while one test runs against main**, `run_checks`'s shape:
-        // the outcome is the answer, and what bounds the wait is Fleet's. #999.
-        Incoming::Fix { id, fix } => match served.daemon().draft_fix(caller, fix).await {
+        // **Answered once the run on main has started**, `run_checks`'s shape:
+        // what it came to is a later turn. By `Arc`, because the run outlives
+        // this call. #999.
+        Incoming::Fix { id, fix } => match served.shared().draft_fix(caller, fix).await {
             Ok(receipt) => Answered::Recorded { id, receipt },
             Err(why) => Answered::Refused { id, why },
         },

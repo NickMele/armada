@@ -73,11 +73,12 @@ impl Working {
         self.dry_runs
     }
 
-    /// Fleet has started running one test against main for the Drone. **The
-    /// clocks suspend as for a dry run**, and the step's fixes are spent, not
-    /// its dry runs. #999.
-    pub(crate) fn fixing(&mut self, at: Timestamp) {
+    /// Fleet has started run `run`, one test against main, for the Drone. **The
+    /// clocks suspend and a submission stops it as for a dry run**, and the
+    /// step's fixes are spent, not its dry runs. #999.
+    pub(crate) fn fixing(&mut self, at: Timestamp, run: u64, going: Going) {
         self.checking_since = Some(at);
+        self.in_flight = Some((run, going));
         self.fixes += 1;
     }
 

@@ -3,15 +3,18 @@
 //!
 //! The Checks are real commands: `/usr/bin/false` fails on main and
 //! `/usr/bin/true` passes, so what the run came to is what the case is about.
+//! The call answers once the run has started; [`came_to`] waits for the rest.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use config::ResolvedWorkflow;
+use core_model::JobId;
 use ipc::mcp::DraftFix;
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, OneTest, Sketch};
 
 use crate::daemon::Fleet;
-use crate::fixing::{Drafted, Fixes, NotFixed};
+use crate::fixing::{Drafted, FixAnswer, Fixes, NotFixed};
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_over, one, worktree_directory};
 use crate::tests::tmp::TempDir;
@@ -19,6 +22,7 @@ use crate::tests::tmp::TempDir;
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 const COMMIT: &str = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+const TEST: &str = "parser::takes_it";
 
 /// One step gated on `suite`, which runs one test by `one_test`.
 fn gated_on(one_test: &str) -> ResolvedWorkflow {
@@ -64,7 +68,7 @@ fn a_fleet(home: &TempDir, workflow: ResolvedWorkflow, fixes: u32) -> Arc<Fixtur
     Arc::new(Fleet::assembled(fittings))
 }
 
-async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
+async fn started(fleet: &Fixture, home: &TempDir) -> JobId {
     let job = fleet
         .propose(a_proposal("make the parser take it"))
         .await
@@ -86,21 +90,38 @@ fn fix_for(test: &str) -> DraftFix {
     }
 }
 
+/// Ask, and wait for what the run on main came to.
+async fn came_to(fleet: &Arc<Fixture>, reporter: &JobId, test: &str) -> Result<Drafted, NotFixed> {
+    match fleet.draft_fix(reporter, fix_for(test)).await? {
+        FixAnswer::Started(running) => running.finished().await.expect("the run reported"),
+        FixAnswer::AlreadyClaimed(fix) => panic!("already claimed by {}", fix.as_str()),
+    }
+}
+
+/// Every fix turn written into the reporter's transcript, as the rows carry it.
+async fn told_fix(fleet: &Fixture, home: &TempDir, reporter: &JobId) -> Vec<String> {
+    let job = fleet.load(reporter).await.expect("the reporter");
+    let drone = job.assigned_drone().cloned().expect("a Drone on it");
+    let path =
+        crate::transcript::transcript_of(&home.path().to_string_lossy(), &job.handle(), &drone);
+    std::fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|row| row.contains("\"occasion\":\"fix\""))
+        .map(str::to_string)
+        .collect()
+}
+
 /// **The claim of the issue.** The test fails on main too, so a fix is drafted
-/// waiting for a person, the test is claimed for it, and both Jobs say so.
+/// waiting for a person, the test is claimed for it, both Jobs say so, and the
+/// Drone is told as a later turn.
 #[tokio::test]
 async fn a_test_failing_on_main_too_drafts_a_fix_and_claims_the_test() {
     let home = TempDir::new();
     let fleet = a_fleet(&home, gated_on("/usr/bin/false {}"), 1);
     let reporter = started(&fleet, &home).await;
 
-    let drafted = fleet
-        .draft_fix(&reporter, &fix_for("parser::takes_it"))
-        .await
-        .expect("a fix is drafted");
-    let Drafted::New(fix) = drafted else {
-        panic!("a new fix, not {drafted:?}");
-    };
+    let Drafted(fix) = came_to(&fleet, &reporter, TEST).await.expect("drafted");
 
     let record = fleet.load(&fix).await.expect("the fix Job");
     assert_eq!(record.status(), core_model::JobStatus::AwaitingApproval);
@@ -113,9 +134,47 @@ async fn a_test_failing_on_main_too_drafts_a_fix_and_claims_the_test() {
         let job = fleet.load(side).await.expect("the Job");
         let claims = fleet.breakages_of(&job).await.expect("read");
         assert_eq!(claims.len(), 1, "both Jobs name the claim");
-        assert_eq!(claims[0].test, "parser::takes_it");
+        assert_eq!(claims[0].test, TEST);
         assert_eq!(claims[0].fix, ipc::JobId::from(&fix));
     }
+    let told = told_fix(&fleet, &home, &reporter).await;
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert!(told[0].contains("fails on main too"), "{}", told[0]);
+}
+
+/// **The call does not wait for main.** A test that takes a while there is
+/// answered before it finishes, and the Drone waits on it as on a dry run.
+#[tokio::test]
+async fn the_call_answers_before_the_test_on_main_finishes() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, gated_on("/bin/sh -c 'sleep 2; exit 1' {}"), 1);
+    let reporter = started(&fleet, &home).await;
+
+    let asked = Instant::now();
+    let answer = fleet
+        .draft_fix(&reporter, fix_for(TEST))
+        .await
+        .expect("started");
+    assert!(
+        asked.elapsed() < Duration::from_secs(2),
+        "the call waited for the run: {:?}",
+        asked.elapsed()
+    );
+    assert!(fleet
+        .the_only_slot()
+        .await
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|at_work| at_work.is_checking()));
+    let FixAnswer::Started(running) = answer else {
+        panic!("a run, not a claim");
+    };
+    running
+        .finished()
+        .await
+        .expect("the run reported")
+        .expect("drafted");
 }
 
 /// **A pass on main is the Drone's own change**, and nothing is drafted.
@@ -125,8 +184,7 @@ async fn a_test_passing_on_main_drafts_nothing() {
     let fleet = a_fleet(&home, gated_on("/usr/bin/true {}"), 1);
     let reporter = started(&fleet, &home).await;
 
-    let refused = fleet
-        .draft_fix(&reporter, &fix_for("parser::takes_it"))
+    let refused = came_to(&fleet, &reporter, TEST)
         .await
         .expect_err("nothing is drafted");
     assert!(
@@ -135,6 +193,11 @@ async fn a_test_passing_on_main_drafts_nothing() {
     );
     let job = fleet.load(&reporter).await.expect("the reporter");
     assert!(fleet.breakages_of(&job).await.expect("read").is_empty());
+    let told = told_fix(&fleet, &home, &reporter).await;
+    assert!(
+        told.iter().any(|row| row.contains("passes on main")),
+        "{told:?}"
+    );
 }
 
 /// A second report of a claimed test names the fix already on it, and runs
@@ -145,18 +208,15 @@ async fn a_second_report_of_a_claimed_test_names_the_fix_on_it() {
     let fleet = a_fleet(&home, gated_on("/usr/bin/false {}"), 1);
     let reporter = started(&fleet, &home).await;
 
-    let first = fleet
-        .draft_fix(&reporter, &fix_for("parser::takes_it"))
-        .await
-        .expect("drafted");
-    let Drafted::New(fix) = first else {
-        panic!("a new fix, not {first:?}");
-    };
+    let Drafted(fix) = came_to(&fleet, &reporter, TEST).await.expect("drafted");
     let again = fleet
-        .draft_fix(&reporter, &fix_for("parser::takes_it"))
+        .draft_fix(&reporter, fix_for(TEST))
         .await
         .expect("answered");
-    assert_eq!(again, Drafted::AlreadyClaimed(fix));
+    let FixAnswer::AlreadyClaimed(claimed) = again else {
+        panic!("a second run started: {again:?}");
+    };
+    assert_eq!(claimed, fix);
 }
 
 /// A step asks for as many fixes as the composition root allows, and no more.
@@ -166,12 +226,9 @@ async fn a_part_asks_for_no_more_fixes_than_it_is_allowed() {
     let fleet = a_fleet(&home, gated_on("/usr/bin/false {}"), 1);
     let reporter = started(&fleet, &home).await;
 
-    fleet
-        .draft_fix(&reporter, &fix_for("parser::takes_it"))
-        .await
-        .expect("drafted");
+    came_to(&fleet, &reporter, TEST).await.expect("drafted");
     let refused = fleet
-        .draft_fix(&reporter, &fix_for("parser::other"))
+        .draft_fix(&reporter, fix_for("parser::other"))
         .await
         .expect_err("spent");
     assert!(
@@ -188,7 +245,7 @@ async fn a_check_with_no_way_to_run_one_test_drafts_nothing() {
     let reporter = started(&fleet, &home).await;
 
     let refused = fleet
-        .draft_fix(&reporter, &fix_for("parser::takes_it"))
+        .draft_fix(&reporter, fix_for(TEST))
         .await
         .expect_err("nothing runs");
     assert!(
@@ -203,13 +260,7 @@ async fn a_fix_that_ends_gives_the_test_back() {
     let home = TempDir::new();
     let fleet = a_fleet(&home, gated_on("/usr/bin/false {}"), 1);
     let reporter = started(&fleet, &home).await;
-    let Drafted::New(fix) = fleet
-        .draft_fix(&reporter, &fix_for("parser::takes_it"))
-        .await
-        .expect("drafted")
-    else {
-        panic!("a new fix");
-    };
+    let Drafted(fix) = came_to(&fleet, &reporter, TEST).await.expect("drafted");
 
     fleet.kill_job(&fix).await.expect("the fix is killed");
 

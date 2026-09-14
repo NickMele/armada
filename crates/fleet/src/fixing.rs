@@ -1,27 +1,35 @@
 //! A Drone asking for the fix to a test it says is broken on main, and Fleet
 //! running just that test against main before anything is drafted. #999.
 //!
-//! **Two bounds, for `crate::dry_run`'s reasons one directory over.** A Drone
-//! waits on one Check run at a time and a step asks for at most [`Fixes`]; and
-//! the checkout of main is shared by every Job on the repository, so one run is
-//! out there at a time.
+//! **The call answers at once, and what the run came to is a later turn**, for
+//! `crate::dry_run`'s reason (#1020): the checkout of main may never have been
+//! built, and a build outlasts what the agent CLI waits on one call.
+//!
+//! **Three bounds.** A Drone waits on one run at a time, a step asks for at most
+//! [`Fixes`], and the checkout of main is shared by every Job on the repository,
+//! so one test runs there at a time.
 //!
 //! **Nothing here passes a gate.** A test that fails on main drafts a Job that
 //! waits for a person; the Drone's own step is still decided by its Checks.
 
 use std::fmt;
 use std::path::Path;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
     Actor, Breakage, BreakageClaim, Job, JobId, ManifestId, ResolvedCheck, StepId, Ulid,
 };
 use ipc::mcp::{DraftFix, NotRecorded};
+use tokio::task::JoinHandle;
 use verification::{Exit, Observed};
 
 use crate::adrift::Adrift;
+use crate::checking::{Going, Stop};
 use crate::daemon::Fleet;
 use crate::drafting::StatedBy;
+use crate::session::{LiveSession, Occasion};
 
 /// How many fixes one step may ask for.
 ///
@@ -40,25 +48,47 @@ impl Fixes {
     }
 }
 
-/// What asking came to: a fix drafted now, or the one already claiming the test.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Drafted {
-    New(JobId),
+/// What the call answered: the fix already claiming the test, or a run started.
+#[derive(Debug)]
+pub enum FixAnswer {
     AlreadyClaimed(JobId),
+    Started(FixRunning),
 }
 
-impl Drafted {
-    /// The receipt's word, which names the fix Job either way.
+impl FixAnswer {
+    /// The receipt's word.
     pub fn word(&self) -> String {
         match self {
-            Drafted::New(job) => format!("drafted {}", job.as_str()),
-            Drafted::AlreadyClaimed(job) => format!("already being fixed by {}", job.as_str()),
+            FixAnswer::AlreadyClaimed(job) => format!(
+                "already being fixed by {}. Nothing new is drafted; carry on with your part",
+                job.as_str()
+            ),
+            FixAnswer::Started(_) => String::from(
+                "started. Fleet is running that test on main, and what it came to arrives as \
+                 a later turn, however long it takes. Carry on with your part meanwhile",
+            ),
         }
     }
 }
 
-/// Why no fix was drafted. **Every one is a tool error the Drone reads**, and
-/// none of them stops or advances its step.
+/// A run against main Fleet has started and owns. **Dropping this leaves it
+/// going.**
+#[derive(Debug)]
+pub struct FixRunning(JoinHandle<Option<Result<Drafted, NotFixed>>>);
+
+impl FixRunning {
+    /// What the Drone was told, or `None` where its step ended before the run.
+    pub async fn finished(self) -> Option<Result<Drafted, NotFixed>> {
+        self.0.await.ok().flatten()
+    }
+}
+
+/// The fix Job a failure on main drafted.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Drafted(pub JobId);
+
+/// Why no fix was drafted. **Every one reaches the Drone as words it can act
+/// on**, and none of them stops or advances its step.
 #[derive(Debug)]
 pub enum NotFixed {
     NothingIsWorking,
@@ -66,6 +96,8 @@ pub enum NotFixed {
     NoWayToRunOneTest { check: String },
     NotOneArgument { test: String },
     AlreadyRunning,
+    AlreadySubmitted,
+    Unheard,
     MainIsBusy,
     Spent { allowed: u32 },
     NoMain { why: String },
@@ -98,7 +130,17 @@ impl fmt::Display for NotFixed {
                  Copy the test's name without quotes"
             ),
             NotFixed::AlreadyRunning => out.write_str(
-                "Fleet is already running a Check for you. Wait for that answer, then ask again",
+                "Fleet is already running something for you — your checks, or a test on \
+                 main. Wait for its later turn, then ask again",
+            ),
+            NotFixed::AlreadySubmitted => out.write_str(
+                "you have submitted, and the checks are about to be run against your work, \
+                 so the test was not run on main. Say in your evidence what you found",
+            ),
+            NotFixed::Unheard => out.write_str(
+                "Fleet restarted while this part was going and can no longer send you a \
+                 later turn, so the test was not run on main and nothing is drafted. Say in \
+                 your evidence what you found",
             ),
             NotFixed::MainIsBusy => out.write_str(
                 "Fleet is already running a test against main for this repository. Carry on \
@@ -141,8 +183,33 @@ impl From<NotFixed> for NotRecorded {
     }
 }
 
+/// The later turn a run against main arrives as, built from the run alone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FixReported(String);
+
+impl FixReported {
+    fn of(test: &str, came_to: &Result<Drafted, NotFixed>) -> FixReported {
+        const HEADING: &str = "THE TEST YOU SAID IS BROKEN ON MAIN";
+        FixReported(match came_to {
+            Ok(Drafted(fix)) => format!(
+                "{HEADING}\n\n`{test}` fails on main too, so the failure is not your change. \
+                 A fix is drafted as Job {} and waits for a person's approval. Carry on with \
+                 your part: your own checks still fail on that test until the fix lands, so \
+                 say so in your evidence.",
+                fix.as_str()
+            ),
+            Err(why) => format!("{HEADING}\n\n{why}."),
+        })
+    }
+
+    /// The turn, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
+
 /// What a Drone asked about, resolved against its own part.
-struct Asked {
+struct Request {
     record: Job,
     step: StepId,
     repository: ManifestId,
@@ -161,34 +228,39 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Run the named test against main and, where it fails there too, draft the
-    /// fix and claim the test for it.
+    /// Start the named test against main or say why not; where it fails there
+    /// too, the task drafts the fix and claims the test for it.
     ///
-    /// **An already-claimed test answers before anything is spent.** Every other
-    /// road that reaches the run gives the clocks and the checkout back on the
-    /// way out, whatever the run came to.
-    pub async fn draft_fix(&self, caller: &JobId, fix: &DraftFix) -> Result<Drafted, NotFixed> {
-        let test = fix.test.trim();
-        let asked = self.what_fix_is_asked(caller, fix, test).await?;
+    /// **An already-claimed test answers before anything is spent.**
+    pub async fn draft_fix(
+        self: &Arc<Self>,
+        caller: &JobId,
+        fix: DraftFix,
+    ) -> Result<FixAnswer, NotFixed> {
+        let test = fix.test.trim().to_string();
+        let request = self.what_fix_is_asked(caller, &fix, &test).await?;
         let claimed = self
             .store()
             .lock()
             .await
-            .breakage_claimed(&asked.repository, &fix.check, test)
+            .breakage_claimed(&request.repository, &fix.check, &test)
             .ok()
             .flatten();
         if let Some(claim) = claimed {
-            return Ok(Drafted::AlreadyClaimed(claim.fix));
+            return Ok(FixAnswer::AlreadyClaimed(claim.fix));
         }
-        self.fix_begins(caller, &asked).await?;
-        let ran = self.run_on_main(&asked).await;
-        self.fix_ends(caller, &asked).await;
-        if !ran? {
-            return Err(NotFixed::PassesOnMain {
-                test: test.to_string(),
-            });
-        }
-        self.drafted_fix(caller, fix, &asked, test).await
+        // One counter with the dry runs, so a run one ended cannot end the other.
+        let run = crate::dry_run::RUNS.fetch_add(1, Ordering::Relaxed);
+        let (going, stop) = Stop::when_dropped();
+        self.fix_begins(caller, &request, run, going).await?;
+        let fleet = Arc::clone(self);
+        let caller = caller.clone();
+        Ok(FixAnswer::Started(FixRunning(tokio::spawn(async move {
+            let ran = fleet.run_on_main(&request, &stop).await;
+            fleet
+                .fix_ends(&caller, &request, run, ran, &fix, &test)
+                .await
+        }))))
     }
 
     /// Every claimed fix a Job is part of, from either side, for its detail.
@@ -238,7 +310,7 @@ where
         caller: &JobId,
         fix: &DraftFix,
         test: &str,
-    ) -> Result<Asked, NotFixed> {
+    ) -> Result<Request, NotFixed> {
         let Some(slot) = self.slot_of(caller).await else {
             return Err(NotFixed::NothingIsWorking);
         };
@@ -290,7 +362,7 @@ where
         let served = self.served_by(&record).map_err(|why| NotFixed::NoMain {
             why: why.to_string(),
         })?;
-        Ok(Asked {
+        Ok(Request {
             repository: ManifestId::carried(Ulid::carried(owner)),
             root: served.root().to_string(),
             run: ResolvedCheck::ManifestCheck {
@@ -310,16 +382,30 @@ where
 
     /// The marks, taken under the slot lock that reads the count: the step's
     /// allowance, the Drone's one run at a time, and the repository's checkout.
-    async fn fix_begins(&self, caller: &JobId, asked: &Asked) -> Result<(), NotFixed> {
+    async fn fix_begins(
+        &self,
+        caller: &JobId,
+        request: &Request,
+        run: u64,
+        going: Going,
+    ) -> Result<(), NotFixed> {
         let Some(slot) = self.slot_of(caller).await else {
             return Err(NotFixed::NothingIsWorking);
         };
         let mut working = slot.lock().await;
-        let Some(at_work) = working.as_mut() else {
+        let Some(at_work) = working.as_mut().filter(|at_work| {
+            at_work.is(request.record.id()) && at_work.standing().1 == request.step
+        }) else {
             return Err(NotFixed::NothingIsWorking);
         };
+        if at_work.session().unheard() {
+            return Err(NotFixed::Unheard);
+        }
         if at_work.is_checking() {
             return Err(NotFixed::AlreadyRunning);
+        }
+        if self.evidence_waiting_for(caller) > 0 {
+            return Err(NotFixed::AlreadySubmitted);
         }
         let allowed = self.fixes().allowed();
         if at_work.fixes() >= allowed {
@@ -329,20 +415,20 @@ where
             .fixing_on_main()
             .lock()
             .await
-            .insert(asked.root.clone())
+            .insert(request.root.clone())
         {
             return Err(NotFixed::MainIsBusy);
         }
-        at_work.fixing(self.now());
+        at_work.fixing(self.now(), run, going);
         Ok(())
     }
 
     /// Whether the test fails on main. `false` is a pass there.
-    async fn run_on_main(&self, asked: &Asked) -> Result<bool, NotFixed> {
+    async fn run_on_main(&self, request: &Request, stop: &Stop) -> Result<bool, NotFixed> {
         // Matched here rather than read off `NoBase::said`, whose sentences are
         // about photographing a before; these say what running a test there met.
         let (served, checkout) = self
-            .base_to_show_from(&asked.record)
+            .base_to_show_from(&request.record)
             .await
             .map_err(|why| NotFixed::NoMain {
                 why: match why {
@@ -360,7 +446,7 @@ where
         let ports = self.main_checkout_ports(&served).await;
         let env = self.main_checkout_port_env(&served).await;
         let completed = crate::checking::ran(
-            std::slice::from_ref(&asked.run),
+            std::slice::from_ref(&request.run),
             &[],
             false,
             false,
@@ -371,6 +457,7 @@ where
             &ports,
             &env,
             None,
+            stop,
         )
         .await;
         let exit = completed
@@ -381,43 +468,81 @@ where
                 _ => None,
             });
         match exit {
-            Some(Exit::Code(code)) if i64::from(*code) == asked.expect_exit_code => Ok(false),
+            Some(Exit::Code(code)) if i64::from(*code) == request.expect_exit_code => Ok(false),
             Some(Exit::NeverRan(_)) | None => Err(NotFixed::NeverRan),
             Some(_) => Ok(true),
         }
     }
 
-    /// Give the checkout and the clocks back. **Guarded on the step**, for
-    /// `dry_run_ends`' reason: the gate can advance one while the run is out.
-    async fn fix_ends(&self, caller: &JobId, asked: &Asked) {
-        self.fixing_on_main().lock().await.remove(&asked.root);
+    /// Take the mark off, draft where main failed too, give the checkout back
+    /// and tell the Drone — **only where this is still the run in flight**, so a
+    /// step that ended or a submission that stopped the run drafts nothing.
+    async fn fix_ends(
+        &self,
+        caller: &JobId,
+        request: &Request,
+        run: u64,
+        ran: Result<bool, NotFixed>,
+        fix: &DraftFix,
+        test: &str,
+    ) -> Option<Result<Drafted, NotFixed>> {
+        let came_to = match (self.fix_still_asked(caller, request, run).await, ran) {
+            (false, _) => None,
+            (true, Err(why)) => Some(Err(why)),
+            (true, Ok(false)) => Some(Err(NotFixed::PassesOnMain {
+                test: test.to_string(),
+            })),
+            // Still holding the checkout, so no second fix for this repository
+            // drafts meanwhile.
+            (true, Ok(true)) => Some(self.drafted_fix(caller, fix, request, test).await),
+        };
+        self.fixing_on_main().lock().await.remove(&request.root);
+        let came_to = came_to?;
+        self.told_fix(caller, request, &FixReported::of(test, &came_to))
+            .await;
+        Some(came_to)
+    }
+
+    /// Whether run `run` was still this Job's run in flight, taking it off if so.
+    async fn fix_still_asked(&self, caller: &JobId, request: &Request, run: u64) -> bool {
         let now = self.now();
+        let Some(slot) = self.slot_of(caller).await else {
+            return false;
+        };
+        let mut working = slot.lock().await;
+        working
+            .as_mut()
+            .filter(|at_work| at_work.is(request.record.id()))
+            .is_some_and(|at_work| at_work.checked(now, run))
+    }
+
+    /// The later turn, written down before the send, `Fleet::tell`'s order.
+    async fn told_fix(&self, caller: &JobId, request: &Request, told: &FixReported) {
         let Some(slot) = self.slot_of(caller).await else {
             return;
         };
-        let mut working = slot.lock().await;
-        if let Some(at_work) = working.as_mut() {
-            let (job, step, _) = at_work.standing();
-            if job == *asked.record.id() && step == asked.step {
-                at_work.checked(now);
-            }
-        }
+        let working = slot.lock().await;
+        let Some(at_work) = working
+            .as_ref()
+            .filter(|at_work| at_work.is(request.record.id()))
+        else {
+            return;
+        };
+        at_work.instructed(Occasion::Fix, told.text());
+        let _ = at_work.session().fix(told).await;
     }
 
     /// Draft the fix at the approval gate, then claim the test for it.
-    ///
-    /// **No race between the two**: the repository's checkout is held for the
-    /// whole run, so no second fix for this repository reaches here meanwhile.
     async fn drafted_fix(
         &self,
         caller: &JobId,
         fix: &DraftFix,
-        asked: &Asked,
+        request: &Request,
         test: &str,
     ) -> Result<Drafted, NotFixed> {
         let drafted = self
             .proposed_job(
-                proposal(fix, &asked.repository),
+                proposal(fix, &request.repository),
                 StatedBy::TheFix {
                     reported_by: caller.clone(),
                 },
@@ -430,7 +555,7 @@ where
             })?;
         let claim = BreakageClaim {
             fix: drafted.id().clone(),
-            repository: asked.repository.clone(),
+            repository: request.repository.clone(),
             breakage: Breakage {
                 check: fix.check.clone(),
                 test: test.to_string(),
@@ -443,7 +568,7 @@ where
             .lock()
             .await
             .claim_breakage(&claim, &self.now());
-        Ok(Drafted::New(drafted.id().clone()))
+        Ok(Drafted(drafted.id().clone()))
     }
 }
 

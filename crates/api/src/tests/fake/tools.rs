@@ -120,7 +120,7 @@ impl Tools for FakeDaemon {
     /// so a router test can tell the argument arrived. **The run against main
     /// and the draft** are `fleet::fixing`'s and tested there.
     async fn draft_fix(
-        &self,
+        self: std::sync::Arc<Self>,
         _caller: crate::Caller,
         fix: ipc::mcp::DraftFix,
     ) -> Result<Receipt, NotRecorded> {

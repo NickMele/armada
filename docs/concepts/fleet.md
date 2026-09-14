@@ -211,7 +211,7 @@ The remedy needs no new state: `depends_on` already sequences Jobs and already p
 
 ### A test broken on main
 
-**A Drone that hits a test already failing on main says so, and Fleet checks before anything is drafted.** Through `draft_fix` it names the Check and the test; Fleet runs just that test against a checkout of main, with the command the Check's `one_test` declares. Only a failure there drafts the fix, and the fix waits at the approval gate like any proposal. A pass there means the failure is the Drone's own, and nothing is drafted. [Manifest](manifest.md), Running one test by name, holds the key.
+**A Drone that hits a test already failing on main says so, and Fleet checks before anything is drafted.** Through `draft_fix` it names the Check and the test; Fleet runs just that test against a checkout of main, with the command the Check's `one_test` declares. The call answers once that run has started, and what it came to reaches the Drone as a later turn, as a dry run's report does. Only a failure there drafts the fix, and the fix waits at the approval gate like any proposal. A pass there means the failure is the Drone's own, and nothing is drafted. [Manifest](manifest.md), Running one test by name, holds the key.
 
 **The fix claims the test, so the same breakage is fixed once.** A claim names the repository, the Check and the test. A second Drone reporting that test is told which Job is fixing it, and nothing new is drafted. The claim ends when the fix Job ends, and forgetting the fix removes it; the Job that reported it is kept by id rather than linked, so forgetting the reporter first leaves the claim standing.
 

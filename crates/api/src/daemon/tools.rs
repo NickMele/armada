@@ -96,10 +96,11 @@ pub trait Tools: Send + Sync + 'static {
     /// **Held open while that one test runs against main**, for
     /// [`run_checks`](Tools::run_checks)'s reason: the outcome is the answer.
     /// The receipt names the fix Job, the one drafted now or the one already
-    /// claiming the test; a test that passes on main is a refusal. It passes
-    /// nothing on the caller's own step.
+    /// claiming the test. **It answers once the run has started**, and what
+    /// the run came to is a later turn. It passes nothing on the caller's own
+    /// step.
     fn draft_fix(
-        &self,
+        self: std::sync::Arc<Self>,
         caller: Caller,
         fix: ipc::mcp::DraftFix,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
