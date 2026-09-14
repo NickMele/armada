@@ -11,26 +11,16 @@
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import type { CheckRun as CheckRunRow } from "@armada/components";
+import { AssertionSet, type CheckRun as CheckRunRow } from "@armada/components";
 import type { StepDetail } from "@armada/protocol";
 
-import { checksChapter } from "./checks";
-import type { Following, Outputs } from "./outputs";
+import { checkSheetOf, checksChapter } from "./checks";
 import type { Opens } from "./phases";
 
 const OPENS: Opens = {
   jobId: "01M130Y1380016YK5S0JXBXDQ5",
   open: () => Promise.resolve({ ok: true }),
   onSaid: () => {},
-};
-
-const OUTPUTS: Outputs = { of: () => undefined, fetch: () => {} };
-
-const FOLLOWING: Following = {
-  reading: { state: "none" },
-  picked: null,
-  pick: () => {},
-  follow: () => {},
 };
 
 const STARTED = "2026-09-11T09:00:00Z";
@@ -80,7 +70,7 @@ function gating(over: Partial<StepDetail> = {}): StepDetail {
 }
 
 function rowsOf(step: StepDetail): CheckRunRow[] {
-  const chapter = checksChapter(step, [], OPENS, OUTPUTS, NOW, FOLLOWING);
+  const chapter = checksChapter(step, [], OPENS, NOW);
   const preview = chapter?.preview as ReactElement<{ rows: CheckRunRow[] }>;
   return preview.props.rows;
 }
@@ -103,7 +93,69 @@ describe("a step whose gate is running its Checks", () => {
   });
 
   it("counts what is running in the chapter's summary", () => {
-    const chapter = checksChapter(gating(), [], OPENS, OUTPUTS, NOW, FOLLOWING);
+    const chapter = checksChapter(gating(), [], OPENS, NOW);
     expect(chapter?.summary).toBe("1 running · 1 of 3 passed");
+  });
+});
+
+// #1021 — a press names the Check, and the sheet is what decides live or
+// kept. This file draws the chapter, not the sheet, so what is proved here is
+// narrower: pressing a row reports the pressed Check and nothing more, and
+// nothing the chapter draws is a reading with no end.
+describe("a press on a Check's row", () => {
+  it("reports the Check pressed, rather than opening a file itself", () => {
+    const opened: string[] = [];
+    const chapter = checksChapter(gating(), [], OPENS, NOW, undefined, undefined, undefined, (checkId) =>
+      opened.push(checkId),
+    );
+    const preview = chapter?.preview as ReactElement<{ onOpen?: (checkId: string) => void }>;
+    preview.props.onOpen?.("test");
+    expect(opened).toEqual(["test"]);
+  });
+
+  it("draws no console output under the rows, live or kept — only the assertion set has an end", () => {
+    // One Check recorded (`build`, so `assertedIn` has a row to draw) beside
+    // one still running (`test`, with a live `output_path`) — the exact shape
+    // #1021 poured a growing log out of. The content this chapter offers is
+    // whatever survived that fix: `AssertionSet` alone, never a `ConsoleOutput`
+    // for the running Check's log.
+    const chapter = checksChapter(
+      gating({ check_runs: [{ attempt: 1, name: "build", outcome: "passed" }] }),
+      [],
+      OPENS,
+      NOW,
+    );
+    const content = chapter?.content as ReactElement<{ rows: unknown[] }> | undefined;
+    expect(content?.type).toBe(AssertionSet);
+  });
+});
+
+// The sheet's own question — `Sheets.tsx`'s `CheckSheet` calls this on every
+// render, so a Check that finishes while its sheet is open moves from live to
+// kept without the sheet closing.
+describe("what a Check's output sheet should read", () => {
+  it("reads live while the gate is still writing it", () => {
+    expect(checkSheetOf(gating(), "test")).toEqual({
+      kind: "live",
+      kept: "implement.1.live.1.log",
+    });
+  });
+
+  it("reads kept once the gate has ruled and stopped writing", () => {
+    const step = gating({
+      checking: undefined,
+      check_runs: [
+        { attempt: 1, name: "test", outcome: "passed", output_path: ".armada/checks/01M1/implement.1.test.log" },
+      ],
+    });
+    expect(checkSheetOf(step, "test")).toEqual({ kind: "kept", kept: "implement.1.test.log" });
+  });
+
+  it("reads nothing for a Check that has never run", () => {
+    expect(checkSheetOf(gating(), "format")).toBeUndefined();
+  });
+
+  it("reads nothing for a Check nobody declared", () => {
+    expect(checkSheetOf(gating(), "nonexistent")).toBeUndefined();
   });
 });

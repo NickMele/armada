@@ -156,4 +156,34 @@ describe("what the sheet is reading, as one value", () => {
     expect(sheetMoved(log, { move: "hold", held: HELD })).toEqual({ which: "log", held: HELD });
     expect(sheetMoved(log, { move: "close" })).toBe(NO_SHEET);
   });
+
+  // #1021 — a press names which Check, and that name has to survive the move
+  // the log's attempt and hold already have to.
+  describe("the Check output sheet", () => {
+    it("opens on the Check a press named", () => {
+      expect(sheetMoved(NO_SHEET, { move: "open", which: "check", checkId: "check:test_suite" })).toEqual(
+        { which: "check", checkId: "check:test_suite" },
+      );
+    });
+
+    it("replaces one Check with another on a second press, rather than stacking", () => {
+      const first = sheetMoved(NO_SHEET, { move: "open", which: "check", checkId: "check:build" });
+      expect(sheetMoved(first, { move: "open", which: "check", checkId: "check:test" })).toEqual({
+        which: "check",
+        checkId: "check:test",
+      });
+    });
+
+    it("is replaced by another sheet, and replaces one in turn", () => {
+      const log = sheetMoved(NO_SHEET, { move: "open", which: "log", attempt: 1, held: HELD });
+      const checked = sheetMoved(log, { move: "open", which: "check", checkId: "check:test_suite" });
+      expect(checked).toEqual({ which: "check", checkId: "check:test_suite" });
+      expect(sheetMoved(checked, { move: "open", which: "diff" })).toEqual({ which: "diff" });
+    });
+
+    it("closes like every other sheet", () => {
+      const checked = sheetMoved(NO_SHEET, { move: "open", which: "check", checkId: "check:test_suite" });
+      expect(sheetMoved(checked, { move: "close" })).toBe(NO_SHEET);
+    });
+  });
 });

@@ -215,6 +215,87 @@ function twoChecksOneReported(): StepDetail {
   };
 }
 
+/**
+ * `regression_verify`, mid-attempt with nextest running and streaming its
+ * log — #1021's own moment. The build Check is queued behind it and has not
+ * started, so it carries no `output_path` at all.
+ */
+function checkStreamingStep(): StepDetail {
+  return {
+    step_id: "regression_verify",
+    label: "Regression check",
+    ordinal: 4,
+    state: "running",
+    checks: [NEXTEST_CHECK, BUILD_CHECK],
+    check_runs: [],
+    judge_checks: [{ criteria: 2, panel_size: 3, gaming_check: true }],
+    judged: [],
+    flagged: [],
+    overridden: false,
+    attempts: [{ attempt: 1, outcome: "running", started_at: "2026-09-10T14:22:18Z" }],
+    verdicts: [],
+    entered_at: "2026-09-10T14:22:18Z",
+    updated_at: "2026-09-10T14:22:52Z",
+    checking: {
+      attempt: 1,
+      checks: [
+        {
+          name: "cargo_nextest",
+          started_at: "2026-09-10T14:22:40Z",
+          output_path: `${REGRESSION_LOG.slice(0, -4)}.live.log`,
+        },
+        { name: "cargo_build" },
+      ],
+    },
+  };
+}
+
+export function gateChecksStreaming(): JobFixture {
+  const theJob = job("running", { current_step_id: "regression_verify" });
+  const steps = [
+    reproStep(),
+    rootCauseStep(),
+    advancedStep("fix", "Fix", 3, [BUILD_CHECK]),
+    checkStreamingStep(),
+    consumersStep(),
+    landStep(),
+  ];
+  const whole = detail(theJob, steps);
+
+  const rows = [
+    instructed("regression_verify", "2026-09-10T14:22:18Z", 4, "cargo nextest run --workspace exits 0", "Regression check"),
+    called("regression_verify", "2026-09-10T14:22:40Z", "call_nextest_1", "Bash", "cargo nextest run --workspace"),
+  ];
+
+  return {
+    name: "running — Regression check: nextest is running and streaming its log",
+    job: theJob,
+    watched: watchedRead(whole),
+    workflows: [workflowWithBuildCheckOnRegression()],
+    manifests: [manifest()],
+    observed: observedWatching(rows, true),
+    journalled: journalledWatching([note("2026-09-10T14:11:02Z", "A worktree was cut for this job.")]),
+    resources: holdsRead(
+      resources("running", {
+        processes: [
+          { pid: 41233, command: "node", cpu_percent: 4.8, memory_bytes: 398_112_768, running_for: "00:22", recorded: true },
+        ],
+        wrote_last_at: "2026-09-10T14:22:52.000Z",
+      }),
+    ),
+    recorded: foldedReads(),
+    calls: {
+      call_nextest_1: {
+        ok: true,
+        call: { tool: "Bash", call: "call_nextest_1", arguments: "cargo nextest run --workspace", whole: true },
+      },
+    },
+    checkOutputs: {},
+    frames: {},
+    now: NOW,
+  };
+}
+
 export function runningAtGate(): JobFixture {
   const theJob = job("running", { current_step_id: "regression_verify" });
   const steps = [

@@ -18,7 +18,7 @@
 // pre-fetching every row that kept one would spend on the screen exactly what
 // the split was made to avoid.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import type { ConsoleRegion, ConsoleRow } from "@armada/components";
 import type { CheckOutput, CheckOutputRead, FollowedLog } from "@armada/protocol";
@@ -197,13 +197,19 @@ export function noteFor(held: OutputState | undefined): string {
  */
 export type FollowCheckOutput = (jobId: string | null, kept: string | null) => unknown;
 
-/** What a chapter needs to show a running Check's log as it is written. */
+/**
+ * What the Check output sheet needs to show a running Check's log as it is
+ * written.
+ *
+ * **No `picked` any more.** Which Check's log this is following used to be
+ * chosen here, for a chapter that drew whichever one was picked inline. The
+ * sheet owns that choice now — `Sheets.tsx`'s `SheetReading` carries the
+ * pressed Check's id — so this holds only the stream itself and how to start
+ * or stop it.
+ */
 export type Following = {
   /** The log main is following for this Job, or `none`. */
   reading: FollowedLog;
-  /** The running Check a person picked, by its log's name, or `null` for none. */
-  picked: string | null;
-  pick: (kept: string) => void;
   /** Follow this log, or `null` to stop. */
   follow: (kept: string | null) => void;
 };
@@ -211,16 +217,16 @@ export type Following = {
 /**
  * Hold which running Check's log a person is reading, for one Job.
  *
- * **Stopped when the Job changes and when the screen goes**, so a socket is
- * never left following a log nobody is looking at.
+ * **Stopped when the Job changes and when the sheet closes**, so a socket is
+ * never left following a log nobody is looking at. The sheet's own mount and
+ * unmount is what starts and stops it now; this hook's job is narrower than it
+ * was — carry the stream and let it go when the Job does.
  */
 export function useFollowing(
   follow: FollowCheckOutput | undefined,
   followed: FollowedLog,
   jobId: string,
 ): Following {
-  const [picked, setPicked] = useState<string | null>(null);
-  useEffect(() => setPicked(null), [jobId]);
   useEffect(
     () => () => {
       follow?.(null, null);
@@ -235,10 +241,7 @@ export function useFollowing(
   );
   const reading: FollowedLog =
     followed.state !== "none" && followed.jobId === jobId ? followed : { state: "none" };
-  return useMemo(
-    () => ({ reading, picked, pick: setPicked, follow: start }),
-    [reading, picked, start],
-  );
+  return useMemo(() => ({ reading, follow: start }), [reading, start]);
 }
 
 /** A followed log's lines, as rows numbered the way the file numbers them. */

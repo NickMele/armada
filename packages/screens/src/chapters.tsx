@@ -70,7 +70,6 @@ import {
 import { fileRowsOf, readingFor, whyNoFootprint } from "./files";
 import { WorkGrouped } from "./grouped";
 import { Log } from "./Log";
-import type { Following, Outputs } from "./outputs";
 import { keptOf, type KeptRead, type Opens } from "./phases";
 import { noteUnder, producedIn } from "./produced";
 import type { OpenSheet } from "./Sheets";
@@ -101,28 +100,22 @@ export function chaptersOf({
   transcript,
   log,
   calls,
-  outputs,
   frames,
   again,
   sheet,
   opens,
   onOpenSheet,
   now,
-  following,
   undecided,
   asking,
   onRunHere,
+  openCheckId,
+  onOpenCheck,
   attempt,
   ended,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
   now: number;
-  /**
-   * The running Check's log this window is following, and how to follow one —
-   * `outputs.ts`. **Held for the Job, like `outputs`**, and streamed only while
-   * somebody has the Checks chapter open on a running gate.
-   */
-  following: Following;
   job: JobSummary;
   step: StepDetail;
   /**
@@ -180,13 +173,6 @@ export function chaptersOf({
    */
   calls: Calls;
   /**
-   * What each Check on this Job has printed, where somebody opened one, and how
-   * to ask for the rest. **Held for the Job, like `calls`**, and for its reason:
-   * a recorded output never moves, so it is one reader's gesture rather than
-   * state the window redraws on.
-   */
-  outputs: Outputs;
-  /**
    * The frames this Job's steps have produced, as this window has them, and how
    * to ask for a step's worth.
    *
@@ -233,6 +219,19 @@ export function chaptersOf({
   asking?: string;
   /** **Run it here** on a refused Check's row, from the run sheet — Journey 9. */
   onRunHere?: (checkId: string) => void;
+  /**
+   * Which Check's output sheet is open, so the Checks chapter's row says so —
+   * `undefined` where no Check's sheet is up, including where a different
+   * sheet (`log`, `diff`, …) is.
+   */
+  openCheckId?: string;
+  /**
+   * Opens the Check output sheet on the pressed Check, live or kept — the
+   * sheet reads `checkSheetOf` to say which. **Not a fetch and not a follow**:
+   * this chapter names the Check and stops, the way `onOpenSheet` above names
+   * a sheet and stops. #1021.
+   */
+  onOpenCheck?: (checkId: string) => void;
   /** Which run of the step this story is of, so its sheets open that run's. */
   attempt?: number;
   /**
@@ -456,7 +455,17 @@ export function chaptersOf({
     // The last chapters, where the step has them. `evidence.tsx` decides
     // whether either is drawn — a step that gates on nothing has neither, and
     // one that gates on a Judge alone has one.
-    ...evidenceChaptersOf({ step, criteria, opens, outputs, now, following, undecided, asking, onRunHere }),
+    ...evidenceChaptersOf({
+      step,
+      criteria,
+      opens,
+      now,
+      undecided,
+      asking,
+      onRunHere,
+      openCheckId,
+      onOpenCheck,
+    }),
   ];
   return story.map((chapter, at) => ({ ...chapter, ordinal: at + 1 }));
 }
