@@ -87,7 +87,7 @@ notes = """
 
 **An omitted field keeps its current value**, saved or shipped. A stored field nobody saved stays unsaved, so a later build shipping a different number still reaches it.
 
-**A value out of range is a 400 and nothing is saved** — including an in-range field sent beside it. The body does not decode, because `ipc::SaveLimits` cannot hold such a value; the daemon is never asked. Concurrency is 1 to 8, the memory share 0 to 50 percent, the disk floor 0 to 100 GiB, Checks at once 1 to 8. A saved Checks at once counts from the next gate; a gate already running keeps the value it began with.
+**A value out of range is a 400 and nothing is saved** — including an in-range field sent beside it. The body does not decode, because `ipc::SaveLimits` cannot hold such a value; the daemon is never asked. Concurrency is 1 to 8, the memory share 0 to 50 percent, the disk floor 0 to 100 GiB, Checks at once 1 to 8. A saved Checks at once counts from the next Check to start anywhere on the machine; one already running finishes.
 
 No event. `get_capacity` is computed at every read, so it reflects a saved bound the moment the save answers, and the limits themselves persist as a reading a surface asks for.
 """

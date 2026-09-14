@@ -9,21 +9,21 @@
 //! allows is ignored rather than trusted, since only a hand-edited file could
 //! hold one.
 //!
-//! **A save changes the next admission and the next gate, and nothing else.**
+//! **A save changes the next admission and the next Check, and nothing else.**
 //! The roster's bound and the headroom are replaced under the roster lock, so
 //! no admission sees one limit changed and the other not; a Drone already
-//! working keeps working, and a gate already running keeps the limits it began
-//! with. No Commands method admits — `crate::admitting` says why — so this does
-//! not either.
+//! working keeps working, a gate already running keeps the headroom it began
+//! with, and a saved Checks at once counts from the next place given out. No
+//! Commands method admits — `crate::admitting` says why — so this does not either.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use ipc::{DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent, SaveLimits};
 use store::{LoadJobError, SavedLimits};
 
 use crate::adrift::Adrift;
-use crate::checking::ChecksAtOnce;
 use crate::daemon::Fleet;
 use crate::headroom::{Bytes, Headroom, Spare};
+use crate::places::ChecksAtOnce;
 use crate::slots::Concurrency;
 
 /// The limits admission holds a new Drone to, and a gate holds its Checks to.

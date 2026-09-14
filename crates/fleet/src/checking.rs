@@ -20,6 +20,9 @@
 //! **Started fastest first, reported in the step's order.** [`Room`] carries
 //! the repository's past durations; each result still lands in its own slot.
 //!
+//! **Each command holds a place on the machine while it runs**, in one line
+//! with every other Job's — `crate::places`. #1063.
+//!
 //! **Over 500 lines.** `ports` and `env` thread through both halves already
 //! here, for `docs/concepts/manifest.md`'s Ports section: it reaches every
 //! Command, and splitting by function would separate a Check from the
@@ -27,7 +30,6 @@
 
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::Footprint;
@@ -37,8 +39,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
 
-use crate::headroom::{Bytes, Headroom, Machine, Reading, Spare};
-use crate::ordering::Past;
+use crate::places::{Ask, Place, Room};
 use crate::ports::resolve_ports;
 use crate::reuse::{self, KeptDryRun};
 use crate::underway::Announcing;
@@ -94,103 +95,6 @@ impl Stop {
             // Nothing is ever sent, so this returns only once the sender is gone.
             Some(watched) => while watched.changed().await.is_ok() {},
         }
-    }
-}
-
-/// How many of a step's Checks may run at once. **The `settings.checks-at-once`
-/// row**, shipped by the composition root and replaced by one a person saves —
-/// `crate::limits`. #284.
-///
-/// **No `Default`**, for [`Concurrency`](crate::Concurrency)'s reason: the
-/// shipped number is a measurement, and `armada::serve` says what it measured.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ChecksAtOnce(usize);
-
-impl ChecksAtOnce {
-    /// At least one: a gate that could start no Check would never rule.
-    pub const fn of(checks: usize) -> ChecksAtOnce {
-        ChecksAtOnce(if checks == 0 { 1 } else { checks })
-    }
-
-    pub const fn get(&self) -> usize {
-        self.0
-    }
-}
-
-/// What is asked before another of a step's Checks starts: whether a slot is
-/// free, and whether the machine has the memory and disk for it. #284.
-///
-/// **The first Check always starts**, so a short machine slows a gate and never
-/// stops one. A further Check waits for a running one to finish and asks again.
-/// Taken when a gate begins, so a limit saved mid-gate counts from the next one.
-#[derive(Clone)]
-pub struct Room {
-    at_once: ChecksAtOnce,
-    machine: Arc<dyn Machine>,
-    headroom: Headroom,
-    /// How long each Check took before, which decides which starts first.
-    past: Past,
-}
-
-impl Room {
-    pub fn of(at_once: ChecksAtOnce, machine: Arc<dyn Machine>, headroom: Headroom) -> Room {
-        Room {
-            at_once,
-            machine,
-            headroom,
-            past: Past::default(),
-        }
-    }
-
-    /// The same room, starting the Checks this repository has timed fastest
-    /// first. #1062.
-    pub(crate) fn knowing(self, past: Past) -> Room {
-        Room { past, ..self }
-    }
-
-    /// Bounded by `at_once` and nothing else: the machine is never read. For a
-    /// caller with no machine to ask, such as a test or the acceptance bench.
-    pub fn ignoring_the_machine(at_once: ChecksAtOnce) -> Room {
-        Room::of(
-            at_once,
-            Arc::new(Unread),
-            Headroom::of(Spare::percent(0), Bytes::gibibytes(0)),
-        )
-    }
-
-    /// Whether another Check may start beside `running`, reading the machine only
-    /// where the answer turns on it. **A machine that cannot be read has room**,
-    /// for `crate::headroom::Machine`'s reason.
-    async fn for_another(&self, running: usize) -> bool {
-        if running == 0 || running >= self.at_once.get() {
-            return may_start(running, self.at_once, false);
-        }
-        let machine = Arc::clone(&self.machine);
-        let reading = tokio::task::spawn_blocking(move || machine.read())
-            .await
-            .ok()
-            .flatten();
-        let short = reading.is_some_and(|now| self.headroom.short_of(&now).is_some());
-        may_start(running, self.at_once, short)
-    }
-}
-
-/// Whether another Check may start beside `running`, given whether the machine
-/// is short: the pure half of [`Room::for_another`].
-pub(crate) fn may_start(running: usize, at_once: ChecksAtOnce, short: bool) -> bool {
-    running == 0 || (running < at_once.get() && !short)
-}
-
-/// A machine that never answers, so it never holds a Check back.
-struct Unread;
-
-impl Machine for Unread {
-    fn read(&self) -> Option<Reading> {
-        None
-    }
-
-    fn disk_free_at(&self, _path: &Path) -> Option<Bytes> {
-        None
     }
 }
 
@@ -458,7 +362,7 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 ///
 /// `plan` is the Job's plan counts off the store, handed in for `ports`' reason;
 /// `None` is a Job no plan was recorded for.
-/// `room` is asked before every Check after the first starts — [`Room`].
+/// `room` is where each command waits for a place on the machine — [`Room`].
 ///
 /// `dry_run`, `attempt` and `footprint_now` are what a gate hands in to reuse a
 /// Check instead of asking it again; a dry run itself, and `crate::proving`'s
@@ -539,7 +443,19 @@ pub(crate) async fn ran(
         .collect();
     let (met, not_met) = match needed.is_empty() {
         true => (Vec::new(), None),
-        false => beforehand(&needed, worktree, budget, ports, env, stop).await,
+        // One place for the whole phase, which is serial and as heavy as a Check.
+        false => {
+            let mut ask = room.ask();
+            let place = tokio::select! {
+                place = room.granted(&mut ask, |held| announcing.behind(held)) => Some(place),
+                () = stop.clone().stopped() => None,
+            };
+            drop(ask);
+            announcing.behind(0);
+            let met = beforehand(&needed, worktree, budget, ports, env, stop).await;
+            drop(place);
+            met
+        }
     };
     // A Check whose prerequisites all ran still runs, even where another
     // Check's did not: a broken `migrate` is not a reason to stop asking `lint`.
@@ -580,15 +496,15 @@ pub(crate) async fn ran(
             Planned::Already(_) | Planned::Blocked { .. } => None,
         })
         .collect::<Vec<(usize, String)>>();
-    let mut queued: VecDeque<(usize, String)> = room.past.fastest_first(queued, checks);
+    let mut queued: VecDeque<(usize, String)> = room.past().fastest_first(queued, checks);
     let worktree = worktree.to_path_buf();
     // Owned, so each spawned Check can move its own copy — the env slice this
     // function borrows does not outlive the batch, and a spawned future must.
     let env: Vec<(String, String)> = env.to_vec();
     // Refilled as each one finishes rather than run in batches: a batch costs
     // the slowest member of it, and a step whose Checks are 17s and 1s would
-    // spend the fast slot idle for sixteen of them. **Room is asked before each
-    // one after the first**, so a short machine waits for a finish, not a batch.
+    // spend the fast slot idle for sixteen of them. **Each waits for a place on
+    // the machine**, so a short or busy machine waits for a finish, not a batch.
     // **A Drone's run drops `halting` at its first failure**, which stops every
     // command still running, and nothing queued starts after it. A
     // prerequisite that broke is that failure before anything spawns.
@@ -603,10 +519,27 @@ pub(crate) async fn ran(
     }
     let mut stopped = vec![false; planned.len()];
     let mut running: JoinSet<(usize, RunAttempt, Duration)> = JoinSet::new();
+    // The batch's turn for its next Check, kept across wakes so it keeps its place in line.
+    let mut ask: Option<Ask> = None;
+    let stopping = stop.clone().stopped();
+    tokio::pin!(stopping);
     loop {
-        while halting.is_some() && !queued.is_empty() && room.for_another(running.len()).await {
-            let Some((at, run)) = queued.pop_front() else {
+        let wants = halting.is_some() && !queued.is_empty();
+        if !wants {
+            ask = None;
+            if running.is_empty() {
                 break;
+            }
+        } else if ask.is_none() {
+            ask = Some(room.ask());
+        }
+        let own = running.len();
+        tokio::select! {
+            place = next_place(room, ask.as_mut(), own, announcing), if wants => {
+            ask = None;
+            announcing.behind(0);
+            let Some((at, run)) = queued.pop_front() else {
+                continue;
             };
             let worktree: PathBuf = worktree.clone();
             let env = env.clone();
@@ -615,6 +548,7 @@ pub(crate) async fn ran(
             let stop = stop.clone();
             let halted = halted.clone();
             running.spawn(async move {
+                let _held: Place = place;
                 let began = Instant::now();
                 let ended = async move {
                     tokio::select! {
@@ -634,10 +568,18 @@ pub(crate) async fn ran(
                 (at, attempt, began.elapsed())
             });
             announcing.started(at, log.as_deref());
-        }
-        let Some(joined) = running.join_next().await else {
-            break;
-        };
+            }
+            // Stopped while waiting for room: what has not started never will.
+            () = &mut stopping, if wants => {
+                ask = None;
+                for (at, run) in queued.drain(..) {
+                    let attempt = never_started(run);
+                    let observed = Observed::Command(attempt.exit.clone());
+                    announcing.finished(at, &checks[at], &observed, Duration::ZERO);
+                    done[at] = Some((attempt, Duration::ZERO));
+                }
+            }
+            Some(joined) = running.join_next(), if !running.is_empty() => {
         if let Ok((at, attempt, took)) = joined {
             let observed = Observed::Command(attempt.exit.clone());
             // Ended by the halt rather than by its own answer.
@@ -666,17 +608,13 @@ pub(crate) async fn ran(
                 announcing.landed(at);
             }
         }
+            }
+        }
     }
     // What a failure stopped before it ever started.
     if let Some(first) = &failed_first {
         for (at, run) in queued.drain(..) {
-            let attempt = RunAttempt {
-                exit: Exit::NeverRan(NeverRan::NotSpawned {
-                    program: run,
-                    kind: std::io::ErrorKind::Interrupted,
-                }),
-                output: Output::default(),
-            };
+            let attempt = never_started(run);
             let observed = Observed::Command(attempt.exit.clone());
             announcing.stopped(at, &checks[at], &observed, Duration::ZERO, first);
             stopped[at] = true;
@@ -745,6 +683,33 @@ pub(crate) async fn ran(
         });
     }
     completed
+}
+
+/// The batch's next place, or never where it has not asked.
+async fn next_place(
+    room: &Room,
+    ask: Option<&mut Ask>,
+    own: usize,
+    announcing: &Announcing,
+) -> Place {
+    match ask {
+        Some(ask) => {
+            room.granted(ask, |held| announcing.behind(held.saturating_sub(own)))
+                .await
+        }
+        None => std::future::pending().await,
+    }
+}
+
+/// A command a stop or a first failure kept from ever starting.
+fn never_started(run: String) -> RunAttempt {
+    RunAttempt {
+        exit: Exit::NeverRan(NeverRan::NotSpawned {
+            program: run,
+            kind: std::io::ErrorKind::Interrupted,
+        }),
+        output: Output::default(),
+    }
 }
 
 /// Whether this answer lets a step through, as the gate would record it.

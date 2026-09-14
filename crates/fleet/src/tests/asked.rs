@@ -80,7 +80,7 @@ async fn ruled(judge: Arc<FakeJudge>, asked: Asked, worktree: &Worktree) -> Ruli
         &[],
         &work,
         budget(),
-        &crate::checking::Room::ignoring_the_machine(crate::checking::ChecksAtOnce::of(4)),
+        &crate::places::Room::ignoring_the_machine(crate::places::ChecksAtOnce::of(4)),
         &judging(judge, asked),
         &keeping_nowhere(),
         Policies::unstated(),

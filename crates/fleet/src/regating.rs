@@ -177,7 +177,9 @@ where
             &recorded,
             self.work(),
             self.budget(),
-            &self.checks_room_for(&job).await,
+            &self
+                .checks_room_for(&job, crate::places::Asking::Gate)
+                .await,
             &judging,
             &Keeping::of(served.records_root(), &job.handle()),
             // Read now rather than carried from the first gating: a re-gate is

@@ -15,8 +15,11 @@ use std::time::Duration;
 
 use core_model::{Attempt, ResolvedCheck, StepId};
 
-use crate::checking::{ran, ChecksAtOnce, Room};
+use crate::checking::ran;
+use crate::headroom::{Bytes, Headroom, Spare};
+use crate::places::{Asking, ChecksAtOnce, Places, Room};
 use crate::tests::gate::Stopped;
+use crate::tests::headroom::Plentiful;
 use crate::tests::tmp::TempDir;
 use crate::underway::{Announcing, Underway};
 
@@ -344,5 +347,79 @@ async fn a_drones_run_is_shown_apart_from_the_gate_and_stops_at_its_first_failur
     assert!(
         underway.dry_run_on(&job, &step).is_none(),
         "dropping the writer left the entry up"
+    );
+}
+
+/// **#1063's Bridge half, from Fleet's side.** Checks waiting for a place other
+/// work holds say how much is ahead of them, and stop saying so once they start.
+#[tokio::test]
+async fn checks_waiting_for_room_other_work_holds_say_how_much() {
+    let repo = TempDir::new();
+    let places = Places::of(ChecksAtOnce::of(1));
+    let headroom = Headroom::of(Spare::percent(0), Bytes::gibibytes(0));
+    let elsewhere = Room::sharing(&places, Asking::DronesRun, Arc::new(Plentiful), headroom);
+    let room = Room::sharing(&places, Asking::Gate, Arc::new(Plentiful), headroom);
+    let held = elsewhere.place().await;
+    let underway = Underway::default();
+    let events = api::Broadcaster::new();
+    let announcing = Announcing::on(
+        ipc::JobId::carried(JOB),
+        StepId::new(STEP),
+        Attempt::FIRST,
+        underway.clone(),
+        events.clone(),
+        Arc::new(Stopped),
+        &repo.path().display().to_string(),
+        JOB,
+    );
+    let checks = [
+        named("build", "/bin/sleep 0.1"),
+        named("test", "/bin/sleep 0.1"),
+    ];
+    let (touched, ports, env) = (Vec::new(), std::collections::BTreeMap::new(), Vec::new());
+    let stop = crate::checking::Stop::never();
+    let gate = ran(
+        &checks,
+        &touched,
+        false,
+        false,
+        repo.path(),
+        Duration::from_secs(30),
+        &room,
+        &announcing,
+        &ports,
+        &env,
+        None,
+        &stop,
+        None,
+        Attempt::FIRST,
+        None,
+    );
+    tokio::pin!(gate);
+    let job = ipc::JobId::carried(JOB);
+    let step = ipc::StepId::from(&StepId::new(STEP));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), &mut gate)
+            .await
+            .is_err(),
+        "the gate ran while the machine's one place was held elsewhere"
+    );
+    let waiting = underway.on(&job, &step).expect("the gate's Checks are up");
+    assert!(
+        waiting
+            .checks
+            .iter()
+            .all(|check| check.waiting_behind == Some(1)),
+        "{waiting:?}"
+    );
+    drop(held);
+    assert_eq!(gate.await.len(), 2);
+    let after = underway.on(&job, &step).expect("up until the writer drops");
+    assert!(
+        after
+            .checks
+            .iter()
+            .all(|check| check.waiting_behind.is_none() && check.ran.is_some()),
+        "{after:?}"
     );
 }

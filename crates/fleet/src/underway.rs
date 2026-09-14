@@ -291,6 +291,7 @@ impl Announcing {
                 ran: known.and_then(|observed| row(attempt, check, observed)),
                 output_path: None,
                 stopped_by: None,
+                waiting_behind: None,
             })
             .collect();
         let running = Running {
@@ -335,10 +336,45 @@ impl Announcing {
         self.moved(bound, at, |check, files| {
             check.started_at = Some((&now).into());
             check.output_path = path;
+            check.waiting_behind = None;
             if let Some(slot) = files {
                 *slot = log.map(Path::to_path_buf);
             }
         });
+    }
+
+    /// This run waits for a place while `others` are held by other work: said
+    /// on every Check still waiting, and cleared by zero. #1063.
+    pub(crate) fn behind(&self, others: usize) {
+        let Some(bound) = self.0.as_ref() else { return };
+        let behind = u32::try_from(others).ok().filter(|held| *held > 0);
+        let checking = {
+            let Ok(mut held) = bound.underway.0.lock() else {
+                return;
+            };
+            let Some(running) = held
+                .whose_mut(bound.whose)
+                .get_mut(&bound.job)
+                .filter(|running| running.token == bound.token)
+            else {
+                return;
+            };
+            let mut moved = false;
+            for check in running.checks.checks.iter_mut() {
+                if check.started_at.is_none()
+                    && check.ran.is_none()
+                    && check.waiting_behind != behind
+                {
+                    check.waiting_behind = behind;
+                    moved = true;
+                }
+            }
+            if !moved {
+                return;
+            }
+            running.checks.clone()
+        };
+        published(bound, Some(checking));
     }
 
     /// The Check at `at` has finished, and this is what was observed of it.

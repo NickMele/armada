@@ -143,7 +143,7 @@ where
             base,
             ports,
             port_env,
-            self.room(),
+            self.room(crate::places::Asking::Proof),
         );
     }
 
@@ -242,7 +242,7 @@ fn spawn_the_run(
     base: String,
     ports: BTreeMap<String, u16>,
     port_env: Vec<(String, String)>,
-    room: crate::checking::Room,
+    room: crate::places::Room,
 ) {
     tokio::spawn(async move {
         // `touched` is empty and `moved` is false, and neither is consulted:

@@ -1,6 +1,6 @@
-//! How many of a step's Checks run at once, and what a short machine does to the
-//! next one: it waits for a running Check to finish, and the first always starts.
-//! #284.
+//! How many Checks run at once on the machine, and what a short machine does to
+//! the next one: it waits for a running Check to finish, and the first on the
+//! machine always starts. #284, #1063.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -13,13 +13,14 @@ use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
-use crate::checking::{may_start, ChecksAtOnce, Room};
 use crate::daemon::{Fittings, Fleet};
 use crate::gate::{rule_on, CheckBudget, Ruling};
 use crate::headroom::{Bytes, Headroom, InUse, Machine, Reading, Spare};
+use crate::places::{may_start, Asking, ChecksAtOnce, Places, Room};
 use crate::policy::Policies;
 use crate::tests::daemon::fitted_with;
 use crate::tests::gate::{diff_evidence, judging, worktree};
+use crate::tests::headroom::Plentiful;
 use crate::tests::keeping::keeping_nowhere;
 use crate::tests::tmp::TempDir;
 
@@ -49,14 +50,32 @@ fn slow(name: &str) -> Gate<'_> {
     }
 }
 
+/// A Check that adds how many of its kind were running as it started to `tally`.
+fn counting<'a>(name: &'a str, run: &'a str) -> Gate<'a> {
+    Gate::Check {
+        name,
+        run,
+        expect_exit_code: 0,
+        when: &[],
+    }
+}
+
+fn shipped_headroom() -> Headroom {
+    Headroom::of(Spare::percent(15), Bytes::gibibytes(10))
+}
+
 /// Rule on a step of three 600ms Checks under `room`, and how long it took.
 async fn ruled(room: &Room) -> (Ruling, Duration) {
-    let gates = [slow("build"), slow("test"), slow("storybook")];
+    ruled_by(room, &[slow("build"), slow("test"), slow("storybook")]).await
+}
+
+/// Rule on a step gated on `gates` under `room`, and how long it took.
+async fn ruled_by(room: &Room, gates: &[Gate<'_>]) -> (Ruling, Duration) {
     let workflow = testkit::resolved(&[Sketch {
         id: "implement",
         label: "Implement",
         evidence_type: Some("diff"),
-        gates: &gates,
+        gates,
         judged_on: &[],
         scope: None,
         gaming: None,
@@ -104,7 +123,7 @@ fn another_check_starts_only_beside_a_free_slot_and_a_machine_with_room() {
     let four = ChecksAtOnce::of(4);
     assert!(
         may_start(0, four, true),
-        "the first always starts, however short the machine"
+        "the first on the machine always starts, however short it is"
     );
     assert!(may_start(1, four, false));
     assert!(
@@ -164,4 +183,115 @@ async fn a_saved_checks_at_once_is_in_force_and_survives_a_restart() {
     let limits = fleet.get_limits().await.expect("limits read");
     assert_eq!(limits.values.checks_at_once, 2);
     assert_eq!(fleet.checks_at_once().get(), 2);
+}
+
+#[test]
+fn the_shipped_limit_is_half_the_cores_from_one_to_eight() {
+    assert_eq!(
+        ChecksAtOnce::for_cores(1).get(),
+        1,
+        "one core still runs a Check"
+    );
+    assert_eq!(ChecksAtOnce::for_cores(4).get(), 2);
+    assert_eq!(ChecksAtOnce::for_cores(10).get(), 5);
+    assert_eq!(
+        ChecksAtOnce::for_cores(64).get(),
+        8,
+        "eight is the most a save holds"
+    );
+}
+
+/// **#1063's first line of done.** Two gates in one machine's places, six Checks
+/// between them, each writing how many were running as it started.
+#[tokio::test]
+async fn two_gates_at_once_never_run_more_checks_between_them_than_the_machine_allows() {
+    let seen = TempDir::new();
+    let running = seen.path().join("running");
+    std::fs::create_dir(&running).expect("a directory to count in");
+    let tally = seen.path().join("tally");
+    let run = format!(
+        "/bin/sh -c 'touch {r}/$$; ls {r} | wc -l >> {t}; sleep 0.4; rm {r}/$$'",
+        r = running.display(),
+        t = tally.display()
+    );
+    let gates = [
+        counting("build", &run),
+        counting("test", &run),
+        counting("storybook", &run),
+    ];
+    let places = Places::of(ChecksAtOnce::of(2));
+    let one = Room::sharing(
+        &places,
+        Asking::Gate,
+        Arc::new(Plentiful),
+        shipped_headroom(),
+    );
+    let other = one.clone();
+    let began = Instant::now();
+    let ((first, _), (second, _)) = tokio::join!(ruled_by(&one, &gates), ruled_by(&other, &gates));
+    let took = began.elapsed();
+    assert!(first.advanced(), "{first:?}");
+    assert!(second.advanced(), "{second:?}");
+    let counts: Vec<usize> = std::fs::read_to_string(&tally)
+        .expect("each Check counted")
+        .lines()
+        .map(|line| line.trim().parse().expect("a count"))
+        .collect();
+    assert_eq!(counts.len(), 6, "{counts:?}");
+    assert!(
+        counts.iter().all(|at_once| *at_once <= 2),
+        "more than the machine's two ran at once: {counts:?}"
+    );
+    assert!(
+        took >= Duration::from_millis(1150),
+        "six 400ms Checks two at a time took {took:?}"
+    );
+}
+
+/// Every room one Fleet hands out, to any Job, waits in the same line.
+#[tokio::test]
+async fn every_room_one_fleet_hands_out_shares_the_machines_limit() {
+    let home = TempDir::new();
+    let fleet = Fleet::assembled(fitted(&home));
+    fleet
+        .save_limits(SaveLimits {
+            checks_at_once: Some(ipc::ChecksAtOnce::new(1).expect("in range")),
+            ..SaveLimits::default()
+        })
+        .await
+        .expect("saved");
+    let held = fleet.room(Asking::Gate).place().await;
+    let drones = fleet.room(Asking::DronesRun);
+    let waiting = tokio::spawn(async move { drones.place().await });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        !waiting.is_finished(),
+        "a Drone's run started while a gate held the machine's one place"
+    );
+    drop(held);
+    let _started = tokio::time::timeout(Duration::from_secs(1), waiting)
+        .await
+        .expect("it starts once the gate's place is back")
+        .expect("it did not panic");
+}
+
+/// **The first on the machine starts however short it is**, and the next, even
+/// another Job's first, waits for it rather than starting beside it.
+#[tokio::test]
+async fn on_a_short_machine_another_jobs_first_check_waits_for_the_one_running() {
+    let places = Places::of(ChecksAtOnce::of(4));
+    let one = Room::sharing(&places, Asking::Gate, Arc::new(Full), shipped_headroom());
+    let other = Room::sharing(&places, Asking::Gate, Arc::new(Full), shipped_headroom());
+    let held = one.place().await;
+    let waiting = tokio::spawn(async move { other.place().await });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        !waiting.is_finished(),
+        "a second Check started beside the first on a short machine"
+    );
+    drop(held);
+    let _started = tokio::time::timeout(Duration::from_secs(1), waiting)
+        .await
+        .expect("it starts once the first finishes")
+        .expect("it did not panic");
 }

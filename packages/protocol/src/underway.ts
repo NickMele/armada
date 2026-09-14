@@ -53,6 +53,11 @@ export type CheckUnderway = {
    * own run. Absent on every gate's Check, which never stops early. Since 13.45.
    */
   stopped_by?: string;
+  /**
+   * How many Checks from other work hold the machine's places while this one
+   * waits for room. Absent while it waits on nothing but its own run. Since 13.47.
+   */
+  waiting_behind?: number;
 };
 
 /** One message on a running Check's log socket. `observe_job_log`'s shape. */
