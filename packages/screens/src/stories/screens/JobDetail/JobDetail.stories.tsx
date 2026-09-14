@@ -23,6 +23,7 @@ import {
   escalatedLoopCap,
   escalatedNoReport,
   escalatedSilent,
+  gateChecksStreaming,
   killed,
   piloted,
   preparing,
@@ -740,12 +741,65 @@ export const LogOpenStopped: Story = {
   },
 };
 
-/** The failed Check's output, opened from the Checks chapter. */
+/** The failed Check's output, opened from the header act — the editor, not the sheet. */
 export const CheckOutputOpen: Story = {
   name: "Check output open",
   render: drawing(escalatedGateFailure),
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /Open the output/ }));
+  },
+};
+
+// #1021 — a Check's log had no end and was drawn under the rows anyway, which
+// pushed every later chapter off the screen. Both stories below are the fix's
+// own definition of done: a press, live or kept, opens the sheet; `Esc`
+// returns to the Checks chapter; nothing is ever drawn inline.
+
+/**
+ * A kept Check's row, pressed. **The sheet, not the chapter, is what grows.**
+ * Nothing between the rows and the next chapter gets any taller.
+ */
+export const CheckOutputRowOpensSheet: Story = {
+  name: "Check output row opens the sheet, kept",
+  render: drawing(escalatedGateFailure),
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "regression_verify.3.cargo_nextest.log" }),
+    );
+    const body = within(document.body);
+    const dialog = within(await body.findByRole("dialog", { name: "Console output" }));
+    await expect(dialog.findByText(/visible_manifests_memoises/)).resolves.toBeVisible();
+    // The one place the file's own name and the pressed Check agree.
+    await expect(dialog.findByText("cargo_nextest — output")).resolves.toBeVisible();
+
+    // The second exit, same as the log and diff sheets.
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(body.queryByRole("dialog")).toBeNull());
+  },
+};
+
+/**
+ * A running Check's row, pressed while the gate is still writing it. The
+ * sheet opens on the same press and asks main to follow the log — nothing
+ * about "which Check is filling the chapter" survives from before #1021,
+ * because nothing fills the chapter any more.
+ */
+export const CheckOutputRowOpensSheetLive: Story = {
+  name: "Check output row opens the sheet, live",
+  render: () => (
+    <JobDetailFrom fixture={gateChecksStreaming()} on={{ onFollowCheckOutput: fn() }} />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "regression_verify.1.cargo_nextest.live.log" }),
+    );
+    const body = within(document.body);
+    const dialog = within(await body.findByRole("dialog", { name: "Console output" }));
+    // No `followed` state was wired for this story, so main has not answered
+    // yet — which is itself the proof the sheet asked, rather than drawing
+    // whatever the chapter already had.
+    await expect(dialog.findByText(/Opening this Check.s log/)).resolves.toBeVisible();
   },
 };
 

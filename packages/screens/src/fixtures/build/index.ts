@@ -33,7 +33,7 @@ import {
 import { preparing } from "./preparing";
 import { reading } from "./reading";
 import { unreadable } from "./unreadable";
-import { retryingCheckFailure, runningAtGate } from "./gating";
+import { gateChecksStreaming, retryingCheckFailure, runningAtGate } from "./gating";
 import { reviewAtDelivery } from "./delivering";
 
 export {
@@ -63,6 +63,7 @@ export {
   unreadable,
   retryingCheckFailure,
   runningAtGate,
+  gateChecksStreaming,
 };
 
 export const FIXTURES = [
@@ -92,4 +93,5 @@ export const FIXTURES = [
   retryingCheckFailure(),
   runningAtGate(),
   runningWaitingOnACommand(),
+  gateChecksStreaming(),
 ];

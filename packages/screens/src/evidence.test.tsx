@@ -30,7 +30,6 @@ import { chaptersOf } from "./chapters";
 import { NO_FRAMES } from "./frames";
 import { CHECKS_CHAPTER } from "./checks";
 import { mount, unmount } from "./mounted";
-import type { Outputs } from "./outputs";
 import type { Opens } from "./phases";
 
 afterEach(unmount);
@@ -166,6 +165,9 @@ const CRITERIA = [
 /** What was asked for, so a press that opens nothing is a failing test. */
 let asked: Artifact[] = [];
 
+/** Which Check a press on a Checks row reported — #1021, `onOpenCheck`'s own. */
+let pressedCheck: string[] = [];
+
 function opens(): Opens {
   return {
     jobId: JOB_ID,
@@ -190,7 +192,6 @@ function opens(): Opens {
 function screen(
   showing: StepDetail,
   criteria = CRITERIA,
-  outputs?: Outputs,
   /**
    * Which chapter is open on mount. **Absent is the ordinary screen**, where
    * every chapter shows its preview and none its content — so a test asserting
@@ -201,6 +202,7 @@ function screen(
   undecided?: string,
 ): void {
   asked = [];
+  pressedCheck = [];
   const summary = job();
   const records = opens();
   mount(
@@ -219,12 +221,13 @@ function screen(
         transcript: undefined,
         log: (region) => ({ region, openId: null, onOpen: () => {} }),
         calls: { of: () => undefined, fetch: () => {} },
-        outputs: outputs ?? { of: () => undefined, fetch: () => {} },
         sheet: null,
         opens: records,
         onOpenSheet: () => {},
         now: NOW,
-        following: { reading: { state: "none" }, picked: null, pick: () => {}, follow: () => {} },
+        // #1021 — a press reports which Check and stops. Opening it, live or
+        // kept, is `Sheets.tsx`'s, once a press has named it.
+        onOpenCheck: (checkId) => pressedCheck.push(checkId),
         undecided,
       })}
       {...(opening === undefined ? {} : { openId: opening })}
@@ -272,10 +275,13 @@ test("the Judge's row on the Checks list counts criteria, never calls", async ()
   await expect.element(page.getByText("judge · 2 criteria · panel of 3")).toBeVisible();
 });
 
-test("a Check's output opens the file the wire named", async () => {
+test("a Check's row reports the Check pressed, so a caller can open its sheet", async () => {
+  // #1021 — pressing a row no longer opens the file itself and no longer
+  // fills the chapter with it. It names the Check; the sheet is what opens.
   screen(refusedStep());
   await page.getByRole("button", { name: "test_suite.log" }).first().click();
-  expect(asked).toContainEqual({ kept: ".armada/checks/01M130/test_suite.log", what: "check" });
+  expect(pressedCheck).toEqual(["check:test_suite"]);
+  expect(asked).toEqual([]);
 });
 
 test("the assertion set tells a Check that was skipped from one that failed", async () => {
@@ -300,7 +306,6 @@ test("the assertion set tells a Check that was skipped from one that failed", as
       ],
     }),
     CRITERIA,
-    undefined,
     CHECKS_CHAPTER,
   );
   await expect.element(page.getByText("What the suite asserted")).toBeVisible();
@@ -334,40 +339,25 @@ test("a Check compares against its own previous attempt, never against a commit"
       ],
     }),
     CRITERIA,
-    undefined,
     CHECKS_CHAPTER,
   );
   await expect.element(page.getByText("passed at attempt 1 · not run at attempt 2")).toBeVisible();
 });
 
-test("a Check's output is read into the chapter, not only opened elsewhere", async () => {
-  // **The audit happens on the screen the Check is on.** The row has carried
-  // `output_path` since the file did, and everything Bridge could do with it
-  // was hand it to the operating system.
-  screen(refusedStep(), CRITERIA, {
-    of: () => ({
-      state: "got",
-      output: {
-        attempt: 1,
-        name: "check:test_suite",
-        path: ".armada/checks/01M130/test_suite.log",
-        lines: ["--- stdout ---", "test parses_rfc3339_offset ... ok"],
-        from_line: 1_939,
-        total_lines: 2_180,
-        bytes: 61_204,
-        whole: false,
-      },
-    }),
-    fetch: () => {},
-  }, CHECKS_CHAPTER);
-  await expect.element(page.getByText("test parses_rfc3339_offset ... ok")).toBeVisible();
-  // The file's own numbering, not the window's: a reader citing 1,939 means the
-  // file's 1,939th line.
-  await expect.element(page.getByText("1939")).toBeVisible();
-  // A truncated reading says it is truncated, and says whose output it is.
-  await expect
-    .element(page.getByText("check:test_suite · lines 1,939–1,940 of 2,180"))
-    .toBeVisible();
+// #1021 — the chapter stopped reading a Check's output at all, live or kept.
+// It used to: opening the chapter poured the kept file in under the rows, and
+// that is exactly the bug. What the chapter draws once open is the assertion
+// set alone — no `.armada-console` at any point, open or collapsed.
+test("opening the chapter draws no console output, only what the suite asserted", async () => {
+  screen(refusedStep());
+  // Collapsed: the rows, and their press is proved by the earlier test.
+  await expect.element(page.getByText("test_suite.log")).toBeVisible();
+  expect(document.querySelectorAll(".armada-console").length).toBe(0);
+
+  screen(refusedStep(), CRITERIA, CHECKS_CHAPTER);
+  // Open: the assertion set, never a console reading beside or under it.
+  await expect.element(page.getByText("What the suite asserted")).toBeVisible();
+  expect(document.querySelectorAll(".armada-console").length).toBe(0);
 });
 
 test("a Check that recorded no output draws no reader", async () => {
@@ -380,7 +370,6 @@ test("a Check that recorded no output draws no reader", async () => {
       check_runs: [{ attempt: 1, name: "diff_nonempty", outcome: "passed" }],
     }),
     CRITERIA,
-    undefined,
     CHECKS_CHAPTER,
   );
   await expect.element(page.getByText("What the suite asserted")).toBeVisible();
@@ -601,7 +590,7 @@ test("the sweep marker's row is never counted or drawn among the Checks", async 
 });
 
 test("the Judge's row draws Fleet's own reason, sentence-cased, and not doubled", async () => {
-  screen(undecidedStep(), CRITERIA, undefined, undefined, UNDECIDED_RAW);
+  screen(undecidedStep(), CRITERIA, undefined, UNDECIDED_RAW);
   // Twice: the Judge's row on the Checks list and the Verdicts chapter's own
   // preview, from the one reading `gates.ts` gives both.
   await expect.element(page.getByText(UNDECIDED_SAID, { exact: false }).first()).toBeVisible();
@@ -612,7 +601,7 @@ test("the Judge's row draws Fleet's own reason, sentence-cased, and not doubled"
 });
 
 test("the Verdicts chapter's short value is the registry's word, the sentence is in the preview", async () => {
-  screen(undecidedStep(), CRITERIA, undefined, undefined, UNDECIDED_RAW);
+  screen(undecidedStep(), CRITERIA, undefined, UNDECIDED_RAW);
   await expect.element(page.getByText("could not read the artifact")).toBeVisible();
   expect(document.body.textContent).not.toContain("has not been asked anything on this step yet");
 });

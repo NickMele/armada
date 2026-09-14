@@ -17,6 +17,8 @@
 
 import {
   ActivityLogSheet,
+  ConsoleOutput,
+  EvidenceSheet,
   JobDiffSheet,
   JobHoldsSheet,
   RunSheet,
@@ -26,7 +28,7 @@ import {
   type JobHoldsSheetProps,
   type RunSheetProps,
 } from "@armada/components";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type {
   Diff,
@@ -35,9 +37,20 @@ import type {
 } from "@armada/protocol";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { Calls } from "./calls";
+import { checkSheetOf } from "./checks";
 import { DecidedDiff } from "./Decide";
 import { clock } from "./duration";
 import { WorkGrouped } from "./grouped";
+import {
+  liveNoteFor,
+  liveRegionOf,
+  liveRowsOf,
+  noteFor,
+  regionOf,
+  rowsOf,
+  type Following,
+  type Outputs,
+} from "./outputs";
 import { recourseOf } from "./recovery";
 import { drawn, WORKTREE_GIVEN_BACK } from "./review";
 import { SettingsSheet, type SettingsSheetProps } from "./settings";
@@ -59,8 +72,15 @@ import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
  * **`run` is the fifth, Journey 9's.** It opens from `r`, from the worktree
  * row's `Run…`, and from a refused Check's `Run it here` — never from a
  * chapter, so it lands nowhere on close, `holds`'s way.
+ *
+ * **`check` is the sixth, #1021's.** A Check's log has no end while the gate
+ * is running it and its kept file can run to thousands of lines once it has
+ * ruled, so both left the Checks chapter for this layer — the same move #286
+ * made for the activity log and the diff. It opens only from a press on a
+ * Check's row, closes back onto the Checks chapter line the way `log` and
+ * `diff` do, and follows the same one sheet, two exits rule.
  */
-export type OpenSheet = "log" | "diff" | "holds" | "settings" | "run" | null;
+export type OpenSheet = "log" | "diff" | "holds" | "settings" | "run" | "check" | null;
 
 /**
  * Where the log's reading was held, and how much it had then.
@@ -100,6 +120,25 @@ export type DetailSheetProps = {
   /** What one log takes, by name, so the sheet's rows are not the preview's. */
   log: { region: string; openId: string | null; onOpen: (rowId: string | null) => void };
   held: HeldAt | null;
+  /**
+   * Which Check the output sheet is open on — `which === "check"`'s own
+   * reading. `checkSheetOf(step, checkId)` is what turns this into live or
+   * kept; absent whenever `which` is not `"check"`.
+   */
+  checkId?: string;
+  /**
+   * What each Check on this Job has printed, where somebody opened one, and
+   * how to ask for the rest. **Held for the Job**, because a recorded output
+   * never moves — the sheet's own fetch, not the chapter's any more. #1021.
+   */
+  outputs: Outputs;
+  /**
+   * The running Check's log this window is following, and how to follow one.
+   * **Started when the sheet mounts on a live Check and stopped when it
+   * unmounts** — closing the sheet or switching Jobs both unmount it, which is
+   * what lets go of the socket now that the chapter no longer does.
+   */
+  following: Following;
   /**
    * Hold the reading where it is, or `null` to follow the tail again.
    *
@@ -141,6 +180,9 @@ export function DetailSheet({
   calls,
   log,
   held,
+  checkId,
+  outputs,
+  following,
   onHold,
   holds,
   settings,
@@ -200,6 +242,19 @@ export function DetailSheet({
   if (which === "diff") {
     return <DiffSheet job={job} whole={whole} diff={diff} floor={floor} onClose={onClose} />;
   }
+  if (which === "check" && checkId !== undefined) {
+    return (
+      <CheckSheet
+        job={job}
+        step={step}
+        checkId={checkId}
+        outputs={outputs}
+        following={following}
+        floor={floor}
+        onClose={onClose}
+      />
+    );
+  }
   if (which === "holds") {
     return <JobHoldsSheet open floor={floor} onClose={onClose} {...holds} />;
   }
@@ -258,6 +313,103 @@ function DiffSheet({
 }
 
 /**
+ * One Check's output, on the layer that can hold it — #1021.
+ *
+ * **`EvidenceSheet`, wired in for the first time.** It existed as a component
+ * and a story — `AChecksConsoleOutput` — and neither was built into the screen
+ * that ships, which is exactly the gap `evidence.tsx`'s own header names for
+ * the Checks and Verdicts chapters. A check's console output is the artifact
+ * that sheet was drawn for.
+ *
+ * **`checkSheetOf` decides live or kept, every render.** A Check open in this
+ * sheet while the gate rules moves from one to the other without the sheet
+ * closing — the same Check, a different file, which is why this asks fresh
+ * rather than fixing the answer at open.
+ */
+function CheckSheet({
+  job,
+  step,
+  checkId,
+  outputs,
+  following,
+  floor,
+  onClose,
+}: {
+  job: JobSummary;
+  step: StepDetail;
+  checkId: string;
+  outputs: Outputs;
+  following: Following;
+  floor: boolean;
+  onClose: () => void;
+}) {
+  const read = checkSheetOf(step, checkId);
+  return (
+    <EvidenceSheet
+      open
+      floor={floor}
+      kind="Console output"
+      name={`${checkId} — output`}
+      step={step.label}
+      jobId={job.handle}
+      onClose={onClose}
+    >
+      {read === undefined ? (
+        <ConsoleOutput rows={[]} emptyNote={NOTHING_TO_READ} />
+      ) : read.kind === "live" ? (
+        <LiveCheckOutput kept={read.kept} following={following} />
+      ) : (
+        <KeptCheckOutput kept={read.kept} outputs={outputs} />
+      )}
+    </EvidenceSheet>
+  );
+}
+
+/**
+ * The kept file, read where the Check is. **The fetch is the open, and it
+ * happens once** — `outputs.fetch` drops a second ask for a name it already
+ * holds, so mounting this is what asks for the file rather than a press
+ * inside it.
+ */
+function KeptCheckOutput({ kept, outputs }: { kept: string; outputs: Outputs }) {
+  useEffect(() => outputs.fetch(kept), [outputs, kept]);
+  const held = outputs.of(kept);
+  const output = held?.state === "got" ? held.output : undefined;
+  return (
+    <ConsoleOutput
+      rows={output === undefined ? [] : rowsOf(output)}
+      {...(output === undefined ? {} : { region: regionOf(output) })}
+      emptyNote={noteFor(held)}
+    />
+  );
+}
+
+/**
+ * One running Check's log, followed as it is written. **Followed while the
+ * sheet is on screen and let go the moment it is not** — mounting and
+ * unmounting this is the whole of starting and stopping the socket, so
+ * closing the sheet or switching Jobs both end it.
+ */
+function LiveCheckOutput({ kept, following }: { kept: string; following: Following }) {
+  const { follow } = following;
+  useEffect(() => {
+    follow(kept);
+    return () => follow(null);
+  }, [follow, kept]);
+  const region = liveRegionOf(following.reading, kept);
+  return (
+    <ConsoleOutput
+      rows={liveRowsOf(following.reading, kept)}
+      {...(region === undefined ? {} : { region })}
+      emptyNote={liveNoteFor(following.reading, kept)}
+    />
+  );
+}
+
+/** A Check named for the sheet that no longer has anything behind it. */
+const NOTHING_TO_READ = "This Check has nothing recorded to read.";
+
+/**
  * Whether the missing reading is a worktree that was given back.
  *
  * **`work: None` is two facts and only one of them may be named.** Fleet
@@ -309,11 +461,14 @@ export function holdOf(now: number, rows: number): HeldAt {
 export type SheetReading =
   | { which: null }
   | { which: "log"; attempt?: number; held: HeldAt | null }
-  | { which: Exclude<OpenSheet, "log" | null> };
+  | { which: "check"; checkId: string }
+  | { which: Exclude<OpenSheet, "log" | "check" | null> };
 
 /** What can happen to it: a sheet goes up, comes down, or the log is held or let go. */
 export type SheetMove =
-  | { move: "open"; which: Exclude<OpenSheet, null>; attempt?: number; held?: HeldAt }
+  | { move: "open"; which: "log"; attempt?: number; held?: HeldAt }
+  | { move: "open"; which: "check"; checkId: string }
+  | { move: "open"; which: Exclude<OpenSheet, "log" | "check" | null> }
   | { move: "close" }
   | { move: "hold"; held: HeldAt | null };
 
@@ -323,6 +478,7 @@ export const NO_SHEET: SheetReading = { which: null };
 export function sheetMoved(was: SheetReading, move: SheetMove): SheetReading {
   if (move.move === "close") return NO_SHEET;
   if (move.move === "hold") return was.which === "log" ? { ...was, held: move.held } : was;
+  if (move.which === "check") return { which: "check", checkId: move.checkId };
   if (move.which !== "log") return { which: move.which };
   return {
     which: "log",

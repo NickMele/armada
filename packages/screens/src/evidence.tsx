@@ -76,7 +76,6 @@ export type Unnumbered = Omit<StepChapter, "ordinal">;
 
 import { checksChapter } from "./checks";
 import { panelsOf } from "./gates";
-import type { Following, Outputs } from "./outputs";
 import type { Opens } from "./phases";
 import { verdictsChapter } from "./verdicts";
 
@@ -94,17 +93,15 @@ export function evidenceChaptersOf({
   step,
   criteria,
   opens,
-  outputs,
   now,
-  following,
   undecided,
   asking,
   onRunHere,
+  openCheckId,
+  onOpenCheck,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
   now: number;
-  /** The running Check's log this window is following, and how to follow one. */
-  following: Following;
   step: StepDetail;
   /** The Job's frozen criteria, for the words and the position a citation names. */
   criteria: readonly Criterion[];
@@ -118,18 +115,17 @@ export function evidenceChaptersOf({
   undecided?: string;
   /** The criterion a live judge question holds open on this step, where one is. */
   asking?: string;
-  /**
-   * What each Check printed, as this window has it, and how to ask for one.
-   *
-   * **Handed in rather than fetched here**, which is `Calls`' rule one record
-   * over: what a Check printed is a reading, and fetching it is a round trip to
-   * the process holding the file. Required rather than optional, for `opens`'
-   * reason — a chapter given no way to read would go quietly back to being the
-   * fixture this file replaced.
-   */
-  outputs: Outputs;
   /** **Run it here** on a refused Check's row, from the run sheet — Journey 9. */
   onRunHere?: (checkId: string) => void;
+  /** Which Check's output sheet is open, so the Checks chapter's row says so. */
+  openCheckId?: string;
+  /**
+   * Opens the Check output sheet on the pressed Check. **Not fetched or
+   * followed here** — a chapter's job is deciding what a row looks like, and
+   * reading what is behind the row is `Sheets.tsx`'s, once a press has named
+   * it. #1021.
+   */
+  onOpenCheck?: (checkId: string) => void;
 }): Unnumbered[] {
   // Read once and drawn twice: the Checks chapter's Judge row and the Verdicts
   // grid are the same panel, and the two counts have to be one count.
@@ -141,7 +137,7 @@ export function evidenceChaptersOf({
   // count is the story's to make, over the list it actually built. The order
   // is still fixed: Checks always before Verdicts.
   return [
-    checksChapter(step, panels, opens, outputs, now, following, undecided, onRunHere),
+    checksChapter(step, panels, opens, now, undecided, onRunHere, openCheckId, onOpenCheck),
     verdictsChapter(step, panels, opens, undecided),
   ].filter(
     (chapter): chapter is Unnumbered => chapter !== undefined,

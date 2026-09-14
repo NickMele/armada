@@ -46,7 +46,9 @@ import { checkEntryId, useRunSheet } from "./rehearsal";
 import { verdictSlotOf } from "./verdict-answered";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
 // makes**, so the key and the control cannot open different files.
-import { outputOf } from "./gates";
+import { checksOf, outputOf } from "./gates";
+import { openKept } from "./phases";
+import { CHECKS_CHAPTER } from "./checks";
 import { whileReading, whyUnreachable } from "./while-reading";
 import { renderFor } from "./render";
 import { runOf, whyNoSteps } from "./run";
@@ -169,6 +171,9 @@ function OneJob({
   const sheet = onSheet.which;
   const logAttempt = onSheet.which === "log" ? (onSheet.attempt ?? null) : null;
   const held = onSheet.which === "log" ? onSheet.held : null;
+  // Which Check the check-output sheet is open on, or `undefined` for none —
+  // #1021. `checkSheetOf` in `Sheets.tsx` is what turns this into live or kept.
+  const openCheckId = onSheet.which === "check" ? onSheet.checkId : undefined;
 
   // Whether the report dialog is up. Two controls open it — the Job header's
   // menu entry and `b` — and the keyboard is bound at the screen's level.
@@ -358,7 +363,7 @@ function OneJob({
    * it, and opening the log takes the reading's position: from here on the tail
    * is not followed, and what arrives is counted rather than scrolled to.
    */
-  function openSheet(which: Exclude<OpenSheet, null>, attempt?: number): void {
+  function openSheet(which: Exclude<OpenSheet, null | "check">, attempt?: number): void {
     // Held only where there is a tail to stop following. A run that has ended
     // does not grow, so the strip would offer a jump to nothing.
     const holding = which === "log" && attempt === undefined ? holdOf(now, rows.length) : undefined;
@@ -368,6 +373,16 @@ function OneJob({
       ...(attempt === undefined ? {} : { attempt }),
       ...(holding === undefined ? {} : { held: holding }),
     });
+  }
+
+  /**
+   * Open the Check output sheet on the current attempt's Check — live where
+   * the gate is still running it, kept once it has ruled. `checkSheetOf` in
+   * `Sheets.tsx` is what reads that off the step; this only names the Check.
+   * #1021.
+   */
+  function openCheck(checkId: string): void {
+    move({ move: "open", which: "check", checkId });
   }
 
   /**
@@ -387,6 +402,7 @@ function OneJob({
     if (was === "log" || was === "diff") {
       keys.onFocusChapter(was === "log" ? LOG_CHAPTER : DIFF_CHAPTER);
     }
+    if (was === "check") keys.onFocusChapter(CHECKS_CHAPTER);
   }
 
   /**
@@ -420,7 +436,6 @@ function OneJob({
       transcript,
       log: keys.inLog,
       calls,
-      outputs,
       frames,
       ...(ended !== undefined
         ? {}
@@ -439,7 +454,6 @@ function OneJob({
       opens: opensRecords,
       onOpenSheet: openSheet,
       now,
-      following,
       // Scoped to the step `stuck` is actually about — a reader may have
       // navigated to a different step, and `stuck.undecided` is not that
       // step's reason for anything.
@@ -449,6 +463,19 @@ function OneJob({
           : undefined,
       asking: ended === undefined ? asking : undefined,
       onRunHere: (checkId) => runHook.open(checkEntryId(checkId)), // Journey 9
+      // **The sheet only ever reads the current attempt.** `checkSheetOf`
+      // reads `open` — this Job's current step — so a press on an earlier
+      // attempt's row goes straight to the editor instead, the way it always
+      // did: that attempt's own kept path, read off `step` here rather than
+      // `open`, is still exactly attributable without the sheet's help.
+      openCheckId: ended === undefined ? openCheckId : undefined,
+      onOpenCheck:
+        ended === undefined
+          ? openCheck
+          : (checkId) => {
+              const kept = checksOf(step).find((one) => one.name === checkId)?.run?.output_path;
+              if (kept !== undefined) openKept(opensRecords, { kept, what: "check" });
+            },
       ...(attempt === undefined ? {} : { attempt }),
       ...(ended === undefined ? {} : { ended }),
     });
@@ -690,6 +717,9 @@ function OneJob({
             // the chapter's preview. Two logs over one stream hold equal ids.
             log={keys.inLog("sheet")}
             held={held}
+            checkId={openCheckId}
+            outputs={outputs}
+            following={following}
             onHold={(to) => move({ move: "hold", held: to })}
             // The full reading, unchanged from what the run column used to
             // draw — `Look now` came with it, because it acts on this reading
