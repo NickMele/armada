@@ -273,6 +273,10 @@ where
             .find(|s| s.evidence_type() == Some(core_model::EvidenceType::Review))
             .map(|s| s.label().to_string());
         detail.job.frozen_by = queued.frozen_by.iter().map(ipc::ManifestId::from).collect();
+        detail.breakages = self
+            .breakages_of(&job)
+            .await
+            .map_err(|why| self.refusal(why))?;
         // The row nested here is built inside `JobDetail::of`, so its counts are
         // filled from the same reading as the plan beside it.
         let plan = self

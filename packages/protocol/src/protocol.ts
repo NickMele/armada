@@ -374,7 +374,7 @@ export type ProposeJob = {
   title: string;
   workflow_id: string;
   owner_manifest_id: string;
-  /** One of the four top-level origins. `sub_dispatched` does not deserialise. */
+  /** One of the top-level origins. `sub_dispatched` does not deserialise. */
   origin: string;
   urgency: string;
   atomic: boolean;
@@ -423,6 +423,29 @@ export type SharedPath = {
   path: string;
   this_step?: string;
   other_step?: string;
+};
+
+/**
+ * A test broken on main and the Job fixing it. `crates/ipc/src/breakage.rs`.
+ *
+ * One entry reads from either side: the fix Job names what it claims, and the
+ * Job whose Drone reported it names who is fixing what it found.
+ */
+export type ClaimedBreakage = {
+  /** The Check the test failed under. */
+  check: string;
+  /** The test, by the name the reporting Drone copied from the output. */
+  test: string;
+  /** What the output said about the failure. */
+  failure: string;
+  /** The Job fixing it. */
+  fix: string;
+  /** What the fix Job is called. */
+  fix_title: string;
+  /** The Job whose Drone reported it. */
+  reported_by: string;
+  /** What that Job is called. Absent where it has been forgotten. */
+  reported_by_title?: string;
 };
 
 export type ProposedCriterion = { text: string; source: string };

@@ -473,6 +473,8 @@ function opening(occasion: string): string {
       return "Armada said which other Jobs are writing here.";
     case "checks":
       return "Armada sent back the checks the Drone asked for.";
+    case "fix":
+      return "Armada sent back what a test came to on main.";
     case "answer":
       return "Armada carried in a person's answer.";
     case "drift":

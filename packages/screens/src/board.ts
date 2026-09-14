@@ -210,12 +210,12 @@ export const BOARD_SORTS: readonly { id: BoardSort; label: string }[] = [
  * a header, and a column of buttons is not a fact about the Job.
  *
  * **Three, not four.** `Dispatched by` is the fourth fact the Board wants and
- * the one it cannot draw. The words exist: `enum-verbs.toml` carries all five
- * `origin` rows and `sub_dispatched` carries a form rather than a word, both
+ * the one it cannot draw. The words exist: `enum-verbs.toml` carries every
+ * `origin` row and `sub_dispatched` carries a form rather than a word, both
  * settled when #234 closed. Two things are still missing, and only the first is
  * a line: the generator's wanted list does not name `origin`, so no `ORIGIN`
- * map reaches Bridge; and `JobSummary` carries the full five-value `Origin`
- * without `dispatched_by`, so on a sub-dispatched row the form has nothing to
+ * map reaches Bridge; and `JobSummary` carries the full `Origin` without
+ * `dispatched_by`, so on a sub-dispatched row the form has nothing to
  * fill its slot with. Naming a column before both are answered would reserve a
  * track for a value that never arrives, which reads as one that failed to load.
  */

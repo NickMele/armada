@@ -204,7 +204,7 @@ export function workOf(
     });
   }
 
-  if (whole !== null) rows.push(...overlapRows(whole));
+  if (whole !== null) rows.push(...overlapRows(whole), ...breakageRows(whole, job.id));
   rows.push(...servingRows(job.id, rehearsal));
   return rows;
 }
@@ -317,6 +317,25 @@ function overlapRows(whole: JobWhole): JobLogReferenceRow[] {
       value: first === undefined ? other.job_id : workspaceOf(first),
       copyValue: paths.join(" "),
       meta: rest > 0 ? `${also} · +${rest}` : also,
+      separated: at === 0,
+    };
+  });
+}
+
+/**
+ * Tests broken on main this Job reported or is fixing — #999. The test is the
+ * value, so it reads in full; who is fixing it is the note beside it.
+ */
+function breakageRows(whole: JobWhole, jobId: string): JobLogReferenceRow[] {
+  return (whole.breakages ?? []).map((broken, at) => {
+    const fixing = broken.fix === jobId;
+    return {
+      iconLabel: fixing ? "Fixing" : "Reported",
+      value: broken.test,
+      copyValue: broken.test,
+      meta: fixing
+        ? `broken on main under ${broken.check}`
+        : `broken on main · ${broken.fix_title} is fixing it`,
       separated: at === 0,
     };
   });

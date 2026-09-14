@@ -64,6 +64,7 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
                     Some("crates".to_string()),
                     vec!["acceptance".to_string()],
                 )),
+                one_test: Some("cargo nextest run -E test(={})".to_string()),
             },
             ResolvedCheck::DiffNonempty,
             ResolvedCheck::ArtifactExists {

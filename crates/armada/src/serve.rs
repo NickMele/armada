@@ -232,6 +232,11 @@ pub const HELM_SESSION_RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 
 /// `fleet::converging`: each ask is one of its own calls.
 pub const PROVISIONAL_DRY_RUNS: DryRuns = DryRuns::of(3);
 
+/// How many fixes one step may ask for: one. **A cost bound**, for
+/// `PROVISIONAL_DRY_RUNS`' reason: each is a run against main. A step that meets
+/// a second test broken on main says so in its evidence. #999.
+pub const PROVISIONAL_FIXES: fleet::fixing::Fixes = fleet::fixing::Fixes::of(1);
+
 /// How many Jobs Fleet works at once.
 ///
 /// **The `concurrency-cap` row in `crates/config/settings.toml`, resolved here**
@@ -746,6 +751,7 @@ fn assemble(
         norms: PROVISIONAL_STEP_NORMS,
         liveness: PROVISIONAL_LIVENESS,
         dry_runs: PROVISIONAL_DRY_RUNS,
+        fixes: PROVISIONAL_FIXES,
         // The same CLI, invoked as a call rather than as a session. The
         // spelling of the model is the adapter's; this crate never learns it.
         judge: Arc::new(HeadlessAgent::at(judge_binary)),

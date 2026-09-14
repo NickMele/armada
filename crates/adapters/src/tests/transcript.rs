@@ -610,6 +610,28 @@ fn a_note_row_says_who_it_was_for_and_what_it_said() {
     assert!(ipc::mcp::NOTE_FIELDS.contains(&"to") && ipc::mcp::NOTE_FIELDS.contains(&"note"));
 }
 
+/// **The Drone's own record of what it said was broken on main.** Fleet keeps
+/// the claim, but only this row says which Drone said it and when. #999.
+#[test]
+fn a_fix_row_names_the_test_said_to_be_broken_on_main() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"mcp__armada__draft_fix",
+              "input":{"check":"test","test":"store::reads_the_last_row",
+                       "failure":"exited 101","title":"Fix the last-row read",
+                       "workflow":"bug","brief":"It fails on main.",
+                       "acceptance_criteria":[]}}]}}"#,
+    );
+    let [DroneEvent::Called { detail, .. }] = &read[..] else {
+        panic!("{read:?}");
+    };
+    assert_eq!(
+        detail.shown(),
+        "store::reads_the_last_row under test, broken on main"
+    );
+    assert!(ipc::mcp::FIX_FIELDS.contains(&"check") && ipc::mcp::FIX_FIELDS.contains(&"test"));
+}
+
 /// A step that will change nothing has declared that. A blank detail is what a
 /// tool nobody called looks like, so the two must not read the same.
 #[test]

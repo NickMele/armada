@@ -711,6 +711,9 @@ where
             // person answers it.
             self.stopped_servers_of(moved.job.id()).await;
             self.released_ports(&moved.job).await;
+            // A fix that ended gives back the test it claimed, so a test broken
+            // again can be claimed again. #999.
+            self.released_breakages(&moved.job).await;
         }
         self.publish(ipc::Event::JobStateChanged((&moved.event).into()));
         Ok(moved.job)

@@ -15,9 +15,10 @@ import { JobRowStacked } from "./JobRowStacked";
  * not generated into TypeScript yet, and nowhere that ships.
  *
  * **Every row's field run now carries origin** — display-only, never a filter
- * axis (`docs/concepts/job-board.md`, Origin tagging). The five values:
- * dispatched by you, found by Fleet, drafted in Helm, workflow-triggered, and
- * sub-dispatched, which additionally names the parent Job. See issue 218.
+ * axis (`docs/concepts/job-board.md`, Origin tagging). The values: dispatched
+ * by you, found by Fleet, drafted in Helm, workflow-triggered, drafted by a
+ * Drone, and sub-dispatched, which additionally names the parent Job. See
+ * issue 218.
  */
 const meta: Meta<typeof JobRowStacked> = {
   title: "Compositions/Job row (stacked)",

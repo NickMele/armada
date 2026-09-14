@@ -224,8 +224,8 @@ fn every_gate_outcome_round_trips_including_each_reason() {
 }
 
 /// The narrowing back from [`Origin`], which the rebuild needs to pick a
-/// constructor. Round trips through `From<TopLevelOrigin>` for the four, and
-/// declines for the one written by the other constructor.
+/// constructor. Round trips through `From<TopLevelOrigin>` for every top-level
+/// origin, and declines for the one written by the other constructor.
 #[test]
 fn every_top_level_origin_narrows_back_to_itself() {
     for origin in Origin::ALL {
@@ -257,7 +257,7 @@ fn each_enums_size_is_pinned_here_and_compared_to_no_registry() {
     assert_eq!(JobStatus::ALL.len(), 13);
     assert_eq!(StepState::ALL.len(), 6);
     assert_eq!(EscalationTrigger::ALL.len(), 24);
-    assert_eq!(Origin::ALL.len(), 5);
+    assert_eq!(Origin::ALL.len(), 6);
     assert_eq!(PilotReason::ALL.len(), 3);
     assert_eq!(CriterionSource::ALL.len(), 3);
     assert_eq!(DependencyDirection::ALL.len(), 2);

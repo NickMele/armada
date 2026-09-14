@@ -331,6 +331,7 @@ pub fn detail(job: JobSummary) -> JobDetail {
         redirect_waiting: None,
         // Absent, not empty: no other Job's record is held, so nothing looked.
         write_scope_overlaps: None,
+        breakages: Vec::new(),
         // Absent for the same reason again: a classification is read from
         // a slot, a filesystem and a store, and this daemon has none of the
         // three.

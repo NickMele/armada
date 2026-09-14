@@ -203,6 +203,8 @@ pub struct Fittings<H, V, W> {
     /// Drone rather than anything about the step's work. See
     /// [`DryRuns`](crate::DryRuns).
     pub dry_runs: DryRuns,
+    /// How many fixes one step may ask for. See [`Fixes`](crate::fixing::Fixes). #999.
+    pub fixes: crate::fixing::Fixes,
     /// What makes a Judge call. **A pointer rather than a type parameter**: the
     /// seam renders and cannot fail, so nothing about it needs to be generic.
     pub judge: Arc<dyn ModelClient + Send + Sync>,
@@ -307,6 +309,7 @@ where
             norms: fittings.norms,
             liveness: fittings.liveness,
             dry_runs: fittings.dry_runs,
+            fixes: fittings.fixes,
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
             proposer_budget: fittings.proposer_budget,
@@ -338,6 +341,7 @@ where
             sweeping: Mutex::new(Sweep::default()),
             peering: Mutex::new(crate::peers::Peering::default()),
             proving: Arc::new(Mutex::new(crate::proving::Proving::default())),
+            fixing_on_main: Mutex::new(std::collections::BTreeSet::new()),
             pressing: crate::showing_again::Pressing::default(),
             rehearsals: crate::rehearsing::Rehearsals::default(),
             servers: crate::servers::Servers::default(),

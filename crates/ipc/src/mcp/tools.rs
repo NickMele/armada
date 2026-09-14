@@ -28,6 +28,7 @@ use serde_json::{json, Map, Value};
 
 use super::ask::{ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 use super::dispatch::{DISPATCH_FIELDS, DISPATCH_TOOL};
+use super::fixing::FIX_TOOL;
 use super::noting::NOTE_TOOL;
 use super::permission::{PERMISSION_FIELDS, PERMISSION_TOOL};
 use super::planning::{
@@ -187,7 +188,7 @@ impl core::fmt::Display for NotAnArgument {
                 out,
                 "there is no tool called `{named}`. The tools are `{TOOL}`, \
                  `{SCOPE_TOOL}`, `{WIDEN_TOOL}`, `{CHECKS_TOOL}`, \
-                 `{SERVER_TOOL}`, `{DISPATCH_TOOL}`, `{ASK_TOOL}`, `{NOTE_TOOL}`, \
+                 `{SERVER_TOOL}`, `{DISPATCH_TOOL}`, `{ASK_TOOL}`, `{NOTE_TOOL}`, `{FIX_TOOL}`, \
                  `{RECORD_PLAN_TOOL}`, `{ADD_TASK_TOOL}` and `{UPDATE_TASK_TOOL}`"
             ),
             NotAnArgument::NoArguments { tool, takes } => write!(
@@ -427,6 +428,7 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
         DISPATCH_TOOL => Ok(DISPATCH_TOOL),
         ASK_TOOL => Ok(ASK_TOOL),
         NOTE_TOOL => Ok(NOTE_TOOL),
+        FIX_TOOL => Ok(FIX_TOOL),
         PERMISSION_TOOL => Ok(PERMISSION_TOOL),
         RECORD_PLAN_TOOL => Ok(RECORD_PLAN_TOOL),
         ADD_TASK_TOOL => Ok(ADD_TASK_TOOL),
@@ -537,6 +539,7 @@ pub(crate) fn listed() -> Vec<Value> {
         super::dispatch::dispatch_tool(),
         super::ask::ask_tool(),
         super::noting::note_tool(),
+        super::fixing::fix_tool(),
         super::permission::permission_tool(),
         super::planning::record_plan_tool(),
         super::planning::add_task_tool(),

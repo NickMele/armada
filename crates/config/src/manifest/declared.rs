@@ -26,6 +26,7 @@ pub struct Check {
     pub(super) when: Option<Covers>,
     pub(super) requires: Vec<Prerequisite>,
     pub(super) narrow: Option<Narrowing>,
+    pub(super) one_test: Option<String>,
 }
 
 impl Check {
@@ -82,6 +83,13 @@ impl Check {
     /// still narrows to the Rust ones, so one key could not carry both.
     pub fn narrow(&self) -> Option<&Narrowing> {
         self.narrow.as_ref()
+    }
+
+    /// How this Check runs one test by name, `{}` where the name goes. **`None`
+    /// where the file declares no `one_test`**, and then a Drone's report of a
+    /// test broken on main has nothing to confirm it with. #999.
+    pub fn one_test(&self) -> Option<&str> {
+        self.one_test.as_deref()
     }
 }
 

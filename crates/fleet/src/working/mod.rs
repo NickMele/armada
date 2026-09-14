@@ -265,6 +265,8 @@ pub(crate) struct Working {
     /// The run [`checking_since`](Working::is_checking) is timing, and what
     /// keeps its Checks going. Dropped with the slot, which stops them.
     in_flight: Option<(u64, crate::checking::Going)>,
+    /// How many fixes this step has asked for, capped like `dry_runs`. #999.
+    fixes: u32,
 }
 
 /// A Drone that has been ended, and everything the slot that held it was
@@ -362,6 +364,7 @@ impl Working {
             checked_for: Duration::ZERO,
             dry_runs: 0,
             in_flight: None,
+            fixes: 0,
         }
     }
 
@@ -427,6 +430,7 @@ impl Working {
             checked_for: Duration::ZERO,
             dry_runs: 0,
             in_flight: None,
+            fixes: 0,
         }
     }
 

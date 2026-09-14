@@ -465,6 +465,34 @@ fn a_narrowing_with_no_command_of_its_own_is_refused() {
     ));
 }
 
+/// A Check says how it runs one test by name, and one that says nothing has no
+/// way to be asked about one test. #999.
+#[test]
+fn a_check_reads_how_it_runs_one_test_and_says_none_where_it_does_not() {
+    let manifest = parse(
+        "version: 1\nid: a\nchecks:\n  test:\n    run: cargo nextest run\n    one_test:\n      run: cargo nextest run -E test(={})\n  build:\n    run: cargo build\n",
+    )
+    .expect("a Check that runs one test by name");
+    assert_eq!(
+        manifest.check("test").expect("test").one_test(),
+        Some("cargo nextest run -E test(={})")
+    );
+    assert!(manifest.check("build").expect("build").one_test().is_none());
+}
+
+/// Without `{}` the same command runs whichever test was named, so it is
+/// refused at load, the way every template with nowhere to substitute is.
+#[test]
+fn a_one_test_command_with_nowhere_to_put_the_name_is_refused() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  test:\n    run: x\n    one_test:\n      run: cargo nextest run\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.test.one_test.run"),
+        Fault::NothingToSubstitute
+    ));
+}
+
 #[test]
 fn a_key_the_narrowing_does_not_read_is_refused_by_name() {
     let refused = refusals(parse(

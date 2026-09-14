@@ -30,6 +30,8 @@ pub enum Origin {
     HelmDrafted,
     SubDispatched,
     WorkflowTriggered,
+    /// Drafted by a working Drone for a test Fleet confirmed broken on main. #999.
+    DroneDrafted,
 }
 
 impl Origin {
@@ -39,6 +41,7 @@ impl Origin {
         Origin::HelmDrafted,
         Origin::SubDispatched,
         Origin::WorkflowTriggered,
+        Origin::DroneDrafted,
     ];
 
     pub fn as_wire(&self) -> &'static str {
@@ -48,6 +51,7 @@ impl Origin {
             Origin::HelmDrafted => "helm_drafted",
             Origin::SubDispatched => "sub_dispatched",
             Origin::WorkflowTriggered => "workflow_triggered",
+            Origin::DroneDrafted => "drone_drafted",
         }
     }
 
@@ -70,12 +74,13 @@ impl Origin {
             Origin::Manual => Some(TopLevelOrigin::Manual),
             Origin::HelmDrafted => Some(TopLevelOrigin::HelmDrafted),
             Origin::WorkflowTriggered => Some(TopLevelOrigin::WorkflowTriggered),
+            Origin::DroneDrafted => Some(TopLevelOrigin::DroneDrafted),
             Origin::SubDispatched => None,
         }
     }
 }
 
-/// The four origins a Job with no `dispatched_by` may claim.
+/// The origins a Job with no `dispatched_by` may claim.
 ///
 /// Not a second vocabulary — every variant maps onto an [`Origin`]. It exists
 /// so that "a top-level Job is `sub_dispatched`" is a sentence the type system
@@ -89,6 +94,9 @@ pub enum TopLevelOrigin {
     /// not consume the fan-out cap. The one value not written from
     /// `dispatched_by`.
     WorkflowTriggered,
+    /// A fix a working Drone drafted. Top-level, because it waits for approval
+    /// like any proposal; the breakage it claims says which Job reported it. #999.
+    DroneDrafted,
 }
 
 impl From<TopLevelOrigin> for Origin {
@@ -98,6 +106,7 @@ impl From<TopLevelOrigin> for Origin {
             TopLevelOrigin::Manual => Origin::Manual,
             TopLevelOrigin::HelmDrafted => Origin::HelmDrafted,
             TopLevelOrigin::WorkflowTriggered => Origin::WorkflowTriggered,
+            TopLevelOrigin::DroneDrafted => Origin::DroneDrafted,
         }
     }
 }

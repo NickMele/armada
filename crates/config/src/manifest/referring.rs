@@ -135,6 +135,7 @@ pub(super) fn after_merge(
                 when: None,
                 requires: Vec::new(),
                 narrow: None,
+                one_test: None,
             }),
             None => out.push(Refusal::new(
                 key,
@@ -184,6 +185,7 @@ pub(super) fn required_by(
                 when: draft.when,
                 requires,
                 narrow: draft.narrow,
+                one_test: draft.one_test,
             },
         );
     }

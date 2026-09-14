@@ -209,6 +209,16 @@ This sentence used to say the opposite, and the overlap warning below was writte
 
 The remedy needs no new state: `depends_on` already sequences Jobs and already parks the waiting one at `blocked_by_dependency`. **Taking it is not built** — there is no operation that writes an edge onto a Job that already exists, and this page says above that a Job's edges are written once, at creation. That write-once property is what lets DAG scheduling above skip a topological sort, so an operation that breaks it is not a small one; `#231` is where that is settled. What a person has today is the two gate answers they already had.
 
+### A test broken on main
+
+**A Drone that hits a test already failing on main says so, and Fleet checks before anything is drafted.** Through `draft_fix` it names the Check and the test; Fleet runs just that test against a checkout of main, with the command the Check's `one_test` declares. The call answers once that run has started, and what it came to reaches the Drone as a later turn, as a dry run's report does. Only a failure there drafts the fix, and the fix waits at the approval gate like any proposal. A pass there means the failure is the Drone's own, and nothing is drafted. [Manifest](manifest.md), Running one test by name, holds the key.
+
+**The fix claims the test, so the same breakage is fixed once.** A claim names the repository, the Check and the test. A second Drone reporting that test is told which Job is fixing it, and nothing new is drafted. The claim ends when the fix Job ends, and forgetting the fix removes it; the Job that reported it is kept by id rather than linked, so forgetting the reporter first leaves the claim standing.
+
+**Bounded the way a dry run is, one directory over.** A Drone waits on one Check run at a time, a step asks for at most one fix, and the checkout of main is shared by every Job on the repository, so one run is out there at a time.
+
+**It passes nothing.** A Drone told a test is someone else's still has its own step decided by its Checks, and a fix drafted from its report still takes a person's approval.
+
 ### Catching a branch up
 
 **Rebasing a Job's branch is Fleet's, always.** Never the Drone — it has no git and `docs/concepts/drone.md` says outright it cannot be trusted to manage its own state — and never nobody, which is what "the base moved and the step never noticed" is.

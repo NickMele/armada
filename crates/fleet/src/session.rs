@@ -34,6 +34,7 @@ use verification::OutcomeTurn;
 
 use crate::converging::ReportNow;
 use crate::dry_run::ChecksReported;
+use crate::fixing::FixReported;
 use crate::group::{end_the_group, run_is_over};
 use crate::peers::PeersChanged;
 use crate::permitting::Permitted;
@@ -146,6 +147,10 @@ pub trait LiveSession {
         &self,
         reported: &ChecksReported,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Inject what running a test on main came to, for the Drone that said it
+    /// was broken there. `#999`, for [`checks`](LiveSession::checks)' reason.
+    fn fix(&self, reported: &FixReported) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Interrupt with a directive to stop and report.
     ///
@@ -283,6 +288,12 @@ impl Turn {
         Turn::of(reported.text())
     }
 
+    /// What running a test on main came to. The wording is [`FixReported`]'s.
+    /// `#999`.
+    pub fn fix(reported: &FixReported) -> Turn {
+        Turn::of(reported.text())
+    }
+
     /// Fleet's own stop-and-report directive, injected into a session already
     /// running. The wording is `ReportNow`'s and there is no way to send other
     /// text under it.
@@ -360,6 +371,8 @@ pub enum Occasion {
     Peers,
     /// The report of the Checks the Drone asked for. `#1020`.
     Checks,
+    /// What running a test on main came to. `#999`.
+    Fix,
 }
 
 impl Occasion {
@@ -367,6 +380,7 @@ impl Occasion {
         match self {
             Occasion::Peers => "peers",
             Occasion::Checks => "checks",
+            Occasion::Fix => "fix",
             Occasion::Opening => "opening",
             Occasion::Outcome => "outcome",
             Occasion::Redirect => "redirect",
@@ -526,6 +540,10 @@ impl LiveSession for DroneSession {
 
     async fn checks(&self, reported: &ChecksReported) -> Result<(), io::Error> {
         self.say(&Turn::checks(reported)).await
+    }
+
+    async fn fix(&self, reported: &FixReported) -> Result<(), io::Error> {
+        self.say(&Turn::fix(reported)).await
     }
 
     async fn interrupt(&self, directive: &ReportNow) -> Result<(), io::Error> {

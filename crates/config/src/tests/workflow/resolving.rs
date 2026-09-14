@@ -49,6 +49,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 when: None,
                 requires: Vec::new(),
                 narrow: None,
+                one_test: None,
             },
             ResolvedCheck::ManifestCheck {
                 name: "test".to_string(),
@@ -57,6 +58,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 when: None,
                 requires: Vec::new(),
                 narrow: None,
+                one_test: None,
             },
             ResolvedCheck::DiffNonempty,
         ]

@@ -107,6 +107,22 @@ where
         })
     }
 
+    /// The working Drone asking for the fix to a test it says is broken on main.
+    /// The run against main, the draft and every bound are `Fleet::draft_fix`'s
+    /// — `crate::fixing`. **The receipt says the run started, or names the fix
+    /// already claiming the test**; what the run came to is a later turn.
+    async fn draft_fix(
+        self: std::sync::Arc<Self>,
+        caller: api::Caller,
+        fix: ipc::mcp::DraftFix,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        let answer = Fleet::draft_fix(&self, &job, fix).await?;
+        Ok(Receipt {
+            word: answer.word(),
+        })
+    }
+
     /// The Evidence tool, which is what a step's claim arrives through.
     ///
     /// The binding — which Job, which step, which evidence type — is

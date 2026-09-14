@@ -34,6 +34,7 @@ mod amending;
 /// held it and nothing served it** — see the module.
 mod asking;
 mod attempt;
+mod breakage;
 /// How many Drones Fleet may run, how many it is running, and what holds the
 /// next one back. **Fleet-wide, and not a Job's field.**
 mod capacity;
@@ -162,6 +163,7 @@ pub use amending::{
 };
 pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, WhenRefused};
 pub use attempt::{first_started_at, Move, StepAttempt};
+pub use breakage::ClaimedBreakage;
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};

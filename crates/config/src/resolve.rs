@@ -413,5 +413,6 @@ fn lifted(name: String, declared: &Check, expect_exit_code: i64) -> ResolvedChec
         when: declared.when().cloned(),
         requires: declared.requires().to_vec(),
         narrow: declared.narrow().cloned(),
+        one_test: declared.one_test().map(str::to_string),
     }
 }

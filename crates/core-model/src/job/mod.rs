@@ -27,6 +27,7 @@
 mod allowed;
 mod asking;
 mod attempt;
+mod breakage;
 mod check;
 mod collision;
 mod covers;
@@ -63,6 +64,7 @@ mod tests;
 pub use allowed::{AllowedCommand, Reach, WhenBlocked};
 pub use asking::WhenRefused;
 pub use attempt::{Attempt, Iteration, Spent};
+pub use breakage::{Breakage, BreakageClaim};
 pub use check::{CheckOutcome, StepCheck};
 pub use collision::{collisions, Collision, ScopeClaim};
 pub use covers::{BadPattern, Covers, PathPattern};

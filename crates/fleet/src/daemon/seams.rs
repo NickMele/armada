@@ -159,6 +159,12 @@ where
     pub(crate) fn dry_runs(&self) -> DryRuns {
         self.dry_runs
     }
+    pub(crate) fn fixes(&self) -> crate::fixing::Fixes {
+        self.fixes
+    }
+    pub(crate) fn fixing_on_main(&self) -> &Mutex<std::collections::BTreeSet<String>> {
+        &self.fixing_on_main
+    }
 
     /// What the gate needs in order to ask the Judge.
     ///

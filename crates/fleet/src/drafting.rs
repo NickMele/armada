@@ -58,12 +58,18 @@ pub(crate) enum StatedBy {
     /// that matters for evaluating the call afterwards is that this scope was
     /// stated by the machine rather than typed.
     TheSplit { parent: core_model::JobId },
+    /// The Drone of another Job, for a test Fleet ran against main and saw
+    /// fail. **`Actor::Fleet`, like the split**, for its reason: the scope was
+    /// stated by the machine rather than typed. #999.
+    TheFix { reported_by: core_model::JobId },
 }
 
 impl StatedBy {
     fn actor(&self) -> Actor {
         match self {
-            StatedBy::TheProposer(_) | StatedBy::TheSplit { .. } => Actor::Fleet,
+            StatedBy::TheProposer(_) | StatedBy::TheSplit { .. } | StatedBy::TheFix { .. } => {
+                Actor::Fleet
+            }
             StatedBy::APerson => Actor::Human,
             StatedBy::AHelmSession => Actor::Helm,
         }
@@ -79,6 +85,10 @@ impl StatedBy {
             StatedBy::TheSplit { parent } => format!(
                 "dispatched by {} as one piece of the split a person approved",
                 parent.as_str()
+            ),
+            StatedBy::TheFix { reported_by } => format!(
+                "drafted by the Drone of {} for a test that failed on main when Fleet ran it",
+                reported_by.as_str()
             ),
         }
     }

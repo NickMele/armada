@@ -152,6 +152,13 @@ pub struct JobDetail {
     /// Job nothing had looked at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub write_scope_overlaps: Option<Vec<ScopeOverlap>>,
+    /// Tests broken on main this Job reported, or is fixing. **Since 13.41.**
+    ///
+    /// One list for both sides of a claim. **Empty is none**, and a detail
+    /// from an older Fleet reads the same way. Filled after
+    /// [`JobDetail::of`], like `when_blocked`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub breakages: Vec<crate::ClaimedBreakage>,
     /// The question this Job's Drone asked and nobody has answered yet.
     ///
     /// **Absent is the ordinary case.** A Drone that never asked, a Drone whose
@@ -630,6 +637,7 @@ impl JobDetail {
             // other Jobs claim these paths is not a field of this Job, and
             // working it out needs every other Job's record.
             write_scope_overlaps,
+            breakages: Vec::new(),
             stuck: stuck.map(Stuck::of),
             show_again: None,
             when_blocked: None,

@@ -83,6 +83,11 @@ pub enum ResolvedCheck {
         /// edited under a running Job would change that answer without
         /// changing the question.
         narrow: Option<Narrowing>,
+        /// How the Manifest says this Check runs one test by name, `{}` where
+        /// the name goes. **`None` where it declares no `one_test`**, and then
+        /// no Drone's report of a test broken on main can be confirmed. Frozen
+        /// for `narrow`'s reason. #999.
+        one_test: Option<String>,
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -203,6 +208,17 @@ impl ResolvedCheck {
     pub fn narrowing(&self) -> Option<&Narrowing> {
         match self {
             ResolvedCheck::ManifestCheck { narrow, .. } => narrow.as_ref(),
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => None,
+        }
+    }
+
+    /// How this Check runs one test by name, `{}` where the name goes. **`None`
+    /// on a built-in and on a Check that declares no `one_test`.** #999.
+    pub fn one_test(&self) -> Option<&str> {
+        match self {
+            ResolvedCheck::ManifestCheck { one_test, .. } => one_test.as_deref(),
             ResolvedCheck::DiffNonempty
             | ResolvedCheck::ArtifactExists { .. }
             | ResolvedCheck::PlanRecorded { .. } => None,
