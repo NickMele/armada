@@ -4,7 +4,7 @@
 //! `expect_exit_code`, `when`, `requires` and `narrow` under `checks.<name>`;
 //! `run`, `destructive`, `serve`, `ready` and `links` under `commands.<name>`;
 //! `container` and `env` under `ports.<name>`, a fourth registry;
-//! `setup.requires`; the three keys [`drone`] reads, the one section here that
+//! `setup.requires` and `setup.seed`, [`seed`]; the three keys [`drone`] reads, the one section here that
 //! is a dial rather than a registry; and the two policies a
 //! `manifest_rule:<key>` gate names, `auto_merge` and `review_gate`; and
 //! `freeze`, [`freeze`]. Every other section the concept page describes is
@@ -27,12 +27,14 @@
 mod declared;
 mod harness;
 mod referring;
+mod seed;
 mod serving;
 
 use referring::{after_merge, preparation, required_by};
 use serving::CommandEntry;
 
 pub use declared::{Check, Command, Port, Preparation};
+pub use seed::{BadSeedPath, Seed};
 pub use harness::Harness;
 pub use serving::{Link, Server};
 
@@ -89,7 +91,7 @@ const COMMAND_KEYS: &[&str] = &["run", "destructive", "serve", "ready", "links"]
 /// The keys M1 reads inside `ports.<name>`.
 const PORT_KEYS: &[&str] = &["container", "env"];
 /// The keys M1 reads inside `setup`.
-pub(super) const SETUP_KEYS: &[&str] = &["requires"];
+pub(super) const SETUP_KEYS: &[&str] = &["requires", "seed"];
 
 /// The keys M1 reads inside `after_merge`. **`checks` and nothing else**, so
 /// the section says one thing: which of this repository's Checks are worth
@@ -131,6 +133,7 @@ pub struct Manifest {
     /// string, unambiguous beside `${...}` forms neither registry defines.
     ports: BTreeMap<String, Port>,
     prepared_by: Vec<Preparation>,
+    seed: Option<Seed>,
     /// How this repository shows its work, where it says. **Not behind the
     /// cell**, for `exclude_paths`' reason one field down: a workflow's
     /// captured steps were resolved against its presence at daemon start.
@@ -306,6 +309,12 @@ impl Manifest {
         &self.prepared_by
     }
 
+    /// The build directories a new worktree is seeded with, where the file
+    /// declares `setup.seed`. `None` is a worktree cut empty, as it always was.
+    pub fn seed(&self) -> Option<&Seed> {
+        self.seed.as_ref()
+    }
+
     /// The Checks this repository asks to be run against the tree a merge left
     /// behind, **already resolved, in the order `after_merge.checks` names
     /// them**. Empty is the default and is opt-in on purpose — see
@@ -479,9 +488,9 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
     // semantics.
     let declares: BTreeSet<String> = drafted.keys().cloned().collect();
     let checks = required_by(drafted, &declares, &commands, &serves, out);
-    let prepared_by = match top.optional("setup") {
+    let (prepared_by, seed) = match top.optional("setup") {
         Some(value) => preparation(value, &declares, &commands, &serves, out),
-        None => Vec::new(),
+        None => (Vec::new(), None),
     };
     // After the two registries and before the dials, which is where it reads:
     // it is a third registry-shaped section rather than a knob, and it resolves
@@ -528,6 +537,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         servers,
         ports,
         prepared_by,
+        seed,
         harness,
         proved_after_a_merge,
         exclude_paths: drone.exclude_paths,

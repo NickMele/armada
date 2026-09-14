@@ -6,6 +6,7 @@
 //! counts are gone and the list lives in `crate::manifest`.
 
 mod ports;
+mod seed;
 mod servers;
 
 use crate::error::Fault;
@@ -646,14 +647,14 @@ fn a_setup_with_no_requires_is_refused() {
 }
 
 #[test]
-fn requires_is_the_only_key_setup_has() {
+fn requires_and_seed_are_the_only_keys_setup_has() {
     let refused = refusals(parse(
         "version: 1\nid: a\ncommands:\n  fmt:\n    run: x\n\
          setup:\n  requires: [fmt]\n  timeout: 60\n",
     ));
     assert!(matches!(
         fault_at(&refused, "setup.timeout"),
-        Fault::Unknown { known } if *known == ["requires"]
+        Fault::Unknown { known } if *known == ["requires", "seed"]
     ));
 }
 
