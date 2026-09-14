@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Plus } from "lucide-react";
 import { expect, fn } from "storybook/test";
 import { SplitButton } from "./SplitButton";
 
@@ -196,7 +197,9 @@ export const Tonal: Story = {
  * Nothing behind the caret yet. `items={[]}` is a real mode, not an empty
  * menu: the caret calls `onAction` directly rather than popping a floating
  * box with nothing in it. The title row's Dispatch is the one caller — both
- * segments read as the same control because they are.
+ * segments read as the same control because they are. The leading `plus` is
+ * that same caller's icon (#1107, `packages/icons/icons.toml`) — `aria-hidden`,
+ * so it never joins the accessible name the `play` below asserts on.
  */
 export const TonalNoMenu: Story = {
   args: {
@@ -207,7 +210,9 @@ export const TonalNoMenu: Story = {
   },
   render: (args) => (
     <Row>
-      <SplitButton {...args}>Dispatch</SplitButton>
+      <SplitButton {...args} icon={<Plus size={16} strokeWidth={2} aria-hidden />}>
+        Dispatch
+      </SplitButton>
     </Row>
   ),
   /** What a rendering cannot show: the caret does not open a menu, it fires
