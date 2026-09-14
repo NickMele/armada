@@ -90,6 +90,46 @@ describe("what the brief says is waiting", () => {
 
 const noOpen: OpenArtifact = () => Promise.resolve({ ok: true });
 
+describe("a test broken on main, on the rows beside the overlaps", () => {
+  const broken = {
+    check: "test",
+    test: "auth::session::refreshes_once",
+    failure: "exited 101",
+    fix_title: "Fix the refresh test broken on main",
+    reported_by: "01M1REPORTER0000000000000000",
+  };
+
+  it("names the fix on a Job waiting on it", () => {
+    // #1001: a Job pointed at a fix is neither the fix nor the reporter.
+    const whole = detail({ breakages: [{ ...broken, fix: "01M1FIXJOB000000000000000000" }] });
+    const row = workOf(noOpen, job(), whole, manifest(), workflow(), noRehearsal).find(
+      (at) => at.value === broken.test,
+    );
+    expect(row?.iconLabel).toBe("Waiting");
+    expect(row?.meta).toBe("broken on main · Fix the refresh test broken on main is fixing it");
+  });
+
+  it("counts the Jobs waiting on the fix, and never lists them", () => {
+    const whole = detail({
+      breakages: [
+        {
+          ...broken,
+          fix: job().id,
+          waiting: [
+            { job_id: "01M1WAITINGONE00000000000000", title: "one" },
+            { job_id: "01M1WAITINGTWO00000000000000", title: "two" },
+          ],
+        },
+      ],
+    });
+    const row = workOf(noOpen, job(), whole, manifest(), workflow(), noRehearsal).find(
+      (at) => at.value === broken.test,
+    );
+    expect(row?.iconLabel).toBe("Fixing");
+    expect(row?.meta).toBe("broken on main under test · 2 Jobs wait on it");
+  });
+});
+
 function manifest(): ManifestSummary {
   return {
     id: "01M1CNPKTV0018H2M1CXDNBK06",

@@ -1,7 +1,7 @@
 //! A test broken on main, and the Job drafted to fix it. #999.
 //!
 //! One row per repository, Check and test, owned by the fix: forgetting the fix
-//! removes its claims, and it gives them back when it ends.
+//! removes its claims, and Fleet gives them back when the fix settles.
 
 use core_model::{Breakage, BreakageClaim, FixWaiter, JobId, ManifestId, Timestamp, Ulid};
 

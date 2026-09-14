@@ -161,8 +161,11 @@ impl Tree {
     /// directory and its `.tsx` must already exist.
     fn split_story(self, group: &str, name: &str, suffix: &str, title: &str) -> Tree {
         let dir = self.0.join(ROOT).join(group).join(name);
-        fs::write(dir.join(format!("{name}.{suffix}.stories.tsx")), story(title))
-            .expect("a split story");
+        fs::write(
+            dir.join(format!("{name}.{suffix}.stories.tsx")),
+            story(title),
+        )
+        .expect("a split story");
         self
     }
 
@@ -276,7 +279,12 @@ fn a_mistitled_sibling_names_itself() {
             Some("Compositions/Job row (stacked)"),
             true,
         )
-        .split_story("compositions", "JobRowStacked", "meta", "Compositions/Wrong")
+        .split_story(
+            "compositions",
+            "JobRowStacked",
+            "meta",
+            "Compositions/Wrong",
+        )
         .run();
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(

@@ -17,7 +17,11 @@ use crate::dry_run::DryRuns;
 use crate::evidence::Call;
 use crate::fixing::{FixAnswer, FixStands, Fixes};
 use crate::peers::{News, PeersChanged};
-use crate::tests::daemon::{a_proposal, fitted_over, one};
+use crate::tests::admitted::dispatched;
+use crate::tests::daemon::{
+    a_fleet_committing_through, a_proposal, diff_evidence, fitted_over, note_evidence, one,
+    worktree_directory,
+};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
@@ -288,4 +292,78 @@ fn a_turn_about_a_fix_leaves_the_shared_file_sentences_out() {
         !text.contains("change files this Job changes too"),
         "{text}"
     );
+}
+
+/// **A fix that completes with its pull request open keeps its claim**, so no
+/// second Job drafts a duplicate before the merge; settling the landing gives
+/// it back.
+#[tokio::test]
+async fn a_completed_fix_keeps_its_claim_until_its_pull_request_settles() {
+    let home = TempDir::new();
+    let fleet = a_fleet_committing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/parse.rs"]),
+        FakeVcs::new(),
+    );
+    let fix = fleet
+        .propose(a_proposal("fix the parser on main"))
+        .await
+        .expect("a proposed fix");
+    let owner = fleet.names().owner_of(fix.id()).expect("an owner");
+    let repository = ManifestId::carried(Ulid::carried(owner));
+    let now = fleet.now();
+    fleet
+        .store()
+        .lock()
+        .await
+        .claim_breakage(
+            &BreakageClaim {
+                fix: fix.id().clone(),
+                repository: repository.clone(),
+                breakage: Breakage {
+                    check: String::from("suite"),
+                    test: TEST.to_string(),
+                    failure: String::from("exited 1"),
+                },
+                reported_by: fix.id().clone(),
+            },
+            &now,
+        )
+        .expect("claimed");
+    worktree_directory(&home, &fix);
+    dispatched(&fleet, fix.id()).await.expect("an approved fix");
+
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("submitted");
+    fleet.turn().await.expect("the first gate");
+    submitted_by_the_one(&fleet, note_evidence())
+        .await
+        .expect("submitted");
+    fleet.turn().await.expect("the last gate");
+
+    assert_eq!(
+        fleet.load(fix.id()).await.expect("the fix").status(),
+        core_model::JobStatus::CompletedSuccess
+    );
+    assert!(
+        claim_stands(&fleet, &repository).await,
+        "the pull request is open, so the claim stands"
+    );
+
+    fleet.fix_settled(fix.id(), true).await;
+    assert!(
+        !claim_stands(&fleet, &repository).await,
+        "the merge gives it back"
+    );
+}
+
+async fn claim_stands(fleet: &Fixture, repository: &ManifestId) -> bool {
+    fleet
+        .store()
+        .lock()
+        .await
+        .breakage_claimed(repository, "suite", TEST)
+        .expect("read")
+        .is_some()
 }
