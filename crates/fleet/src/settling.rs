@@ -271,6 +271,7 @@ where
             &recorded,
             self.work(),
             self.budget(),
+            &self.room(),
             &judging,
             &Keeping::of(served.records_root(), &job.handle()),
             self.gating_policies(&served),

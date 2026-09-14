@@ -266,6 +266,9 @@ impl Commands for FakeDaemon {
         if let Some(v) = save.disk_floor_gib {
             limits.values.disk_floor_gib = v.get();
         }
+        if let Some(v) = save.checks_at_once {
+            limits.values.checks_at_once = v.get();
+        }
         Ok(*limits)
     }
 

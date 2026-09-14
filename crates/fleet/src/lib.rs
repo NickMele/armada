@@ -245,6 +245,7 @@ pub use adrift::Adrift;
 pub use allowance::{Allowance, Micros, Overspent};
 pub use asked::Asked;
 pub use at_step::AtStep;
+pub use checking::{ChecksAtOnce, Room};
 pub use clock::{Clock, SystemClock};
 pub use commanding::CommandBudget;
 pub use converging::{NoReport, ReportNow, Stage, StepNorms, Tripwire, Wandering, FORCED_REPORT};

@@ -276,6 +276,19 @@ pub const PROVISIONAL_CONCURRENCY: Concurrency = Concurrency::of(2);
 /// being started can finish and the operator has warning before the next one.
 const PROVISIONAL_HEADROOM: Headroom = Headroom::of(Spare::percent(15), Bytes::gibibytes(10));
 
+/// How many of a step's Checks run at once. **The `checks-at-once` row**, resolved
+/// here like every other dial on this page, and replaced by one a person saves.
+///
+/// **Four, measured when Fleet worked one Job at a time, and not re-measured
+/// under two**: a test running two gates at once is the load this exists to
+/// spare. This repository's six Checks, ten cores, warm target directory: 28.5s
+/// one at a time against 16.5s at four, with two to six within noise of each
+/// other, because the slowest Check and one Cargo target lock set the floor.
+/// Four rather than six leaves room for the step's own Drone. Under a second Job
+/// the machine decides: another Check starts only while memory and disk have
+/// room — `fleet::checking::Room`.
+const PROVISIONAL_CHECKS_AT_ONCE: fleet::ChecksAtOnce = fleet::ChecksAtOnce::of(4);
+
 /// How stale a machine reading may be before it is taken again. **The
 /// `fleet-health-check-resource-poll-interval` row.**
 ///
@@ -724,6 +737,7 @@ fn assemble(
         // repository is read at admission, on its own volume — `fleet::admitting`.
         machine: Arc::new(TheMachine::watching(&home)),
         headroom: PROVISIONAL_HEADROOM,
+        checks_at_once: PROVISIONAL_CHECKS_AT_ONCE,
         polling: PROVISIONAL_RESOURCE_POLL,
         noticing: PROVISIONAL_MERGE_NOTICE,
         reclaiming: PROVISIONAL_RECLAIM_SWEEP,

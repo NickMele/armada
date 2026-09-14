@@ -40,6 +40,20 @@ Machine constraint. Also sets Doctor's System stats warn boundary — below thre
 Where nothing is saved, `crates/armada/src/serve.rs` supplies it as part of `PROVISIONAL_HEADROOM` and carries the argument for the number. It ships at 15 percent: nothing has measured what a Drone costs in memory, and what the number is for is refusing to start work on a machine that is already full.
 """
 
+[settings.checks-at-once]
+name = "Checks at once"
+scope = "Machine"
+lifetime = "Live"
+merge_strategy = "n/a — single layer"
+peer_polarity = "n/a — single layer"
+owner = "Fleet"
+read_by = "fleet"
+notes = """
+**Enforced.** How many of one step's Checks run at once — `fleet::checking::Room`, which a gate, a Drone's own run and a proof after a merge each ask before every Check after the first. It reads the machine against the memory and disk rows here, so a short machine makes the next Check wait for a running one to finish. The first always starts: a short machine slows a gate and never stops one.
+
+**Machine, not Manifest.** How many Checks a repository declares is the Manifest's; how many one machine can host is not. Shipped at four, measured under one Job — `armada::serve::PROVISIONAL_CHECKS_AT_ONCE` says what was measured.
+"""
+
 [settings.disk-headroom-floor-for-spawning]
 name = "Disk headroom floor for spawning"
 scope = "Machine"
@@ -533,7 +547,7 @@ read_by = "bridge (TS)"
 notes = """
 Whether Job detail's *Where things are* chapter opens collapsed (`false`) or expanded (`true`) — `docs/journeys/monitor-active-work.md` wants it to "open with one click and remember the choice", which had nowhere to be remembered until this. `#927`.
 
-**Delivered, not orphaned — the first row of this shape to say so.** Not through the two rows above's own gap, though: those are Kit/Machine values `config` resolves from `armada.yml`/`machine.yml` with no crate carrying the resolved figure to Bridge, and this preference is never in either file — a person sets it in Bridge and Fleet is where it is kept, the way `fleet_limits` keeps the three admission limits. `get_preferences`/`save_preferences` (`crates/ipc/operations.toml`, protocol 13.24) read and save a `preferences` table (`crates/store/src/preferences.rs`, V60) keyed by name; `apps/desktop/src/main/preferences.ts` loads it when Fleet connects and saves on change, and it reaches the renderer on `BridgeState.preferences`. The other two Bridge-scoped rows above stay orphaned, and so does `[bridge-notification-routing-path]` — this is a different path, not that one closed.
+**Delivered, not orphaned — the first row of this shape to say so.** Not through the two rows above's own gap, though: those are Kit/Machine values `config` resolves from `armada.yml`/`machine.yml` with no crate carrying the resolved figure to Bridge, and this preference is never in either file — a person sets it in Bridge and Fleet is where it is kept, the way `fleet_limits` keeps the four Fleet limits. `get_preferences`/`save_preferences` (`crates/ipc/operations.toml`, protocol 13.24) read and save a `preferences` table (`crates/store/src/preferences.rs`, V60) keyed by name; `apps/desktop/src/main/preferences.ts` loads it when Fleet connects and saves on change, and it reaches the renderer on `BridgeState.preferences`. The other two Bridge-scoped rows above stay orphaned, and so does `[bridge-notification-routing-path]` — this is a different path, not that one closed.
 """
 
 [settings.landing-manifest-last-opened-project]

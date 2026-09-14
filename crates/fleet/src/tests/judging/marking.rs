@@ -57,6 +57,7 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         &[],
         &work,
         budget(),
+        &crate::checking::Room::ignoring_the_machine(crate::checking::ChecksAtOnce::of(4)),
         &judging,
         &keeping_nowhere(),
         Policies::unstated(),

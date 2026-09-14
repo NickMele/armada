@@ -902,6 +902,10 @@ cannot work.
 
 `?repository=<root>` on `start_checkout_run`, `undo_checkout_run`, `list_checkout_runs`, `get_checkout_run_output` and `get_checkout_run_diff`, refused beside `?manifest_id=` as Verify's routes are (#986). `StartCheckoutRun.workspace`, optional, names a directory whose own `armada.yml` declares the Command. `CheckoutRunSheet.workspaces` lists each workspace's Commands, and `workspace` rides on `CheckoutRunUnderway` and `CheckoutRunRecord`. All additive.
 
+## Protocol 13.40: how many of a step's Checks run at once
+
+`LimitValues.checks_at_once` and `SaveLimits.checks_at_once`, additive: a fourth limit on `get_limits` and `save_limits`, from 1 to 8 (#284). Fleet runs a step's Checks up to it, and before starting each one after the first reads the machine against the memory and disk limits, so a short machine makes the next Check wait for a running one to finish.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

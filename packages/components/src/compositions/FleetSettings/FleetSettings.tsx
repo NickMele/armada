@@ -4,8 +4,9 @@ import { Input } from "../../primitives/Input/Input";
 import { Sheet } from "../../primitives/Sheet/Sheet";
 
 /**
- * Fleet's three admission limits, changeable from Bridge — how many drones run
- * at once, the memory and the disk Fleet keeps free before starting another.
+ * Fleet's four limits, changeable from Bridge — how many drones run at once,
+ * the memory and the disk Fleet keeps free before starting another, and how
+ * many of a job's checks run at once.
  *
  * **Fleet-wide, and its own sheet rather than a section on Job settings.** A
  * Job's own settings answer for one Job; these answer for every drone Fleet
@@ -20,6 +21,7 @@ export type FleetSettingsProps = {
   concurrency: FleetSettingsRow;
   memorySparePercent: FleetSettingsRow;
   diskFloorGib: FleetSettingsRow;
+  checksAtOnce: FleetSettingsRow;
   /** Every row is off — the reading is not live, or a save is already out. */
   disabled?: boolean;
   /** Why, said once under the lead rather than left for each row to repeat. */
@@ -55,6 +57,7 @@ export function FleetSettings({
   concurrency,
   memorySparePercent,
   diskFloorGib,
+  checksAtOnce,
   disabled = false,
   disabledNote,
   onClose,
@@ -99,6 +102,13 @@ export function FleetSettings({
           label="Disk to keep free"
           means="The disk space Fleet leaves free before it starts another drone."
           row={diskFloorGib}
+          disabled={disabled}
+        />
+        <Row
+          id={`${group}-checks`}
+          label="Checks at once"
+          means="How many of a job's checks Fleet runs at the same time. When memory or disk runs short, the next check waits for one to finish."
+          row={checksAtOnce}
           disabled={disabled}
         />
       </div>

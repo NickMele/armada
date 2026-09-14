@@ -166,6 +166,11 @@ pub struct Fittings<H, V, W> {
     /// `settings.disk-headroom-floor-for-spawning` rows, enforced — see
     /// [`Headroom`], which has no default for [`Concurrency`]'s reason.
     pub headroom: Headroom,
+    /// How many of a step's Checks may run at once, **where nobody has saved
+    /// another**. The `settings.checks-at-once` row, enforced — see
+    /// [`ChecksAtOnce`](crate::ChecksAtOnce), which has no default for
+    /// [`Concurrency`]'s reason. #284.
+    pub checks_at_once: crate::ChecksAtOnce,
     /// How stale a machine reading may be. **The
     /// `settings.fleet-health-check-resource-poll-interval` row** — see
     /// [`Polling`] for why it is a freshness bound rather than a second timer.
@@ -263,6 +268,7 @@ where
         let shipped = Limits {
             concurrency: fittings.concurrency,
             headroom: fittings.headroom,
+            checks_at_once: fittings.checks_at_once,
         };
         // **A row that will not read is the shipped limits**, not a Fleet that
         // will not start: `Store::open` already refused a damaged file, and the
@@ -323,6 +329,7 @@ where
             names: Arc::new(crate::naming::Names::new()),
             machine: fittings.machine,
             headroom: std::sync::Mutex::new(in_force.headroom),
+            checks_at_once: std::sync::Mutex::new(in_force.checks_at_once),
             shipped,
             polling: fittings.polling,
             noticing: fittings.noticing,

@@ -369,10 +369,34 @@ where
         &self.slots
     }
 
-    /// The three dials the headroom half of admission reads. All of them are
-    /// `crate::admitting`'s, which is the only caller.
+    /// The machine reader and the headroom in force: what admission asks before a
+    /// Drone starts, and what [`Fleet::room`] asks before a Check does.
     pub(crate) fn machine(&self) -> &Arc<dyn Machine> {
         &self.machine
+    }
+    /// How many of a step's Checks run at once, in force, **by value** for
+    /// `headroom`'s reason. #284.
+    pub(crate) fn checks_at_once(&self) -> crate::checking::ChecksAtOnce {
+        *self
+            .checks_at_once
+            .lock()
+            .expect("the checks-at-once lock is not poisoned")
+    }
+    /// Put a saved Checks-at-once in force. `crate::limits`' alone.
+    pub(crate) fn rechecked(&self, at_once: crate::checking::ChecksAtOnce) {
+        *self
+            .checks_at_once
+            .lock()
+            .expect("the checks-at-once lock is not poisoned") = at_once;
+    }
+    /// What a gate, a dry run or a proof asks before starting another Check, as
+    /// the limits stand now. #284.
+    pub(crate) fn room(&self) -> crate::checking::Room {
+        crate::checking::Room::of(
+            self.checks_at_once(),
+            Arc::clone(&self.machine),
+            self.headroom(),
+        )
     }
     /// The headroom in force, **by value**: a save replaces it, so a borrow
     /// would be a lock held across whatever the caller did next.

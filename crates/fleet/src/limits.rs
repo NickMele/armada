@@ -1,32 +1,37 @@
-//! The three limits a person changes while Fleet runs — Drones at once, the
-//! memory share, the disk floor — and how a saved one reaches admission.
+//! The four limits a person changes while Fleet runs — Drones at once, the
+//! memory share, the disk floor, Checks at once — and how a saved one reaches
+//! admission and the gate.
 //!
 //! **Shipped, overlaid by saved.** The composition root hands in the shipped
-//! numbers as [`Fittings`](crate::daemon::Fittings)' `concurrency` and
-//! `headroom`; a field somebody saved replaces its shipped value at assembly
-//! and again at every save. A stored value outside the range the wire allows is
-//! ignored rather than trusted, since only a hand-edited file could hold one.
+//! numbers as [`Fittings`](crate::daemon::Fittings)' `concurrency`, `headroom`
+//! and `checks_at_once`; a field somebody saved replaces its shipped value at
+//! assembly and again at every save. A stored value outside the range the wire
+//! allows is ignored rather than trusted, since only a hand-edited file could
+//! hold one.
 //!
-//! **A save changes the next admission and nothing else.** The roster's bound
-//! and the headroom are replaced under the roster lock, so no admission sees
-//! one limit changed and the other not; a Drone already working keeps working,
-//! and the next turn admits against the new values. No Commands method admits
-//! — `crate::admitting` says why — so this does not either.
+//! **A save changes the next admission and the next gate, and nothing else.**
+//! The roster's bound and the headroom are replaced under the roster lock, so
+//! no admission sees one limit changed and the other not; a Drone already
+//! working keeps working, and a gate already running keeps the limits it began
+//! with. No Commands method admits — `crate::admitting` says why — so this does
+//! not either.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use ipc::{DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent, SaveLimits};
 use store::{LoadJobError, SavedLimits};
 
 use crate::adrift::Adrift;
+use crate::checking::ChecksAtOnce;
 use crate::daemon::Fleet;
 use crate::headroom::{Bytes, Headroom, Spare};
 use crate::slots::Concurrency;
 
-/// The limits admission holds a new Drone to.
+/// The limits admission holds a new Drone to, and a gate holds its Checks to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
     pub concurrency: Concurrency,
     pub headroom: Headroom,
+    pub checks_at_once: ChecksAtOnce,
 }
 
 impl Limits {
@@ -47,9 +52,15 @@ impl Limits {
             .and_then(DiskFloorGib::new)
             .map(|floor| Bytes::gibibytes(u64::from(floor.get())))
             .unwrap_or(self.headroom.disk_floor());
+        let checks_at_once = saved
+            .checks_at_once
+            .and_then(ipc::ChecksAtOnce::new)
+            .map(|checks| ChecksAtOnce::of(checks.get() as usize))
+            .unwrap_or(self.checks_at_once);
         Limits {
             concurrency,
             headroom: Headroom::of(spare, disk),
+            checks_at_once,
         }
     }
 
@@ -61,6 +72,7 @@ impl Limits {
             memory_spare_percent: self.headroom.memory_spare().percentage(),
             disk_floor_gib: u32::try_from(self.headroom.disk_floor().whole_gibibytes())
                 .unwrap_or(u32::MAX),
+            checks_at_once: u32::try_from(self.checks_at_once.get()).unwrap_or(u32::MAX),
         }
     }
 }
@@ -78,6 +90,10 @@ pub(crate) fn merged(before: SavedLimits, save: &SaveLimits) -> SavedLimits {
             .disk_floor_gib
             .map(|v| v.get())
             .or(before.disk_floor_gib),
+        checks_at_once: save
+            .checks_at_once
+            .map(|v| v.get())
+            .or(before.checks_at_once),
     }
 }
 
@@ -99,6 +115,7 @@ where
             values: Limits {
                 concurrency: Concurrency::of(slots.cap()),
                 headroom: self.headroom(),
+                checks_at_once: self.checks_at_once(),
             }
             .values(),
             shipped: self.shipped().values(),
@@ -124,6 +141,7 @@ where
         let limits = self.shipped().overlaid_by(&saved);
         slots.rebound(limits.concurrency);
         self.rehoused(limits.headroom);
+        self.rechecked(limits.checks_at_once);
         Ok(FleetLimits {
             values: limits.values(),
             shipped: self.shipped().values(),

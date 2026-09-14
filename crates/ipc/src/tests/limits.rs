@@ -46,11 +46,13 @@ fn the_limits_in_force_are_flat_with_what_shipped_beside_them() {
             concurrency: 4,
             memory_spare_percent: 15,
             disk_floor_gib: 10,
+            checks_at_once: 4,
         },
         shipped: LimitValues {
             concurrency: 2,
             memory_spare_percent: 15,
             disk_floor_gib: 10,
+            checks_at_once: 4,
         },
     };
     let json = encode(&limits).expect("plain data");

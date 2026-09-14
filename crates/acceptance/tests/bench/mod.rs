@@ -445,6 +445,7 @@ impl Bench {
             &recorded,
             &self.work,
             self.budget,
+            &fleet::Room::ignoring_the_machine(fleet::ChecksAtOnce::of(4)),
             &self.judging,
             // Where a kept deliverable would go. **Nothing is written**: no
             // step here declares an `artifact_exists`, so the gate never holds
