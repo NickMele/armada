@@ -51,9 +51,16 @@ export type HeldFlagProps = {
   /** Every flag holding the step, in the order the check answered. Empty draws nothing. */
   findings: HeldFinding[];
   onOpenBrief?: (brief: string) => void;
-  /** *No, the work is fine*. The reason is optional: a preset, a note, both, or nothing. */
+  /**
+   * *No, the work is fine*. The reason is optional: a preset, a note, both, or
+   * nothing. The presets are the registry's for the patterns shown.
+   */
   carryOn: HeldAnswer & { presets: readonly string[]; onCarryOn: (reason: string) => void };
-  /** *Yes, the test was weakened*. The note is optional and goes to the Drone. */
+  /**
+   * *Yes, the flag is right*. The note is optional and goes to the Drone.
+   * Whether that is a redirect or a restart is the caller's, and `consequence`
+   * says which.
+   */
   sendBack: HeldAnswer & { onSendBack: (note?: string) => void };
   /** An act on this Job is already out, or what is shown is not live. */
   disabled?: boolean;
@@ -66,7 +73,7 @@ const OPEN_THE_BRIEF = "Open the brief";
 const IS_IT_RIGHT = "Is the flag right?";
 const NO_IT_IS_FINE = "No, the work is fine";
 const CARRY_ON = "Carry on";
-const YES_IT_WAS = "Yes, the test was weakened";
+const YES_IT_WAS = "Yes, the flag is right";
 const SEND_IT_BACK = "Send it back";
 const REASON = "Reason (optional)";
 const NOTE = "Note (optional)";

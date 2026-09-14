@@ -104,6 +104,12 @@ export type GamingFlag = {
    * hide it. `brief` here is the second reading's own exchange.
    */
   cleared?: { why: string; brief?: string };
+  /**
+   * Where this pattern stands on the attempt — `flagged`, `cleared`, `not
+   * seen` — drawn beside it where a surface lists every pattern the check looks
+   * for. **Absent draws nothing**, which is every surface listing flags alone.
+   */
+  stands?: string;
 };
 
 /** Where in the change a flag points. */
@@ -187,12 +193,26 @@ export function GamingFlags({
             {/* The verb where there is one, the wire spelling where there is
                 not — and the two are not the same kind of thing, so they do
                 not read the same. */}
-            <span
-              className="armada-gaming-flags__pattern"
-              data-verb={flag.verb === undefined ? undefined : "true"}
-            >
-              {flag.verb ?? flag.pattern}
-            </span>
+            {flag.stands === undefined ? (
+              <span
+                className="armada-gaming-flags__pattern"
+                data-verb={flag.verb === undefined ? undefined : "true"}
+              >
+                {flag.verb ?? flag.pattern}
+              </span>
+            ) : (
+              <span className="armada-gaming-flags__head">
+                <span
+                  className="armada-gaming-flags__pattern"
+                  data-verb={flag.verb === undefined ? undefined : "true"}
+                >
+                  {flag.verb ?? flag.pattern}
+                </span>
+                <span className="armada-gaming-flags__stands" data-stands={flag.stands}>
+                  {flag.stands}
+                </span>
+              </span>
+            )}
             {/* Above the citation, because it is the question the citation is
                 the answer to. Not through `Prose`: this is one sentence the
                 registry holds, written by hand, and rendering it as markup

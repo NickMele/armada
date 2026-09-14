@@ -18,6 +18,11 @@ function meaning(pattern: string): Pick<HeldFinding, "headline" | "explanation">
   return said === undefined ? {} : { headline: said.headline, explanation: said.explanation };
 }
 
+/** The registry's three reasons for carrying on past a pattern's flag. */
+function presetsOf(...patterns: string[]): string[] {
+  return [...new Set(patterns.flatMap((pattern) => GAMING_PATTERN_MEANING[pattern]?.presets ?? []))];
+}
+
 const TEST_FILE = "packages/settings/test/useColumnSelectors.test.ts";
 
 const ASKED =
@@ -26,53 +31,53 @@ const ASKED =
 
 const BRIEF = ".armada/briefs/77-split-the-settings-reducer/implement.1.gaming.assertion_weakened.txt";
 
-/** The presets the owner chose for *No, the work is fine*. */
-const PRESETS = ["It's not a test", "Checked elsewhere in this change", "The test checks the same thing"];
+/** The words `flag-held.tsx` says for each of the two acts Send it back can be. */
+const RESTARTS =
+  "Restarts the step with a fresh drone. Its brief carries the flag, and your note if you write one.";
+const REDIRECTS =
+  "Sends the flag back to the drone still on this step, with your note if you write one, and it " +
+  "works the step again in the same session.";
 
-const ANSWERS = {
-  carryOn: {
-    consequence: "Overrules the flag. It is not the last step, so the job carries on at the next one.",
-    presets: PRESETS,
-    onCarryOn: fn(),
+function answers(presets: string[], sendBack = RESTARTS) {
+  return {
+    carryOn: {
+      consequence: "Overrules the flag. It is not the last step, so the job carries on at the next one.",
+      presets,
+      onCarryOn: fn(),
+    },
+    sendBack: { consequence: sendBack, onSendBack: fn() },
+    onOpenBrief: fn(),
+  };
+}
+
+const ADDED_LINE: HeldFinding = {
+  pattern: "assertion_weakened",
+  ...meaning("assertion_weakened"),
+  hunk: {
+    path: TEST_FILE,
+    lines: [
+      { kind: "hunk", text: '@@ -38,7 +38,7 @@ describe("useColumnSelectors", () => {' },
+      { kind: "context", text: '   it("keeps hidden columns out of the visible set", () => {' },
+      { kind: "context", text: "     const visible = selectVisible(state);" },
+      { kind: "removed", text: '-    expect(visible).toEqual(["name", "status", "owner"]);' },
+      { kind: "added", text: "+    expect(visible.length).toBeGreaterThan(0);" },
+      { kind: "context", text: "   });" },
+    ],
   },
-  sendBack: {
-    consequence: "Restarts the step. The new drone's brief carries the flag, and your note if you write one.",
-    onSendBack: fn(),
-  },
-  onOpenBrief: fn(),
+  asked: ASKED,
+  brief: BRIEF,
 };
 
 /**
- * **A flag on an added line.** Fleet placed it at line 41 of the post-image,
- * and the hunk holding that line is what the card draws — the old assertion
- * and the one that replaced it, one above the other.
+ * **A flag on an added line**, where the Drone has gone and Send it back
+ * restarts the step. Fleet placed the flag at line 41 of the post-image, and
+ * the hunk holding that line is what the card draws.
  *
  * **Nothing to type.** Carry on with no reason picked and no note sends a
  * blank reason, which Fleet takes on a gaming flag.
  */
 export const OnAnAddedLine: Story = {
-  args: {
-    ...ANSWERS,
-    findings: [
-      {
-        pattern: "assertion_weakened",
-        ...meaning("assertion_weakened"),
-        hunk: {
-          path: TEST_FILE,
-          lines: [
-            { kind: "hunk", text: '@@ -38,7 +38,7 @@ describe("useColumnSelectors", () => {' },
-            { kind: "context", text: '   it("keeps hidden columns out of the visible set", () => {' },
-            { kind: "context", text: "     const visible = selectVisible(state);" },
-            { kind: "removed", text: '-    expect(visible).toEqual(["name", "status", "owner"]);' },
-            { kind: "added", text: "+    expect(visible.length).toBeGreaterThan(0);" },
-            { kind: "context", text: "   });" },
-          ],
-        },
-        asked: ASKED,
-        brief: BRIEF,
-      },
-    ],
-  },
+  args: { ...answers(presetsOf("assertion_weakened")), findings: [ADDED_LINE] },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Carry on" }));
     await expect(args.carryOn.onCarryOn).toHaveBeenCalledWith("");
@@ -89,7 +94,7 @@ export const OnAnAddedLine: Story = {
  */
 export const OnARemovedLine: Story = {
   args: {
-    ...ANSWERS,
+    ...answers(presetsOf("assertion_weakened")),
     findings: [
       {
         pattern: "assertion_weakened",
@@ -122,13 +127,22 @@ export const OnARemovedLine: Story = {
 };
 
 /**
+ * **Send it back where the Drone still holds its session**, which is nearly
+ * every flag: a gaming flag escalates the Job and leaves the Drone there. The
+ * answer is a redirect, and the sentence under it says so.
+ */
+export const SendItBackToTheDroneStillThere: Story = {
+  args: { ...answers(presetsOf("assertion_weakened"), REDIRECTS), findings: [ADDED_LINE] },
+};
+
+/**
  * **A pattern the diff decides, which was asked nothing.** No question and no
  * brief, so the card draws neither — and its explanation speaks flatly,
  * because the patch measured it rather than a model judging it.
  */
 export const DecidedByTheDiff: Story = {
   args: {
-    ...ANSWERS,
+    ...answers(presetsOf("check_config_edited")),
     findings: [
       {
         pattern: "check_config_edited",
@@ -155,7 +169,7 @@ export const DecidedByTheDiff: Story = {
  */
 export const NoHunkLocated: Story = {
   args: {
-    ...ANSWERS,
+    ...answers(presetsOf("test_deleted")),
     findings: [
       {
         pattern: "test_deleted",
@@ -170,14 +184,15 @@ export const NoHunkLocated: Story = {
 /**
  * **Two flags on one step.** Two findings, each with what it means and its own
  * lines, and one answer — the step is held once, and a person decides once.
+ * The reasons offered are both patterns' own.
  *
  * Send it back with no note sends none, rather than an empty string.
  */
 export const TwoFlagsOnOneStep: Story = {
   args: {
-    ...ANSWERS,
+    ...answers(presetsOf("assertion_weakened", "test_skipped")),
     findings: [
-      { ...OnAnAddedLine.args!.findings![0]! },
+      ADDED_LINE,
       {
         pattern: "test_skipped",
         ...meaning("test_skipped"),
@@ -200,17 +215,17 @@ export const TwoFlagsOnOneStep: Story = {
 };
 
 /**
- * **Send it back where Fleet will not restart the step.** A Drone still
- * holding its session is one a restart would end, and Fleet refuses that —
- * so the answer is drawn, off, with Fleet's reason under it.
+ * **Send it back where Fleet offers neither a redirect nor a restart.** The
+ * answer is drawn, off, with the reason under it, rather than left out.
  */
 export const SendItBackWithheld: Story = {
   args: {
-    ...OnAnAddedLine.args,
+    ...answers(presetsOf("assertion_weakened")),
+    findings: [ADDED_LINE],
     sendBack: {
-      ...ANSWERS.sendBack,
-      withheld:
-        "Restart is off while the drone is still running, because it would throw away the drone's session.",
+      consequence: RESTARTS,
+      onSendBack: fn(),
+      withheld: "Fleet offers neither a redirect nor a restart on this step.",
     },
   },
 };

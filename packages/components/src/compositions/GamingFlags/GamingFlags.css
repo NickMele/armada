@@ -256,3 +256,30 @@
   font-weight: var(--weight-medium);
   color: var(--fg-default);
 }
+
+/* --- Every declared pattern, with where it stands ------------------------- */
+
+/* The pattern and its standing on one line: a list of what the check looked
+   for reads down the patterns, and the word at the trailing edge is scanned. */
+.armada-gaming-flags__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* `flagged`, `cleared`, `not seen`. A value, so mono; no hue, because none of
+   the three is a verdict. A pattern not seen is drawn at metadata contrast
+   rather than hidden, so the list is still every pattern the check looked for. */
+.armada-gaming-flags__stands {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-gaming-flags__stands[data-stands="not seen"] {
+  color: var(--fg-subtle);
+}
