@@ -699,7 +699,7 @@ is the back-fill by hand that this section existed to prevent.
 
 ```
 ⌘K       command palette
-⌘1–⌘6    Bridge surfaces, in rail order
+⌘1–⌘7    Bridge surfaces, in rail order
 ⌘J       Helm, toggles the dock on every surface
 ⌘\       toggle sidebar
 ⌘[ ⌘]    back / forward
@@ -784,8 +784,8 @@ Three reversals against what stood before, each with a reason:
 **`x` for kill and every safety rule below are unchanged.** Neither was
 in play, and the destructive-key rule is what kept `x` off `k`.
 
-**`⌘1`–`⌘6` follow the rail** — Overview, Job Board, Alerts, Doctor,
-Manifest, Cleanup — since Active Jobs, Reviews and the Activity
+**`⌘1`–`⌘7` follow the rail** — Overview, Job Board, Alerts, Doctor,
+Manifest, Cleanup, Settings — since Active Jobs, Reviews and the Activity
 Feed folded into the Board and Cleanup joined at the end of it.
 The digits shift if the rail does; the rule is rail order, not the
 numbers.
@@ -806,7 +806,12 @@ one recorded against `bridge_surfaces` in `actions.toml` rather than
 against a surface's own row, because no single surface's binding moved —
 the rail's shape did.
 
-**`1`–`5` and `⌘1`–`⌘6` are different acts on one row of keys.** One is
+**Settings joined the rail last, on 2026-09-14 (#1089), taking `⌘7`** —
+the ordinary case, not Overview's exception: it is Fleet's four limits and
+this machine's own settings, on the screen a sheet reached from the status
+bar used to hold before #1088 removed the bar.
+
+**`1`–`5` and `⌘1`–`⌘7` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
 that way deliberately rather than by omission.
 

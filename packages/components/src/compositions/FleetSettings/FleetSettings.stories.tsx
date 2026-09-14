@@ -4,22 +4,13 @@ import { expect, fn } from "storybook/test";
 import { FleetSettings, type FleetSettingsRow } from "./FleetSettings";
 
 /**
- * Fleet's four limits, on the layer Job settings already draws
- * from. Window-fixed rather than `contained`: it opens from the status bar and
- * the rail, not from one screen — every story draws a positioned ancestor
- * anyway, so the geometry is checkable without a real window behind it.
+ * Fleet's four limits, the Settings screen's own Fleet section (#1089). A
+ * plain section rather than a layer, so no decorator stands in for a window —
+ * `Card` on `packages/screens/src/BridgeSettings.tsx` is what supplies the chrome.
  */
 const meta: Meta<typeof FleetSettings> = {
   title: "Compositions/Fleet settings",
   component: FleetSettings,
-  args: { open: true, onClose: fn() },
-  decorators: [
-    (Story) => (
-      <div style={{ position: "relative", height: "100vh", background: "var(--bg-base)" }}>
-        <Story />
-      </div>
-    ),
-  ],
 };
 export default meta;
 

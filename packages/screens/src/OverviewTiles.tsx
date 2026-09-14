@@ -18,7 +18,7 @@ export type OverviewTilesProps = {
   /** The picked root, `BridgeState.repository`'s terms: `null` is All repositories. */
   picked: string | null;
   drifts: DriftsRead;
-  onOpenFleetSettings: () => void;
+  onOpenSettings: () => void;
   onOpenQueued: () => void;
   onOpenManifest: () => void;
 };
@@ -33,8 +33,8 @@ export function OverviewTiles(props: OverviewTilesProps) {
       <OverviewTile {...doctorReading(props.health)} />
       <OverviewTile
         {...dronesReading(props.connection, props.capacity, queued.length)}
-        opens="Fleet settings"
-        onOpen={props.onOpenFleetSettings}
+        opens="Settings"
+        onOpen={props.onOpenSettings}
       />
       <OverviewTile
         {...queuedReading(queued, props.repositories, picked)}

@@ -35,7 +35,7 @@ import { FailureBlock } from "@armada/shell";
 import { jobFailure } from "@armada/shell";
 import { headOf } from "@armada/shell";
 import { AskRepository } from "@armada/screens";
-import { FleetSettingsSheet } from "@armada/screens";
+import { BridgeSettings } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Composing } from "./Composing";
 import { Overview } from "./Overview";
@@ -166,11 +166,9 @@ export function App() {
   // the Board would put a control nobody can act on beside rows that exist to
   // be acted on.
   const [clearing, setClearing] = useState(false);
-  // Whether Fleet settings is open. **Not a rail surface and not the Board with
-  // something over it**: the three limits are Fleet's own, not one Job's or one
-  // screen's, so this is a window-fixed sheet that opens over whatever is on
-  // screen rather than replacing it.
-  const [fleetSettingsOpen, setFleetSettingsOpen] = useState(false);
+  // Whether Settings is open — a rail surface since #1089, the sheet it
+  // replaced having lost its own opener when the status bar went (#1088).
+  const [settingsShowing, setSettingsShowing] = useState(false);
   // Whether the Manifest surface is open — Journey 9's *Running one*. **Its
   // own view, and it needs no Job to draw**: it is read off the file Fleet
   // already holds, which is what lets a person run this project's lint with
@@ -452,6 +450,7 @@ export function App() {
     setClearing(surfaceId === SURFACE.worktrees);
     setManifesting(surfaceId === SURFACE.manifest);
     setOverviewing(surfaceId === SURFACE.overview);
+    setSettingsShowing(surfaceId === SURFACE.settings);
     if (surfaceId !== SURFACE.manifest) setPicked(null);
     if (surfaceId !== SURFACE.manifest) setSettingUp(false);
   }
@@ -506,10 +505,11 @@ export function App() {
     onReadReports: () => setAuditing(true),
     onCloseWorktrees: () => setClearing(false),
     onReadWorktrees: () => setClearing(true),
-    onOpenLimits: () => setFleetSettingsOpen(true),
+    onOpenSettings: () => goTo(SURFACE.settings),
     // Which Manifest view is up, so the head describes the one on screen.
     manifest: manifesting ? editing.view : false,
     overviewing,
+    settingsShowing,
     onRefresh: () => void commands.refresh(),
     jobs: boardJobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
@@ -572,7 +572,9 @@ export function App() {
               ? SURFACE.manifest
               : overviewing
                 ? SURFACE.overview
-                : SURFACE.board
+                : settingsShowing
+                  ? SURFACE.settings
+                  : SURFACE.board
         }
         onSurface={goTo}
       >
@@ -841,7 +843,7 @@ export function App() {
               selected={openJob}
               onOpen={setOpenJob}
               onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
-              onOpenFleetSettings={() => setFleetSettingsOpen(true)}
+              onOpenSettings={() => goTo(SURFACE.settings)}
               onOpenQueued={() => {
                 goTo(SURFACE.board);
                 setLanding("queued");
@@ -850,6 +852,10 @@ export function App() {
               onCopied={setCopied}
               onCursor={setOverviewCursor}
             />
+          ) : settingsShowing ? (
+            <Boundary region="Settings" {...guarded}>
+              <BridgeSettings limits={state.limits} live={live} onSave={commands.saveLimits} />
+            </Boundary>
           ) : (
             <>
               {/* The boundary `docs/practices/react.md` names: a Job that cannot
@@ -972,7 +978,7 @@ export function App() {
             },
             confirm: (what, jobId) => setConfirming({ act: what, jobId }),
             openSetting: (id) => {
-              if (id === "fleet_settings") setFleetSettingsOpen(true);
+              if (id === "fleet_settings") goTo(SURFACE.settings);
             },
           })
         }
@@ -985,18 +991,6 @@ export function App() {
           }
         }}
       />
-
-      {/* Fleet-wide, and window-fixed rather than scoped to a screen — it opens
-          from the status bar and the rail both, over whatever else is up. */}
-      {fleetSettingsOpen ? (
-        <FleetSettingsSheet
-          limits={state.limits}
-          live={live}
-          floor={floor}
-          onClose={() => setFleetSettingsOpen(false)}
-          onSave={commands.saveLimits}
-        />
-      ) : null}
 
       <CopiedToast copied={copied} />
       <SaidToast said={telling} />

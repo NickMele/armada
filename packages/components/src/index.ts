@@ -261,6 +261,7 @@ export * from "./compositions/JobHoldsSheet/JobHoldsSheet";
 // the header's way into it.
 export * from "./compositions/JobSettings/JobSettings";
 export * from "./compositions/FleetSettings/FleetSettings";
+export * from "./compositions/MachineSettings/MachineSettings";
 
 // Asking a Job to show its work again, and every set a press kept beside the
 // step's own frames. Each set is an unchanged `FramesShown`.

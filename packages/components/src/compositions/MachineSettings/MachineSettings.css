@@ -1,0 +1,39 @@
+/* This machine's own settings — plain rows, no field: `FleetSettings.css`'s
+   spacing, without an input or a Save button to make room for. */
+
+.armada-machine-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-machine-settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-machine-settings__field:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.armada-machine-settings__label {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-machine-settings__means {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  text-wrap: pretty;
+}

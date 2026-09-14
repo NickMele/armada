@@ -62,7 +62,7 @@ export function BoardFrom({
     onReadReports: noop,
     onCloseWorktrees: noop,
     onReadWorktrees: noop,
-    onOpenLimits: noop,
+    onOpenSettings: noop,
     onRefresh: noop,
     jobs: boardJobs,
     onClearTerminal: noop,

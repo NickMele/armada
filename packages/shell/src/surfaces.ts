@@ -17,7 +17,7 @@
 // `docs/concepts/bridge.md`, and every digit falls out of it.
 
 import { useEffect, useRef } from "react";
-import { ClipboardList, FileCog, HardDrive, LayoutDashboard } from "lucide-react";
+import { ClipboardList, FileCog, HardDrive, LayoutDashboard, Settings as SettingsIcon } from "lucide-react";
 
 import type { PaletteSurface } from "./Palette";
 
@@ -35,8 +35,13 @@ import type { PaletteSurface } from "./Palette";
  * — which is the thing moving Helm to `⌘6`, and then off the rail entirely
  * for `⌘J`, was allowed to do, with the reason recorded in `actions.toml`
  * beside the binding.
+ *
+ * **Settings joined last, 14 Sep 2026 (#1089).** The status bar's Fleet
+ * settings sheet had no rail row to lose when #1088 removed it, so this is
+ * the first digit the surface has ever taken — the next one, by the same
+ * arithmetic as every arrival before Overview's own exception.
  */
-const RAIL = ["overview", "board", "alerts", "doctor", "manifest", "worktrees"] as const;
+const RAIL = ["overview", "board", "alerts", "doctor", "manifest", "worktrees", "settings"] as const;
 
 type SurfaceId = (typeof RAIL)[number];
 
@@ -46,6 +51,7 @@ export const SURFACE = {
   board: "board",
   manifest: "manifest",
   worktrees: "worktrees",
+  settings: "settings",
 } as const satisfies Record<string, SurfaceId>;
 
 /** What reaches a surface: its place in the rail, spelled as the contract does. */
@@ -95,6 +101,14 @@ export const SURFACES: readonly PaletteSurface[] = [
     shortcut: digitOf(SURFACE.worktrees),
     aliases: ["held worktrees", "disk", "held disk"],
     icon: HardDrive,
+  },
+  {
+    id: SURFACE.settings,
+    label: "Settings",
+    shortcut: digitOf(SURFACE.settings),
+    // No alias: `fleet_settings` is the palette's own row, in its own
+    // section, and it names an id rather than a word somebody already knows.
+    icon: SettingsIcon,
   },
 ];
 

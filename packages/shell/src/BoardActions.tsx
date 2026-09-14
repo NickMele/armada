@@ -39,7 +39,7 @@ export function BoardActions({
   onRefresh,
   onReadReports,
   onReadWorktrees,
-  onOpenLimits,
+  onOpenSettings,
   onClearTerminal,
   onForgetTerminal,
 }: {
@@ -51,9 +51,9 @@ export function BoardActions({
   onRefresh: () => void;
   onReadReports: () => void;
   onReadWorktrees: () => void;
-  /** Fleet settings. Here, and not among the acts on a Job — it answers for
-   *  every Job Fleet will ever start, not for one row on the Board. */
-  onOpenLimits: () => void;
+  /** Settings. Here, and not among the acts on a Job — Fleet's four limits
+   *  answer for every Job Fleet will ever start, not for one row on the Board. */
+  onOpenSettings: () => void;
   onClearTerminal: (jobIds: readonly string[]) => void;
   onForgetTerminal: (jobIds: readonly string[]) => void;
 }) {
@@ -68,7 +68,7 @@ export function BoardActions({
     { label: refreshing ? "Refreshing" : "Refresh", onSelect: onRefresh },
     { label: "Reported", onSelect: onReadReports },
     { label: "Held disk", onSelect: onReadWorktrees },
-    { label: "Fleet settings", onSelect: onOpenLimits },
+    { label: "Settings", onSelect: onOpenSettings },
     ...(reclaimable.length === 0
       ? []
       : [{ label: `Clear ${reclaimable.length} finished ${clearNoun}`, onSelect: () => setAsking("clear") }]),

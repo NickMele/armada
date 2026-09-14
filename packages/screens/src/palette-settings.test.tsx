@@ -1,12 +1,12 @@
-// Choosing "Fleet settings" from the command palette opens the sheet.
+// Choosing "Fleet settings" from the command palette goes to the Settings screen.
 //
 // **This is the wiring the palette's Settings section exists to prove.** The
 // primitive draws the row and `@armada/shell` turns choosing it into a
-// `PaletteChoice`; neither package can mount `FleetSettingsSheet`, since a
-// screen sits above both on the layer this package's own comment names. So
-// the claim — a chosen row actually opens the sheet, not only that something
-// fired — is provable only here, where `Palette` and the sheet can be mounted
-// side by side.
+// `PaletteChoice`; neither package can mount `BridgeSettings`, since a screen
+// sits above both on the layer this package's own comment names. So the
+// claim — a chosen row actually navigates, not only that something fired —
+// is provable only here, where `Palette` and the screen can be mounted side
+// by side.
 
 import { afterEach, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
@@ -16,7 +16,7 @@ import { useState } from "react";
 import { Palette } from "@armada/shell";
 import type { FleetLimits, Outcome } from "@armada/protocol";
 
-import { FleetSettingsSheet } from "./FleetSettings";
+import { BridgeSettings } from "./BridgeSettings";
 import { mount, unmount } from "./mounted";
 
 afterEach(unmount);
@@ -29,9 +29,9 @@ const LIMITS: FleetLimits = {
   shipped: { concurrency: 2, memory_spare_percent: 15, disk_floor_gib: 10, checks_at_once: 4 },
 };
 
-/** A stand-in for the app: the palette and the sheet, wired the way `App.tsx` wires them. */
+/** A stand-in for the app: the palette and the rail's own toggle, wired the way `App.tsx` wires them. */
 function Host() {
-  const [open, setOpen] = useState(false);
+  const [showing, setShowing] = useState(false);
   return (
     <>
       <Palette
@@ -43,16 +43,14 @@ function Host() {
         jobs={[]}
         settings={[{ id: "fleet_settings", label: "Fleet settings" }]}
         onChoose={(choice) => {
-          if (choice.of === "setting" && choice.id === "fleet_settings") setOpen(true);
+          if (choice.of === "setting" && choice.id === "fleet_settings") setShowing(true);
         }}
         onConfirmAct={() => {}}
       />
-      {open ? (
-        <FleetSettingsSheet
+      {showing ? (
+        <BridgeSettings
           limits={LIMITS}
           live
-          floor={false}
-          onClose={() => setOpen(false)}
           onSave={(): Promise<Outcome> => Promise.resolve({ ok: true })}
         />
       ) : null}
@@ -60,12 +58,13 @@ function Host() {
   );
 }
 
-test("choosing Fleet settings from the palette opens the sheet", async () => {
+test("choosing Fleet settings from the palette shows the Settings screen", async () => {
   mount(<Host />);
 
-  await expect.element(page.getByRole("dialog", { name: "Fleet settings" })).not.toBeInTheDocument();
+  await expect.element(page.getByRole("heading", { name: "Fleet" })).not.toBeInTheDocument();
 
   await userEvent.click(page.getByRole("option", { name: "Fleet settings" }));
 
-  await expect.element(page.getByRole("dialog", { name: "Fleet settings" })).toBeVisible();
+  await expect.element(page.getByRole("heading", { name: "Fleet" })).toBeVisible();
+  await expect.element(page.getByRole("heading", { name: "This machine" })).toBeVisible();
 });
