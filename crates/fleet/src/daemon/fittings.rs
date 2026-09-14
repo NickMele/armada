@@ -160,6 +160,9 @@ pub struct Fittings<H, V, W> {
     /// [`TheMachine`](crate::headroom::TheMachine) and a fixture has no machine
     /// it can hold still.
     pub machine: Arc<dyn Machine>,
+    /// Cloning a seed into a worktree. **A seam for `machine`'s reason** — the
+    /// shipped answer is [`TheVolume`](crate::seeding::TheVolume). #1064.
+    pub copy_on_write: Arc<dyn crate::seeding::CopyOnWrite>,
     /// How much memory and disk must be free before another Drone starts,
     /// **where nobody has saved another**. The
     /// `settings.cpu-mem-headroom-threshold-for-spawning` and
@@ -331,6 +334,9 @@ where
             slots: Mutex::new(Slots::bounded_by(in_force.concurrency)),
             names: Arc::new(crate::naming::Names::new()),
             machine: fittings.machine,
+            copy_on_write: fittings.copy_on_write,
+            seeds: Arc::new(std::sync::Mutex::new(crate::seeding::Seeds::default())),
+            base_preparing: Arc::new(tokio::sync::Mutex::new(())),
             headroom: std::sync::Mutex::new(in_force.headroom),
             checks_at_once: std::sync::Mutex::new(in_force.checks_at_once),
             shipped,

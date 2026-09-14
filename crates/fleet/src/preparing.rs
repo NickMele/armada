@@ -85,6 +85,9 @@ where
         // `armada.yml` edit made while this Job is between steps must not
         // change what its worktree gets prepared with.
         let (manifest, _) = self.effective_manifest(job).await?;
+        // Before `setup.requires`, so an install writes into a tree already
+        // holding the build it would otherwise start from nothing. #1064.
+        self.seeded(job, worktree, &manifest).await;
         let required = manifest.prepared_by();
         if required.is_empty() {
             return Ok(());

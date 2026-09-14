@@ -1,15 +1,15 @@
 //! Getting a prepared checkout of the base, giving back the ones the base has
 //! moved past, and reading one side's frames against the other's.
 //!
-//! # Why there is no lock in this file
+//! # One lock, and only around preparation
 //!
 //! Several Jobs want the same base checkout, and two turns must not set it up
-//! twice or take it away under each other. **The turn loop is what stops
-//! that**, not a mutex added here: `crate::turning` is one task walking the
-//! roster in order and awaiting each Job, so no two Jobs' settling overlaps,
-//! and the sweep below runs on that same turn. A lock would be a second answer
-//! to a question already answered, and the kind that reads as protecting
-//! something.
+//! twice or take it away under each other. **The turn loop is what stops that
+//! for Jobs**: `crate::turning` is one task walking the roster in order and
+//! awaiting each Job, and the sweep below runs on that same turn. The seed's
+//! warm-up, `crate::seeding`, is spawned off that loop and prepares the same
+//! checkout, so preparation alone is held under `Fleet::base_preparing`, and
+//! the sweep leaves the commit being warmed.
 //!
 //! Across processes the guard is git's own: two Fleets on one repository is
 //! already refused, and `armada clean` refuses while a Fleet runs.
@@ -25,8 +25,10 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::Duration;
 
 use adapter_traits::{AgentHarness, BaseCheckout, BaseSpec, Delivery, Vcs, WorkProduct, Worktree};
+use config::Preparation;
 use core_model::{Component, Envelope, FieldValue, Job, Level, Side, StepFrame};
 
 use crate::daemon::Fleet;
@@ -215,6 +217,36 @@ pub fn paired(frames: &[StepFrame]) -> Paired {
     counted
 }
 
+/// Run `setup.requires` in a base checkout and mark it prepared.
+///
+/// **Free, so the seed's warm-up can call it off the turn loop**
+/// (`crate::seeding`). Every caller holds `Fleet::base_preparing`.
+pub(crate) async fn prepare_checkout(
+    required: &[Preparation],
+    spec: &BaseSpec,
+    budget: Duration,
+) -> Result<(), NoBase> {
+    let at = spec.path();
+    for command in required {
+        if let Err(cause) = prepare_one(command, Path::new(&at), budget, &BTreeMap::new(), &[]).await
+        {
+            // `verification::how` and not `NotPrepared`'s own `Display`:
+            // that sentence opens *the worktree was not prepared*, and this
+            // is not a worktree. The exit is the part that is the same.
+            return Err(NoBase::NotPrepared {
+                command: cause.command.clone(),
+                why: verification::how(&cause.exit),
+            });
+        }
+    }
+    // Written last, and it is the whole of the promise: a checkout carrying
+    // this file has run every command in `setup.requires` to completion.
+    std::fs::write(spec.ready_marker(), spec.commit()).map_err(|cause| NoBase::NotPrepared {
+        command: String::from("marking the base checkout prepared"),
+        why: cause.to_string(),
+    })
+}
+
 impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
@@ -274,6 +306,11 @@ where
         if checkout.prepared() {
             return Ok((served, checkout));
         }
+        // The seed's warm-up may have prepared it while this waited.
+        let _held = self.base_preparing().lock().await;
+        if Path::new(&spec.ready_marker()).exists() {
+            return Ok((served, BaseCheckout::at(checkout.path(), spec.commit(), true)));
+        }
         let prepared = self.prepare_the_base(job, &spec, checkout, &served).await?;
         Ok((served, prepared))
     }
@@ -311,7 +348,6 @@ where
         served: &crate::repositories::Served,
     ) -> Result<BaseCheckout, NoBase> {
         let required = served.manifest().prepared_by();
-        let at = Path::new(checkout.path());
         if !required.is_empty() {
             self.noted_basing(
                 job,
@@ -322,33 +358,7 @@ where
                 ],
             );
         }
-        for command in required {
-            if let Err(cause) = prepare_one(
-                command,
-                at,
-                self.budget().duration(),
-                &std::collections::BTreeMap::new(),
-                &[],
-            )
-            .await
-            {
-                // `verification::how` and not `NotPrepared`'s own `Display`:
-                // that sentence opens *the worktree was not prepared*, and this
-                // is not a worktree. The exit is the part that is the same.
-                return Err(NoBase::NotPrepared {
-                    command: cause.command.clone(),
-                    why: verification::how(&cause.exit),
-                });
-            }
-        }
-        // Written last, and it is the whole of the promise: a checkout carrying
-        // this file has run every command in `setup.requires` to completion.
-        std::fs::write(spec.ready_marker(), spec.commit()).map_err(|cause| {
-            NoBase::NotPrepared {
-                command: String::from("marking the base checkout prepared"),
-                why: cause.to_string(),
-            }
-        })?;
+        prepare_checkout(required, spec, self.budget().duration()).await?;
         Ok(BaseCheckout::at(checkout.path(), spec.commit(), true))
     }
 
@@ -359,8 +369,8 @@ where
     /// things walking `.armada/` on two clocks is how a directory comes to be
     /// deleted by whichever one a person was not thinking about.
     ///
-    /// **Everything that is not the current base commit**, and nothing else
-    /// decides. A checkout is only reachable through the commit its directory
+    /// **Everything that is not the current base commit, or the commit a seed
+    /// is warming at**, and nothing else decides. A checkout is only reachable through the commit its directory
     /// is named for, so one at any other commit can never be asked for again —
     /// there is no in-use set to consult, and a base run in flight is
     /// impossible here for the reason this module's header gives: one turn
@@ -387,10 +397,16 @@ where
         let Ok(listing) = std::fs::read_dir(spec.parent()) else {
             return Vec::new();
         };
+        let warming = self
+            .seeds()
+            .lock()
+            .expect("the seeds lock is not poisoned")
+            .warming_in(root)
+            .map(str::to_string);
         let mut taken: Vec<String> = Vec::new();
         for entry in listing.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name == current {
+            if name == current || warming.as_deref() == Some(name.as_str()) {
                 continue;
             }
             // Through a `BaseSpec` rather than by removing the path the walk

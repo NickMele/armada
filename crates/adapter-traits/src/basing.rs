@@ -43,6 +43,10 @@ const BASE_ROOT: &str = ".armada/bases/";
 /// there is nothing to keep in sync with the disk.
 const READY_FILE: &str = ".armada-base-ready";
 
+/// The file a base checkout carries once its seed is warm. Apart from
+/// [`READY_FILE`], because a checkout is prepared long before a build finishes.
+const SEED_FILE: &str = ".armada-seed-warm";
+
 /// Why a base checkout could not be derived.
 ///
 /// The same shape as [`WorktreeSpecRefused`](crate::WorktreeSpecRefused) and
@@ -170,6 +174,16 @@ impl BaseSpec {
         let mut marker = self.path();
         marker.push('/');
         marker.push_str(READY_FILE);
+        marker
+    }
+
+    /// The file whose presence says `setup.seed.warm` finished here, so the
+    /// seed's directories may be cloned. Written last, after every command
+    /// succeeded, for [`ready_marker`](BaseSpec::ready_marker)'s reason. #1064.
+    pub fn seed_marker(&self) -> String {
+        let mut marker = self.path();
+        marker.push('/');
+        marker.push_str(SEED_FILE);
         marker
     }
 
@@ -308,6 +322,13 @@ mod tests {
     fn the_marker_is_inside_the_checkout_it_is_about() {
         let spec = spec();
         assert!(spec.ready_marker().starts_with(&spec.path()));
+    }
+
+    #[test]
+    fn the_seed_marker_is_inside_the_checkout_and_is_not_the_ready_marker() {
+        let spec = spec();
+        assert!(spec.seed_marker().starts_with(&spec.path()));
+        assert_ne!(spec.seed_marker(), spec.ready_marker());
     }
 
     #[test]

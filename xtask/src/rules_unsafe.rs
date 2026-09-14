@@ -66,6 +66,11 @@ const UNSAFE_SITES: &[(&str, &str)] = &[
          bounded to one c_int the local already owns",
     ),
     (
+        "crates/fleet/src/seeding/cloning.rs",
+        "clonefile(2) over a seed's build directory — the one call that clones copy-on-write \
+         and refuses on a volume that cannot, where std::fs::copy silently copies gigabytes",
+    ),
+    (
         "crates/fleet/src/tests/adopting.rs",
         "waitpid on the pid a case deliberately outlived a Fleet with — a real OS child of \
          the test binary the whole time, so this collects it directly instead of polling \

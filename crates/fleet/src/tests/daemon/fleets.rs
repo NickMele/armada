@@ -135,6 +135,7 @@ pub fn fitted_over<V>(
         // own is ever held back by one. Reading the real machine here would
         // make every test in this crate pass or fail on what else is running.
         machine: Arc::new(crate::tests::headroom::Plentiful),
+        copy_on_write: Arc::new(crate::tests::seeding::Copying::default()),
         // The production threshold, so the cases that trip it trip the one that
         // ships. See `armada::serve::PROVISIONAL_HEADROOM`.
         headroom: Headroom::of(Spare::percent(15), Bytes::gibibytes(10)),
