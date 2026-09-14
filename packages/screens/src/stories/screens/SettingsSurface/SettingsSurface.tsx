@@ -38,7 +38,6 @@ export function SettingsSurfaceFrom() {
           { id: "settings", label: "Settings", icon: SettingsIcon },
         ]}
         activeId="settings"
-        title="Settings"
         stats={{
           rows: [
             { id: "approval", label: "Awaiting approval", value: 1, tone: "warn" },

@@ -15,7 +15,7 @@ import type {
   RepositorySummary,
   ScannedWorkspace,
 } from "@armada/protocol";
-import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
+import { Shell, statementOf, SURFACE } from "@armada/shell";
 
 import { Manifest } from "../../../Manifest";
 import { useManifestEditing } from "../../../manifest-file";
@@ -321,13 +321,6 @@ export function SetupFrom({
     onEditManifest: () => Promise.resolve({ state: "failed", outcome: { ok: false, why: "not_connected" } }),
     onReadSpend: () => Promise.resolve({ ok: false, outcome: { ok: false, why: "not_connected" } }),
   });
-  const head = headOf({
-    reading: false, composing: false, auditing: false, clearing: false, manifest: editing.view, live: true,
-    refreshing: false, onCloseComposer: noop, onCompose: noop, onCloseReports: noop, onReadReports: noop,
-    onCloseWorktrees: noop, onReadWorktrees: noop, onOpenSettings: noop, onRefresh: noop, jobs: [],
-    onClearTerminal: noop, onForgetTerminal: noop,
-  });
-
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <Shell
@@ -360,9 +353,6 @@ export function SetupFrom({
           onOpenChange: noop,
         }}
         fleet={{ state: "running", label: "Running", detail: statementOf(CONNECTED, NOW, NOW).detail, open: true, onOpenChange: noop }}
-        title={head?.title}
-        summary="Set up a Manifest for each workspace in this checkout. Write puts one file down and stops, without staging or committing it."
-        actions={head?.actions}
         showing={SURFACE.manifest}
         onAddRepository={locate.onOpen}
       >

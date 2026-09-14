@@ -11,8 +11,8 @@ const noop = () => {};
  * panels `OverviewLists` draws beneath it, inside the shell with Helm's dock open. #920, #921.
  *
  * **Not routed yet, so this composes what the app renders rather than what mounts it.** The rail
- * roster and the head are stand-ins — #921 is what puts Overview in the rail — and the dock's
- * questions are `DockQuestions`'s own fixture, not this surface's arithmetic.
+ * roster is a stand-in — #921 is what puts Overview in the rail — and the dock's questions are
+ * `DockQuestions`'s own fixture, not this surface's arithmetic. No page head, since #1090.
  *
  * `jobs` overrides `OverviewListsFrom`'s own fixture, where a story needs a specific roster in the
  * shell's own width — the rail and Helm's dock beside it, which the lists' own story stands alone
@@ -26,8 +26,6 @@ export function OverviewSurfaceFrom({ jobs }: { jobs?: readonly JobSummary[] } =
           { id: "board", label: "Job Board", icon: ClipboardList, count: 6 },
           { id: "worktrees", label: "Cleanup", icon: HardDrive },
         ]}
-        title="Overview"
-        summary="Everything in flight for armada."
         stats={{
           rows: [
             { id: "approval", label: "Awaiting approval", value: 1, tone: "warn" },

@@ -1,9 +1,9 @@
 // The app's Manifest surface, in the window Bridge draws it in.
 //
-// **Not a drawing of the surface — the surface.** `Shell`, `headOf` and
-// `Manifest` are the three the app renders, called the way `App` calls them,
-// so the rail, the head and every row come out of the app's own code. What is
-// made up is only the data, and it is typed against the wire.
+// **Not a drawing of the surface — the surface.** `Shell` and `Manifest` are
+// the two the app renders, called the way `App` calls them, so the rail and
+// every row come out of the app's own code. What is made up is only the data,
+// and it is typed against the wire. No page head — #1090.
 
 import { useRef, useState } from "react";
 import { connectedTo, PROTOCOL_VERSION, type Connection } from "@armada/protocol";
@@ -30,7 +30,7 @@ import type {
   ServerEntry,
   VerifyStep,
 } from "@armada/protocol";
-import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
+import { Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
 import type { ManifestEditAnswer, ManifestSaveAnswer, ManifestView } from "../../../editing";
 import type { RepositoryAllowedCommandsRead } from "../../../manifest-allows";
@@ -332,27 +332,6 @@ export function ManifestFrom({
     },
   });
   const statement = statementOf(CONNECTED, now, now);
-  const head = headOf({
-    reading: false,
-    composing: false,
-    auditing: false,
-    clearing: false,
-    // The view the surface is showing, as `App` passes it.
-    manifest: editing.view,
-    live: true,
-    refreshing: false,
-    onCloseComposer: noop,
-    onCompose: noop,
-    onCloseReports: noop,
-    onReadReports: noop,
-    onCloseWorktrees: noop,
-    onReadWorktrees: noop,
-    onOpenSettings: noop,
-    onRefresh: noop,
-    jobs: [],
-    onClearTerminal: noop,
-    onForgetTerminal: noop,
-  });
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <Shell
@@ -376,9 +355,6 @@ export function ManifestFrom({
           onOpenChange: noop,
         }}
         fleet={{ state: "running", label: "Running", detail: statement.detail, open: true, onOpenChange: noop }}
-        title={head?.title}
-        summary={head?.summary}
-        actions={head?.actions}
         showing={SURFACE.manifest}
       >
         <div className="armada-screen__mounted">

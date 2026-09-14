@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import type { LeftOutWorkflow, ManifestReading, ManifestSummary, RepositorySummary } from "@armada/protocol";
+import { Button } from "@armada/components";
 import { AskRepository, Composer, DispatchJob, watchOf } from "@armada/screens";
 import { Boundary } from "@armada/shell";
 
@@ -72,15 +73,27 @@ export function Composing({
       current = false;
     };
   }, [all, answered]);
+  // The way out, at the top of every state — #1090 moved it here from the
+  // page head that used to carry it.
+  const cancel = (
+    <div>
+      <Button variant="ghost" size="sm" onClick={onClose}>
+        Cancel
+      </Button>
+    </div>
+  );
   if (all && answered === null) {
     return (
-      <AskRepository
-        repositories={repositories}
-        title="Pick the repository this Job is for"
-        next="A Job belongs to one repository. The Board stays on All; the new Job is listed under the repository you pick."
-        onPick={setAnswered}
-        onlySetUp
-      />
+      <div className="armada-screen__pane">
+        {cancel}
+        <AskRepository
+          repositories={repositories}
+          title="Pick the repository this Job is for"
+          next="A Job belongs to one repository. The Board stays on All; the new Job is listed under the repository you pick."
+          onPick={setAnswered}
+          onlySetUp
+        />
+      </div>
     );
   }
   // Off All, the repository already picked — unchanged. On All, the one the
@@ -88,12 +101,14 @@ export function Composing({
   const manifest = all ? repositories.find((one) => one.root === answered)?.manifest : scoped;
   const guarded = { bridge: state.bridge, onCopied };
   return (
-    /* Describing the work is the path and the form is the override, so
-       the composer is what `Enter by hand` swaps to rather than what
-       opens. What Fleet holds is read over the one connection and not
-       scraped off the Jobs already on the board, which is what this
-       offered before `list_workflows` and `list_manifests` existed. */
-    <Boundary region="the job composer" {...guarded}>
+    <div className="armada-screen__pane">
+      {cancel}
+      {/* Describing the work is the path and the form is the override, so
+          the composer is what `Enter by hand` swaps to rather than what
+          opens. What Fleet holds is read over the one connection and not
+          scraped off the Jobs already on the board, which is what this
+          offered before `list_workflows` and `list_manifests` existed. */}
+      <Boundary region="the job composer" {...guarded}>
       <DispatchJob
         // What the reading is read against is published state, so it is
         // handed over at the press rather than held by the command. On All,
@@ -149,6 +164,7 @@ export function Composing({
           />
         }
       />
-    </Boundary>
+      </Boundary>
+    </div>
   );
 }

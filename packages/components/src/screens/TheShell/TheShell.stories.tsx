@@ -42,8 +42,6 @@ const shell: ComponentProps<typeof TheShell> = {
     { id: "worktrees", label: "Cleanup", icon: HardDrive },
   ],
   activeId: "board",
-  title: "Job Board",
-  actions: <Button variant="primary">Dispatch</Button>,
   children: <div className="armada-screen__mount">The list mounts here — 1d</div>,
   stats: {
     rows: [
@@ -95,7 +93,6 @@ export const CollapsedRail: Story = {
 export const FleetIsNotRunning: Story = {
   args: {
     ...shell,
-    summary: "No jobs.",
     surfaces: [
       { id: "board", label: "Job Board", icon: ClipboardList, count: 0 },
       { id: "worktrees", label: "Cleanup", icon: HardDrive },
@@ -117,22 +114,16 @@ export const FleetIsNotRunning: Story = {
  * This is the story that was missing, and its absence is why the layout kept
  * reading right here and wrong in the app. Every other screen story mounts a
  * screen on its own, into a box the story sized. Bridge mounts it into the
- * shell — under a head, beside the left column — and the chain from the
- * window down to the screen is exactly the part that was broken.
+ * shell, beside the left column, and the chain from the window down to the
+ * screen is exactly the part that was broken.
  *
  * **Nothing outside a pane scrolls.** The left column holds, and the tall
  * content moves inside its own box. If this story ever scrolls the whole
  * shell, the chain is broken again, and it is broken in Bridge with it.
- *
- * No head, which is the shape a Job read whole takes: the screen's own header
- * is the top of the window.
  */
 export const AScreenTallerThanTheWindow: Story = {
   args: {
     ...shell,
-    title: undefined,
-    summary: undefined,
-    actions: undefined,
     children: (
       <div className="armada-screen__mounted">
       <div className="armada-screen__pane">
@@ -162,10 +153,6 @@ export const AScreenTallerThanTheWindow: Story = {
 export const OneRowInATallWindow: Story = {
   args: {
     ...shell,
-    // No summary on the head: Bridge puts the count on the list, beside the
-    // control that changes it. The head keeps the surface's name, and the two
-    // have to line up — which is what this story is now also for.
-    summary: undefined,
     children: (
       <div className="armada-screen__mounted">
         <div className="armada-screen__stack">

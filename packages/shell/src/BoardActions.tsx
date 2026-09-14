@@ -1,11 +1,13 @@
 // The Board's one control: `Dispatch` (`New job` until #1087 renamed the
 // registry row), with everything else the Board offers in its menu.
 //
-// **One control, where there were six.** The head carried Refresh, Reported,
-// Held disk and New job, and the Board carried Clear and Delete in a row of
-// their own beneath it. The owner ruled on 11 Sep 2026 that a head carries one
-// action and a menu, the rule Job detail's header already keeps, so the likely
-// act is on the face and the rest are one click away.
+// **One control, where there were six.** The head this used to sit in carried
+// Refresh, Reported, Held disk and New job, and the Board carried Clear and
+// Delete in a row of their own beneath it. The owner ruled on 11 Sep 2026
+// that a head carries one action and a menu, the rule Job detail's header
+// already keeps, so the likely act is on the face and the rest are one click
+// away. #1090 removed the head itself; this now draws at the top of the
+// Board's own content instead, and the rule it was built under still holds.
 //
 // **The two bulk acts still confirm on their own.** Delete is the one act on
 // the Board that cannot be undone, and a person reaching for Clear must never

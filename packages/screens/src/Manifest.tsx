@@ -137,6 +137,17 @@ export function Manifest(props: ManifestProps) {
   }
 
   const onForm = editing.view === "form" && !props.settingUp;
+  // What the view on screen is for, and the one thing about it that
+  // surprises people — said once here rather than repeated on every row.
+  // **Moved from the page head #1090 removed**, and it still swaps with the
+  // toggle: Run's own summary is nothing here is a verdict, and the file and
+  // the forms share Save's own, because both write the one file.
+  const viewNote =
+    props.settingUp || onlySetup
+      ? null
+      : rootless || editing.view === "run"
+        ? "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict."
+        : "Edit this repository's Manifest. Save writes the file to disk and stops, without staging or committing it.";
   return (
     <div className="armada-screen__stack">
       {/* Above every view, so a freeze left on is seen wherever the page opens. */}
@@ -183,6 +194,7 @@ export function Manifest(props: ManifestProps) {
           if (id !== "setup") editing.onView(id === "file" || id === "form" ? id : "run");
         }}
       />
+      {viewNote === null ? null : <p className="text-fg-muted">{viewNote}</p>}
       {(props.settingUp || onlySetup) && props.setup !== undefined ? (
         props.setup
       ) : rootless ? (

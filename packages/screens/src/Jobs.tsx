@@ -17,7 +17,9 @@
 //
 // **There is no count sentence.** `4 jobs need you. 15 on the Board.` sat over
 // the list until 11 Sep 2026, when the owner cut it: the tab counts say both
-// numbers already. The bulk acts that sat above it are in the head's menu.
+// numbers already. The bulk acts that sat above it are `BoardActions`, drawn
+// by the caller and passed in as `actions` — #1090 moved it here from the
+// page head that used to carry it, at the top of this content instead.
 //
 // # The keyboard
 //
@@ -69,7 +71,7 @@
 // replacement already spends on `Approve dispatch`.
 
 import { ActiveJobsList, BoardControls, Button } from "@armada/components";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { JobSummary, RepositorySummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
@@ -150,6 +152,12 @@ export type JobsProps = {
   onCursor?: (jobId: string | null) => void;
   /** Filled with what the palette can reach here. `keys.ts` says why. */
   reach?: { current: BoardReach | null };
+  /**
+   * `BoardActions` — `Dispatch` and everything else the Board offers, built by
+   * the caller. Absent draws none, which is every story that only wants the
+   * list. #1090 moved it here from the page head that used to carry it.
+   */
+  actions?: ReactNode;
 };
 
 export function Jobs({
@@ -167,6 +175,7 @@ export function Jobs({
   onCopied,
   onCursor,
   reach,
+  actions,
 }: JobsProps) {
   // Folded once for the whole board rather than per row. The dependency is the
   // array Bridge published, which is replaced on every event and never mutated,
@@ -402,6 +411,9 @@ export function Jobs({
         onCursor?.(row.dataset.jobId);
       }}
     >
+      {actions === undefined ? null : (
+        <div className="armada-screen__board-actions">{actions}</div>
+      )}
       <ActiveJobsList
         // Every drawn row opens a Job, so the frame is a listbox and its rows
         // are options — which is what lets "this one is open" be a state a

@@ -39,6 +39,15 @@
 // This file still renders the picker's markup — it is Bridge's own reading of
 // what Fleet serves — but hands it to `TheShell` as `repositoryPicker` rather
 // than `railHeader`.
+//
+// # No screen draws a page head, #1090
+//
+// Every screen used to spend a header row naming the surface the rail already
+// says — `headOf` built it and this file carried it to `TheShell` as `title`,
+// `summary` and `actions`. All three are gone: the rail is where a person
+// reads where they are, and a screen's own controls — Board's menu, the way
+// out of the composer, the reports and the held worktrees — sit at the top of
+// each screen's own content instead. `App.tsx` is where that moved.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -81,11 +90,6 @@ export type ShellProps = {
   stats: Omit<StatsPanelProps, "narrow">;
   /** The left column's Fleet panel — what the status bar used to draw. */
   fleet: Omit<FleetPanelProps, "narrow">;
-  /** Absent draws no head — see `TheShell`. One Job read whole passes none. */
-  title?: string;
-  summary?: string;
-  /** The head's trailing controls. `Dispatch` is the one primary. */
-  actions?: ReactNode;
   /** Opens the composer. The title row's own Dispatch control — #1087 — beside the Board's own. */
   onCompose: () => void;
   /** Opens the command palette from the title row's search field. */
@@ -115,9 +119,6 @@ export function Shell({
   boardJobs,
   stats,
   fleet,
-  title,
-  summary,
-  actions,
   onCompose,
   onSearch,
   showing,
@@ -177,9 +178,6 @@ export function Shell({
       onSearch={onSearch}
       onDispatch={onCompose}
       dispatchDisabled={!live}
-      title={title}
-      summary={summary}
-      actions={actions}
       stats={stats}
       fleet={fleet}
     >
