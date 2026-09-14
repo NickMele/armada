@@ -6,7 +6,9 @@
 //! the next free place; a gate and a fix draft follow in the order they asked;
 //! a proof after a merge, which nobody waits on, comes last. No ask is passed
 //! over more than [`OVERTAKEN_AT_MOST`] times, so a stream of Drones' runs slows
-//! a gate and never holds it back for good.
+//! a gate and never holds it back for good. **Not every Check costs one
+//! place** — `checks.<name>.places` (#1102), clamped by [`Places::ask`] to the
+//! limit in force, so a Check wider than it still takes every place there is.
 //!
 //! A heavy run outside `crate::checking::ran` holds one through [`Room::place`].
 //! A join of identical runs (#338) would sit in front of the ask.
@@ -110,6 +112,9 @@ struct Waiter {
     seq: u64,
     rank: u8,
     overtaken: u32,
+    /// How many places this ask wants, already clamped to the limit it joined
+    /// the line under. #1102.
+    wants: usize,
 }
 
 impl State {
@@ -126,11 +131,16 @@ impl State {
     }
 
     fn take(&mut self, seq: u64) {
+        let wants = self
+            .waiting
+            .iter()
+            .find(|one| one.seq == seq)
+            .map_or(1, |one| one.wants);
         self.waiting.retain(|one| one.seq != seq);
         for earlier in self.waiting.iter_mut().filter(|one| one.seq < seq) {
             earlier.overtaken += 1;
         }
-        self.held += 1;
+        self.held += wants;
     }
 }
 
@@ -164,19 +174,25 @@ impl Places {
         self.state().held
     }
 
-    fn ask(&self, asking: Asking) -> Ask {
+    /// Join the line asking for `wants` places, clamped to what the limit in
+    /// force allows right now — so a Check wider than the limit still gets a
+    /// turn instead of waiting for room that will never be free. #1102.
+    fn ask(&self, asking: Asking, wants: usize) -> Ask {
         let mut state = self.state();
         let seq = state.asked;
         state.asked += 1;
+        let wants = wants.max(1).min(state.at_once.get());
         state.waiting.push(Waiter {
             seq,
             rank: asking.rank(),
             overtaken: 0,
+            wants,
         });
         Ask {
             places: self.clone(),
             seq,
             short_at: None,
+            wants,
         }
     }
 
@@ -193,6 +209,8 @@ pub(crate) struct Ask {
     seq: u64,
     /// How many places had been given back when the machine last read short.
     short_at: Option<u64>,
+    /// How many places this ask takes, clamped at [`Places::ask`]. #1102.
+    wants: usize,
 }
 
 enum Turn {
@@ -205,10 +223,10 @@ impl Ask {
     fn turn(&self) -> Turn {
         let mut state = self.places.state();
         let held = state.held;
-        if state.next() != Some(self.seq) || !may_start(held, state.at_once, false) {
+        if state.next() != Some(self.seq) || !may_start(held, self.wants, state.at_once, false) {
             return Turn::Wait(held);
         }
-        if may_start(held, state.at_once, true) {
+        if may_start(held, self.wants, state.at_once, true) {
             state.take(self.seq);
             return Turn::Taken;
         }
@@ -220,7 +238,8 @@ impl Ask {
 
     fn took_after_reading(&mut self, short: bool, given_back: u64) -> bool {
         let mut state = self.places.state();
-        if state.next() == Some(self.seq) && may_start(state.held, state.at_once, short) {
+        if state.next() == Some(self.seq) && may_start(state.held, self.wants, state.at_once, short)
+        {
             state.take(self.seq);
             return true;
         }
@@ -268,6 +287,7 @@ impl Ask {
         self.places.0.changed.notify_waiters();
         Place {
             places: self.places.clone(),
+            holds: self.wants,
         }
     }
 }
@@ -286,25 +306,27 @@ impl Drop for Ask {
     }
 }
 
-/// A place held on the machine. Dropping it is the only way it is given back.
+/// A place held on the machine — or several, for a Check wider than one.
+/// Dropping it is the only way it is given back.
 #[must_use = "a place is given back the moment it is dropped"]
 pub struct Place {
     places: Places,
+    holds: usize,
 }
 
 impl Drop for Place {
     fn drop(&mut self) {
         {
             let mut state = self.places.state();
-            state.held = state.held.saturating_sub(1);
+            state.held = state.held.saturating_sub(self.holds);
             state.given_back += 1;
         }
         self.places.0.changed.notify_waiters();
     }
 }
 
-/// What a run asks before each command it starts: a place on the machine, and
-/// the memory and disk for it. #284, #1063.
+/// What a run asks before each command it starts: one or more of the
+/// machine's places, and the memory and disk for it. #284, #1063, #1102.
 ///
 /// **The first on the machine always starts**, so a short machine slows Checks
 /// and never stops them. The headroom is taken when the run begins.
@@ -362,7 +384,12 @@ impl Room {
 
     /// Join the line for a place.
     pub(crate) fn ask(&self) -> Ask {
-        self.places.ask(self.asking)
+        self.places.ask(self.asking, 1)
+    }
+
+    /// Join the line for a Check's own `places`. #1102.
+    pub(crate) fn ask_for(&self, places: std::num::NonZeroU32) -> Ask {
+        self.places.ask(self.asking, places.get() as usize)
     }
 
     /// The place `ask` waits for. `waiting` is told how many places are held
@@ -378,10 +405,15 @@ impl Room {
     }
 }
 
-/// Whether another command may start beside `held` places, given whether the
-/// machine is short: the pure half of [`Room::granted`].
-pub(crate) fn may_start(held: usize, at_once: ChecksAtOnce, short: bool) -> bool {
-    held == 0 || (held < at_once.get() && !short)
+/// Whether an ask wanting `wants` places may start beside `held` others,
+/// given whether the machine is short: the pure half of [`Room::granted`].
+///
+/// **Nothing held always starts**, whatever `wants` and `short` say — the
+/// clamp in [`Places::ask`] already bounds `wants` to the limit in force, so
+/// this is what lets a Check wider than a limit lowered after it clamped
+/// still run alone rather than wait for room that will never be free. #1102.
+pub(crate) fn may_start(held: usize, wants: usize, at_once: ChecksAtOnce, short: bool) -> bool {
+    held == 0 || (held + wants <= at_once.get() && !short)
 }
 
 /// A machine that never answers, so it never holds a Check back.

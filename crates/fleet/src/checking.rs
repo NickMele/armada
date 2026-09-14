@@ -23,8 +23,9 @@
 //! **Started fastest first, reported in the step's order.** [`Room`] carries
 //! the repository's past durations; each result still lands in its own slot.
 //!
-//! **Each command holds a place on the machine while it runs**, in one line
-//! with every other Job's — `crate::places`. #1063.
+//! **Each command holds one or more of the machine's places while it runs** —
+//! most take one, a Check may declare more — in one line with every other
+//! Job's. `crate::places`. #1063, #1102.
 //!
 //! **Over 500 lines.** `ports` and `env` thread through both halves already
 //! here, for `docs/concepts/manifest.md`'s Ports section: it reaches every
@@ -534,6 +535,10 @@ pub(crate) async fn ran(
     let mut running: JoinSet<(usize, RunAttempt, Duration)> = JoinSet::new();
     // The batch's turn for its next Check, kept across wakes so it keeps its place in line.
     let mut ask: Option<Ask> = None;
+    // Places this batch's own running Checks hold right now — in places, not
+    // in how many are running, since a weighted Check holds more than one.
+    // #1102.
+    let mut own_places: usize = 0;
     let stopping = stop.clone().stopped();
     tokio::pin!(stopping);
     loop {
@@ -552,23 +557,28 @@ pub(crate) async fn ran(
                 }
             }
         }
-        let wants = halting.is_some() && !queued.is_empty();
-        if !wants {
+        let wants_a_turn = halting.is_some() && !queued.is_empty();
+        if !wants_a_turn {
             ask = None;
             if running.is_empty() {
                 break;
             }
         } else if ask.is_none() {
-            ask = Some(room.ask());
+            // Peeked rather than popped: the ask has to be for the Check that
+            // will actually be spawned once it is granted. #1102.
+            let places = queued
+                .front()
+                .map_or(std::num::NonZeroU32::MIN, |(at, _)| checks[*at].places());
+            ask = Some(room.ask_for(places));
         }
-        let own = running.len();
         tokio::select! {
-            place = next_place(room, ask.as_mut(), own, announcing), if wants => {
+            place = next_place(room, ask.as_mut(), own_places, announcing), if wants_a_turn => {
                 ask = None;
                 announcing.behind(0);
                 let Some((at, run)) = queued.pop_front() else {
                     continue;
                 };
+                own_places += checks[at].places().get() as usize;
                 let worktree: PathBuf = worktree.clone();
                 let env = env.clone();
                 let log = announcing.log_for(at);
@@ -598,7 +608,7 @@ pub(crate) async fn ran(
                 announcing.started(at, log.as_deref());
             }
             // Stopped while waiting for room: what has not started never will.
-            () = &mut stopping, if wants => {
+            () = &mut stopping, if wants_a_turn => {
                 ask = None;
                 for (at, run) in queued.drain(..) {
                     let attempt = never_started(run);
@@ -611,6 +621,7 @@ pub(crate) async fn ran(
                 let Ok((at, attempt, took)) = joined else {
                     continue;
                 };
+                own_places = own_places.saturating_sub(checks[at].places().get() as usize);
                 let observed = Observed::Command(attempt.exit.clone());
                 // Ended by the halt rather than by its own answer.
                 let cut = failed_first
