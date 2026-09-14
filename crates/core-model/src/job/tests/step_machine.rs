@@ -581,6 +581,10 @@ fn drone_killed() -> StepLevelTrigger {
     StepLevelTrigger::of(EscalationTrigger::DroneKilled).expect("drone_killed is step-level")
 }
 
+fn drone_gone() -> StepLevelTrigger {
+    StepLevelTrigger::of(EscalationTrigger::DroneGone).expect("drone_gone is step-level")
+}
+
 /// A Job escalated over a step that is still being worked — the `stalled`
 /// shape, and the one the freeze had no answer for.
 ///
@@ -634,6 +638,32 @@ fn a_person_ending_a_drone_stops_the_step_beneath_an_escalated_job() {
     );
     assert_eq!(moved.event.actor(), Actor::Human);
     assert_eq!(moved.event.under(), JobStatus::Escalated);
+}
+
+/// **#1034, the same exception one Drone later.** A person restarting a step
+/// whose Drone had already left — before anybody killed it — stops the step
+/// under `drone_gone` rather than `drone_killed`, which would misname the act.
+#[test]
+fn a_restart_over_a_drone_already_gone_stops_the_step_beneath_an_escalated_job() {
+    let job = escalated_over_a_running_step();
+    let moved = job
+        .transition_step(
+            &first(),
+            StepTarget::Stopped(drone_gone()),
+            Actor::Human,
+            when(),
+        )
+        .expect("a person may restart a step whose Drone had already left");
+
+    let row = moved.job.step(&first()).expect("the row is there");
+    assert_eq!(row.state(), StepState::Stopped);
+    assert_eq!(row.last_verdict(), Some(StepVerdict::Failed(drone_gone())));
+    assert_eq!(
+        moved.job.status(),
+        JobStatus::Escalated,
+        "the Job stays put"
+    );
+    assert_eq!(moved.event.actor(), Actor::Human);
 }
 
 /// The exception admits that one move and nothing beside it.

@@ -28,7 +28,8 @@ use std::path::Path;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
-    Actor, Component, Envelope, Job, JobId, JobStatus, Level, StepId, StepTarget, Target,
+    Actor, Component, Envelope, EscalationTrigger, Job, JobId, JobStatus, Level, StepId, StepState,
+    StepTarget, Target, TransitionReason,
 };
 
 use crate::adrift::Adrift;
@@ -368,10 +369,25 @@ where
         // on exactly this pair, and the two readings have to agree — a Job that
         // is offered an act and refused it is the defect #442 closed. #452.
         //
-        // **An empty slot with no stopped step still refuses**, and hears the
-        // same sentence it always did: there is no process to end and no step
-        // to run again, which is `interrupted` and `resource_exhausted`.
-        if !stopped && standing != Some(true) {
+        // **An empty slot with no stopped step still refuses, unless the Job
+        // is `stalled` over a step still `running`.** That shape is a Drone
+        // that was genuinely there when the Job escalated and has since gone
+        // — `core_model::job::stuck::abandoned_mid_step` reads the same three
+        // facts, gated the same way, so the offer and this refusal agree.
+        // Every other empty-slot Job hears the sentence it always did: there
+        // is no process to end and no step to run again, which is
+        // `interrupted`, `would_not_start`, `not_configurable`, `no_worktree`
+        // and `resource_exhausted`. `#1034`.
+        let abandoned = !stopped
+            && standing.is_none()
+            && job
+                .current_step()
+                .is_some_and(|row| row.state() == StepState::Running)
+            && matches!(
+                self.last_reason(job_id).await?,
+                Some(TransitionReason::Escalation(EscalationTrigger::Stalled))
+            );
+        if !stopped && standing != Some(true) && !abandoned {
             return Err(Adrift::NoStepStopped {
                 job: job_id.clone(),
             });
@@ -425,13 +441,13 @@ where
         // which is not what happened and would open the Drone with the wrong
         // sentence about the part before it.
         //
-        // **`drone_killed`, and it is the truthful trigger rather than the
-        // convenient one.** A person pressed restart and the Drone was ended
-        // for it, which is `stopped_by_hand`'s own case; `unheard` is Job-level
-        // and cannot reach a step's `last_verdict` at all. It is the one
-        // `running -> stopped` the step machine admits beneath a frozen Job —
-        // `core_model::step_machine::taken_from_a_person`, #313 — and
-        // `Stuck::of` offers this act on that predicate's own three conditions.
+        // **`drone_killed` or `drone_gone`, and each is the truthful trigger
+        // rather than the convenient one.** A person pressed restart and ended
+        // a Drone that was still there — `stopped_by_hand`'s case — or pressed
+        // it over one already gone — `stopped_abandoned`'s, `#1034`. Both are
+        // `running -> stopped` moves `step_machine::taken_from_a_person`
+        // admits beneath a frozen Job, and `Stuck::of` offers this act on the
+        // same two readings.
         //
         // Reloaded first: `end_the_drone` cleared the record's Drone pointer
         // above, so the copy in hand no longer says what the store does.
@@ -439,7 +455,10 @@ where
             true => job,
             false => {
                 let job = self.load(job_id).await?;
-                self.stopped_by_hand(&job).await?
+                match abandoned {
+                    true => self.stopped_abandoned(&job).await?,
+                    false => self.stopped_by_hand(&job).await?,
+                }
             }
         };
         // **Before the Job leaves `escalated`, and this used to be before the
