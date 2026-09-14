@@ -13,13 +13,7 @@ const HASH: &[&str] = &[
 ];
 
 /// Files named without an extension whose comments open with `#`.
-const HASH_NAMES: &[&str] = &[
-    "makefile",
-    "gnumakefile",
-    "dockerfile",
-    "gemfile",
-    "rakefile",
-];
+const HASH_NAMES: &[&str] = &["makefile", "gnumakefile", "gemfile", "rakefile"];
 
 /// Languages whose line comments open with `--`.
 const DASHES: &[&str] = &["sql", "lua", "hs", "elm"];
