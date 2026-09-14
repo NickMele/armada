@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { JobDetail as JobWhole, JobSummary, Stuck } from "@armada/protocol";
+import type { JobDetail as JobWhole, JobSummary, StepDetail, Stuck } from "@armada/protocol";
 import { recourseOf } from "./recovery";
 
 /** An escalated job, which is the status both acts ask for. */
@@ -102,5 +102,61 @@ describe("what the restart button says", () => {
     ).stands;
     expect(stands).toContain("the worktree it was working in is gone");
     expect(stands).not.toContain("no step to land on");
+  });
+});
+
+/** The step a failed Check stopped, for `rerun_checks`'s own fixtures. #1105. */
+function checkStopped(): StepDetail {
+  return {
+    step_id: "verify",
+    label: "Verify",
+    ordinal: 3,
+    state: "stopped",
+    check_runs: [],
+    overridden: false,
+    judged: [],
+    flagged: [],
+    attempts: [],
+    verdicts: [],
+    entered_at: "2026-09-14T09:00:00Z",
+    updated_at: "2026-09-14T09:10:00Z",
+  };
+}
+
+function awaitingRepair(over: Partial<Stuck> = {}): JobWhole {
+  return {
+    job: job({ status: "awaiting_repair" }),
+    created_at: "2026-09-14T09:00:00Z",
+    steps: [checkStopped()],
+    acceptance_criteria: [],
+    dependencies: [],
+    stuck: stuck({
+      step_id: "verify",
+      recourse: ["rerun_checks", "restart_step", "redispatch_job"],
+      ...over,
+    }),
+  };
+}
+
+describe("running the checks again", () => {
+  it("is offered beside restart, naming the step that stopped", () => {
+    const recourse = recourseOf(job({ status: "awaiting_repair" }), awaitingRepair());
+    expect(recourse.rerunChecks?.step.step_id).toBe("verify");
+    expect(recourse.act).toBe("restart_step");
+  });
+
+  it("says no drone works and no retry is spent", () => {
+    const says = recourseOf(job({ status: "awaiting_repair" }), awaitingRepair()).says.rerun_checks;
+    expect(says).toContain("no drone works");
+    expect(says).toContain("no retry is spent");
+  });
+
+  it("is absent where fleet named no such recourse", () => {
+    const recourse = recourseOf(
+      job({ status: "awaiting_repair" }),
+      awaitingRepair({ recourse: ["restart_step", "redispatch_job"] }),
+    );
+    expect(recourse.rerunChecks).toBeUndefined();
+    expect(recourse.says.rerun_checks).toBeUndefined();
   });
 });

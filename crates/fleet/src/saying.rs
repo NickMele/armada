@@ -425,6 +425,19 @@ impl fmt::Display for Adrift {
             // already names the Job it is about, and this is what the control
             // puts under the button a person just pressed.
             Adrift::CannotShowAgain { why, .. } => write!(out, "{}", why.said()),
+            Adrift::CannotRerunChecks { why, .. } => write!(out, "{}", why.said()),
+            Adrift::ChecksRunningAgain { job } => write!(
+                out,
+                "{}'s Checks are running again on its worktree. Wait for that run to finish \
+                 before restarting the step or replacing the Job",
+                job.as_str()
+            ),
+            Adrift::RecheckAbandoned { job } => write!(
+                out,
+                "the run of {}'s Checks ended without an answer. Its log says how far it got; \
+                 press again to run them again",
+                job.as_str()
+            ),
             Adrift::PressAbandoned { job } => write!(
                 out,
                 "the run showing {}'s work ended without an answer. Its log says how far it got; \
@@ -701,6 +714,9 @@ impl Adrift {
             | Adrift::CheckDidNotPass { job, .. }
             | Adrift::NotUndecided { job, .. }
             | Adrift::NotStandingThere { job }
+            | Adrift::CannotRerunChecks { job, .. }
+            | Adrift::ChecksRunningAgain { job }
+            | Adrift::RecheckAbandoned { job }
             | Adrift::CannotShowAgain { job, .. }
             | Adrift::PressAbandoned { job }
             | Adrift::NothingToRuleOn { job, .. }
@@ -836,6 +852,9 @@ impl Error for Adrift {
             // missing and the second what happened, and neither wraps a cause.
             | Adrift::CannotShowAgain { .. }
             | Adrift::PressAbandoned { .. }
+            | Adrift::CannotRerunChecks { .. }
+            | Adrift::ChecksRunningAgain { .. }
+            | Adrift::RecheckAbandoned { .. }
             | Adrift::Unreasoned { .. }
             // `NotFiled` joins them: it says what a filing could not be, not
             // what failed underneath it.

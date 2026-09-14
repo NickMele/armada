@@ -63,7 +63,7 @@ pub async fn gate_against(
         submitted,
         run.declared.as_ref(),
         &Lifted::of(&run.job),
-        Some(&entered_with),
+        fleet::Began::At(&entered_with),
         &recorded,
         &bench.work,
         bench.budget,

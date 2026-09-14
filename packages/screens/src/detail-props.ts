@@ -62,6 +62,12 @@ export type JobDetailProps = {
   acting: boolean;
   /** An approval already sent for this Job. */
   approving: boolean;
+  /**
+   * This Job's stopped step is having its Checks run again. **Its own flag
+   * beside `acting`'s**: the re-run can take minutes, and the step panel says
+   * so for as long as it runs rather than only reading generically busy.
+   */
+  rerunningChecks: boolean;
   /** A decision on this Job's work already in flight. */
   deciding: boolean;
   /** Ask for a confirmation. Nothing destructive is one press from here. */
@@ -133,6 +139,12 @@ export type JobDetailProps = {
   onRaiseTurnCap: (jobId: string, turnCap: number) => void;
   /** Ask the gate again on a step it could not decide. Nothing is at stake. */
   onRerun: (jobId: string) => void;
+  /**
+   * Run a stopped step's Checks again, on the worktree as it stands. No
+   * Drone spawns and no retry is spent — `#1105`, `onRerun`'s shape for the
+   * other trigger.
+   */
+  onRerunChecks: (jobId: string) => void;
   /**
    * Ask the Job to show its work again. **Answered to this screen**, like
    * `onReport`, because what a press came to is said beside its control.

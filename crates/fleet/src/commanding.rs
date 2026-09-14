@@ -285,6 +285,18 @@ where
         self.summarised(&job).await
     }
 
+    /// A person runs a failed step's Checks again. **The `Arc` is handed on**,
+    /// so the run is a task of its own — `crate::rechecking`.
+    ///
+    /// **Not [`budgeted`].** The request waits for the Checks, however long
+    /// they take.
+    async fn rerun_checks(self: Arc<Self>, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::rerun_checks(Arc::clone(&self), &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
     /// A person asking a Job to show its work. **The `Arc` is handed on**, so
     /// the press runs on a task of its own — `crate::showing_again`.
     ///

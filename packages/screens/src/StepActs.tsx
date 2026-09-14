@@ -24,14 +24,15 @@ import type { Render } from "./render";
 import { steeringOf } from "./steering";
 
 /**
- * The four acts that change a step rather than the Job, in the panel header
+ * The five acts that change a step rather than the Job, in the panel header
  * beside the step they act on.
  *
- * **They were rendered at Job level and four of the eight do not act on the
+ * **They were rendered at Job level and five of the eleven do not act on the
  * Job.** Redirecting a Drone, restarting a step, overruling the verdict on a
- * step and asking a step's gate again all leave the Job exactly where it is —
- * only the step moves. Drawn in the Job header they read as peers of the two
- * kills, which is the reading job detail was redrawn to end.
+ * step, asking a step's gate again and running its Checks again all leave the
+ * Job exactly where it is — only the step moves. Drawn in the Job header they
+ * read as peers of the two kills, which is the reading job detail was
+ * redrawn to end.
  *
  * **The accent goes with them.** The object of attention on this screen is the
  * open step, and the Job header keeps only the acts that end or replace the
@@ -39,12 +40,12 @@ import { steeringOf } from "./steering";
  * act the state calls for — nothing here decides emphasis for a state it cannot
  * see.
  *
- * **Which of the four is offered is `recovery.ts`'s reading, unchanged.** It is
+ * **Which of the five is offered is `recovery.ts`'s reading, unchanged.** It is
  * the side that can see the worktree, and a restart offered without that answer
  * was refused on the press every time the worktree had been reclaimed. Moving
  * the controls did not move that decision.
  *
- * **On a Job that is working, one of the four is still offered, and by a second
+ * **On a Job that is working, one of the five is still offered, and by a second
  * reading.** `stuck` is absent on a Job that has not stopped — it is the record
  * of a stop — so `steering.ts` answers for that Job instead, off the pointer
  * this header already draws `kill_drone` from. A redirect is legal on a healthy
@@ -64,11 +65,13 @@ export function StepActs({
   opens,
   render,
   acting,
+  rerunningChecks,
   stale,
   onAct,
   onRedirect,
   onOverrule,
   onRerun,
+  onRerunChecks,
 }: {
   job: JobSummary;
   whole: JobWhole | null;
@@ -81,6 +84,13 @@ export function StepActs({
   opens: Opens;
   render: Render;
   acting: boolean;
+  /**
+   * This Job's stopped step is having its Checks run again. **A wait worth
+   * saying**: the press can run for minutes, and the button stays legible
+   * about what it is doing rather than only going grey the way a redirect or
+   * a restart's instant round trip does.
+   */
+  rerunningChecks: boolean;
   stale: boolean;
   onAct: (act: ConfirmableAct, jobId: string) => void;
   onRedirect: (jobId: string, instruction: string) => void;
@@ -95,6 +105,8 @@ export function StepActs({
    * own dialog, and this one has nothing to confirm.
    */
   onRerun: (jobId: string) => void;
+  /** Run a stopped step's Checks again. `onRerun`'s shape, for the other trigger. */
+  onRerunChecks: (jobId: string) => void;
 }) {
   // Fleet's answer, on the render that carries one. A Job nothing is wrong with
   // has no `stuck` and so offers none of these — which is the wire's reading
@@ -121,6 +133,7 @@ export function StepActs({
   // because the two triggers partition — `recovery.ts` says so.
   const overrule = recourse?.overrule;
   const reread = recourse?.reread;
+  const rerunChecks = recourse?.rerunChecks;
 
   return (
     <>
@@ -167,6 +180,21 @@ export function StepActs({
           />
         </Tooltip>
       )}
+      {/* Ahead of restart, because it takes nothing away — no Drone spawns and
+          no retry is spent, where a restart spends both. While it runs, the
+          button says so rather than reading as a dead end: this can take
+          minutes, `CHECKS_MS`'s reason. */}
+      {rerunChecks === undefined ? null : (
+        <Tooltip label={rerunningChecks ? CHECKS_RUNNING : (recourse?.says.rerun_checks ?? ACT_LABEL.rerun_checks)}>
+          <Button
+            variant="secondary"
+            disabled={acting || stale}
+            onClick={() => onRerunChecks(job.id)}
+          >
+            {rerunningChecks ? RUNNING_CHECKS : ACT_LABEL.rerun_checks}
+          </Button>
+        </Tooltip>
+      )}
       {canRestart ? (
         <Tooltip label={recourse?.says.restart_step ?? ACT_LABEL.restart_step} shortcut={RESTART_KEY}>
           <Button
@@ -190,6 +218,12 @@ export function StepActs({
  */
 const REDIRECT_KEY = "d";
 const RESTART_KEY = "s";
+
+/** The button's face while its own press is out. `ACT_LABEL.rerun_checks`'s verb, in flight. */
+const RUNNING_CHECKS = "Running Checks";
+
+/** The tooltip while its own press is out — said rather than only greyed, `CHECKS_MS`'s reason. */
+const CHECKS_RUNNING = "The Checks are running now. This can take a few minutes.";
 
 /**
  * The redirect on offer, and which job it is about. **Which reading produced it

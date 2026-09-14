@@ -24,13 +24,17 @@ import type { Render } from "./render";
 import { ReportControl } from "./Report";
 
 /**
- * What the two kills, the redispatch, the two step-resuming acts and the two
- * answers to a gate that stopped the work are called.
+ * What the two kills, the redispatch, the two step-resuming acts and the
+ * three answers to a step that stopped are called.
  *
  * **`rerun_gate` is the seventh and it is not a widening of the sixth.** An
  * override answers a gate that ruled; this answers a gate that ruled on
  * nothing. `crates/fleet/src/regating.rs` admits exactly the trigger
  * `overrulable()` refuses, so the two names partition rather than overlap.
+ *
+ * **`rerun_checks` is the eighth, beside the seventh and not a widening of
+ * it.** It answers a step that stopped on a failed mechanical Check rather
+ * than an undecided gate — `#1105`, `recovery.ts`'s third trigger.
  */
 export type JobAct =
   | "kill_drone"
@@ -40,11 +44,12 @@ export type JobAct =
   | "restart_step"
   | "override_verdict"
   | "rerun_gate"
-  // The eighth, and the only one that acts on disk rather than on the record
+  | "rerun_checks"
+  // The ninth, and the only one that acts on disk rather than on the record
   // or the machine. `armada clean` could already do it and refuses while Fleet
   // is running, which is exactly when a person wants the space back.
   | "reclaim_worktree"
-  // The ninth, and the one act on this header that cannot be undone. It takes
+  // The tenth, and the one act on this header that cannot be undone. It takes
   // the row `reclaim_worktree` leaves — `crates/ipc/operations.toml` argues
   // the split on the same row that argues this one's — so a person wanting
   // both sends both, and this is never the act a stray `Enter` reaches.
@@ -55,21 +60,21 @@ export type JobAct =
  * are not two of them** — each carries a required field in its own dialog, so
  * each is its own confirmation and neither also routes through this one.
  *
- * **Nor is the re-run, and for the opposite reason.** It has no dialog at all:
- * nothing is destroyed, nothing is overruled and nothing is committed, so there
- * is no responsibility for a person to take on the record. A confirmation here
- * would say a re-run costs something, which would be the screen inventing a
- * cost Fleet does not charge.
+ * **Nor are the two re-runs, and for the opposite reason.** Neither has a
+ * dialog at all: nothing is destroyed, nothing is overruled and nothing is
+ * committed, so there is no responsibility for a person to take on the record.
+ * A confirmation here would say a re-run costs something, which would be the
+ * screen inventing a cost Fleet does not charge.
  */
 export type ConfirmableAct = Exclude<
   JobAct,
-  "redirect" | "override_verdict" | "rerun_gate"
+  "redirect" | "override_verdict" | "rerun_gate" | "rerun_checks"
 >;
 
 /**
  * What can be done to this Job from here.
  *
- * **Ten acts, and none of them collapses into another.** Killing the Drone
+ * **Eleven acts, and none of them collapses into another.** Killing the Drone
  * ends a process and leaves the Job open with its worktree held; killing the
  * Job ends the Job at `killed`, terminal; redispatch does the second and mints
  * a replacement; approving lets a Job at the gate run. Redirect and restart are
@@ -81,7 +86,7 @@ export type ConfirmableAct = Exclude<
  * is the board's own `Clear`/`Delete record` acts, and this is the per-Job door
  * to the same act.
  *
- * **Six of the ten are drawn on Fleet's answer and not on the row.**
+ * **Seven of the eleven are drawn on Fleet's answer and not on the row.**
  * `stuck.recourse` on `GET /jobs/:job_id` is the acts Fleet will take now, and
  * `#193` moved them here from a derivation that could not read the filesystem
  * and so offered a restart onto a worktree that had been reclaimed. The two
@@ -101,6 +106,7 @@ export type ConfirmableAct = Exclude<
  * | `restart_step` | `recourse` names `restart_step` | yes |
  * | `override_verdict` | `recourse` names `override_verdict` | its own dialog |
  * | `rerun_gate` | `recourse` names `rerun_gate` | no — nothing is at stake |
+ * | `rerun_checks` | `recourse` names `rerun_checks` | no — nothing is at stake |
  *
  * **The override is not a seventh variant of the six; it is the only one that
  * keeps the work the gate refused.** It sits with redirect and restart because
@@ -149,9 +155,9 @@ export type ConfirmableAct = Exclude<
  * the socket because a Job is open. Neither is invented here to match a
  * picture.
  *
- * Redirect, restart, the override and the re-run sit outside all of this: none
- * of them acts on the Job, so none reaches this header at all, and since the
- * split they are not even in this file — `StepActs.tsx` draws them.
+ * Redirect, restart, the override and the two re-runs sit outside all of this:
+ * none of them acts on the Job, so none reaches this header at all, and since
+ * the split they are not even in this file — `StepActs.tsx` draws them.
  *
  * **What this header does read of that answer is `redispatch`**, which is
  * `recourseOf`'s and not this file's. The stopped screen states in words what

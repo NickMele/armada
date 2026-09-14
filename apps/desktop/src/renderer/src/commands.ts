@@ -5,11 +5,12 @@
 // boundary — nothing here knows which surface is open or what is drawn, and
 // nothing that draws knows how to reach the host.
 //
-// **The five pieces of state here are the ones a command in flight has**, and
+// **The six pieces of state here are the ones a command in flight has**, and
 // they are here for that reason and not because they were nearby: which Job an
 // act is on, which Job a decision on its work is on, what the last command
-// answered, what the last reclaim gave back, and whether a re-read is out.
-// Every one of them is set by a call below and read by nothing else.
+// answered, what the last reclaim gave back, whether a re-read is out, and
+// which Job is having its Checks run again. Every one of them is set by a call
+// below and read by nothing else.
 //
 // # What is not decided here
 //
@@ -204,6 +205,11 @@ export function useCommands(sending: Sending) {
   // the header's act set: sharing one flag would grey out the header's kills
   // while a review note was being sent.
   const [deciding, setDeciding] = useState<string | null>(null);
+  // Which Job is having a stopped step's Checks run again. Its own state
+  // beside `acting`'s: a re-run can take minutes, and the step needs to keep
+  // saying so for as long as it runs — `acting` alone cannot say which act
+  // that grey covers, and every other one here answers in milliseconds.
+  const [rerunningChecks, setRerunningChecks] = useState<string | null>(null);
   // What the last reclaim (or bulk clear) gave back. **Its own state and not
   // `outcome`** — that one draws refusals, and this is a success worth
   // reading: the act asks for two things, the halves can disagree, and a kept
@@ -510,6 +516,22 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Run a stopped step's Checks again. `rerun`'s shape, and `rerunningChecks`
+   * beside `acting` for the wait's own reason: this can run for minutes, and
+   * the step panel says so for as long as it does.
+   */
+  async function rerunChecks(jobId: string): Promise<void> {
+    setActing(jobId);
+    setRerunningChecks(jobId);
+    try {
+      setOutcome(await window.armada.rerunChecks(jobId));
+    } finally {
+      setActing(null);
+      setRerunningChecks(null);
+    }
+  }
+
+  /**
    * Give one job a higher cost ceiling. **Not through `act`**, for `redirect`'s
    * reason: the dialog that collected the figure was the confirmation. It moves
    * no part of the job — what it changes is that the next dispatch is not
@@ -752,6 +774,8 @@ export function useCommands(sending: Sending) {
     removeAllowedCommand,
     overrule,
     rerun,
+    rerunChecks,
+    rerunningChecks,
     raiseCap,
     raiseTurns,
     saveLimits,

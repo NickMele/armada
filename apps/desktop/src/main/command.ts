@@ -41,7 +41,7 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
-import { ask, COMMAND_MS, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
+import { ask, CHECKS_MS, COMMAND_MS, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
 import type { Picked } from "./picked";
 import { Clearing } from "./clearing";
 import { Limits } from "./limits";
@@ -109,6 +109,7 @@ type Busy =
   | "already_restarting"
   | "already_overruling"
   | "already_rereading"
+  | "already_rerunning_checks"
   | "already_raising"
   | "already_raising_turns"
   | "already_reporting"
@@ -151,6 +152,14 @@ export class JobCommands {
    * press that names a different Job's different act.
    */
   private readonly rereading = new Set<string>();
+  /**
+   * Jobs with a Checks re-run in flight. Its own set beside the gate re-run's:
+   * `rerun_checks` answers a stopped Check and `rerun_gate` answers a gate that
+   * could not decide, and `recovery.ts` says the two triggers partition — so a
+   * Job never has both out at once, but the sets stay separate rather than
+   * shared because nothing here should have to know that to stay correct.
+   */
+  private readonly rerunningChecks = new Set<string>();
   /**
    * Jobs with a cost cap being raised. Its own set: a raise moves no status and
    * asks for no drone, so it is not in flight with anything else — and one set
@@ -728,6 +737,19 @@ export class JobCommands {
       // not on a store read. `MODEL_CALL_MS` says why the ordinary wait is the
       // wrong one here.
       ask(port, "POST", route(jobId, "rerun_gate"), undefined, MODEL_CALL_MS),
+    );
+  }
+
+  /**
+   * Run a stopped step's Checks again, on the worktree as it stands. `#1105`,
+   * `rerunGate`'s shape: no Drone works, no retry is spent, no body — a pass
+   * moves the step on and a fail leaves the Job where it was, with the new
+   * run recorded. `CHECKS_MS` rather than `MODEL_CALL_MS`: this waits on
+   * Checks, not one model call.
+   */
+  async rerunChecks(jobId: string): Promise<Outcome> {
+    return this.act(jobId, this.rerunningChecks, "already_rerunning_checks", (port) =>
+      ask(port, "POST", route(jobId, "rerun_checks"), undefined, CHECKS_MS),
     );
   }
 

@@ -67,8 +67,12 @@ fn every_edge_in_the_table_is_admitted() {
             None => reach(edge.from),
         };
         let target = target_for(edge.to, edge.escalation_trigger);
+        let by = match crate::job::transition::a_persons_edge(edge.from, edge.to) {
+            true => Actor::Human,
+            false => Actor::Fleet,
+        };
         let moved = job
-            .transition(target, Actor::Fleet, at("2026-08-26T10:00:00.000Z"))
+            .transition(target, by, at("2026-08-26T10:00:00.000Z"))
             .unwrap_or_else(|e| panic!("{} -> {}: {e}", edge.from.as_wire(), edge.to.as_wire()));
         assert_eq!(moved.job.status(), edge.to);
         assert_eq!(moved.event.from(), edge.from);
@@ -473,28 +477,59 @@ fn awaiting_repair_is_admitted_once_the_worked_step_is_stopped() {
         .all(|row| row.state() != StepState::Running));
 }
 
-/// **A Job held for repair has no road back to `running`, and that is the
-/// point.** `#208` gave it one so a redirect could answer the failure into the
-/// session that wrote the code; keeping that session kept the working slot for
-/// as long as a person took to read the failure, which is the trade
-/// `awaiting_review` measured and gave up. The Drone is stood down, so the only
-/// way on is `-> queued` and a fresh Drone that admission starts.
-///
-/// **The edge is removed rather than left unfired**, which is the same
-/// discipline `running -> completed_failed` got from the same issue: an edge
-/// nothing takes is one the next reader assumes something does.
+/// **A Job held for repair reaches `running` only by a person's hand.** A
+/// restart still re-queues and admission starts its Drone; the one road
+/// straight to `running` is a person running the Checks again, which starts
+/// none (#1105). Fleet taking it on its own would be a loop.
 #[test]
-fn a_job_held_for_repair_goes_back_through_the_queue_and_never_straight_to_running() {
+fn a_job_held_for_repair_reaches_running_only_as_a_persons_act() {
     let out: Vec<JobStatus> = JobStatus::AwaitingRepair.transitions_out().collect();
-
-    assert!(
-        !out.contains(&JobStatus::Running),
-        "no session is left to resume into: {out:?}"
-    );
     assert!(
         out.contains(&JobStatus::Queued),
         "a restart re-queues, as both answers at a human gate do: {out:?}"
     );
+
+    let why = StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("a step-level trigger");
+    let mut job = reach(JobStatus::Running);
+    for target in [StepTarget::Running, StepTarget::Stopped(why)] {
+        job = job
+            .transition_step(
+                &StepId::new("fix"),
+                target,
+                Actor::Fleet,
+                at("2026-08-26T09:30:00.000Z"),
+            )
+            .expect("a step is entered and stopped")
+            .job;
+    }
+    let held = job
+        .transition(
+            Target::AwaitingRepair,
+            Actor::Fleet,
+            at("2026-08-26T10:00:00.000Z"),
+        )
+        .expect("no step is running")
+        .job;
+
+    assert!(
+        matches!(
+            held.transition(
+                Target::Running,
+                Actor::Fleet,
+                at("2026-08-26T10:05:00.000Z")
+            ),
+            Err(IllegalTransition::NotAPersonsAct { .. })
+        ),
+        "Fleet does not run a held Job's Checks again of its own accord"
+    );
+    let rerun = held
+        .transition(
+            Target::Running,
+            Actor::Human,
+            at("2026-08-26T10:05:00.000Z"),
+        )
+        .expect("a person may");
+    assert_eq!(rerun.job.status(), JobStatus::Running);
 }
 
 /// **A step that was never entered does not hold the Job open.** The guard says

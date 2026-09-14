@@ -338,6 +338,23 @@ pub(crate) async fn rerun_gate<D: Commands>(
     }
 }
 
+/// A failed Check held the Job for repair, and a person runs the step's Checks
+/// again. **The Job comes back wherever the reading left it** — held for repair
+/// again where the Checks still fail, or on its way where they do not.
+///
+/// No body. 409 anywhere but a Job held on a failed Check with its worktree on
+/// disk and nothing in its slot, and while a re-run is already in flight. It
+/// waits for the Checks, which the daemon runs off the request.
+pub(crate) async fn rerun_checks<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+) -> Response {
+    match served.shared().rerun_checks(job.id()).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Ask a Job to show its work: the repository's harness runs the last spec a
 /// Drone named, in the Job's worktree, and what it captured comes back as a set
 /// of its own. **The Job does not move**, so what comes back is the set and not

@@ -20,6 +20,7 @@ fn all_there() -> Standing {
         worktree_on_disk: true,
         checks_passed: true,
         workflow_held: true,
+        checks_rerunning: false,
     }
 }
 
@@ -396,8 +397,76 @@ fn a_spent_budget_is_restarted_and_never_overruled() {
     assert_eq!(stuck.step(), Some(&StepId::new("repro")));
     assert_eq!(
         stuck.recourse(),
-        [Recourse::RestartStep, Recourse::Redispatch]
+        [
+            Recourse::RerunChecks,
+            Recourse::RestartStep,
+            Recourse::Redispatch
+        ],
+        "running the Checks again takes nothing away, so it comes first"
     );
+}
+
+/// **The re-run is offered only where a mechanical Check failed**, on a
+/// worktree still there with nothing in the slot, and never beneath
+/// `escalated`, where a failed Check does not stop a Job. #1105.
+#[test]
+fn a_rerun_of_the_checks_is_offered_where_a_check_failed_and_nowhere_else() {
+    let failed = Standing {
+        checks_passed: false,
+        ..drone_gone()
+    };
+    for (job, standing, why) in [
+        (
+            budget_spent(),
+            Standing {
+                checks_passed: true,
+                ..failed
+            },
+            "every Check passed, so a Check is not what stopped it",
+        ),
+        (
+            budget_spent(),
+            Standing {
+                worktree_on_disk: false,
+                ..failed
+            },
+            "there is no worktree to run them in",
+        ),
+        (
+            budget_spent(),
+            Standing {
+                drone: DroneStanding::Unheard,
+                ..failed
+            },
+            "a Drone is standing in the slot",
+        ),
+        (
+            stopped_on(EscalationTrigger::GateFailure),
+            failed,
+            "escalated is a Judge's refusal, not a Check",
+        ),
+    ] {
+        assert!(
+            !classify(&job, standing).admits(Recourse::RerunChecks),
+            "{why}"
+        );
+    }
+}
+
+/// **While the Checks run again, nothing that puts a Drone on the worktree or
+/// replaces the Job is offered**: the re-run is still reading it.
+#[test]
+fn while_the_checks_run_again_nothing_else_is_offered() {
+    let stuck = classify(
+        &budget_spent(),
+        Standing {
+            checks_passed: false,
+            checks_rerunning: true,
+            ..drone_gone()
+        },
+    );
+
+    assert!(stuck.recourse().is_empty(), "{:?}", stuck.recourse());
 }
 
 /// **The classification asks the slot, never the status**, so a Drone somehow
@@ -488,6 +557,7 @@ fn every_act_is_spelled_as_the_operation_that_performs_it() {
         [
             "override_verdict",
             "rerun_gate",
+            "rerun_checks",
             "redirect_drone",
             "restart_step",
             "redispatch_job"

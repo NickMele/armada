@@ -444,6 +444,14 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/rerun_gate",
     },
+    // A failed Check's re-run, beneath `awaiting_repair`. Its own route rather
+    // than `rerun_gate`'s: that one answers a gate that could not rule, and
+    // this one a Check that did.
+    Route {
+        operation: "rerun_checks",
+        method: "POST",
+        path: "/jobs/:job_id/rerun_checks",
+    },
     // A person asking a Job to show its work. A POST because it runs a
     // repository's harness and keeps what it captured, and its own route
     // because it moves nothing on the Job — what comes back is a set of frames

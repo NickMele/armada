@@ -323,6 +323,13 @@ export type BridgeApi = {
    */
   rerunGate: (jobId: string) => Promise<Outcome>;
   /**
+   * Run a stopped step's Checks again, on an `awaiting_repair` Job whose
+   * stopped step failed a mechanical Check. No Drone spawns, no retry is
+   * spent — `#1105`. **This can take minutes**, since it waits on the Checks
+   * themselves, not a store read.
+   */
+  rerunChecks: (jobId: string) => Promise<Outcome>;
+  /**
    * Ask a Job to show its work: Fleet reruns a spec a Drone named, in the Job's
    * worktree, and keeps what it captured as a set of its own beside the step's
    * frames. **It moves nothing on the Job.**

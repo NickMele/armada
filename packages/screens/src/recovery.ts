@@ -41,7 +41,7 @@
 // Job. The first two are `OVERRULING` keyed by `stuck.stopped_by`; the third is
 // the frozen step list's own shape, and Fleet serves no field for it.
 //
-// # The two acts beside `act`, and why they are beside it
+// # The three acts beside `act`, and why they are beside it
 //
 // Overruling a verdict is not exclusive with either resume act —
 // `crates/fleet/src/overruling.rs` says a Drone being there decides only how
@@ -50,10 +50,13 @@
 // different things a person is doing, so the sentences are one record and
 // admitting a trigger costs the words to describe it.
 //
-// `gate_undecided` is the gate declining to rule in either direction. There is
-// nothing to overrule, so what is left is to ask again —
-// `crates/fleet/src/regating.rs` — and that runs out of the Job's own slot, so
-// it co-occurs with a redirect rather than replacing it.
+// `gate_undecided` is the gate declining to rule in either direction, and a
+// failed mechanical Check declines nothing — neither has a ruling to
+// overrule, so what is left for both is to ask again, on the worktree as it
+// stands: `crates/fleet/src/regating.rs` for the first, `#1105` for the
+// second. The gate's re-run needs the Drone still standing, so it sits beside a
+// redirect; a failed Check has already stood its Drone down, so the Checks'
+// re-run sits beside a restart.
 
 import { JOB_STATUS } from "@armada/components";
 import type { JobDetail as JobWhole, JobSummary, RedirectInFlight, StepDetail, Stuck } from "@armada/protocol";
@@ -82,6 +85,11 @@ const HELD_FOR_A_PERSON: readonly string[] = ["escalated", "awaiting_repair"];
  */
 const OVERRIDE_VERDICT = "override_verdict";
 const RERUN_GATE = "rerun_gate";
+/**
+ * `#1105`. Offered on `awaiting_repair` where the stopped step failed a
+ * mechanical Check — `rerun_gate`'s partner act, for the trigger it refuses.
+ */
+const RERUN_CHECKS = "rerun_checks";
 const REDIRECT_DRONE = "redirect_drone";
 const RESTART_STEP = "restart_step";
 const REDISPATCH_JOB = "redispatch_job";
@@ -102,6 +110,13 @@ export type Recourse = {
   act?: "redirect" | "restart_step";
   overrule?: Overrule;
   reread?: Reread;
+  /**
+   * The step a Checks re-run reads again. **Beside `act` and never it**, on
+   * `reread`'s terms: this takes nothing away, so it is offered alongside
+   * whichever of the two resume acts applies rather than replacing it —
+   * `docs/practices/bridge.md`, `#1105`.
+   */
+  rerunChecks?: RerunChecks;
   /**
    * Whether Fleet will mint a replacement. **A field rather than a status test
    * here**: two of the three things it turns on are on no row — whether Fleet
@@ -150,6 +165,15 @@ export type Reread = {
 };
 
 /**
+ * The step whose Checks a person may run again. `Reread`'s shape, for the
+ * other trigger: a re-run takes no reason and has no second outcome either.
+ */
+export type RerunChecks = {
+  /** The step that stopped on a failed Check. What the sentence is about. */
+  step: StepDetail;
+};
+
+/**
  * The decision a person may overrule, and what overruling it is about to do.
  * **A decision and not a verdict**: a Judge's refusal is one, and a gaming
  * check calling the evidence suspect is the other, which is never a verdict.
@@ -193,6 +217,7 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
   const offered = new Set(stuck.recourse);
   const overrule = offered.has(OVERRIDE_VERDICT) ? overruleOf(whole, stuck) : undefined;
   const reread = offered.has(RERUN_GATE) ? rereadOf(whole, stuck) : undefined;
+  const rerunChecks = offered.has(RERUN_CHECKS) ? rerunChecksOf(whole, stuck) : undefined;
   // Exclusive, and Fleet is what made them exclusive: a redirect wants a
   // session Fleet can speak to, and a restart wants no Drone working the step —
   // gone already, or standing there unreadable and ended by the act. So no
@@ -211,6 +236,7 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
   const says: Partial<Record<JobAct, string>> = {
     ...(overrule === undefined ? {} : { override_verdict: overruling(overrule) }),
     ...(reread === undefined ? {} : { rerun_gate: REREAD }),
+    ...(rerunChecks === undefined ? {} : { rerun_checks: RERUN_CHECKS_SAYS }),
     ...(act === "redirect" ? { redirect: REDIRECT } : {}),
     // **Which restart this is, off the fact Fleet sent.** The two readings take
     // the same act and describe different things, and the trigger cannot tell
@@ -220,7 +246,7 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
       ? { restart_step: stuck.drone_unheard ? RESTART_UNHEARD : RESTART }
       : {}),
   };
-  const drew: Recourse = { act, overrule, reread, redispatch, says, stands: "" };
+  const drew: Recourse = { act, overrule, reread, rerunChecks, redispatch, says, stands: "" };
   // **The answer to the last press leads.** A redirect that is waiting and one
   // that never arrived are the same escalated Job, and the person reading this
   // is usually the person who just sent one — so what happened to it comes
@@ -360,6 +386,12 @@ function rereadOf(whole: JobWhole, stuck: Stuck): Reread | undefined {
   return held === undefined ? undefined : { step: held.stopped };
 }
 
+/** The Checks re-run Fleet offered, against the step it is about. `rereadOf`'s shape. */
+function rerunChecksOf(whole: JobWhole, stuck: Stuck): RerunChecks | undefined {
+  const held = stoppedIn(whole, stuck);
+  return held === undefined ? undefined : { step: held.stopped };
+}
+
 /**
  * The step that stopped, and the steps it stopped among.
  *
@@ -400,6 +432,7 @@ function unreachable(stuck: Stuck, made: Recourse): string | undefined {
   const drawn = new Set<string>();
   if (made.overrule !== undefined) drawn.add(OVERRIDE_VERDICT);
   if (made.reread !== undefined) drawn.add(RERUN_GATE);
+  if (made.rerunChecks !== undefined) drawn.add(RERUN_CHECKS);
   if (made.act === "redirect") drawn.add(REDIRECT_DRONE);
   if (made.act === "restart_step") drawn.add(RESTART_STEP);
   if (made.redispatch) drawn.add(REDISPATCH_JOB);
@@ -550,6 +583,14 @@ function waiting(sent: RedirectInFlight): string {
 const REREAD =
   "The gate could not decide, so there is nothing to overrule. Asking again runs it over the " +
   "evidence already submitted — no drone works, nothing is redone, and no retry is spent.";
+
+/**
+ * What running the Checks again is, `REREAD`'s shape for the other trigger: a
+ * failed mechanical Check, not an undecided gate.
+ */
+const RERUN_CHECKS_SAYS =
+  "A Check on this step failed. Running the Checks again runs them on the work already here — " +
+  "no drone works, and no retry is spent.";
 
 /** `DroneStillThere` stated as the act it points at rather than as a refusal. */
 const REDIRECT =

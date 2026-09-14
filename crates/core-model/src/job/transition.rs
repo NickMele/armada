@@ -74,6 +74,7 @@ pub static EDGES: &[Edge] = &[
     edge(AwaitingRepair, Killed),
     edge(AwaitingRepair, Piloted),
     edge(AwaitingRepair, Queued),
+    edge(AwaitingRepair, Running),
     edge(AwaitingReview, AwaitingAttestation),
     guarded(AwaitingReview, CompletedSuccess, Guard::EveryStepAdvanced),
     triggered(AwaitingReview, Escalated, EscalationTrigger::Interrupted),
@@ -339,11 +340,21 @@ pub enum IllegalTransition {
         step_id: StepId,
         holding: StepState,
     },
+    /// The edge exists, and it is a person's act that something else took.
+    ///
+    /// `awaiting_repair -> running` alone — see [`a_persons_edge`].
+    NotAPersonsAct { from: JobStatus, to: JobStatus },
 }
 
 impl fmt::Display for IllegalTransition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            IllegalTransition::NotAPersonsAct { from, to } => write!(
+                f,
+                "{} -> {} is a person's act, and only a person may take it",
+                from.as_wire(),
+                to.as_wire()
+            ),
             IllegalTransition::FromTerminal { from, to } => write!(
                 f,
                 "{} is terminal and has no edge to {}",
@@ -399,6 +410,14 @@ impl core::error::Error for IllegalTransition {}
 /// guard on an edge that does not exist has nothing to be asked about, and
 /// reporting a failed condition for a move nothing sanctions would name the
 /// wrong defect.
+/// Whether only a person may take this edge.
+///
+/// `awaiting_repair -> running` is `rerun_checks` and nothing else: Fleet
+/// running a held Job's Checks again on its own would be a loop.
+pub(crate) fn a_persons_edge(from: JobStatus, to: JobStatus) -> bool {
+    from == AwaitingRepair && to == Running
+}
+
 pub(crate) fn admits(
     from: JobStatus,
     to: &Target,

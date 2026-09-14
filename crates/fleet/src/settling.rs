@@ -268,7 +268,7 @@ where
             &landed.submission,
             declared.as_ref(),
             &Lifted::of(&job),
-            entered_with.as_ref(),
+            crate::gate::Began::at(entered_with.as_ref()),
             &recorded,
             self.work(),
             self.budget(),
@@ -382,7 +382,7 @@ where
     /// evidence could land here — `crate::landing`'s module doc — so what
     /// this step's own catch-up came to is `note_delivery`'s row, not
     /// anything this call computed.
-    async fn guarded_against_unpushed_delivery(
+    pub(crate) async fn guarded_against_unpushed_delivery(
         &self,
         job_id: &JobId,
         step: &ResolvedStep,

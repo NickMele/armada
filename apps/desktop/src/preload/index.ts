@@ -207,6 +207,10 @@ const api: BridgeApi = {
   // reason crosses, because nothing is being disagreed with.
   rerunGate: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.rerunGate, jobId),
 
+  // Run a stopped step's Checks again. Its own entry beside `rerunGate`'s, for
+  // the trigger the two partition on — `#1105`.
+  rerunChecks: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.rerunChecks, jobId),
+
   // Ask a Job to show its work. Its own entry because it moves nothing on the
   // Job: what comes back is a set of frames, or why there is none. `spec` names
   // which to run; without one Fleet runs the last a Drone named.

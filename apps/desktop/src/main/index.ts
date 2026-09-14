@@ -546,6 +546,11 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.rerunGate, (_event, jobId: string) =>
     connection?.commands.rerunGate(jobId),
   );
+  // A stopped step's own Checks, asked again. Its own channel beside the
+  // gate re-run's: `#1105`, and the two triggers partition the same way.
+  ipcMain.handle(CHANNELS.rerunChecks, (_event, jobId: string) =>
+    connection?.commands.rerunChecks(jobId),
+  );
   ipcMain.handle(CHANNELS.showAgain, (_event, jobId: string, spec?: string) =>
     connection?.commands.showAgain(jobId, spec),
   );

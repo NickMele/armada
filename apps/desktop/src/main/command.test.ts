@@ -145,6 +145,22 @@ it("drops a blank note rather than refusing the restart", async () => {
   expect(asked[0]?.body).toBe("");
 });
 
+/**
+ * `#1105`. `rerunGate`'s route sends no body either; this is the same act's
+ * shape, on the wire it re-runs.
+ */
+it("sends no body asking a stopped step's checks to run again", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  const answer = await commands.rerunChecks(A_JOB.id);
+
+  expect(answer.ok).toBe(true);
+  expect(asked).toHaveLength(1);
+  expect(asked[0]?.path).toBe(`/jobs/${A_JOB.id}/rerun_checks`);
+  expect(asked[0]?.body).toBe("");
+});
+
 /** Surrounding whitespace is not part of what a person said. */
 it("trims what it sends", async () => {
   const asked: Asked[] = [];

@@ -526,6 +526,53 @@ fn a_job_level_trigger_cannot_be_made_into_a_step_stop() {
     }
 }
 
+/// **A re-run of the Checks leaves `stopped` and is not a run.** It keeps the
+/// verdict and the clock, reads back off the row it writes as itself rather
+/// than as a restart, and is refused onto a step that did not stop. #1105.
+#[test]
+fn a_rerun_of_the_checks_leaves_stopped_without_beginning_a_run() {
+    let why = gate_failure().expect("gate_failure is step-level");
+    let stopped = step(
+        &step(&running(), &first(), StepTarget::Running),
+        &first(),
+        StepTarget::Stopped(why),
+    );
+    let entered = stopped
+        .step(&first())
+        .expect("the row")
+        .entered_at()
+        .clone();
+
+    let rechecking = step(&stopped, &first(), StepTarget::Rechecking(why));
+    let row = rechecking.step(&first()).expect("the row");
+    assert_eq!(row.state(), StepState::Running);
+    assert_eq!(
+        row.last_verdict(),
+        Some(StepVerdict::Failed(why)),
+        "nothing has ruled yet"
+    );
+    assert_eq!(
+        row.entered_at(),
+        &entered,
+        "the run is still the one that stopped"
+    );
+    assert!(!StepTarget::Rechecking(why).begins_a_run());
+
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Stopped, StepState::Running, Some(why), None),
+        Some(StepTarget::Rechecking(why))
+    );
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Stopped, StepState::Running, None, None),
+        Some(StepTarget::Running),
+        "a restart across the same edge carries no trigger"
+    );
+    assert!(matches!(
+        running().transition_step(&first(), StepTarget::Rechecking(why), Actor::Human, when()),
+        Err(IllegalStepTransition::NotAStoppedStep { .. })
+    ));
+}
+
 fn gate_failure() -> Option<StepLevelTrigger> {
     StepLevelTrigger::of(EscalationTrigger::GateFailure)
 }

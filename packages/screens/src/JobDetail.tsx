@@ -113,6 +113,7 @@ function OneJob({
   stale,
   now,
   acting,
+  rerunningChecks,
   approving,
   deciding,
   observed,
@@ -139,6 +140,7 @@ function OneJob({
   onOverrule,
   onSendBack,
   onRerun,
+  onRerunChecks,
   onShowAgain,
   onReport,
   onApprove,
@@ -686,11 +688,13 @@ function OneJob({
                   opens={opensRecords}
                   render={render}
                   acting={acting}
+                  rerunningChecks={rerunningChecks}
                   stale={stale}
                   onAct={onAct}
                   onRedirect={onRedirect}
                   onOverrule={onOverrule}
                   onRerun={onRerun}
+                  onRerunChecks={onRerunChecks}
                 />
               ),
               // A question outranks the render's own notice: nothing else on

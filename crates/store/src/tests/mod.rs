@@ -36,6 +36,7 @@ mod preferences;
 mod process;
 mod proving;
 mod rebuilding;
+mod rechecking;
 mod reconstruct;
 mod report;
 mod repositories;

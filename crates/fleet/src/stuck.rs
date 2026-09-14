@@ -1,4 +1,4 @@
-//! The four live facts a classification needs, gathered.
+//! The live facts a classification needs, gathered.
 //!
 //! `core_model::Stuck` is the rule — which acts a stopped Job admits, given
 //! what is true about it. This is the half that reads what is true: the slot,
@@ -138,6 +138,7 @@ where
             workflow_held: self
                 .served_by(job)
                 .is_ok_and(|served| served.workflows().contains_key(job.workflow_id())),
+            checks_rerunning: self.rechecking().holds(job.id()),
         }
     }
 

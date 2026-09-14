@@ -341,6 +341,7 @@ where
         // hears which act applies instead — and hears it before "a Drone is
         // still there", which is true of both and names neither.
         self.held_for_a_person(&job)?;
+        self.not_while_checks_run_again(&job)?;
         // Read before the slot is taken, because the slot is what decides
         // whether its absence refuses.
         let stopped = job.stopped_on().is_some();

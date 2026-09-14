@@ -179,6 +179,9 @@ impl JobStep {
                 | StepTarget::Returned(_)
                 | StepTarget::Revisited
                 | StepTarget::Retraced
+                // A re-run of the Checks has ruled nothing yet; the ruling
+                // that follows it writes the verdict.
+                | StepTarget::Rechecking(_)
                 | StepTarget::HeldForReview => self.last_verdict,
                 StepTarget::Advanced => Some(StepVerdict::Passed),
                 // **The verdict does not move on an override**, which is the
@@ -221,6 +224,7 @@ impl JobStep {
                 | StepTarget::Stopped(_)
                 | StepTarget::Overridden(_)
                 | StepTarget::Retrying(_)
+                | StepTarget::Rechecking(_)
                 | StepTarget::HeldForReview => self.entered_at.clone(),
             },
             updated_at: at,

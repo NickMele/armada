@@ -81,6 +81,29 @@ pub struct CheckOutput {
     pub output: Output,
 }
 
+/// Where `diff_nonempty` measures this step's change from.
+///
+/// **Three answers rather than an `Option`**, because a re-run of the Checks
+/// has neither a footprint nor nothing: it has what the stopped run's own
+/// `diff_nonempty` recorded, and a footprint read now would measure the step
+/// from where it stopped (#1105).
+#[derive(Clone, Copy, Debug)]
+pub enum Began<'a> {
+    /// What the worktree held when the step began, kept in the slot.
+    At(&'a Footprint),
+    /// A step Fleet never saw start, so nothing is known to have moved.
+    Unseen,
+    /// The stopped run's recorded outcome — `crate::rechecking`.
+    AsRecorded(bool),
+}
+
+impl<'a> Began<'a> {
+    /// The slot's reading, where it holds one.
+    pub fn at(footprint: Option<&'a Footprint>) -> Began<'a> {
+        footprint.map_or(Began::Unseen, Began::At)
+    }
+}
+
 // **`Ruling` lives in `crate::ruling` and is re-exported here.** It is the type
 // every other module in this crate reads, and it was the reason a file about
 // deciding was also the file everything imported.
@@ -101,7 +124,7 @@ pub use crate::ruling::Ruling;
 /// | `recorded` | What every step of this Job has submitted so far. Its two readers — the gaming check's baseline and a step's `reference_docs` — both reach it through [`AtStep::baseline`], which will not answer with anything but a strictly earlier step's |
 /// | `keeping` | Where a copy of the step's deliverable goes. The repository and the Job are the caller's to know, and a worktree path is not something to reverse-engineer either of them out of. **Not an `Option`** — every caller is gating a real Job in a real repository, and a gate that could rule without keeping what it read is the gate `#223` was filed against |
 /// | `lifted` | The excluded paths a Judge has already cleared for this Job, off its own scope revisions. **Handed in rather than derived** because this function is given a step and not a Job, and because [`Lifted`] has one constructor: a caller with a record in hand can produce one and nothing else can. A gate that re-refused a path `declare_scope` had accepted would fail the step for being the plan Fleet took, which is `#417`'s own complaint |
-/// | `entered_with` | What the worktree held when this step began, **after the boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s to place and not this function's. `diff_nonempty` is decided by comparing it against a second reading taken here — which is what catches the step that advanced having written nothing, where the check used to read the whole branch and count an earlier step's file as this step's work |
+/// | `began` | What the worktree held when this step began, or a re-run's recorded answer — [`Began`] — **after the boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s to place and not this function's. `diff_nonempty` is decided by comparing it against a second reading taken here — which is what catches the step that advanced having written nothing, where the check used to read the whole branch and count an earlier step's file as this step's work |
 /// | `policies` | What this repository has said about `auto_merge` and `review_gate`, folded across the Job's gating Manifests. **Handed in and never read here**, for `lifted`'s reason and one more: both settings are `Live`, so the answer is only true at the instant it is taken, and a gate that read the file for itself would be a second reader of a value the caller has already resolved. `crate::policy` is where it is built |
 /// | `room` | Where each Check waits for a place in the machine's one limit, shared with every other Job's, and whether the machine has the memory and disk. **Handed in for `lifted`'s reason** — the limits in force are the Fleet's to read, and a gate that began keeps them. `crate::places::Room` |
 /// | `announcing` | Where each Check is said to start and to finish while it runs. **Told, never read**: nothing below decides on it, and the ruling is what `crate::checking` hands back. Handed in because the entry it writes has to stand until the caller has written the ruling down, which is after this returns — `crate::underway` |
@@ -117,7 +140,7 @@ pub async fn rule_on<W>(
     evidence: &Submission,
     declared: Option<&DeclaredPaths>,
     lifted: &Lifted,
-    entered_with: Option<&Footprint>,
+    began: Began<'_>,
     recorded: &[(StepId, StepEvidence)],
     work: &W,
     budget: CheckBudget,
@@ -196,7 +219,8 @@ where
     // only where the step declares `diff_nonempty`: `crate::reuse` needs this
     // same reading to tell whether the worktree the gate is looking at is the
     // one the dry run measured.
-    let footprint_now = match wants_diff || dry_run.is_some() {
+    let measured = wants_diff && !matches!(began, Began::AsRecorded(_));
+    let footprint_now = match measured || dry_run.is_some() {
         false => None,
         true => match work.footprint(at.worktree()) {
             Ok(now) => Some(now),
@@ -211,9 +235,13 @@ where
         },
     };
     let moved = wants_diff
-        && footprint_now
-            .as_ref()
-            .is_some_and(|now| entered_with.is_some_and(|before| now.differs_from(before)));
+        && match began {
+            Began::At(before) => footprint_now
+                .as_ref()
+                .is_some_and(|now| now.differs_from(before)),
+            Began::Unseen => false,
+            Began::AsRecorded(moved) => moved,
+        };
     // **Several at a time, started fastest first, reported in declaration
     // order, each with its own budget, and never stopped at a failure.**
     // `crate::checking` owns all three properties; what matters here is that

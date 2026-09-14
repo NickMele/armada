@@ -173,7 +173,7 @@ where
             &submission,
             declared.as_ref(),
             &Lifted::of(&job),
-            entered_with.as_ref(),
+            crate::gate::Began::at(entered_with.as_ref()),
             &recorded,
             self.work(),
             self.budget(),
@@ -283,7 +283,11 @@ where
     /// not read what it needed, and asking again would spend a turn to be told
     /// what the record already holds. `store::step_evidence` answers the
     /// step's latest run, which is the run that stopped.
-    async fn submitted_already(&self, job: &Job, step: &StepId) -> Result<Submission, Adrift> {
+    pub(crate) async fn submitted_already(
+        &self,
+        job: &Job,
+        step: &StepId,
+    ) -> Result<Submission, Adrift> {
         let recorded = self
             .store()
             .lock()
@@ -347,7 +351,7 @@ where
 /// the cause was permanent; the rest say the gate answered, and which answer it
 /// gave is already on the step. A wildcard here would let a new ruling arrive
 /// spelled as something it is not, so the match is exhaustive.
-fn came_to(ruling: &Ruling) -> &'static str {
+pub(crate) fn came_to(ruling: &Ruling) -> &'static str {
     match ruling {
         Ruling::Advanced { .. } => "advanced",
         Ruling::Finished { .. } => "finished",

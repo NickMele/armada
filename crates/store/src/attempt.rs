@@ -217,9 +217,12 @@ pub(crate) fn attempt_now(
 ) -> Result<Attempt, DatabaseFault> {
     let runs: i64 = conn
         .query_row(
+            // A `stopped -> running` row carrying a trigger is a person's
+            // re-run of the Checks, and no Drone works it — `crate::rechecking`.
             "SELECT count(*) FROM job_events
              WHERE job_id = ?1 AND step_id = ?2
-               AND kind = 'step_transition' AND state_to = 'running'",
+               AND kind = 'step_transition' AND state_to = 'running'
+               AND NOT (state_from = 'stopped' AND reason_value IS NOT NULL)",
             (job_id.as_str(), step_id.as_str()),
             |row| row.get(0),
         )
@@ -290,6 +293,7 @@ pub(crate) fn spent_now(
             "SELECT count(*) FROM job_events
              WHERE job_id = ?1 AND step_id = ?2
                AND kind = 'step_transition' AND state_to = 'running'
+               AND NOT (state_from = 'stopped' AND reason_value IS NOT NULL)
                AND seq >= coalesce(
                    (SELECT max(seq) FROM job_events
                     WHERE job_id = ?1 AND step_id = ?2

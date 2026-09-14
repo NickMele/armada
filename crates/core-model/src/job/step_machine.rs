@@ -7,7 +7,8 @@
 //!
 //! **`stopped -> running` is one edge for two acts**, and which of them a Job
 //! admits is decided by whether it holds a Drone — `fleet::resume`'s to ask,
-//! not this file's. **`stopped -> advanced`, `advanced -> running`,
+//! not this file's. A person's re-run of the Checks crosses it too, as
+//! [`StepTarget::Rechecking`], which is not a run. **`stopped -> advanced`, `advanced -> running`,
 //! `running -> running` and `awaiting_human -> running` are narrowed**:
 //! [`StepTarget::Overridden`] walks the first, [`StepTarget::Returned`] and
 //! [`StepTarget::Retraced`] the second, [`StepTarget::Revisited`] the last
@@ -338,6 +339,14 @@ pub enum StepTarget {
     /// answers leaves the Job at `awaiting_review` for ever; that is a reaper's
     /// question and there is no reaper. It costs no Drone and no slot.
     HeldForReview,
+    /// A person runs a stopped step's Checks again, with no Drone.
+    ///
+    /// **It arrives at `running` and it is not a run.** A restart crosses the
+    /// same edge; the trigger the step stopped on rides the row so the two are
+    /// told apart, and `store::attempt` leaves this one out of the step's runs,
+    /// so no retry is spent (#1105). The ruling's own move out of `running`
+    /// follows it in the same call.
+    Rechecking(StepLevelTrigger),
 }
 
 impl StepTarget {
@@ -347,7 +356,8 @@ impl StepTarget {
             StepTarget::Running
             | StepTarget::Returned(_)
             | StepTarget::Revisited
-            | StepTarget::Retraced => StepState::Running,
+            | StepTarget::Retraced
+            | StepTarget::Rechecking(_) => StepState::Running,
             StepTarget::Advanced | StepTarget::Overridden(_) => StepState::Advanced,
             StepTarget::Stopped(_) => StepState::Stopped,
             StepTarget::Retrying(_) => StepState::Retrying,
@@ -383,9 +393,10 @@ impl StepTarget {
             | StepTarget::Revisited
             | StepTarget::Retraced
             | StepTarget::HeldForReview => None,
-            StepTarget::Stopped(why) | StepTarget::Overridden(why) | StepTarget::Retrying(why) => {
-                Some(*why)
-            }
+            StepTarget::Stopped(why)
+            | StepTarget::Overridden(why)
+            | StepTarget::Retrying(why)
+            | StepTarget::Rechecking(why) => Some(*why),
         }
     }
 
@@ -405,7 +416,8 @@ impl StepTarget {
             | StepTarget::HeldForReview
             | StepTarget::Stopped(_)
             | StepTarget::Overridden(_)
-            | StepTarget::Retrying(_) => None,
+            | StepTarget::Retrying(_)
+            | StepTarget::Rechecking(_) => None,
         }
     }
 
@@ -443,6 +455,13 @@ impl StepTarget {
         }
         if by.is_some() {
             return None;
+        }
+        // The one arrival at `running` carrying a trigger, which is what tells
+        // a re-run of the Checks from a restart across the same edge.
+        if from == StepState::Stopped && state == StepState::Running {
+            if let Some(why) = why {
+                return Some(StepTarget::Rechecking(why));
+            }
         }
         // The loop's other half, told apart the same way and by the same
         // column, and the person's road beside it: the two edges that arrive at
@@ -570,6 +589,11 @@ pub enum IllegalStepTransition {
     /// still standing where it sent the work back. With none, it is
     /// [`StepAlreadyAdvanced`](Self::StepAlreadyAdvanced) under another name.
     NothingToRetrace { step_id: StepId },
+    /// A re-run of the Checks was aimed at a step that did not stop.
+    ///
+    /// [`StepTarget::Rechecking`] opens no run, so onto any other state it
+    /// would be a dispatch nothing counted.
+    NotAStoppedStep { step_id: StepId, from: StepState },
 }
 
 impl fmt::Display for IllegalStepTransition {
@@ -626,6 +650,12 @@ impl fmt::Display for IllegalStepTransition {
             IllegalStepTransition::NotAnAdvancedStep { step_id, from } => write!(
                 f,
                 "step `{}` is {} and a loop returns to or retraces only a step that advanced",
+                step_id.as_str(),
+                from.as_wire()
+            ),
+            IllegalStepTransition::NotAStoppedStep { step_id, from } => write!(
+                f,
+                "step `{}` is {} and its Checks are run again only once it has stopped",
                 step_id.as_str(),
                 from.as_wire()
             ),
@@ -751,6 +781,12 @@ pub(crate) fn admits_step(
     if from == StepState::AwaitingHuman && matches!(to, StepTarget::Running) {
         return Err(IllegalStepTransition::StepIsHeld {
             step_id: step_id.clone(),
+        });
+    }
+    if from != StepState::Stopped && matches!(to, StepTarget::Rechecking(_)) {
+        return Err(IllegalStepTransition::NotAStoppedStep {
+            step_id: step_id.clone(),
+            from,
         });
     }
     if !matches!(from, StepState::Running | StepState::AwaitingHuman)

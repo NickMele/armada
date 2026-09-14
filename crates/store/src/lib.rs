@@ -82,6 +82,8 @@ mod proposing;
 /// here that is not keyed by a Job.**
 mod proving;
 mod read;
+/// Giving a Job's resources back without giving up its record.
+mod rechecking;
 /// Which comments on a Job's pull request have already reached a Drone.
 mod remarks;
 /// What a person says went wrong, kept after the Job it is about is gone.
@@ -90,7 +92,6 @@ mod repositories;
 /// A ULID, a whole handle or a bare number in, one Job out — **a second way
 /// in and never a second key.**
 mod resolving;
-/// Giving a Job's resources back without giving up its record.
 mod retain;
 mod retrace;
 mod reuse;

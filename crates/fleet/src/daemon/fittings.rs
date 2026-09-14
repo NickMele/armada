@@ -359,6 +359,7 @@ where
             proving: Arc::new(Mutex::new(crate::proving::Proving::default())),
             fixing_on_main: Mutex::new(std::collections::BTreeSet::new()),
             pressing: crate::showing_again::Pressing::default(),
+            rechecking: crate::rechecking::Rechecking::default(),
             rehearsals: crate::rehearsing::Rehearsals::default(),
             servers: crate::servers::Servers::default(),
             allowance: fittings.allowance,

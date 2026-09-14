@@ -10,7 +10,7 @@
 //! [`Recourse`], the acts Fleet will take now, spelled as
 //! `crates/ipc/operations.toml` spells the routes.
 //!
-//! # Four live facts, and they are why this is not Bridge's to compute
+//! # Live facts, and they are why this is not Bridge's to compute
 //!
 //! Bridge derived this from `status`, `current_step_id` and `assigned_drone`
 //! and got four of five refusals right. The fifth it could not: whether the
@@ -47,6 +47,7 @@ use crate::job::transition::TransitionReason;
 /// ordering of the five acts. `rerun_gate` is newer than that table and sits
 /// beside the override because it also keeps everything; the two are mutually
 /// exclusive by trigger, so which of them comes first is never observed.
+/// `rerun_checks` keeps everything too, beneath a different status.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Recourse {
     /// A person disagrees with a machine's decision and the stopped step
@@ -55,6 +56,9 @@ pub enum Recourse {
     /// The gate is asked again over evidence already submitted. The act for
     /// `gate_undecided`, where there is no decision to disagree with.
     RerunGate,
+    /// The stopped step's Checks run again on the worktree as it stands, with
+    /// no Drone. The act for a Check that failed where nothing needs redoing.
+    RerunChecks,
     /// An instruction into the session a live Drone is still holding.
     Redirect,
     /// A fresh Drone onto the worktree the last one left.
@@ -69,6 +73,7 @@ impl Recourse {
     pub const ALL: &'static [Recourse] = &[
         Recourse::OverrideVerdict,
         Recourse::RerunGate,
+        Recourse::RerunChecks,
         Recourse::Redirect,
         Recourse::RestartStep,
         Recourse::Redispatch,
@@ -79,6 +84,7 @@ impl Recourse {
         match self {
             Recourse::OverrideVerdict => "override_verdict",
             Recourse::RerunGate => "rerun_gate",
+            Recourse::RerunChecks => "rerun_checks",
             Recourse::Redirect => "redirect_drone",
             Recourse::RestartStep => "restart_step",
             Recourse::Redispatch => "redispatch_job",
@@ -117,10 +123,9 @@ pub enum DroneStanding {
     Unheard,
 }
 
-/// The four things Fleet knows about a stopped Job that its record does not
-/// say.
+/// What Fleet knows about a stopped Job that its record does not say.
 ///
-/// **A struct with named fields rather than four arguments**, so nothing can be
+/// **A struct with named fields rather than positional arguments**, so nothing can be
 /// passed in the wrong order, and rather than defaults, so nothing can be
 /// forgotten: every field has to be written at every call site, which is what
 /// makes "I did not read the store" impossible to spell as `checks_passed:
@@ -149,6 +154,11 @@ pub struct Standing {
     /// A definition renamed or deleted since the Job was created cannot be
     /// frozen into a replacement, so a redispatch has nothing to mint from.
     pub workflow_held: bool,
+    /// Whether a person's re-run of this Job's Checks is in flight.
+    ///
+    /// Fleet's memory and never the record. While it holds, the worktree is
+    /// being read, so nothing that puts a Drone on it or replaces it is offered.
+    pub checks_rerunning: bool,
 }
 
 /// One call the Drone reached for and was refused.
@@ -326,6 +336,17 @@ impl Stuck {
                 {
                     recourse.push(Recourse::RerunGate);
                 }
+                // **A mechanical Check failed, and nothing stands in the slot.**
+                // `fleet::rechecking` refuses on exactly these, #442's rule.
+                if job.status() == JobStatus::AwaitingRepair
+                    && trigger.trigger() == EscalationTrigger::GateFailure
+                    && !standing.checks_passed
+                    && standing.drone == DroneStanding::Gone
+                    && standing.worktree_on_disk
+                    && !standing.checks_rerunning
+                {
+                    recourse.push(Recourse::RerunChecks);
+                }
             }
             // **Which of the two resume acts applies is decided by the Drone,
             // not by the person**, so they are exclusive here exactly as
@@ -350,6 +371,7 @@ impl Stuck {
             if standing.drone == DroneStanding::Speakable {
                 recourse.push(Recourse::Redirect);
             } else if standing.worktree_on_disk
+                && !standing.checks_rerunning
                 && (stopped.is_some() || unheard_mid_step(job, &standing))
             {
                 recourse.push(Recourse::RestartStep);
@@ -500,6 +522,7 @@ fn redispatchable(job: &Job, standing: &Standing) -> bool {
             | JobStatus::Killed
     ) && job.origin().top_level().is_some()
         && standing.workflow_held
+        && !standing.checks_rerunning
 }
 
 /// The trigger a Job-level escalation recorded, out of the reason its last

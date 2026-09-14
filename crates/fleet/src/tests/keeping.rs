@@ -161,7 +161,7 @@ impl Repo {
             &note_evidence(),
             None,
             &Lifted::default(),
-            Some(&Footprint::nothing()),
+            crate::gate::Began::At(&Footprint::nothing()),
             &[],
             &FakeWorkProduct::changed(&[]),
             budget(),
