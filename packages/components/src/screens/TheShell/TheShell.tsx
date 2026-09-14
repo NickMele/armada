@@ -1,9 +1,9 @@
-import { ArmadaLockupHorizontal, ArmadaMark } from "@armada/brand";
 import { MessageSquare } from "lucide-react";
 import type { ReactNode } from "react";
 import { BoardEmptyState } from "../../compositions/BoardEmptyState/BoardEmptyState";
 import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
 import { StatusBar, type StatusBarProps } from "../../compositions/StatusBar/StatusBar";
+import { TitleBar } from "../../compositions/TitleBar/TitleBar";
 import { Button } from "../../primitives/Button/Button";
 import { Kbd, KbdChord } from "../../primitives/Kbd/Kbd";
 import { Sheet } from "../../primitives/Sheet/Sheet";
@@ -25,14 +25,22 @@ import { Sheet } from "../../primitives/Sheet/Sheet";
  * "layout broke on resize" restated in CSS.
  */
 export type TheShellProps = {
-  /**
-   * The app name, in the drag region the traffic lights sit in. **Absent
-   * draws Armada's own**: the horizontal lockup, or the mark alone when the
-   * rail is collapsed.
-   */
-  appName?: ReactNode;
-  /** Beneath the app name — the Manifest picker, on M1's shell. */
+  /** Beneath the rail's own section label — nothing draws here since #1087
+   *  moved the Manifest picker to the title row; kept for a caller that wants
+   *  the rail to carry something else. */
   railHeader?: ReactNode;
+  /**
+   * The repository picker, in the title row. **Moved out of the rail by
+   * #1087** — the row that used to be macOS's grey bar now carries it beside
+   * the traffic lights. Absent draws none.
+   */
+  repositoryPicker?: ReactNode;
+  /** Opens the command palette from the title row's search field. Absent draws no field. */
+  onSearch?: () => void;
+  /** Opens the composer from the title row's Dispatch control. Absent draws no control. */
+  onDispatch?: () => void;
+  /** Disabled while nothing is connected to dispatch into. */
+  dispatchDisabled?: boolean;
   surfaces: SidebarItem[];
   activeId?: string;
   /** The 48px icon rail. The surface decides, from the window's width. */
@@ -50,7 +58,7 @@ export type TheShellProps = {
   title?: ReactNode;
   /** The sentence under it — the counts, or what this view does. */
   summary?: ReactNode;
-  /** The controls at the head's trailing edge. `New job` is the primary. */
+  /** The controls at the head's trailing edge. `Dispatch` is the primary. */
   actions?: ReactNode;
   /** The panel body. The one region that scrolls. */
   children: ReactNode;
@@ -75,8 +83,11 @@ export type TheShellDock = {
 };
 
 export function TheShell({
-  appName,
   railHeader,
+  repositoryPicker,
+  onSearch,
+  onDispatch,
+  dispatchDisabled,
   surfaces,
   activeId,
   collapsed,
@@ -90,9 +101,15 @@ export function TheShell({
 }: TheShellProps) {
   return (
     <div className="armada-shell">
+      <TitleBar
+        repositoryPicker={repositoryPicker}
+        onSearch={onSearch}
+        onDispatch={onDispatch}
+        dispatchDisabled={dispatchDisabled}
+        helm={helmButtonOf(dock)}
+      />
       <div className="armada-shell__body">
         <Sidebar
-          appName={appName ?? brandOf(collapsed === true)}
           header={railHeader}
           surfaces={surfaces}
           activeId={activeId}
@@ -186,24 +203,21 @@ function Chord({ binding }: { binding: string }) {
 }
 
 /**
- * Armada's name in the drag region: the horizontal lockup, or the mark alone
- * when the rail collapses, which the owner asked for on 11 Sep 2026 after the
- * collapsed rail drew the wordmark clipped.
+ * Helm's title-row reopen control, from the same `dock` shape the edge strip
+ * reads — so the caller states the dock once and both controls agree on it.
  *
- * **Decided here, not by the caller.** `Shell` used to choose, and this
- * component's own default was the word "Armada", so every story drew text the
- * app never shows. `packages/brand/README.md` floors the lockup at a 20px cap
- * height, 26px overall; a 48px rail has no room for it, and a clipped lockup
- * is nothing where the mark alone is still the app's name.
- *
- * `title` gives either its accessible name; without one both render
- * `aria-hidden`. Nothing here is clickable: the drag region cannot hold
- * anything interactive.
+ * **Absent whenever the full dock is showing beside the content.** Drawn
+ * while folded (the strip's own state) and while closed outright: #1087 adds
+ * this control without removing the edge strip, which stays until #1094.
  */
-function brandOf(collapsed: boolean): ReactNode {
-  return collapsed ? (
-    <ArmadaMark size={20} title="Armada" />
-  ) : (
-    <ArmadaLockupHorizontal height={26} title="Armada" />
-  );
+function helmButtonOf(
+  dock: TheShellDock | undefined,
+): { questions: number; binding?: string; onOpen: () => void } | undefined {
+  if (dock === undefined) return undefined;
+  if (dock.open && dock.folded !== true) return undefined;
+  return {
+    questions: dock.questions ?? 0,
+    ...(dock.binding === undefined ? {} : { binding: dock.binding }),
+    onOpen: () => dock.onOpen(true),
+  };
 }

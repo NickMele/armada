@@ -1,5 +1,5 @@
-// The Board's one control: `New job`, with everything else the Board offers
-// in its menu.
+// The Board's one control: `Dispatch` (`New job` until #1087 renamed the
+// registry row), with everything else the Board offers in its menu.
 //
 // **One control, where there were six.** The head carried Refresh, Reported,
 // Held disk and New job, and the Board carried Clear and Delete in a row of
@@ -92,7 +92,7 @@ export function BoardActions({
         disabled={!live}
         menuLabel="Everything else on the Board"
       >
-        New job
+        Dispatch
       </SplitButton>
       <Dialog
         open={asking === "clear"}

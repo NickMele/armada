@@ -723,7 +723,7 @@ c              copy debug info
 b              report this job     (detail only) (confirms)
 x              kill                (confirms)
 X              kill & redispatch   (detail only) (confirms) (not built)
-n              new job
+n              dispatch
 /              search the current list
 1–6            state filter        (Job Board only, in tab order)
 a              approve             (dispatch card only)

@@ -345,6 +345,8 @@ export function SetupFrom({
           setScope(root);
           setSettingUp(to.manifest === undefined || settingUp);
         }}
+        onCompose={noop}
+        onSearch={noop}
         jobs={[]}
         boardJobs={[]}
         capacity={{ bound: 4, occupied: 0 }}

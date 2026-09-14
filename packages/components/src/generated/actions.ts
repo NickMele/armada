@@ -339,7 +339,7 @@ export const ACTIONS: readonly Action[] = [
     id: "new_job",
     kind: "Action",
     tier: "Contextual",
-    verb: "New job",
+    verb: "Dispatch",
     icon: null,
     iconAbsent: "undecided",
     shortcut: "n",

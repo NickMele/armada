@@ -28,8 +28,16 @@
 //
 // `Refresh` used to live in the bar. The design contract is explicit that the
 // bar carries no icons and that its only colour is the dot and the two counts,
-// so the control moved up beside `New job` and the bar is what it is specified
-// to be.
+// so the control moved up beside `Dispatch` (`New job` until #1087 renamed
+// it) and the bar is what it is specified to be.
+//
+// # The picker and Dispatch live in the title row, not here
+//
+// #1087 moved the repository picker out of the rail and put a second
+// `Dispatch` beside it, in the row `TheShell` draws over the traffic lights.
+// This file still renders the picker's markup — it is Bridge's own reading of
+// what Fleet serves — but hands it to `TheShell` as `repositoryPicker` rather
+// than `railHeader`.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -77,8 +85,12 @@ export type ShellProps = {
   /** Absent draws no head — see `TheShell`. One Job read whole passes none. */
   title?: string;
   summary?: string;
-  /** The head's trailing controls. `New job` is the one primary. */
+  /** The head's trailing controls. `Dispatch` is the one primary. */
   actions?: ReactNode;
+  /** Opens the composer. The title row's own Dispatch control — #1087 — beside the Board's own. */
+  onCompose: () => void;
+  /** Opens the command palette from the title row's search field. */
+  onSearch: () => void;
   /** Which surface is up, by its id in `surfaces.ts`. The rail marks it. */
   showing: string;
   /** Opens Fleet settings. The status bar's own held reason is one click from
@@ -112,6 +124,8 @@ export function Shell({
   title,
   summary,
   actions,
+  onCompose,
+  onSearch,
   showing,
   onSurface,
   onOpenLimits,
@@ -121,6 +135,7 @@ export function Shell({
 }: ShellProps) {
   const collapsed = useNarrow();
   const dock = useDock(collapsed);
+  const live = connection.state === "connected";
 
   return (
     <TheShell
@@ -155,7 +170,7 @@ export function Shell({
       activeId={showing}
       onSelect={onSurface}
       collapsed={collapsed}
-      railHeader={
+      repositoryPicker={
         <>
         <Select
           aria-label="Project"
@@ -173,17 +188,19 @@ export function Shell({
           )}
           <RepositoryOptions repositories={repositories} />
         </Select>
-        {/* Under the picker rather than in it: an option that opened a dialog would be a pick that picked nothing. */}
+        {/* Beside the picker rather than in it: an option that opened a dialog
+            would be a pick that picked nothing. Moved out of the rail and into
+            the title row with the picker itself — #1087. */}
         {onAddRepository === undefined ? null : (
-          // A block around it, so the rail's column does not stretch it and centre its label.
-          <div>
-            <Button variant="ghost" size="sm" onClick={onAddRepository}>
-              Add a repository
-            </Button>
-          </div>
+          <Button variant="ghost" size="sm" onClick={onAddRepository}>
+            Add a repository
+          </Button>
         )}
         </>
       }
+      onSearch={onSearch}
+      onDispatch={onCompose}
+      dispatchDisabled={!live}
       title={title}
       summary={summary}
       actions={actions}

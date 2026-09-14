@@ -41,7 +41,9 @@ export const ALIASES: Readonly<Record<string, readonly string[] | undefined>> = 
   redispatch: ["retry", "again", "rerun"],
   redirect: ["steer", "correct", "instruct"],
   restart_step: ["retry the step", "run the step again"],
-  new_job: ["dispatch", "start", "compose"],
+  // "dispatch" left the alias list on 2026-09-14 (#1087): it is the verb now,
+  // and an alias identical to the label it finds teaches nothing.
+  new_job: ["start", "compose"],
   copy_debug_info: ["clipboard", "support", "envelope"],
   report_job: ["bug", "file", "wrong"],
   observe: ["watch", "transcript", "terminal"],
