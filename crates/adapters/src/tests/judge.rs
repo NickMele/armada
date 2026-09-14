@@ -124,3 +124,16 @@ fn the_default_judge_model_is_the_value_the_settings_row_carries() {
     // checks costs would be a second Drone rather than a veto.
     assert_ne!(HeadlessAgent::judge_model(), HeadlessAgent::default_model());
 }
+
+/// A flag is read again by a model on the roster and stronger than the one that
+/// raised it, or the second reading is the first look asked twice.
+#[test]
+fn a_flag_is_read_again_on_a_stronger_model_than_raised_it() {
+    assert_eq!(HeadlessAgent::second_opinion_model(), "sonnet");
+    let roster = HeadlessAgent::models();
+    let at = |model| roster.iter().position(|named| *named == model);
+    assert!(
+        at(HeadlessAgent::second_opinion_model()) < at(HeadlessAgent::judge_model()),
+        "the roster runs strongest first"
+    );
+}

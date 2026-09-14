@@ -120,6 +120,7 @@ pub struct Fleet<H, V, W> {
     /// and it is empty after a restart because a proposal is not a record.
     proposals: Proposals,
     judge_model: Model,
+    second_opinion_model: Model,
     proposer_model: Model,
     links: Arc<dyn LinkLookup + Send + Sync>,
     ci_configuration: Arc<dyn CiConfiguration + Send + Sync>,

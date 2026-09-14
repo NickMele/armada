@@ -193,6 +193,7 @@ where
             client: Arc::clone(&self.judge),
             budget: self.judge_budget,
             default_model: self.judge_model.clone(),
+            second_opinion_model: self.second_opinion_model.clone(),
             environment: environment(
                 HostPaths {
                     path: &self.host.path,

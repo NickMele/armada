@@ -74,6 +74,12 @@ pub fn judge_model(named: Option<String>) -> Result<Model, SpawnConfigRefused> {
     resolved(named, HeadlessAgent::judge_model())
 }
 
+/// What a judged gaming flag is read a second time on. **No override**: raising
+/// the first look through `ARMADA_JUDGE_MODEL` is no reason to move the second.
+pub fn second_opinion_model() -> Result<Model, SpawnConfigRefused> {
+    Model::named(HeadlessAgent::second_opinion_model())
+}
+
 /// What a dispatch request is read by when nothing names one.
 ///
 /// `crates/config/settings.toml`'s `job-proposer-model` row reads `undecided`,

@@ -313,6 +313,7 @@ impl Bench {
                 client: Arc::new(judge),
                 budget: JudgeBudget::of(Duration::from_secs(20)),
                 default_model: Model::named("the-cheap-model").expect("a model name"),
+                second_opinion_model: Model::named("the-second-model").expect("a model name"),
                 environment: Environment::nothing(),
                 // The bench asserts on rulings, not on what a call said about
                 // itself while it was out — and it reaches no `api` and no

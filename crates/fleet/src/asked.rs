@@ -31,7 +31,8 @@ use crate::check_output::one_component;
 /// output and now briefs — and one sweep that knows all four is the only kind
 /// that can be reasoned about. A rule invented here would be a fifth answer
 /// nobody could find. What this owes `#69` is the bound: one file per
-/// criterion **and one per judged gaming pattern** per attempt per step, a
+/// criterion **and one per judged gaming pattern** per attempt per step, plus
+/// one for each flag read a second time, a
 /// panel sharing one, each roughly the branch diff plus the deliverable
 /// (`verification::A_DELIVERABLE`, 16 KiB) plus the Check tails. So a Job's
 /// briefs grow with its criteria and its declared patterns times its re-runs,
@@ -134,6 +135,20 @@ impl Asked {
         question: &str,
     ) -> Option<String> {
         self.written(gaming_file_name(step, attempt, pattern)?, question)
+    }
+
+    /// The same, for the second reading of a judged flag: one file beside the
+    /// first look's, so the two calls about one flag list as a pair.
+    pub(crate) fn kept_second_opinion(
+        &self,
+        step: &StepId,
+        attempt: Attempt,
+        pattern: GamingPattern,
+        question: &str,
+    ) -> Option<String> {
+        let first = gaming_file_name(step, attempt, pattern)?;
+        let name = format!("{}.second.txt", first.strip_suffix(".txt")?);
+        self.written(name, question)
     }
 
     fn written(&self, name: String, question: &str) -> Option<String> {

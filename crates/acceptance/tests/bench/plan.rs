@@ -335,6 +335,7 @@ fn no_judge() -> Judging {
         client: Arc::new(FakeJudge::that_fails("a Judge that should never be asked")),
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
+        second_opinion_model: Model::named("the-second-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
         asked: Asked::nowhere(),

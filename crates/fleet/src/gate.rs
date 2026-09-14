@@ -28,19 +28,21 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::time::Duration;
 
 use adapter_traits::{Changed, Footprint, WorkProduct};
 use checks_runner::Output;
 use core_model::{
-    Actor, AdvanceGate, CriterionId, DeclaredPaths, EscalationTrigger, IllegalTransition, Job,
-    Judgment, ResolvedCheck, ResolvedStep, StepCheck, StepEvidence, StepId, StepLevelTrigger,
-    Target, Timestamp, Transitioned, WhenRefused, WorkPlan,
+    Actor, AdvanceGate, CriterionId, DeclaredPaths, EscalationTrigger, GamingFlag,
+    IllegalTransition, Job, Judgment, ResolvedCheck, ResolvedStep, StepCheck, StepEvidence, StepId,
+    StepLevelTrigger, Target, Timestamp, Transitioned, WhenRefused, WorkPlan,
 };
 use verification::{
-    decide, out_of_bounds, Accepted, Answered, Baseline, CheckFailed, Delivered, InScope, Lifted,
-    OutcomeTurn, OutsideScope, Printed, Ran, Request, Submission, Verdict, Verified, A_DELIVERABLE,
+    decide, out_of_bounds, Accepted, Answered, Baseline, CheckFailed, Delivered, Flagged, InScope,
+    Lifted, OutcomeTurn, OutsideScope, Printed, Ran, Request, Submission, Verdict, Verified,
+    A_DELIVERABLE,
 };
 
 use crate::at_step::AtStep;
@@ -489,11 +491,13 @@ where
     // would otherwise advance, because that is the case it exists for: a
     // Mechanical Check passes gamed evidence by design, and a step already
     // stopped needs no second reason. It cannot take an advance away by
-    // failing the step — it routes elsewhere entirely.
+    // failing the step — it routes elsewhere entirely. A flag a second reading
+    // cleared stops nothing, and rides on the advance to be written down.
+    let mut cleared = Vec::new();
     if verdict.advanced() {
-        if let Some(suspect) = suspect(at, work, recorded, judging, &checks, &output, &judged).await
-        {
-            return suspect;
+        match suspect(at, work, recorded, judging, &checks, &output, &judged).await {
+            ControlFlow::Break(stopped) => return stopped,
+            ControlFlow::Continue(flags) => cleared = flags,
         }
     }
 
@@ -534,6 +538,7 @@ where
                     checks,
                     output,
                     judged,
+                    cleared,
                     held,
                 },
                 false => match at.next() {
@@ -542,12 +547,14 @@ where
                         checks,
                         output,
                         judged,
+                        cleared,
                     },
                     None => Ruling::Finished {
                         tell: OutcomeTurn::advanced(step, None, Verified::of(&ran)),
                         checks,
                         output,
                         judged,
+                        cleared,
                     },
                 },
             }
@@ -710,10 +717,12 @@ pub(crate) fn sent_back(step: &ResolvedStep, pass: core_model::Iteration) -> Sen
     }
 }
 
-/// The gaming look, where the step declares one. `None` is nothing flagged.
+/// The gaming look, where the step declares one. `Break` is the ruling that
+/// stops the step; `Continue` carries the flags a second reading cleared, empty
+/// where nothing was flagged.
 ///
 /// Its own function because it is the one part of the gate whose answer is not
-/// a [`Verdict`]: it returns a whole [`Ruling`] or nothing, and there is no
+/// a [`Verdict`]: it returns a whole [`Ruling`] or lets the step through, and there is no
 /// value it could hand back that `Verdict::but_for` would accept.
 async fn suspect<W>(
     at: AtStep<'_>,
@@ -726,19 +735,19 @@ async fn suspect<W>(
     // it and a step whose Judge never ran are different facts, and a gaming
     // flag must not erase the first.
     judged: &[Judgment],
-) -> Option<Ruling>
+) -> ControlFlow<Ruling, Vec<GamingFlag>>
 where
     W: WorkProduct,
     W::Error: Error + Send + Sync + 'static,
 {
     let step = at.step();
     if !step.asks_about_gaming() {
-        return None;
+        return ControlFlow::Continue(Vec::new());
     }
     let patch = match work.patch(at.worktree()) {
         Ok(patch) => patch,
         Err(cause) => {
-            return Some(Ruling::CouldNotDecide {
+            return ControlFlow::Break(Ruling::CouldNotDecide {
                 artifact: "the step's patch",
                 cause: Box::new(cause),
                 checks: checks.to_vec(),
@@ -757,14 +766,16 @@ where
         .and_then(|reference| at.baseline(reference, recorded));
     let baseline = named.map(|(step, evidence)| Baseline::of(step.as_str(), evidence));
     match judging::gaming(at, &patch, baseline, judging).await {
-        Ok(None) => None,
-        Ok(Some(flagged)) => Some(Ruling::Suspect {
-            flagged,
-            checks: checks.to_vec(),
-            output: output.to_vec(),
-            judged: judged.to_vec(),
-        }),
-        Err(cause) => Some(Ruling::CouldNotDecide {
+        Ok(flags) => match Flagged::among(flags) {
+            Ok(flagged) => ControlFlow::Break(Ruling::Suspect {
+                flagged,
+                checks: checks.to_vec(),
+                output: output.to_vec(),
+                judged: judged.to_vec(),
+            }),
+            Err(cleared) => ControlFlow::Continue(cleared),
+        },
+        Err(cause) => ControlFlow::Break(Ruling::CouldNotDecide {
             artifact: "the gaming check's answer",
             cause: Box::new(cause),
             checks: checks.to_vec(),

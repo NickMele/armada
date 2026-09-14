@@ -11,7 +11,7 @@
 
 use std::error::Error;
 
-use core_model::{EscalationTrigger, Judgment, StepCheck, StepLevelTrigger};
+use core_model::{EscalationTrigger, GamingFlag, Judgment, StepCheck, StepLevelTrigger};
 use verification::{CheckFailed, Flagged, NotWhatTheStepAsked, OutcomeTurn, Refusals};
 
 use crate::gate::CheckOutput;
@@ -59,6 +59,10 @@ pub enum Ruling {
         /// Every criterion the Judge answered. Empty on the ordinary step,
         /// which asks nothing and did not drift.
         judged: Vec<Judgment>,
+        /// Gaming flags a second reading cleared, written down because they are
+        /// the record of how often the first look is wrong. Empty wherever no
+        /// flag was raised.
+        cleared: Vec<GamingFlag>,
     },
     /// The last step passed. The Drone is told, then terminated, and the Job
     /// reaches `completed_success`. **The one advance that still tells its
@@ -69,6 +73,7 @@ pub enum Ruling {
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
+        cleared: Vec<GamingFlag>,
     },
     /// Every tier the step declared held, and the gate answers a person.
     /// **The Job reaches `awaiting_review` and the step holds at
@@ -99,6 +104,7 @@ pub enum Ruling {
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
+        cleared: Vec<GamingFlag>,
         held: HeldBecause,
     },
     /// A Check did not pass, the step's retry budget has room, and the failure
@@ -195,8 +201,8 @@ pub enum Ruling {
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
     },
-    /// Every Check passed, the Judge did not refuse, and the gaming check
-    /// flagged the evidence. **The Job escalates as `evidence_suspect`**, which
+    /// Every Check passed, the Judge did not refuse, and a gaming flag stood
+    /// once a second reading was asked about it. **The Job escalates as `evidence_suspect`**, which
     /// is a different claim from a refusal: the work satisfies the step as
     /// written, and the way it satisfies it is not to be trusted.
     ///
@@ -304,6 +310,21 @@ impl Ruling {
         match self {
             Ruling::Suspect { flagged, .. } => Some(flagged),
             _ => None,
+        }
+    }
+
+    /// Every gaming flag this ruling writes down, standing and cleared.
+    ///
+    /// **Not only [`flagged`](Ruling::flagged)**: a step whose every flag a
+    /// second reading cleared advances, and those flags are still the record of
+    /// what the first look got wrong.
+    pub fn gaming_flags(&self) -> &[GamingFlag] {
+        match self {
+            Ruling::Suspect { flagged, .. } => flagged.cited(),
+            Ruling::Advanced { cleared, .. }
+            | Ruling::Finished { cleared, .. }
+            | Ruling::HeldForReview { cleared, .. } => cleared,
+            _ => &[],
         }
     }
 

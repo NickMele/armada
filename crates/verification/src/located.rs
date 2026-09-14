@@ -37,7 +37,7 @@ use crate::quoted;
 /// **Quotations are read in the order they were written**, and the first one
 /// the patch holds wins. A citation naming two places has to pick one, and the
 /// one it led with is the one it was arguing from.
-pub(crate) fn in_the_patch(patch: &Patch, cited: &str) -> Option<CitedAt> {
+pub(crate) fn in_the_patch(patch: &Patch, cited: &str) -> Option<Found> {
     let spans: Vec<String> = quoted::spans(cited)
         .iter()
         .flat_map(|span| quoted::elisions(span))
@@ -47,11 +47,18 @@ pub(crate) fn in_the_patch(patch: &Patch, cited: &str) -> Option<CitedAt> {
     spans.iter().find_map(|span| holding(patch, span))
 }
 
+/// Where a citation is, and whether the line holding it is a comment.
+pub(crate) struct Found {
+    pub(crate) at: CitedAt,
+    /// Read against the file's language. See [`commented`](mod@crate::commented).
+    pub(crate) commented: bool,
+}
+
 /// The first line of the patch holding `span`, as a location.
 ///
 /// `span` is already normalised by [`quoted::words`], which pads at both ends
 /// — so `contains` here is a word-boundary test and not a substring one.
-fn holding(patch: &Patch, span: &str) -> Option<CitedAt> {
+fn holding(patch: &Patch, span: &str) -> Option<Found> {
     let mut file: Option<String> = None;
     // The post-image line the next added or context line will be. Meaningless
     // until a hunk header sets it, and no line is offered before one does.
@@ -80,10 +87,13 @@ fn holding(patch: &Patch, span: &str) -> Option<CitedAt> {
             post = post.map(|n| n + 1);
         }
         if found {
-            let path = RepoPath::new(file?);
-            return Some(match at {
-                Some(line) => CitedAt::at_line(path, line),
-                None => CitedAt::in_file(path),
+            let file = file?;
+            return Some(Found {
+                commented: crate::commented::is_comment(&file, marked.text),
+                at: match at {
+                    Some(line) => CitedAt::at_line(RepoPath::new(&file), line),
+                    None => CitedAt::in_file(RepoPath::new(&file)),
+                },
             });
         }
     }

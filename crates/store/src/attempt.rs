@@ -159,7 +159,7 @@ impl Store {
         let rows = self
             .collect(
                 "SELECT step_id, attempt, flagged_at, pattern, cited, cited_file, cited_line,
-                        asked, brief_path
+                        asked, brief_path, cleared_why, cleared_brief_path
                  FROM job_step_gaming_flags WHERE job_id = ?1
                  ORDER BY step_id, attempt, ordinal",
                 job_id,
@@ -441,6 +441,7 @@ fn flag(row: &Row<'_>) -> Result<GamingFlag, RowError> {
         at: crate::gaming::cited_at(row)?,
         asked: maybe(row, "asked")?,
         brief_path: maybe(row, "brief_path")?,
+        cleared: crate::gaming::cleared(row)?,
     })
 }
 

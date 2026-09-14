@@ -9,24 +9,27 @@
 //! a verdict — each is a [`CallFailed`]. A machine that cannot answer must not
 //! produce one, in either direction.
 //!
-//! # Three, and the line is not a line count
+//! # Four, and the line is not a line count
 //!
 //! `marking` names no question and reads no answer: it holds which call is out
 //! and takes the mark down however that call ends. `running` names no
-//! criterion: it is a child process, a pipe and a budget. `looks` is the only
-//! half that knows what is being asked and what the answer means, and the only
-//! one that costs money — which is why the other two can be read without it.
+//! criterion: it is a child process, a pipe and a budget. `looks` and
+//! `flagging` know what is being asked and what the answer means, and are the
+//! only ones that cost money; `flagging` is the gaming look, apart because it
+//! is the one look that asks twice.
 //!
 //! What all three share stays here: the budget, what a pass is configured with,
 //! which of the five looks is out, and every way a call can fail. [`CallFailed`]
-//! in particular belongs to no one half — `looks` raises four of its variants
+//! in particular belongs to no one half — `looks` and `flagging` raise four of its variants
 //! and `running` the other five.
 
+mod flagging;
 mod looks;
 mod marking;
 mod running;
 
-pub(crate) use looks::{converging, gaming, judged, widening, JudgeFold};
+pub(crate) use flagging::gaming;
+pub(crate) use looks::{converging, judged, widening, JudgeFold};
 pub use marking::{Aloft, Marking};
 pub(crate) use running::{said, watched};
 
@@ -73,6 +76,10 @@ pub struct Judging {
     pub budget: JudgeBudget,
     /// What a step naming no model of its own is judged by.
     pub default_model: Model,
+    /// What a judged gaming flag is read a second time on, whatever the step
+    /// names: the step's dial is for the looks it declared. Resolved by the
+    /// composition root, for `default_model`'s reason.
+    pub second_opinion_model: Model,
     /// What the call's process holds. Fleet's own, because a Judge call
     /// authenticates as Fleet — the one place it differs from a Drone.
     pub environment: Environment,

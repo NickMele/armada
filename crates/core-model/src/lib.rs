@@ -38,7 +38,7 @@ pub use job::{
     handle_of, names_a_credential, AcceptanceCriterion, AdmissionHold, AdvanceGate, AllowedCommand,
     Area, Attachment, Attempt, AutoMerge, BadPattern, Became, BlankBranch, BlankModel, BlankTitle,
     Branch, Breakage, BreakageClaim, Bucket, BudgetHold, ChangedTest, CheckOutcome, Citation,
-    CitedAt, Collision, Confidence, ContextSource, Covers, CriteriaOwed, CriterionId,
+    CitedAt, ClearedFlag, Collision, Confidence, ContextSource, Covers, CriteriaOwed, CriterionId,
     CriterionSource, DecidedBy, DeclarePlanAt, DeclaredPaths, DependencyDirection, DependencyEdge,
     Dismissal, DispatchOrigin, DroneAssigned, DroneId, DroneMoved, DronePresence, DroneStanding,
     Edge, EscalationTrigger, EvidenceRef, EvidenceScope, EvidenceType, Facts, Finding, FixWaiter,

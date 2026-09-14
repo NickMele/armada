@@ -149,7 +149,7 @@ fn a_clean_submission_trips_nothing() {
          +    expect(limiter.allow(0)).toBe(false);\n",
     );
     assert!(in_the_diff(&honest, EVERY_MECHANICAL).is_empty());
-    assert!(Flagged::among(Vec::new()).is_none());
+    assert!(Flagged::among(Vec::new()).is_err());
 }
 
 /// A step is looked at for what it declared and nothing else. A gutted test
@@ -285,6 +285,7 @@ fn a_flag_carries_its_citation_and_a_clearance_carries_nothing() {
             // Whoever made the call knows where it was kept; this crate does
             // not touch a filesystem.
             brief_path: None,
+            cleared: None,
         })
     );
     assert_eq!(

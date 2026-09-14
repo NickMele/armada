@@ -25,6 +25,7 @@
 //! declared scope is two answers — [`scope`](mod@scope) is the one place.
 
 mod answered;
+mod commented;
 mod converging;
 mod drift;
 mod forbidden;
@@ -38,7 +39,9 @@ mod product;
 mod quoted;
 mod request;
 mod review;
+mod scanned;
 mod scope;
+mod second_opinion;
 mod shown;
 mod submission;
 mod widening;
@@ -53,7 +56,7 @@ pub use core_model::{
 };
 pub use drift::{drift_criterion, DECLARED_PLAN_DRIFT};
 pub use forbidden::{forbidden, forbidden_among, out_of_bounds, Forbidden};
-pub use gaming::{in_the_diff, judged_patterns, Baseline, Flagged, GamingBrief};
+pub use gaming::{judged_patterns, Baseline, Flagged, GamingBrief};
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
 pub use judge::{field, Brief, Refusals, Unreadable};
 pub use mechanical::{
@@ -66,7 +69,9 @@ pub use product::{
 };
 pub use request::Request;
 pub use review::{AcceptedReview, Review, ReviewRefused};
+pub use scanned::in_the_diff;
 pub use scope::{drifted, InScope, Lifted, OutsideScope};
+pub use second_opinion::SecondOpinion;
 pub use shown::{digest, digest_of};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};
 pub use widening::{NotWidened, Widened, WideningBrief};

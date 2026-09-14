@@ -226,6 +226,15 @@ export type Flagged = {
    * failed — a flag is not lost because a disk was.
    */
   brief_path?: string;
+  /**
+   * What a second reading said where it disagreed with this flag. Since 13.50.
+   *
+   * **Absent is a flag that stands**, and only a standing flag stops a step: a
+   * step whose every flag carries this advanced. `why` is the second reading's
+   * reason in its own words; `brief_path` is where its brief was kept, absent
+   * where nothing could be written.
+   */
+  cleared?: { why: string; brief_path?: string };
 };
 
 /**

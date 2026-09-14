@@ -438,7 +438,8 @@ impl Stopped {
                 ));
             }
         }
-        for flag in &self.flagged {
+        // A flag a second reading cleared is not why the step stopped.
+        for flag in self.flagged.iter().filter(|flag| flag.stands()) {
             cited = true;
             block.push_str(&format!(
                 "\n\n  Pattern    {}\n  Found in   {}",
