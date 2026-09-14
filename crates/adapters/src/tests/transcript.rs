@@ -664,6 +664,25 @@ fn an_approval_ask_names_the_job_it_is_for() {
     assert_eq!(detail.shown(), "01JOB9");
 }
 
+/// **A Helm session's own tools arrive prefixed by the MCP server**, never
+/// bare — `mcp__armada-fleet__ask_person_to_approve`, `ipc::door::SERVER`
+/// named. `detail` reads `input` alone, so the prefix on `name` changes
+/// nothing about what this decodes; `packages/screens/src/helm-thread.ts` is
+/// where the prefix has to be read, and this is the row it reads.
+#[test]
+fn an_approval_ask_names_the_job_it_is_for_prefixed_by_helms_own_server_too() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"mcp__armada-fleet__ask_person_to_approve",
+              "input":{"job_id":"01JOB9"}}]}}"#,
+    );
+    let [DroneEvent::Called { tool, detail, .. }] = &read[..] else {
+        panic!("{read:?}");
+    };
+    assert_eq!(tool, "mcp__armada-fleet__ask_person_to_approve");
+    assert_eq!(detail.shown(), "01JOB9");
+}
+
 /// The bound is `CallDetail`'s and is reached here the same way a `Bash`
 /// command reaches it — a second bound for this case would be a second
 /// mechanism where one already works.

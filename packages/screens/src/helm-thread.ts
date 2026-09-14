@@ -12,8 +12,21 @@ import type { HelmThreadRow } from "@armada/components";
 import { clock } from "./duration";
 import { money } from "./facts";
 
-/** `ask_person_to_approve`'s name on the wire — the inventory's key and the door's tool, alike. `#1041`. */
+/** `ask_person_to_approve`'s name on the wire — the inventory's key. `#1041`. */
 export const APPROVAL_ASK_TOOL = "ask_person_to_approve";
+
+/**
+ * Whether a `called` row's `tool` is `ask_person_to_approve` — bare, the
+ * inventory's own spelling, or as Helm's session actually names it,
+ * `mcp__<server>__ask_person_to_approve`. The server name is `ipc::door::SERVER`,
+ * named once in `crates/fleet/src/helm/hosting.rs` and never assumed here: a
+ * suffix match reads right whatever it is spelled, which a Drone's own eight
+ * tools reach through a different door and never collide with. The one place
+ * this fold decides it, so a caller never repeats the rule.
+ */
+function isApprovalAsk(tool: string): boolean {
+  return tool === APPROVAL_ASK_TOOL || tool.endsWith(`__${APPROVAL_ASK_TOOL}`);
+}
 
 /**
  * One `ask_person_to_approve` call, read off its own `called` row: the call's
@@ -38,8 +51,8 @@ export type HelmFoldedRow = Omit<HelmThreadRow, "cards"> & { asks?: HelmApproval
  * every event between — `refused`, `started`, `answered`, `background_work`,
  * `unrecognised` and anything else the wire ever adds — draws nothing and
  * does not break the reply open. `called` is the one exception: where the
- * tool is `ask_person_to_approve`, its Job joins the open reply's `asks`
- * rather than being dropped with the rest.
+ * tool is the approval ask, bare or prefixed (`isApprovalAsk`), its Job joins
+ * the open reply's `asks` rather than being dropped with the rest.
  */
 export function helmRowsOf(items: readonly HelmThreadItem[]): HelmFoldedRow[] {
   const rows: HelmFoldedRow[] = [];
@@ -86,7 +99,7 @@ export function helmRowsOf(items: readonly HelmThreadItem[]): HelmFoldedRow[] {
       open.texts.push(saw.text);
       continue;
     }
-    if (saw.event === "called" && saw.tool === APPROVAL_ASK_TOOL) {
+    if (saw.event === "called" && isApprovalAsk(saw.tool)) {
       const jobId = saw.detail.trim();
       if (jobId !== "") {
         open ??= { id: item.id, at: clock(item.turn.ts), texts: [], asks: [] };
