@@ -7,13 +7,8 @@
 //! only, because a restart ends the build it would name.
 //!
 //! **The warm-up runs off the turn loop**, which awaits every Job in turn and
-//! would hold them all for the length of a workspace build. Its warm-up
-//! commands take a place in the machine's one line of Checks
-//! (`crate::places`, #1063), asking as [`Asking::SeedWarmup`](crate::places::Asking::SeedWarmup) —
-//! ranked last of all, so it never holds back a gate, a Drone's run or a fix
-//! draft. **Still at most one warm-up at a time on the machine**, kept
-//! alongside the place: two repositories' warm-ups competing for the same
-//! machine is wasteful however many places are free.
+//! would hold them all for the length of a workspace build. Its commands take
+//! a place beside the Checks, ranked last of all (`crate::places`, #1063).
 //!
 //! **What each worktree got is written beside the Job's log**, under
 //! `.armada/seeds/`, because the run sheet asks after a restart too and no
