@@ -303,6 +303,12 @@ where
         if matches!(landed, Landing::Merged { .. }) {
             self.landing_announced(job).await;
         }
+        // A fix's claims held for this, and the Jobs pointed at it hear. #1001.
+        match landed {
+            Landing::Merged { .. } => self.fix_settled(job, true).await,
+            Landing::ClosedUnmerged { .. } => self.fix_settled(job, false).await,
+            Landing::Open { .. } | Landing::Unknown => {}
+        }
         let noticed = Noticed {
             job: job.clone(),
             landed,

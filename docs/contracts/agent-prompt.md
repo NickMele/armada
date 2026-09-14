@@ -472,6 +472,12 @@ note through `leave_note` (#1000). Either side's claim counts: a step's
 declared plan, or the Job's `write_targets`. A path already announced for a
 pair is not said again.
 
+It also fires when this Job is pointed at a fix another Job claims, because
+one of its failed Checks printed the claimed test (#1001), and again when that
+fix lands or ends without landing. A fix item says the test is another Job's to
+fix and that this Job's checks still fail on it until the fix lands; the
+sentences about shared files are left out of a turn that carries only fixes.
+
 **Queued, then spaced.** News waits until the Drone has gone `fleet::peers::SPACING`
 without a peer turn, and one turn names at most `fleet::peers::AT_MOST` items. Where no
 Drone is live, it rides the next opening brief as a block, and the landing

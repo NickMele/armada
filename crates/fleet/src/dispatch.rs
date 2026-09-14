@@ -214,6 +214,22 @@ where
         // spend folded afterwards is a Job that reads as costing less than it
         // did. See [`paid_so_far`](Fleet::paid_so_far).
         self.paid_so_far(working).await?;
+        // A failed Check printing a test another Job is fixing points this Job
+        // at that fix. #1001.
+        let printed: Vec<_> = ruling
+            .output()
+            .iter()
+            .map(|kept| (kept.check.as_str(), &kept.output))
+            .collect();
+        let failed = crate::fixing::failures_said(
+            ruling
+                .checks()
+                .iter()
+                .filter(|check| !check.outcome.advances())
+                .map(|check| check.name.as_str()),
+            &printed,
+        );
+        self.pointed_at_fixes(job_id, &failed).await;
         match ruling {
             // **The Drone ends here, and a fresh one starts the next step on
             // the same worktree.** It used to be told and carried on: same
@@ -712,8 +728,9 @@ where
             self.stopped_servers_of(moved.job.id()).await;
             self.released_ports(&moved.job).await;
             // A fix that ended gives back the test it claimed, so a test broken
-            // again can be claimed again. #999.
-            self.released_breakages(&moved.job).await;
+            // again can be claimed again (#999) — or holds it until its pull
+            // request settles, telling the Jobs pointed at it either way (#1001).
+            self.fix_ended(&moved.job).await;
         }
         self.publish(ipc::Event::JobStateChanged((&moved.event).into()));
         Ok(moved.job)

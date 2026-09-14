@@ -93,7 +93,8 @@ export type JobDetail = {
    */
   write_scope_overlaps?: ScopeOverlap[];
   /**
-   * Tests broken on main this Job reported, or is fixing. Since protocol 13.41.
+   * Tests broken on main this Job reported, is fixing, or is waiting on
+   * another Job to fix (since 13.42). Since protocol 13.41.
    *
    * **One list for both sides of a claim.** Where this Job's Drone reported the
    * test, `reported_by` is this Job; on the fix Job, `fix` is. Absent is none,

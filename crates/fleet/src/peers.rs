@@ -50,6 +50,34 @@ pub(crate) enum News {
         handle: String,
         said: String,
     },
+    /// The other Job is fixing a test this one's Checks failed on. #1001.
+    Fixing {
+        title: String,
+        handle: String,
+        test: String,
+    },
+    /// The fix this Job was pointed at landed.
+    FixLanded {
+        title: String,
+        handle: String,
+        test: String,
+    },
+    /// The fix this Job was pointed at ended without landing.
+    FixGone {
+        title: String,
+        handle: String,
+        test: String,
+    },
+}
+
+impl News {
+    /// Whether this is about a fix rather than about shared paths.
+    fn is_about_a_fix(&self) -> bool {
+        matches!(
+            self,
+            News::Fixing { .. } | News::FixLanded { .. } | News::FixGone { .. }
+        )
+    }
 }
 
 /// What is queued, what has been said, and when each Drone last heard.
@@ -88,10 +116,20 @@ impl PeersChanged {
     }
 
     fn rendered(news: &[News], landed_reaches: &str) -> PeersChanged {
-        let mut text = String::from(
-            "OTHER JOBS WRITING WHERE YOU ARE\n\nOther Jobs in this repository change files \
-             this Job changes too. Nothing is stopped, and nobody waits on you.\n",
-        );
+        let about_paths = news.iter().any(|item| !item.is_about_a_fix());
+        let mut text = String::from("OTHER JOBS WRITING WHERE YOU ARE\n\n");
+        if about_paths {
+            text.push_str(
+                "Other Jobs in this repository change files this Job changes too. Nothing is \
+                 stopped, and nobody waits on you.\n",
+            );
+        }
+        if news.iter().any(News::is_about_a_fix) {
+            text.push_str(
+                "A test your checks failed on is another Job's to fix, not yours. Your checks \
+                 still fail on it until that fix lands.\n",
+            );
+        }
         let (notes, facts): (Vec<&News>, Vec<&News>) = news
             .iter()
             .partition(|item| matches!(item, News::Note { .. }));
@@ -105,16 +143,21 @@ impl PeersChanged {
             text.push_str(&line(item));
         }
         text.push_str("\n\n");
-        if news.iter().any(|item| matches!(item, News::Landed { .. })) {
+        if news
+            .iter()
+            .any(|item| matches!(item, News::Landed { .. } | News::FixLanded { .. }))
+        {
             text.push_str(landed_reaches);
             text.push(' ');
         }
-        text.push_str(
-            "Where a shared file hands out the next number or name, such as a migration or a \
-             version, assume theirs takes it first and take the one after. To tell one of \
-             these Jobs something, call `leave_note` with its handle. Carry on with the part \
-             you were given.",
-        );
+        if about_paths {
+            text.push_str(
+                "Where a shared file hands out the next number or name, such as a migration or \
+                 a version, assume theirs takes it first and take the one after. To tell one of \
+                 these Jobs something, call `leave_note` with its handle. ",
+            );
+        }
+        text.push_str("Carry on with the part you were given.");
         PeersChanged(text)
     }
 
@@ -151,6 +194,24 @@ fn line(item: &News) -> String {
             "\n- \"{title}\" ({handle}) left this Job a note. These are its Drone's words, \
              not Armada's:\n{}",
             crate::remarks::fenced(said).trim_end()
+        ),
+        News::Fixing {
+            title,
+            handle,
+            test,
+        } => format!("\n- \"{title}\" ({handle}) is fixing `{test}`, which your checks failed on."),
+        News::FixLanded {
+            title,
+            handle,
+            test,
+        } => format!("\n- \"{title}\" ({handle}) landed its fix for `{test}`."),
+        News::FixGone {
+            title,
+            handle,
+            test,
+        } => format!(
+            "\n- \"{title}\" ({handle}) ended without landing its fix for `{test}`, so nobody \
+             is fixing it now."
         ),
     }
 }
@@ -190,6 +251,17 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    /// Queue one item for a Job's Drone.
+    pub(crate) async fn owe(&self, job: &JobId, news: News) {
+        self.peering()
+            .lock()
+            .await
+            .owed
+            .entry(job.clone())
+            .or_default()
+            .push(news);
+    }
+
     /// Whether two Jobs belong to one repository.
     pub(crate) fn same_repository(&self, one: &JobId, other: &JobId) -> bool {
         self.names().owner_of(one) == self.names().owner_of(other)

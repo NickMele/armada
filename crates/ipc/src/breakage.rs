@@ -28,4 +28,18 @@ pub struct ClaimedBreakage {
     /// claim outlives its reporter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reported_by_title: Option<String>,
+    /// The Jobs pointed at this fix because their Checks failed on the test.
+    /// **Since 13.42**, and empty is none — a detail from an older Fleet reads
+    /// the same way. #1001.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub waiting: Vec<WaitingOnFix>,
+}
+
+/// One Job pointed at a fix, waiting for it to land.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitingOnFix {
+    pub job_id: JobId,
+    /// What the Job is called. Absent where it could not be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
