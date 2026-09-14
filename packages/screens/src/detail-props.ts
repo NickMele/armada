@@ -112,8 +112,10 @@ export type JobDetailProps = {
   onOverrule: (jobId: string, reason: string) => void;
   /**
    * Send a step a gaming flag held back to be worked again, with an optional
-   * note for the next Drone. **The restart, answered from the card** — the
-   * card's answer is its own confirmation, as the redirect's dialog is. #1079.
+   * note for the next Drone. **The restart, answered from the card**, where the
+   * Drone has gone; where it still holds its session the card redirects it
+   * through `onRedirect` instead. The card's answer is its own confirmation,
+   * as the redirect's dialog is. #1079.
    */
   onSendBack: (jobId: string, note?: string) => void;
   /**

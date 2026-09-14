@@ -8,8 +8,8 @@
 // **A flag a second reading cleared is still a flag**, and it never holds a
 // step: it is drawn in the panel as cleared, with why, and nowhere else.
 
-import type { DiffLine } from "@armada/components";
-import type { Diff, Flagged, StepDetail } from "@armada/protocol";
+import { GAMING_PATTERN_MEANING, type DiffLine } from "@armada/components";
+import type { DeclaredJudge, Diff, Flagged, StepDetail } from "@armada/protocol";
 
 import { onlyCurrentAttempt } from "./facts";
 import { didNotPass, NOT_REACHED } from "./gates";
@@ -22,6 +22,14 @@ import { drawnOf } from "./review";
  * shape exactly, and nothing more.
  */
 export type FlaggedRead = Flagged & { cleared?: { why: string; brief_path?: string } };
+
+/**
+ * `DeclaredJudge` as Fleet serves it once its half of #1079 lands: the patterns
+ * a step's gaming check looks for, in `flag_if` order, as wire spellings.
+ * **Replace with `DeclaredJudge` from `@armada/protocol` once the generated
+ * type has the field** — this is that shape exactly, and nothing more.
+ */
+export type DeclaredJudgeRead = DeclaredJudge & { gaming_patterns?: string[] };
 
 /** One attempt's flags, split into those that hold the step and those cleared. */
 export type FlagsRead = { held: FlaggedRead[]; cleared: FlaggedRead[] };
@@ -38,6 +46,17 @@ export function flagsOf(step: StepDetail, rows?: readonly FlaggedRead[]): FlagsR
 /** Whether the step declares a gaming check at all. */
 export function declaresGaming(step: StepDetail): boolean {
   return (step.judge_checks ?? []).some((judge) => judge.gaming_check);
+}
+
+/**
+ * Every pattern the step's gaming check looks for, in the order declared, or
+ * `undefined` from a Fleet that does not say — which reads as the flags alone.
+ */
+export function declaredPatterns(step: StepDetail): string[] | undefined {
+  const judges: readonly DeclaredJudgeRead[] = step.judge_checks ?? [];
+  const spelled = judges.filter((judge) => judge.gaming_patterns !== undefined);
+  if (spelled.length === 0) return undefined;
+  return [...new Set(spelled.flatMap((judge) => judge.gaming_patterns ?? []))];
 }
 
 /**
@@ -75,25 +94,66 @@ export function gamingStands({ held, cleared }: FlagsRead, stopped: boolean): st
 }
 
 /**
- * What the step panel's Gaming check row says folded — `1 flagged · stopped
- * the step`.
+ * What the step panel's Gaming check row says folded — `1 of 6 flagged ·
+ * stopped the step`.
  *
- * **No `of 6`.** The owner's drawing counts against every pattern the step
- * declares, and the wire carries only whether a gaming check is declared,
- * never which patterns — so the denominator would be invented.
+ * **Against every declared pattern where Fleet says which**, counting patterns
+ * flagged rather than flags, and against nothing where it does not: an older
+ * Fleet sends only whether a gaming check is declared, and a denominator then
+ * would be invented.
  */
-export function gamingSummary({ held, cleared }: FlagsRead, reached: boolean, stopped: boolean): string {
+export function gamingSummary(
+  { held, cleared }: FlagsRead,
+  reached: boolean,
+  stopped: boolean,
+  declared?: readonly string[],
+): string {
+  const any = held.length + cleared.length > 0;
+  if (!any && !reached) return NOT_REACHED;
   const parts = [
-    ...(held.length > 0 ? [`${held.length} flagged`] : []),
+    ...(declared !== undefined
+      ? [`${new Set(held.map((flag) => flag.pattern)).size} of ${declared.length} flagged`]
+      : held.length > 0
+        ? [`${held.length} flagged`]
+        : []),
     ...(cleared.length > 0 ? [`${cleared.length} cleared`] : []),
   ];
-  if (held.length > 0 && stopped) return [...parts, "stopped the step"].join(" · ");
-  if (parts.length > 0) return parts.join(" · ");
-  return reached ? NOTHING_FLAGGED : NOT_REACHED;
+  if (held.length > 0 && stopped) parts.push("stopped the step");
+  return parts.length > 0 ? parts.join(" · ") : NOTHING_FLAGGED;
 }
 
 /** What a gaming check that ran and found nothing says. */
 export const NOTHING_FLAGGED = "nothing flagged";
+
+/** What a declared pattern the check did not find says on its row. */
+export const NOT_SEEN = "not seen";
+
+/**
+ * The words *Send it back* redirects a Drone still holding the step with.
+ *
+ * **Composed from the flag, never left to the Drone to look up**: the pattern's
+ * headline, what the check cited and what it asked, and the person's note
+ * where they wrote one. A redirect is a turn in a live session, and a Drone
+ * told only "the flag is right" would have to guess which flag and why.
+ */
+export function sentBackWords(flags: readonly Flagged[], note: string | undefined): string {
+  const found = flags.map((flag) =>
+    [
+      `${GAMING_PATTERN_MEANING[flag.pattern]?.headline ?? flag.pattern}.`,
+      ...(flag.cited === "" ? [] : [`It cited: ${flag.cited}`]),
+      ...(flag.asked === undefined ? [] : [`It asked: ${flag.asked}`]),
+    ].join("\n"),
+  );
+  const said = note?.trim();
+  return [SENT_BACK, ...found, ...(said === undefined || said === "" ? [] : [`The person's note: ${said}`])].join(
+    "\n\n",
+  );
+}
+
+/** How the redirect opens. */
+const SENT_BACK =
+  "The gaming check flagged this step, and a person read the flag and agrees with it. Change the " +
+  "work so the flag no longer applies, then submit the step again.";
 
 /** One flag's lines, located in the patch: the file and the hunk that holds them. */
 export type Located = { file: string; lines: DiffLine[] };
@@ -140,8 +200,7 @@ function holdsLine(hunk: readonly DiffLine[], line: number): boolean {
   let at = Number(header[1]);
   for (const row of hunk.slice(1)) {
     if (row.kind === "removed" || row.text.startsWith("\\")) continue;
-    if (row.kind === "added" && at === line) return true;
-    if (row.kind === "context" && at === line) return true;
+    if (at === line) return true;
     at += 1;
   }
   return false;

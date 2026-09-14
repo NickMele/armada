@@ -26,7 +26,7 @@ import { isSweepMarker } from "./declared";
 import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import { askedOf, didNotPass, judgeAsking } from "./gates";
-import { declaresGaming, flagsOf, gamingReached, gamingSummary } from "./gaming";
+import { declaredPatterns, declaresGaming, flagsOf, gamingReached, gamingSummary } from "./gaming";
 import { entriesOf } from "./story";
 
 /** Which phase a row is. What an attempt wrote rides on `working`. */
@@ -456,7 +456,7 @@ function gamingRow(read: StepDetail, attempt: StepAttempt, current: boolean): Ti
     phase: "gaming",
     name: "Gaming check",
     mark,
-    meta: asking ? "asking" : gamingSummary(flags, reached, stopped),
+    meta: asking ? "asking" : gamingSummary(flags, reached, stopped, declaredPatterns(read)),
     ...(asking ? { live: true } : {}),
   };
 }

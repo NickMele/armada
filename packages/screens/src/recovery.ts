@@ -260,7 +260,7 @@ function withheldBy(stuck: Stuck, made: Recourse): string | undefined {
  * for is not here. It was the fourth sentence of a paragraph about Redirect,
  * which is where a reason for an absent act is least likely to be read.
  */
-export const RESTART_WITHHELD =
+const RESTART_WITHHELD =
   "Restart is off while the drone is still running, because it would throw away the drone's session.";
 
 /**

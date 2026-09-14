@@ -7,17 +7,18 @@
 // it, and three unrelated refused commands in the same box.
 //
 // **Both answers are acts that already exist.** Carry on is the override, which
-// Fleet takes with a blank reason on a gaming flag. Send it back is the step
-// restart, which already puts the flag into the next Drone's brief.
+// Fleet takes with a blank reason on a gaming flag. Send it back is a redirect
+// where the Drone still holds its session, which is nearly every flag, and the
+// step restart where it has gone, which briefs the next Drone with the flag.
 
 import { GAMING_PATTERN_MEANING, HeldFlag, Refusals, type HeldFinding } from "@armada/components";
 import type { Diff, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { ReactNode } from "react";
 
 import { answerNamed } from "./copy";
-import { flagsOf, hunkFor } from "./gaming";
+import { flagsOf, hunkFor, sentBackWords } from "./gaming";
 import { openKept, type Opens } from "./phases";
-import { onwards, recourseOf, RESTART_WITHHELD } from "./recovery";
+import { onwards, recourseOf } from "./recovery";
 import { refusedIn } from "./refused";
 import type { Answering } from "./step";
 
@@ -28,7 +29,10 @@ export type Deciding = {
   stale: boolean;
   acting: boolean;
   onOverrule: (jobId: string, reason: string) => void;
+  /** The restart, where the Drone has gone. */
   onSendBack: (jobId: string, note?: string) => void;
+  /** The redirect, where the Drone still holds its session. */
+  onRedirect: (jobId: string, instruction: string) => void;
 };
 
 /** Whether this step is the one Fleet holds on a gaming flag that nothing cleared. */
@@ -42,18 +46,17 @@ export function heldByAFlag(whole: JobWhole | null, step: StepDetail): boolean {
   );
 }
 
-/** The presets the owner chose for *No, the work is fine*. Sent as the reason, word for word. */
-export const CARRY_ON_PRESETS = [
-  "It's not a test",
-  "Checked elsewhere in this change",
-  "The test checks the same thing",
-];
+/** What *Send it back* does where the Drone still holds its session. */
+const REDIRECTS =
+  "Sends the flag back to the drone still on this step, with your note if you write one, and it " +
+  "works the step again in the same session.";
 
-/** What *Send it back* does. `restart_step` briefs the next Drone with the flag. */
-const SENDS_IT_BACK = "Restarts the step. The new drone's brief carries the flag, and your note if you write one.";
+/** What it does where the Drone has gone. `restart_step` briefs the next Drone with the flag. */
+const RESTARTS =
+  "Restarts the step with a fresh drone. Its brief carries the flag, and your note if you write one.";
 
-/** Where Fleet offers no restart and no Drone is holding either. */
-const NO_RESTART = "Fleet offers no restart on this step.";
+/** Where Fleet offers neither. */
+const NEITHER = "Fleet offers neither a redirect nor a restart on this step.";
 
 /** Where Fleet offers no override on this step. */
 const NO_OVERRIDE = "Fleet offers no override on this step.";
@@ -75,7 +78,8 @@ export function heldFlagOf(
   if (deciding === undefined || !heldByAFlag(whole, step)) return undefined;
   const recourse = recourseOf(job, whole);
   const overrule = recourse.overrule?.trigger === "evidence_suspect" ? recourse.overrule : undefined;
-  const findings: HeldFinding[] = flagsOf(step).held.map((flag) => {
+  const flags = flagsOf(step).held;
+  const findings: HeldFinding[] = flags.map((flag) => {
     const means = GAMING_PATTERN_MEANING[flag.pattern];
     const located = hunkFor(flag, deciding.diff, job.id);
     return {
@@ -90,6 +94,11 @@ export function heldFlagOf(
       ...(flag.brief_path === undefined ? {} : { brief: flag.brief_path }),
     };
   });
+  // The registry's reasons for each pattern holding the step, once each.
+  const presets = [...new Set(flags.flatMap((flag) => GAMING_PATTERN_MEANING[flag.pattern]?.presets ?? []))];
+  // **Fleet's answer, never guessed**: a Drone still holding its session takes
+  // a redirect, and one that has gone takes a restart.
+  const sendsBy = recourse.act;
   return (
     <HeldFlag
       findings={findings}
@@ -98,17 +107,16 @@ export function heldFlagOf(
         consequence:
           overrule === undefined ? "Overrules the flag." : `Overrules the flag. ${onwards(overrule)}`,
         ...(overrule === undefined ? { withheld: NO_OVERRIDE } : {}),
-        presets: CARRY_ON_PRESETS,
+        presets,
         onCarryOn: (reason) => deciding.onOverrule(job.id, reason),
       }}
       sendBack={{
-        consequence: SENDS_IT_BACK,
-        // **Fleet's answer, never guessed.** A Drone still holding its session
-        // is one a restart would end, and Fleet refuses that.
-        ...(recourse.act === "restart_step"
-          ? {}
-          : { withheld: recourse.act === "redirect" ? RESTART_WITHHELD : NO_RESTART }),
-        onSendBack: (note) => deciding.onSendBack(job.id, note),
+        consequence: sendsBy === "redirect" ? REDIRECTS : RESTARTS,
+        ...(sendsBy === undefined ? { withheld: NEITHER } : {}),
+        onSendBack: (note) =>
+          sendsBy === "redirect"
+            ? deciding.onRedirect(job.id, sentBackWords(flags, note))
+            : deciding.onSendBack(job.id, note),
       }}
       disabled={deciding.stale || deciding.acting}
       disabledNote={deciding.stale ? STALE : deciding.acting ? SENDING : undefined}

@@ -5,6 +5,7 @@ import type { Refusal, StepDetail } from "@armada/protocol";
 import { escalatedEvidenceSuspect } from "../../../fixtures/build/index";
 import { diffRead, JOB_ID, watchedRead } from "../../../fixtures/build/base";
 import type { JobFixture } from "../../../fixtures/fixture";
+import type { DeclaredJudgeRead } from "../../../gaming";
 import { JobDetailFrom } from "./JobDetail";
 
 /** Job detail, split by group — #1044. Same `title` as the rest of this directory, so ids hold. */
@@ -36,13 +37,21 @@ function refusedCommand(call: string, detail: string): Refusal {
   return { tool: "Bash", call, detail, truncated: false, because: "", offers: [], rules: [] };
 }
 
+/** The step's gaming check as the Fleet half of #1079 serves it: every pattern it looks for. */
+const GAMING: DeclaredJudgeRead = {
+  criteria: 2,
+  panel_size: 3,
+  gaming_check: true,
+  gaming_patterns: ["assertion_weakened", "test_scope_narrowed", "tautological_test", "test_skipped", "test_deleted", "check_config_edited"],
+};
+
 /**
  * The owner's Job on 14 Sep, in the fixture's words: every Check passed, the
- * gaming check flagged a removed assertion, and three commands the Drone was
- * refused sat in the same box. The Drone has left, so Fleet offers both the
- * override and the restart.
+ * gaming check flagged a removed assertion, and three refused commands sat in
+ * the same box. `recourse` is Fleet's reading of whether the Drone is still
+ * there, which decides what Send it back is.
  */
-function heldByTheGamingCheck(): JobFixture {
+function heldByTheGamingCheck(recourse: string[]): JobFixture {
   const fixture = escalatedEvidenceSuspect();
   if (fixture.watched.state !== "read") return fixture;
   const whole = fixture.watched.detail;
@@ -52,6 +61,7 @@ function heldByTheGamingCheck(): JobFixture {
         ? step
         : {
             ...step,
+            judge_checks: [GAMING],
             judged: step.judged.map((one) => ({ ...one, verdict: "met" })),
             flagged: [
               {
@@ -74,7 +84,7 @@ function heldByTheGamingCheck(): JobFixture {
       steps,
       stuck: {
         ...whole.stuck!,
-        recourse: ["override_verdict", "restart_step", "redispatch_job"],
+        recourse,
         refused: [
           refusedCommand("call_1", "cargo nextest run --package fleet 2>&1 | tail -80"),
           refusedCommand("call_2", "git stash"),
@@ -90,25 +100,66 @@ function heldByTheGamingCheck(): JobFixture {
   };
 }
 
-/** What Carry on sends. A module's spy, read by the play. */
+/** What each answer sends. Module spies, cleared by the plays that read them. */
 const overrule = fn();
+const redirect = fn();
+const restart = fn();
 
 /**
- * **A step the gaming check stopped, and what to do about it.** #1079. The rail
- * names the gaming check, the panel has a section for it, and the card says
- * what the flag means over the lines it is about — with both answers, and the
- * refused commands folded into a card of their own.
+ * **A step the gaming check stopped, with the Drone still holding its
+ * session**, which is what a flag leaves behind nearly every time. #1079. The
+ * rail names the gaming check, the section reads `1 of 6 flagged`, and the card
+ * says what the flag means over the lines it is about.
  *
- * **Carry on needs nothing typed**, which is the definition of done.
+ * **Send it back is a redirect here**, carrying the flag and the note, and
+ * Carry on needs nothing typed.
  */
 export const HeldByTheGamingCheck: Story = {
   name: "Held by the gaming check",
-  render: () => <JobDetailFrom fixture={heldByTheGamingCheck()} on={{ onOverrule: overrule }} />,
+  render: () => (
+    <JobDetailFrom
+      fixture={heldByTheGamingCheck(["override_verdict", "redirect_drone", "redispatch_job"])}
+      on={{ onOverrule: overrule, onRedirect: redirect, onSendBack: restart }}
+    />
+  ),
   play: async ({ canvas, userEvent }) => {
     overrule.mockClear();
-    await expect(canvas.getByText("A test may have been weakened to make this step pass")).toBeVisible();
+    redirect.mockClear();
+    restart.mockClear();
     await expect(canvas.getByText("3 commands were refused during Regression check")).toBeVisible();
+    await expect(canvas.getByText(/Sends the flag back to the drone still on this step/)).toBeVisible();
+    await userEvent.type(canvas.getByRole("textbox", { name: "Note for the drone (optional)" }), "Put it back");
+    await userEvent.click(canvas.getByRole("button", { name: "Send it back" }));
+    await expect(redirect).toHaveBeenCalledWith(
+      JOB_ID,
+      expect.stringContaining("A test may have been weakened to make this step pass."),
+    );
+    await expect(redirect).toHaveBeenCalledWith(JOB_ID, expect.stringContaining("The person's note: Put it back"));
+    await expect(restart).not.toHaveBeenCalled();
     await userEvent.click(canvas.getByRole("button", { name: "Carry on" }));
     await expect(overrule).toHaveBeenCalledWith(JOB_ID, "");
+  },
+};
+
+/**
+ * **The same step once its Drone has gone.** Fleet offers the restart instead,
+ * so Send it back restarts the step and the new Drone's brief carries the flag
+ * — and the sentence under the answer says it is a restart.
+ */
+export const HeldByTheGamingCheckDroneGone: Story = {
+  name: "Held by the gaming check, drone gone",
+  render: () => (
+    <JobDetailFrom
+      fixture={heldByTheGamingCheck(["override_verdict", "restart_step", "redispatch_job"])}
+      on={{ onRedirect: redirect, onSendBack: restart }}
+    />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    redirect.mockClear();
+    restart.mockClear();
+    await expect(canvas.getByText(/Restarts the step with a fresh drone/)).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Send it back" }));
+    await expect(restart).toHaveBeenCalledWith(JOB_ID, undefined);
+    await expect(redirect).not.toHaveBeenCalled();
   },
 };

@@ -530,7 +530,7 @@ function OneJob({
   // person meets one: the command it is waiting on, and a refused row.
   const answering = answeringOf(job.id, stale, acting, onAnswerCommand);
   // What the card a gaming flag holds a step with draws from and sends. #1079.
-  const flagAnswers: Deciding = { diff: recorded.diff, stale, acting, onOverrule, onSendBack };
+  const flagAnswers: Deciding = { diff: recorded.diff, stale, acting, onOverrule, onSendBack, onRedirect };
   const refusedAside = open === undefined ? undefined : refusedAsideOf(whole, open, answering);
   // Bound to the Job being read, so nothing downstream carries an id back.
   const explain =

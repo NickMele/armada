@@ -5,7 +5,16 @@ import { describe, expect, it } from "vitest";
 import type { Diff, Flagged } from "@armada/protocol";
 
 import { freshStep } from "./fixtures/build/base";
-import { flagsOf, gamingStands, gamingSummary, hunkFor, type FlaggedRead } from "./gaming";
+import {
+  declaredPatterns,
+  flagsOf,
+  gamingStands,
+  gamingSummary,
+  hunkFor,
+  sentBackWords,
+  type DeclaredJudgeRead,
+  type FlaggedRead,
+} from "./gaming";
 
 const JOB = "01M22TYSAE0023MADDP5ZQEYGW";
 const FILE = "packages/settings/test/useColumnSelectors.test.ts";
@@ -84,5 +93,44 @@ describe("what the rail and the panel say", () => {
     expect(gamingSummary({ held: [], cleared: [cleared] }, true, false)).toBe("1 cleared");
     expect(gamingSummary({ held: [], cleared: [] }, true, false)).toBe("nothing flagged");
     expect(gamingSummary({ held: [], cleared: [] }, false, false)).toBe("not reached");
+  });
+
+  it("counts flagged patterns against every declared one, where Fleet names them", () => {
+    const declared = ["assertion_weakened", "test_skipped", "test_deleted", "tautological_test", "check_config_edited", "test_scope_narrowed"];
+    expect(gamingSummary({ held: [held, held], cleared: [] }, true, true, declared)).toBe(
+      "1 of 6 flagged · stopped the step",
+    );
+    expect(gamingSummary({ held: [], cleared: [] }, true, false, declared)).toBe("0 of 6 flagged");
+    expect(gamingSummary({ held: [], cleared: [] }, false, false, declared)).toBe("not reached");
+  });
+
+  it("reads the declared patterns in order, and nothing from a Fleet that does not name them", () => {
+    const naming: DeclaredJudgeRead = {
+      criteria: 0,
+      gaming_check: true,
+      gaming_patterns: ["test_deleted", "assertion_weakened"],
+    };
+    expect(declaredPatterns({ ...freshStep("implement", "Implement", 2), judge_checks: [naming] })).toEqual([
+      "test_deleted",
+      "assertion_weakened",
+    ]);
+    const silent = { ...freshStep("implement", "Implement", 2), judge_checks: [{ criteria: 0, gaming_check: true }] };
+    expect(declaredPatterns(silent)).toBeUndefined();
+  });
+});
+
+describe("the words Send it back redirects a Drone with", () => {
+  const cited = flag({ cited: "`expect(a).toBe(b)` was removed", asked: "Is that assertion made nowhere else?" });
+
+  it("carry the pattern's headline, what was cited, what was asked, and the note", () => {
+    const words = sentBackWords([cited], "  Put it back  ");
+    expect(words).toContain("A test may have been weakened to make this step pass.");
+    expect(words).toContain("It cited: `expect(a).toBe(b)` was removed");
+    expect(words).toContain("It asked: Is that assertion made nowhere else?");
+    expect(words).toContain("The person's note: Put it back");
+  });
+
+  it("say nothing about a note nobody wrote", () => {
+    expect(sentBackWords([cited], undefined)).not.toContain("note");
   });
 });
