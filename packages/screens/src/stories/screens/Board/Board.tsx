@@ -1,6 +1,6 @@
 import { connectedTo, PROTOCOL_VERSION, type Connection, type JobSummary } from "@armada/protocol";
 import type { RepositorySummary, WorkflowSummary } from "@armada/protocol";
-import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
+import { BoardActions, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Jobs } from "../../../Jobs";
 import { ofPicked } from "../../../board";
 import { CREATED_AT, repository } from "../../../fixtures/build/base";
@@ -17,12 +17,12 @@ export const CONNECTED: Connection = connectedTo(
 const noop = () => {};
 
 /**
- * The app's Board, in the window Bridge draws it in: the shell's rail, its
- * status bar and its head, and the Board screen under them.
+ * The app's Board, in the window Bridge draws it in: the shell's rail and its
+ * left column, and the Board screen under them — no page head, since #1090.
  *
- * **Not a drawing of the Board — the Board.** `Shell`, `headOf` and `Jobs` are
- * the three the app renders, called the way `App` calls them, so the head's
- * controls, the tabs, the count and every row come out of the app's own code.
+ * **Not a drawing of the Board — the Board.** `Shell`, `BoardActions` and
+ * `Jobs` are the three the app renders, called the way `App` calls them, so
+ * the menu, the tabs, the count and every row come out of the app's own code.
  * What is made up is only the data, and it is typed against the wire.
  */
 export function BoardFrom({
@@ -48,26 +48,20 @@ export function BoardFrom({
   // `App`'s own reading: the Board's Jobs follow the pick, and the bar reads every Job.
   const pickedRepository = repositories.find((one) => one.root === picked) ?? null;
   const boardJobs = ofPicked(jobs, pickedRepository);
-  const head = headOf({
-    reading: false,
-    composing: false,
-    auditing: false,
-    clearing: false,
-    manifest: false,
-    live,
-    refreshing: false,
-    onCloseComposer: noop,
-    onCompose: noop,
-    onCloseReports: noop,
-    onReadReports: noop,
-    onCloseWorktrees: noop,
-    onReadWorktrees: noop,
-    onOpenSettings: noop,
-    onRefresh: noop,
-    jobs: boardJobs,
-    onClearTerminal: noop,
-    onForgetTerminal: noop,
-  });
+  const boardActions = (
+    <BoardActions
+      jobs={boardJobs}
+      live={live}
+      refreshing={false}
+      onCompose={noop}
+      onRefresh={noop}
+      onReadReports={noop}
+      onReadWorktrees={noop}
+      onOpenSettings={noop}
+      onClearTerminal={noop}
+      onForgetTerminal={noop}
+    />
+  );
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <Shell
@@ -92,9 +86,6 @@ export function BoardFrom({
           onOpenChange: noop,
         }}
         fleet={{ state: "running", label: "Running", detail: statement.detail, open: true, onOpenChange: noop }}
-        title={head?.title}
-        summary={head?.summary}
-        actions={head?.actions}
         showing={SURFACE.board}
       >
         <div className="armada-screen__mounted">
@@ -110,6 +101,7 @@ export function BoardFrom({
             onOpen={noop}
             onKill={noop}
             onCompose={noop}
+            actions={boardActions}
             onCopied={noop}
           />
         </div>

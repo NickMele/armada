@@ -79,6 +79,13 @@ export type ReportsProps = {
   onWant: (want: boolean) => void;
   /** `GET /reports`, as main published it. */
   reports: ReportsRead;
+  /**
+   * Back to the Board. **At the top of every state**, not only the read one —
+   * the page head this used to live in carried it whether or not the read
+   * had come back yet, and a surface with no way out while it is still
+   * reading is a dead end for as long as that takes.
+   */
+  onClose: () => void;
   /** A clipboard write is silent, so the surface confirms it. */
   onCopied: (value: string) => void;
 };
@@ -96,12 +103,27 @@ export type ReportsProps = {
  * scrolls. The day a store has hundreds, this is the surface that needs
  * `[list-virtualization]` answered before anything else does.
  */
-export function Reports({ reports, onWant, onCopied }: ReportsProps) {
+export function Reports({ reports, onWant, onClose, onCopied }: ReportsProps) {
   useEffect(() => {
     onWant(true);
     return () => onWant(false);
   }, []);
 
+  return (
+    <div className="armada-screen__pane">
+      {/* The way out, at the top of every state — #1090 moved it here from
+          the page head that used to carry it. */}
+      <div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Back to the list
+        </Button>
+      </div>
+      <Body reports={reports} onCopied={onCopied} />
+    </div>
+  );
+}
+
+function Body({ reports, onCopied }: { reports: ReportsRead; onCopied: (value: string) => void }) {
   if (reports.state === "failed") {
     return (
       <Alert tone="escalated" title="The filed reports could not be read">
@@ -120,7 +142,7 @@ export function Reports({ reports, onWant, onCopied }: ReportsProps) {
   }
 
   return (
-    <div className="armada-screen__pane">
+    <>
       <Counts calibration={reports.list.calibration} />
       {reports.list.reports.length === 0 ? (
         <Nothing />
@@ -129,7 +151,7 @@ export function Reports({ reports, onWant, onCopied }: ReportsProps) {
           <Filed key={report.id} report={report} onCopied={onCopied} />
         ))
       )}
-    </div>
+    </>
   );
 }
 

@@ -7,9 +7,10 @@ import { boardJobs, boardWorkflows } from "../../../fixtures/build/board";
 import { BoardFrom } from "./Board";
 
 /**
- * The Board, drawn by the app's own `Shell`, `headOf` and `Jobs` from rows in
- * the shape `list_jobs` sends. Change the screen and this changes with it;
- * only the data is made up. `Screens/Job detail` is built the same way.
+ * The Board, drawn by the app's own `Shell`, `BoardActions` and `Jobs` from
+ * rows in the shape `list_jobs` sends. Change the screen and this changes
+ * with it; only the data is made up. `Screens/Job detail` is built the same
+ * way.
  */
 const meta = {
   title: "Screens/Board",

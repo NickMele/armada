@@ -75,6 +75,7 @@ function opened(
         return Promise.resolve(answers.forget?.(jobId) ?? { ok: true });
       }}
       now={NOW}
+      onClose={() => {}}
       onCopied={() => {}}
     />,
   );
@@ -292,6 +293,7 @@ test("a read that failed says so rather than drawing an empty page", async () =>
       onDeleteBranch={() => Promise.resolve({ ok: true })}
       onForget={() => Promise.resolve({ ok: true })}
       now={NOW}
+      onClose={() => {}}
       onCopied={() => {}}
     />,
   );

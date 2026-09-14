@@ -111,6 +111,12 @@ export type WorktreesProps = {
    */
   onForget: (jobId: string) => Promise<Outcome>;
   /**
+   * Back to the Board. **At the top of every state**, not only the read
+   * one — the page head this used to live in carried it whether or not the
+   * read had come back yet.
+   */
+  onClose: () => void;
+  /**
    * The clock every elapsed figure on this surface is drawn from.
    *
    * **The app's one `now`, not a `Date.now()` per row.** Two clocks on one
@@ -139,6 +145,7 @@ export function Worktrees({
   onDeleteBranch,
   onForget,
   now,
+  onClose,
   onCopied,
 }: WorktreesProps) {
   useEffect(() => {
@@ -159,11 +166,24 @@ export function Worktrees({
   /** One act at a time, so a second press does not send the set twice. */
   const [sending, setSending] = useState(false);
 
+  /** The way out, at the top of every state — #1090 moved it here from the
+   *  page head that used to carry it. */
+  const back = (
+    <div>
+      <Button variant="ghost" size="sm" onClick={onClose}>
+        Back to the list
+      </Button>
+    </div>
+  );
+
   if (held.state === "failed") {
     return (
-      <Alert tone="escalated" title="What fleet is holding could not be read">
-        {said(held.outcome)}
-      </Alert>
+      <div className="armada-screen__pane">
+        {back}
+        <Alert tone="escalated" title="What fleet is holding could not be read">
+          {said(held.outcome)}
+        </Alert>
+      </div>
     );
   }
   // `none` is the frame before the effect above has run. It says the same thing
@@ -171,7 +191,12 @@ export function Worktrees({
   // fleet is holding nothing — the one answer on this page nobody should be
   // given by accident.
   if (held.state !== "read") {
-    return <p className="text-fg-muted">Reading what fleet is holding.</p>;
+    return (
+      <div className="armada-screen__pane">
+        {back}
+        <p className="text-fg-muted">Reading what fleet is holding.</p>
+      </div>
+    );
   }
 
   const groups = divided(held.held.worktrees);
@@ -247,6 +272,7 @@ export function Worktrees({
 
   return (
     <div className="armada-screen__pane">
+      {back}
       {refused.map((one) => (
         <Alert key={`${one.jobId}-${one.act}`} tone="escalated" title={refusalTitle(one)}>
           {refusedSaid(one.outcome)}
