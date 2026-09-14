@@ -20,9 +20,12 @@ export const WholeSurface: Story = {
   name: "Whole surface",
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("Needs you")).toBeVisible();
-    await expect(canvas.getByText("Running")).toBeVisible();
-    await expect(canvas.getByText("Queued")).toBeVisible();
+    // `getByRole("heading", …)`, not `getByText` — the tile band has its own
+    // "Queued" tile, and a panel's own head is a heading where a tile's label
+    // is not.
+    await expect(canvas.getByRole("heading", { name: "Needs you" })).toBeVisible();
+    await expect(canvas.getByRole("heading", { name: "Running" })).toBeVisible();
+    await expect(canvas.getByRole("heading", { name: "Queued" })).toBeVisible();
     await expect(canvas.getByRole("complementary", { name: "Helm" })).toBeVisible();
   },
 };
