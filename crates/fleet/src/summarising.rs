@@ -172,14 +172,14 @@ where
                 frozen_by: Vec::new(),
             });
         }
-        // **The same predicate admission opens with**, asked of the same
-        // roster. The bound and each of the three machine readings fold to the
-        // one label the registry gives a `queued` Job short of anything; which
-        // of them it was is not a Board fact.
+        // The same two `admit_next` folds, so a Board row never disagrees
+        // with what Fleet is doing — `crate::admitting`.
         let mut slots = self.slots().lock().await;
-        let room = self.room_for_another(&mut slots).await;
+        let room = self.room_for(&mut slots).await;
+        drop(slots);
+        let short = !room.granted() || self.volume_is_short(job).await;
         Ok(Waiting::on(
-            (!room.granted()).then_some(CoreQueuedReason::WaitingOnResources),
+            short.then_some(CoreQueuedReason::WaitingOnResources),
         ))
     }
 }

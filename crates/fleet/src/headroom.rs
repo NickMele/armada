@@ -19,8 +19,11 @@
 //! Quota is **not** a fourth. `docs/spikes/005-what-does-a-job-cost.md` settled
 //! it: the stream's rate-limit event carries a window and a status and no
 //! quantity, so there is no number to hold a Job back against.
+//!
+//! **Disk is per volume, memory is not.** A worktree is cut beneath whichever
+//! repository a Job belongs to, and `crate::admitting` reads free space there.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
@@ -228,6 +231,10 @@ impl Headroom {
 /// the next poll rather than at the next ask.
 pub trait Machine: Send + Sync {
     fn read(&self) -> Option<Reading>;
+
+    /// Free bytes on the volume at `path`, read fresh — a repository's own,
+    /// not `read`'s one configured volume. `crate::admitting` asks per Job.
+    fn disk_free_at(&self, path: &Path) -> Option<Bytes>;
 }
 
 /// The machine Fleet is running on, read by asking the shell.
@@ -252,9 +259,8 @@ pub struct TheMachine {
 }
 
 impl TheMachine {
-    /// Read the volume `volume` sits on. **Fleet's repository root**, because
-    /// every worktree is cut beneath it — the disk that fills is the one the
-    /// work is on, not the one the daemon's binary is on.
+    /// Read `volume` for [`Machine::read`]'s one bundled reading. **Not a
+    /// repository's root** — see [`Machine::disk_free_at`] for that question.
     pub fn watching(volume: impl Into<PathBuf>) -> TheMachine {
         TheMachine {
             volume: volume.into(),
@@ -273,6 +279,10 @@ impl Machine for TheMachine {
             Command::new("df").args(["-P", "-k"]).arg(&self.volume),
         )?)?;
         Some(Reading::of(cpu, memory, free))
+    }
+
+    fn disk_free_at(&self, path: &Path) -> Option<Bytes> {
+        disk_free(&said(Command::new("df").args(["-P", "-k"]).arg(path))?)
     }
 }
 

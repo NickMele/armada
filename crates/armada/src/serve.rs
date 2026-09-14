@@ -720,8 +720,8 @@ fn assemble(
         // The shell, not a platform crate: `fleet::headroom` carries the
         // argument, which is `fleet::process`'s and is about one spelling on
         // both platforms rather than about convenience.
-        // Home, where worktrees and builds usually land now that no one
-        // repository is the volume that fills.
+        // The operator's home, for this one bundled reading. A Job's own
+        // repository is read at admission, on its own volume — `fleet::admitting`.
         machine: Arc::new(TheMachine::watching(&home)),
         headroom: PROVISIONAL_HEADROOM,
         polling: PROVISIONAL_RESOURCE_POLL,
