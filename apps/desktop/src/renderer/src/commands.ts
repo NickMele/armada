@@ -689,20 +689,6 @@ export function useCommands(sending: Sending) {
     }
   }
 
-  /**
-   * Send the branch back for a Drone that can edit files to bring it current
-   * with main. `#663`. Under the same one-in-flight guard as `decide`, for
-   * `takeUpRemarks`'s reason: it leaves `awaiting_review` the same way.
-   */
-  async function resolvePullRequestConflict(jobId: string): Promise<void> {
-    setDeciding(jobId);
-    try {
-      setOutcome(await window.armada.resolvePullRequestConflict(jobId));
-    } finally {
-      setDeciding(null);
-    }
-  }
-
   /** Start the pull request's failed CI runs again. #905. */
   async function rerunFailedChecks(jobId: string): Promise<void> {
     setDeciding(jobId);
@@ -748,7 +734,6 @@ export function useCommands(sending: Sending) {
     deciding,
     takeUpRemarks,
     dismissFinding,
-    resolvePullRequestConflict,
     rerunFailedChecks,
     investigateFailedChecks,
     queueAfterFinding,

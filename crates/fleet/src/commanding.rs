@@ -156,18 +156,6 @@ where
         self.summarised(&job).await
     }
 
-    /// A person sends the branch back for a Drone that can edit files to
-    /// bring it current with main. `#663`.
-    ///
-    /// **Not [`budgeted`]**, for [`Commands::merge_pull_request`]'s reason: the
-    /// rebase and push inside are against a remote nothing here has measured.
-    async fn resolve_pull_request_conflict(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
-        let job = Fleet::resolve_pull_request_conflict(self, &job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
-        self.summarised(&job).await
-    }
-
     /// The pull request's failed CI runs, started again. #905. **Not [`budgeted`]**, for
     /// [`Commands::merge_pull_request`]'s reason: the forge write inside is over a network.
     async fn rerun_failed_checks(&self, job_id: JobId) -> Result<JobSummary, Refusal> {

@@ -749,12 +749,6 @@ export type BridgeApi = {
    * entry taking which would read as one act and perform four.
    */
   mergePullRequest: (jobId: string) => Promise<Outcome>;
-  /**
-   * Send the branch back for a Drone that can edit files to bring it current
-   * with main. `#663`. Fleet runs the rebase; only a conflict spawns a Drone,
-   * on the step before the one that delivers, never the gate's own.
-   */
-  resolvePullRequestConflict: (jobId: string) => Promise<Outcome>;
   /** Start the pull request's failed CI runs again. A forge write, only from a press. #905. */
   rerunFailedChecks: (jobId: string) => Promise<Outcome>;
   /** Send the branch back for a Drone to find out why CI failed. #905. */

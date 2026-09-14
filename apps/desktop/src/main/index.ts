@@ -821,9 +821,6 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.mergePullRequest, (_event, jobId: string) =>
     connection?.commands.mergePullRequest(jobId),
   );
-  ipcMain.handle(CHANNELS.resolvePullRequestConflict, (_event, jobId: string) =>
-    connection?.commands.resolvePullRequestConflict(jobId),
-  );
   ipcMain.handle(CHANNELS.rerunFailedChecks, (_event, jobId: string) =>
     connection?.commands.rerunFailedChecks(jobId),
   );

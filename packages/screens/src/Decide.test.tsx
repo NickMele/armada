@@ -313,10 +313,10 @@ test("a conversation comment an older Fleet sent with null fields still renders"
     .toBeVisible();
 });
 
-// `#663`: "Resolve conflicts" sits with the pull request block now, directly
-// under the sentence naming the clash — `verdict.test.tsx` covers it there.
-// `Decide` no longer draws it.
-test("Decide itself never draws Resolve conflicts — it moved beside the pull request", async () => {
+// `#663`, `#1131`: Fleet clears a conflict on its own now, so there is no
+// press anywhere for `Decide` to draw — it never has, and this stays a guard
+// against the control coming back.
+test("Decide itself never draws Resolve conflicts", async () => {
   mount(
     <Decide
       onNeedMaterial={() => {}}
@@ -369,7 +369,9 @@ test("merge is drawn and disabled while the branch conflicts, and the other thre
 
   const merge = page.getByRole("button", { name: "Merge and take the work" });
   await expect.element(merge).toBeDisabled();
-  await expect.element(page.getByText("Resolve the conflicts first.")).toBeVisible();
+  await expect
+    .element(page.getByText("This branch conflicts with main. Fleet sends it back for a Drone to clear the conflicts."))
+    .toBeVisible();
 
   await userEvent.click(page.getByRole("button", { name: "Approve the work" }));
   expect(approved).toEqual([JOB.id]);
@@ -410,5 +412,7 @@ test("merge is the primary act again once the branch is no longer conflicted", a
   await expect
     .element(page.getByRole("button", { name: "Merge and take the work" }))
     .not.toBeDisabled();
-  await expect.element(page.getByText("Resolve the conflicts first.")).not.toBeInTheDocument();
+  await expect
+    .element(page.getByText("This branch conflicts with main. Fleet sends it back for a Drone to clear the conflicts."))
+    .not.toBeInTheDocument();
 });

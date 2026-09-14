@@ -48,7 +48,6 @@ export type Decision =
   | "request_changes"
   | "reject"
   | "merge"
-  | "resolve_pull_request_conflict"
   | "rerun_failed_checks"
   | "investigate_failed_checks";
 

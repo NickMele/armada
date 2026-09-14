@@ -274,7 +274,7 @@ where
     /// request changed this turn, the catch-up conflicted before either was
     /// touched. Clearing them anyway is what silently orphaned the recovery
     /// path in the measured incident — the store forgot the very pull
-    /// request `resolve_pull_request_conflict` reads to send the Drone back.
+    /// request `crate::conflict_resolution` reads to send the Drone back.
     async fn note_delivery(
         &self,
         job: &Job,

@@ -975,14 +975,14 @@ Added by the Aug 2026 config review. Named in the crate design as a verification
 [settings.loop-iteration-cap-iteration-cap]
 name = "Loop iteration cap (iteration_cap)"
 scope = "Kit → Manifest"
-default = "5 returns per looping step"
+default = "0 — no return permitted where a step declares none"
 lifetime = "Live"
 merge_strategy = "REPLACE"
 peer_polarity = "Lower is stricter"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
-Ceiling on how many times a step is redone as designed via a loop return; reaching it escalates as loop_cap. Not the retry limit — an iteration is not a failure, never consumes the retry budget, never trips a gate-failure escalation. Set per step on the step that emits the verdict, defaulted from default_gate_policy.iteration_cap. Named in the Escalation Taxonomy since it was written; no row until Aug 21 2026.
+Ceiling on how many times a step is redone as designed via a loop return; reaching it escalates as loop_cap. Not the retry limit — an iteration is not a failure, never consumes the retry budget, never trips a gate-failure escalation. Set per step on the step that emits the verdict; a step that declares none reads zero, fail-closed, rather than a default drawn from anywhere else — `crates/config/src/resolve.rs:326`. Named in the Escalation Taxonomy since it was written; no row until Aug 21 2026.
 """
 
 [settings.review-gate-policy-manifest-rule-review-gate]

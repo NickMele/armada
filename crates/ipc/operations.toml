@@ -1005,26 +1005,9 @@ transport = "HTTP"
 agent_access = "No"
 description = "Sends the branch back for a Drone to find out why a pull request's CI failed"
 notes = """
-`resolve_pull_request_conflict`'s road with a note (#905): the Job goes back to the step before the one that delivers, and the Drone there opens with the failed checks and is asked to say which of five kinds each is and fix what is the change's. **It re-runs nothing**; a flaky run is reported, and re-running it is a person's press. Once its step passes, the ordinary forward walk delivers again and the pull request updates.
+`crate::conflict_resolution`'s road with a note (#905): the Job goes back to the step before the one that delivers, and the Drone there opens with the failed checks and is asked to say which of five kinds each is and fix what is the change's. **It re-runs nothing**; a flaky run is reported, and re-running it is a person's press. Once its step passes, the ordinary forward walk delivers again and the pull request updates.
 
 Refused with a 409 anywhere but `awaiting_review`, where the Job has no open pull request or no failed check when Fleet last read it, and where the workflow has no step before the one that delivers.
-"""
-
-[operations.resolve_pull_request_conflict]
-kind = "command"
-transport = "HTTP"
-agent_access = "No"
-description = "Sends the branch back for a Drone that can edit files to bring it current with main"
-notes = """
-**`#663`. A sixth thing to do at the review gate, and Fleet's own rebase — never a Drone's, because a Drone has no git.** A clean result is pushed with `--force-with-lease` and nothing else moves: the pull request updates in place, the same outcome an unattended Job already gets from the automatic sweep in `fleet::currency`.
-
-**A conflict is sent back to the step before the one that delivers**, the same `StepTarget::Returned` edge a workflow's own `verdict_routing` already uses to redo a step on purpose — `crate::reviewing::route_back` is that caller and this act is a second one, choosing its own target. `crate::spawning`'s catch-up briefs the fresh Drone with the conflict exactly as a restart already does; once its step's Checks pass, the ordinary forward walk carries the Job through the delivering step again, which is what commits, pushes and updates the pull request. The gate itself is never touched — it stays exactly where it was, waiting for the same person's answer.
-
-**Never the gate's own Drone.** #660 spent a turn on `handoff` — a step that only summarises — because a picked pull-request comment asking to resolve conflicts reached it through `take_up_remarks`; that Drone has no git and no code to edit. This act is the one road that redoes the step that can.
-
-Refused with a 409 anywhere but `awaiting_review`, sharing that with the acts beside it; with a 409 where the record holds no open pull request; and with a 409 where the frozen workflow has no step before the one that delivers — a single step doing both, which this cannot redo without redelivering onto its own conflict.
-
-`agent_access` is `No`, like every other act at this gate.
 """
 
 [operations.answer_question]

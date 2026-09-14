@@ -20,10 +20,8 @@ import { openPullRequest, type OpenPullRequest } from "./opening";
 import type { ReactNode } from "react";
 import { GitPullRequest, Minus } from "lucide-react";
 import {
-  Button,
   CheckRuns,
   JudgeQuestion,
-  Tooltip,
   VerdictSheet,
   type CheckRun as CheckRunRow,
   type VerdictFigure,
@@ -316,8 +314,6 @@ export function pullRequestBlockOf(
   detail: PullRequestDetail | undefined,
   now: number,
   onOpen?: () => void,
-  onResolveConflict?: () => void,
-  disabled?: boolean,
   /**
    * Present where the branch's last commit never reached this pull request —
    * `whole.delivery.unpushed`. Since protocol 11.2, `#691`.
@@ -334,7 +330,6 @@ export function pullRequestBlockOf(
   const number =
     detail?.number === undefined ? (pullRequestNumber(address) ?? "Pull request") : `#${detail.number}`;
   const currency = currencyLineOf(detail?.currency, now);
-  const blocked = unpushed !== undefined || currency?.conflicted === true;
   return (
     <div className="armada-verdict__pr">
       <p className="text-xs text-fg-muted">
@@ -363,21 +358,6 @@ export function pullRequestBlockOf(
         <p className="text-xs text-fg-default">
           The work here is committed but has not reached this pull request yet.
         </p>
-      )}
-      {/* Sits directly under the sentence it answers, never after the
-          decision card below — a person reading "changes that clash" should
-          find the fix in the same glance. `#663`. Drawn only where there is a
-          clash to resolve: the automatic catch-up already keeps an
-          unattended branch current, so this is not a "check now" button.
-          **Primary**, because `Decide`'s own merge control is disabled in
-          exactly this state — one accent fill, and it is on the control that
-          works. */}
-      {!blocked || onResolveConflict === undefined ? null : (
-        <Tooltip label="Sends the clash back to the step that wrote the code. Its Drone fixes the files, the Checks run again, and the pull request updates.">
-          <Button variant="primary" disabled={disabled} onClick={onResolveConflict}>
-            Resolve conflicts
-          </Button>
-        </Tooltip>
       )}
     </div>
   );
@@ -452,10 +432,6 @@ export type VerdictArgs = {
     address: string | undefined;
     detail: PullRequestDetail | undefined;
     onOpen?: () => void;
-    /** Send the clash back to a Drone that can edit files. `#663`. */
-    onResolveConflict?: () => void;
-    /** Off while nothing here can be sent — the same reading `Decide` gets. */
-    resolveConflictDisabled?: boolean;
     /** Present where the last commit never reached this pull request. Since protocol 11.2, `#691`. */
     unpushed?: string;
   };
@@ -502,8 +478,6 @@ export function verdictOf({
             pullRequest.detail,
             now,
             pullRequest.onOpen,
-            pullRequest.onResolveConflict,
-            pullRequest.resolveConflictDisabled,
             pullRequest.unpushed,
           ),
         }),
@@ -538,8 +512,6 @@ export type VerdictSlotAtGateArgs = {
   stale: boolean;
   deciding: boolean;
   onMergePullRequest: (jobId: string) => void;
-  /** Send the branch back for a Drone that can edit files. `#663`. */
-  onResolvePullRequestConflict: (jobId: string) => void;
   /** Start the pull request's failed CI runs again. #905. */
   onRerunFailedChecks?: (jobId: string) => void;
   /** Send the branch back for a Drone to find out why CI failed. #905. */
@@ -586,7 +558,6 @@ export function verdictSlotAtGate({
   stale,
   deciding,
   onMergePullRequest,
-  onResolvePullRequestConflict,
   onRerunFailedChecks,
   onInvestigateFailedChecks,
   onQueueAfterFinding,
@@ -660,8 +631,6 @@ export function verdictSlotAtGate({
             void openPullRequest(onOpenPullRequest, job.id).then((because) => {
               if (because !== null) onSaid(because);
             }),
-          onResolveConflict: () => onResolvePullRequestConflict(job.id),
-          resolveConflictDisabled: stale || deciding,
           unpushed,
         },
         undecided,
@@ -716,7 +685,6 @@ export function verdictSlotAtGate({
               ...(onRerunFailedChecks === undefined
                 ? {}
                 : { onRerun: () => onRerunFailedChecks(job.id) }),
-              onResolve: () => onResolvePullRequestConflict(job.id),
               disabled: stale || deciding,
             }),
           })}

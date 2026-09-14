@@ -59,7 +59,6 @@ export type ConfidenceCi = {
   conflicted: boolean;
   onInvestigate?: () => void;
   onRerun?: () => void;
-  onResolve?: () => void;
   disabled?: boolean;
 };
 

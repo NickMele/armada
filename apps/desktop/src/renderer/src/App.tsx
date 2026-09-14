@@ -680,9 +680,6 @@ export function App() {
                 onShowAgain={showAgain}
                 onApprove={(jobId) => void commands.approve(jobId)}
                 onMergePullRequest={(jobId) => void commands.decide(jobId, "merge")}
-                onResolvePullRequestConflict={(jobId) =>
-                  void commands.resolvePullRequestConflict(jobId)
-                }
                 onRerunFailedChecks={(jobId) => void commands.rerunFailedChecks(jobId)}
                 onInvestigateFailedChecks={(jobId) => void commands.investigateFailedChecks(jobId)}
                 onQueueAfterFinding={(jobId, finding) => void commands.queueAfterFinding(jobId, finding)}

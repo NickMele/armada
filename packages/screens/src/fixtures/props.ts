@@ -86,7 +86,6 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onReport: async () => NOT_CONNECTED,
     onApprove: noop,
     onMergePullRequest: noop,
-    onResolvePullRequestConflict: noop,
     onRerunFailedChecks: noop,
     onInvestigateFailedChecks: noop,
     onQueueAfterFinding: noop,

@@ -129,19 +129,51 @@ export const APullRequestToMerge: Story = {
 };
 
 /**
- * `#663`: the branch clashes with main, so Fleet would refuse the merge.
+ * `#663`: the branch conflicts with main, so Fleet would refuse the merge.
  * **Merge stays drawn and takes no fill** — a disabled control has no variant
- * left to express — **with the reason beside it**, never folded into
+ * left to express — **with the reason under the row**, never folded into
  * `disabledNote`, which belongs to the whole group and is not in play here:
- * Approve, Request changes and Reject all still work. The caller's own
- * conflict control is what fixes the branch; this one only says why it
- * cannot be pressed yet.
+ * Approve, Request changes and Reject all still work. `#1131`: Fleet sends a
+ * Drone to clear it on its own, so the reason names what is happening
+ * rather than something to press.
+ *
+ * **The three buttons stay packed at their own width.** The reason used to
+ * sit inside Merge's own flex item and, being the longest sentence on the
+ * surface, stretched that column — pushing Approve to the far side of the
+ * row. It sits under the whole group now, `aria-describedby` on Merge in
+ * place of the position it gave up.
  */
 export const TheBranchConflicts: Story = {
   args: {
     note: "",
     onMerge: () => {},
-    mergeBlockedReason: "Resolve the conflicts first.",
+    mergeBlockedReason: "This branch conflicts with main. Fleet sends it back for a Drone to clear the conflicts.",
+  },
+  play: async ({ canvasElement }) => {
+    const kept = canvasElement.querySelector<HTMLElement>(".armada-decision__kept")!;
+    const buttons = kept.querySelectorAll<HTMLElement>("button");
+    const merge = buttons[0]!;
+    const approve = buttons[1]!;
+    await expect(merge).toHaveTextContent("Merge and take the work");
+    await expect(approve).toHaveTextContent("Approve the work");
+
+    // Packed at their own width: same row, and no wider a gap between them
+    // than the row declares — the regression a short "Resolve the conflicts
+    // first." never surfaced, once the reason sat inside Merge's own column.
+    const mergeBox = merge.getBoundingClientRect();
+    const approveBox = approve.getBoundingClientRect();
+    const rowGap = Number.parseFloat(getComputedStyle(kept).columnGap);
+    await expect(approveBox.top).toBeCloseTo(mergeBox.top, 0);
+    const seam = approveBox.left - mergeBox.right;
+    await expect(seam).toBeGreaterThanOrEqual(0);
+    await expect(seam).toBeLessThanOrEqual(rowGap + 1);
+
+    // The reason itself sits under the row, not beside it, and Merge still
+    // names it for a screen reader.
+    const reason = canvasElement.querySelector<HTMLElement>('[role="note"]')!;
+    await expect(reason).toHaveTextContent("This branch conflicts with main.");
+    await expect(reason.getBoundingClientRect().top).toBeGreaterThanOrEqual(mergeBox.bottom);
+    await expect(merge.getAttribute("aria-describedby")?.split(" ")).toContain(reason.id);
   },
 };
 
