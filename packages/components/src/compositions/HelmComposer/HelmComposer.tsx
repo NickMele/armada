@@ -29,6 +29,14 @@ export type HelmComposerProps = {
   chip?: HelmComposerChip;
   /** The chip's own `×`. Omitted with no `chip` draws nothing to remove. */
   onRemoveChip?: () => void;
+  /**
+   * The footer's one sentence — where the person is, in the caller's own
+   * words. **Built off the same context #1075 sends with every ask**, never a
+   * second reading of the screen: a footer that could disagree with what
+   * Helm was actually told would be worse than none. No lead-in — never
+   * "Helm reads where you are: …". `#1094`. Absent draws no footer.
+   */
+  location?: string;
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
@@ -44,6 +52,7 @@ export function HelmComposer({
   startFreshDisabled = false,
   chip,
   onRemoveChip,
+  location,
   value,
   onChange,
   onSend,
@@ -92,8 +101,14 @@ export function HelmComposer({
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
         placeholder="Ask Helm about this repository"
+        // Reopening the dock remounts this field — #1094 — and that is the
+        // only time this fires: nothing else in the tree changes its key.
+        autoFocus
       />
       <div className="armada-helm-composer__actions">
+        {location === undefined ? null : (
+          <span className="armada-helm-composer__location">{location}</span>
+        )}
         <Button type="submit" variant="primary" size="sm" disabled={disabled || blank}>
           Send
         </Button>

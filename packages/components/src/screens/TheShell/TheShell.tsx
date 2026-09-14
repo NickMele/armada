@@ -68,7 +68,14 @@ export type TheShellProps = {
   fleet: Omit<FleetPanelProps, "narrow">;
 };
 
-/** Helm's dock (#948). Closed draws the edge strip at any width, so both arrangements share one way back. */
+/**
+ * Helm's dock (#948). **Closed draws nothing at all beyond the layout
+ * breakpoint** — #1094 dropped the edge strip that used to sit there at any
+ * width, since the title row's own Helm button (#1087) is already the way
+ * back and a strip that says the same thing a second time is residue, not a
+ * second door. Folded still keeps its strip: under the breakpoint the title
+ * row has no room to carry the button, so the strip is the only way in.
+ */
 export type TheShellDock = {
   /** Beside the content, or the sheet when folded. */
   open: boolean;
@@ -169,6 +176,10 @@ function Dock({ open, folded = false, questions = 0, binding, onOpen, children }
     );
   }
 
+  // Closed, at width: nothing. The title row's Helm button is the one way
+  // back — #1094.
+  if (!folded) return null;
+
   const waiting = questions > 0 ? `, ${questions} ${questions === 1 ? "question" : "questions"} waiting` : "";
   return (
     <>
@@ -213,8 +224,8 @@ function Chord({ binding }: { binding: string }) {
  * reads — so the caller states the dock once and both controls agree on it.
  *
  * **Absent whenever the full dock is showing beside the content.** Drawn
- * while folded (the strip's own state) and while closed outright: #1087 adds
- * this control without removing the edge strip, which stays until #1094.
+ * while folded (the strip's own state) and while closed outright — the latter
+ * is the only way back once #1094 stopped drawing a strip there at all.
  */
 function helmButtonOf(
   dock: TheShellDock | undefined,
