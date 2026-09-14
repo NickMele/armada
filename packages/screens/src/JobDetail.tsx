@@ -262,9 +262,7 @@ function OneJob({
       ? recorded.handed.moment
       : undefined;
   const run =
-    whole === null
-      ? []
-      : runOf(whole, now, selected ?? undefined, watching?.rows ?? [], handed, render === "reviewing");
+    whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? [], handed);
   // The strip's rows carry the three records a person reads because a verdict
   // went against them, and each opens. The Job id and the toast are the panel's,
   // so they are handed down rather than reached for; `phases.tsx` says why.
@@ -716,6 +714,7 @@ function OneJob({
               timeline,
               openRow: keys.openChapterId,
               onOpenRow: keys.onOpenChapter,
+              timelineFolded: atGate,
               // A finished Job's verdict sheet is a record, read after the story.
               after: atGate ? undefined : verdictSlot,
             }

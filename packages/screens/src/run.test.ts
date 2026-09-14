@@ -291,17 +291,3 @@ describe("a step the gaming check stopped", () => {
     expect(factsOf(flagged).get("Checks")).toBe("1 of 1 passed");
   });
 });
-
-// #1129: the rail kept Produced, Checks and Waiting open under the same
-// step the record above the rail was already reading, at the review gate.
-describe("factsOpen at the review gate", () => {
-  it("starts the selected step's facts closed once it is only waiting on a review", () => {
-    const [drawn] = runOf(whole(step()), NOW, "tests", [], undefined, true);
-    expect(drawn?.factsOpen).toBeUndefined();
-  });
-
-  it("starts the selected step's facts open everywhere else", () => {
-    const [drawn] = runOf(whole(step()), NOW, "tests", [], undefined, false);
-    expect(drawn?.factsOpen).toBe(true);
-  });
-});

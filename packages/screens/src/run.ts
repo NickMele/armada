@@ -73,10 +73,6 @@ export function stepsAhead(workflow: WorkflowSummary | undefined): RunTreeSkelet
  * **The selected step's facts start open and no others do.** A seven-step
  * workflow with every step expanded fits no screen; after that the tree holds
  * whatever the reader opened, which is `RunTree`'s own rule.
- *
- * **Except at the review gate.** Once the review is written and the step is
- * only waiting on a person, Produced, Checks and Waiting are three facts the
- * record above already carries; starting them open repeated it. #1129.
  */
 export function runOf(
   whole: JobWhole,
@@ -85,8 +81,6 @@ export function runOf(
   rows: readonly Turn[],
   /** The moment this Job's Drone handed in, where one has arrived. `#813`. */
   handed?: EvidenceSubmitted,
-  /** Whether the step is waiting on a person's review. `render.ts`'s `reviewing`. */
-  reviewing = false,
 ): RunTreeStep[] {
   const wrote = producedBy(rows);
   const criteria = whole.acceptance_criteria;
@@ -115,7 +109,7 @@ export function runOf(
       activity,
       status: frozen?.word ?? stateOf(step),
       current: current || undefined,
-      factsOpen: (current && !reviewing) || undefined,
+      factsOpen: current || undefined,
       elapsed: took(step, now, frozen !== undefined),
       facts,
       factsAbsent: NOTHING_RECORDED,

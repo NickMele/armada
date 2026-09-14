@@ -90,10 +90,16 @@ export type StepTimelineProps = {
    */
   openRow?: string | null;
   onOpenRow?: (rowId: string | null) => void;
+  /**
+   * Whether the timeline starts with every row closed. `VerdictSheet`'s own
+   * `folded`, for the same reason: at the review gate the record above already
+   * reads this step, and every row open under it read the same thing twice.
+   */
+  folded?: boolean;
 };
 
-export function StepTimeline({ attempts, label, openRow, onOpenRow }: StepTimelineProps) {
-  const [held, setHeld] = useState<string | null>(() => whereItIs(attempts));
+export function StepTimeline({ attempts, label, openRow, onOpenRow, folded = false }: StepTimelineProps) {
+  const [held, setHeld] = useState<string | null>(() => (folded ? null : whereItIs(attempts)));
   const many = attempts.length > 1;
 
   // **Synced, not controlled, and never synced to nothing.** A caller that
@@ -104,6 +110,12 @@ export function StepTimeline({ attempts, label, openRow, onOpenRow }: StepTimeli
   useEffect(() => {
     if (openRow !== undefined && openRow !== null) setHeld(openRow);
   }, [openRow]);
+
+  // `folded` transitioning true — arriving at the gate on a panel already
+  // mounted — closes every row the same way the initial seed above does.
+  useEffect(() => {
+    if (folded) setHeld(null);
+  }, [folded]);
 
   function toggle(rowId: string): void {
     const next = held === rowId ? null : rowId;
