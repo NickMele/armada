@@ -134,11 +134,25 @@ export type JobSummary = {
    */
   landed?: Settled;
   /**
-   * When the Job was created. On the row rather than only on the detail,
-   * because elapsed is what answers "is this stuck" without opening it, and
-   * reading it per row would be one request per row.
+   * When the Job was created. Not what a whole-Job elapsed is measured from
+   * — `started_at` below is — but on the row for the same reason that one is:
+   * a row that cannot answer "is this stuck" without opening the Job needs
+   * one request per row to answer it.
    */
   created_at: string;
+  /**
+   * When the Job first reached `running` — the first dated arrival in the
+   * log, and only the first. Since protocol 13.39.
+   *
+   * **Absent until the Job's first Drone starts, and never `null`.** Time at
+   * `awaiting_approval` and time `queued` before that first run must not
+   * count, which is the whole reason this is a field of its own rather than
+   * `created_at`: a Job waiting for approval, or approved and waiting for a
+   * slot, shows no run time at all. Once set it never moves, even where the
+   * Job later returns to `awaiting_approval` for a sub-dispatch approval or
+   * to `queued` on a restart — only the very first arrival counts.
+   */
+  started_at?: string;
   /** Absent until a worktree exists. A Job at the approval gate has none. */
   branch?: string;
   /**

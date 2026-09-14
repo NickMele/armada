@@ -43,7 +43,7 @@ import type {
 } from "@armada/protocol";
 
 import { money, pullRequestNumber } from "./facts";
-import { absoluteOf, span } from "./duration";
+import { absoluteOf, elapsedSince } from "./duration";
 import { checkRow, saidOf, iconOf } from "./checks";
 import { checksOf, didNotPass, mechanicalRunsOf, panelsOf } from "./gates";
 import { basename, keptOf, type Opens } from "./phases";
@@ -274,10 +274,18 @@ function filesCountOf(diff: Diff, jobId: string): number | undefined {
  * How long the Job ran, and what it cost — off the human gate step's own
  * `updated_at`, the instant that closed the Job, rather than the live clock
  * every other render reads against.
+ *
+ * **`undefined` while `started_at` is absent**, for [`verdict.tsx`]'s own
+ * `tookOf`'s reason: a Job that never ran has nothing to report, and
+ * `created_at` would count the wait for approval as run time.
  */
-function tookOf(job: JobSummary, whole: JobWhole | null, gate: StepDetail | undefined): string | undefined {
-  const elapsed = gate === undefined ? null : span(job.created_at, gate.updated_at);
-  if (elapsed === null) return undefined;
+export function tookOf(
+  job: JobSummary,
+  whole: JobWhole | null,
+  gate: StepDetail | undefined,
+): string | undefined {
+  const elapsed = gate === undefined ? undefined : elapsedSince(job.started_at, gate.updated_at);
+  if (elapsed === undefined) return undefined;
   const spend = whole?.spend;
   return spend === undefined ? elapsed : `${elapsed} · ${money(spend.cost_micros)}`;
 }

@@ -37,7 +37,7 @@ import { landingsOf, stepTimelineOf, turnsOfAttempt, wroteIn } from "./timeline"
 import type { AttemptRead } from "./timeline";
 import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
-import { span } from "./duration";
+import { elapsedSince, span } from "./duration";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
@@ -549,7 +549,10 @@ function OneJob({
     <InsideAJob
       heading={heading}
       run={run.map(named)}
-      runElapsed={span(job.created_at, now) ?? undefined}
+      // Absent while the Job has never run — `started_at` is not set until
+      // its first Drone starts, and waiting for approval or a slot must not
+      // count.
+      runElapsed={elapsedSince(job.started_at, now)}
       runAbsent={whyNoSteps(watched, job.id)}
       runReading={reading?.run}
       unreachable={whyUnreachable(watched, job.id)}

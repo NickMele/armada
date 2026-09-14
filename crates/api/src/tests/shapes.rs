@@ -158,6 +158,7 @@ pub fn job_at(id: &str, spelling: &str) -> JobSummary {
         title: format!("a Job called {id}"),
         status: status(spelling),
         created_at: Instant::carried("2026-01-01T00:00:00.000Z"),
+        started_at: None,
         branch: Some(format!("armada/{id}")),
         reason: None,
         queued_reason: None,

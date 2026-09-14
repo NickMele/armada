@@ -37,7 +37,7 @@ import type { JobDetailField } from "@armada/components";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
-import { span } from "./duration";
+import { elapsedSince } from "./duration";
 import { freezeLineOf } from "./freeze";
 import { leading } from "./reading";
 import { LANDED } from "./Row";
@@ -211,10 +211,15 @@ function freezeFact(job: JobSummary): JobDetailField[] {
   return line === null ? [] : [{ label: line.lead, value: line.names, mono: true, suffix: line.tail }];
 }
 
-/** How long the Job has been alive, from `created_at`. */
+/**
+ * How long the Job has been running, from `started_at`.
+ *
+ * **Absent, not from `created_at`, while the Job has never run** — waiting
+ * for approval and waiting in the queue for a slot must not count.
+ */
 function elapsedFact(job: JobSummary, now: number): JobDetailField[] {
-  const alive = span(job.created_at, now);
-  return alive === null ? [] : [{ label: "Elapsed", value: alive, mono: true }];
+  const alive = elapsedSince(job.started_at, now);
+  return alive === undefined ? [] : [{ label: "Elapsed", value: alive, mono: true }];
 }
 
 /**

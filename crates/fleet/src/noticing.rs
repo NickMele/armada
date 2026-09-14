@@ -503,7 +503,12 @@ where
         // way that publish builds it — from the record alone, with no reason,
         // no queued reason and no slot, none of which a Job that finished some
         // time ago has anything to say about.
-        let mut summary = ipc::JobSummary::from(&job);
+        //
+        // **`started_at` is read, not left `None`.** A landed Job has run —
+        // `From` would say otherwise, `crate::dispatch::Fleet::published`'s
+        // own reason.
+        let started_at = self.job_started_at(job.id()).await?;
+        let mut summary = ipc::JobSummary::of(&job, None, None, None, false, None, started_at);
         summary.landed = Some(state);
         // A client replaces the row with this one, so it keeps its task counts.
         summary.tasks = self.task_counts(&noticed.job).await?;

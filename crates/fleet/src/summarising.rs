@@ -80,6 +80,7 @@ where
         // spend until somebody answers.
         let asking = self.question_awaited(job.id()).await.is_some()
             || self.command_awaited(job.id()).await.is_some();
+        let started_at = self.job_started_at(job.id()).await.map_err(|why| self.refusal(why))?;
         let mut summary = JobSummary::of(
             job,
             reason.as_ref(),
@@ -87,6 +88,7 @@ where
             queued.budget,
             asking,
             self.resumption(job),
+            started_at,
         );
         summary.frozen_by = queued.frozen_by.iter().map(ipc::ManifestId::from).collect();
         summary.tasks = self

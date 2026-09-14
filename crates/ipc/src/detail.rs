@@ -550,12 +550,14 @@ impl JobDetail {
     /// computed from the board, a step's Checks are the workflow's and the
     /// store's, and the footprint is the store's alone — a Job carries no
     /// record of what it touched.
+    #[allow(clippy::too_many_arguments)]
     pub fn of(
         job: &core_model::Job,
         reason: Option<&core_model::TransitionReason>,
         queued_reason: Option<core_model::QueuedReason>,
         budget_hold: Option<core_model::BudgetHold>,
         resumption: Option<core_model::Resumption>,
+        started_at: Option<core_model::Timestamp>,
         steps: &[StepFacts],
         footprint: Option<JobFootprint>,
         redirecting: Option<RedirectInFlight>,
@@ -578,6 +580,7 @@ impl JobDetail {
                 budget_hold,
                 asking.is_some(),
                 resumption,
+                started_at,
             ),
             created_at: job.created_at().into(),
             branch: job.branch().map(|branch| branch.as_str().to_string()),

@@ -41,18 +41,17 @@
 // `JobSummary` now, so the switch is a field the row already holds. A Job at
 // the approval gate has no worktree and keeps the workflow.
 //
-// **Elapsed is measured from `created_at`**, also on the summary now. It is the
-// track that answers "is this stuck" without opening the Job, which was the
-// whole reason it was drawn. It runs to now while the Job is working and stops
-// at the Job's own last movement once it is over — a terminal Job whose elapsed
-// kept climbing would read as still running.
+// **Elapsed is measured from `started_at`, not `created_at`.** Waiting for
+// approval and waiting in the queue for a slot must not count, so a Job that
+// has never run — `started_at` absent — draws no elapsed at all. Once running
+// it runs to now, and stops at the Job's own last movement once it is over —
+// a terminal Job whose elapsed kept climbing would read as still running.
 //
-// **The same track carries when a Job was created, not just how long.** While
-// working, elapsed stays the drawn value and the creation time rides along as
-// a hover title — the glance-value people scan for stays "is this stuck," and
-// the exact instant is a hover away. Once terminal, elapsed has nothing left
-// to answer, and that slot — blank until now — draws the creation time itself
-// rather than staying empty.
+// **The same track carries when a Job was created, once it has run.** Once
+// terminal, elapsed has nothing left to answer, and that slot — blank until
+// now — draws the creation time itself rather than staying empty. A Job that
+// never ran has nothing to draw there either: a creation time in a Run time
+// column would read as a run that happened.
 //
 // **Spend stays out of the row entirely.** Nothing measures it — not on the
 // wire, not in the store, not computed — and a labelled gap on every row reads
@@ -83,7 +82,7 @@ import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { taskBarSegmentsOf, taskFigureOf } from "./board";
-import { absoluteOf, span } from "./duration";
+import { absoluteOf, elapsedSince } from "./duration";
 import { activityFor } from "./frozen";
 import { rowFreezeOf } from "./freeze";
 import { ROW_VERBS, verbOf } from "./keys";
@@ -230,7 +229,12 @@ export function Row({
     },
     {
       label: "Run time",
-      value: elapsedNow ?? createdAt ?? "—",
+      // **A Job that has never run draws nothing here, not `createdAt`.** The
+      // fallback is for a terminal Job whose elapsed has nothing left to
+      // answer; a Job still waiting for approval or a slot has never run at
+      // all, and a creation time in this column would read as a run that
+      // happened.
+      value: elapsedNow ?? (isTerminal(job) ? createdAt : undefined) ?? "—",
       mono: true,
       quiet: elapsedNow === undefined,
     },
@@ -320,16 +324,17 @@ export function Row({
 }
 
 /**
- * How long this Job has been alive.
+ * How long this Job has been running.
  *
  * **A working Job runs to now; a Job that is over stops.** `JobSummary` carries
  * no ended-at, so a terminal Job would otherwise keep counting and read as
  * still running. There is nothing on the row to stop it against, so a terminal
  * Job shows no elapsed at all rather than a figure that is wrong every second
  * after it is drawn. Reported: the row wants the instant the Job stopped.
+ *
+ * **`undefined` too where `started_at` is absent** — a Job at `needs approval`,
+ * or approved and waiting in the queue, has never run and shows no run time.
  */
-function elapsedOf(job: JobSummary, now: number): string | undefined {
-  return JOB_LIFECYCLE[job.status]?.terminal === false
-    ? (span(job.created_at, now) ?? undefined)
-    : undefined;
+export function elapsedOf(job: JobSummary, now: number): string | undefined {
+  return JOB_LIFECYCLE[job.status]?.terminal === false ? elapsedSince(job.started_at, now) : undefined;
 }

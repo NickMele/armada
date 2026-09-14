@@ -171,3 +171,22 @@ describe("did this land", () => {
     expect(labels(null)).not.toContain("merged");
   });
 });
+
+describe("Elapsed", () => {
+  const now = Date.parse("2026-08-31T09:05:00Z");
+
+  it("draws nothing for a Job that has never run", () => {
+    const drawn = factsOf(job({ status: "awaiting_approval", started_at: undefined }), null, undefined, now);
+    expect(drawn.find((field) => field.label === "Elapsed")).toBeUndefined();
+  });
+
+  it("draws the span from started_at once the Job has run", () => {
+    const drawn = factsOf(
+      job({ status: "running", started_at: "2026-08-31T09:00:00Z" }),
+      null,
+      undefined,
+      now,
+    );
+    expect(drawn.find((field) => field.label === "Elapsed")?.value).toBe("5m 00s");
+  });
+});

@@ -63,7 +63,7 @@ export type JobDetail = {
   workflow_source?: string;
   /** The Job's plan whole. Absent is a Job no plan was recorded for. Since 13.21. */
   work_plan?: WorkPlan;
-  /** What a whole-Job elapsed is measured from. Creation is not a transition. */
+  /** When the Job was created. Also on `job` — see `JobSummary.started_at` for what elapsed is measured from. */
   created_at: string;
   /** Absent until a worktree exists. A Job at the gate has no branch. */
   branch?: string;

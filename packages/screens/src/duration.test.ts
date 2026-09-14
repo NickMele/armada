@@ -1,7 +1,7 @@
 // What the duration formatters say, at the boundaries where they change words.
 import { describe, expect, it } from "vitest";
 
-import { briefly, lasting, span } from "./duration";
+import { briefly, elapsedSince, lasting, span } from "./duration";
 
 describe("a short duration keeps its milliseconds", () => {
   it("reports under a second in milliseconds", () => {
@@ -32,5 +32,20 @@ describe("a span between two instants", () => {
 
   it("reads minutes and seconds", () => {
     expect(span("2026-09-10T14:00:00Z", "2026-09-10T14:02:22Z")).toBe("2m 22s");
+  });
+});
+
+describe("a whole-Job elapsed, from started_at", () => {
+  it("is undefined for a Job that has never run", () => {
+    expect(elapsedSince(undefined, "2026-09-10T14:02:22Z")).toBeUndefined();
+  });
+
+  it("spans from started_at once the Job has run", () => {
+    expect(elapsedSince("2026-09-10T14:00:00Z", "2026-09-10T14:02:22Z")).toBe("2m 22s");
+  });
+
+  it("takes `now` as a number the same way span does", () => {
+    const now = Date.parse("2026-09-10T14:02:22Z");
+    expect(elapsedSince("2026-09-10T14:00:00Z", now)).toBe("2m 22s");
   });
 });

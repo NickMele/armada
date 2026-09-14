@@ -197,9 +197,26 @@ pub struct Move<'a> {
     pub at: &'a Instant,
 }
 
+/// The first dated arrival at `running`, off a Job-level log kept in this same
+/// shape — one entry per status move rather than per step move. `why` is
+/// unused: a Job-level move carries a `TransitionReason`, not a step's
+/// trigger.
+///
+/// **The first, and only the first — [`JobSummary::of`](crate::JobSummary::of)'s
+/// whole rule for its own `started_at`.** A Job that leaves `running` for
+/// `awaiting_approval` or `queued` and comes back does not get a second clock:
+/// waiting for approval and waiting for a slot never count, and only the very
+/// first Drone's start does. Matching by spelling rather than by position is
+/// what makes `running -> awaiting_approval -> queued -> running` still answer
+/// the first entry, however many later ones arrive.
+pub fn first_started_at<'a>(moves: impl Iterator<Item = Move<'a>>) -> Option<Instant> {
+    let running = core_model::JobStatus::Running.as_wire();
+    moves.filter(|moved| moved.to == running).map(|moved| moved.at.clone()).next()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Move, StepAttempt};
+    use super::{first_started_at, Move, StepAttempt};
     use crate::ids::Instant;
 
     fn at(second: u32) -> Instant {
@@ -335,5 +352,49 @@ mod tests {
         );
 
         assert!(runs.is_empty());
+    }
+
+    /// The clock's whole rule: the first arrival at `running` survives a later
+    /// approval and a later queue, and a second dispatch never resets it.
+    #[test]
+    fn a_job_sent_back_to_approval_and_the_queue_keeps_its_first_start() {
+        let (first, gate, queue, second) = (at(0), at(1), at(2), at(3));
+        let moves = [
+            Move {
+                to: "running",
+                why: None,
+                at: &first,
+            },
+            Move {
+                to: "awaiting_approval",
+                why: None,
+                at: &gate,
+            },
+            Move {
+                to: "queued",
+                why: None,
+                at: &queue,
+            },
+            Move {
+                to: "running",
+                why: None,
+                at: &second,
+            },
+        ];
+
+        assert_eq!(first_started_at(moves.into_iter()), Some(first));
+    }
+
+    /// A Job still at the gate, or still in the queue, has never started.
+    #[test]
+    fn a_job_that_has_not_run_has_no_started_at() {
+        let queued = at(0);
+        let moves = [Move {
+            to: "queued",
+            why: None,
+            at: &queued,
+        }];
+
+        assert_eq!(first_started_at(moves.into_iter()), None);
     }
 }
