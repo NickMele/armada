@@ -329,6 +329,14 @@ pub enum CommitWorkError {
     /// A path to commit that is absolute or climbs out with `..`. Refused
     /// before anything is staged, so the index is as it was.
     PathOutsideTheWorktree { worktree: String, path: String },
+    /// The worktree's index still holds unmerged paths — a conflict, or the
+    /// markers one left behind — from before this call staged anything.
+    /// Refused before `add_all` can resolve them into an ordinary blob
+    /// carrying the conflict markers as text. `#1097`.
+    UnmergedPaths {
+        worktree: String,
+        paths: Vec<String>,
+    },
 }
 
 impl fmt::Display for CommitWorkError {
@@ -338,6 +346,12 @@ impl fmt::Display for CommitWorkError {
                 f,
                 "`{path}` is not a path inside the worktree at {worktree}, so \
                  nothing was committed and nothing was staged"
+            ),
+            CommitWorkError::UnmergedPaths { worktree, paths } => write!(
+                f,
+                "the worktree at {worktree} holds unmerged paths ({}), so nothing \
+                 was staged and nothing was committed — resolve them by hand first",
+                paths.join(", ")
             ),
             CommitWorkError::WorktreeUnreadable { worktree, cause } => {
                 write!(f, "the worktree at {worktree} would not open: {cause}")
@@ -366,7 +380,8 @@ impl Error for CommitWorkError {
             CommitWorkError::WorktreeUnreadable { cause, .. }
             | CommitWorkError::NotStaged { cause, .. }
             | CommitWorkError::NotCommitted { cause, .. } => Some(cause),
-            CommitWorkError::PathOutsideTheWorktree { .. } => None,
+            CommitWorkError::PathOutsideTheWorktree { .. }
+            | CommitWorkError::UnmergedPaths { .. } => None,
         }
     }
 }

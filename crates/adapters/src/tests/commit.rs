@@ -339,3 +339,56 @@ fn committed_paths(worktree: &Worktree) -> Vec<String> {
     .expect("a walk");
     paths
 }
+
+// -------------------------------------------------------- unmerged paths
+
+/// **`#1097`: a Job merged with `<<<<<<< Updated upstream` baked into a
+/// tracked file**, because nothing between a failed stash pop and this
+/// commit checked for it. `add_all` resolves a conflict into an ordinary
+/// blob the instant it stages one, so the refusal has to come first.
+#[test]
+fn a_worktree_with_unmerged_paths_is_refused_before_anything_is_staged() {
+    use crate::error::CommitWorkError;
+
+    let repo = TempRepo::with_a_commit();
+    repo.write("shared.txt", "the original\n");
+    repo.commit_everything("a file both sides touch");
+
+    let worktree = worktree_for(&repo);
+    wrote(&worktree, "shared.txt", "what the job wrote\n");
+    GitVcs::new()
+        .commit_all(&worktree, "the job's work", NINE)
+        .expect("a commit");
+
+    repo.commit_one(
+        "shared.txt",
+        "what somebody else merged\n",
+        "somebody else got there first",
+    );
+
+    // A conflicted merge, left exactly as git leaves one — unmerged and
+    // uncommitted, the same index state a failed stash pop leaves.
+    let merge = std::process::Command::new("git")
+        .args(["-C", worktree.path(), "merge", "main"])
+        .output()
+        .expect("git on PATH");
+    assert!(!merge.status.success(), "the merge was meant to conflict");
+    let started_at = tip(&worktree);
+    let before = status(&worktree);
+
+    let refused = GitVcs::new().commit_all(&worktree, "papering over it", NINE);
+    assert!(
+        matches!(
+            &refused,
+            Err(CommitWorkError::UnmergedPaths { paths, .. })
+                if paths == &["shared.txt".to_string()]
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(tip(&worktree), started_at, "the branch did not move");
+    assert_eq!(
+        status(&worktree),
+        before,
+        "nothing was staged over the conflict"
+    );
+}
