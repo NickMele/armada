@@ -517,6 +517,30 @@ more". `fleet::PeersChanged` is the one constructor. Its own `Occasion`,
 └────────────────────────────────────────────────
 ```
 
+## The checks report
+
+Fires when the Checks a Drone asked for have finished (#1020). The call that
+asked answers at once, because a build outlasts what the agent CLI waits on one
+tool call, and what each Check did arrives as this turn.
+
+**Only while the part is still going.** A submission, a kill or a Drone gone
+stops the run, and whatever follows is told nothing about it.
+
+**Fleet's own report.** `fleet::ChecksReported` is the one constructor, built
+from the run and nothing else. Its own `Occasion`, `Checks`.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ THE CHECKS YOU ASKED FOR ─────────────────────
+│ They have finished. This is what each one did:
+│
+│ (one row per Check: what it did, how long it
+│ took, and where its Check log is — then the
+│ sentence saying this is not a verdict)
+└────────────────────────────────────────────────
+```
+
 ## The poke
 
 Fires when nothing structured has arrived at all. `poke_limit` is a
