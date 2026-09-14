@@ -83,8 +83,8 @@ export type * from "./setup-reads";
 // Locate — Journey 3's *Getting in*: a repository added by folder or cloned, then Setup.
 export * from "./Locate";
 export * from "./locate-reads";
-// Overview — #919: the band of five readings, and what each reads.
-export * from "./OverviewTiles";
+// Overview — #1091: the summary strip that replaced the tile band.
+export * from "./OverviewSummary";
 export * from "./overview";
 export type * from "./overview-reads";
 // Overview — #920: Needs you, Running, Queued and Other, as the Board's own rows.

@@ -1,0 +1,92 @@
+/* Overview's summary strip — a joined row of counts, one press per panel.
+   `border-left` between items rather than a gap, so the strip reads as one
+   card wearing four windows and not four cards beside each other. */
+.armada-overview-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  overflow: hidden;
+  flex: none;
+}
+
+.armada-overview-summary[data-count="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.armada-overview-summary__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-left: var(--border-width) solid var(--border-subtle);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.armada-overview-summary__item:first-child {
+  border-left: 0;
+}
+
+.armada-overview-summary__item:hover {
+  background: var(--bg-hover);
+}
+
+.armada-overview-summary__item:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}
+
+.armada-overview-summary__count {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-overview-summary__item[data-tone="awaiting-review"] .armada-overview-summary__count {
+  color: var(--status-awaiting-review);
+}
+
+.armada-overview-summary__item[data-tone="completed-failed"] .armada-overview-summary__count {
+  color: var(--status-completed-failed);
+}
+
+.armada-overview-summary__item[data-empty] .armada-overview-summary__count,
+.armada-overview-summary__item[data-empty] .armada-overview-summary__label {
+  color: var(--fg-subtle);
+}
+
+.armada-overview-summary__label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   620px is the shell mock's own breakpoint for the two-up form — docs/contracts/design-system.md */
+@container (max-width: 620px) {
+  .armada-overview-summary,
+  .armada-overview-summary[data-count="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .armada-overview-summary__item:nth-child(3) {
+    border-left: 0;
+  }
+
+  .armada-overview-summary__item:nth-child(n + 3) {
+    border-top: var(--border-width) solid var(--border-subtle);
+  }
+}

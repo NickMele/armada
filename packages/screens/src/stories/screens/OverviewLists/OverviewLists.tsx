@@ -1,4 +1,5 @@
 import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
+import type { BoardSection } from "../../../board";
 import { OverviewLists } from "../../../OverviewLists";
 import { job, repository } from "../../../fixtures/build/base";
 import { boardJobs, boardWorkflows } from "../../../fixtures/build/board";
@@ -68,6 +69,8 @@ export function OverviewListsFrom({
   disconnected = null,
   stale = false,
   now = NOW,
+  openSections,
+  onSectionOpenChange,
   onCursor,
 }: {
   jobs?: readonly JobSummary[];
@@ -78,6 +81,8 @@ export function OverviewListsFrom({
   disconnected?: string | null;
   stale?: boolean;
   now?: number;
+  openSections?: Partial<Record<BoardSection, boolean>>;
+  onSectionOpenChange?: (section: BoardSection, open: boolean) => void;
   onCursor?: (jobId: string | null) => void;
 }) {
   return (
@@ -90,6 +95,8 @@ export function OverviewListsFrom({
       picked={picked}
       disconnected={disconnected}
       selected={null}
+      openSections={openSections}
+      onSectionOpenChange={onSectionOpenChange}
       onOpen={noop}
       onKill={noop}
       onCopied={noop}

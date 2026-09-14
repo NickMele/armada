@@ -1,11 +1,12 @@
-// Overview's readings, case by case: the machine's three tiles ignore a pick, the scope's two follow it.
+// Overview's readings, case by case: the machine's three ignore a pick, the scope's own two follow
+// it. Overview 27 (#1091) retired the tile band these once drew for; `left-column.ts` reads them
+// into the left column's Stats and Fleet panels now.
 
 import { describe, expect, it } from "vitest";
 
 import type { Connection, FleetHealth, ManifestDriftRead, RepositorySummary } from "@armada/protocol";
 import { connectedTo, PROTOCOL_VERSION } from "@armada/protocol";
-import { job } from "./fixtures/build/base";
-import { doctorReading, driftReading, dronesReading, fleetReading, queuedIn, queuedReading } from "./overview";
+import { doctorReading, driftReading, dronesReading, fleetReading } from "./overview";
 import type { RepositoryDrift } from "./overview-reads";
 
 const NOW = Date.parse("2026-09-13T12:00:00Z");
@@ -75,27 +76,6 @@ describe("the Drones tile", () => {
   it("stands in while connected and unread, and says not read otherwise", () => {
     expect(dronesReading(CONNECTED, null, 0).value).toBeUndefined();
     expect(dronesReading({ state: "reading" }, null, 0).value).toBe("Not read");
-  });
-});
-
-describe("the Queued tile", () => {
-  const jobs = [
-    job("queued", { id: "a", owner_manifest_id: "armada" }),
-    job("queued", { id: "b", owner_manifest_id: "shop" }),
-    job("running", { id: "c", owner_manifest_id: "shop" }),
-  ];
-
-  it("counts every repository's on All, and only the pick's on a pick", () => {
-    expect(queuedIn(jobs, null).map((one) => one.id)).toEqual(["a", "b"]);
-    expect(queuedIn(jobs, SHOP).map((one) => one.id)).toEqual(["b"]);
-  });
-
-  it("says where they are", () => {
-    const served = [ARMADA, SHOP, SCRATCH];
-    expect(queuedReading(queuedIn(jobs, null), served, null)).toMatchObject({ value: "2", detail: "In 2 of 3 repositories" });
-    expect(queuedReading(queuedIn(jobs, SHOP), served, SHOP)).toMatchObject({ value: "1", detail: "shop" });
-    expect(queuedReading([], served, null)).toMatchObject({ value: "0", detail: "Across 3 repositories" });
-    expect(queuedReading(queuedIn(jobs, null), [ARMADA], null).detail).toBeUndefined();
   });
 });
 

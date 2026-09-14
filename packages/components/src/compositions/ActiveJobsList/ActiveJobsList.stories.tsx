@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement } from "react";
-import { cloneElement } from "react";
+import { cloneElement, useState } from "react";
 import { Check, CircleDot, Cpu, GitBranch, Layers, OctagonAlert, Power, UserCheck, X } from "lucide-react";
 import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
@@ -560,4 +560,60 @@ export const EscalatedBadgeInTheTableAtTheWidthFloor: StoryObj = {
     </div>
   ),
   play: async ({ canvasElement }) => escalatedRowStaysInFrame(canvasElement),
+};
+
+/**
+ * A `panel` list's own fold, Overview 27's addition (#1091). **Collapses to
+ * the head, never to nothing** — `Panel`'s own rule: the count stays put and
+ * the rows leave, so a glance still answers how many without a press.
+ *
+ * Controlled here the way the app controls it: `open` and `onOpenChange` are
+ * this story's own `useState`, standing in for the persisted preference
+ * Overview keeps per panel.
+ */
+export const PanelFolded: StoryObj = {
+  render: function Render() {
+    const [open, setOpen] = useState(true);
+    return (
+      <ActiveJobsList
+        variant="panel"
+        heading="Running"
+        count={1}
+        open={open}
+        onOpenChange={setOpen}
+        selectable
+        label="Running"
+      >
+        <JobRowStacked
+          status="running"
+          statusIcon={Cpu}
+          statusLabel="Running"
+          headline="Reconcile orphaned drones on Fleet start"
+          jobId="job_31c7"
+          handle="31-reconcile-orphaned-drones-fleet-start"
+          onOpen={() => {}}
+          fields={[{ value: WORKFLOW }]}
+        />
+      </ActiveJobsList>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole("heading", { name: "Running" })).toBeVisible();
+    await expect(canvas.getByRole("option")).toBeVisible();
+
+    const toggle = canvas.getByRole("button", { name: "Collapse Running" });
+    await userEvent.click(toggle);
+
+    // Collapsed to the head: the count is still there, the row is not — and
+    // it is gone rather than hidden, so a roving list finds nothing to rove.
+    await expect(canvas.getByText("1")).toBeVisible();
+    await expect(canvas.queryByRole("option")).toBeNull();
+    await expect(canvas.getByRole("button", { name: "Expand Running" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+
+    await userEvent.click(canvas.getByRole("button", { name: "Expand Running" }));
+    await expect(canvas.getByRole("option")).toBeVisible();
+  },
 };

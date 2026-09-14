@@ -835,12 +835,6 @@ export function App() {
               selected={openJob}
               onOpen={setOpenJob}
               onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
-              onOpenSettings={() => goTo(SURFACE.settings)}
-              onOpenQueued={() => {
-                goTo(SURFACE.board);
-                setLanding("queued");
-              }}
-              onOpenManifest={() => goTo(SURFACE.manifest)}
               onCopied={setCopied}
               onCursor={setOverviewCursor}
             />
