@@ -127,6 +127,10 @@ export const watchManifestDrift = (want: boolean): void =>
 export const watchOverview = (want: boolean): void => void window.armada.watchOverview(want);
 export const startCheckoutVerify = (workspace?: string) => window.armada.startCheckoutVerify(workspace);
 export const pickRepository = (root: string | null): void => void window.armada.pickRepository(root);
+// Helm's conversation — #944. The reply, and the thread it joins, arrive on `BridgeState.helm`.
+export const askHelm = (text: string) => window.armada.askHelm(text);
+export const startHelmFresh = () => window.armada.startHelmFresh();
+export const pointHelm = (manifestId: string): void => void window.armada.pointHelm(manifestId);
 // Locate: a folder from the OS dialog, and a repository added or cloned. The window picks what it located.
 export const chooseFolder = () => window.armada.chooseFolder();
 export const resolveFolder = (path: string) => window.armada.resolveFolder(path);

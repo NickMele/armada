@@ -1,0 +1,31 @@
+/* The composer under Helm's thread. */
+.armada-helm-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-helm-composer__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-helm-composer__repository {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-helm-composer__actions {
+  display: flex;
+  justify-content: flex-end;
+}

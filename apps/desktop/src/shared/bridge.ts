@@ -19,6 +19,7 @@ import type {
   Handed,
   Holds,
   HeldWorktrees,
+  HelmThread,
   History,
   Holdings,
   FollowedLog,
@@ -390,6 +391,12 @@ export type BridgeState = {
    * repository Fleet serves, **whatever the rail picked**. Helm's dock draws them. `questions.ts`.
    */
   questions: Outstanding[];
+  /**
+   * One repository's Helm conversation — the dock's own thread, under the
+   * questions above. Which repository it answers for is main's own decision;
+   * see `main/helm.ts`.
+   */
+  helm: HelmThread;
 };
 
 /**
@@ -440,6 +447,7 @@ export const NOTHING_YET: BridgeState = {
   health: { state: "none" },
   drifts: { state: "none" },
   questions: [],
+  helm: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -570,4 +578,9 @@ export const CHANNELS = {
   // A request/response like `readCall`/`readCheckOutput`, answered to the
   // caller and published nowhere: `BridgeState` carries nothing about it.
   readComposing: "bridge:read-composing",
+  // Helm's conversation: say something, forget it, and point it at a
+  // repository without moving the rail's own pick. #944.
+  askHelm: "bridge:ask-helm",
+  startHelmFresh: "bridge:start-helm-fresh",
+  pointHelm: "bridge:point-helm",
 } as const;

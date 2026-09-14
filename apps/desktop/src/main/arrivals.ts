@@ -40,6 +40,7 @@ export interface ArrivalHost {
   /** Every open window's own Overview read again — `connection.ts`'s `windowFacades`. */
   overviewAgain(port: number): Promise<void>;
   readonly questions: Questions;
+  readonly helm: { reconnected(port: number): void };
   readonly material: ReviewMaterial;
   readonly socket: { close(): void; resetUnreachable(): void };
   publish(change: Partial<BridgeState>): void;
@@ -167,6 +168,9 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // list, and it is one list so that a read added later is classified
     // rather than left out. #472.
     void host.takeAgain(fleet.port, { because: cameBack ? "fleet_came_back" : "stream_gap" });
+    // And Helm's own socket, on a repository already targeted — a second
+    // socket to the same peer, `takeAgain`'s reason repeated one seam over.
+    host.helm.reconnected(fleet.port);
     return;
   }
 

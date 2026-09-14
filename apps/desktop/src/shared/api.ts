@@ -845,4 +845,15 @@ export type BridgeApi = {
    * how one stops.
    */
   onSummoned: (onGo: (to: Summons) => void) => () => void;
+
+  /** Say something to Helm, about whichever repository it currently answers for. The reply arrives on `BridgeState.helm`. */
+  askHelm: (text: string) => Promise<Outcome>;
+  /** Forget Helm's stored session and the thread. Refused while a reply is being written. */
+  startHelmFresh: () => Promise<Outcome>;
+  /**
+   * "Discuss with Helm" on a card, or the dock's own switch on All
+   * repositories. **The rail's own pick does not move.** A pick still wins
+   * once made — this is only ever the tie-break for All.
+   */
+  pointHelm: (manifestId: string) => Promise<void>;
 };

@@ -180,6 +180,7 @@ describe("a clone that lands late", () => {
       holds: () => NOTHING_YET.holds,
       rehearsal: { onRepositoryMoved: async () => {} } as unknown as RehearsalConnection,
       overviewAgain: async () => {},
+      onPicked: () => {},
       port: () => port,
     });
     await reads.locating.clone("https://forge.invalid/owner/scratch.git", "/Users/user");

@@ -91,7 +91,11 @@ export function dormantIn(where: {
     // Global acts with no surface behind them. The rail carries the Job Board
     // and nothing else — four disabled rows would be a promise Armada does not
     // keep, which is `Shell.tsx`'s own reasoning about the rail.
-    helm: "no Helm surface yet",
+    //
+    // Helm's dock is built (#944) and `⌘J` opens it, but that state is
+    // `Shell.tsx`'s own `useDock` and `App` holds no handle to it — a wiring
+    // gap, same shape as the four signposts above.
+    helm: "⌘J opens it; not reachable from the palette yet",
     toggle_sidebar: "the rail does not hide yet",
     history: "no back and forward yet",
   };

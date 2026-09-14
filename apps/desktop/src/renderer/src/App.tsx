@@ -16,9 +16,12 @@
 // `commands.ts` for what the host is asked to do, `failing.ts` for which
 // failure is on screen, and `palette.ts` for what the palette can reach.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dockQuestionsOf, ofPicked } from "@armada/screens";
+import type { Outstanding } from "@armada/screens";
+import type { JobSummary } from "@armada/protocol";
 import { useDockAnswering } from "./dock-answering";
+import { HelmDock } from "./HelmDock";
 import { Dialog, Textarea } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
@@ -58,6 +61,9 @@ import {
   resolveFolder,
   addRepository,
   cloneRepository,
+  askHelm,
+  startHelmFresh,
+  pointHelm,
   getRunOutput,
   getCheckoutRunOutput,
   getCheckoutRunDiff,
@@ -436,9 +442,14 @@ export function App() {
   const boardJobs = useMemo(() => ofPicked(state.jobs, pickedRepository), [state.jobs, pickedRepository]);
   // Helm's dock lists every repository's questions, whatever the pick. Answering is #936, Helm #944.
   const dockAnswering = useDockAnswering(commands);
+  // "Discuss with Helm" points it at the card's own repository. The picker never moves for it.
+  const onDiscussHelm = useCallback(
+    (_question: Outstanding, job: JobSummary) => pointHelm(job.owner_manifest_id),
+    [],
+  );
   const questions = useMemo(
-    () => dockQuestionsOf(state.questions, state.jobs, repositories, now, dockAnswering),
-    [state.questions, state.jobs, repositories, now, dockAnswering],
+    () => dockQuestionsOf(state.questions, state.jobs, repositories, now, { ...dockAnswering, onDiscuss: onDiscussHelm }),
+    [state.questions, state.jobs, repositories, now, dockAnswering, onDiscussHelm],
   );
   const head = headOf({
     reading: reading !== null,
@@ -476,6 +487,17 @@ export function App() {
         jobs={state.jobs}
         boardJobs={boardJobs}
         questions={questions}
+        helm={
+          <HelmDock
+            helm={state.helm}
+            repositories={repositories}
+            scope={state.repository}
+            live={live}
+            onAsk={(text) => void askHelm(text)}
+            onStartFresh={() => void startHelmFresh()}
+            onSwitch={(manifestId) => pointHelm(manifestId)}
+          />
+        }
         capacity={state.capacity}
         title={head?.title}
         summary={

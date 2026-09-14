@@ -248,3 +248,16 @@
 
 /* Questions waiting on a person, in Helm's dock. */
 @import "./compositions/DockQuestions/DockQuestions.css";
+
+/* Helm's own conversation, under the dock's questions. */
+@import "./compositions/HelmThread/HelmThread.css";
+@import "./compositions/HelmComposer/HelmComposer.css";
+
+/* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
+   frame is what gives the pair its edges. */
+.armada-helm-dock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}

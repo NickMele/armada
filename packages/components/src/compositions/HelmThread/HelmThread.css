@@ -1,0 +1,120 @@
+/* Helm's own conversation — two voices, `ActivityLog`'s well one subject over. */
+.armada-helm-thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-helm-thread__notice {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--status-completed-failed);
+  background: var(--status-completed-failed-bg);
+  color: var(--fg-default);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+.armada-helm-thread__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.armada-helm-thread__row {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* Your own words sit to the trailing edge, Helm's to the leading — the one hue
+   difference a two-voice thread needs, without a third colour. */
+.armada-helm-thread__row[data-actor="you"] {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.armada-helm-thread__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.armada-helm-thread__who {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+.armada-helm-thread__at {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-helm-thread__message {
+  margin: 0;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+.armada-helm-thread__message[data-mono="true"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: pre-wrap;
+}
+
+.armada-helm-thread__meta {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-helm-thread__empty {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+.armada-helm-thread__replying {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* `LogEntry`'s own thinking marker, token for token — a still dot, never a
+   spinner: motion in a stream where a row can arrive every second is motion
+   nobody can read. */
+.armada-helm-thread__working {
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--status-running);
+}

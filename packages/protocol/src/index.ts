@@ -30,6 +30,8 @@ export * from "./footprint";
 export * from "./forge";
 export * from "./generated/protocol-version";
 export * from "./health";
+export * from "./helm";
+export * from "./helm-thread";
 export * from "./history";
 export * from "./holding";
 export * from "./journal";
