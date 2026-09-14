@@ -38,7 +38,7 @@ import { isSweepMarker } from "./declared";
 import { DIFF_CHAPTER } from "./detail-keys";
 import { span } from "./duration";
 import { onlyCurrentAttempt, ordered } from "./facts";
-import { askedOf, checksOf, checksStand, judgeAsking, panelsFrom } from "./gates";
+import { askedOf, checksOf, checksStand, droneRunOf, DRONES_RUN, judgeAsking, panelsFrom } from "./gates";
 import { frozenBeneath } from "./frozen";
 
 /**
@@ -174,9 +174,11 @@ function factsOfStep(
   if (submitted !== undefined) facts.push(submitted);
 
   const checks =
-    step.checking === undefined
-      ? checksFact(step, gateOf(step.check_runs, live, working))
-      : checkingFact(step);
+    step.checking !== undefined
+      ? checkingFact(step)
+      : step.dry_run !== undefined
+        ? droneRunFact(step)
+        : checksFact(step, gateOf(step.check_runs, live, working));
   if (checks !== undefined) facts.push(checks);
 
   const judge = judgeFact(step, gateOf(step.judged, live, working), criteria, asking);
@@ -346,6 +348,22 @@ function checkingFact(step: StepDetail): RunTreeFact {
   const reads = checksOf(step);
   const failed = reads.some((read) => read.run !== undefined && didNotPass(read.run));
   return { label: "Checks", value: checksStand(reads), named: failed ? "failed" : "running" };
+}
+
+/**
+ * What the Drone's own run of the Checks stands at — `The Drone's run · 1
+ * running`. **No hue once it is over**: a Drone asking moves nothing, and red
+ * here would read as the gate failing. #1062.
+ */
+function droneRunFact(step: StepDetail): RunTreeFact | undefined {
+  const reads = droneRunOf(step);
+  if (reads === undefined || reads.length === 0) return undefined;
+  const moving = reads.some((read) => read.live !== undefined && read.live.ran === undefined);
+  return {
+    label: "Checks",
+    value: `${DRONES_RUN} · ${checksStand(reads)}`,
+    ...(moving ? { named: "running" as const } : {}),
+  };
 }
 
 /**

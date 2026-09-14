@@ -289,6 +289,7 @@ impl Announcing {
                 took_ms: known.map(|_| 0),
                 ran: known.and_then(|observed| row(attempt, check, observed)),
                 output_path: None,
+                stopped_by: None,
             })
             .collect();
         let running = Running {
@@ -378,6 +379,7 @@ impl Announcing {
         self.moved(bound, at, |held, _| {
             held.took_ms = Some(took.as_millis() as u64);
             held.ran = ran;
+            held.stopped_by = Some(because.to_string());
         });
     }
 

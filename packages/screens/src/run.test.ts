@@ -249,3 +249,21 @@ describe("a step that sends the work back", () => {
     expect(facts.has("Pass")).toBe(false);
   });
 });
+
+// #1062 — a Drone's own run of the Checks, on the rail, never read as the gate's.
+describe("a Drone's own run of the Checks", () => {
+  const running = { attempt: 1, checks: [{ name: "build", started_at: "2026-09-11T09:59:00Z" }] };
+
+  it("is the Checks fact until the gate takes the step, marked as the Drone's", () => {
+    const asking = step({ state: "running", check_runs: [], dry_run: running });
+    const facts = runOf(whole(asking), NOW, "tests", [])[0]?.facts ?? [];
+    const checks = facts.find((fact) => fact.label === "Checks");
+    expect(checks?.value).toBe("The Drone's run · 1 running");
+    expect(checks?.named).toBe("running");
+  });
+
+  it("gives way to the gate's own run", () => {
+    const both = step({ state: "running", check_runs: [], dry_run: running, checking: running });
+    expect(factsOf(both).get("Checks")).toBe("1 running");
+  });
+});

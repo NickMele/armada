@@ -611,6 +611,7 @@ fn a_gate_running_its_checks_rides_beside_the_state() {
                     reused_from_dry_run: None,
                 }),
                 output_path: Some(".armada/checks/j/repro.2.live.0.log".to_string()),
+                stopped_by: None,
             },
             CheckUnderway {
                 name: "test".to_string(),
@@ -618,6 +619,7 @@ fn a_gate_running_its_checks_rides_beside_the_state() {
                 took_ms: None,
                 ran: None,
                 output_path: None,
+                stopped_by: None,
             },
         ],
     };
@@ -658,6 +660,7 @@ fn a_drones_own_run_rides_apart_from_the_gates() {
             took_ms: None,
             ran: None,
             output_path: None,
+            stopped_by: None,
         }],
     };
     let facts = StepFacts {

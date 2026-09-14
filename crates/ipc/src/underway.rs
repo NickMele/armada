@@ -77,6 +77,11 @@ pub struct CheckUnderway {
     /// the file could not be opened — the Check runs either way.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_path: Option<String>,
+    /// The Check whose failure stopped this one before it finished, on a
+    /// Drone's own run. **Absent on every gate's Check**, which never stops
+    /// early. #1062.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stopped_by: Option<String>,
 }
 
 /// One message on a running Check's log socket.

@@ -830,6 +830,11 @@ export type StepDetail = {
   judging?: JudgeInFlight;
   /** The step's Checks while the gate runs them. Since 10.3. `underway.ts`. */
   checking?: ChecksUnderway;
+  /**
+   * The Checks the Drone asked for mid-step, **its own run and never the
+   * gate's**, until it asks again, submits or the step ends. Since 13.45.
+   */
+  dry_run?: ChecksUnderway;
   /** Entered, then moved on entering `running`. To `updated_at` is how long. */
   entered_at: string;
   updated_at: string;
