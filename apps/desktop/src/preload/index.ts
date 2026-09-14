@@ -490,6 +490,16 @@ const api: BridgeApi = {
   investigateFailedChecks: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.investigateFailedChecks, jobId),
 
+  queueAfterFinding: (jobId: string, finding: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.queueAfterFinding, jobId, finding),
+
+  fileFindingIssue: (jobId: string, finding: string, title: string, body: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.fileFindingIssue, jobId, finding, title, body),
+
+  // A finding's issue, `openRemarkLink`'s reason: main reads the address off the Job it holds.
+  openFindingIssue: (jobId: string, finding: string): Promise<Followed> =>
+    ipcRenderer.invoke(CHANNELS.openFindingIssue, jobId, finding),
+
   requestChanges: (jobId: string, note: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.requestChanges, jobId, note),
 

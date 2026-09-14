@@ -231,6 +231,15 @@ impl Delivery for GitVcs {
         crate::rerunning::rerun_failed(in_repo, pull_request)
     }
 
+    fn file_issue(
+        &self,
+        in_repo: &str,
+        title: &str,
+        body: &str,
+    ) -> Result<adapter_traits::FiledIssue, adapter_traits::NotFiled> {
+        crate::filing::file_issue(in_repo, title, body)
+    }
+
     fn kept_current(&self, in_repo: &str, handle: &str, base: &str) -> KeptCurrent {
         crate::keeping_current::kept_current(in_repo, handle, base)
     }

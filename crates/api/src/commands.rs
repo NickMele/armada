@@ -246,6 +246,42 @@ pub(crate) async fn dismiss_finding<D: Commands>(
     }
 }
 
+/// A person turns a For context finding into a Job that waits on this one. #906.
+///
+/// 409 on a finding the Job's latest review did not raise for context.
+pub(crate) async fn queue_after_finding<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let queued: ipc::FindingQueued = match ipc::decode("a finding to queue", &body) {
+        Ok(queued) => queued,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().queue_after_finding(job.id(), queued).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// A person confirms an issue drafted from a For context finding. #906.
+///
+/// 422 on a blank title. 409 on a finding not raised for context, or where the forge refused.
+pub(crate) async fn file_finding_issue<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let filed: ipc::IssueFiled = match ipc::decode("an issue to file", &body) {
+        Ok(filed) => filed,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().file_finding_issue(job.id(), filed).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// A verdict on the work, and the Job is over. **Terminal**, which is what
 /// separates it from `request_changes` — and it is not `kill_job`, which clears
 /// the Board and carries no verdict at all.

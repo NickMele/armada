@@ -279,3 +279,19 @@ pub struct Dismissal {
     pub finding: String,
     pub reason: String,
 }
+
+/// What a person made of a finding: a Job queued behind this one, or an issue on the forge. #906.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FollowUp {
+    pub finding: String,
+    pub became: Became,
+}
+
+/// What a finding became.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Became {
+    /// A Job that waits on this one, so it starts when this one lands.
+    Queued { job: crate::JobId },
+    /// An issue filed on the forge, by its address.
+    Issue { url: String },
+}

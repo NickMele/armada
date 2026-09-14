@@ -29,11 +29,12 @@ use crate::amending::edit_manifest;
 use crate::attention::{get_activity_feed, list_alerts, list_job_board, list_reviews};
 use crate::commands::{
     add_task, answer_command, answer_judge, answer_question, approve_dispatch, approve_review,
-    delete_branch, dismiss_finding, drop_task, examine_job, file_report, forget_job, kill_drone,
-    kill_job, merge_pull_request, override_verdict, propose_from_request, propose_job,
-    raise_cost_cap, raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job, reject_job,
-    request_changes, rerun_gate, resolve_pull_request_conflict, restart_step, set_when_blocked,
-    set_when_refused, show_again, stop_proposal, take_up_remarks,
+    delete_branch, dismiss_finding, drop_task, examine_job, file_finding_issue, file_report,
+    forget_job, kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request,
+    propose_job, queue_after_finding, raise_cost_cap, raise_turn_cap, reclaim_worktree,
+    redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate,
+    resolve_pull_request_conflict, restart_step, set_when_blocked, set_when_refused, show_again,
+    stop_proposal, take_up_remarks,
 };
 use crate::conversing::{ask_helm, observe_helm, start_helm_fresh};
 use crate::daemon::Daemon;
@@ -174,6 +175,14 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/reject", post(reject_job::<D>))
         .route("/jobs/:job_id/take_up_remarks", post(take_up_remarks::<D>))
         .route("/jobs/:job_id/dismiss_finding", post(dismiss_finding::<D>))
+        .route(
+            "/jobs/:job_id/queue_after_finding",
+            post(queue_after_finding::<D>),
+        )
+        .route(
+            "/jobs/:job_id/file_finding_issue",
+            post(file_finding_issue::<D>),
+        )
         .route(
             "/jobs/:job_id/override_verdict",
             post(override_verdict::<D>),

@@ -534,6 +534,12 @@ export type VerdictSlotAtGateArgs = {
   onRerunFailedChecks?: (jobId: string) => void;
   /** Send the branch back for a Drone to find out why CI failed. #905. */
   onInvestigateFailedChecks?: (jobId: string) => void;
+  /** Queue a Job after this one lands, from a For context finding. #906. */
+  onQueueAfterFinding?: (jobId: string, finding: string) => void;
+  /** File the issue a person confirmed, drafted from a For context finding. #906. */
+  onFileFindingIssue?: (jobId: string, finding: string, title: string, body: string) => void;
+  /** Open the issue a finding became. #906. */
+  onOpenFindingIssue?: (jobId: string, finding: string) => void;
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -572,6 +578,9 @@ export function verdictSlotAtGate({
   onResolvePullRequestConflict,
   onRerunFailedChecks,
   onInvestigateFailedChecks,
+  onQueueAfterFinding,
+  onFileFindingIssue,
+  onOpenFindingIssue,
   onApproveReview,
   onRequestChanges,
   onReject,
@@ -700,6 +709,19 @@ export function verdictSlotAtGate({
               onResolve: () => onResolvePullRequestConflict(job.id),
               disabled: stale || deciding,
             }),
+          })}
+      {...(onQueueAfterFinding === undefined || onFileFindingIssue === undefined
+        ? {}
+        : {
+            acts: {
+              onQueueAfter: (finding: string) => onQueueAfterFinding(job.id, finding),
+              onFileIssue: (finding: string, title: string, body: string) =>
+                onFileFindingIssue(job.id, finding, title, body),
+              ...(onOpenFindingIssue === undefined
+                ? {}
+                : { onOpenIssue: (finding: string) => onOpenFindingIssue(job.id, finding) }),
+              disabled: stale || deciding,
+            },
           })}
       sheet={sheetWith}
     />

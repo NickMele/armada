@@ -1473,6 +1473,36 @@ notes = """
 `agent_access` is `No`: a Drone never rules on its own review.
 """
 
+[operations.queue_after_finding]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "A person turns a For context finding into a Job that starts when this one lands"
+notes = """
+**A new Job, created waiting on this one.** Fleet proposes it from the finding's words and why it was raised, on this Job's workflow and repository, with a `depends_on` edge to this Job written at creation. It goes to the approval gate like any proposal, and the hold keeps it queued until this Job lands. #906.
+
+**No edge is added to a Job that already exists**, so the rule that every edge points at an older Job stands. A finding the Job's latest review did not raise for context is refused, a 409.
+
+The finding shows what it became under `confidence.followed`. What comes back is this Job as it stands.
+
+`agent_access` is `No`: a person decides what is worth a Job.
+"""
+
+[operations.file_finding_issue]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "A person confirms an issue drafted from a For context finding, and the forge files it"
+notes = """
+**Written as the person, so only from their confirm.** Bridge drafts the title and body from the finding and the person edits them; Fleet files exactly what was confirmed, in the repository the Job serves. Nothing is posted on the pull request. #906.
+
+A blank title is refused, a 422. A finding the Job's latest review did not raise for context is refused, a 409, and so is an issue the forge would not file, carrying what it said.
+
+The finding shows the issue's address under `confidence.followed`. What comes back is this Job as it stands.
+
+`agent_access` is `No`: nothing is written on the forge except from a person's press.
+"""
+
 [operations.request_changes]
 kind = "command"
 transport = "HTTP"

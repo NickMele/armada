@@ -172,8 +172,9 @@ pub use commanding::{
 };
 pub use configured::ManifestConfig;
 pub use detail::{
-    AreaRow, ChangedTestRow, DismissedRow, FindingDismissed, FindingRow, JobConfidence,
-    OpenedBecause, ProvesRow, Says, TestsSection, UntestedRow,
+    AreaRow, ChangedTestRow, DismissedRow, FindingDismissed, FindingQueued, FindingRow,
+    FollowedRow, IssueFiled, JobConfidence, OpenedBecause, ProvesRow, Says, TestsSection,
+    UntestedRow,
 };
 pub use detail::{
     Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,

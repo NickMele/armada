@@ -210,6 +210,13 @@ pub enum Adrift {
     RerunRefused { job: JobId, said: String },
     /// Investigate was pressed on a Job whose pull request has no failed check. #905.
     NothingToInvestigate { job: JobId },
+    /// Queue after this lands or File an issue was pressed on a finding the Job's latest
+    /// review did not raise for context. #906.
+    FindingNotForContext { job: JobId, finding: String },
+    /// File an issue was confirmed with a blank title. A 422. #906.
+    NoIssueTitle { job: JobId },
+    /// The forge would not file the issue, in its own words. #906.
+    IssueNotFiled { job: JobId, said: String },
     /// A conflict resolution was asked for on a workflow whose delivering step
     /// has nothing before it — a single step that both writes the work and
     /// sends it out, which this cannot redo without redelivering onto its own

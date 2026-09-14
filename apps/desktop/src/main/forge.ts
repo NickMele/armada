@@ -122,3 +122,27 @@ async function opened(address: string | undefined): Promise<Followed> {
     return { ok: false, why: "refused", address, detail: String(error) };
   }
 }
+
+/**
+ * The address of the issue a finding became, off the reading of this Job main is holding.
+ * `addressOf`'s reason: read off `watched` alone, so the renderer sends no address. #906.
+ */
+function issueAddressOf(state: BridgeState, jobId: string, finding: string): string | undefined {
+  const watched = state.watched;
+  if (watched.state !== "read" || watched.jobId !== jobId) return undefined;
+  const followed = watched.detail.confidence?.followed ?? [];
+  return followed.find((row) => row.finding === finding && row.issue !== undefined)?.issue;
+}
+
+/** Open the issue a review finding became, on the forge. #906. */
+export async function openFindingIssue(
+  state: BridgeState,
+  jobId: string,
+  finding: string,
+): Promise<Followed> {
+  const job =
+    state.jobs.some((row) => row.id === jobId) ||
+    (state.watched.state === "read" && state.watched.jobId === jobId);
+  if (!job) return { ok: false, why: "unknown_job" };
+  return opened(issueAddressOf(state, jobId, finding));
+}

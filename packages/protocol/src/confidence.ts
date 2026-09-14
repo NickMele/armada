@@ -17,6 +17,8 @@ export type JobConfidence = {
   for_context: FindingRow[];
   /** Findings a person dismissed, taken off the three lists above. Since 13.29, #907. */
   dismissed?: DismissedRow[];
+  /** What a person made of a For context finding: a queued Job or an issue. Since 13.36, #906. */
+  followed?: FollowedRow[];
 };
 
 export type AreaRow = {
@@ -80,4 +82,11 @@ export type FindingRow = {
 export type DismissedRow = {
   finding: string;
   reason: string;
+};
+
+/** What a finding became. Since 13.36, #906. One of `job` or `issue`, whichever was made. */
+export type FollowedRow = {
+  finding: string;
+  job?: string;
+  issue?: string;
 };

@@ -157,7 +157,8 @@ impl Forgotten {
             | "job_step_review_untested"
             | "job_step_review_findings"
             | "job_step_review_view"
-            | "job_review_dismissals" => &mut self.review_parts,
+            | "job_review_dismissals"
+            | "job_review_followups" => &mut self.review_parts,
             _ => return None,
         })
     }

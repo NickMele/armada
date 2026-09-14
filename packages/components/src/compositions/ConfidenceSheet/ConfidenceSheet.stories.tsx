@@ -233,3 +233,35 @@ export const WithFailedCi: Story = {
     await expect(args.ci?.onRerun).toHaveBeenCalled();
   },
 };
+
+/** For context findings a person can follow up: one already queued, one still open. #906. */
+export const WithFollowUps: Story = {
+  args: {
+    confidence: {
+      says: "confident",
+      reasons: ["Every Check passed."],
+      areas: [],
+      needs_you: [],
+      small_fixes: [],
+      for_context: [
+        {
+          finding: "`headroom.rs` has grown past what one reader holds",
+          why: "The author flagged it for later.",
+        },
+        { finding: "The retry count is a guess", why: "Nothing measured it." },
+      ],
+      followed: [{ finding: "The retry count is a guess", job: "01J9Z3M5X8Q2V7R4T6W1Y0ZABC" }],
+    },
+    followUp: { onQueueAfter: fn(), onFileIssue: fn() },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const open = "`headroom.rs` has grown past what one reader holds";
+    await userEvent.click(canvas.getByRole("button", { name: /For context/ }));
+    await expect(canvas.getByText("Job queued. It starts when this one lands.")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Queue after this lands" }));
+    await expect(args.followUp?.onQueueAfter).toHaveBeenCalledWith(open);
+    await userEvent.click(canvas.getByRole("button", { name: "More ways to follow up" }));
+    await userEvent.click(await canvas.findByRole("menuitem", { name: "File an issue" }));
+    await expect(args.followUp?.onFileIssue).toHaveBeenCalledWith(open);
+  },
+};

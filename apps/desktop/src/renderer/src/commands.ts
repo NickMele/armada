@@ -91,6 +91,10 @@ export const openArtifact = (jobId: string, what: Artifact) => window.armada.ope
 export const openPullRequest = (jobId: string) => window.armada.openPullRequest(jobId);
 export const openRemarkLink = (jobId: string, remarkId: string) =>
   window.armada.openRemarkLink(jobId, remarkId);
+
+/** Open the issue a finding became. Main reads the address; the renderer sends none. #906. */
+export const openFindingIssue = (jobId: string, finding: string) =>
+  window.armada.openFindingIssue(jobId, finding);
 export const examine = (jobId: string): void => void window.armada.examineJob(jobId);
 // The run sheet — Journey 9. Opened by the sheet, not the Job.
 export const watchRunSheet = (jobId: string | null): void => void window.armada.watchRunSheet(jobId);
@@ -636,6 +640,26 @@ export function useCommands(sending: Sending) {
     }
   }
 
+  /** Queue a Job after this one lands, from a For context finding. #906. */
+  async function queueAfterFinding(jobId: string, finding: string): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(await window.armada.queueAfterFinding(jobId, finding));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
+  /** File the issue a person confirmed from a For context finding. #906. */
+  async function fileFindingIssue(jobId: string, finding: string, title: string, body: string): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(await window.armada.fileFindingIssue(jobId, finding, title, body));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
   /**
    * Send the branch back for a Drone that can edit files to bring it current
    * with main. `#663`. Under the same one-in-flight guard as `decide`, for
@@ -698,6 +722,8 @@ export function useCommands(sending: Sending) {
     resolvePullRequestConflict,
     rerunFailedChecks,
     investigateFailedChecks,
+    queueAfterFinding,
+    fileFindingIssue,
     givenBack,
     setGivenBack,
     refreshing,

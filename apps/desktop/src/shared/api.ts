@@ -750,6 +750,12 @@ export type BridgeApi = {
   rerunFailedChecks: (jobId: string) => Promise<Outcome>;
   /** Send the branch back for a Drone to find out why CI failed. #905. */
   investigateFailedChecks: (jobId: string) => Promise<Outcome>;
+  /** Queue a Job after this one lands, from a For context finding. #906. */
+  queueAfterFinding: (jobId: string, finding: string) => Promise<Outcome>;
+  /** File the issue a person confirmed. Written as them, so only from their confirm. #906. */
+  fileFindingIssue: (jobId: string, finding: string, title: string, body: string) => Promise<Outcome>;
+  /** Open the issue a finding became. Main reads its address; the renderer sends none. #906. */
+  openFindingIssue: (jobId: string, finding: string) => Promise<Followed>;
   /**
    * Send the work back with a note. **The Job comes back `running`**, same step,
    * same Drone — nothing is spawned and nothing done is thrown away.

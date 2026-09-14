@@ -48,7 +48,7 @@ import { Limits } from "./limits";
 import { Preferring } from "./preferences";
 import { Reporting } from "./reporting";
 import { proposeFromRequest as propose } from "./proposing";
-import { decide, dismiss, takeUp, type Decision } from "./review";
+import { decide, dismiss, fileIssue, queueAfter, takeUp, type Decision } from "./review";
 
 /**
  * What an act needs of the connection, and nothing more.
@@ -902,6 +902,15 @@ export class JobCommands {
   async dismissFinding(jobId: string, finding: string, reason: string): Promise<Outcome> {
     if (reason.trim() === "") return { ok: false, why: "empty_note" };
     return this.act(jobId, this.deciding, "already_deciding", (p) => dismiss(p, jobId, finding, reason));
+  }
+
+  async queueAfterFinding(jobId: string, finding: string): Promise<Outcome> {
+    return this.act(jobId, this.deciding, "already_deciding", (p) => queueAfter(p, jobId, finding));
+  }
+
+  async fileFindingIssue(jobId: string, finding: string, title: string, body: string): Promise<Outcome> {
+    if (title.trim() === "") return { ok: false, why: "empty_note" };
+    return this.act(jobId, this.deciding, "already_deciding", (p) => fileIssue(p, jobId, finding, title, body));
   }
 
   /**
