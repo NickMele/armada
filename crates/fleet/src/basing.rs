@@ -373,8 +373,9 @@ where
     /// things walking `.armada/` on two clocks is how a directory comes to be
     /// deleted by whichever one a person was not thinking about.
     ///
-    /// **Everything that is not the current base commit, or the commit a seed
-    /// is warming at**, and nothing else decides. A checkout is only reachable through the commit its directory
+    /// **Everything that is not the current base commit, the commit a seed is
+    /// warming at, or the newest warm seed while the current one is not warm**,
+    /// and nothing else decides. A checkout is only reachable through the commit its directory
     /// is named for, so one at any other commit can never be asked for again —
     /// there is no in-use set to consult, and a base run in flight is
     /// impossible here for the reason this module's header gives: one turn
@@ -407,10 +408,19 @@ where
             .expect("the seeds lock is not poisoned")
             .warming_in(root)
             .map(str::to_string);
+        // The last warm seed outlives a base move until the new one is marked,
+        // so the warm-up can start from it and a failed one leaves it standing.
+        let kept = match std::path::Path::new(&spec.seed_marker()).exists() {
+            true => None,
+            false => crate::seeding::newest_warm_seed(&spec).map(|seed| seed.commit().to_string()),
+        };
         let mut taken: Vec<String> = Vec::new();
         for entry in listing.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name == current || warming.as_deref() == Some(name.as_str()) {
+            if name == current
+                || warming.as_deref() == Some(name.as_str())
+                || kept.as_deref() == Some(name.as_str())
+            {
                 continue;
             }
             // Through a `BaseSpec` rather than by removing the path the walk

@@ -229,7 +229,7 @@ where
         }
         // On the sweep's clock rather than every tick: finding the base commit
         // opens the repository. Spawned, not awaited — `crate::seeding`.
-        let _warming = self.warm_seeds();
+        self.warm_seeds_on_the_sweep();
         let held = self.worktrees_held().await?;
         let mut gave_back = Vec::new();
         for one in held.iter().filter(|one| one.provably_safe()) {

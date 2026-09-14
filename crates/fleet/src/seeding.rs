@@ -40,6 +40,9 @@ pub(crate) struct Seeds {
     warming: Option<(String, String)>,
     /// By repository root: the commit, and why its warm-up did not finish.
     failed: BTreeMap<String, (String, String)>,
+    /// The warm-up the sweep started, kept so a test can await it.
+    #[cfg(test)]
+    task: Option<JoinHandle<()>>,
 }
 
 impl Seeds {
@@ -150,6 +153,10 @@ where
     /// logs nothing and clones nothing. `crate::preparing` calls this before
     /// `setup.requires`, so an install writes into a tree already holding the
     /// build.
+    ///
+    /// The source is never swept mid-clone: dispatch is awaited on the turn
+    /// loop, the sweep runs on that same loop, and it never takes the current
+    /// commit's checkout.
     pub(crate) async fn seeded(&self, job: &Job, worktree: &Worktree, manifest: &Manifest) {
         let Some(seed) = manifest.seed() else {
             return;
@@ -285,6 +292,29 @@ where
         None
     }
 
+    /// [`warm_seeds`](Fleet::warm_seeds), from the sweep. The task runs on
+    /// detached; a test build keeps its handle.
+    pub(crate) fn warm_seeds_on_the_sweep(&self) {
+        let _started = self.warm_seeds();
+        #[cfg(test)]
+        if let Some(task) = _started {
+            self.seeds()
+                .lock()
+                .expect("the seeds lock is not poisoned")
+                .task = Some(task);
+        }
+    }
+
+    /// The warm-up the last sweep started, if one did.
+    #[cfg(test)]
+    pub(crate) fn warm_up_the_sweep_started(&self) -> Option<JoinHandle<()>> {
+        self.seeds()
+            .lock()
+            .expect("the seeds lock is not poisoned")
+            .task
+            .take()
+    }
+
     /// A line in the Job's own log, for `crate::preparing`'s reason.
     fn noted_seeding(&self, job: &Job, said: &str, fields: &[(&'static str, FieldValue)]) {
         let mut envelope = Envelope::new(
@@ -381,17 +411,7 @@ where
 /// Start from the last warm seed, so a base that moved builds on it rather
 /// than from nothing. Best effort: a warm-up with nothing carried is only slower.
 fn carried_forward(copying: &dyn CopyOnWrite, spec: &BaseSpec, paths: &[String]) {
-    let Ok(listing) = std::fs::read_dir(spec.parent()) else {
-        return;
-    };
-    let previous = listing
-        .flatten()
-        .filter_map(|entry| {
-            BaseSpec::at(spec.repo_root(), &entry.file_name().to_string_lossy()).ok()
-        })
-        .filter(|other| other.commit() != spec.commit())
-        .find(|other| Path::new(&other.seed_marker()).exists());
-    if let Some(previous) = previous {
+    if let Some(previous) = newest_warm_seed(spec) {
         let _ = cloned_into(
             copying,
             Path::new(&previous.path()),
@@ -399,6 +419,28 @@ fn carried_forward(copying: &dyn CopyOnWrite, spec: &BaseSpec, paths: &[String])
             paths,
         );
     }
+}
+
+/// The most recently marked warm seed at any commit but `spec`'s, by the
+/// marker's modified time: `read_dir` order is arbitrary, and a commit id says
+/// nothing about age. The sweep keeps this one until `spec`'s seed is warm.
+pub(crate) fn newest_warm_seed(spec: &BaseSpec) -> Option<BaseSpec> {
+    std::fs::read_dir(spec.parent())
+        .ok()?
+        .flatten()
+        .filter_map(|entry| {
+            BaseSpec::at(spec.repo_root(), &entry.file_name().to_string_lossy()).ok()
+        })
+        .filter(|other| other.commit() != spec.commit())
+        .filter_map(|other| {
+            let marked = std::fs::metadata(other.seed_marker())
+                .ok()?
+                .modified()
+                .ok()?;
+            Some((marked, other))
+        })
+        .max_by_key(|(marked, _)| *marked)
+        .map(|(_, newest)| newest)
 }
 
 /// Clone each declared directory that the seed holds and the tree does not.
