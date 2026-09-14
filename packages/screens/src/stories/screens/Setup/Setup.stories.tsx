@@ -275,8 +275,11 @@ export const BothListed: Story = {
     // throws on more than one match, which is what stands in for the
     // `<select>`'s own optgroup keeping it out of "Not set up".
     await expect(canvas.getByRole("menuitem", { name: MANIFEST_ID })).toBeInTheDocument();
-    await expect(canvas.getByText("Not set up")).toBeVisible();
-    await expect(canvas.getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
+    // Scoped to the open menu: the left column's Stats panel reads the same
+    // two words for a repository's own setup state, #1088.
+    const menu = canvas.getByRole("menu");
+    await expect(within(menu).getByText("Not set up")).toBeVisible();
+    await expect(within(menu).getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await expect(canvas.queryByRole("region", { name: "Workspaces" })).toBeNull();
   },
@@ -318,9 +321,12 @@ export const PickNotSetUp: Story = {
     await expect(within(verify).getByRole("button", { name: "Verify" })).toBeEnabled();
     const picker = canvas.getByRole("button", { name: "scratch" });
     await userEvent.click(picker);
-    // Written, so it is set up now — no longer under "Not set up".
-    await expect(canvas.queryByText("Not set up")).toBeNull();
-    await expect(canvas.getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
+    // Written, so it is set up now — no longer under "Not set up". Scoped to
+    // the open menu, since the left column's Stats panel reads the same two
+    // words for a repository's own setup state, #1088.
+    const menu = canvas.getByRole("menu");
+    await expect(within(menu).queryByText("Not set up")).toBeNull();
+    await expect(within(menu).getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await expect(canvas.getByRole("tab", { name: "Edit" })).toBeVisible();
   },

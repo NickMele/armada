@@ -57,8 +57,11 @@ export const AFolderAdded: Story = {
     // The added folder is nobody's Manifest yet, so it reads by its own name — the picker's label.
     const picker = canvas.getByRole("button", { name: "scratch" });
     await userEvent.click(picker);
-    await expect(canvas.getByText("Not set up")).toBeVisible();
-    await expect(canvas.getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
+    // Scoped to the open menu: the left column's Stats panel reads the same
+    // two words for a repository's own setup state, #1088.
+    const menu = canvas.getByRole("menu");
+    await expect(within(menu).getByText("Not set up")).toBeVisible();
+    await expect(within(menu).getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await expect(await canvas.findByRole("region", { name: "Workspaces" })).toBeVisible();
   },
@@ -219,7 +222,9 @@ export const ThePickersNames: Story = {
     await expect(canvas.getByRole("menuitem", { name: "storefront" })).toBeInTheDocument();
     await expect(canvas.getByRole("menuitem", { name: "api" })).toBeInTheDocument();
     await expect(canvas.queryByRole("menuitem", { name: "services/api" })).toBeNull();
-    await expect(canvas.getByText("Not set up")).toBeVisible();
+    // Scoped to the open menu: the left column's Stats panel reads the same
+    // two words for a repository's own setup state, #1088.
+    await expect(within(canvas.getByRole("menu")).getByText("Not set up")).toBeVisible();
     await expect(canvas.getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
     await expect(canvas.getByRole("menuitem", { name: "code/api" })).toBeInTheDocument();
     await expect(canvas.getByRole("menuitem", { name: "old/api" })).toBeInTheDocument();
