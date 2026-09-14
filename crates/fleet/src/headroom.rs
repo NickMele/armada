@@ -20,11 +20,8 @@
 //! it: the stream's rate-limit event carries a window and a status and no
 //! quantity, so there is no number to hold a Job back against.
 //!
-//! **Disk is per volume, memory is not.** One Fleet serves several
-//! repositories, and a worktree is cut beneath whichever one a Job belongs to
-//! — `crate::admitting` reads free space there, at admission, and holds back
-//! only the Job whose own volume is short. Memory has no repository to ask it
-//! of, so it stays the one machine-wide reading it always was.
+//! **Disk is per volume, memory is not.** A worktree is cut beneath whichever
+//! repository a Job belongs to, and `crate::admitting` reads free space there.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -235,12 +232,8 @@ impl Headroom {
 pub trait Machine: Send + Sync {
     fn read(&self) -> Option<Reading>;
 
-    /// Free bytes on the volume at `path`, read fresh. **A second question and
-    /// not `read`'s own**: one Fleet serves several repositories, each perhaps
-    /// on its own volume, so no single cached reading can answer for all of
-    /// them. `crate::admitting` asks this once per candidate Job, of its own
-    /// served repository's root, and holds only that Job back where it is
-    /// short — see `#987`.
+    /// Free bytes on the volume at `path`, read fresh — a repository's own,
+    /// not `read`'s one configured volume. `crate::admitting` asks per Job.
     fn disk_free_at(&self, path: &Path) -> Option<Bytes>;
 }
 
@@ -266,16 +259,8 @@ pub struct TheMachine {
 }
 
 impl TheMachine {
-    /// Read `volume` for [`Machine::read`]'s one bundled reading — cpu, memory
-    /// and a backstop disk figure, all off this one path.
-    ///
-    /// **Not a repository's root, and not every volume Fleet touches.** A
-    /// Fleet serves several repositories, each perhaps on its own volume, so
-    /// no one of them could stand for "the" disk here — that is
-    /// [`Machine::disk_free_at`]'s question, asked per Job at admission
-    /// against its own served repository. The composition root gives this one
-    /// the operator's home, where Fleet's own files and a repository added
-    /// with nowhere else in mind both land.
+    /// Read `volume` for [`Machine::read`]'s one bundled reading. **Not a
+    /// repository's root** — see [`Machine::disk_free_at`] for that question.
     pub fn watching(volume: impl Into<PathBuf>) -> TheMachine {
         TheMachine {
             volume: volume.into(),

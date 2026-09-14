@@ -533,6 +533,45 @@ async fn only_the_jobs_own_short_volume_holds_it_back() {
     assert_eq!(fleet.working_on().await, vec![healthy_job.id().clone()]);
 }
 
+/// A machine whose bundled reading (the one configured volume) is short of
+/// disk, but every repository's own volume, asked separately, has room.
+struct HomeShort;
+
+impl Machine for HomeShort {
+    fn read(&self) -> Option<Reading> {
+        Some(Reading::of(
+            InUse::percent(10),
+            InUse::percent(20),
+            Bytes::gibibytes(2),
+        ))
+    }
+
+    fn disk_free_at(&self, _path: &Path) -> Option<Bytes> {
+        Some(Bytes::gibibytes(500))
+    }
+}
+
+/// **The Board and admission must never disagree.** A short reading off the
+/// one configured volume must not hold back a Job whose own repository's
+/// volume, asked separately, has room — the Board says nothing is wrong, and
+/// the Job runs.
+#[tokio::test]
+async fn a_short_reading_off_the_configured_volume_does_not_hold_back_a_jobs_own() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.headroom = SHIPPED;
+    fittings.machine = Arc::new(HomeShort);
+    let fleet = Fleet::assembled(fittings);
+    let job = approved(&fleet, &home, "a change whose own volume has room").await;
+
+    assert_eq!(
+        board(&fleet, &job).await,
+        ("running".to_string(), None),
+        "queued_reason and admit_next fold the same two predicates"
+    );
+    assert_eq!(fleet.working_on().await, vec![job]);
+}
+
 // ----------------------------------------------- a person's act, and the queue
 
 /// A Drone that speaks once and leaves, so the slot empties and a restart is

@@ -27,7 +27,7 @@
 //! [`Fleet::next_queued`]: crate::Fleet
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -40,7 +40,7 @@ use crate::adrift::Adrift;
 use crate::converging::elapsed;
 use crate::coupling::{coupling, Coupling};
 use crate::daemon::Fleet;
-use crate::headroom::{Reading, Short};
+use crate::headroom::{Bytes, Reading, Short};
 use crate::slots::Slots;
 use crate::sub_dispatch::{children_standing, waiting_on_children};
 use crate::superseding::{siblings_of, still_needed, Landed, StillNeeded};
@@ -108,11 +108,18 @@ impl Room {
 pub(crate) struct Polled {
     at: core_model::Timestamp,
     saw: Option<Reading>,
+    /// Disk per repository volume, asked lazily and cleared with `saw` — see
+    /// [`Fleet::disk_free_at`].
+    volumes: BTreeMap<PathBuf, Option<Bytes>>,
 }
 
 impl Polled {
     pub(crate) fn taken(at: core_model::Timestamp, saw: Option<Reading>) -> Polled {
-        Polled { at, saw }
+        Polled {
+            at,
+            saw,
+            volumes: BTreeMap::new(),
+        }
     }
 }
 
@@ -126,19 +133,12 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Whether Fleet may start another Drone right now.
+    /// Whether Fleet may start another Drone, of no Job in particular.
     ///
-    /// **The one predicate.** [`Fleet::admit_next`] opens with it and
-    /// `serving`'s `queued_reason` answers `waiting_on_resources` from it, so
-    /// there is no second answer for a Board to disagree with admission by.
-    ///
-    /// **The bound is asked first because it is free.** `Slots::room` reads a
-    /// map; the machine reading costs three processes. A Fleet already at its
-    /// cap never pays for a reading it would not have acted on.
-    ///
-    /// The roster is passed in rather than taken, because `admit_next` is
-    /// already holding it — taking it here would deadlock, and the lock order
-    /// `crate::slots` states is roster first and everything else after.
+    /// **`get_capacity`'s alone now.** It bundles a disk reading of the one
+    /// configured volume, which is the wrong question per Job — see
+    /// [`Fleet::room_for`] and [`Fleet::volume_is_short`], which
+    /// `admit_next` and `queued_reason` share instead.
     pub(crate) async fn room_for_another(&self, slots: &mut Slots) -> Room {
         if !slots.room() {
             return Room::Bound;
@@ -150,6 +150,21 @@ where
         {
             Some(short) => Room::Machine(short),
             None => Room::Yes,
+        }
+    }
+
+    /// The bound and memory, with no Job's volume asked. **Shared by
+    /// [`Fleet::admit_next`] and `queued_reason`**, both folded with
+    /// [`Fleet::volume_is_short`], so the two can never disagree.
+    pub(crate) async fn room_for(&self, slots: &mut Slots) -> Room {
+        if !slots.room() {
+            return Room::Bound;
+        }
+        match self.machine_reading().await {
+            Some(reading) if reading.memory().spare() < self.headroom().memory_spare() => {
+                Room::Machine(Short::Memory)
+            }
+            _ => Room::Yes,
         }
     }
 
@@ -179,12 +194,8 @@ where
 
     /// Start every approved Job there is room for.
     ///
-    /// **The bound and memory are [`Fleet::room_for_another`]**, asked once a
-    /// pass and shared with `queued_reason` — a Board saying a Job is blocked
-    /// on either while Fleet is starting it is worse than saying nothing.
-    /// **Disk is asked per Job, of its own served repository's volume**, so a
-    /// Job on a short volume is skipped and the next queued Job, on whatever
-    /// volume it lands on, is still tried — `#987`.
+    /// **[`Fleet::room_for`] and [`Fleet::volume_is_short`]**, the same two
+    /// `queued_reason` folds — a short volume skips its Job, not the pass.
     ///
     /// **The roster lock is held across the loop, and nothing else is.** Two
     /// admissions running at once would each read the same `queued` Job as next
@@ -192,10 +203,8 @@ where
     /// It is released the moment the last Drone is spawned — a slot is held for
     /// as long as a Job is worked, and this for as long as one is *started*.
     ///
-    /// Admission stops at the first Job whose `dispatch` itself fails — a real
-    /// error, never a Job merely held back by [`Room`] or by its own volume,
-    /// both of which are skipped rather than failed. The failure is returned,
-    /// its Job is left `escalated`, and the next turn asks again.
+    /// Admission stops only at a real `dispatch` failure — never at a Job
+    /// merely held back, which is skipped. The Job is left `escalated`.
     ///
     /// **Never from a `Commands` method, and none does** — `#428`, then `#456`
     /// for the six that freed a place and filled it in one breath. This runs a
@@ -211,16 +220,8 @@ where
         // `next_queued` does not hand the same one back — `#987`.
         let mut short_on_volume: Vec<JobId> = Vec::new();
         loop {
-            // Not `room_for_another`: that bundles a disk reading of its own
-            // one configured volume, which is the wrong question for a Fleet
-            // serving several — see [`Fleet::volume_is_short`] below.
-            if !slots.room() {
+            if !self.room_for(&mut slots).await.granted() {
                 break;
-            }
-            if let Some(reading) = self.machine_reading().await {
-                if reading.memory().spare() < self.headroom().memory_spare() {
-                    break;
-                }
             }
             let Some(job) = self.next_queued(&short_on_volume).await? else {
                 break;
@@ -235,9 +236,7 @@ where
             if self.superseded_by_a_sibling(&job).await? {
                 continue;
             }
-            // The Job's own repository's volume, not the machine's — a short
-            // one holds only this Job back, so the pass moves on rather than
-            // stopping.
+            // Its own volume, not the machine's — skip it, not the pass.
             if self.volume_is_short(&job).await {
                 short_on_volume.push(job_id);
                 continue;
@@ -262,25 +261,37 @@ where
         Ok(admitted)
     }
 
-    /// Whether the volume this Job's worktree would land on is short of the
-    /// disk floor. **The served repository's root**, since that is where
-    /// `WorktreeSpec` cuts one; a Job this Fleet does not serve carries no
-    /// volume to ask about and is not held back for one it cannot name.
-    ///
-    /// `pub(crate)` for `summarising::queued_reason`, which needs this Job's
-    /// own answer and not `room_for_another`'s machine-wide one.
+    /// Whether the disk is short on this Job's own repository's volume —
+    /// `served.root()`, where `WorktreeSpec` cuts one. Unserved is `false`.
     pub(crate) async fn volume_is_short(&self, job: &Job) -> bool {
         let Ok(served) = self.served_by(job) else {
             return false;
         };
         let volume = PathBuf::from(served.root());
-        let machine = Arc::clone(self.machine());
         let floor = self.headroom().disk_floor();
-        tokio::task::spawn_blocking(move || machine.disk_free_at(&volume))
+        self.disk_free_at(&volume)
+            .await
+            .is_some_and(|free| free < floor)
+    }
+
+    /// Free bytes on `volume`, cached with the machine reading — one `df`
+    /// per volume per poll interval, not one per queued Job. `#987`.
+    async fn disk_free_at(&self, volume: &Path) -> Option<Bytes> {
+        self.machine_reading().await;
+        let mut polled = self.polled().lock().await;
+        let entry = polled.as_mut().expect("machine_reading just set it");
+        if let Some(cached) = entry.volumes.get(volume) {
+            return *cached;
+        }
+        let machine = Arc::clone(self.machine());
+        let owned = volume.to_path_buf();
+        let key = owned.clone();
+        let free = tokio::task::spawn_blocking(move || machine.disk_free_at(&owned))
             .await
             .ok()
-            .flatten()
-            .is_some_and(|free| free < floor)
+            .flatten();
+        entry.volumes.insert(key, free);
+        free
     }
 
     /// The Job that has been waiting longest, by when it was approved.
