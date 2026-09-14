@@ -211,6 +211,22 @@ export const DockBesideTheContent: Story = {
   ),
 };
 
+/**
+ * At `--layout-breakpoint` and wider, closed: no strip, no residue — #1094.
+ * The title row's own Helm button is the only way back, and pressing it
+ * reopens the dock beside the content.
+ */
+export const DockClosedAtWidth: Story = {
+  args: { ...shell, dock: { open: false, binding: "⌘J", onOpen: () => {} } },
+  render: DockBesideTheContent.render,
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByLabelText("Helm")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /Open Helm/ })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Helm" }));
+    await expect(canvas.getByLabelText("Helm")).toBeVisible();
+  },
+};
+
 /** Questions from two repositories in the dock's questions zone, above where Helm's conversation will sit. */
 export const DockWithQuestions: Story = {
   args: {

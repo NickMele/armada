@@ -13,6 +13,7 @@ import type {
 import type { HelmContext, JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { helmRowsOf, type HelmApprovalAsk, type HelmFoldedRow } from "@armada/screens/src/helm-thread";
 import type { BridgeState } from "../../shared/bridge";
+import { locationOf } from "./helm-context";
 
 export type HelmDockProps = {
   helm: BridgeState["helm"];
@@ -88,6 +89,7 @@ export function HelmDock({
         repositories={options}
         chip={chip}
         onRemoveChip={onRemoveChip}
+        location={locationOf(context, jobs)}
         // Drawn whenever there is somewhere else to point Helm — a specific
         // pick does not hide it, because Discuss or the switch itself is
         // what points Helm away from the picked repository without moving
