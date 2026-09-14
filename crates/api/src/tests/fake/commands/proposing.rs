@@ -69,6 +69,8 @@ impl FakeDaemon {
             // was never in.
             status: status("awaiting_approval"),
             created_at: Instant::carried("2026-01-01T00:00:00.000Z"),
+            // Never run: a Job just proposed has no Drone yet.
+            started_at: None,
             // No worktree exists at the approval gate, so no branch is claimed.
             branch: None,
             reason: None,

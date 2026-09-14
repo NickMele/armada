@@ -129,15 +129,15 @@ fn every_jobs_manifest_survives_the_wire_and_sorts_two_repositories_apart() {
 
     let list = JobList {
         jobs: vec![
-            JobSummary::of(&gate, None, None, None, false, None),
-            JobSummary::of(&running, None, None, None, false, None),
+            JobSummary::of(&gate, None, None, None, false, None, None),
+            JobSummary::of(&running, None, None, None, false, None, None),
             // The one row `asking` overrides: a running Job whose Drone is
             // waiting on an answer reads as Needs you, not Running.
-            JobSummary::of(&asking, None, None, None, true, None),
-            JobSummary::of(&queued, None, None, None, false, None),
-            JobSummary::of(&done, None, None, None, false, None),
-            JobSummary::of(&mailer_gate, None, None, None, false, None),
-            JobSummary::of(&mailer_queued, None, None, None, false, None),
+            JobSummary::of(&asking, None, None, None, true, None, None),
+            JobSummary::of(&queued, None, None, None, false, None, None),
+            JobSummary::of(&done, None, None, None, false, None, None),
+            JobSummary::of(&mailer_gate, None, None, None, false, None, None),
+            JobSummary::of(&mailer_queued, None, None, None, false, None, None),
         ],
         unreadable: Vec::new(),
     };

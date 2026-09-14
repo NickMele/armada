@@ -63,14 +63,33 @@ pub struct JobSummary {
     /// copy of the rule.
     pub title: String,
     pub status: JobStatus,
-    /// When the Job was created. **The instant elapsed is measured from**, and
-    /// the reason it is on the row rather than only on the detail: a Board that
-    /// cannot draw how long a Job has been going needs one request per row to
-    /// answer "is this stuck", which is the question the column exists for.
+    /// When the Job was created. **Not the instant elapsed is measured from**
+    /// — [`started_at`](JobSummary::started_at) is, since waiting for approval
+    /// and waiting in the queue must not count — but on the row for
+    /// [`started_at`]'s own reason: a Board that cannot draw how long a Job has
+    /// been going needs one request per row to answer "is this stuck", which is
+    /// the question the column exists for.
     ///
     /// Read from the record, never derived from the id's ULID prefix — that
     /// would be a second source for an instant that is already stored.
     pub created_at: Instant,
+    /// When the Job's first Drone started: the first dated arrival at
+    /// `running` in the log, off [`first_started_at`](crate::attempt::first_started_at).
+    /// **Absent until then, and never `null`.**
+    ///
+    /// **The instant a whole-Job elapsed is measured from**, and the whole
+    /// reason it exists apart from [`created_at`](JobSummary::created_at):
+    /// time spent at `awaiting_approval`, and time spent `queued` before that
+    /// first run, must read as nothing rather than as a run that is already
+    /// under way. Once set it never moves, even where the Job returns to
+    /// `awaiting_approval` for a sub-dispatch approval or to `queued` on a
+    /// restart — only the very first arrival counts.
+    ///
+    /// Filled by Fleet from the log, like [`landed`](JobSummary::landed) is
+    /// filled from the store: `core_model::Job` carries no instant for this,
+    /// only the log does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<Instant>,
     /// The branch the Job's worktree is on. **Absent until a worktree exists**
     /// — a Job at the approval gate has no branch and does not claim one, and
     /// absent is never `null`.
@@ -235,6 +254,11 @@ impl JobSummary {
     /// caller holding the working slot can supply it. A chained setter was the
     /// alternative and was rejected — a summary built without the call would say
     /// `false` silently, which is the redaction decision nobody made.
+    ///
+    /// `started_at` is last and for the same reason as the rest: the first
+    /// dated arrival at `running` is in `job_events`, not on `core_model::Job`,
+    /// so only a caller holding the log can supply it.
+    #[allow(clippy::too_many_arguments)]
     pub fn of(
         job: &core_model::Job,
         reason: Option<&core_model::TransitionReason>,
@@ -242,6 +266,7 @@ impl JobSummary {
         budget_hold: Option<core_model::BudgetHold>,
         asking: bool,
         resumption: Option<core_model::Resumption>,
+        started_at: Option<core_model::Timestamp>,
     ) -> JobSummary {
         JobSummary {
             id: job.id().into(),
@@ -249,6 +274,7 @@ impl JobSummary {
             title: job.title().as_str().to_string(),
             status: job.status().into(),
             created_at: job.created_at().into(),
+            started_at: started_at.as_ref().map(Instant::from),
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             reason: reason.and_then(Reason::of),
             queued_reason: queued_reason.map(QueuedReason::from),
@@ -363,6 +389,13 @@ pub struct RestartRequested {
 /// a `queued` Job — creation, a step advancing and a Drone arriving or leaving
 /// all carry a Job in some other status. A publish that did would need the
 /// board, which is exactly what this conversion does not have.
+///
+/// **`started_at` is `None` here too, and that is only ever right for a Job
+/// just created** — the one caller left on this conversion, every one of
+/// which mints a fresh Job at its approval gate or its sub-dispatch entry,
+/// neither of which has run. A caller publishing about a Job that has already
+/// run must call [`JobSummary::of`] instead, with the log's own answer: this
+/// conversion holds no log to ask.
 impl From<&core_model::Job> for JobSummary {
     fn from(job: &core_model::Job) -> JobSummary {
         // **`asking` is `false` here and that is the answer, not a default.**
@@ -374,7 +407,7 @@ impl From<&core_model::Job> for JobSummary {
         // `budget_hold` is `None` for the same reason `queued_reason` is: both
         // are read off the board rather than off the record, and this
         // conversion holds only the record.
-        JobSummary::of(job, None, None, None, false, None)
+        JobSummary::of(job, None, None, None, false, None, None)
     }
 }
 

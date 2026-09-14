@@ -387,6 +387,33 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
         .collect()
 }
 
+/// The instant this Job first reached `running` — [`JobSummary::of`](ipc::JobSummary::of)'s
+/// `started_at`, read the way [`step_moves`] reads a step's own runs.
+///
+/// **The first arrival, and only the first.** `ipc::first_started_at` does the
+/// finding, over the Job-level moves the same log carries beside the step
+/// moves [`narrowed`] keeps; a later return to `awaiting_approval` or `queued`
+/// does not move it.
+pub(crate) fn job_started_at(
+    store: &Store,
+    job: &core_model::JobId,
+) -> Result<Option<core_model::Timestamp>, LoadJobError> {
+    let events = store.events_for(job).map_err(LoadJobError::Unreadable)?;
+    let job_moves: Vec<(&'static str, ipc::Instant)> = events
+        .iter()
+        .filter_map(|event| match event.moved() {
+            Moved::Job { to, .. } => Some((to.as_wire(), event.at().into())),
+            Moved::Step { .. } | Moved::Drone { .. } => None,
+        })
+        .collect();
+    Ok(ipc::first_started_at(job_moves.iter().map(|entry| ipc::Move {
+        to: entry.0,
+        why: None,
+        at: &entry.1,
+    }))
+    .map(|instant| instant.to_domain()))
+}
+
 /// What Fleet knows about a Job's steps beyond the `job_steps` rows.
 ///
 /// **Nothing here is read off the Job.** That row carries the trigger the gate

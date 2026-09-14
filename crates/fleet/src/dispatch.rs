@@ -736,9 +736,17 @@ where
     /// Job in `queued` — creation, a step advancing and a Drone arriving or
     /// leaving are none of them a `queued` Job — so there is no board to read
     /// those from here either.
+    ///
+    /// **`started_at` is read, unlike those.** A step advancing or a Drone
+    /// arriving or leaving is a Job already `running`, or one that was — its
+    /// clock is already ticking and this publish must carry the same instant
+    /// [`summarised`](Fleet::summarised) would, not the `None` a fresh Job
+    /// reads as.
     pub(crate) async fn published(&self, job: &Job) -> Result<ipc::JobSummary, Adrift> {
         let reason = self.last_reason(job.id()).await?;
-        let mut summary = ipc::JobSummary::of(job, reason.as_ref(), None, None, false, None);
+        let started_at = self.job_started_at(job.id()).await?;
+        let mut summary =
+            ipc::JobSummary::of(job, reason.as_ref(), None, None, false, None, started_at);
         // A client replaces its row with this one, so the counts ride along.
         summary.tasks = self.task_counts(job.id()).await?;
         Ok(summary)

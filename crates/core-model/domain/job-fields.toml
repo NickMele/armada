@@ -88,9 +88,20 @@ table = "jobs"
 storage = "Column"
 nullable = "No"
 frozen_at = "Creation"
-purpose = "When the Job was created. What a whole-Job elapsed is measured from."
+purpose = "When the Job was created. Not what a whole-Job elapsed is measured from — see `started_at` below — but on the row for the same reason: a Board that cannot draw how long a Job has been open needs one request per row to answer it."
 in_code = "Yes"
 notes = "The instant every constructor already takes. It was a column and not a field while nothing read it — the rebuild needed it to stamp the `job_steps` rows — and it is on the record now because creation writes no event, so nothing else on the Job can answer how long it has been open."
+
+[fields.started_at]
+type = "timestamp"
+table = "jobs"
+storage = "Derived — not stored"
+nullable = "Yes — absent until the Job's first Drone starts"
+frozen_at = "N/A"
+purpose = "When the Job first reached `running`. What a whole-Job elapsed is measured from, since time at `awaiting_approval` and time `queued` before that first run must not count."
+in_code = "Yes"
+notes = "The first dated arrival at `running` in `job_events`, folded the way `retry_count` and `iteration_count` are — a stored column would be a second record of a fact the log already carries and a pair that can disagree. `ipc::first_started_at` finds it and never moves it: a Job that returns to `awaiting_approval` for a sub-dispatch approval or to `queued` on a restart keeps its first instant, because only the very first arrival counts."
+why = "Reported on the Board on 13 Sep 2026 as a Job at `needs approval` whose run time kept climbing — every whole-Job elapsed figure spanned from `created_at`, which does not stop for a wait nobody is working through. `#1008`."
 
 [fields.Attachments]
 type = "array<object>"

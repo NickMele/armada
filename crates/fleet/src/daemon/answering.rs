@@ -360,6 +360,18 @@ where
         }))
     }
 
+    /// The instant this Job first reached `running` — [`JobSummary`](ipc::JobSummary)'s
+    /// `started_at`. Absent until the Job's first Drone starts, and unmoved by
+    /// a later return to `awaiting_approval` or `queued`: `crate::wire::job_started_at`
+    /// keeps only the first arrival.
+    pub async fn job_started_at(
+        &self,
+        job_id: &JobId,
+    ) -> Result<Option<core_model::Timestamp>, Adrift> {
+        let store = self.store.lock().await;
+        crate::wire::job_started_at(&store, job_id).map_err(Adrift::Reading)
+    }
+
     /// Which Jobs are being worked. Empty where none is.
     ///
     /// **A list rather than an `Option`**, which is `#50` arriving on the one
