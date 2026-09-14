@@ -193,6 +193,12 @@ export type DeclaredCheck = {
    * only moment it says anything the `skipped` row will not say later.
    */
   when?: string[];
+  /**
+   * Where the Manifest says this Check runs. `gate` is never in a Drone's own
+   * run; `handoff` runs last, and only on the step before handoff. **Absent
+   * means everywhere.** Since 13.48, #849.
+   */
+  runs_at?: "gate" | "handoff";
 };
 
 /**

@@ -76,7 +76,7 @@ async fn the_tool_points_at_the_block_that_names_the_checks() {
         .find(|step| step.id() == &StepId::new("implement"))
         .expect("the step")
         .clone();
-    let offer = Checking::at(&step).expect("an offer");
+    let offer = Checking::at(workflow.frozen(), &step).expect("an offer");
     let heading = offer
         .text()
         .lines()
@@ -123,5 +123,5 @@ fn a_step_with_no_checks_is_not_offered_the_dry_run() {
         .find(|step| step.id() == &StepId::new("implement"))
         .expect("the step")
         .clone();
-    assert!(Checking::at(&step).is_none());
+    assert!(Checking::at(unchecked.frozen(), &step).is_none());
 }

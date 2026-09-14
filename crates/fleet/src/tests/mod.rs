@@ -71,6 +71,7 @@ mod frozen;
 mod gaming;
 mod gate;
 mod group;
+mod handoff_checks;
 mod headings;
 mod headroom;
 mod helm_conversation;

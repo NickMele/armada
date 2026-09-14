@@ -66,6 +66,7 @@ pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
                 step_id: step.step_id().into(),
                 label: declared.map(|step| step.label().to_string()),
                 declares: None,
+                held_for_handoff: Vec::new(),
                 // The bench holds no real attempt history, so every ruling
                 // here is stamped as the first and only run — see the header
                 // on `attempts` below.

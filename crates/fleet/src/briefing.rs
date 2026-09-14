@@ -669,7 +669,7 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
         if let Some(asked) = Declaring::at(step) {
             blocks.headed(asked.text(), ipc::BlockKind::Standing);
         }
-        if let Some(offered) = Checking::at(step) {
+        if let Some(offered) = Checking::at(workflow, step) {
             blocks.headed(offered.text(), ipc::BlockKind::Checks);
         }
     }

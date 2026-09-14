@@ -163,6 +163,9 @@ pub enum Observed {
     /// the recorded row carries: the patterns, so a reader's first question is
     /// already answered.
     Skipped { covers: String },
+    /// A Check declared to run before handoff, not run because another Check
+    /// on this gate did not pass. A skip, never a pass. #849.
+    HeldBack,
     /// The gate is answering this Check from a Drone's own dry run rather than
     /// running it again. **The row, whole, and not re-derived** — `crate::gate`
     /// decided this Check qualifies before this variant is ever built, and a
@@ -179,6 +182,7 @@ impl Observed {
             Observed::Artifact(_) => "a look for a file",
             Observed::Plan { .. } => "a reading of the plan",
             Observed::Skipped { .. } => "a skipped check",
+            Observed::HeldBack => "a check held back for handoff",
             Observed::Reused(_) => "a Drone's own dry run",
         }
     }
@@ -498,6 +502,8 @@ enum Answer {
     Skipped {
         covers: String,
     },
+    /// See [`Observed::HeldBack`].
+    HeldBack,
     Failed(CheckFailed),
     /// Answered from a Drone's own dry run rather than run again. The row,
     /// already whole — see [`Observed::Reused`].
@@ -614,7 +620,7 @@ impl Ran {
     pub fn skipped(&self) -> usize {
         self.each
             .iter()
-            .filter(|(_, answer)| matches!(answer, Answer::Skipped { .. }))
+            .filter(|(_, answer)| matches!(answer, Answer::Skipped { .. } | Answer::HeldBack))
             .count()
     }
 
@@ -641,7 +647,7 @@ impl Ran {
                     name: name.clone(),
                     outcome: match answer {
                         Answer::Passed => CheckOutcome::Passed,
-                        Answer::Skipped { .. } => CheckOutcome::Skipped,
+                        Answer::Skipped { .. } | Answer::HeldBack => CheckOutcome::Skipped,
                         Answer::Failed(failed) => failed.outcome(),
                         Answer::Reused(_) => unreachable!("returned above"),
                     },
@@ -658,6 +664,7 @@ impl Ran {
                         Answer::Skipped { covers } => {
                             Some(format!("no changed file is under {covers}"))
                         }
+                        Answer::HeldBack => Some(HELD_BACK.to_string()),
                         Answer::Passed => None,
                         Answer::Reused(_) => unreachable!("returned above"),
                     },
@@ -671,6 +678,10 @@ impl Ran {
             .collect()
     }
 }
+
+/// What a held-back Check's row says instead of a result.
+const HELD_BACK: &str =
+    "not run: it runs before handoff, once every other check here passes, and one did not";
 
 /// One check against one observation.
 fn verdict(
@@ -690,6 +701,7 @@ fn verdict(
         // was first produced, and re-matching on it here would be asking a
         // question the reuse decision already answered.
         (_, Observed::Reused(row)) => Ok(Answer::Reused(row.clone())),
+        (_, Observed::HeldBack) => Ok(Answer::HeldBack),
         (
             ResolvedCheck::ManifestCheck {
                 name,

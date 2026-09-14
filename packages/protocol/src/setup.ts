@@ -96,6 +96,11 @@ export type WorkflowStep = {
    * looking at it, before any Job of it has even run.
    */
   delivers: boolean;
+  /**
+   * Checks declared `runs_at: handoff` that this step's gate leaves to a later
+   * step. Absent is none. Since 13.48, #849.
+   */
+  held_for_handoff?: string[];
 };
 
 /** One Manifest Fleet holds. */

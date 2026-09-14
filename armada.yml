@@ -20,22 +20,15 @@ base: main
 
 # Checks gate advancement. A step naming one not declared here is refused.
 #
-# **The order below is the order they start in.** A step that says
-# `every_manifest_check` takes it from this file, and `fleet::checking` starts
-# four at a time off it, refilling as each finishes — so the first four declared
-# are the four that start. There is no `order:` key to state it with, for the
-# reason a workflow's `steps[]` has none: order is already the semantics, and
-# two statements of it can disagree.
+# **The order below is the order they are reported in**, and no longer the order
+# they start in: `fleet::checking` starts them fastest first by this
+# repository's past runs (#1062). There is no `order:` key, for the reason a
+# workflow's `steps[]` has none.
 #
-# **It does not decide what a Drone is told first, and this once said it did.**
-# Nothing here stops early — `checking`'s own note is that a failing Check
-# cancels none of the others, because whoever reads a failed step wants every
-# result — and the report is written into slots sized from the declaration, so
-# what comes back is in this order however the four raced. What the order
-# actually decides is the schedule, and on that reading it is not tuned: the
-# classic answer is slowest first, which would put `bridge_test` at the top
-# rather than at the bottom. `typecheck`, `storybook` and `bridge_build` have
-# never been timed on their own, so there is nothing to tune it against yet.
+# **`runs_at: gate` keeps a Check out of a Drone's own run** and nowhere else —
+# the gate still runs it (#849). The two here are the slowest things a Drone
+# asked for: `storybook` at 1m21s–2m42s and the story tests at up to 184s,
+# measured on 14 Sep 2026.
 checks:
   build:
     # `--locked`: a Check that updates the lockfile changed what it measured.
@@ -138,6 +131,8 @@ checks:
 
   storybook:
     run: pnpm -C packages/components build-storybook
+    # Built at the gate, never in a Drone's run: see `runs_at` atop `checks`.
+    runs_at: gate
     # Shorter than the two above: nothing under `apps/` concerns it.
     when:
       - "packages/**"
@@ -145,54 +140,42 @@ checks:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
 
-  bridge_test:
-    # The Bridge half had no test runner at all until this Check. `test` above
-    # is `cargo`, `typecheck` compiles TypeScript without running any of it, and
-    # `storybook` proves the stories build rather than that any of them renders
-    # what it claims. A component could be wrong in every way that is not a type
-    # error and nothing here would say so.
-    #
-    # **Four runners under one name, and none subsumes another.** The split is
-    # by what is being checked, not by package.
-    #
-    # `packages/screens` runs its pure modules in node — which tab a Job is in,
-    # which render it takes — where a hundred cases cost what one costs. It also
-    # runs its screens in a browser, in a second project, because a screen
-    # cannot be storied: `xtask/src/rules_layers.rs` puts `@armada/components`
-    # below `@armada/screens` and refuses the import the other way, so no story
-    # can mount `OverruleControl`. What a screen wires is checked where the
-    # screen is.
-    #
-    # `apps/desktop` runs main's own state machines in node, against a `ws`
-    # server on a loopback port. Everything main holds is a socket's messages
-    # folded into state, and no Check here could reach any of it: `typecheck`
-    # compiles main without running it and `bridge_build` bundles it, so a
-    # `failed` that dropped the rows it had already received was invisible until
-    # #324.
-    #
-    # `packages/components` runs every story in a real browser through
-    # `@storybook/addon-vitest`: rendering at all is the smoke test, and a story
-    # with a `play` function has its assertions run. So the drawing, the wiring,
-    # the arithmetic and the wire are each checked by the thing that can check
-    # them.
-    #
-    # **The chain is in a `package.json` script, for the reason `typecheck`
-    # above gives at length: a `run` gets no shell.** `apps/desktop` first,
-    # because it is now the only one that starts no browser: screens answered in
-    # under a second until it gained a browser project of its own, and the
-    # sentence that used to be here said so. The order is the order they answer
-    # in — 6s, 40s, then the stories — so a failure surfaces as early as it can.
-    #
-    # **Still `&&`, and it hid two suites once.** #613: a run went red on
-    # `setTypeOfService EINVAL`, raised inside Node's own `undici`, after every
-    # `apps/desktop` test had passed — and the two suites behind it never ran.
-    # Fail-fast is not what made that expensive; a red that meant nothing is,
-    # and it is fixed where it was raised, in `apps/desktop/src/main/request.ts`.
-    # Should that errno ever reach this Check again it is the OS refusing an
-    # advisory byte on a socket it has already torn down, and no test failed.
-    run: pnpm bridge-test
+  # The Bridge's tests, one Check per package so each can say where it runs.
+  # They were one `bridge_test` chaining all three with `&&`, which hid two
+  # suites once (#613) and could not keep the story tests out of a Drone's run.
+  # `pnpm bridge-test` still chains them for a person. None subsumes another:
+  # `typecheck` runs no TypeScript and `storybook` renders no story.
+  desktop_test:
+    # Main's own state machines in node, against a `ws` server on a loopback
+    # port — nothing else here runs main (#324).
+    run: pnpm -C apps/desktop test
     when:
       - "apps/**"
+      - "packages/**"
+      - "crates/core-model/domain/**"
+      - "protocol-version.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
+  screens_test:
+    # Pure modules in node, and screens in a browser project, because a screen
+    # cannot be storied: `xtask/src/rules_layers.rs` refuses the import.
+    run: pnpm -C packages/screens test
+    when:
+      - "packages/**"
+      - "crates/core-model/domain/**"
+      - "protocol-version.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
+  components_test:
+    # Every story, `screens`' included, in a real browser through
+    # `@storybook/addon-vitest`; a `play` function has its assertions run.
+    run: pnpm -C packages/components test
+    runs_at: gate
+    when:
       - "packages/**"
       - "crates/core-model/domain/**"
       - "protocol-version.toml"
@@ -243,13 +226,13 @@ commands:
   bootstrap:
     run: pnpm install --frozen-lockfile
 
-  # The browser `bridge_test` mounts stories in. `setup.requires` names this
+  # The browser `components_test` and `screens_test` mount into. `setup.requires` names this
   # too, after `bootstrap` — the binary it runs is installed by it.
   #
   # **A machine-level cache, not a worktree one.** Playwright puts the shell in
   # the user's cache directory, so this is a fetch on a machine that has never
   # run it and a version check on every one after. Left out of setup, the first
-  # Job on a fresh machine would fail `bridge_test` on a missing executable and
+  # Job on a fresh machine would fail `components_test` on a missing executable and
   # report it as a broken test.
   #
   # `--only-shell`: the headless shell is what a headless run launches, and it
@@ -329,7 +312,7 @@ drone:
   # honest silence of 79s on a repository with a warm cache and small changes.
   # Measured here into an empty target directory on 3 Sep 2026, each a single
   # tool call a Drone makes no sound during: `build` 37.6s, `test` 41s, and
-  # `bridge_test` 6s then 40s before a browser starts. A Drone that runs two of
+  # the Bridge tests 6s then 40s before a browser starts. A Drone that runs two of
   # them before it speaks is past 120s while nothing is wrong.
   #
   # 300 is the top of the band that spike named as separating every stuck step

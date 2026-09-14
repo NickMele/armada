@@ -153,6 +153,8 @@ pub fn workflow() -> FrozenWorkflow {
                         )),
                         // Carried so every round trip here walks a Check that runs one test by name. #999.
                         one_test: Some("cargo nextest run -E test(={})".to_string()),
+                        // Not the default, so the round trip carries a word. #849.
+                        runs_at: core_model::RunsAt::Handoff,
                     },
                     ResolvedCheck::DiffNonempty,
                     // Carried on the shared fixture for `when`'s reason: every

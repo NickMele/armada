@@ -17,6 +17,9 @@
 //! often explains the first. A Drone's own run stops at its first failed
 //! command, because the Drone will fix that and ask again (#1062).
 //!
+//! **A Check declared `runs_at: handoff` starts last**, once every other answer
+//! in the batch lets the step through; otherwise it records a skip (#849).
+//!
 //! **Started fastest first, reported in the step's order.** [`Room`] carries
 //! the repository's past durations; each result still lands in its own slot.
 //!
@@ -34,7 +37,7 @@ use std::time::Duration;
 
 use adapter_traits::Footprint;
 use checks_runner::{Attempt as RunAttempt, Narrowed, Output, Writing};
-use core_model::{Attempt, Prerequisite, ResolvedCheck, TaskCounts};
+use core_model::{Attempt, Prerequisite, ResolvedCheck, RunsAt, TaskCounts};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
@@ -496,7 +499,17 @@ pub(crate) async fn ran(
             Planned::Already(_) | Planned::Blocked { .. } => None,
         })
         .collect::<Vec<(usize, String)>>();
-    let mut queued: VecDeque<(usize, String)> = room.past().fastest_first(queued, checks);
+    let queued: VecDeque<(usize, String)> = room.past().fastest_first(queued, checks);
+    let (later, now): (Vec<(usize, String)>, Vec<(usize, String)>) = queued
+        .into_iter()
+        .partition(|(at, _)| checks[*at].runs_at() == RunsAt::Handoff);
+    let mut deferred = vec![false; planned.len()];
+    for (at, _) in &later {
+        deferred[*at] = true;
+    }
+    let mut queued: VecDeque<(usize, String)> = now.into();
+    let mut later: Option<VecDeque<(usize, String)>> = (!later.is_empty()).then(|| later.into());
+    let mut held_back = vec![false; planned.len()];
     let worktree = worktree.to_path_buf();
     // Owned, so each spawned Check can move its own copy — the env slice this
     // function borrows does not outlive the batch, and a spawned future must.
@@ -524,6 +537,21 @@ pub(crate) async fn ran(
     let stopping = stop.clone().stopped();
     tokio::pin!(stopping);
     loop {
+        // Everything else has answered: start what waits for handoff, or hold it back.
+        if queued.is_empty() && running.is_empty() {
+            if let Some(held) = later.take() {
+                match halting.is_some() && passed_so_far(checks, &planned, &done, &deferred) {
+                    true => queued = held,
+                    false => {
+                        for (at, _) in held {
+                            let observed = Observed::HeldBack;
+                            announcing.finished(at, &checks[at], &observed, Duration::ZERO);
+                            held_back[at] = true;
+                        }
+                    }
+                }
+            }
+        }
         let wants = halting.is_some() && !queued.is_empty();
         if !wants {
             ask = None;
@@ -606,7 +634,9 @@ pub(crate) async fn ran(
                 }
                 done[at] = Some((attempt, took));
                 // A result that does not end the run is heard now; the last is the report.
-                if failed_first.is_none() && !(queued.is_empty() && running.is_empty()) {
+                if failed_first.is_none()
+                    && !(queued.is_empty() && running.is_empty() && later.is_none())
+                {
                     announcing.landed(at);
                 }
             }
@@ -625,6 +655,16 @@ pub(crate) async fn ran(
 
     let mut completed = Vec::with_capacity(planned.len());
     for (at, plan) in planned.into_iter().enumerate() {
+        if held_back[at] {
+            completed.push(Completed {
+                observed: Observed::HeldBack,
+                narrowed_to: None,
+                printed: None,
+                took: Duration::ZERO,
+                stopped: None,
+            });
+            continue;
+        }
         completed.push(match plan {
             Planned::Already(observed) => Completed {
                 observed,
@@ -711,6 +751,26 @@ fn never_started(run: String) -> RunAttempt {
         }),
         output: Output::default(),
     }
+}
+
+/// Whether every answer not waiting for handoff lets the step through.
+fn passed_so_far(
+    checks: &[ResolvedCheck],
+    planned: &[Planned],
+    done: &[Option<(RunAttempt, Duration)>],
+    deferred: &[bool],
+) -> bool {
+    planned.iter().enumerate().all(|(at, plan)| {
+        deferred[at]
+            || match plan {
+                Planned::Already(observed) | Planned::Blocked { observed, .. } => {
+                    advances(&checks[at], observed)
+                }
+                Planned::Command { .. } => done[at].as_ref().is_some_and(|(attempt, _)| {
+                    advances(&checks[at], &Observed::Command(attempt.exit.clone()))
+                }),
+            }
+    })
 }
 
 /// Whether this answer lets a step through, as the gate would record it.

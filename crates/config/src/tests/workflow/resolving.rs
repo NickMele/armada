@@ -50,6 +50,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 requires: Vec::new(),
                 narrow: None,
                 one_test: None,
+                runs_at: core_model::RunsAt::Everywhere,
             },
             ResolvedCheck::ManifestCheck {
                 name: "test".to_string(),
@@ -59,6 +60,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 requires: Vec::new(),
                 narrow: None,
                 one_test: None,
+                runs_at: core_model::RunsAt::Everywhere,
             },
             ResolvedCheck::DiffNonempty,
         ]

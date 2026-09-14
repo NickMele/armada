@@ -40,6 +40,7 @@ use crate::job::ids::{ModelName, StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
 use crate::job::narrowing::Narrowing;
 use crate::job::prerequisite::Prerequisite;
+use crate::job::runs_at::RunsAt;
 use crate::job::scope::EvidenceScope;
 use crate::job::source::WorkflowSource;
 use crate::job::verdict::GateVerdict;
@@ -88,6 +89,9 @@ pub enum ResolvedCheck {
         /// no Drone's report of a test broken on main can be confirmed. Frozen
         /// for `narrow`'s reason. #999.
         one_test: Option<String>,
+        /// Where the Manifest says this Check runs. Frozen for `narrow`'s
+        /// reason. #849.
+        runs_at: RunsAt,
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -222,6 +226,17 @@ impl ResolvedCheck {
             ResolvedCheck::DiffNonempty
             | ResolvedCheck::ArtifactExists { .. }
             | ResolvedCheck::PlanRecorded { .. } => None,
+        }
+    }
+
+    /// Where this Check runs. **`Everywhere` on a built-in**, which a Drone's
+    /// own run answers the same as the gate does. #849.
+    pub fn runs_at(&self) -> RunsAt {
+        match self {
+            ResolvedCheck::ManifestCheck { runs_at, .. } => *runs_at,
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => RunsAt::Everywhere,
         }
     }
 
@@ -610,6 +625,16 @@ impl ResolvedStep {
         &self.checks
     }
 
+    /// The Checks a Drone's own run asks, in the step's order: every one
+    /// declared [`RunsAt::Everywhere`]. The gate still runs the rest. #849.
+    pub fn mid_step_checks(&self) -> Vec<ResolvedCheck> {
+        self.checks
+            .iter()
+            .filter(|check| check.runs_at().mid_step())
+            .cloned()
+            .collect()
+    }
+
     /// Whether the definition asked for every Check its repository declares,
     /// rather than naming them.
     ///
@@ -872,5 +897,26 @@ impl FrozenWorkflow {
     /// The one step whose entry sends the work out, at most one. `#663`.
     pub fn delivering_step(&self) -> Option<&ResolvedStep> {
         self.steps.iter().find(|step| step.delivers())
+    }
+
+    /// The handoff-only Checks a step gating on every Check leaves to a later
+    /// step, by name. **Empty on a step that names its Checks**, which asked
+    /// for no more than it named. #849.
+    pub fn held_for_handoff(&self, id: &StepId) -> Vec<&str> {
+        let Some(at) = self.steps.iter().position(|step| step.id() == id) else {
+            return Vec::new();
+        };
+        if !self.steps[at].gates_on_every_check() {
+            return Vec::new();
+        }
+        let mut held: Vec<&str> = Vec::new();
+        for check in self.steps[at + 1..].iter().flat_map(ResolvedStep::checks) {
+            if check.runs_at() == RunsAt::Handoff {
+                if let Some(name) = check.name().filter(|name| !held.contains(name)) {
+                    held.push(name);
+                }
+            }
+        }
+        held
     }
 }

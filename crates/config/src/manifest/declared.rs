@@ -11,7 +11,7 @@
 //! these and every reader outside this crate goes through an accessor — which
 //! is where what absence means is written down, and the one place it is.
 
-use core_model::{Covers, Narrowing, Prerequisite};
+use core_model::{Covers, Narrowing, Prerequisite, RunsAt};
 
 /// A command a change must pass to land or to advance a step.
 ///
@@ -27,6 +27,7 @@ pub struct Check {
     pub(super) requires: Vec<Prerequisite>,
     pub(super) narrow: Option<Narrowing>,
     pub(super) one_test: Option<String>,
+    pub(super) runs_at: RunsAt,
 }
 
 impl Check {
@@ -90,6 +91,12 @@ impl Check {
     /// test broken on main has nothing to confirm it with. #999.
     pub fn one_test(&self) -> Option<&str> {
         self.one_test.as_deref()
+    }
+
+    /// Where this Check runs. **`Everywhere` where the file declares no
+    /// `runs_at`**, which is every Check written before the key existed. #849.
+    pub fn runs_at(&self) -> RunsAt {
+        self.runs_at
     }
 }
 
