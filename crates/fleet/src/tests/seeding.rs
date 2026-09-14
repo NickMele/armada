@@ -7,13 +7,16 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use adapter_traits::{BaseSpec, WorktreeSpec};
+use api::Commands;
 use config::Manifest;
 use core_model::JobStatus;
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
+use crate::places::Asking;
 use crate::seeding::{recorded, CopyOnWrite, NotCloned, Recorded};
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
@@ -356,6 +359,44 @@ async fn a_warm_up_that_fails_leaves_no_mark_and_the_next_job_says_why() {
         why.contains("did not finish") && why.contains("warm"),
         "{why}"
     );
+}
+
+/// #1063: the warm-up's commands take a place in the machine's one line,
+/// ranked behind a gate, and run only once one is given back.
+#[tokio::test]
+async fn the_warm_up_waits_for_a_place_and_starts_once_one_is_given_back() {
+    let home = TempDir::new();
+    let spec = base(&home, COMMIT);
+    std::fs::create_dir_all(spec.path()).expect("a base checkout");
+    let fleet = a_seeding_fleet(
+        &home,
+        "/bin/mkdir target",
+        "/usr/bin/true",
+        Arc::new(Copying::default()),
+    );
+    fleet
+        .save_limits(ipc::SaveLimits {
+            checks_at_once: Some(ipc::ChecksAtOnce::new(1).expect("in range")),
+            ..ipc::SaveLimits::default()
+        })
+        .await
+        .expect("saved");
+    let held = fleet.room(Asking::Gate).place().await;
+
+    let warming = fleet.warm_seeds().expect("a warm-up starts");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        !Path::new(&spec.path()).join("target").is_dir(),
+        "the warm-up's command ran while a gate held the machine's one place"
+    );
+
+    drop(held);
+    tokio::time::timeout(Duration::from_secs(1), warming)
+        .await
+        .expect("the warm-up starts once the place is given back")
+        .expect("the warm-up ends");
+    assert!(Path::new(&spec.path()).join("target").is_dir());
+    assert!(Path::new(&spec.seed_marker()).exists());
 }
 
 /// A base that moved warms from the last seed rather than from nothing: the

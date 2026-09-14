@@ -7,8 +7,13 @@
 //! only, because a restart ends the build it would name.
 //!
 //! **The warm-up runs off the turn loop**, which awaits every Job in turn and
-//! would hold them all for the length of a workspace build. One runs at a time
-//! on the machine until #1063 gives it a place beside the Checks.
+//! would hold them all for the length of a workspace build. Its warm-up
+//! commands take a place in the machine's one line of Checks
+//! (`crate::places`, #1063), asking as [`Asking::SeedWarmup`](crate::places::Asking::SeedWarmup) —
+//! ranked last of all, so it never holds back a gate, a Drone's run or a fix
+//! draft. **Still at most one warm-up at a time on the machine**, kept
+//! alongside the place: two repositories' warm-ups competing for the same
+//! machine is wasteful however many places are free.
 //!
 //! **What each worktree got is written beside the Job's log**, under
 //! `.armada/seeds/`, because the run sheet asks after a restart too and no
@@ -33,6 +38,7 @@ use tokio::task::JoinHandle;
 
 use crate::basing::NoBase;
 use crate::daemon::Fleet;
+use crate::places::{Asking, Room};
 use crate::preparing::prepare_one;
 
 pub use cloning::{CopyOnWrite, NotCloned, TheVolume};
@@ -290,6 +296,7 @@ where
                 seeds: Arc::clone(self.seeds()),
                 preparing: Arc::clone(self.base_preparing()),
                 copying: Arc::clone(self.copy_on_write()),
+                room: self.room(Asking::SeedWarmup),
             };
             return Some(tokio::spawn(warm.run()));
         }
@@ -347,6 +354,9 @@ struct Warm<V> {
     seeds: Arc<std::sync::Mutex<Seeds>>,
     preparing: Arc<tokio::sync::Mutex<()>>,
     copying: Arc<dyn CopyOnWrite>,
+    /// A place in the machine's one line, held for as long as `warm`'s
+    /// commands run. #1063.
+    room: Room,
 }
 
 impl<V> Warm<V>
@@ -395,6 +405,9 @@ where
         let _ =
             tokio::task::spawn_blocking(move || carried_forward(copying.as_ref(), &spec, &paths))
                 .await;
+        // Held only for the warm-up commands themselves: the heavy part, and
+        // what #1063's limit is measured against.
+        let _place = self.room.place().await;
         for command in &self.warm {
             prepare_one(
                 command,
