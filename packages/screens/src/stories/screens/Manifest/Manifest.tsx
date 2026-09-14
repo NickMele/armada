@@ -361,6 +361,8 @@ export function ManifestFrom({
         repositories={[repository()]}
         scope={repository().root}
         onScope={noop}
+        onCompose={noop}
+        onSearch={noop}
         jobs={[]}
         boardJobs={[]}
         capacity={{ bound: 4, occupied: 0 }}

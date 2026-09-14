@@ -85,6 +85,9 @@ export * from "./screens/absent";
 // frame as a component, and the story renders it from the drawing's fixture.
 export * from "./screens/TheShell/TheShell";
 
+// The title row `TheShell` draws above the rail and the panel. #1087.
+export * from "./compositions/TitleBar/TitleBar";
+
 // The error treatment. Its own group, because an error is Armada failing and a
 // failed Job is Armada working — the vocabulary that keeps the two apart is
 // not a primitive and is not a composition of one.

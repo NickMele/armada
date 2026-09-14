@@ -518,6 +518,8 @@ export function App() {
         scope={state.repository}
         onScope={pick}
         onAddRepository={locate.onOpen}
+        onCompose={() => setComposing(true)}
+        onSearch={palette.onOpen}
         jobs={state.jobs}
         boardJobs={boardJobs}
         questions={questions}

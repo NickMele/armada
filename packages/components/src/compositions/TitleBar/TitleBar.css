@@ -1,0 +1,205 @@
+/* The title row. Frameless `hiddenInset` chrome insets the macOS traffic
+ * lights over this bar's leading edge rather than over the sidebar, which is
+ * what #1087 moved: the picker, the search field and Dispatch used to sit
+ * lower, under a grey bar that said only "Armada".
+ *
+ * NO TOKEN FOR THE HEIGHT OR THE TRAFFIC-LIGHT GUTTER, so both are composed
+ * from the spacing scale rather than spelled as literals — the sidebar's own
+ * drag region carried the same unspelled gap before this bar existed.
+ * Reported alongside it rather than invented twice. 44px of height
+ * (`--space-8` + `--space-2` + `--space-1`) clears the lights' ~28px with
+ * room for the row's own border; ~80px of leading gutter (`--space-12` +
+ * `--space-8`) clears the lights themselves before the picker starts. */
+.armada-title-bar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: var(--space-3);
+  height: calc(var(--space-8) + var(--space-2) + var(--space-1));
+  padding-inline: var(--space-3);
+  padding-inline-start: calc(var(--space-12) + var(--space-8));
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  background: var(--bg-sunken);
+  -webkit-app-region: drag;
+}
+
+/* Every interactive child opts out of the drag region by hand — nothing
+ * inside it is draggable by default, and the row's own background is what a
+ * person actually grabs the window by. */
+.armada-title-bar__picker,
+.armada-title-bar__search,
+.armada-title-bar__dispatch,
+.armada-title-bar__helm {
+  -webkit-app-region: no-drag;
+}
+
+.armada-title-bar__picker {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The search field is a button that opens the same palette ⌘K does — the
+ * palette owns its own input once open, top-anchored under this row. */
+.armada-title-bar__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  max-width: var(--sidebar-max);
+  height: var(--h-control-sm);
+  padding-inline: var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--fg-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.armada-title-bar__search:hover {
+  background: var(--bg-hover);
+}
+
+.armada-title-bar__search:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-title-bar__search-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Dispatch. Tonal: `--accent-muted` fill and `--accent` text, never the solid
+ * `--accent` fill a split button takes on Job detail — the top bar is chrome
+ * on every screen, so one solid accent per screen stays the surface's own
+ * decision (Approve on a Job), not this row's.
+ *
+ * **No `+` glyph.** The drawing calls for one and `packages/icons/icons.toml`
+ * has no `plus` row — minting it here is exactly the second registry this
+ * repository keeps finding and deleting. Reported rather than invented. */
+.armada-title-bar__dispatch {
+  display: inline-flex;
+  align-items: stretch;
+  flex: none;
+  height: var(--h-control-sm);
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid var(--accent);
+  background: var(--accent-muted);
+}
+
+.armada-title-bar__dispatch-action,
+.armada-title-bar__dispatch-caret {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.armada-title-bar__dispatch-action {
+  padding-inline: var(--space-3);
+  border-start-start-radius: calc(var(--radius-sm) - var(--border-width));
+  border-end-start-radius: calc(var(--radius-sm) - var(--border-width));
+}
+
+.armada-title-bar__dispatch-caret {
+  justify-content: center;
+  width: calc(var(--h-control-sm) - var(--space-2));
+  /* Faint: a tint of --accent rather than a second colour, so the divider
+   * reads as part of the fill and not as a border the fill happens to sit
+   * inside. */
+  border-inline-start: var(--border-width) solid
+    color-mix(in srgb, var(--accent) 35%, transparent);
+  border-start-end-radius: calc(var(--radius-sm) - var(--border-width));
+  border-end-end-radius: calc(var(--radius-sm) - var(--border-width));
+}
+
+.armada-title-bar__dispatch-action:hover,
+.armada-title-bar__dispatch-caret:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.armada-title-bar__dispatch-action:focus-visible,
+.armada-title-bar__dispatch-caret:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  position: relative;
+  z-index: 1;
+}
+
+.armada-title-bar__dispatch-action:disabled,
+.armada-title-bar__dispatch-caret:disabled {
+  color: var(--fg-subtle);
+  cursor: default;
+}
+
+.armada-title-bar__dispatch:has(.armada-title-bar__dispatch-action:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-sunken);
+}
+
+.armada-title-bar__spacer {
+  flex: 1;
+}
+
+/* Helm's reopen control. Drawn only while the caller says the dock is closed
+ * — the edge strip `TheShell` already draws stays too, until #1094 removes
+ * it. */
+.armada-title-bar__helm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  height: var(--h-control-sm);
+  padding-inline: var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.armada-title-bar__helm:hover {
+  background: var(--bg-hover);
+}
+
+.armada-title-bar__helm:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Amber: `--status-awaiting-review`, the status bar's own "needs you, not
+ * urgent" hue — a question waiting on a person, not the more urgent orange
+ * an escalation takes. */
+.armada-title-bar__helm-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--status-awaiting-review);
+}
+
+.armada-title-bar > svg,
+.armada-title-bar > [aria-hidden="true"] {
+  flex: none;
+}

@@ -77,6 +77,8 @@ export function BoardFrom({
         listed={live}
         scope={pickedRepository?.root ?? null}
         onScope={noop}
+        onCompose={noop}
+        onSearch={noop}
         jobs={jobs}
         boardJobs={boardJobs}
         capacity={{ bound: 4, occupied: 2 }}

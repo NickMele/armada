@@ -12,8 +12,9 @@
 // **There is no count sentence.** The Board drew one beside its filter until
 // 11 Sep 2026, when the owner cut it as prose the tab counts already say.
 //
-// **The Board's head is one control.** `New job`, with everything else the
-// Board offers in its menu. `BoardActions` says why.
+// **The Board's head is one control.** `Dispatch` (renamed from `New job`
+// by #1087), with everything else the Board offers in its menu. `BoardActions`
+// says why.
 
 import type { ReactNode } from "react";
 import { Button, Kbd } from "@armada/components";
@@ -173,7 +174,7 @@ export function headOf({
   if (reading) return null;
   if (composing) {
     return {
-      title: "New job",
+      title: "Dispatch",
       summary: "It lands at the approval gate. Nothing runs until you release it.",
       actions: (
         <Button variant="ghost" size="sm" onClick={onCloseComposer}>
@@ -182,7 +183,7 @@ export function headOf({
       ),
     };
   }
-  // Checked after the composer: the palette's `New job` does not leave
+  // Checked after the composer: the palette's `Dispatch` does not leave
   // Overview, so both can be true at once and the composer is what is on
   // screen.
   if (overviewing) return { title: "Overview", actions: null };

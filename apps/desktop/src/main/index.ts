@@ -142,6 +142,13 @@ function createWindow(): BrowserWindow {
     // at, and the floor is where that stops being the layout's problem.
     minWidth: floor("--window-floor"),
     show: false,
+    // Frameless: the title row Bridge draws itself — #1087 — replaces macOS's
+    // grey bar, which said only "Armada" while the app's own controls sat
+    // lower. `trafficLightPosition` centres the lights in that row; the row's
+    // own height and left gutter are `TitleBar.css`'s, and there is no shared
+    // token for either figure yet, same gap that css already reports.
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 20, y: 22 },
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: true,

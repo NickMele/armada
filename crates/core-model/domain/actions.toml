@@ -294,14 +294,14 @@ notes = "Shifted `x`, because kill is `x` and this is the same act carried furth
 [actions.new_job]
 kind = "Action"
 tier = "Contextual"
-verb = "New job"
+verb = "Dispatch"
 icon = ""
 icon_absent = "undecided"
 shortcut = "n"
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "The one contextual key that acts on nothing on screen, which is why its scope is anywhere rather than the list it is pressed on. `send` is Dispatch and this composes rather than dispatches — the dispatch card is between them."
+notes = "The one contextual key that acts on nothing on screen, which is why its scope is anywhere rather than the list it is pressed on. Renamed from `New job` on 2026-09-14 (#1087): the owner put this act in the title row and wanted it called Dispatch there, which means it now shares its verb with the dispatch card's own submit — this row opens the card, the card's own button sends what it read. The id stays `new_job`; only the rendered word moved."
 
 [actions.search]
 kind = "Action"

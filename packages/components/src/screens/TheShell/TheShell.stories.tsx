@@ -29,11 +29,14 @@ export default meta;
 type Story = StoryObj<typeof TheShell>;
 
 const shell: ComponentProps<typeof TheShell> = {
-  railHeader: (
+  // The picker moved out of the rail and into the title row with #1087.
+  repositoryPicker: (
     <Select aria-label="Project">
       <option>armada</option>
     </Select>
   ),
+  onSearch: () => {},
+  onDispatch: () => {},
   // The drawing's rail row carried a label and a count and no glyph, and drew
   // Active jobs — a surface retired when the Board became every Job with state
   // as a filter. This is the roster now, with the registry's own glyph for
@@ -44,7 +47,7 @@ const shell: ComponentProps<typeof TheShell> = {
   ],
   activeId: "board",
   title: "Job Board",
-  actions: <Button variant="primary">New job</Button>,
+  actions: <Button variant="primary">Dispatch</Button>,
   children: <div className="armada-screen__mount">The list mounts here — 1d</div>,
   status: {
     fleet: "running",

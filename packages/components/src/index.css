@@ -257,6 +257,10 @@
    not after it: an `@import` that follows a rule is dropped by the browser. */
 @import "./compositions/HeldFlag/HeldFlag.css";
 
+/* The title row — the picker, the search field, Dispatch, Helm's reopen
+   control and the logo, in the traffic lights' own bar. #1087. */
+@import "./compositions/TitleBar/TitleBar.css";
+
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */
 .armada-helm-dock {
