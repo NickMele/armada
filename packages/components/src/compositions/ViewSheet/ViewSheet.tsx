@@ -33,6 +33,14 @@ export type ViewSheetProps = {
   onAddNote?: (note: string) => void;
   /** Dismisses the finding this View is of, with the note as the reason. Absent on an area. #907. */
   onDismiss?: (reason: string) => void;
+  /**
+   * A decision on this Job's work is already in flight, from somewhere other
+   * than this dismissal — the dismiss itself carries no wait of its own,
+   * since pressing it closes this sheet before Fleet answers. What this
+   * guards is a second decision going out while one is already on its way.
+   * #1117.
+   */
+  disabled?: boolean;
   /** The window is at `--window-floor`. */
   floor?: boolean;
   onClose?: () => void;
@@ -45,6 +53,7 @@ export function ViewSheet({
   onOpenFile,
   onAddNote,
   onDismiss,
+  disabled = false,
   floor = false,
   onClose,
 }: ViewSheetProps) {
@@ -155,7 +164,7 @@ export function ViewSheet({
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={draft.trim() === ""}
+                disabled={draft.trim() === "" || disabled}
                 onClick={() => onDismiss(draft.trim())}
               >
                 Dismiss this finding

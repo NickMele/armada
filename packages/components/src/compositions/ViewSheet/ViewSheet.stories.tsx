@@ -131,3 +131,29 @@ export const DismissingAFinding: Story = {
     await expect(args.onAddNote).not.toHaveBeenCalled();
   },
 };
+
+/**
+ * A decision elsewhere at the gate is already in flight — `disabled` keeps
+ * this View's own Dismiss off, a filled note included, so a second decision
+ * cannot go out while one is already on its way. This View closes on its own
+ * press before Fleet answers, so this is never its own wait — only a
+ * different act's. #1117.
+ */
+export const DismissDisabledByAnotherDecision: Story = {
+  args: {
+    open: true,
+    title: "The lock order when saving",
+    steps: STEPS.slice(0, 1),
+    onAddNote: fn(),
+    onDismiss: fn(),
+    onClose: fn(),
+    disabled: true,
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.type(
+      canvas.getByLabelText("Note for the drone"),
+      "Saving takes one lock, so there is no order.",
+    );
+    await expect(canvas.getByRole("button", { name: "Dismiss this finding" })).toBeDisabled();
+  },
+};
