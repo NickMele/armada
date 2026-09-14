@@ -171,7 +171,7 @@ Two tiers, and drawing them as one row of chips risks reading as one kind of thi
 
 **A failed mechanical Check hands the work back to the Drone that produced it**, with the Check's output, under the step's retry limit. Why: a failing test is work, and the Drone that wrote the code is what should fix it.
 
-**Where a step lands once retries are spent is settled and built** — the Job holds at `awaiting_repair`. The drawing assumed the Drone stayed alive and idle there, and it does not: a repair somebody may take a day over holds a working slot the same way a review does, so the session ends and a restart puts a fresh Drone on the step. The badge the error-states drawing marked provisional now names a status that exists, and it reads **needs repair**.
+**Where a step lands once retries are spent is settled and built** — the Job holds at `awaiting_repair`. The drawing assumed the Drone stayed alive and idle there, and it does not: a repair somebody may take a day over holds a working slot the same way a review does, so the session ends and a restart puts a fresh Drone on the step. Where the work was fine and a Check failed for some other reason, **Run Checks again** runs the same Checks on it with no Drone (#1105). The badge the error-states drawing marked provisional now names a status that exists, and it reads **needs repair**.
 
 This paragraph read *this contradicts Job* until #208. It does not: `docs/concepts/job.md` says the same thing, and `crates/fleet/src/tests/retrying.rs` asserts it.
 

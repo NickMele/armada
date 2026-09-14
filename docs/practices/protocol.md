@@ -934,6 +934,10 @@ cannot work.
 
 `CheckUnderway.places`, additive beside `waiting_behind`: how many of the machine's places this Check takes, absent where it takes one (#1102). A browser suite costing more than `format` now says so where its wait is; Bridge names it only for a Check taking more than one.
 
+## Protocol 13.52: running a stopped step's Checks again
+
+`rerun_checks`, additive: a new command, `POST /jobs/:job_id/rerun_checks`, with no body, answering `JobSummary` (#1105). `Stuck.recourse` gains `rerun_checks`, offered on a Job at `awaiting_repair` whose stopped step failed a mechanical Check. Bridge reads `recourse` as strings, so a Bridge that predates the value draws nothing for it. The request waits for the Checks, which Fleet runs on a task of its own.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file
