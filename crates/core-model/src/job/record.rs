@@ -293,6 +293,14 @@ impl Job {
         at: Timestamp,
     ) -> Result<Transitioned, IllegalTransition> {
         admits(self.status, &to, &self.steps)?;
+        if crate::job::transition::a_persons_edge(self.status, to.status())
+            && !matches!(by, Actor::Human)
+        {
+            return Err(IllegalTransition::NotAPersonsAct {
+                from: self.status,
+                to: to.status(),
+            });
+        }
         let arriving = to.status();
         let event = JobEvent::recorded(self.id.clone(), self.status, arriving, to.reason(), by, at);
         let mut job = self.clone();

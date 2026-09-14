@@ -88,7 +88,14 @@ from = "awaiting_repair"
 to = "queued"
 on = "restart_step"
 in_code = "Not yet"
-notes = "**The only way out of this status that keeps the work**, and `restart_step` is the act. It is not `override_verdict`, which is where this parts company with `escalated -> queued`: an override lifts `gate_failure` where a Judge wrote it, here a Check wrote it, and a Check is not overrulable. `Stuck` reaches that without a rule of its own — it reads `checks_passed` off the store rather than off the trigger, and the Checks did not pass. **`awaiting_repair -> running` was the neighbouring edge until the Drone was stood down**; a redirect had a session to go into and now there is none, so every road out of a spent budget goes through the queue, as `awaiting_review`'s two do. The act lands whether or not `concurrency-cap` has room, and admission is the only thing that spawns."
+notes = "**The only way out of this status that keeps the work**, and `restart_step` is the act. It is not `override_verdict`, which is where this parts company with `escalated -> queued`: an override lifts `gate_failure` where a Judge wrote it, here a Check wrote it, and a Check is not overrulable. `Stuck` reaches that without a rule of its own — it reads `checks_passed` off the store rather than off the trigger, and the Checks did not pass. **Every road out that wants a Drone goes through the queue**, as `awaiting_review`'s two do; `awaiting_repair -> running` below wants none. The act lands whether or not `concurrency-cap` has room, and admission is the only thing that spawns."
+
+[[transitions]]
+from = "awaiting_repair"
+to = "running"
+on = "rerun_checks: a person runs the stopped step's Checks again, and the reading goes somewhere"
+in_code = "Not yet"
+notes = "**A person's act, and `Job::transition` refuses any other actor.** It was a redirect's edge until the Drone stopped being kept here, and it comes back with no Drone behind it (#1105). The Checks run while the Job is still held: a failure, or one with budget to hand back, moves nothing. Any other reading takes this edge in the same call, the step leaves `stopped` as `StepTarget::Rechecking` — which `store::attempt` does not count as a run, so no retry is spent — and the ruling follows the gate's own edges out of `running`."
 
 [[transitions]]
 from = "awaiting_review"
