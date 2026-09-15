@@ -487,3 +487,80 @@ export const EscapeOverASheet: Story = {
     await expect(canvas.queryByText("1676 entries.")).toBeNull();
   },
 };
+
+/**
+ * **A click outside closes the palette.** The layer behind `.armada-palette`
+ * used to answer nothing (#1150), so Esc and choosing a row were the only
+ * exits. The click lands on the layer itself — outside the panel — and
+ * containment is what has to catch it.
+ */
+export const ClickOutsideClosesThePalette: Story = {
+  render: () => <Closable />,
+  play: async ({ canvas, userEvent }) => {
+    const panel = canvas.getByRole("dialog", { name: "Command palette" });
+    const layer = panel.parentElement as HTMLElement;
+
+    await userEvent.click(layer);
+
+    await expect(canvas.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+  },
+};
+
+/**
+ * **A click inside the panel is not a click outside it.** Choosing a row still
+ * closes through `choose()`; this is a click that lands on the panel and
+ * chooses nothing — a section head, here — which the containment check has to
+ * tell apart from the layer around it.
+ */
+export const ClickInsidePaletteStaysOpen: Story = {
+  render: () => <Closable />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByText("Navigation"));
+
+    await expect(canvas.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+  },
+};
+
+/**
+ * **A confirmation opened over the palette is the top layer, and the click is
+ * its to answer.** The Esc handler already carries this exception (#1013);
+ * the outside-click handler needs it too, or choosing a destructive entry and
+ * then clicking Cancel would dismiss the palette underneath along with it.
+ */
+export const ClickInsideAConfirmationDoesNotClose: Story = {
+  render: () => {
+    const [open, setOpen] = useState(true);
+    const [pending, setPending] = useState<PaletteEntry | undefined>(undefined);
+    return (
+      <>
+        <CommandPalette
+          {...board}
+          open={open}
+          defaultQuery="kill"
+          onConfirm={(entry) => setPending(entry)}
+          onClose={() => setOpen(false)}
+        />
+        <Dialog
+          open={pending !== undefined}
+          tone="destructive"
+          title="Kill the drone on job 12?"
+          confirmLabel="Kill job"
+          onCancel={() => setPending(undefined)}
+          onConfirm={() => setPending(undefined)}
+        >
+          Step 3 of 5, 18 minutes in. The worktree is left in place and evidence carries forward
+          if you redispatch.
+        </Dialog>
+      </>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("dialog", { name: "Kill the drone on job 12?" })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
+
+    await expect(canvas.queryByRole("dialog", { name: "Kill the drone on job 12?" })).toBeNull();
+    await expect(canvas.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+  },
+};

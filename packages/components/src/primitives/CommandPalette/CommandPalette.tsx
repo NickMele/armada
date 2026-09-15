@@ -145,6 +145,7 @@ export function CommandPalette({
   const [at, setAt] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const active = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
 
   // Grouped by section in the caller's order, and in the caller's order inside
   // each. Nothing is ranked: the contract fixes what comes first, and a
@@ -187,6 +188,22 @@ export function CommandPalette({
     }
     window.addEventListener("keydown", onEscape, true);
     return () => window.removeEventListener("keydown", onEscape, true);
+  }, [open, onClose]);
+
+  // A click outside `.armada-palette` closes it, following `Popover`'s `contains(target)` check —
+  // not `event.target === layer`, which breaks the moment anything else nests in the layer.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(event: MouseEvent) {
+      const target = event.target as Element | null;
+      // A confirmation opened over the palette is the top layer, and the click is its to answer.
+      const dialog = target?.closest?.('[role="dialog"]');
+      if (dialog && !dialog.classList.contains("armada-palette")) return;
+      if (panel.current?.contains(target as Node | null)) return;
+      onClose?.();
+    }
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
   }, [open, onClose]);
 
   // The active row is kept in view. `nearest` and not `center`: the list is
@@ -235,7 +252,13 @@ export function CommandPalette({
 
   return (
     <div className="armada-palette-layer">
-      <div className="armada-palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div
+        ref={panel}
+        className="armada-palette"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+      >
         <input
           ref={input}
           className="armada-palette__input"
