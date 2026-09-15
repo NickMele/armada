@@ -135,7 +135,7 @@ Two tiers, and drawing them as one row of chips risks reading as one kind of thi
 
 **Every entry opens to its payload.** A command opens to its full text, its output, its exit code and where it ran.
 
-**An opened log holds its position and does not follow the tail.** Why: a person opening 1676 entries is looking for one of them, and a followed tail pulls it out from under them. *Jump to now* carries the count of what arrived, and the held strip states where the reading is.
+**An opened log follows the tail at the bottom, and holds the moment a person scrolls away from it.** Why: watching a live Drone wants each entry to arrive the way a chat's does, and a person who has scrolled up into 1676 entries looking for one of them is exactly who a followed tail would pull out from under — so the log follows only while nobody has moved, and holds from the scroll itself rather than for the whole time it is open. Scrolling back to the bottom, or *Jump to now*, resumes following. *Jump to now* carries the count of what arrived while held, and the held strip states where the reading is.
 
 ### Acts
 

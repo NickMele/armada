@@ -386,13 +386,18 @@ function OneJob({
 
   /**
    * Open a sheet. **The second one replaces the first** rather than stacking on
-   * it, and opening the log takes the reading's position: from here on the tail
-   * is not followed, and what arrives is counted rather than scrolled to.
+   * it. Opening the log on a live step starts following the tail — #1155 — and
+   * the sheet itself is what holds once a person scrolls away from it, through
+   * `onFollowingChange` in `Sheets.tsx`.
    */
   function openSheet(which: Exclude<OpenSheet, null | "check">, attempt?: number): void {
-    // Held only where there is a tail to stop following. A run that has ended
-    // does not grow, so the strip would offer a jump to nothing.
-    const holding = which === "log" && attempt === undefined ? holdOf(now, rows.length) : undefined;
+    // Held on open only where there is a tail and nothing is watching it: a run
+    // that has ended does not grow, so the strip would offer a jump to nothing,
+    // and a live run starts following instead of holding from the first paint.
+    const holding =
+      which === "log" && attempt === undefined && observed.state !== "watching"
+        ? holdOf(now, rows.length)
+        : undefined;
     move({
       move: "open",
       which,
@@ -446,6 +451,7 @@ function OneJob({
     const ended = over ? wroteIn(read.turns) : undefined;
     return chaptersOf({
       job,
+      whole,
       step,
       // Every step, in the frozen workflow's order, for the Drone brief's
       // `steps` section. Same nullable read as `criteria` below: a Job
@@ -479,6 +485,7 @@ function OneJob({
       // two would be two vocabularies for one failed open — #307.
       opens: opensRecords,
       onOpenSheet: openSheet,
+      onRedirect,
       now,
       // Scoped to the step `stuck` is actually about — a reader may have
       // navigated to a different step, and `stuck.undecided` is not that
@@ -756,10 +763,12 @@ function OneJob({
             // the chapter's preview. Two logs over one stream hold equal ids.
             log={keys.inLog("sheet")}
             held={held}
+            now={now}
             checkId={openCheckId}
             outputs={outputs}
             following={following}
             onHold={(to) => move({ move: "hold", held: to })}
+            onRedirect={onRedirect}
             // The full reading, unchanged from what the run column used to
             // draw — `Look now` came with it, because it acts on this reading
             // and not on the five lines that open it.

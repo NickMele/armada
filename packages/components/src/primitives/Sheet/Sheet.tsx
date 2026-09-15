@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode, type Ref } from "react";
 import { X } from "lucide-react";
 import { Button } from "../Button/Button";
 import { Kbd } from "../Kbd/Kbd";
@@ -80,6 +80,11 @@ export type SheetProps = {
   /** The body carries its own padding, for a reading that runs edge to edge. */
   bleed?: boolean;
   /**
+   * The body's own scroll container, for a caller that has to read or drive
+   * its scroll position — the Activity log sheet's own following. #1155.
+   */
+  bodyRef?: Ref<HTMLDivElement>;
+  /**
    * Laid out inside the nearest positioned ancestor rather than over the
    * window. **What a trailing sheet takes**: the layer belongs to the screen it
    * was opened from, and a window-fixed one would cover the shell's rail as
@@ -117,6 +122,7 @@ export function Sheet({
   controls,
   bands,
   bleed = false,
+  bodyRef,
   contained = false,
   closeLabel,
   closeBinding,
@@ -209,7 +215,7 @@ export function Sheet({
           )}
         </div>
         {bands === undefined ? null : <div className="armada-sheet__bands">{bands}</div>}
-        <div className="armada-sheet__body" data-bleed={bleed || undefined}>
+        <div ref={bodyRef} className="armada-sheet__body" data-bleed={bleed || undefined}>
           {children}
         </div>
         {footer ? <div className="armada-sheet__foot">{footer}</div> : null}

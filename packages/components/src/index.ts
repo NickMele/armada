@@ -294,3 +294,6 @@ export * from "./compositions/ValuePopover/ValuePopover";
 export * from "./compositions/OverviewSummaryStrip/OverviewSummaryStrip";
 // The card a gaming flag holds a step with, and the two answers to it. #1079.
 export * from "./compositions/HeldFlag/HeldFlag";
+// The message box fixed under an activity log — sending a redirect without
+// leaving the log to reach the step header's button. #1154.
+export * from "./compositions/DroneMessageBox/DroneMessageBox";

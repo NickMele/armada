@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
 import { Sheet } from "../../primitives/Sheet/Sheet";
 import { Tabs } from "../../primitives/Tabs/Tabs";
@@ -13,12 +13,16 @@ import { Tabs } from "../../primitives/Tabs/Tabs";
  * came back to goes with them. So the log leaves the panel and the panel stays
  * exactly as it was, which is the way back.
  *
- * **The log holds position and does not follow the tail.** A stream that
- * scrolls itself cannot be read, and a stream that silently stops arriving
- * cannot be trusted — so it does both: the reading is held where you left it,
- * the strip says so, and *Jump to now* carries the count of what arrived while
- * you were reading. The same count is repeated under the last entry, because
- * the strip is at the top and the reader is at the bottom.
+ * **The log follows the tail at the bottom, and holds the moment you scroll
+ * away from it.** #1155. Watching a live drone wants each entry to arrive the
+ * way a chat's does; someone who has scrolled up into 1676 entries looking for
+ * one of them is the reader a followed tail would pull out from under —
+ * `onFollowingChange` is how this sheet tells its caller which of the two just
+ * became true, off the scroll itself rather than off a row landing, so a row
+ * arriving mid-scroll cannot flip the read. Held, the strip says so and *Jump
+ * to now* carries the count of what arrived; the same count is repeated under
+ * the last entry, because the strip is at the top and the reader is at the
+ * bottom. Scrolling back down, or pressing *Jump to now*, resumes following.
  *
  * **The stream itself is a slot.** Two log renderings exist in this package —
  * `ActivityLog` and `LogEntry` — and Bridge draws the second. A sheet that
@@ -57,6 +61,14 @@ const FILTERS: { id: ActivityFilter; label: string }[] = [
 ];
 
 /**
+ * How close to the bottom counts as *at* it. A couple of rows, not a pixel —
+ * an exact match misses on a fractional scroll position a browser rounds
+ * differently than the layout that produced it, which reads as "never quite
+ * at the bottom" to a person who plainly is.
+ */
+const NEAR_THE_BOTTOM_PX = 48;
+
+/**
  * What the Job did while the sheet was open. **Stated in the sheet and nowhere
  * else on this layer** — the rail behind it carries the failed step and the
  * hued cross, and the sheet only says the Job moved.
@@ -78,6 +90,11 @@ export type ActivityLogSheetProps = {
   jobId?: ReactNode;
   /** The stream, drawn by whichever log the caller's surface already uses. */
   children: ReactNode;
+  /**
+   * The message box, fixed under the stream rather than scrolling with it —
+   * `Sheet`'s own `footer` slot. #1154. Absent draws the sheet as it was.
+   */
+  footer?: ReactNode;
   /** How many the stream holds, which is not how many are drawn. */
   total: number;
   /** Whether rows are still arriving. The live mark, and the pulse with it. */
@@ -88,12 +105,22 @@ export type ActivityLogSheetProps = {
   onFilter?: (filter: ActivityFilter) => void;
   /**
    * When the reading was held. Absent means the log is at the tail and no strip
-   * is drawn — there is nothing to jump back to.
+   * is drawn — there is nothing to jump back to. **Also what says whether this
+   * sheet is following**: present is held, absent is following, and the two
+   * effects below key off exactly this rather than a second flag the caller
+   * could disagree with it about.
    */
   heldAt?: string;
   /** How many arrived while the reader was reading. */
   arrived?: number;
   onJumpToNow?: () => void;
+  /**
+   * The reader crossed the near-bottom line, by an actual scroll — never by a
+   * row landing while `heldAt` is already set, which would read as a press
+   * nobody made. #1155. The caller owns what happens next: `true` is what
+   * *Jump to now* already does, `false` is what scrolling up now also does.
+   */
+  onFollowingChange?: (following: boolean) => void;
   /** What the Job did while the sheet was open, where it did something. */
   escalation?: ActivityEscalation;
   /** The window is at `--window-floor`. */
@@ -106,6 +133,7 @@ export function ActivityLogSheet({
   step,
   jobId,
   children,
+  footer,
   total,
   live = false,
   endedAt,
@@ -114,6 +142,7 @@ export function ActivityLogSheet({
   heldAt,
   arrived = 0,
   onJumpToNow,
+  onFollowingChange,
   escalation,
   floor = false,
   onClose,
@@ -125,6 +154,36 @@ export function ActivityLogSheet({
       onChange={(id) => onFilter?.(id as ActivityFilter)}
     />
   );
+
+  const body = useRef<HTMLDivElement>(null);
+  const following = heldAt === undefined;
+
+  // **A real scroll, not a computed one.** Re-subscribed on every `following`
+  // change so the comparison inside always reads the caller's current answer
+  // rather than one closed over at mount — the mismatch is what says a person
+  // crossed the line, in either direction.
+  useEffect(() => {
+    const el = body.current;
+    if (el === null || onFollowingChange === undefined) return;
+    function onScroll(): void {
+      const distance = el!.scrollHeight - el!.scrollTop - el!.clientHeight;
+      const atBottom = distance <= NEAR_THE_BOTTOM_PX;
+      if (atBottom !== following) onFollowingChange!(atBottom);
+    }
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [following, onFollowingChange]);
+
+  // Each new entry scrolls into view — while following. Runs on mount too, so
+  // opening the sheet on a live step starts at the newest entry rather than at
+  // the top of a stream it has not read yet. Holding leaves the scroll exactly
+  // where the reader put it; new rows still land, off the bottom of the view.
+  useLayoutEffect(() => {
+    if (!following) return;
+    const el = body.current;
+    if (el === null) return;
+    el.scrollTop = el.scrollHeight;
+  }, [following, total]);
 
   // The tail control. `Jump to now` above the floor; `Now` at it, where the
   // strip is also carrying the four filters and the sentence has gone.
@@ -175,6 +234,8 @@ export function ActivityLogSheet({
       closeLabel="Close"
       closeBinding="Esc"
       bleed
+      bodyRef={body}
+      footer={footer}
       bands={
         <>
           {escalation === undefined ? null : (

@@ -46,7 +46,7 @@ import {
 
 import type { Criterion, Diff, Footprint, KeptFrame, Turn } from "@armada/protocol";
 import type { ChangedFile as WireFile } from "@armada/protocol";
-import type { JobSummary, StepDetail } from "@armada/protocol";
+import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import { briefChecksOf, briefStepsOf } from "./brief";
 import type { Calls } from "./calls";
@@ -58,6 +58,7 @@ import {
   type DetailKeys,
 } from "./detail-keys";
 import { againSummary, type Again } from "./again";
+import { DroneMessageControl } from "./DroneMessage";
 import { evidenceChaptersOf, type Unnumbered } from "./evidence";
 import {
   framesSummary,
@@ -89,6 +90,7 @@ export const EVERY_STORY_TELLS = {
  */
 export function chaptersOf({
   job,
+  whole,
   step,
   steps,
   criteria,
@@ -105,6 +107,7 @@ export function chaptersOf({
   sheet,
   opens,
   onOpenSheet,
+  onRedirect,
   now,
   undecided,
   asking,
@@ -117,6 +120,14 @@ export function chaptersOf({
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
   now: number;
   job: JobSummary;
+  /**
+   * The Job whole, for the log chapter's message box — `steeringOf` reads it
+   * to say whether a redirect out is already waiting. `null` while `GET
+   * /jobs/:job_id` has not answered yet, which draws the box as though
+   * nothing is out rather than blocking on a read the button beside it does
+   * not wait for either.
+   */
+  whole: JobWhole | null;
   step: StepDetail;
   /**
    * Every one of the Job's steps, in the frozen workflow's own order, for the
@@ -208,6 +219,8 @@ export function chaptersOf({
    */
   opens: Opens;
   onOpenSheet: (which: "log" | "diff", attempt?: number) => void;
+  /** Sends a redirect, from the log chapter's own message box. #1154. */
+  onRedirect: (jobId: string, instruction: string) => void;
   /**
    * Fleet's own reason the gate could not decide on this step's current
    * attempt, for the Verdicts chapter and the Checks chapter's Judge row.
@@ -378,6 +391,10 @@ export function chaptersOf({
             calls={calls}
             log={log("log")}
           />
+          {/* Fixed under the rows rather than a longer version of them — #1154.
+              This log does not scroll, so nothing here can cover a row the way
+              it could in the sheet; it is simply the last thing in the card. */}
+          <DroneMessageControl job={job} whole={whole} onRedirect={onRedirect} />
         </>
       ),
     },

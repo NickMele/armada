@@ -160,6 +160,9 @@ function chapters(
 ) {
   return chaptersOf({
     job: job(),
+    // No wire read is under test here — the message box's own availability is
+    // `DroneMessage.test.tsx`'s subject, not this file's.
+    whole: null,
     step: over.step ?? step(),
     steps: over.steps ?? [over.step ?? step()],
     criteria: over.criteria ?? [],
@@ -175,6 +178,7 @@ function chapters(
     sheet: null,
     opens: OPENS,
     onOpenSheet: () => {},
+    onRedirect: () => {},
     // No gate is running on any step here, so nothing is followed or aged.
     now: 0,
   });
