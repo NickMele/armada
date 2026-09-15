@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect } from "storybook/test";
 
 import { Button } from "../../primitives/Button/Button";
-import { StepTimeline, StepTimelineSkeleton } from "./StepTimeline";
+import { StepTimeline, StepTimelineSkeleton, type StepTimelineAttempt } from "./StepTimeline";
 
 /**
  * A step as one timeline, replacing the phase strip and the story that repeated
@@ -73,6 +74,72 @@ export const FoldedAtTheGate: Story = {
     await userEvent.click(working);
     await expect(working).toHaveAttribute("aria-expanded", "true");
     await expect(canvas.getByText("The activity log.")).toBeVisible();
+  },
+};
+
+/** `PhaseGoesLive`'s own attempt, built for whichever phase is live. */
+function liveAttempt(live: "working" | "checks"): StepTimelineAttempt {
+  return {
+    id: "1",
+    name: "Attempt 1",
+    current: true,
+    rows: [
+      { id: "a", name: "Instructed", activity: "advanced", body: body("The brief.") },
+      {
+        id: "b",
+        name: "Working",
+        activity: live === "working" ? "running" : "advanced",
+        live: live === "working",
+        meta: "351 calls · 43m 37s · 36 files",
+        body: body("The activity log."),
+      },
+      {
+        id: "c",
+        name: "Checks",
+        activity: live === "checks" ? "running" : "not_started",
+        live: live === "checks",
+        meta: live === "checks" ? "running" : "not reached",
+        body: live === "checks" ? body("Running the gate.") : undefined,
+      },
+      { id: "d", name: "Judge", activity: "not_started", meta: "2 criteria, not asked" },
+    ],
+  };
+}
+
+/**
+ * A step moving from Working to Checks. **The live phase is the one open**,
+ * and it moves without a press: `whereItIs` re-runs as the live row changes,
+ * not only at mount, which is #1152's phase-level half.
+ */
+function PhaseGoesLiveDrawn() {
+  const [live, setLive] = useState<"working" | "checks">("working");
+  return (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setLive("checks")}>
+        Move the step on
+      </Button>
+      <StepTimeline label="Where this step is" attempts={[liveAttempt(live)]} />
+    </>
+  );
+}
+
+export const PhaseGoesLive: Story = {
+  name: "A phase goes live",
+  // `render` draws its own state; `args` only satisfies the type `Working`'s
+  // shape already carries — nothing here reads it.
+  args: { attempts: [liveAttempt("working")] },
+  render: () => <PhaseGoesLiveDrawn />,
+  play: async ({ canvas, userEvent }) => {
+    const working = canvas.getByRole("button", { name: /Working/ });
+    await expect(working).toHaveAttribute("aria-expanded", "true");
+    await expect(canvas.getByText("The activity log.")).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Move the step on" }));
+
+    await expect(working).toHaveAttribute("aria-expanded", "false");
+    const checks = canvas.getByRole("button", { name: /Checks/ });
+    await expect(checks).toHaveAttribute("aria-expanded", "true");
+    await expect(canvas.getByText("Running the gate.")).toBeVisible();
   },
 };
 

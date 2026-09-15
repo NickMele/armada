@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -102,13 +102,24 @@ export function StepTimeline({ attempts, label, openRow, onOpenRow, folded = fal
   const [held, setHeld] = useState<string | null>(() => (folded ? null : whereItIs(attempts)));
   const many = attempts.length > 1;
 
+  // Whether `held` is following the live phase rather than a row the reader
+  // opened themselves. Starts `true` — nothing has been pressed yet, so the
+  // seed above and the live phase are the same row — and only a press that
+  // lands somewhere else turns it off; a press on the live row turns it back
+  // on, the same rule `JobDetail.tsx` applies one level up. #1152.
+  const following = useRef(true);
+  const openRef = useRef<HTMLDivElement | null>(null);
+
   // **Synced, not controlled, and never synced to nothing.** A caller that
   // names a row — the keyboard — sets this rather than owning it. It starts at
   // `null` and mounts before anyone has pressed anything, so honouring that
   // null shut every row on arrival; closing is a press, which goes through
   // `toggle` below.
   useEffect(() => {
-    if (openRow !== undefined && openRow !== null) setHeld(openRow);
+    if (openRow !== undefined && openRow !== null) {
+      following.current = openRow === whereItIs(attempts);
+      setHeld(openRow);
+    }
   }, [openRow]);
 
   // `folded` transitioning true — arriving at the gate on a panel already
@@ -117,9 +128,30 @@ export function StepTimeline({ attempts, label, openRow, onOpenRow, folded = fal
     if (folded) setHeld(null);
   }, [folded]);
 
+  // Follow the live phase. **Re-read on every change of where it is, not only
+  // at mount** — `whereItIs` already finds it, so a step moving from Working
+  // to Checks to Judge is this running again, not a second function. A row
+  // the reader opened by hand leaves `following` false, so this does nothing
+  // until a press on the live row itself turns it back on.
+  const live = folded ? null : whereItIs(attempts);
+  useEffect(() => {
+    if (following.current && live !== null) setHeld(live);
+  }, [live]);
+
+  // The followed row scrolls into view as it changes. `nearest`, not
+  // `center` — `CommandPalette.tsx`'s own reasoning: centring would move a
+  // row that was already visible. Left alone on a press elsewhere, which put
+  // its own row in view already.
+  useEffect(() => {
+    if (following.current) openRef.current?.scrollIntoView({ block: "nearest" });
+  }, [held]);
+
   function toggle(rowId: string): void {
     const next = held === rowId ? null : rowId;
     setHeld(next);
+    // A press on the live row resumes following, whichever way it toggles;
+    // any other press holds there until the live row is pressed again.
+    following.current = rowId === whereItIs(attempts);
     onOpenRow?.(next);
   }
 
@@ -127,7 +159,7 @@ export function StepTimeline({ attempts, label, openRow, onOpenRow, folded = fal
     <div className="armada-steps">
       {label === undefined ? null : <span className="armada-steps__label">{label}</span>}
       {attempts.map((attempt) => (
-        <Attempt key={attempt.id} attempt={attempt} named={many} open={held} onToggle={toggle} />
+        <Attempt key={attempt.id} attempt={attempt} named={many} open={held} onToggle={toggle} openRef={openRef} />
       ))}
     </div>
   );
@@ -139,15 +171,23 @@ function Attempt({
   named,
   open,
   onToggle,
+  openRef,
 }: {
   attempt: StepTimelineAttempt;
   named: boolean;
   open: string | null;
   onToggle: (rowId: string) => void;
+  openRef: MutableRefObject<HTMLDivElement | null>;
 }) {
   const [shown, setShown] = useState(attempt.current === true);
   const rows = attempt.rows.map((row) => (
-    <Row key={row.id} row={row} open={open === row.id} onToggle={() => onToggle(row.id)} />
+    <Row
+      key={row.id}
+      row={row}
+      open={open === row.id}
+      onToggle={() => onToggle(row.id)}
+      openRef={open === row.id ? openRef : undefined}
+    />
   ));
   if (!named) return <div className="armada-steps__rows">{rows}</div>;
   return (
@@ -189,10 +229,13 @@ function Row({
   row,
   open,
   onToggle,
+  openRef,
 }: {
   row: StepTimelineRow;
   open: boolean;
   onToggle: () => void;
+  /** Set only on the followed row, so the timeline can scroll it into view. */
+  openRef?: MutableRefObject<HTMLDivElement | null>;
 }) {
   const name = (
     <span className="armada-steps__mark" {...row.marker}>
@@ -201,21 +244,23 @@ function Row({
     </span>
   );
   return (
-    <Chapter
-      name={name}
-      {...(row.meta === undefined ? {} : { meta: row.meta })}
-      {...(row.live === true ? { live: true } : {})}
-      {...(row.act === undefined ? {} : { act: row.act })}
-      // A phase with nothing recorded draws its header as a label: `Chapter`
-      // takes no `onToggle` there, so no control opens an empty box.
-      {...(row.body === undefined ? {} : { open, onToggle })}
-    >
-      {row.bounded === true ? (
-        <div className="armada-steps__bounded">{row.body}</div>
-      ) : (
-        row.body
-      )}
-    </Chapter>
+    <div className="armada-steps__row" ref={openRef}>
+      <Chapter
+        name={name}
+        {...(row.meta === undefined ? {} : { meta: row.meta })}
+        {...(row.live === true ? { live: true } : {})}
+        {...(row.act === undefined ? {} : { act: row.act })}
+        // A phase with nothing recorded draws its header as a label: `Chapter`
+        // takes no `onToggle` there, so no control opens an empty box.
+        {...(row.body === undefined ? {} : { open, onToggle })}
+      >
+        {row.bounded === true ? (
+          <div className="armada-steps__bounded">{row.body}</div>
+        ) : (
+          row.body
+        )}
+      </Chapter>
+    </div>
   );
 }
 

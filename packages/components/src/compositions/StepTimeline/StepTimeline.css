@@ -71,6 +71,13 @@
   min-width: 0;
 }
 
+/* One phase, wrapped only so the followed row has a node to scroll into view
+   — `Chapter` itself takes no ref. `min-width: 0` carries on for the wrapper
+   what it used to get for free as `.armada-steps__rows`'s direct child. */
+.armada-steps__row {
+  min-width: 0;
+}
+
 /* The mark and the phase's name, as one thing inside the chapter's header. */
 .armada-steps__mark {
   display: inline-flex;
