@@ -11,12 +11,17 @@
 //! | `facts` | Free text handed to a model whole; the likeliest place a secret lands |
 //! | `scope_revisions` | Carries `rationale`, which is free text for the same reason |
 //! | `acceptance_criteria` | The requester's words. `get_job` returns the Job in full; this is the list |
-//! | `dependencies`, `gate_manifests`, `dispatched_by` | The graph, which the Board does not draw at M1 |
+//! | `dependencies`, `gate_manifests` | The graph, which the Board does not draw at M1 |
 //!
 //! `branch` crosses because it is a name in Armada's own namespace rather than a
 //! path, and is what a person merges. `title` crosses because it is the one
 //! string on a Job written to be read off a screen: a list of ids and statuses
 //! with no name on any row is a list nobody can use.
+//!
+//! **`dispatched_by`'s own id crosses too, `#1165`, and that is narrower than
+//! it looks.** The parent's id alone joins the row — not `step_id`, not
+//! `dependencies`, not `gate_manifests` — so a caller with every row still
+//! cannot draw the fan-out a step made, only that a Job has a parent.
 //!
 //! **The list carries its failures.** [`JobList`] is not a `Vec<JobSummary>`:
 //! `store` hands back the Jobs that loaded *and* the ones that did not, and a
@@ -190,6 +195,18 @@ pub struct JobSummary {
     /// without this a Board reads every second failure as a first one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redispatched_from: Option<JobId>,
+    /// The Job whose Drone dispatched this one. **The parent's id alone, not
+    /// `core_model::DispatchOrigin`'s `step_id`** — that would start to name
+    /// the fan-out a step made rather than one Job's lineage.
+    ///
+    /// Since 14.2, `#1165`: `sub_dispatched`'s registry sentence had nothing
+    /// to fill its slot with, so the fact was withheld rather than shown
+    /// half-true. Crosses on [`redispatched_from`]'s own reasoning — every
+    /// row still cannot draw the DAG `dependencies` or `gate_manifests` would.
+    ///
+    /// [`redispatched_from`]: JobSummary::redispatched_from
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dispatched_by: Option<JobId>,
     /// Whether this Job's Drone is waiting on an answer from a person.
     ///
     /// # A flag, and deliberately not the question
@@ -309,6 +326,7 @@ impl JobSummary {
             current_step_id: job.current_step_id().map(StepId::from),
             assigned_drone: job.assigned_drone().map(DroneId::from),
             redispatched_from: job.redispatched_from().map(JobId::from),
+            dispatched_by: job.dispatched_by().map(|by| JobId::from(&by.job_id)),
             reclaimed_at: job.reclaimed_at().map(Instant::from),
             asking,
             // Filled by the caller that has it, and `None` here on purpose:

@@ -123,4 +123,30 @@ fn the_summary_of_a_sub_dispatched_job_says_so() {
     assert_eq!(summary.origin.as_wire(), "sub_dispatched");
     assert_eq!(summary.status.as_wire(), "queued");
     assert_eq!(summary.urgency.as_wire(), "incident");
+    assert_eq!(
+        summary.dispatched_by.as_ref().map(|id| id.as_str()),
+        Some("01PARENT"),
+        "the parent's id is on the row so the facts line has a sentence to fill; #1165"
+    );
+
+    let json = encode(&summary).expect("plain data");
+    assert!(
+        json.contains("\"dispatched_by\":\"01PARENT\""),
+        "the parent's id and nothing else of DispatchOrigin — no step_id: {json}"
+    );
+    assert!(
+        !json.contains("step_id"),
+        "the graph stays withheld: {json}"
+    );
+}
+
+/// **Absent, never present-and-null**, `redispatched_from`'s own rule: a
+/// top-level Job has no parent to name.
+#[test]
+fn a_top_level_job_carries_no_dispatched_by() {
+    let json = encode(&JobSummary::from(&job())).expect("plain data");
+    assert!(
+        !json.contains("dispatched_by"),
+        "a Job nobody's Drone spawned claims no parent: {json}"
+    );
 }

@@ -203,8 +203,19 @@ describe("who dispatched it", () => {
     expect(drawn.at(-1)).toEqual({ value: "Found by Fleet" });
   });
 
-  it("draws nothing for sub_dispatched, since Bridge carries no dispatched_by yet", () => {
+  it("draws nothing for sub_dispatched where an older Fleet sends no dispatched_by", () => {
     expect(factsOf(job({ origin: "sub_dispatched" }), null, now)).toEqual(baseline);
+  });
+
+  it("names the parent Job for sub_dispatched, since #1165", () => {
+    const drawn = factsOf(
+      job({ origin: "sub_dispatched", dispatched_by: "01PARENT0000000000000000" }),
+      null,
+      now,
+    );
+    expect(drawn.at(-1)).toEqual({
+      value: "Sub-dispatched by 01PARENT0000000000000000",
+    });
   });
 
   it("draws nothing for a wire origin the registry has no row for", () => {
