@@ -46,7 +46,7 @@ export function FleetPanel({ state, label, detail, meta, doctor, open, onOpenCha
           {label}
         </div>
         {detail === undefined ? null : <div className="armada-fleet-panel__mono">{detail}</div>}
-        {meta === undefined ? null : <div className="armada-fleet-panel__meta">{meta}</div>}
+        {meta === undefined ? null : <div className="armada-fleet-panel__mono">{meta}</div>}
         {doctor === undefined ? null : (
           <div className="armada-fleet-panel__doctor">
             <span className="armada-fleet-panel__dot" data-tone={DOCTOR_TONE[doctor.outcome]} aria-hidden />
