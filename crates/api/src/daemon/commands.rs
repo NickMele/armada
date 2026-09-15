@@ -101,7 +101,8 @@ pub trait Commands: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ipc::ProposalStopped, Refusal>> + Send;
 
     /// `approve_dispatch` — releases a Job to spawn. The primary autonomy
-    /// control, and a human act: `agent_access` on this row is `No`.
+    /// control: `agent_access` on this row is `Helm only` — a human act Helm
+    /// may also take, once asked to, in conversation.
     ///
     /// **What comes back is `queued`, not `running`.** The dispatch is a
     /// turn's, because one inside this request died whenever a client stopped
@@ -230,7 +231,8 @@ pub trait Commands: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Redispatched, Refusal>> + Send;
 
     /// `redirect_drone` — a person's instruction to the Drone that is there.
-    /// Intervention Ladder rung 1, and the one command Helm reaches directly.
+    /// Intervention Ladder rung 1, and Helm's original rung-1 act (`#73`); the
+    /// ladder no longer bounds what else Helm reaches (`#1150`).
     ///
     /// **It keeps everything.** The session, the worktree and every step so
     /// far: the Job goes back to `running` at the step it stopped on and the
