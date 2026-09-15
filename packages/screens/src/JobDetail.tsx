@@ -37,6 +37,7 @@ import { landingsOf, stepTimelineOf, turnsOfAttempt, wroteIn } from "./timeline"
 import type { AttemptRead } from "./timeline";
 import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
+import { approvalOverviewOf } from "./approval";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
@@ -255,6 +256,9 @@ function OneJob({
 
   const steps = whole === null ? [] : ordered(whole);
   const open = steps.find((step) => step.step_id === (selected ?? job.current_step_id)) ?? steps[0];
+  // The workflow overview, while this Job waits for approval — what will run,
+  // in place of the idle step view `open` above would otherwise draw. #1149.
+  const overview = approvalOverviewOf(job, whole);
   // What the observe socket says about itself, where it is not reading. **A
   // third answer the story needs**: four of the five states carry no rows, and
   // a chapter drawn from the rows alone reads every one of them as a step that
@@ -688,6 +692,7 @@ function OneJob({
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
       briefLoading={reading !== undefined}
+      overview={overview}
       step={
         open === undefined
           ? undefined

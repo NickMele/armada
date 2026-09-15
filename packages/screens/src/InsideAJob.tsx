@@ -16,6 +16,7 @@ import {
   Skeleton,
   Tooltip,
   WhereRow,
+  WorkflowDiagram,
   conceptSaid,
   type JobBriefProps,
   type JobDetailField,
@@ -26,6 +27,7 @@ import {
   type RunTreeSkeletonProps,
   type RunTreeStep,
   type TaskMarkState,
+  type WorkflowDiagramStep,
 } from "@armada/components";
 
 import type { PlanEditAnswer } from "./plan-edits";
@@ -170,6 +172,17 @@ export type PlanRegionRead =
   | ({ recorded: true } & PlanRegionData)
   | { recorded: false; stepLabel: string };
 
+/**
+ * The panel while a Job waits for approval: what will run, in place of the
+ * idle step view. #1149 — nothing has run, so there is nothing to draw a
+ * result for, only what somebody is agreeing to.
+ */
+export type StepOverview = {
+  diagram: WorkflowDiagramStep[];
+  /** Where the Job stops, its caps and its model — beside the diagram. */
+  facts: JobDetailField[];
+};
+
 /** The panel while its step is read: what is already known of the step. */
 export type StepReading = {
   /** The step's name off the workflow. Absent draws a bar in its place. */
@@ -312,6 +325,12 @@ export type InsideAJobProps = {
   /** The step, while it is read. Present takes the slot over `step`/`stepAbsent`. */
   stepReading?: StepReading;
   /**
+   * The workflow overview, while a Job waits for approval. Takes the panel
+   * over `step`/`stepReading`/`stepAbsent` — the scope is the approval moment
+   * alone, never the running Job's own step view.
+   */
+  overview?: StepOverview;
+  /**
    * Why nothing about this Job could be read, where Fleet did not answer for
    * it. **One message where the step goes, instead of an empty region per
    * part of the screen**: every region would say the same thing, and four of
@@ -367,6 +386,7 @@ export function InsideAJob({
   step,
   stepAbsent = "Select a step in the run",
   stepReading,
+  overview,
   unreachable,
   sheet,
   onCopied,
@@ -475,6 +495,25 @@ export function InsideAJob({
             <div className="armada-inside__unreachable" role="status">
               <Unplug size={20} strokeWidth={1.5} aria-hidden />
               <span>{unreachable}</span>
+            </div>
+          ) : overview !== undefined ? (
+            <div className="armada-inside__overview">
+              <WorkflowDiagram steps={overview.diagram} />
+              <div className="armada-inside__step-fields">
+                {overview.facts.map((field, f) => (
+                  <span className="armada-inside__field" key={f}>
+                    {field.label === undefined ? null : <FieldLabel>{field.label}</FieldLabel>}
+                    {field.value === undefined ? null : (
+                      <span
+                        className="armada-inside__field-value"
+                        data-mono={field.mono || undefined}
+                      >
+                        {field.value}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
             </div>
           ) : step === undefined ? (
             <p className="armada-inside__absent" role="note">

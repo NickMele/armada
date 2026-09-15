@@ -1007,6 +1007,18 @@
   min-width: 0;
 }
 
+/* The workflow overview, drawn instead of the step panel while a Job waits for
+   approval — the diagram, then the same field chips the step head uses for
+   its own facts, reused rather than restated. #1149. */
+.armada-inside__overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
 /* --- the step's own header ----------------------------------------------- */
 
 .armada-inside__step-head {

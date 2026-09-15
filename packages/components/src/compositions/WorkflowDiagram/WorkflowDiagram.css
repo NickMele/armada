@@ -1,0 +1,114 @@
+/* Workflow diagram — boxes left to right, the gate between them, a loop drawn
+   as a return arc beneath. `gridTemplateColumns` is set inline per instance,
+   since the column count is the step count. */
+.armada-diagram {
+  display: grid;
+  align-items: start;
+  row-gap: var(--space-2);
+  overflow-x: auto;
+  padding: var(--space-1);
+}
+
+.armada-diagram__step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  border: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-diagram__name {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-diagram__name[data-identifier] {
+  font-family: var(--font-mono);
+  color: var(--fg-muted);
+}
+
+.armada-diagram__declared {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-diagram__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.armada-diagram__command {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.armada-diagram__covers {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The gate marker between two boxes. `data-waits` is the one thing it draws
+   differently: a person's gate takes the accent, since it is the marker a
+   reader is deciding whether to trust the Job to sit at. */
+.armada-diagram__gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  color: var(--fg-subtle);
+  text-align: center;
+}
+
+.armada-diagram__gate[data-waits] {
+  color: var(--accent);
+}
+
+.armada-diagram__gate-arrow {
+  font-size: var(--text-sm);
+  line-height: 1;
+}
+
+.armada-diagram__gate-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+/* The loop's return arc: a bracket spanning from the target step's box to the
+   source step's own gate, drawn one row below both. */
+.armada-diagram__loop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.armada-diagram__loop-bracket {
+  align-self: stretch;
+  height: var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.armada-diagram__loop-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
