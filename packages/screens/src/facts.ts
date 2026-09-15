@@ -91,14 +91,21 @@ function repositoryFact(job: JobSummary): JobDetailField[] {
  * `enum-verbs.toml`'s `origin` table, carried to Bridge as `ORIGIN` since
  * #1115 closed the gap `Row.tsx` names.
  *
- * **`sub_dispatched` draws nothing.** Its sentence needs the parent Job's id,
- * and `dispatched_by` is the field `crates/ipc/src/job.rs` deliberately leaves
- * off the wire at M1 — filling the template with nothing would state a fact
- * this build cannot back.
+ * **`sub_dispatched` fills its own slot, since #1165.** Its verb,
+ * `"Sub-dispatched by {dispatched_by.job_id}"`, is the one templated row the
+ * registry carries; `job.dispatched_by` is now the parent's id and nothing
+ * else of the graph — `crates/ipc/src/job.rs` still leaves `dependencies` and
+ * `gate_manifests` off the wire. A Fleet built before this field existed
+ * sends the origin with nothing to fill the slot, so the line still draws
+ * nothing rather than the literal template.
  */
 function dispatchedByFact(job: JobSummary): JobDetailField[] {
   const verb = ORIGIN[job.origin]?.verb;
-  if (verb === null || verb === undefined || verb.includes("{")) return [];
+  if (verb === null || verb === undefined) return [];
+  if (verb.includes("{")) {
+    if (job.dispatched_by === undefined) return [];
+    return [{ value: verb.replace("{dispatched_by.job_id}", job.dispatched_by) }];
+  }
   return [{ value: verb }];
 }
 

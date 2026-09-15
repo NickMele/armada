@@ -106,6 +106,16 @@ export type JobSummary = {
    */
   redispatched_from?: string;
   /**
+   * The Job whose Drone dispatched this one, where `origin` is
+   * `sub_dispatched`. Since protocol 14.2.
+   *
+   * **The parent's id, and nothing else of the graph.** `dependencies` and
+   * `gate_manifests` stay off this row — the Board does not draw the DAG a
+   * step's fan-out makes, only that this Job has a parent and which one, for
+   * the facts line's `Sub-dispatched by …` sentence.
+   */
+  dispatched_by?: string;
+  /**
    * Whether this job's drone is waiting on an answer from a person. Since
    * protocol 5.7.
    *

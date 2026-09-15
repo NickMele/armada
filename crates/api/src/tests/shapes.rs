@@ -169,6 +169,7 @@ pub fn job_at(id: &str, spelling: &str) -> JobSummary {
         current_step_id: None,
         assigned_drone: None,
         redispatched_from: None,
+        dispatched_by: None,
         asking: false,
         landed: None,
         reclaimed_at: None,
