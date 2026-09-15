@@ -47,11 +47,13 @@
 
 /* The dock's leading edge, drawn only where `onResize` is wired — an edge
    that looks grabbable and does nothing would be worse than none. The hit
-   area is the whole 16px gap the dock's own margin used to spend alone; the
-   grip line at its centre is visible at rest — `--border-default`, one step
-   up from a divider's own `--border-subtle` since this is a control rather
-   than a rule — and brightens to `--border-strong` on hover, focus or drag,
-   never appearing from nothing. */
+   area is the whole 16px gap the dock's own margin used to spend alone; a
+   short handlebar grip at its vertical centre is visible at rest —
+   `--border-default`, one step up from a divider's own `--border-subtle`
+   since this is a control rather than a rule — and brightens to
+   `--border-strong` on hover, focus or drag, never appearing from nothing.
+   `--space-8` and `top: 50%` keep it a short pill rather than the full-height
+   line the hit area's own `align-self: stretch` would otherwise suggest. */
 .armada-shell__dock-handle {
   flex: none;
   align-self: stretch;
@@ -65,10 +67,13 @@
 .armada-shell__dock-handle::before {
   content: "";
   position: absolute;
-  inset: 0;
+  top: 50%;
   left: 50%;
   width: var(--border-width);
+  height: var(--space-8);
+  border-radius: var(--radius-sm);
   background: var(--border-default);
+  transform: translateY(-50%);
 }
 
 .armada-shell__dock-handle:hover::before,
