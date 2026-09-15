@@ -463,6 +463,25 @@ export const EscapeClosesAfterAClickInside: Story = {
 };
 
 /**
+ * **A click outside closes it, a click inside does not.** The layer drew with no click handler at
+ * all before this fix (#1150), so the only exits were `Esc` and choosing a row. The "inside" click
+ * lands on a section head rather than the input, because a handler scoped to the field would miss
+ * this the same way it missed `Esc` on the same layer.
+ */
+export const OutsideClickCloses: Story = {
+  render: () => <Closable />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByText("Navigation"));
+    await expect(canvas.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+
+    // The layer, not the panel: containment is what the fix tests, not `event.target === layer`.
+    const layer = canvas.getByRole("dialog", { name: "Command palette" }).parentElement!;
+    await userEvent.click(layer);
+    await expect(canvas.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+  },
+};
+
+/**
  * **Over a sheet, the palette goes first.** The sheet catches `Esc` in the capture phase, and
  * without yielding it closed underneath while the palette stayed up (#1013). The second press is
  * the sheet's.
