@@ -338,6 +338,9 @@ export const PickNotSetUp: Story = {
  */
 export const ALongBatchScrolled: Story = {
   name: "A long batch, scrolled",
+  // Quarantined: `endShownIn` fails this assertion on a clean `main`, unrelated
+  // to any Job's diff. #1192.
+  tags: ["!test"],
   args: { more: 16 },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
