@@ -376,9 +376,12 @@ themselves. Fleet waking the session was rejected: it would make Helm a
 second notification channel alongside Alerts. See the decision in Armada
 Decisions.
 
-On a command, an agent's access is the Intervention Ladder rung. The full
-set of operations — each with its kind, its transport and what an agent
-may reach directly — is in `crates/ipc/operations.toml`.
+On a command, a plain agent's access is `agent_access = "Yes"`; a Helm session
+also reaches `Drafts only` and `Helm only` rows, which is every command but
+`undo_run` once a person asks for it in conversation — `fleet::helm::may` is
+the rule, and the Intervention Ladder no longer bounds it. The full set of
+operations — each with its kind, its transport and what an agent may reach
+directly — is in `crates/ipc/operations.toml`.
 
 **An operation the inventory names and nothing serves fails the gate**, with
 an allowance that carries a written reason per operation. Four commands and

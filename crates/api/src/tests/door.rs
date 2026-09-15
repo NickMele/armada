@@ -392,11 +392,17 @@ async fn read_only_refuses_every_command_and_still_reads() {
             &calling(row.operation, r#"{"job_id":"1","body":{}}"#),
         )
         .await;
-        assert!(
-            body.contains(&format!("`{}` is not Helm's to call", row.operation)),
-            "{}: {body}",
-            row.operation
-        );
+        // An operation nothing serves (`xtask`'s `NOT_BUILT`) 404s before the
+        // reach is ever consulted — for any caller, acting or not — so its
+        // refusal names no route rather than naming Helm's authority.
+        let expected = match SERVED.iter().any(|route| route.operation == row.operation) {
+            true => format!("`{}` is not Helm's to call", row.operation),
+            false => format!(
+                "`{}` is named in this Fleet's operation inventory and is served at no route",
+                row.operation
+            ),
+        };
+        assert!(body.contains(&expected), "{}: {body}", row.operation);
     }
     let read = from(&app, HELM, &calling("get_job", r#"{"job_id":"1"}"#)).await;
     assert!(

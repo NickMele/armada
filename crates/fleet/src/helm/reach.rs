@@ -1,9 +1,15 @@
 //! What Helm may do, as one predicate over the operations the agent door offers.
 //!
-//! **An allowlist of acts rather than the `agent_access` column.** The column is
-//! one set shared by every agent on the machine, and `#73` drew Helm's line
-//! inside it: `undo_run` reads `Yes` and stays a person's. Reading the column
-//! directly would also hand Helm any command marked `Yes` later, undecided.
+//! **A denylist of acts, not an allowlist.** `#73` drew Helm's line as an
+//! allowlist inside the `agent_access` column the door shares with every
+//! agent on the machine; Nick's later ruling (`#1150`) reversed the default —
+//! Helm may call any command it is offered, when a person asks it to in
+//! conversation, except what is named in [`RESERVED`]. The column still keeps
+//! Helm and a Drone apart: `agent_access = "No"` rows stay invisible to every
+//! agent regardless of this list, for reasons that have nothing to do with
+//! Helm's authority (a Drone's own exclusions, or a read too costly to hand
+//! every session) — this predicate only ever sees what the door already
+//! offered.
 
 use ipc::door::Reachable;
 
@@ -12,40 +18,27 @@ use ipc::door::Reachable;
 /// the one place the setting becomes one of these two; `#943`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Authority {
-    /// The setting's shipped value: every read, and the acts in [`ACTS`].
+    /// The setting's shipped value: every read, and every act not in
+    /// [`RESERVED`].
     Acting,
     /// Every read, and no act.
     ReadOnly,
 }
 
-/// The acts `#73` decided are Helm's, keyed as the inventory keys them.
-///
-/// `propose_job`, `propose_from_request` and `ask_person_to_approve` read
-/// `Drafts only`, which the door offers a Helm session and no other agent
-/// (`#941`).
-pub(super) const ACTS: &[&str] = &[
-    "ask_person_to_approve",
-    "examine_job",
-    "propose_job",
-    "propose_from_request",
-    "raise_cost_cap",
-    "raise_turn_cap",
-    "redirect_drone",
-    "show_again",
-    "start_run",
-    "stop_run",
-    "start_server",
-    "stop_server",
-];
+/// The one act that stays a person's, independent of what the machine's
+/// authority setting allows. `undo_run` reverses a run's own files, and
+/// nothing else here draws the line — `#1150` named it the sole exception to
+/// "any command Helm is offered, on request."
+pub(super) const RESERVED: &[&str] = &["undo_run"];
 
 /// Whether Helm, under `authority`, may call one operation the door offers.
 ///
-/// Every query is a read and every read is Helm's. A command is Helm's only
-/// where it is one of [`ACTS`] and the machine lets Helm act.
+/// Every query is a read and every read is Helm's. A command is Helm's where
+/// the machine lets Helm act at all and the operation is not [`RESERVED`].
 pub fn may(authority: Authority, offered: &Reachable) -> bool {
     match offered.kind {
         "query" => true,
-        "command" => authority == Authority::Acting && ACTS.contains(&offered.operation),
+        "command" => authority == Authority::Acting && !RESERVED.contains(&offered.operation),
         _ => false,
     }
 }

@@ -7,7 +7,10 @@
 //! The tool set is [`REACHABLE`], emitted by `build.rs` from the inventory's
 //! own `agent_access` column. A list written by hand is how a tool gets added
 //! to the file and stays unreachable. [`DRAFTING`] is the `Drafts only` rows,
-//! which only a Helm session is offered.
+//! offered to a Helm session alone for drafting a Job; [`HELM_ONLY`] is the
+//! `Helm only` rows, offered to a Helm session alone for everything else a
+//! person may ask it to do (`#1150`). Neither reaches a plain agent door
+//! session or a Drone.
 //!
 //! The Drone's endpoint is [`crate::mcp`] and is a different seam: its peer is
 //! a process Fleet spawned, and its eight tools are in no inventory.
@@ -452,6 +455,8 @@ fn listed(shapes: &[Shape]) -> Vec<Value> {
 fn tool(shape: &Shape) -> Value {
     let described = REACHABLE
         .iter()
+        .chain(DRAFTING.iter())
+        .chain(HELM_ONLY.iter())
         .find(|row| row.operation == shape.operation)
         .map(|row| row.description)
         .unwrap_or_default();

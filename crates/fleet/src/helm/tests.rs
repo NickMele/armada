@@ -1,4 +1,5 @@
-//! Helm's brief, pinned whole, and the line `#73` drew around what Helm may do.
+//! Helm's brief, pinned whole, and the denylist `#1150` replaced `#73`'s
+//! allowlist with.
 //!
 //! **The snapshots pin the copy on purpose**, unlike `tests::briefing`: `#940`'s
 //! claim is the assembled text. An edit to section 5a of the Agent Prompt
@@ -7,13 +8,15 @@
 use std::path::Path;
 
 use config::Manifest;
-use ipc::door::{DRAFTING, REACHABLE};
+use ipc::door::{DRAFTING, HELM_ONLY, REACHABLE};
 
-use super::reach::ACTS;
+use super::reach::RESERVED;
 use super::{brief, may, Authority, Voice};
 
-/// Acts the door offers that `#73` left with the person.
-const THE_PERSONS: &[&str] = &["undo_run"];
+/// Acts the door offers that stay a person's, independent of the ruling that
+/// granted Helm the rest (`#1150`). Mirrors [`RESERVED`] so a test failure
+/// reads as this list going stale rather than as the const under test.
+const THE_PERSONS: &[&str] = RESERVED;
 
 /// A Manifest carrying a Command, so a test can see its line is not told.
 fn a_manifest() -> Manifest {
@@ -52,31 +55,21 @@ what is in it rather than assuming the line carries its contents.
 
 WHAT YOU MAY DO
 
-You may call every tool that reads. Of the tools that act, you may call these \
-and no others:
+You may call every tool you are given that acts, once a person has asked you \
+to make that call, in this conversation, and never on your own initiative. \
+Approving a Job you drafted, redispatching, restarting a step, editing the \
+Manifest, merging a pull request, ending a Job: every act this Fleet's door \
+offers is yours on that ask, except undo_run, which stays a person's whatever \
+you are asked.
 
-  examine_job
-  raise_cost_cap
-  raise_turn_cap
-  redirect_drone
-  show_again
-  start_run
-  stop_run
-  start_server
-  stop_server
-  ask_person_to_approve
-  propose_job
-  propose_from_request
+Approving a Job follows the same rule, including one you drafted yourself: \
+yours to call once a person asks you to, and not before. Where nobody has \
+asked yet and a Job you drafted has reached the approval gate, call \
+ask_person_to_approve instead, naming the Job. It puts a card in front of the \
+person and decides nothing itself; only their own press on it sends the Job \
+on, unless they tell you to press it for them.
 
-Approving a Job is never yours, whatever you are asked. Call \
-ask_person_to_approve instead, naming the Job, when you are asked to approve \
-one or a Job you drafted has reached the approval gate. It puts a card in \
-front of the person and decides nothing itself; only their own press on it \
-sends the Job on.
-
-Any other act is the person's, including a tool you have been given that is \
-not listed here. Where one would help, say which and why, and leave it to \
-them. How far you may raise a cap is bounded, and a raise past the bound is \
+How far you may raise a cap is bounded, and a raise past the bound is \
 refused, naming the most you may ask for.
 
 HOW YOU ANSWER
@@ -143,13 +136,16 @@ fn the_brief_does_not_quote_the_manifest() {
     assert!(!brief.as_str().contains("release"));
 }
 
-/// A command marked `Yes` later fails here until somebody decides whose it is.
+/// A command marked `Yes` is Helm's under `Acting` unless `THE_PERSONS` names
+/// it — the denylist's whole shape, checked against the door's own set rather
+/// than asserted about `RESERVED` alone.
 #[test]
 fn every_act_the_door_offers_is_decided_for_helm_or_the_person() {
     for row in REACHABLE.iter().filter(|row| row.kind == "command") {
-        assert!(
-            ACTS.contains(&row.operation) || THE_PERSONS.contains(&row.operation),
-            "`{}` reads `Yes` and nobody has said whether it is Helm's",
+        assert_eq!(
+            may(Authority::Acting, row),
+            !THE_PERSONS.contains(&row.operation),
+            "`{}` disagrees with the reserved list",
             row.operation
         );
     }
@@ -162,19 +158,19 @@ fn every_act_the_door_offers_is_decided_for_helm_or_the_person() {
     }
 }
 
-/// Every act names a row agents may reach at all, `Yes` or `Drafts only`.
+/// A name reserved from Helm has to be a command the door actually offers —
+/// reserving a name nobody offers would decide nothing.
 #[test]
-fn every_act_is_an_operation_an_agent_may_reach() {
+fn every_reserved_act_is_an_operation_the_door_offers() {
     let inventory = include_str!("../../../ipc/operations.toml");
-    for act in ACTS {
+    for act in THE_PERSONS {
         let (_, row) = inventory
             .split_once(&format!("\n[operations.{act}]\n"))
             .unwrap_or_else(|| panic!("`{act}` is not in the inventory"));
         let row = row.split("\n[operations.").next().unwrap_or(row);
         assert!(
-            row.contains("agent_access = \"Yes\"")
-                || row.contains("agent_access = \"Drafts only\""),
-            "`{act}` is one no agent may reach"
+            row.contains("agent_access = \"Yes\""),
+            "`{act}` is not one `Yes` offers, so reserving it from Helm reserves nothing"
         );
     }
 }
@@ -188,6 +184,20 @@ fn drafting_is_an_acting_helms_and_never_a_read_only_ones() {
         "the inventory has rows reading `Drafts only`"
     );
     for row in DRAFTING {
+        assert!(may(Authority::Acting, row), "`{}`", row.operation);
+        assert!(!may(Authority::ReadOnly, row), "`{}`", row.operation);
+    }
+}
+
+/// The door offers `Helm only` rows to a Helm session alone, so an acting one
+/// must be allowed every row of it and a read-only one none. `#1150`.
+#[test]
+fn helm_only_is_an_acting_helms_and_never_a_read_only_ones() {
+    assert!(
+        !HELM_ONLY.is_empty(),
+        "the inventory has rows reading `Helm only`"
+    );
+    for row in HELM_ONLY {
         assert!(may(Authority::Acting, row), "`{}`", row.operation);
         assert!(!may(Authority::ReadOnly, row), "`{}`", row.operation);
     }
