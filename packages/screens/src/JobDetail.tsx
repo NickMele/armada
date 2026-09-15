@@ -376,13 +376,18 @@ function OneJob({
 
   /**
    * Open a sheet. **The second one replaces the first** rather than stacking on
-   * it, and opening the log takes the reading's position: from here on the tail
-   * is not followed, and what arrives is counted rather than scrolled to.
+   * it. Opening the log on a live step starts following the tail — #1155 — and
+   * the sheet itself is what holds once a person scrolls away from it, through
+   * `onFollowingChange` in `Sheets.tsx`.
    */
   function openSheet(which: Exclude<OpenSheet, null | "check">, attempt?: number): void {
-    // Held only where there is a tail to stop following. A run that has ended
-    // does not grow, so the strip would offer a jump to nothing.
-    const holding = which === "log" && attempt === undefined ? holdOf(now, rows.length) : undefined;
+    // Held on open only where there is a tail and nothing is watching it: a run
+    // that has ended does not grow, so the strip would offer a jump to nothing,
+    // and a live run starts following instead of holding from the first paint.
+    const holding =
+      which === "log" && attempt === undefined && observed.state !== "watching"
+        ? holdOf(now, rows.length)
+        : undefined;
     move({
       move: "open",
       which,
@@ -748,6 +753,7 @@ function OneJob({
             // the chapter's preview. Two logs over one stream hold equal ids.
             log={keys.inLog("sheet")}
             held={held}
+            now={now}
             checkId={openCheckId}
             outputs={outputs}
             following={following}

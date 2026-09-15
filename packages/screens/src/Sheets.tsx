@@ -81,10 +81,13 @@ export type OpenSheet = "log" | "diff" | "holds" | "settings" | "run" | "check" 
 /**
  * Where the log's reading was held, and how much it had then.
  *
- * **The tail is not followed while the sheet is open.** A stream that scrolls
- * itself cannot be read, so the reading stays where it was put and what arrives
- * is counted instead — `rows` is the count at the moment it was held, and the
- * difference is what *Jump to now* carries.
+ * **Held once the reader scrolls away from the tail, not for the whole time
+ * the sheet is open.** #1155. At the bottom the sheet follows, the way a chat
+ * does; a stream that scrolls itself out from under someone who scrolled up
+ * to read one of 1676 entries is the failure the hold exists to prevent, so it
+ * takes over exactly there rather than from the moment the sheet opens. `rows`
+ * is the count at the moment it was held, and the difference is what *Jump to
+ * now* carries — scrolling back down does the same thing the button does.
  */
 export type HeldAt = { at: string; rows: number };
 
@@ -116,6 +119,8 @@ export type DetailSheetProps = {
   /** What one log takes, by name, so the sheet's rows are not the preview's. */
   log: { region: string; openId: string | null; onOpen: (rowId: string | null) => void };
   held: HeldAt | null;
+  /** Now, for `holdOf` — the clock a scroll-away hold is stamped with. #1155. */
+  now: number;
   /**
    * Which Check the output sheet is open on — `which === "check"`'s own
    * reading. `checkSheetOf(step, checkId)` is what turns this into live or
@@ -178,6 +183,7 @@ export function DetailSheet({
   calls,
   log,
   held,
+  now,
   checkId,
   outputs,
   following,
@@ -221,6 +227,10 @@ export function DetailSheet({
         heldAt={held?.at}
         arrived={held === null ? 0 : Math.max(rows.length - held.rows, 0)}
         onJumpToNow={() => onHold(null)}
+        // The scroll itself decides, not a row landing: at the bottom resumes
+        // following exactly as *Jump to now* does; scrolled away holds exactly
+        // where the reader put it, stamped now for the strip and the count. #1155.
+        onFollowingChange={(following) => onHold(following ? null : holdOf(now, rows.length))}
         escalation={escalationOf(job, whole, step, onClose)}
         // Fixed under the stream in `Sheet`'s own footer slot, so it holds its
         // place while the body above it scrolls — #1154, and the reason #1155

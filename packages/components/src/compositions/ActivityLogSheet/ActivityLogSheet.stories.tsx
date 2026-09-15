@@ -1,5 +1,7 @@
+import { useState } from "react";
+import type { ReactElement } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 import { ActivityLogSheet } from "./ActivityLogSheet";
 import { ActivityLog, type ActivityEntry } from "../ActivityLog/ActivityLog";
 
@@ -121,5 +123,123 @@ export const Escalated: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole("button", { name: /Show me/ }));
     await expect(args.onClose).toHaveBeenCalled();
+  },
+};
+
+// Following, #1155: a caller wired the way `Sheets.tsx` wires this sheet — the
+// held state lives with the caller, and `onFollowingChange` is what tells it
+// which way the reader just crossed the line. Enough entries to overflow
+// `--palette-max-height`'s 400px is the point: nothing here scrolls to prove
+// anything on a log short enough to show whole.
+
+function manyEntries(count: number): ActivityEntry[] {
+  return Array.from({ length: count }, (_, at) => ({
+    id: `e${at}`,
+    at: `14:${String(22 + at).padStart(2, "0")}:00`,
+    actor: "drone",
+    summary: `Read`,
+    subject: `packages/screens/src/file-${at}.ts`,
+  }));
+}
+
+/** The scrollable body — the one `Sheet` gives a ref to, for this sheet's own scroll. */
+function bodyOf(canvasElement: HTMLElement): HTMLElement {
+  const el = canvasElement.querySelector(".armada-sheet__body");
+  if (el === null) throw new Error("the sheet's scroll container is not on the page");
+  return el as HTMLElement;
+}
+
+/** How close `el`'s scroll reads as "at the bottom" — the sheet's own threshold, read back. */
+function nearBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= 48;
+}
+
+/** Wired the way `Sheets.tsx` wires it: the hold lives here, off `onFollowingChange` alone. */
+function FollowingDemo(): ReactElement {
+  const [entries, setEntries] = useState(() => manyEntries(24));
+  const [held, setHeld] = useState<{ at: string; rows: number } | null>(null);
+
+  return (
+    <>
+      <ActivityLogSheet
+        open
+        step="Fix"
+        total={entries.length}
+        live
+        heldAt={held?.at}
+        arrived={held === null ? 0 : Math.max(entries.length - held.rows, 0)}
+        onJumpToNow={() => setHeld(null)}
+        onFollowingChange={(following) =>
+          setHeld(following ? null : { at: "14:31:58", rows: entries.length })
+        }
+      >
+        <ActivityLog entries={entries} />
+      </ActivityLogSheet>
+      {/* Fixed to the viewport rather than flowed beside the sheet: the scrim
+          this sheet draws over the whole decorator would otherwise sit above
+          a normal-flow control at the same paint order and take the click. */}
+      <button
+        type="button"
+        style={{ position: "fixed", top: 8, left: 8, zIndex: 2147483647 }}
+        onClick={() => setEntries((was) => [...was, ...manyEntries(was.length + 1).slice(-1)])}
+      >
+        A row arrives
+      </button>
+    </>
+  );
+}
+
+/** At the bottom, each new row scrolls into view by itself — no press needed. */
+export const FollowsAtTheBottom: Story = {
+  render: () => <FollowingDemo />,
+  play: async ({ canvasElement, canvas, userEvent }) => {
+    const body = bodyOf(canvasElement);
+    // Opening on a live step starts at the newest entry, following — nobody
+    // scrolled, and it is already there.
+    await waitFor(() => expect(nearBottom(body)).toBe(true));
+    await expect(canvas.queryByText(/Held at/)).toBeNull();
+
+    await userEvent.click(canvas.getByRole("button", { name: "A row arrives" }));
+    await waitFor(() => expect(nearBottom(body)).toBe(true));
+    await expect(canvas.queryByText(/Held at/)).toBeNull();
+  },
+};
+
+/** Scrolled up, a row landing holds rather than pulling the reading back down. */
+export const HoldsWhileScrolledUp: Story = {
+  render: () => <FollowingDemo />,
+  play: async ({ canvasElement, canvas, userEvent }) => {
+    const body = bodyOf(canvasElement);
+    await waitFor(() => expect(nearBottom(body)).toBe(true));
+
+    body.scrollTop = 0;
+    body.dispatchEvent(new Event("scroll"));
+    await waitFor(() => expect(canvas.getByText(/Held at/)).toBeVisible());
+
+    const before = body.scrollTop;
+    await userEvent.click(canvas.getByRole("button", { name: "A row arrives" }));
+    await expect(canvas.getByRole("button", { name: /Jump to now/ })).toHaveTextContent("+1");
+    // Held, not pulled to the tail — the failure this sheet used to have.
+    await expect(body.scrollTop).toBe(before);
+  },
+};
+
+/** Scrolling back to the bottom resumes following, the same as pressing `Jump to now`. */
+export const ScrollingDownResumesFollowing: Story = {
+  render: () => <FollowingDemo />,
+  play: async ({ canvasElement, canvas, userEvent }) => {
+    const body = bodyOf(canvasElement);
+    await waitFor(() => expect(nearBottom(body)).toBe(true));
+
+    body.scrollTop = 0;
+    body.dispatchEvent(new Event("scroll"));
+    await waitFor(() => expect(canvas.getByText(/Held at/)).toBeVisible());
+
+    body.scrollTop = body.scrollHeight;
+    body.dispatchEvent(new Event("scroll"));
+    await waitFor(() => expect(canvas.queryByText(/Held at/)).toBeNull());
+
+    await userEvent.click(canvas.getByRole("button", { name: "A row arrives" }));
+    await waitFor(() => expect(nearBottom(body)).toBe(true));
   },
 };
