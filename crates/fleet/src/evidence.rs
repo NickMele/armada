@@ -382,12 +382,38 @@ where
         };
         let (job, step, _) = at_work.standing();
         let evidence_type = call.evidence_type;
+        self.kept_pending(&job, &step, call, &at).await?;
         let recorded = EvidenceTool::for_job(job.clone(), self.inbox())
             .submit(call, at.clone())
             .map_err(NotSubmitted::Malformed)?;
         cut_short(&mut working, &at);
         self.published_submission(&job, &step, evidence_type, &at);
         Ok(recorded)
+    }
+
+    /// Write the submission down the instant it is accepted, before the
+    /// receipt returns. #796: a Fleet that stops before the gate rules on it
+    /// still has this to reload — `crate::pending_evidence`'s.
+    async fn kept_pending(
+        &self,
+        job: &JobId,
+        step: &StepId,
+        call: Call<'_>,
+        at: &Timestamp,
+    ) -> Result<(), NotSubmitted> {
+        self.store()
+            .lock()
+            .await
+            .record_pending_evidence(&store::PendingEvidence {
+                job_id: job.clone(),
+                step_id: step.clone(),
+                evidence_type: call.evidence_type,
+                claimed: call.claimed.0.to_string(),
+                shown_by: call.shown_by.0.to_string(),
+                not_claimed: call.not_claimed.0.to_string(),
+                landed_at: at.clone(),
+            })
+            .map_err(|why| NotSubmitted::NotKept(why.to_string()))
     }
 
     /// Say that a submission landed. **The moment, and not the submission.**
@@ -473,17 +499,16 @@ where
                 .record_confidence(&job, &step, &accepted.recorded(), &at)
                 .map_err(|why| NotSubmitted::ReviewNotKept(why.to_string()))?;
         }
+        let call = Call {
+            evidence_type,
+            claimed: Claimed(&submission.claimed),
+            shown_by: ShownBy(&submission.shown_by),
+            not_claimed: NotClaimed(&submission.not_claimed),
+            review: accepted.as_ref().map(|accepted| accepted.review()),
+        };
+        self.kept_pending(&job, &step, call, &at).await?;
         let recorded = EvidenceTool::for_job(job.clone(), self.inbox())
-            .submit(
-                Call {
-                    evidence_type,
-                    claimed: Claimed(&submission.claimed),
-                    shown_by: ShownBy(&submission.shown_by),
-                    not_claimed: NotClaimed(&submission.not_claimed),
-                    review: accepted.as_ref().map(|accepted| accepted.review()),
-                },
-                at.clone(),
-            )
+            .submit(call, at.clone())
             .map_err(NotSubmitted::Malformed)?;
         cut_short(&mut working, &at);
         self.published_submission(&job, &step, evidence_type, &at);
@@ -586,10 +611,16 @@ where
     /// because the gate drains the inbox before anything reaps — so a
     /// submission still in here when a Job ends is one no gate ever saw, and
     /// that is the fact a person needs and the one that was missing.
-    pub(crate) fn empty_the_inbox(&self, job: &JobId) -> usize {
+    pub(crate) async fn empty_the_inbox(&self, job: &JobId) -> usize {
         let mut dropped = 0;
         while self.inbox().take_for(job).is_some() {
             dropped += 1;
+        }
+        // #796: the row this Job's evidence was durable under, given up along
+        // with the in-memory queue. A write that fails leaves it for a later
+        // boot to find and drop, `crate::pending_evidence`'s own guard.
+        if let Err(why) = self.store().lock().await.forget_pending_evidence(job) {
+            self.noted_adrift(&crate::adrift::Adrift::Writing(why));
         }
         dropped
     }
@@ -647,6 +678,9 @@ pub enum NotSubmitted {
     ChangeUnreadable { step: StepId, why: String },
     /// The store would not keep an accepted review. Not the Drone's.
     ReviewNotKept(String),
+    /// The store would not keep the pending row #796 needs to survive a
+    /// restart. Not the Drone's.
+    NotKept(String),
 }
 
 impl fmt::Display for NotSubmitted {
@@ -706,6 +740,11 @@ impl fmt::Display for NotSubmitted {
                 out,
                 "the review was not kept: {why}. This is a fault in Fleet and not in the review"
             ),
+            NotSubmitted::NotKept(why) => write!(
+                out,
+                "the submission was not kept: {why}. This is a fault in Fleet and not in the \
+                 submission"
+            ),
             NotSubmitted::Malformed(cause) => write!(out, "{cause}"),
         }
     }
@@ -722,7 +761,8 @@ impl Error for NotSubmitted {
             | NotSubmitted::NotAReviewStep { .. }
             | NotSubmitted::ReviewRefused(_)
             | NotSubmitted::ChangeUnreadable { .. }
-            | NotSubmitted::ReviewNotKept(_) => None,
+            | NotSubmitted::ReviewNotKept(_)
+            | NotSubmitted::NotKept(_) => None,
             NotSubmitted::Malformed(cause) => Some(cause),
         }
     }

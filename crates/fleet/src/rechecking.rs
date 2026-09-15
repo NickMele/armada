@@ -15,7 +15,7 @@ use core_model::{
     Actor, CheckOutcome, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus,
     Level, StepId, StepLevelTrigger, StepTarget, Target, DIFF_NONEMPTY,
 };
-use verification::{Lifted, Request};
+use verification::{Lifted, Request, Submission};
 
 use crate::adrift::Adrift;
 use crate::at_step::AtStep;
@@ -245,15 +245,43 @@ where
         self.failed_on_a_check(&job).await?;
         let worktree = self.surviving_worktree(&job)?;
         let submission = self.submitted_already(&job, step).await?;
-        let Some(at) = AtStep::named(job.workflow(), step, &worktree) else {
+        let ruling = self
+            .ruled_with_no_drone(&job, step, &worktree, &submission)
+            .await?;
+        self.noted_rechecked(job_id, step, &ruling);
+        self.noted_undecided(job_id, step, &ruling);
+        if matches!(ruling, Ruling::Failed { .. } | Ruling::HandedBack { .. }) {
+            return self.load(job_id).await;
+        }
+        self.carried_on(&ruling, job_id, step, stopped_by, &worktree)
+            .await
+    }
+
+    /// Rule the gate on one submission with no live slot and no live Drone:
+    /// the Checks and the Judge run against the worktree and the submission
+    /// alone, and every record a ruling writes is written before this
+    /// returns. **This module's own shape**, shared by a person's press here
+    /// and by `crate::pending_evidence`'s boot recovery, #796 — both rule on
+    /// a submission the ordinary turn loop's `crate::settling::settle` will
+    /// never be asked about, because neither has a Drone in a slot for it to
+    /// find.
+    pub(crate) async fn ruled_with_no_drone(
+        &self,
+        job: &Job,
+        step: &StepId,
+        worktree: &Worktree,
+        submission: &Submission,
+    ) -> Result<Ruling, Adrift> {
+        let job_id = job.id();
+        let Some(at) = AtStep::named(job.workflow(), step, worktree) else {
             return Err(Adrift::NoSuchStep {
                 job: job_id.clone(),
                 step: Some(step.clone()),
             });
         };
-        let served = self.served_by(&job)?;
+        let served = self.served_by(job)?;
         let judging = self
-            .judging(&job, &served)
+            .judging(job, &served)
             .map_err(|cause| Adrift::NotConfigurable {
                 job: job_id.clone(),
                 cause,
@@ -302,9 +330,9 @@ where
             .filter(|run| run.step_id == *step && run.attempt == attempt)
             .flat_map(|run| run.record.iter())
             .any(|check| check.name == DIFF_NONEMPTY && check.outcome == CheckOutcome::Passed);
-        let announcing = self.announcing(&served, &job, step, attempt);
-        let ports = self.port_map(&job).await;
-        let port_env = self.port_env(&job).await;
+        let announcing = self.announcing(&served, job, step, attempt);
+        let ports = self.port_map(job).await;
+        let port_env = self.port_env(job).await;
         let refusal_policy = self
             .store()
             .lock()
@@ -319,17 +347,15 @@ where
             .unwrap_or_default();
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
-            Request::of(&job),
-            &submission,
+            Request::of(job),
+            submission,
             declared.as_ref(),
-            &Lifted::of(&job),
+            &Lifted::of(job),
             Began::AsRecorded(moved),
             &recorded,
             self.work(),
             self.budget(),
-            &self
-                .checks_room_for(&job, crate::places::Asking::Gate)
-                .await,
+            &self.checks_room_for(job, crate::places::Asking::Gate).await,
             &judging,
             &Keeping::of(served.records_root(), &job.handle()),
             self.gating_policies(&served),
@@ -348,19 +374,13 @@ where
 
         self.recorded_checks(job_id, &job.handle(), step, attempt, &ruling)
             .await?;
-        self.kept_timings(&job, announcing.timings()).await;
+        self.kept_timings(job, announcing.timings()).await;
         drop(announcing);
         self.recorded_judgments(job_id, step, &ruling).await?;
-        self.recorded_evidence(job_id, step, &submission, &ruling)
+        self.recorded_evidence(job_id, step, submission, &ruling)
             .await?;
         self.recorded_gaming(job_id, step, &ruling).await?;
-        self.noted_rechecked(job_id, step, &ruling);
-        self.noted_undecided(job_id, step, &ruling);
-        if matches!(ruling, Ruling::Failed { .. } | Ruling::HandedBack { .. }) {
-            return self.load(job_id).await;
-        }
-        self.carried_on(&ruling, job_id, step, stopped_by, &worktree)
-            .await
+        Ok(ruling)
     }
 
     /// Take the Job out of `awaiting_repair` and carry the ruling out.

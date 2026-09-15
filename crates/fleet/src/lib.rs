@@ -145,6 +145,8 @@ pub mod overruling;
 pub mod peer;
 /// What a working Drone is told about other Jobs writing where it writes. #998.
 pub mod peers;
+/// Evidence a restart found still waiting for the gate, ruled on at boot. #796.
+mod pending_evidence;
 pub mod permitting;
 /// The machine's places for Checks, one line for every Job and repository. #1063.
 pub mod places;
