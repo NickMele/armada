@@ -1,5 +1,5 @@
 import { MessageSquare } from "lucide-react";
-import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { BoardEmptyState } from "../../compositions/BoardEmptyState/BoardEmptyState";
 import { FleetPanel, type FleetPanelProps } from "../../compositions/FleetPanel/FleetPanel";
 import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
@@ -81,11 +81,12 @@ export type TheShellDock = {
    */
   width?: number;
   /**
-   * Drags and arrow-key nudges the leading-edge handle, clamped to
-   * `--w-dock-min`/`--w-dock-max`. **Absent draws no handle at all** — an
-   * edge that looks grabbable and does nothing is worse than no edge.
-   * Persisting the result across a restart is the caller's, the same way
-   * `open` is.
+   * Drags and arrow-key nudges the leading-edge handle, clamped between
+   * `--w-dock-min` and whatever the window leaves once the left column and
+   * `--w-work-min` are accounted for — `clampDockWidth`. **Absent draws no
+   * handle at all** — an edge that looks grabbable and does nothing is worse
+   * than no edge. Persisting the result across a restart is the caller's, the
+   * same way `open` is.
    */
   onResize?: (width: number) => void;
   /** Absent draws one quiet line until the questions (#935) and the conversation (#944) arrive. */
@@ -143,22 +144,59 @@ export function TheShell({
 const DOCK_TITLE = "Helm";
 
 // Fallbacks only for a caller with no stylesheet loaded (a bare unit test);
-// the tokens are the real source and are read fresh on every drag.
+// the tokens are the real source and are read fresh on every drag. The max
+// fallback stands in for a whole computed ceiling, not one token, since a
+// caller with no stylesheet has no window figure worth trusting either.
 const DOCK_WIDTH_MIN_FALLBACK = 320;
 const DOCK_WIDTH_MAX_FALLBACK = 640;
 const DOCK_WIDTH_DEFAULT_FALLBACK = 380;
 
-function dockWidthBounds(): { min: number; max: number } {
+/**
+ * The dock's drag range. The floor is a token — `--w-dock-min` is what keeps
+ * the composer's head row from clipping. **The ceiling has no token**, since
+ * #1171/#1176: it is `availableWidth` (the window's own width, read by the
+ * caller as `window.innerWidth`) minus the chrome around the dock that isn't
+ * the panel or the dock itself — the left column's width, its own margin, the
+ * gap beside it, the handle's hit area and the dock's own margin, four
+ * `--space-4` gutters and `--sidebar-default` between them, all from
+ * `TheShell.css` — minus `--w-work-min`, the panel's own floor. The left
+ * column reads as `--sidebar-default` rather than a live measurement because
+ * the dock only ever sits beside the panel at `--layout-breakpoint` and
+ * wider, which is wider than `--layout-breakpoint-narrow` — the rail is never
+ * collapsed while this figure matters.
+ */
+function dockWidthBounds(availableWidth: number): { min: number; max: number } {
   if (typeof document === "undefined") {
     return { min: DOCK_WIDTH_MIN_FALLBACK, max: DOCK_WIDTH_MAX_FALLBACK };
   }
   const style = getComputedStyle(document.documentElement);
   const min = parseFloat(style.getPropertyValue("--w-dock-min"));
-  const max = parseFloat(style.getPropertyValue("--w-dock-max"));
-  return {
-    min: Number.isFinite(min) ? min : DOCK_WIDTH_MIN_FALLBACK,
-    max: Number.isFinite(max) ? max : DOCK_WIDTH_MAX_FALLBACK,
-  };
+  const sidebar = parseFloat(style.getPropertyValue("--sidebar-default"));
+  const workMin = parseFloat(style.getPropertyValue("--w-work-min"));
+  const gutter = parseFloat(style.getPropertyValue("--space-4"));
+  const floor = Number.isFinite(min) ? min : DOCK_WIDTH_MIN_FALLBACK;
+  if (![sidebar, workMin, gutter].every(Number.isFinite)) {
+    return { min: floor, max: DOCK_WIDTH_MAX_FALLBACK };
+  }
+  const chrome = sidebar + 4 * gutter;
+  const dynamicMax = availableWidth - chrome - workMin;
+  return { min: floor, max: Math.max(floor, dynamicMax) };
+}
+
+/** The window's own width, read live — the one figure here no CSS token can
+ *  name, and the reason the dock's ceiling has to be computed rather than
+ *  read off the theme. Updates on resize so a dock already open shrinks with
+ *  the window instead of pushing it into overflow. */
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
+  useEffect(() => {
+    function read(): void {
+      setWidth(window.innerWidth);
+    }
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
+  return width;
 }
 
 /** The dock's own resting width, in px, for a caller with none of its own to remember yet. */
@@ -169,12 +207,13 @@ export function defaultDockWidth(): number {
 }
 
 /**
- * Clamped to the drag range `--w-dock-min`/`--w-dock-max` names, so a width
- * read back from storage — stale, or from a build that carried different
- * tokens — never draws past what the tokens allow today.
+ * Clamped to the drag range `dockWidthBounds` computes from `availableWidth`
+ * — the caller's `window.innerWidth` — so a width read back from storage —
+ * stale, from a narrower window, or from a build that carried different
+ * tokens — never draws past what today's window and today's tokens allow.
  */
-export function clampDockWidth(width: number): number {
-  const { min, max } = dockWidthBounds();
+export function clampDockWidth(width: number, availableWidth: number): number {
+  const { min, max } = dockWidthBounds(availableWidth);
   return Math.min(max, Math.max(min, width));
 }
 
@@ -190,7 +229,15 @@ const DOCK_WIDTH_STEP = 16;
  * grows it, the same direction a mouse drag moves. Home and End match: Home
  * (the leftmost position a splitter can take) is the widest the dock gets.
  */
-function DockHandle({ width, onResize }: { width: number; onResize: (width: number) => void }) {
+function DockHandle({
+  width,
+  availableWidth,
+  onResize,
+}: {
+  width: number;
+  availableWidth: number;
+  onResize: (width: number) => void;
+}) {
   const drag = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
   // Only for the line's own intensified colour while dragging — `:hover` drops
   // the moment the cursor leaves the 8px hit area, which a fast drag does
@@ -214,7 +261,7 @@ function DockHandle({ width, onResize }: { width: number; onResize: (width: numb
   function pointerMove(event: PointerEvent<HTMLDivElement>): void {
     if (drag.current === null || drag.current.pointerId !== event.pointerId) return;
     const delta = drag.current.startX - event.clientX;
-    onResize(clampDockWidth(drag.current.startWidth + delta));
+    onResize(clampDockWidth(drag.current.startWidth + delta, availableWidth));
   }
 
   function endDrag(event: PointerEvent<HTMLDivElement>): void {
@@ -226,16 +273,16 @@ function DockHandle({ width, onResize }: { width: number; onResize: (width: numb
   }
 
   function keyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    const { min, max } = dockWidthBounds();
-    if (event.key === "ArrowLeft") onResize(clampDockWidth(width + DOCK_WIDTH_STEP));
-    else if (event.key === "ArrowRight") onResize(clampDockWidth(width - DOCK_WIDTH_STEP));
+    const { min, max } = dockWidthBounds(availableWidth);
+    if (event.key === "ArrowLeft") onResize(clampDockWidth(width + DOCK_WIDTH_STEP, availableWidth));
+    else if (event.key === "ArrowRight") onResize(clampDockWidth(width - DOCK_WIDTH_STEP, availableWidth));
     else if (event.key === "Home") onResize(max);
     else if (event.key === "End") onResize(min);
     else return;
     event.preventDefault();
   }
 
-  const { min, max } = dockWidthBounds();
+  const { min, max } = dockWidthBounds(availableWidth);
   return (
     <div
       className="armada-shell__dock-handle"
@@ -257,19 +304,28 @@ function DockHandle({ width, onResize }: { width: number; onResize: (width: numb
 }
 
 function Dock({ open, folded = false, questions = 0, binding, width, onResize, onOpen, children }: TheShellDock) {
+  const availableWidth = useWindowWidth();
   const body = children ?? (
     <BoardEmptyState quiet>Questions waiting on you, and Helm, will be here.</BoardEmptyState>
   );
 
   if (open && !folded) {
-    const restingWidth = width ?? defaultDockWidth();
+    // Clamped before it reaches the handle, not after: the window can narrow
+    // between one render and the next, and a `width` still carrying what fit
+    // the old one would show the handle's own aria-valuenow, its drag anchor
+    // and its arrow-key math a number the aside on screen already disagrees
+    // with. Clamping once here keeps every reader of `restingWidth` — the
+    // aside's style included — looking at what is actually drawn.
+    const restingWidth = clampDockWidth(width ?? defaultDockWidth(), availableWidth);
     return (
       <>
-        {onResize === undefined ? null : <DockHandle width={restingWidth} onResize={onResize} />}
+        {onResize === undefined ? null : (
+          <DockHandle width={restingWidth} availableWidth={availableWidth} onResize={onResize} />
+        )}
         <aside
           className="armada-shell__dock"
           aria-label={DOCK_TITLE}
-          style={width === undefined ? undefined : { width: `${clampDockWidth(width)}px` }}
+          style={width === undefined ? undefined : { width: `${restingWidth}px` }}
         >
           <div className="armada-shell__dock-head">
             <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>

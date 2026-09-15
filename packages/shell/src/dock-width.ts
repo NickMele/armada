@@ -34,15 +34,16 @@ function write(width: number): void {
 
 /**
  * The dock's width in px, backed by `localStorage`. Starts from what was
- * remembered, clamped to today's `--w-dock-min`/`--w-dock-max` in case the
- * tokens moved since it was saved; falls back to `--w-dock` when nothing was
- * saved yet.
+ * remembered, clamped to today's `--w-dock-min` and today's window in case
+ * either moved since it was saved; falls back to `--w-dock` when nothing was
+ * saved yet. `window.innerWidth` is what `clampDockWidth` has no other way to
+ * reach — the ceiling it computes is the window's, not a token's.
  */
 export function useDockWidth(): [number, (width: number) => void] {
-  const [width, setWidth] = useState(() => clampDockWidth(read() ?? defaultDockWidth()));
+  const [width, setWidth] = useState(() => clampDockWidth(read() ?? defaultDockWidth(), window.innerWidth));
 
   function press(next: number): void {
-    const clamped = clampDockWidth(next);
+    const clamped = clampDockWidth(next, window.innerWidth);
     setWidth(clamped);
     write(clamped);
   }

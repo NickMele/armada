@@ -137,12 +137,23 @@
   /* The dock's own drag range, from the owner's request to make the dock
      resizable. 320px is the narrowest that keeps the composer's head row —
      the repository label, its switch and Start fresh — on one line before the
-     switch is forced to clip; the label already ellipsizes for room. 640px is
-     --w-dialog-wide's own figure, not borrowed for its meaning: it caps the
-     dock at less than half a 1280px window, so dragging it never costs the
-     work panel the room a diff needs. */
+     switch is forced to clip; the label already ellipsizes for room.
+
+     There is no fixed ceiling any more. The dock used to carry --w-dock-max
+     at --w-dialog-wide's own 640px, "to cap the dock under half a 1280px
+     window" — a judgment call with no floor behind it, and the owner ruled it
+     out on #1171 and #1176: the dock should grow as wide as the window
+     allows. `clampDockWidth` (packages/components) computes the real ceiling
+     from the window's own width, the left column and --w-work-min below,
+     rather than reading one here. */
   --w-dock-min: 320px;
-  --w-dock-max: 640px;
+  /* The main content panel's own floor, so a dock dragged wide never leaves
+     the Board or Job detail a sliver. 380px is not a new number: it is
+     --w-run-column's own precedent, a few lines up — `.armada-inside`
+     already treats "window-floor minus the run column" as the tightest a
+     pane holding a diff is allowed to go, and the panel beside the dock is
+     asked to hold the same kind of thing. */
+  --w-work-min: 380px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 
