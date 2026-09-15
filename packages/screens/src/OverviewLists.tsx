@@ -16,7 +16,8 @@
 //
 // **The keyboard shares `Jobs.tsx`'s mechanism rather than copying it.** `list-keyboard.ts` carries
 // the window listener and DOM-focus-as-cursor; `keys.ts`'s `boardPressOf` carries the map, unchanged.
-// Only `move`, `open`, `verb` and `kill` are answered — the rest have no target here yet.
+// `move`, `open`, `verb`, `kill` and `compose` are answered — `search`, `tab` and `copy` have no
+// target here yet, since this screen draws no search field and no state tabs.
 //
 // Not routed yet — #921 mounts this beneath the summary strip Overview 27 replaced the tile band
 // with — so a story draws it directly.
@@ -68,6 +69,12 @@ export type OverviewListsProps = {
   onRedispatch: (jobId: string) => void;
   /** Ask to clear — Recently ended's caret, beside Redispatch. Asks; never clears. */
   onClear: (jobId: string) => void;
+  /**
+   * Open the composer — `n`, the one key in the contextual tier that acts on
+   * nothing on screen. `Jobs.tsx`'s own prop, answered here too: the map
+   * already recognized the key, and this is what it now reaches.
+   */
+  onCompose: () => void;
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
   /**
@@ -95,6 +102,7 @@ export function OverviewLists({
   onKill,
   onRedispatch,
   onClear,
+  onCompose,
   onCopied,
   onCursor,
 }: OverviewListsProps) {
@@ -131,12 +139,14 @@ export function OverviewLists({
         if (job === undefined || isTerminal(job)) return;
         onKill(job.id);
         break;
+      case "compose":
+        onCompose();
+        break;
       case "search":
       case "tab":
       case "copy":
-      case "compose":
-        // No search field, no state tabs, nothing to copy, nowhere to open a composer from here —
-        // the map still recognizes the key; this screen has nothing to do with it yet.
+        // No search field, no state tabs, nothing to copy — the map still
+        // recognizes the key; this screen has nothing to do with it.
         return;
     }
     event.preventDefault();

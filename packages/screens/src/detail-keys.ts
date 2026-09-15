@@ -18,6 +18,7 @@
 // | `f` | `open_diff`, scope `detail` | open the Produced chapter to the diff |
 // | `b` | `report_job`, scope `detail` | open the dialog that says this job failed in error |
 // | `r` | `run`, scope `detail` | open the run sheet, nothing selected — Journey 9 |
+// | `n` | `new_job`, scope `anywhere` | open the composer — the Board's own key, answered the same way here |
 // | `Esc` | `back`, scope `detail` | the list, and `App.tsx` owns it |
 //
 // # It names what it opens, and holds what it opened
@@ -133,7 +134,9 @@ export type DetailPress =
   /** `T` — let this job take more turns. */
   | { act: "raiseTurns" }
   /** `r` — open the run sheet, nothing selected. */
-  | { act: "run" };
+  | { act: "run" }
+  /** `n` — open the composer. Scope `anywhere`, so detail answers it too. */
+  | { act: "compose" };
 
 /**
  * What a keypress means on job detail, or `null` for nothing.
@@ -196,6 +199,11 @@ export function detailPressOf(event: KeyboardEvent): DetailPress | null {
     // key on a row, this is detail's on the whole screen.
     case "r":
       return { act: "run" };
+    // `new_job`'s scope is `anywhere`, not `detail` — the one contextual key
+    // that acts on nothing on screen, so detail answers it exactly as the
+    // Board does rather than leaving it for a surface with a cursor on it.
+    case "n":
+      return { act: "compose" };
     default:
       return null;
   }
@@ -289,6 +297,13 @@ export type DetailShape = {
    * these two keys and not both.
    */
   onRaiseTurnCap?: () => void;
+  /**
+   * Open the composer — `n`. **Required, unlike `onReport` and the two
+   * ceilings above**: those answer only where the render offers the act, and
+   * `new_job`'s scope is `anywhere`, so this is always offered rather than
+   * conditional on the Job's state.
+   */
+  onCompose: () => void;
 };
 
 /** The open state this file holds, in the shape the screen takes it in. */
@@ -432,6 +447,9 @@ function act(press: DetailPress, shape: DetailShape, on: Moves): boolean {
       return raiseTurns(shape);
     case "run":
       return sheet(shape.onOpenRun);
+    case "compose":
+      shape.onCompose();
+      return true;
   }
 }
 

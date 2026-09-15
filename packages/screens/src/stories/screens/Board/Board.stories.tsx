@@ -154,6 +154,28 @@ export const KeyboardMovesTheCursorAndActs: Story = {
   },
 };
 
+/**
+ * `n` — `new_job`'s scope is `anywhere`, so the Board answers it with no row
+ * under the cursor at all. `actions.toml`'s own reading of the key, drawn
+ * from `keys.ts`'s `compose` act and answered in `Jobs.tsx`.
+ */
+export const DispatchKeyOpensTheComposer: Story = {
+  name: "Dispatch key opens the composer",
+  args: { onCompose: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.keyboard("n");
+    await expect(args.onCompose).toHaveBeenCalledTimes(1);
+
+    // Typing "n" into the search field is typing, not a shortcut — `holdsText`
+    // in `keys.ts` is the whole of that rule, and every single-key press goes
+    // through it.
+    const search = canvas.getByRole("searchbox", { name: "Search every job" });
+    await userEvent.type(search, "n");
+    await expect(args.onCompose).toHaveBeenCalledTimes(1);
+  },
+};
+
 /** Fleet holds no Jobs for this repository. */
 export const Empty: Story = { name: "Empty", args: { jobs: [] } };
 

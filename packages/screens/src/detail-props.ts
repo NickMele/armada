@@ -328,4 +328,11 @@ export type JobDetailProps = {
    */
   whereOpen: boolean;
   onOpenWhere: (open: boolean) => void;
+  /**
+   * Open the composer — `n` in `actions.toml`, scope `anywhere`. **The Board's
+   * own key, answered here too**: `new_job` is the one contextual act that
+   * acts on nothing on screen, so every contextual surface reaches the same
+   * composer through the same handler rather than each opening its own.
+   */
+  onCompose: () => void;
 };

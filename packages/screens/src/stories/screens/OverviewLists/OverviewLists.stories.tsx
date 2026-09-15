@@ -125,6 +125,20 @@ export const KeyboardMovesTheCursorAndActs: Story = {
 };
 
 /**
+ * `n` — the gap the owner found beside the one above: `keys.ts` already claimed the key here, but
+ * this screen answered it with a no-op because nothing had wired a composer to open. `new_job`'s
+ * scope is `anywhere`, so it answers with no row under the cursor at all, the same as the Board.
+ */
+export const DispatchKeyOpensTheComposer: Story = {
+  name: "Dispatch key opens the composer",
+  args: { onCompose: fn() },
+  play: async ({ args }) => {
+    await userEvent.keyboard("n");
+    await expect(args.onCompose).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
  * Overview 27's own fold (#1091), wired through this screen rather than pressed straight on
  * `ActiveJobsList` — proves `section.id` reaches the right panel's `open`/`onOpenChange`, which
  * `ActiveJobsList`'s own story cannot see from inside one list.

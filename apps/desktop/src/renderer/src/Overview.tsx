@@ -28,6 +28,7 @@ export function Overview({
   onKill,
   onRedispatch,
   onClear,
+  onCompose,
   onCopied,
   onCursor,
 }: {
@@ -46,6 +47,8 @@ export function Overview({
   onRedispatch: (jobId: string) => void;
   /** Ask to clear — Recently ended's caret, beside Redispatch. Asks; never clears. */
   onClear: (jobId: string) => void;
+  /** Open the composer — `n`, `OverviewLists`' own prop, passed straight through. */
+  onCompose: () => void;
   onCopied: (value: string) => void;
   /** Where the cursor is, reported up — `OverviewLists`' own state, mirrored. #1075. */
   onCursor?: (jobId: string | null) => void;
@@ -112,6 +115,7 @@ export function Overview({
           onKill={onKill}
           onRedispatch={onRedispatch}
           onClear={onClear}
+          onCompose={onCompose}
           onCopied={onCopied}
           onCursor={onCursor}
         />
