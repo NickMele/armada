@@ -631,7 +631,7 @@ function OneJob({
           <ChevronRight size={12} strokeWidth={2} aria-hidden />
         </button>
       }
-      // One animated mark per screen, on the thing being read — and nothing
+      // The running mark pulses in one place, on the thing being read, `[running-mark-scope]` — and nothing
       // pulses on a Job that is over, where "still working" is a claim no step
       // is making. **The pulse moves with the reading**: with a sheet open the
       // tree's current step is behind the layer, so its mark stops and the

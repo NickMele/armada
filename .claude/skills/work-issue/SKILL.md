@@ -101,6 +101,12 @@ was not its own.
 **Verify it yourself rather than on a report.** An agent's claim of green has
 been wrong here.
 
+**A filtered Check that prints nothing did not pass.** `armada check` reads
+`armada.yml` from the working directory. Confirmed 14 Sep 2026 on #1117: a
+typecheck run from `packages/components` could not read the file, and the
+`grep` for `passed|failed` around it printed nothing at all. Run Checks from
+the repository root, and read a silence as nothing having run.
+
 ### 5. Commit
 
 Read `.claude/skills/commit-message/SKILL.md`. Say what the diff cannot.
