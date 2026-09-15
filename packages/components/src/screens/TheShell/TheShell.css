@@ -39,6 +39,49 @@
   overflow: hidden;
 }
 
+/* The handle supplies its own margin in the gap it now occupies — #1094's
+   dock kept the whole 16px as its own left margin because nothing sat in it. */
+.armada-shell__work:has(.armada-shell__dock-handle) .armada-shell__dock {
+  margin-left: 0;
+}
+
+/* The dock's leading edge, drawn only where `onResize` is wired — an edge
+   that looks grabbable and does nothing would be worse than none. The hit
+   area is the whole 16px gap the dock's own margin used to spend alone; the
+   grip line at its centre is visible at rest — `--border-default`, one step
+   up from a divider's own `--border-subtle` since this is a control rather
+   than a rule — and brightens to `--border-strong` on hover, focus or drag,
+   never appearing from nothing. */
+.armada-shell__dock-handle {
+  flex: none;
+  align-self: stretch;
+  position: relative;
+  width: var(--space-2);
+  margin: var(--space-4) var(--space-1);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.armada-shell__dock-handle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  left: 50%;
+  width: var(--border-width);
+  background: var(--border-default);
+}
+
+.armada-shell__dock-handle:hover::before,
+.armada-shell__dock-handle:focus-visible::before,
+.armada-shell__dock-handle[data-dragging="true"]::before {
+  background: var(--border-strong);
+}
+
+.armada-shell__dock-handle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--border-width) * -2);
+}
+
 .armada-shell__dock-head {
   flex: none;
   display: flex;
