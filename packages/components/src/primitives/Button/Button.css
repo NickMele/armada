@@ -111,6 +111,21 @@
   background: var(--status-completed-failed-bg);
 }
 
+/* Tonal — chrome, not a list row's act. Same tokens as `SplitButton`'s own
+ * `tonal`: `--accent-muted` fill, `--accent-hover` text (never `--accent`,
+ * which reads too dim on the muted fill), no border. The title row's
+ * Dispatch is the one caller (#1156). */
+.armada-button[data-variant="tonal"] {
+  background: var(--accent-muted);
+  border-color: transparent;
+  color: var(--accent-hover);
+}
+
+.armada-button[data-variant="tonal"]:hover:not(:disabled),
+.armada-button[data-variant="tonal"][data-preview-hover] {
+  background: color-mix(in srgb, var(--accent) 24%, var(--accent-muted));
+}
+
 /* Focus is a 2px --accent ring at 2px offset, no glow — a resting edge and a
  * focus ring differ in colour, width and position. */
 .armada-button:focus-visible,

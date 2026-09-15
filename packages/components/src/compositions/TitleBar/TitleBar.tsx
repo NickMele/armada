@@ -1,8 +1,8 @@
 import { MessageSquare, Plus, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { ArmadaLockupHorizontal } from "@armada/brand";
+import { Button } from "../../primitives/Button/Button";
 import { Kbd } from "../../primitives/Kbd/Kbd";
-import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 
 /**
  * The title row — what used to be macOS's grey bar saying only "Armada".
@@ -25,13 +25,12 @@ export type TitleBarProps = {
   /** Opens the command palette. The same surface ⌘K opens; this is the other way in. */
   onSearch?: () => void;
   /**
-   * Opens the composer. **Both segments of Dispatch call this.**
+   * Opens the composer.
    *
    * The Board's own menu (Refresh, Reported, Held disk, Settings, the
-   * two bulk acts) stays on the Board's own head — nothing here belongs behind
-   * a caret yet. `SplitButton`'s empty-`items` mode is what draws a caret with
-   * nothing behind it: it calls `onDispatch` directly rather than opening a
-   * menu with nothing in it.
+   * two bulk acts) stays on the Board's own head — Dispatch here is a plain
+   * button, not a split one. #1156: a `SplitButton` with nothing behind its
+   * caret still drew a caret, so a person saw a menu that was not there.
    */
   onDispatch?: () => void;
   /** Disabled while nothing is connected to dispatch into. */
@@ -71,17 +70,15 @@ export function TitleBar({
         )}
 
         {onDispatch === undefined ? null : (
-          <SplitButton
-            variant="tonal"
-            size="sm"
-            icon={<Plus size={16} strokeWidth={2} aria-hidden />}
-            items={[]}
-            onAction={onDispatch}
-            disabled={dispatchDisabled}
-            menuLabel="Dispatch a job"
-          >
-            Dispatch
-          </SplitButton>
+          // Wrapped, not styled directly: `Button` takes no `className` to
+          // carry a title-bar-only no-drag hook on, same reasoning as the
+          // picker below. #1156.
+          <div className="armada-title-bar__dispatch">
+            <Button variant="tonal" size="sm" onClick={onDispatch} disabled={dispatchDisabled}>
+              <Plus size={16} strokeWidth={2} aria-hidden />
+              Dispatch
+            </Button>
+          </div>
         )}
       </div>
 

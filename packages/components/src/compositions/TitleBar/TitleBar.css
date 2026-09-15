@@ -29,15 +29,13 @@
  * inside it is draggable by default, and the row's own background is what a
  * person actually grabs the window by.
  *
- * Dispatch is `SplitButton` rendered directly (#1121 dropped the wrapper
- * `<div>` this opt-out used to name), and `SplitButton` takes no `className`
- * to carry a title-bar-only hook on — scoped to `__center` rather than a bare
- * `.armada-split-button`, so a `SplitButton` anywhere else stays exactly as
- * draggable as its own container says. */
+ * Dispatch is `Button` (#1156 dropped the caret-drawing `SplitButton`), and
+ * `Button` takes no `className` to carry a title-bar-only hook on — same as
+ * the picker below, it gets a wrapper `<div>` this row owns itself. */
 .armada-title-bar__picker,
 .armada-title-bar__search,
 .armada-title-bar__helm,
-.armada-title-bar__center .armada-split-button {
+.armada-title-bar__dispatch {
   -webkit-app-region: no-drag;
 }
 
@@ -74,6 +72,14 @@
   gap: var(--space-3);
   justify-self: center;
   min-width: 0;
+}
+
+/* A bare wrapper around `Button` — see the no-drag rule above for why it
+ * exists — so it takes no layout of its own beyond staying out of the flex
+ * item's stretch. */
+.armada-title-bar__dispatch {
+  flex: none;
+  display: flex;
 }
 
 /* The search field is a button that opens the same palette ⌘K does — the
