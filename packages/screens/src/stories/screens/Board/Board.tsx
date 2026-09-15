@@ -34,6 +34,7 @@ export function BoardFrom({
   picked,
   onOpen = noop,
   onKill = noop,
+  onCompose = noop,
 }: {
   jobs: readonly JobSummary[];
   workflows: readonly WorkflowSummary[];
@@ -48,6 +49,8 @@ export function BoardFrom({
   onOpen?: (jobId: string) => void;
   /** Ask to kill the Job under the cursor — a story spies on this the same way. */
   onKill?: (jobId: string) => void;
+  /** Open the composer — `n`, a story spies on this the same way. */
+  onCompose?: () => void;
 }) {
   const statement = statementOf(connection, now, now);
   const live = connection.state === "connected";
@@ -109,7 +112,7 @@ export function BoardFrom({
             onKill={onKill}
             onRedispatch={noop}
             onClear={noop}
-            onCompose={noop}
+            onCompose={onCompose}
             actions={boardActions}
             onCopied={noop}
           />

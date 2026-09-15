@@ -73,6 +73,7 @@ export function OverviewListsFrom({
   onSectionOpenChange,
   onOpen = noop,
   onKill = noop,
+  onCompose = noop,
   onCursor,
 }: {
   jobs?: readonly JobSummary[];
@@ -89,6 +90,8 @@ export function OverviewListsFrom({
   onOpen?: (jobId: string) => void;
   /** Ask to kill the Job under the cursor — a story spies on this the same way. */
   onKill?: (jobId: string) => void;
+  /** Open the composer — `n`, a story spies on this the same way. */
+  onCompose?: () => void;
   onCursor?: (jobId: string | null) => void;
 }) {
   return (
@@ -107,6 +110,7 @@ export function OverviewListsFrom({
       onKill={onKill}
       onRedispatch={noop}
       onClear={noop}
+      onCompose={onCompose}
       onCopied={noop}
       onCursor={onCursor}
     />

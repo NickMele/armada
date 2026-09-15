@@ -132,5 +132,6 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     // story is a reading of one moment and no Fleet is behind it.
     whereOpen: false,
     onOpenWhere: noop,
+    onCompose: noop,
   };
 }

@@ -165,6 +165,7 @@ function OneJob({
   onAddTask,
   onDropTask,
   rehearsal,
+  onCompose,
 }: JobDetailProps) {
   // Which step the panel is showing. **The whole of navigation inside a Job**:
   // `null` means the one Fleet says is current, so a Job that moves on carries
@@ -346,6 +347,9 @@ function OneJob({
     // `T`, on the other ceiling. The two are exclusive because `budget_hold`
     // is, so a job held for turns answers this key and not `B`.
     ...(heldForTurns(job) && !stale ? { onRaiseTurnCap: () => setRaisingTurns(true) } : {}),
+    // `n`, scope `anywhere` — the Board's own key. Detail answers it with the
+    // same handler the caller wired the Board's row to.
+    onCompose,
   });
 
   // The rest of any call argument the socket cut, for as long as this Job is

@@ -700,6 +700,8 @@ export function App() {
                 onSaid={setTelling}
                 whereOpen={whereOpen}
                 onOpenWhere={pressWhereOpen}
+                // `n` — the same composer every contextual surface opens.
+                onCompose={() => setComposing(true)}
                 // The run sheet — Journey 9 — and the servers it starts.
                 rehearsal={{
                   runSheet: state.runSheet,
@@ -842,6 +844,7 @@ export function App() {
               // `reclaim_worktree` is that header's own word for Clear.
               onRedispatch={(jobId) => setConfirming({ act: "redispatch", jobId })}
               onClear={(jobId) => setConfirming({ act: "reclaim_worktree", jobId })}
+              onCompose={() => setComposing(true)}
               onCopied={setCopied}
               onCursor={setOverviewCursor}
             />
