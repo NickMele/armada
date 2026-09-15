@@ -373,6 +373,13 @@ where
             let held = self.load(&job_id).await?;
             self.compose_review_at_gate(&held, &step, &worktree).await;
         }
+        // #796: the ruling is fully applied, so the durable row this
+        // submission survived a restart under is no longer needed.
+        self.store()
+            .lock()
+            .await
+            .forget_pending_evidence(&job_id)
+            .map_err(Adrift::Writing)?;
         Ok(Settled::ruling(ruling))
     }
 
@@ -464,6 +471,12 @@ where
         // on the way out: a submission left behind would be declined at a guard
         // with nothing new to say, on every turn, for ever.
         self.take_evidence(job_id);
+        // #796: given up for good, so its durable row goes with it.
+        self.store()
+            .lock()
+            .await
+            .forget_pending_evidence(job_id)
+            .map_err(Adrift::Writing)?;
         self.unreachable(job_id).await?;
         Ok(Settled::declining(why))
     }

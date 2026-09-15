@@ -130,6 +130,12 @@ where
         reconciled
             .mended
             .extend(self.mended_wedged_reviews(&mut jobs).await?);
+        // Before the Drone-adoption pass below, for the same reason: a
+        // ruling here can move a Job or leave a stale Drone pointer, and the
+        // pass right after has to see the result. #796.
+        reconciled
+            .recovered_evidence
+            .extend(self.ruled_on_pending_evidence(&mut jobs).await?);
         // Every **step** the store says holds a Drone, whatever status its Job
         // is under. A Drone is spoken to through a pipe the Fleet that spawned
         // it holds, so this Fleet has none of them — and `assigned_drone` is

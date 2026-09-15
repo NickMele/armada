@@ -516,7 +516,8 @@ where
                 // submission is waiting and this arm is not the one reached.
                 // Said out loud on the arm it is not reached from, because the
                 // one drop nobody wrote down is the defect this pair closes.
-                self.dropped_with_the_job(&job_id, self.empty_the_inbox(&job_id));
+                let dropped = self.empty_the_inbox(&job_id).await;
+                self.dropped_with_the_job(&job_id, dropped);
             }
             // The idle Drone of a Job a person is already holding. Its going is
             // the only fact, and it is what turns a redirect into a restart.
@@ -532,7 +533,8 @@ where
                 // Reachable, unlike its neighbour: a Job that stopped while its
                 // Drone was still submitting leaves evidence with no step to be
                 // against. It goes, and the Job's log says it went.
-                self.dropped_with_the_job(&job_id, self.empty_the_inbox(&job_id));
+                let dropped = self.empty_the_inbox(&job_id).await;
+                self.dropped_with_the_job(&job_id, dropped);
             }
             Aftermath::TheGateDecides => {}
         }
@@ -625,7 +627,7 @@ where
             None => None,
         };
         if let Some(job_id) = ended {
-            let dropped = self.empty_the_inbox(&job_id);
+            let dropped = self.empty_the_inbox(&job_id).await;
             self.dropped_with_the_job(&job_id, dropped);
         }
     }

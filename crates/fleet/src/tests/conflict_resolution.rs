@@ -133,9 +133,10 @@ fn main_moved_with_a_conflict(fleet: &Fixture, onto: &str) {
 }
 
 /// Turn until a Drone is on `step`. **Turned for, not assumed**: under a full
-/// suite's load one turn does not always see the spawn through.
+/// suite's load one turn does not always see the spawn through — widened
+/// from 8, which a loaded machine could still exhaust.
 async fn until_a_drone_is_on(fleet: &Fixture, job_id: &JobId, step: &str) {
-    for _ in 0..8 {
+    for _ in 0..32 {
         fleet.turn().await.expect("a turn");
         let job = fleet.load(job_id).await.expect("the Job reads");
         let on = job.step(&StepId::new(step));
