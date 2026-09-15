@@ -723,6 +723,15 @@ export type StepDetail = {
    * Absent on every step that sends nothing back, and where Fleet cannot say.
    */
   pass?: StepPass;
+  /**
+   * Where this step goes on a verdict that neither advances nor ends, naming
+   * the step rather than the verdict. **On the step that sends the work
+   * back**, `pass`'s own step — a client drawing a loop's arrow needs both:
+   * this says where it points, `pass.of` says how many times it may be drawn.
+   * Absent on every step that sends nothing back, and where Fleet cannot say,
+   * as `checks` is. Since 14.3, #1149.
+   */
+  verdict_routing_target?: string;
   /** Absent until a gate has ruled on the step. */
   last_verdict?: Verdict;
   /**

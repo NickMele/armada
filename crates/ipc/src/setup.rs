@@ -94,6 +94,20 @@ pub struct WorkflowStep {
     /// before a dispatch. Since 13.48, #849.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub held_for_handoff: Vec<String>,
+    /// Where this step goes on a verdict that neither advances nor ends —
+    /// `structure: loop`'s edge. **This is the fact `structure` alone cannot
+    /// give**: a `loop` workflow says a step returns to an earlier one, and
+    /// only `verdict_routing` says which. `None` on every step of a linear
+    /// workflow, which is most steps of most workflows. Since 14.3, #1149.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict_routing_target: Option<StepId>,
+    /// How many times this step may be returned to before the Job escalates.
+    /// **Present exactly where [`verdict_routing_target`](Self::verdict_routing_target)
+    /// is** — a target with no cap could not stop, and a cap on a step that
+    /// routes nowhere would answer a question a preview never asks. Since
+    /// 14.3, #1149.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iteration_cap: Option<u32>,
 }
 
 /// One workflow Fleet holds, as a picker offers it.
