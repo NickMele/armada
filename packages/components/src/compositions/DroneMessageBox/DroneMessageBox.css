@@ -1,0 +1,28 @@
+/* The message box fixed under an activity log. #1154. */
+.armada-drone-message-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-drone-message-box__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-drone-message-box__row > .armada-textarea-field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The disabled reason and the waiting sentence share one line under the
+   field's own controls: only one of the two is ever true at once. */
+.armada-drone-message-box__said {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

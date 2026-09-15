@@ -78,6 +78,11 @@ export type ActivityLogSheetProps = {
   jobId?: ReactNode;
   /** The stream, drawn by whichever log the caller's surface already uses. */
   children: ReactNode;
+  /**
+   * The message box, fixed under the stream rather than scrolling with it —
+   * `Sheet`'s own `footer` slot. #1154. Absent draws the sheet as it was.
+   */
+  footer?: ReactNode;
   /** How many the stream holds, which is not how many are drawn. */
   total: number;
   /** Whether rows are still arriving. The live mark, and the pulse with it. */
@@ -106,6 +111,7 @@ export function ActivityLogSheet({
   step,
   jobId,
   children,
+  footer,
   total,
   live = false,
   endedAt,
@@ -175,6 +181,7 @@ export function ActivityLogSheet({
       closeLabel="Close"
       closeBinding="Esc"
       bleed
+      footer={footer}
       bands={
         <>
           {escalation === undefined ? null : (

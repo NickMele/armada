@@ -209,6 +209,7 @@ function screen(
     <StepStory
       chapters={chaptersOf({
         job: summary,
+        whole: null,
         step: showing,
         steps: [showing],
         criteria,
@@ -224,6 +225,7 @@ function screen(
         sheet: null,
         opens: records,
         onOpenSheet: () => {},
+        onRedirect: () => {},
         now: NOW,
         // #1021 — a press reports which Check and stops. Opening it, live or
         // kept, is `Sheets.tsx`'s, once a press has named it.

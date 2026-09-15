@@ -436,6 +436,7 @@ function OneJob({
     const ended = over ? wroteIn(read.turns) : undefined;
     return chaptersOf({
       job,
+      whole,
       step,
       // Every step, in the frozen workflow's order, for the Drone brief's
       // `steps` section. Same nullable read as `criteria` below: a Job
@@ -469,6 +470,7 @@ function OneJob({
       // two would be two vocabularies for one failed open — #307.
       opens: opensRecords,
       onOpenSheet: openSheet,
+      onRedirect,
       now,
       // Scoped to the step `stuck` is actually about — a reader may have
       // navigated to a different step, and `stuck.undecided` is not that
@@ -750,6 +752,7 @@ function OneJob({
             outputs={outputs}
             following={following}
             onHold={(to) => move({ move: "hold", held: to })}
+            onRedirect={onRedirect}
             // The full reading, unchanged from what the run column used to
             // draw — `Look now` came with it, because it acts on this reading
             // and not on the five lines that open it.

@@ -39,6 +39,7 @@ import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/prot
 import type { Calls } from "./calls";
 import { checkSheetOf } from "./checks";
 import { DecidedDiff } from "./Decide";
+import { DroneMessageControl } from "./DroneMessage";
 import { clock } from "./duration";
 import { WorkGrouped } from "./grouped";
 import {
@@ -143,6 +144,8 @@ export type DetailSheetProps = {
    * the strip it belongs to stayed up saying the tail was not being followed.
    */
   onHold: (held: HeldAt | null) => void;
+  /** Sends a redirect, from the log sheet's own message box. #1154. */
+  onRedirect: (jobId: string, instruction: string) => void;
   /**
    * The full machine reading, exactly as the panel used to draw it — every
    * state and every argument, `Look now` included. Built by the caller, because
@@ -179,6 +182,7 @@ export function DetailSheet({
   outputs,
   following,
   onHold,
+  onRedirect,
   holds,
   settings,
   run,
@@ -218,6 +222,11 @@ export function DetailSheet({
         arrived={held === null ? 0 : Math.max(rows.length - held.rows, 0)}
         onJumpToNow={() => onHold(null)}
         escalation={escalationOf(job, whole, step, onClose)}
+        // Fixed under the stream in `Sheet`'s own footer slot, so it holds its
+        // place while the body above it scrolls — #1154, and the reason #1155
+        // has to land after it: "the tail" is the last row above this box, not
+        // the row this box would otherwise sit on top of.
+        footer={<DroneMessageControl job={job} whole={whole} onRedirect={onRedirect} />}
         onClose={onClose}
       >
         {/* The sheet is the whole log, so a socket that stopped says so here
