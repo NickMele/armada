@@ -159,13 +159,16 @@ describe("a step being worked again", () => {
   it("says the Judge is being asked while the call is out", () => {
     const judging = {
       look: "criterion",
+      criterion_id: "implements_the_scope",
       model: "sonnet",
-      call: 1,
-      of: 2,
-      since: "2026-09-12T18:10:48Z",
+      call: 2,
+      of: 5,
+      since: "2026-09-11T09:59:20Z",
       budget_ms: 120000,
     };
-    expect(factsOf(retrying({ judging })).get("Judge")).toBe("asking · 1 criterion");
+    expect(factsOf(retrying({ judging })).get("Judge")).toBe(
+      "asking implements_the_scope · call 2 of 5 · sonnet · 40s",
+    );
   });
 
   it("draws no verdict, because the one on the wire ruled the attempt before", () => {

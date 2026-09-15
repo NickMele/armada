@@ -221,6 +221,56 @@ describe("the gate's rows", () => {
   });
 });
 
+// #1153: the Judge row named only the declared count while a call was out,
+// for as long as it took. `judging` carries the call itself.
+describe("the Judge row while a call is out", () => {
+  it("names the criterion, the call count, the model and the elapsed time", () => {
+    const step = handedBack({
+      judge_checks: [{ criteria: 2, gaming_check: false }],
+      judging: {
+        look: "criterion",
+        criterion_id: "implements_the_scope",
+        model: "sonnet",
+        call: 2,
+        of: 5,
+        since: "2026-09-10T14:29:20Z",
+        budget_ms: 120000,
+      },
+    });
+    const [, second] = timelineOf(step, [], NOW);
+    const row = second?.rows.find((one) => one.phase === "judge");
+    expect(row?.meta).toBe("asking implements_the_scope · call 2 of 5 · sonnet · 40s");
+    expect(row?.mark).toBe("running");
+    expect(row?.live).toBe(true);
+  });
+
+  it("names the pattern instead, on a gaming call", () => {
+    const step = handedBack({
+      judge_checks: [{ criteria: 0, gaming_check: true }],
+      judging: {
+        look: "gaming",
+        pattern: "assertion_weakened",
+        model: "sonnet",
+        call: 1,
+        of: 1,
+        since: "2026-09-10T14:29:20Z",
+        budget_ms: 120000,
+      },
+    });
+    const [, second] = timelineOf(step, [], NOW);
+    const row = second?.rows.find((one) => one.phase === "judge");
+    expect(row?.meta).toBe("asking assertion_weakened · call 1 of 1 · sonnet · 40s");
+  });
+
+  it("says only the declared count on a step with no call out", () => {
+    const step = handedBack({ judge_checks: [{ criteria: 2, gaming_check: false }] });
+    const [, second] = timelineOf(step, [], NOW);
+    const row = second?.rows.find((one) => one.phase === "judge");
+    expect(row?.meta).toBe("2 criteria, not asked");
+    expect(row?.live).toBeUndefined();
+  });
+});
+
 describe("what an attempt that has ended keeps", () => {
   const wroteFirst = producedTurn("regression_verify", "2026-09-10T14:23:30Z", [
     { path: "crates/settings/src/hold.rs", change: "modified" },

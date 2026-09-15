@@ -183,7 +183,7 @@ export function timelineOf(
     ];
     const gate = [
       checksRow(step, attempt, runs, current),
-      judgeRow(step, attempt, ruled, current),
+      judgeRow(step, attempt, ruled, current, now),
       gamingRow(asAttempt(step, attempt, ended, current), attempt, current),
     ];
     for (const row of gate) if (row !== undefined) rows.push(row);
@@ -395,9 +395,11 @@ function judgeRow(
   attempt: StepAttempt,
   ruled: Judged[],
   current: boolean,
+  now: number,
 ): TimelineRow | undefined {
   const asked = askedOf(step);
-  const asking = current && step.judging !== undefined;
+  const judging = current ? step.judging : undefined;
+  const asking = judging !== undefined;
   const criteria = new Map<string, boolean>();
   for (const one of ruled) {
     criteria.set(one.criterion_id, (criteria.get(one.criterion_id) ?? true) && one.verdict === "met");
@@ -410,12 +412,16 @@ function judgeRow(
   // asked a Judge about has no Judge phase, rather than a phase reporting that
   // it does not exist.
   if (asked === 0 && step.judged.length === 0 && !asking) return undefined;
+  // **A call in flight leads even where nothing is declared.** A gaming or
+  // convergence look asks nobody's criterion, so `asked` reads `0` on a step
+  // that is, right now, out on a call — and that call, not "no judge
+  // declared", is what a person watching wants to read.
   const meta =
     criteria.size === 0
-      ? asked === 0
-        ? "no judge declared"
-        : asking
-          ? judgeAsking(step)
+      ? judging !== undefined
+        ? judgeAsking(judging, now)
+        : asked === 0
+          ? "no judge declared"
           : `${asked} ${asked === 1 ? "criterion" : "criteria"}, not asked`
       : refused > 0
         ? `${refused} of ${criteria.size} refused`

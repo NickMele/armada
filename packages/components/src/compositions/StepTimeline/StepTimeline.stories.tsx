@@ -216,6 +216,63 @@ export const Advanced: Story = {
 };
 
 /**
+ * A criterion call is out. #1153: the Judge phase used to say only
+ * `asking · 2 criteria` for as long as the call took, whichever one it was.
+ */
+export const JudgeAskingCriterion: Story = {
+  name: "Judge asking a criterion",
+  args: {
+    label: "Where this step is",
+    attempts: [
+      {
+        id: "1",
+        name: "Attempt 1",
+        current: true,
+        rows: [
+          { id: "a", name: "Instructed", activity: "advanced", body: body("The brief.") },
+          { id: "b", name: "Working", activity: "advanced", meta: "351 calls · 43m 37s · 36 files", body: body("What it did.") },
+          { id: "c", name: "Checks", activity: "advanced", meta: "8 of 8 passed", body: body("Every Check passed.") },
+          {
+            id: "d",
+            name: "Judge",
+            activity: "running",
+            live: true,
+            meta: "asking implements_the_scope · call 2 of 5 · sonnet · 40s",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+/** The same call in flight, over a gaming look — named by the pattern instead. */
+export const JudgeAskingGaming: Story = {
+  name: "Judge asking about gaming",
+  args: {
+    label: "Where this step is",
+    attempts: [
+      {
+        id: "1",
+        name: "Attempt 1",
+        current: true,
+        rows: [
+          { id: "a", name: "Instructed", activity: "advanced", body: body("The brief.") },
+          { id: "b", name: "Working", activity: "advanced", meta: "351 calls · 43m 37s · 36 files", body: body("What it did.") },
+          { id: "c", name: "Checks", activity: "advanced", meta: "8 of 8 passed", body: body("Every Check passed.") },
+          {
+            id: "d",
+            name: "Judge",
+            activity: "running",
+            live: true,
+            meta: "asking assertion_weakened · call 1 of 1 · sonnet · 12s",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+/**
  * Before the step has come back.
  *
  * **The names are known and the standing is not.** A phase's name comes off the
