@@ -199,8 +199,7 @@ export const WhatEachCallDid: Story = {
 /**
  * A Drone thinking now. The last run is the one that can still be happening, so
  * it is the one that says **Working** and the only mark that moves — a run with
- * rows after it already ended, and the contract allows one animated mark per
- * screen.
+ * rows after it already ended.
  */
 export const ADroneThinking: Story = {
   args: {

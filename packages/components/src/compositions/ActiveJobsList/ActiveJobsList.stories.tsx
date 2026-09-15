@@ -296,7 +296,7 @@ export const Selectable: Story = {
  * **Both rows read as running and one of them breathes.** Hue says which Jobs
  * are running, on both; the pulse says *still working*, and the Motion section
  * asks that of the row being read and no other. Two marks at
- * `--duration-pulse` is what its first sentence forbids, and it is what this
+ * `--duration-pulse` is what that scope avoids, and it is what this
  * list drew for as long as the pulse followed the status — invisibly, because
  * a second running row was unreachable.
  *

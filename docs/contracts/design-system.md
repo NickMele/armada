@@ -1885,6 +1885,16 @@ is verification source=Check with actor=Drone.
 
 ## Open questions
 
+- **[running-mark-scope]** Should every running row's mark pulse, and should
+  the step keep pulsing behind an open sheet? Today the running mark pulses in
+  one place per screen: the focused row on a list, the rail's current step on
+  Job detail, and the sheet's live mark while a sheet is up. That scope was a
+  consequence of one-animation-per-screen, which is no longer a rule, so it is
+  now a choice. Every row pulsing says which Jobs are still working without
+  moving the cursor, at the cost of as many marks breathing as Jobs running;
+  a control waiting on Fleet already sweeps its own bar beside them.
+  `JobRowStacked`, `Row.tsx` and `JobDetail.tsx` carry the scope today.
+
 - **[pilot-exit-bindings]** What are the keys for Close as superseded and
   Override the verdict? Every action owes a verb, an icon and a shortcut, and
   these two have no binding. Both end or overrule a Job's record, so neither

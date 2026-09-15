@@ -42,8 +42,8 @@ export const RovingOption = createContext<Roving | null>(null);
  *
  * **The badge carries the pulse; the bar never does.** It sits in the same
  * fixed column on every row, so the motion appears in one predictable place
- * rather than moving with the workflow's length. The rule is one pulse per
- * screen, on the most specific mark present — so on job detail the rail takes
+ * rather than moving with the workflow's length. The running mark pulses in one
+ * place per screen, on the most specific mark present — so on job detail the rail takes
  * it and this badge goes static, which is what `pulsing` is for.
  *
  * **Inside a roving list the pulse follows the cursor, not the status.** This
@@ -274,7 +274,7 @@ export function JobRowStacked({
   const roving = useContext(RovingOption);
   const onCursor = roving === null || roving.index === roving.active;
   const tabIndex = !opens ? undefined : onCursor ? 0 : -1;
-  // One animated mark per screen. `pulsing` says this Job is running; the
+  // The running mark pulses in one place per screen, `[running-mark-scope]`. `pulsing` says this Job is running; the
   // cursor says which running row is being read, and only that one breathes.
   const pulses = pulsing && onCursor;
   // Long enough that the badge needs its own line at the 720px floor (#984).

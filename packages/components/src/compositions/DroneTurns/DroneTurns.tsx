@@ -173,8 +173,7 @@ export function DroneTurns({ turns, emptyNote, live = false }: DroneTurnsProps) 
             key={entry.turns[0].id}
             turns={entry.turns}
             // Only the last run can still be happening: a run with rows after
-            // it already ended, and the contract allows one animated mark per
-            // screen anyway.
+            // it already ended.
             working={live && at === entries.length - 1}
             open={open.has(entry.turns[0].id)}
             onToggle={() => setOpen(toggled(open, entry.turns[0].id))}

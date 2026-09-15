@@ -316,8 +316,8 @@ export function Row({
       handle={job.handle}
       fields={facts}
       // **Every running row, and the row applies the ceiling.** Two Jobs run
-      // at once now, so this alone would breathe twice on one board — which
-      // Motion forbids and then names: the pulse rides the focused row. The
+      // at once now, so this alone would breathe twice on one board, and the
+      // running mark pulses on the focused row only, `[running-mark-scope]`. The
       // row knows where the cursor is and this does not, so the rule is its.
       pulsing={job.status === "running" && !stale}
       dimmed={stale}
