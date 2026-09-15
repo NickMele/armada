@@ -1,5 +1,5 @@
 import { MessageSquare } from "lucide-react";
-import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { BoardEmptyState } from "../../compositions/BoardEmptyState/BoardEmptyState";
 import { FleetPanel, type FleetPanelProps } from "../../compositions/FleetPanel/FleetPanel";
 import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
@@ -192,11 +192,16 @@ const DOCK_WIDTH_STEP = 16;
  */
 function DockHandle({ width, onResize }: { width: number; onResize: (width: number) => void }) {
   const drag = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+  // Only for the line's own intensified colour while dragging — `:hover` drops
+  // the moment the cursor leaves the 8px hit area, which a fast drag does
+  // almost at once, and the grip going dim mid-drag would read as let go.
+  const [dragging, setDragging] = useState(false);
 
   function pointerDown(event: PointerEvent<HTMLDivElement>): void {
     if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: width };
+    setDragging(true);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     // Suppressing the drag's own text selection also suppresses the focus a
@@ -215,6 +220,7 @@ function DockHandle({ width, onResize }: { width: number; onResize: (width: numb
   function endDrag(event: PointerEvent<HTMLDivElement>): void {
     if (drag.current?.pointerId !== event.pointerId) return;
     drag.current = null;
+    setDragging(false);
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
   }
@@ -239,6 +245,7 @@ function DockHandle({ width, onResize }: { width: number; onResize: (width: numb
       aria-valuenow={Math.round(width)}
       aria-valuemin={Math.round(min)}
       aria-valuemax={Math.round(max)}
+      data-dragging={dragging || undefined}
       tabIndex={0}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
