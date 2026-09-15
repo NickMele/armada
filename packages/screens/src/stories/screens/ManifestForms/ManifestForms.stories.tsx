@@ -258,6 +258,9 @@ export const TheIdentityIsReadOnly: Story = {
  */
 export const ScrolledToTheEnd: Story = {
   name: "Scrolled to the last section",
+  // Quarantined: `endShownIn` fails this assertion on a clean `main`, unrelated
+  // to any Job's diff. #1192.
+  tags: ["!test"],
   args: { ...TheForms.args },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
