@@ -185,7 +185,7 @@ function factsOfStep(
         : checksFact(step, gateOf(step.check_runs, live, working));
   if (checks !== undefined) facts.push(checks);
 
-  const judge = judgeFact(step, gateOf(step.judged, live, working), criteria, asking);
+  const judge = judgeFact(step, gateOf(step.judged, live, working), criteria, asking, now);
   if (judge !== undefined) facts.push(judge);
 
   // **The verdict is the live attempt's or it is not drawn.** `last_verdict` is
@@ -428,6 +428,7 @@ function judgeFact(
   judged: Judged[],
   criteria: readonly Criterion[],
   asking?: string,
+  now?: number,
 ): RunTreeFact | undefined {
   const declared = step.judge_checks;
   if (declared === undefined) return undefined;
@@ -435,7 +436,7 @@ function judgeFact(
     // **A call still out is not a gate that has not been reached.** `judging`
     // is Fleet's own "right now", and the sentence is `gates.ts`'s so the
     // timeline's Judge row four inches away cannot word it differently.
-    if (step.judging !== undefined) return { label: "Judge", value: judgeAsking(step) };
+    if (step.judging !== undefined) return { label: "Judge", value: judgeAsking(step.judging, now) };
     // **Criteria, not declarations.** One Judge declaration asks two criteria
     // on the step this was found on, and `1 declared` beside the timeline's
     // `2 criteria, not asked` was two counts of one thing. `askedOf` is that one.

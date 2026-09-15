@@ -27,11 +27,13 @@ import type {
   CheckUnderway,
   Criterion,
   DeclaredCheck,
+  JudgeInFlight,
   Judged,
   StepDetail,
 } from "@armada/protocol";
 
 import { isSweepMarker, nameOf } from "./declared";
+import { span } from "./duration";
 import { onlyCurrentAttempt } from "./facts";
 
 /**
@@ -297,8 +299,8 @@ export type Panel = {
   refused: Judged[];
   /**
    * Unanimity, from `docs/concepts/judge.md`: one veto refuses the criterion.
-   * **`asking` is a live `JudgeQuestion` holding this criterion open** —
-   * neither met nor refused yet, since protocol 11.1.
+   * **`asking` is a live `JudgeQuestion`, or `step.judging`'s own call** —
+   * neither met nor refused yet. #1153.
    */
   verdict: "met" | "not_met" | "asking";
 };
@@ -313,6 +315,8 @@ export type Panel = {
  *
  * **Narrowed to the current attempt.** `judged` holds every attempt's rows
  * since protocol 7.0, and both surfaces draw the live gate.
+ *
+ * **Falls back to `step.judging`'s own criterion.** #1153.
  */
 export function panelsOf(
   step: StepDetail,
@@ -324,7 +328,7 @@ export function panelsOf(
    */
   asking?: string,
 ): Panel[] {
-  return panelsFrom(onlyCurrentAttempt(step.judged), criteria, asking);
+  return panelsFrom(onlyCurrentAttempt(step.judged), criteria, asking ?? step.judging?.criterion_id);
 }
 
 /**
@@ -424,15 +428,22 @@ export function askedOf(step: StepDetail): number {
 }
 
 /**
- * What a Judge still out says — `asking · 2 criteria`.
+ * What a Judge call out right now says — `asking implements_the_scope · call
+ * 2 of 5 · sonnet · 40s`.
  *
- * **One sentence, because two surfaces say it.** The timeline's Judge row and
- * the run tree's Judge fact both draw a step whose panel is being asked, and a
- * call in flight reading two ways in one panel is the drift this file holds.
+ * **One sentence for both surfaces that draw a call in flight.** #1153: the
+ * target is `criterion_id` or `pattern`, the raw id and never the question —
+ * #653 carries that.
  */
-export function judgeAsking(step: StepDetail): string {
-  const asked = askedOf(step);
-  return `asking · ${asked} ${asked === 1 ? "criterion" : "criteria"}`;
+export function judgeAsking(judging: JudgeInFlight, now: number | undefined): string {
+  const what = judging.criterion_id ?? judging.pattern;
+  const elapsed = now === undefined ? null : span(judging.since, now);
+  return [
+    what === undefined ? "asking" : `asking ${what}`,
+    `call ${judging.call} of ${judging.of}`,
+    judging.model,
+    ...(elapsed === null ? [] : [elapsed]),
+  ].join(" · ");
 }
 
 /**

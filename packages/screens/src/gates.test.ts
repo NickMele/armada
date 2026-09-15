@@ -11,13 +11,14 @@
 // below is a case the two would have answered differently.
 
 import { describe, expect, it } from "vitest";
-import type { Criterion, Judged, StepDetail } from "@armada/protocol";
+import type { Criterion, JudgeInFlight, Judged, StepDetail } from "@armada/protocol";
 
 import { citationsOf, givenTo } from "./cited";
 import { assertedIn } from "./asserted";
 import {
   checksFromAttempt,
   checksOf,
+  judgeAsking,
   judgeFromAttempt,
   outputOf,
   outputRunOf,
@@ -462,6 +463,49 @@ describe("a panel, read as one row per criterion", () => {
     );
     expect(panels.map((panel) => panel.criterionId)).toEqual(["c2", "c1"]);
   });
+
+  // #1153: before the fallback, the criterion `step.judging` was out on drew
+  // no row at all until `judged` had one for it.
+  it("draws the criterion step.judging is out on, marked asking, before it is judged", () => {
+    const panels = panelsOf(
+      step({
+        judged: [judged({ criterion_id: "c1" })],
+        judging: {
+          look: "criterion",
+          criterion_id: "c2",
+          model: "sonnet",
+          call: 1,
+          of: 2,
+          since: "2026-09-09T09:40:00Z",
+          budget_ms: 120000,
+        },
+      }),
+      CRITERIA,
+    );
+    const asking = panels.find((panel) => panel.criterionId === "c2");
+    expect(asking?.verdict).toBe("asking");
+    expect(asking?.members).toEqual([]);
+  });
+
+  it("leaves a live JudgeQuestion's criterion in charge over a call in flight", () => {
+    const panels = panelsOf(
+      step({
+        judged: [],
+        judging: {
+          look: "criterion",
+          criterion_id: "c2",
+          model: "sonnet",
+          call: 1,
+          of: 2,
+          since: "2026-09-09T09:40:00Z",
+          budget_ms: 120000,
+        },
+      }),
+      CRITERIA,
+      "c1",
+    );
+    expect(panels.map((panel) => panel.criterionId)).toEqual(["c1"]);
+  });
 });
 
 describe("the panel's shape", () => {
@@ -609,5 +653,48 @@ describe("what each member of a panel was handed", () => {
       CRITERIA,
     );
     expect(givenTo(panels[0] as (typeof panels)[number])?.identical).toBe(false);
+  });
+});
+
+// #1153: one sentence for both the timeline's Judge row and the run tree's
+// Judge fact, so a call in flight cannot read two ways.
+describe("what a Judge call in flight says", () => {
+  const NOW = Date.parse("2026-09-09T09:40:40Z");
+
+  function judging(over: Partial<JudgeInFlight> = {}): JudgeInFlight {
+    return {
+      look: "criterion",
+      model: "sonnet",
+      call: 2,
+      of: 5,
+      since: "2026-09-09T09:40:00Z",
+      budget_ms: 120000,
+      ...over,
+    };
+  }
+
+  it("names the criterion, the call count, the model and the elapsed time", () => {
+    expect(judgeAsking(judging({ criterion_id: "implements_the_scope" }), NOW)).toBe(
+      "asking implements_the_scope · call 2 of 5 · sonnet · 40s",
+    );
+  });
+
+  it("names the pattern instead, on a gaming call", () => {
+    expect(judgeAsking(judging({ look: "gaming", pattern: "assertion_weakened" }), NOW)).toBe(
+      "asking assertion_weakened · call 2 of 5 · sonnet · 40s",
+    );
+  });
+
+  // Convergence names neither a criterion nor a pattern.
+  it("names only the call, the model and the elapsed time where neither is out", () => {
+    expect(judgeAsking(judging({ look: "convergence" }), NOW)).toBe(
+      "asking · call 2 of 5 · sonnet · 40s",
+    );
+  });
+
+  it("drops the elapsed time rather than measuring against a clock it was not given", () => {
+    expect(judgeAsking(judging({ criterion_id: "c1" }), undefined)).toBe(
+      "asking c1 · call 2 of 5 · sonnet",
+    );
   });
 });
