@@ -106,6 +106,15 @@ export type JobSummary = {
    */
   redispatched_from?: string;
   /**
+   * The Job that dispatched this one, where `origin` is `sub_dispatched`.
+   * Since protocol 14.2.
+   *
+   * **Absent on every other origin**, and absent on a `sub_dispatched` job
+   * read from a Fleet older than this field — `facts.ts` draws nothing for
+   * `sub_dispatched` in that case rather than a sentence with a hole in it.
+   */
+  dispatched_by?: DispatchedBy;
+  /**
    * Whether this job's drone is waiting on an answer from a person. Since
    * protocol 5.7.
    *
@@ -331,6 +340,12 @@ export type { Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable } from 
 
 /** What a Job is about. Neither sequencing nor provenance. */
 export type Subject = { kind: string; reference: string };
+
+/**
+ * The Job that dispatched a `sub_dispatched` job. **Only the id** — the
+ * record's own step is off the wire because nothing reads it.
+ */
+export type DispatchedBy = { job_id: string };
 
 /**
  * What a redispatch did. **Two Jobs, because a redispatch is two acts** — the

@@ -11,7 +11,16 @@
 //! | `facts` | Free text handed to a model whole; the likeliest place a secret lands |
 //! | `scope_revisions` | Carries `rationale`, which is free text for the same reason |
 //! | `acceptance_criteria` | The requester's words. `get_job` returns the Job in full; this is the list |
-//! | `dependencies`, `gate_manifests`, `dispatched_by` | The graph, which the Board does not draw at M1 |
+//! | `dependencies`, `gate_manifests` | The graph, which the Board does not draw at M1 |
+//!
+//! **`dispatched_by` crossed this table once and does not any longer.** #1165:
+//! the withholding was never about what the field says — a pointer to one Job,
+//! the same shape [`redispatched_from`](JobSummary::redispatched_from) already
+//! carries — it was that the Board drew no use for it. `sub_dispatched`'s own
+//! sentence in `facts.ts` needs the parent's id to say who dispatched a Job,
+//! and one pointer is not the graph: `dependencies` and `gate_manifests` stay
+//! withheld because nothing reads them yet, not because this reversal argues
+//! they should follow.
 //!
 //! `branch` crosses because it is a name in Armada's own namespace rather than a
 //! path, and is what a person merges. `title` crosses because it is the one
@@ -190,6 +199,19 @@ pub struct JobSummary {
     /// without this a Board reads every second failure as a first one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redispatched_from: Option<JobId>,
+    /// The Job that dispatched this one, where [`origin`](JobSummary::origin)
+    /// is `sub_dispatched`. **Absent on every other origin**, and absent on a
+    /// `sub_dispatched` Job read from a Fleet older than this field. Since
+    /// 14.2 (#1165).
+    ///
+    /// **Reversed out of M1's own withholding table.** It was left off with
+    /// `dependencies` and `gate_manifests` as "the graph, which the Board does
+    /// not draw" — but the reason it was grouped there was that nothing read
+    /// it, not that a parent pointer is unsafe to carry: it is the same shape
+    /// `redispatched_from` already is. `facts.ts`'s `sub_dispatched` sentence
+    /// needed the parent's id to say who, and one pointer is not the graph.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dispatched_by: Option<DispatchedBy>,
     /// Whether this Job's Drone is waiting on an answer from a person.
     ///
     /// # A flag, and deliberately not the question
@@ -309,6 +331,7 @@ impl JobSummary {
             current_step_id: job.current_step_id().map(StepId::from),
             assigned_drone: job.assigned_drone().map(DroneId::from),
             redispatched_from: job.redispatched_from().map(JobId::from),
+            dispatched_by: job.dispatched_by().map(DispatchedBy::from),
             reclaimed_at: job.reclaimed_at().map(Instant::from),
             asking,
             // Filled by the caller that has it, and `None` here on purpose:
@@ -320,6 +343,24 @@ impl JobSummary {
             landed: None,
             // Filled by the caller that holds a store, for `landed`'s reason.
             tasks: None,
+        }
+    }
+}
+
+/// The Job that dispatched a `sub_dispatched` Job. **Only the id.** The
+/// record's own `DispatchOrigin` also carries the step, and that half stays
+/// off the wire: nothing reads it, and adding it would be exactly the kind of
+/// field this crate's own boundary is supposed to refuse without a reader in
+/// hand for it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DispatchedBy {
+    pub job_id: JobId,
+}
+
+impl From<&core_model::DispatchOrigin> for DispatchedBy {
+    fn from(by: &core_model::DispatchOrigin) -> DispatchedBy {
+        DispatchedBy {
+            job_id: JobId::from(&by.job_id),
         }
     }
 }

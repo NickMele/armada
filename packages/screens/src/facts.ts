@@ -91,15 +91,21 @@ function repositoryFact(job: JobSummary): JobDetailField[] {
  * `enum-verbs.toml`'s `origin` table, carried to Bridge as `ORIGIN` since
  * #1115 closed the gap `Row.tsx` names.
  *
- * **`sub_dispatched` draws nothing.** Its sentence needs the parent Job's id,
- * and `dispatched_by` is the field `crates/ipc/src/job.rs` deliberately leaves
- * off the wire at M1 — filling the template with nothing would state a fact
- * this build cannot back.
+ * **`sub_dispatched`'s sentence has a slot, and `dispatched_by` fills it**,
+ * since #1165 put the parent Job's id on the wire. A `sub_dispatched` Job
+ * read from a Fleet old enough to carry no `dispatched_by` still draws
+ * nothing — filling the template with a hole would state a fact this build
+ * cannot back — which is also what an origin with a template and no known
+ * field to fill it from falls back to.
  */
 function dispatchedByFact(job: JobSummary): JobDetailField[] {
   const verb = ORIGIN[job.origin]?.verb;
-  if (verb === null || verb === undefined || verb.includes("{")) return [];
-  return [{ value: verb }];
+  if (verb === null || verb === undefined) return [];
+  const filled = job.dispatched_by
+    ? verb.replace("{dispatched_by.job_id}", job.dispatched_by.job_id)
+    : verb;
+  if (filled.includes("{")) return [];
+  return [{ value: filled }];
 }
 
 /** Where a workflow came from, in Fleet's own words for `WorkflowSource` — #425. */

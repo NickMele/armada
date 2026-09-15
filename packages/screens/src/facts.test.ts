@@ -203,7 +203,16 @@ describe("who dispatched it", () => {
     expect(drawn.at(-1)).toEqual({ value: "Found by Fleet" });
   });
 
-  it("draws nothing for sub_dispatched, since Bridge carries no dispatched_by yet", () => {
+  it("names the parent Job for sub_dispatched, from dispatched_by", () => {
+    const drawn = factsOf(
+      job({ origin: "sub_dispatched", dispatched_by: { job_id: "01M130Y1380016YK5S0JXBXDQ5" } }),
+      null,
+      now,
+    );
+    expect(drawn.at(-1)).toEqual({ value: "Sub-dispatched by 01M130Y1380016YK5S0JXBXDQ5" });
+  });
+
+  it("draws nothing for sub_dispatched read from a Fleet with no dispatched_by", () => {
     expect(factsOf(job({ origin: "sub_dispatched" }), null, now)).toEqual(baseline);
   });
 

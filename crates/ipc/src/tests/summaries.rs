@@ -123,4 +123,11 @@ fn the_summary_of_a_sub_dispatched_job_says_so() {
     assert_eq!(summary.origin.as_wire(), "sub_dispatched");
     assert_eq!(summary.status.as_wire(), "queued");
     assert_eq!(summary.urgency.as_wire(), "incident");
+    assert_eq!(
+        summary
+            .dispatched_by
+            .map(|by| by.job_id.as_str().to_string()),
+        Some("01PARENT".to_string()),
+        "the parent's id is what facts.ts fills the sub_dispatched sentence with — #1165"
+    );
 }

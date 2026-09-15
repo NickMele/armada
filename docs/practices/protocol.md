@@ -956,6 +956,20 @@ person's press used to reach and is now reached only from there. A Bridge
 built before this offered a press that answered `fleet.route_not_found`; there
 is no road left for it to hit, and nobody presses anything now.
 
+## Protocol 14.2: a sub-dispatched Job names who dispatched it
+
+`#1165`. `JobSummary.dispatched_by`, additive, carries the parent Job's id
+alone — the record's own `step_id` stays off the wire, since nothing reads it.
+Absent on every origin but `sub_dispatched`, and absent there too on a Fleet
+built before this.
+
+**Reversed out of an M1 decision, not an oversight left uncaught.** `dispatched_by`
+was withheld alongside `dependencies` and `gate_manifests` as "the graph, which
+the Board does not draw" — but the reason it was grouped there was that nothing
+read it, not that a parent pointer is a fact the Board should not have. It is
+the same shape `redispatched_from` already carries. `facts.ts`'s `sub_dispatched`
+sentence had a slot with nothing to fill it, and this is what fills it.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

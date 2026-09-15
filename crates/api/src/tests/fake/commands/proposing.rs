@@ -91,6 +91,8 @@ impl FakeDaemon {
             current_step_id: None,
             assigned_drone: None,
             redispatched_from: None,
+            // A fake never sub-dispatches, so nothing to name here.
+            dispatched_by: None,
             // No slot, so nothing is waiting. See `Tools::ask_question`.
             asking: false,
             landed: None,
