@@ -65,9 +65,9 @@ Once a plan is recorded:
 
 **A mark alone carries a task's state.** Done is `check`, working is
 `circle-dot` and static, open is `circle-dashed`, dropped is `minus`. A row
-carries no state word and no step name. The pulse stays scoped to one mark
-per screen — the running step's own, in The run above — so a working task's
-mark does not pulse.
+carries no state word and no step name. Motion loops the running step's own
+mark, in The run above, and a control waiting on Fleet — a task row is
+neither, so a working task's mark stays static even while its step runs.
 
 **A workflow that declares no step recording a plan draws no Plan region at
 all.** Nothing on this screen is drawn empty.

@@ -116,7 +116,8 @@ export const Advanced: Story = {
  * The step a Drone is on. The mark pulses — opacity and scale on the inner
  * dot only, so the ring holds still and no row reflows.
  *
- * One pulse per screen, on the most specific mark present.
+ * It is the most specific mark present for this step, which is why it is
+ * the one that carries the loop.
  */
 export const Running: Story = {
   args: {

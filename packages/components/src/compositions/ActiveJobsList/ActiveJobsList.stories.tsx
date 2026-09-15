@@ -38,8 +38,8 @@ const menu = [
 ];
 
 /**
- * Six states, one row shape. The one running row carries the one pulse on the
- * screen.
+ * Six states, one row shape. The running row is the only one here, so it
+ * carries the loop.
  *
  * **One, because one row is running here — not because only one can be.** This
  * paragraph used to say the pulse rode the status "focused or not, because
