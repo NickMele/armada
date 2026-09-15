@@ -66,15 +66,18 @@ fn number(text: &str, key: &str, source: &Path) -> u32 {
         .unwrap_or_else(|| panic!("{} has no `{key} = <integer>` line", source.display()))
 }
 
-/// Every row whose `agent_access` is `Yes`, as a table, and every row reading
-/// `Drafts only` as a second.
+/// Every row whose `agent_access` is `Yes`, as a table, every row reading
+/// `Drafts only` as a second, and every row reading `Helm only` as a third.
 ///
-/// **Two tables, never one with a flag.** `REACHABLE` is what the door offers
-/// any agent; `DRAFTING` is offered to a Helm session alone (`#941`), so a
-/// reader that forgot a flag could not hand drafting to everyone.
+/// **Three tables, never one with a flag.** `REACHABLE` is what the door offers
+/// any agent; `DRAFTING` is offered to a Helm session alone for drafting a Job
+/// (`#941`); `HELM_ONLY` is offered to a Helm session alone for everything else
+/// a person may ask it to do (`#1150`) — so a reader that forgot a flag could
+/// not hand any of the three to a caller it was not written for.
 fn reachable(inventory: &str, source: &Path) -> String {
     let mut rows = String::new();
     let mut drafting = String::new();
+    let mut helm_only = String::new();
     let mut found = 0usize;
     for block in inventory.split("\n[operations.") {
         let Some((header, body)) = block.split_once(']') else {
@@ -92,6 +95,7 @@ fn reachable(inventory: &str, source: &Path) -> String {
                 &mut rows
             }
             Some("Drafts only") => &mut drafting,
+            Some("Helm only") => &mut helm_only,
             _ => continue,
         };
         let kind = field(body, "kind").unwrap_or_default();
@@ -113,7 +117,8 @@ fn reachable(inventory: &str, source: &Path) -> String {
     );
     format!(
         "pub const REACHABLE: &[Reachable] = &[\n{rows}];\n\
-         pub const DRAFTING: &[Reachable] = &[\n{drafting}];\n"
+         pub const DRAFTING: &[Reachable] = &[\n{drafting}];\n\
+         pub const HELM_ONLY: &[Reachable] = &[\n{helm_only}];\n"
     )
 }
 

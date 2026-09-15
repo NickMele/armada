@@ -24,10 +24,14 @@
 # Fields:
 #   kind        - query | command | event
 #   transport   - HTTP | WebSocket
-#   agent_access - Yes | No | Bridge only | Drafts only. What an agent may
-#                 reach directly — Helm inside Bridge, or any agent working
-#                 on the machine, on one shared set — which on a command is
-#                 the Intervention Ladder rung
+#   agent_access - Yes | No | Bridge only | Drafts only | Helm only. What an
+#                 agent may reach directly — Helm inside Bridge, or any agent
+#                 working on the machine, on one shared set. `Helm only` is a
+#                 command Helm may call when a person asks it to in
+#                 conversation; the person's ask is the gate, not a further
+#                 tier. `Drafts only` is the narrower set offered a Helm
+#                 session alone for drafting a Job. What stays `No` for Helm
+#                 too is named, not implied — `fleet::helm::reach::RESERVED`
 #   description - what the operation returns or does, in one line
 #   unbuilt     - an event declared here and not yet sent, naming the issue
 #                 that will send it. Absent means the event is sent. The
@@ -80,7 +84,7 @@ What `get_capacity` is measured against. A route of its own because the four cha
 [operations.save_limits]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Save any of the four limits, and answer with what is now in force"
 notes = """
 **Changed while Fleet runs, and kept across a restart.** The save is written to the store before anything in memory moves, and the next admission turn reads the new values; no restart, and nothing already running is stopped. A bound lowered below how many Drones are working holds new starts until enough finish.
@@ -108,7 +112,7 @@ Kept the way `get_limits` is: Fleet-wide, surviving a relaunch, and read once pe
 [operations.save_preferences]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Save one preference by name, and answer with every preference now in force"
 notes = """
 **One preference, not the set** — unlike `save_limits`, which saves all three fields of one fixed row in a single request. A preference is a row keyed by name, so saving one leaves the store untouched for every other name, and there is nothing to omit.
@@ -431,25 +435,25 @@ The step after Scan, for a repository with no `armada.yml` — `docs/journeys/se
 [operations.edit_manifest_proposal]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Apply one edit to one workspace's proposal, and answer with the proposal after it"
 notes = """
 Put a port, a Check or a Command by name (replacing or adding), set `setup.requires`, set or clear a policy, move a line between Checks and Commands, or remove one. **No edit names a provenance**: a changed line Scan found reads `edited_during_setup`, a line a person wrote reads `added_during_setup`, and an edit that changes nothing moves nothing.
 
 **A value `config` would refuse is not refused here**, because a proposal is iterated through wrong states; Write is what refuses it. Refused, as a 422, is an edit that cannot apply: a workspace Scan does not find (`fleet.no_such_workspace`), a line that is not there, or a move that would drop `requires` or `destructive`, which the other registry has no key for (`fleet.proposal_not_amended`). After Write it is a 409, `fleet.proposal_written`.
 
-`agent_access` is `No` until Helm exists. Helm will need this read and a draft-shaped edit, at *Drafts only*, and never Write.
+`agent_access` is `Helm only`. This row was written before Helm existed, expecting a narrower *Drafts only* reach here and never Write — Nick's later ruling grants both this edit and `write_manifest_proposal` itself, on request: the person's ask is the gate, not a separate tier.
 """
 
 [operations.write_manifest_proposal]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Create armada.yml for one workspace from its proposal as it stands"
 notes = """
 Writes the proposal's `text`, and creates rather than replaces: a file already at the path is a 409, `fleet.manifest_appeared`, carrying `on_disk`. A proposal whose file would not load is a 422, `fleet.proposal_refused`, carrying `faults` as `[key, fault]` pairs; bytes that would not go down are a 500, `fleet.proposal_unwritable`. Nothing is staged or committed. Afterwards the proposal carries `written` and takes no edits.
 
-`agent_access` is `No`: it puts the file every Job here is gated on into the owner's checkout, and Helm never reaches Write.
+`agent_access` is `Helm only`: it puts the file every Job here is gated on into the owner's checkout, and Helm reaches Write now too, on request — a person asking Helm to write it is the same act as pressing Save themselves, not a second, unwitnessed one.
 """
 
 [operations.get_manifest_file]
@@ -582,7 +586,7 @@ Beside `list_manifests` rather than instead of it: Setup starts from a folder no
 [operations.add_repository]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Serve one more repository, from a folder a person chose"
 notes = """
 Locate, by folder — `docs/journeys/set-up-a-project-manifest.md`, *Getting in*. The body is `path`, absolute. Answers 201 with the repository as `list_repositories` lists it.
@@ -595,7 +599,7 @@ Fleet remembers the repository and serves it again after a restart. The store's 
 [operations.clone_repository]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Clone a repository from a URL into a new folder under one a person chose, and serve it"
 notes = """
 Locate, by URL — `docs/journeys/set-up-a-project-manifest.md`, *Getting in*. The body is `url` and `parent`, absolute. The new folder is named from the URL as `git clone` names it, and git on the machine runs the clone with whatever credentials it already has. Answers 201 with the repository as `add_repository` answers it, which it then is.
@@ -787,7 +791,7 @@ Not `/events`, which carries only a server's three lifecycle facts, for `observe
 [operations.answer_command]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person allows or rejects a command a Drone was not given"
 notes = """
 **It answers two things, and the call id says which.** A command a Drone is waiting on right now — its Job is set to `ask_me`, the default a new Job starts at, so the harness is holding it inside the permission call — is answered in place, and the Drone carries on in the same session. A refused row on a Job stopped at `blocked_by_policy` — `refuse_and_hold` — is answered after the fact: an allow records the command for the Job and restarts the step, and a reject reaches the Drone as a turn.
@@ -802,7 +806,7 @@ Refused with a 409 where the call names nothing waiting or refused on that Job, 
 
 It replaces `approve_command`, a placeholder row for confirm-before-destructive that nothing served. A command declared destructive is offered nothing here.
 
-`agent_access` is `No`, on `answer_question`'s argument: an allow becomes something a Drone runs, and `always_allow` a line every later Job is given.
+`agent_access` is `Helm only`. An allow becomes something a Drone runs, and `always_allow` a line every later Job is given — real consequences, but ones Helm may now cause on the same terms as any other act: only when asked, in conversation, and never on its own initiative.
 """
 
 [operations.explain_command]
@@ -823,7 +827,7 @@ A model that will not answer is answered in words and never blocks the decision:
 [operations.answer_judge]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person agrees with a judge's refusal, disagrees for this step, or disagrees and stands the criterion down for the repository"
 notes = """
 `docs/concepts/judge.md`'s asking design: a Judge criterion that refuses and is not marked `refuse` holds the step open at a question rather than stopping it. The body is `answer` -- `agree`, `disagree_once` or `disagree_always` -- and an optional `note` that rides along for the record and nothing else.
@@ -832,26 +836,26 @@ notes = """
 
 Refused with a 409 where the Job is not holding a question open.
 
-`agent_access` is `No`, for `answer_command`'s reason: whether a refusal stands is the owner's to decide.
+`agent_access` is `Helm only`, `answer_command`'s reason: whether a refusal stands is decided by whoever is asked to decide it, and the person's own ask to Helm is that decision, not a delegation of it.
 """
 
 [operations.set_when_refused]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Whether one job's judge asks a person about a criterion that refuses, per criterion, always asks, or always stops the step"
 notes = """
 A live setting on one job, the same shape `set_when_blocked` uses. The next criterion that refuses reads it, and no drone is respawned for it.
 
 The body is `when_refused`: `per_criterion`, `always_ask` or `always_refuse`. A new job starts at `per_criterion`, which is what a job that chose nothing already reads as -- each criterion decides for itself, off its own declaration. `JobDetail.when_refused` reads it back, and is absent from a Fleet older than 11.3.
 
-`agent_access` is `No`, for `set_when_blocked`'s reason: whether a refusal is asked about or stopped over is the owner's to decide.
+`agent_access` is `Helm only`, `set_when_blocked`'s reason: whether a refusal is asked about or stopped over is still decided by a person, and Helm may only set it when that person has said so.
 """
 
 [operations.set_when_blocked]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Whether one Job asks a person about a command it was not given, refuses it and holds, or runs it"
 notes = """
 A live setting on one Job. The next permission question the Job's Drone raises reads it, and no Drone is respawned for it.
@@ -860,13 +864,13 @@ The body is `when_blocked`: `refuse_and_hold`, `ask_me` or `allow_all`. A new Jo
 
 **`allow_all` runs every command without asking, except two**: one `armada.yml` declares destructive and one the harness cannot grant — a push. Those still stop for a person, so no setting on this route lets a Job push or run a destructive command unseen. It arrived at 11.0 and was a major bump, because Bridge matches on this set to choose which control to draw.
 
-`agent_access` is `No`, for `answer_command`'s reason: whether a Drone is held waiting on the owner is the owner's to decide.
+`agent_access` is `Helm only`, `answer_command`'s reason: whether a Drone is held waiting on the owner is still the owner's decision, and Helm carries it out only where that owner has just made it, in conversation.
 """
 
 [operations.set_model]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Choose the model one Job's later steps run on, or clear the choice"
 notes = """
 A live setting on one Job, like `set_when_blocked`, and the answer is the Job's summary. **The next step's spawn reads it; the step running now keeps its model.** Nothing is respawned for it, so a Drone mid-step is never cut off to pick up a model.
@@ -875,24 +879,24 @@ The body is `model`: a name `list_models` offers, or `null` to clear the choice 
 
 Refused with a 409 on a model `list_models` does not offer. The picker and the route answer from the same list, so a name only a stale window still shows is told rather than spawned.
 
-`agent_access` is `No`: which model spends a Job's budget is the owner's to decide, and a Helm that could move it could move it past what the owner priced the Job at.
+`agent_access` is `Helm only`: which model spends a Job's budget is still the owner's to decide, and Helm moving it now happens only where the owner asked it to move it — the ask is the same pricing decision, said in conversation instead of pressed on a picker.
 """
 
 [operations.set_review_model]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Choose the model one Job's review step runs on, or clear the choice"
 notes = """
 `set_model`'s terms, for the one step that writes Armada's review (#903). **On that step a chosen review model beats the Job's own chosen model**, and every other step ignores it. The body is `model`, a name `list_models` offers or `null` to clear, sent rather than implied. `JobDetail.review_model_override` reads the choice back, and `JobDetail.review_step` names the step it applies to, absent on a workflow with none.
 
-Refused with a 409 on a model `list_models` does not offer. `agent_access` is `No`, for `set_model`'s reason.
+Refused with a 409 on a model `list_models` does not offer. `agent_access` is `Helm only`, `set_model`'s reason.
 """
 
 [operations.remove_allowed_command]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Take back a command a person allowed for one Job"
 notes = """
 The body is `run`, the command exactly as `JobDetail.allowed_commands` lists it, and the answer is the Job's summary. **The next reach for it is answered by the Job's `when_blocked` again.**
@@ -901,7 +905,7 @@ The body is `run`, the command exactly as `JobDetail.allowed_commands` lists it,
 
 Refused with a 409 where the Job holds no such allow, so a window left open across a removal is told rather than answered 200.
 
-`agent_access` is `No`, for `answer_command`'s reason: what a Drone may run is the owner's to decide.
+`agent_access` is `Helm only`, `answer_command`'s reason: what a Drone may run is still the owner's decision, and Helm only takes one back when that owner asked it to.
 """
 
 [operations.get_repository_allowed_commands]
@@ -920,20 +924,20 @@ The same list, unfiltered, rides on `get_job`'s `JobDetail.repository_allowed_co
 [operations.remove_repository_allowed_command]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Take back a rule a person always-allowed for this Manifest's repository"
 notes = """
 The body is `run`, exactly as `get_repository_allowed_commands` lists it. **Read by the next permission question and the next spawn**, so nothing already running is touched: a Job whose Drone was spawned under the grant keeps it for the step it is on, and the next Job dispatched against this Manifest is asked again.
 
 Refused with a 409 where nothing always-allowed for this Manifest is spelled `run`.
 
-`agent_access` is `No`, for `remove_allowed_command`'s reason.
+`agent_access` is `Helm only`, `remove_allowed_command`'s reason.
 """
 
 [operations.approve_dispatch]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Releases a Job to spawn"
 notes = """
 The primary autonomy control.
@@ -945,7 +949,7 @@ transport = "HTTP"
 agent_access = "Drafts only"
 description = "Names one Job a Helm session was asked to approve, or has drafted and sees at the gate, so `HelmThread` can draw an approval card for it"
 notes = """
-**`#1041`. Helm still cannot approve — this is not `approve_dispatch` reached a second way.** That row stays `No` for every agent, Helm under `Acting` authority included; what this answers is which Job to put a card in front of the person for. The press that releases the Job is `approve_dispatch` itself, taken by the person, exactly as it always was.
+**`#1041`. This is not `approve_dispatch` reached a second way — it is the ask, not the press.** `approve_dispatch` is now `Helm only` too, so Helm may call it, but only where a person has just asked it to, in conversation; this route is for the other direction, where nobody has asked yet and a Job is waiting on somebody to. What this answers is which Job to put a card in front of the person for, so a person who has not yet said "approve it" still gets the ordinary card rather than a silent approval.
 
 **It writes nothing, on purpose.** `Resolved` has already refused a Job id that names nothing, the ordinary 404 every job-scoped route gets; past that, the route answers the id and handle back and touches no record, no log line, no event. Whether the Job is still `awaiting_approval` by the time the card is drawn, or ever was, is `HelmThread`'s own read of the Board at that moment — not a fact this call is in a position to freeze, since a person can act on the Job by any other road while the reply is still being written.
 
@@ -955,10 +959,10 @@ notes = """
 [operations.approve_review]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Advances past a human gate"
 notes = """
-The counterpart to `approve_dispatch`, at the other end: that one is the gate before a Job runs and this is the decision after it has. Both are human acts and neither is reachable by Helm.
+The counterpart to `approve_dispatch`, at the other end: that one is the gate before a Job runs and this is the decision after it has. Both were human acts with no exception for Helm; both are now Helm's too, on request — the person's ask in conversation is the same gate the press always was.
 
 **It goes through the machine like any other move.** The step advances on the inner machine — which is legal beneath `awaiting_review`, one of the two statuses a step moves under — and then the Job either goes back to `running` at the next step or, where the step that passed was the workflow's last, is committed, delivered and recorded `completed_success`. Nothing here writes a status directly.
 
@@ -968,7 +972,7 @@ Refused with a 409 on a Job that is not at `awaiting_review`. The three review a
 [operations.merge_pull_request]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person merges the pull request their Job opened, and Fleet runs what follows"
 notes = """
 **The fourth answer at a human gate, and the only act in Armada that writes into a repository Fleet did not make.** Every other act is confined to a worktree Fleet cut; this changes what everybody else builds on, so it is the loudest thing in the Job's log and it is written there before the write happens rather than after.
@@ -985,24 +989,24 @@ notes = """
 
 Refused with a 409 on a Job that is not at `awaiting_review`, sharing that refusal with the three acts beside it, and with a 409 where the Job's record holds no pull request — a workflow that declares no delivering step opened none, and the act a person wants on one of those is `approve_review`.
 
-`agent_access` is `No`, like every other act at this gate. Deciding that work lands is the owner's, and this one lands it in somebody else's repository.
+`agent_access` is `Helm only` now, like every other act at this gate. Deciding that work lands is still the owner's, and this one lands it in somebody else's repository — Nick's ruling grants it to Helm on request anyway, which is named here rather than resolved: this row's own argument is that landing work elsewhere is the loudest act in the file, and asking Helm to press it is a person deciding through words rather than through a button, not a different decision.
 """
 
 [operations.rerun_failed_checks]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Asks the forge to start a Job's pull request's failed CI runs again"
 notes = """
 **A write to the forge, taken only from a person's press**, like `merge_pull_request` (#905). `gh run rerun --failed` starts each failed run's failed jobs again and writes nothing on the pull request. It moves nothing on the Job, and what comes back is the Job as it stands.
 
-Refused with a 409 where the Job has no open pull request, and with a 409 carrying the forge's own words where it would not start them. `agent_access` is `No`: a forge act is a person's.
+Refused with a 409 where the Job has no open pull request, and with a 409 carrying the forge's own words where it would not start them. `agent_access` is `Helm only`: a forge act is still a person's, taken only from their ask.
 """
 
 [operations.investigate_failed_checks]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Sends the branch back for a Drone to find out why a pull request's CI failed"
 notes = """
 `crate::conflict_resolution`'s road with a note (#905): the Job goes back to the step before the one that delivers, and the Drone there opens with the failed checks and is asked to say which of five kinds each is and fix what is the change's. **It re-runs nothing**; a flaky run is reported, and re-running it is a person's press. Once its step passes, the ordinary forward walk delivers again and the pull request updates.
@@ -1013,7 +1017,7 @@ Refused with a 409 anywhere but `awaiting_review`, where the Job has no open pul
 [operations.answer_question]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person picks one of the answers a waiting Drone offered"
 notes = """
 **The other half of a Drone's `ask_question`.** That tool is on the Fleet/Drone seam and is in no row here; this is the Fleet/Bridge half, and the two are the same act seen from its two ends.
@@ -1022,7 +1026,7 @@ The body carries the question's id and the label chosen, and there is no field f
 
 The id is what makes a stale answer a refusal. A window left open across an answered question would otherwise send a label that matched the *next* question's options by coincidence, and what a wrong answer produces here is dispatched Jobs that run and spend rather than a bad verdict.
 
-**`agent_access` is `No`, on `file_report`'s argument.** Answering on the owner's behalf without his sentence is the failure mode that rule names, and here it is worse than a filed report: the answer becomes work that exists. Helm reads the outstanding question through `get_job` like every other fact, and the answer is the one thing it may not supply.
+**`agent_access` is `Helm only` now, on `file_report`'s argument read against itself.** Answering on the owner's behalf without his sentence is the failure mode that rule names, and here it is worse than a filed report: the answer becomes work that exists. Nick's ruling grants this row anyway, on the reasoning that his own ask to Helm to pick an answer *is* his sentence — named here rather than resolved, the same tension `file_report` carries.
 
 It moves no status and no step state. The Job is `running` while it waits and `running` after — see `job.asking`.
 """
@@ -1030,8 +1034,13 @@ It moves no status and no step state. The Job is `running` while it waits and `r
 [operations.deny_dispatch]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Rejects a dispatch, feeds pattern learning"
+notes = """
+Moot for now: nothing serves this row (`xtask`'s `NOT_BUILT` names why), so
+`agent_access` moving to `Helm only` with the rest of this ruling changes
+nothing until somebody builds it.
+"""
 
 [operations.examine_job]
 kind = "command"
@@ -1059,7 +1068,7 @@ Five looks, each saying whether it could tell working from not: whether the proc
 [operations.file_report]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Files a report on a Job that failed, carrying the person's reason and the Job's own record"
 notes = """
 **`failures` is what Armada thinks went wrong; a report is what you know went wrong.** Every other operation here answers *did this fail*. None answers *did this fail correctly*, and the two sets do not contain each other: a Job that failed perfectly by its own lights and was wrong is `escalated` with a real trigger on it, and nothing anywhere records that the refusal was wrong. Twice now the owner disagreeing out loud has been the entire detection mechanism.
@@ -1068,7 +1077,7 @@ notes = """
 
 **`claim` is a closed set because a count may not read prose.** The first override in this repository carries the reason `probe`, sent to find out whether the route was served, and `job_events` is append-only so it says that for ever. An override with a useless reason is indistinguishable from a considered one, and a required non-blank field does not make a reason meaningful — so what the count reads is the value a person picked, and the sentence is what a person reads.
 
-**`agent_access` is `No`, and it is the strongest `No` in this file.** Filing on the owner's behalf without his sentence is the exact failure mode: the record is evidence and his reason is the finding, and an agent that could file one would be producing the bundle without the finding, at machine speed, into a tracker where a wrong claim survives as a fact.
+**`agent_access` is `Helm only` now, over the strongest `No` in this file.** Filing on the owner's behalf without his sentence is the exact failure mode this paragraph names: the record is evidence and his reason is the finding. Nick's ruling grants this row anyway, on the reasoning that his own ask *is* the sentence — but that is this file's own argument read against itself, and it is named here rather than quietly resolved.
 
 Redaction happens on the way in. The record is rendered and scrubbed before it is stored, never at read time — scrubbing on the way out leaves a window the length of the file's life, and a store that has already written a credential cannot un-write it.
 
@@ -1078,7 +1087,7 @@ It creates no Job and dispatches nothing. Filing comes first; dispatching is the
 [operations.kill_drone]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Kills a Drone, captures learnings, holds the worktree"
 notes = """
 Intervention Ladder rung 2.
@@ -1087,7 +1096,7 @@ Intervention Ladder rung 2.
 [operations.kill_job]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Ends a Job at `killed`, terminal, from any non-terminal status"
 notes = """
 Not on the Intervention Ladder, and not `kill_drone`. The ladder orders what a
@@ -1102,14 +1111,15 @@ retention and never by process exit, and a rephrase-and-redispatch may reuse it
 from a Job that ended here. `reject_job` is the neighbour that carries a
 verdict; this one says nothing about the work.
 
-Helm does not reach it directly, because Helm access on a command is the ladder
-rung and this has none.
+`agent_access` is `Helm only`. It carries no Intervention Ladder rung, but the ladder
+no longer bounds Helm's reach on its own — Helm may end a Job the same way it may
+redispatch or restart one, when asked to.
 """
 
 [operations.forget_job]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Deletes a terminal Job's whole record"
 notes = """
 Real deletion, and the only operation on this seam that is: every other act
@@ -1133,7 +1143,7 @@ should not also have to think about a directory.
 [operations.reclaim_worktree]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Gives one terminal Job's worktree and branch back"
 notes = """
 **The other half of `forget_job`, and deliberately not part of it.** That row
@@ -1170,7 +1180,7 @@ rung.
 [operations.delete_branch]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Deletes one terminal Job's branch, commits nobody has taken and all, once its checkout is gone"
 notes = """
 **The one act on this seam that destroys unmerged work, and it is a person's.**
@@ -1194,7 +1204,7 @@ The answer carries the tip, because a deleted branch is recoverable from its SHA
 and nothing else. Nothing is written to the record beyond a line in the Job's
 own log.
 
-Not on the Intervention Ladder, for `reclaim_worktree`'s reason.
+Not on the Intervention Ladder, for `reclaim_worktree`'s reason. `agent_access` is `Helm only` now — the one act on this seam that destroys unmerged work is Helm's to press on request, which is named here rather than resolved: this row's own guard is that a person saw the tip and confirmed, and an ask in conversation is a thinner confirmation than a press against a shown SHA.
 """
 
 [operations.propose_job]
@@ -1270,7 +1280,7 @@ somebody decided, and a surface drawing it in red would say Armada broke.
 [operations.stop_proposal]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Stops a Job proposer call that is still out"
 notes = """
 The only thing anybody may do to a proposal in flight, and it exists because the
@@ -1293,15 +1303,16 @@ It is not on the Intervention Ladder and it ends no Job, because there is no Job
 Nothing is created, nothing moves, and the person is returned to the form with what
 they typed.
 
-agent_access is No for approve_dispatch's reason turned around: Helm proposes without
-a surface and has nobody waiting, so there is no wait for it to abandon — and a
-stop it could reach would let it cancel a person's dispatch.
+agent_access is Helm only now. Helm proposes without a surface and has nobody
+waiting, so there is normally no wait of its own for it to abandon — but where a
+person asks Helm to stop a proposal call still out, that ask is the same act as
+their own press, and this is what carries it.
 """
 
 [operations.pause_job]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Retired 2026-09-03. Never built, and no longer promised"
 notes = """
 **Retired, not pending.** The row said *not yet built* for months, which read as
@@ -1319,7 +1330,9 @@ What it would have been, so that whoever proposes it again starts from the
 argument rather than from the gap: a hold on a healthy Drone with its worktree
 intact. It only ever meant something there — anything escalated is already
 held, because Fleet never auto-kills — and it carried no Intervention Ladder
-rung, so Helm never reached it directly.
+rung, so Helm never reached it directly. Moot for now: nothing serves this row,
+so `agent_access` moving to `Helm only` with the rest of this ruling changes
+nothing until somebody builds it.
 """
 
 [operations.raise_cost_cap]
@@ -1363,7 +1376,7 @@ notes = """
 [operations.add_task]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person adds a task to the Job's plan, and answers with the plan it leaves"
 notes = """
 `#897`. `title`, an optional `detail` and `after` — the id it comes after, or `""` for the end — the same three fields the Drone-facing `add_task` MCP tool takes, so a person's add and a Drone's are one shape read two ways. The change is kept under `store::PlanHand::Person`, which is the whole of what tells the two apart on the record.
@@ -1374,13 +1387,13 @@ notes = """
 
 Publishes `job.plan_changed` either way, `actor` `human`.
 
-`agent_access` is `No`: this changes the Job, which is `redirect_drone`'s own reason and every other command on this table that moves a Job.
+`agent_access` is `Helm only`: this changes the Job, `redirect_drone`'s own reason and every other command on this table that moves a Job — and, like `redirect_drone`, it is Helm's to call when a person asks it to.
 """
 
 [operations.drop_task]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person drops a task from the Job's plan, with a reason, and answers with the plan it leaves"
 notes = """
 `#897`. `task` and a required `reason` — the same two fields the Drone-facing `update_task` MCP tool takes for a drop. The change is kept under `store::PlanHand::Person`.
@@ -1391,7 +1404,7 @@ notes = """
 
 Delivery and the event are `add_task`'s.
 
-`agent_access` is `No`, `add_task`'s reason.
+`agent_access` is `Helm only`, `add_task`'s reason.
 """
 
 [operations.redirect_drone]
@@ -1400,8 +1413,9 @@ transport = "HTTP"
 agent_access = "Yes"
 description = "Structured instruction to a running Drone"
 notes = """
-Intervention Ladder rung 1, and Helm's one rung-1 act — `fleet::helm::may`
-carries the rest of what Helm reaches (`#73`).
+Intervention Ladder rung 1, and Helm's original rung-1 act (`#73`). The ladder
+no longer bounds what else Helm reaches — `fleet::helm::may` denies only
+`RESERVED`, and this was never on it.
 
 **What is kept is the worktree and every step so far.** A Drone belongs to a workflow step, so whether there is a session to speak to depends on where the Job stands. Mid-step there is one and the instruction is a turn injected into it, and the session is kept too. At a step boundary there is none: the instruction waits and opens the next step's Drone in its brief. **It never respawns to deliver itself** — a redirect that spawned would be a restart that lost the session for nothing, and it is `restart_step` that puts a second Drone on a step that stopped.
 
@@ -1415,7 +1429,7 @@ Nothing bounds how often a Job may be redirected. Whether a cap belongs here is 
 [operations.redispatch_job]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Fresh Drone with corrective context"
 notes = """
 Intervention Ladder rung 2.
@@ -1424,7 +1438,7 @@ Intervention Ladder rung 2.
 [operations.reject_job]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Hard stop"
 notes = """
 Reserved for hard stops only.
@@ -1437,7 +1451,7 @@ Refused on a Job that is not at `awaiting_review`. `awaiting_approval -> rejecte
 [operations.take_up_remarks]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "The comments a person picked off the pull request reach a Drone. Nothing is written back onto the pull request"
 notes = """
 **A second entrance onto the note road, not a second road.** What it does to the Job is `request_changes`, called rather than restated: the words go onto the record as `redirect_waiting`, the Job takes `awaiting_review -> queued`, and the Drone re-admission puts back on the same step opens with them. The block a Drone reads is `crossing::Redirected` either way. What is different is only where the words came from.
@@ -1452,13 +1466,13 @@ notes = """
 
 **Nothing is written back onto the pull request.** Armada's own record — `job_remarks_taken_up` — is what tells a comment already handed to a Drone apart from one nobody has touched; the forge never hears about a press.
 
-`agent_access` is `No`, because Helm access on a command is the Intervention Ladder rung and this has none.
+`agent_access` is `Helm only`. It carries no Intervention Ladder rung, but the ladder no longer bounds Helm's reach on its own — Helm may take up remarks the same way it may redirect a Drone, when asked to.
 """
 
 [operations.dismiss_finding]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person dismisses a finding Armada's review raised, and says why"
 notes = """
 **Kept, not deleted.** The finding leaves the lists `get_job` serves under `confidence`, the reason stays on the Job's record as `confidence.dismissed`, and the next review pass is handed both in its opening brief so it does not raise the finding again. #907.
@@ -1467,13 +1481,13 @@ notes = """
 
 **It moves nothing.** The Job stays where it stands, and what comes back is the Job as it now stands.
 
-`agent_access` is `No`: a Drone never rules on its own review.
+`agent_access` is `Helm only`: a Drone never rules on its own review, and dismissing one is still a person's judgment on it — Helm carries it out only where that person has just made the call.
 """
 
 [operations.queue_after_finding]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person turns a For context finding into a Job that starts when this one lands"
 notes = """
 **A new Job, created waiting on this one.** Fleet proposes it from the finding's words and why it was raised, on this Job's workflow and repository, with a `depends_on` edge to this Job written at creation. It goes to the approval gate like any proposal, and the hold keeps it queued until this Job lands. #906.
@@ -1482,13 +1496,13 @@ notes = """
 
 The finding shows what it became under `confidence.followed`. What comes back is this Job as it stands.
 
-`agent_access` is `No`: a person decides what is worth a Job.
+`agent_access` is `Helm only`: a person decides what is worth a Job, and Helm queuing one behind this Job is that same decision, said in conversation rather than pressed.
 """
 
 [operations.file_finding_issue]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person confirms an issue drafted from a For context finding, and the forge files it"
 notes = """
 **Written as the person, so only from their confirm.** Bridge drafts the title and body from the finding and the person edits them; Fleet files exactly what was confirmed, in the repository the Job serves. Nothing is posted on the pull request. #906.
@@ -1497,13 +1511,13 @@ A blank title is refused, a 422. A finding the Job's latest review did not raise
 
 The finding shows the issue's address under `confidence.followed`. What comes back is this Job as it stands.
 
-`agent_access` is `No`: nothing is written on the forge except from a person's press.
+`agent_access` is `Helm only` now. Nothing was written on the forge except from a person's press, and this still files exactly what was confirmed — but a confirm said to Helm in conversation is not the same act as a person editing the drafted text themselves, and that gap is named here rather than resolved.
 """
 
 [operations.request_changes]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Design Plan feedback loop"
 notes = """
 The third answer at a human gate, between taking the work and ending the Job. The Job goes back to `running` at the same step and the note reaches the work that was waiting — so the worktree and every step so far survive, which is what separates this from a redispatch.
@@ -1520,7 +1534,7 @@ The body carries the person's own words and is a type of its own rather than a r
 [operations.restart_step]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A fresh Drone on the surviving worktree, at the step that stopped"
 notes = """
 The second of the four acts that reach an escalated Job — `docs/concepts/job.md` has the table. The Drone is **gone**; the worktree, the branch and every earlier step's work survive, and a new Drone takes the step over where it stopped.
@@ -1541,13 +1555,13 @@ The second of the four acts that reach an escalated Job — `docs/concepts/job.m
 
 Its refusals are answered at the moment it is asked, not deferred: a Drone still standing on the Job, a worktree already reclaimed, an exit the record has not taken down, or a note already waiting. Each is a question about now.
 
-Helm does not reach it directly, because Helm access on a command is the ladder rung and this has none.
+`agent_access` is `Helm only`. It carries no Intervention Ladder rung, but the ladder no longer bounds Helm's reach on its own — Helm may restart a step the same way it may redirect or redispatch, when asked to.
 """
 
 [operations.override_verdict]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person overrules the machine that stopped a step and the step advances, keeping what was ruled on the record"
 notes = """
 The fifth act that reaches an escalated Job, and the only one that lets the work
@@ -1610,14 +1624,18 @@ is written the moment they give it, on the step, beneath `escalated`; only the
 process waits, and the Job reads `waiting_on_resources` while it does. The
 completion path above spawns nothing and therefore does not wait at all.
 
-Helm does not reach it. Overruling a verifier is the act a verifier exists to
-make somebody take deliberately, and it is not on the Intervention Ladder.
+`agent_access` is `Helm only` now. Overruling a verifier is the act a verifier
+exists to make somebody take deliberately, and it is not on the Intervention
+Ladder — Nick's ruling grants it to Helm anyway, on request, which is this
+file's argument for why a verdict has to be appealable turned around against
+its own claim that the appeal wants deliberateness a conversational ask may not
+carry. Named here rather than resolved.
 """
 
 [operations.rerun_gate]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person asks the gate again, on the evidence a step already submitted, where the first reading could not decide"
 notes = """
 The sixth act that reaches an escalated Job, and **the one `override_verdict` is
@@ -1663,14 +1681,16 @@ A second reading that also could not decide **moves nothing**. The Job is alread
 ruling would put them, and a press that changed nothing is written into the Job's
 own log rather than into the record as a run the Drone never had.
 
-Helm does not reach it, for `override_verdict`'s reason: it is not on the
-Intervention Ladder.
+`agent_access` is `Helm only`. It is not on the Intervention Ladder, but the ladder
+no longer bounds Helm's reach on its own; re-asking the gate on evidence already
+submitted is Helm's to call when asked, unlike `override_verdict`, which stays
+flagged for a person's own weighing — see that row.
 """
 
 [operations.rerun_checks]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "A person runs a stopped step's Checks again on the worktree as it stands, where a failed Check held the Job for repair"
 notes = """
 **The act for a Check that failed where nothing needs redoing** (#1105). A
@@ -1701,7 +1721,7 @@ worktree that is gone, a Drone standing in the slot, and a re-run already in
 flight. While one is in flight `restart_step` and `redispatch_job` refuse too,
 since both would take the worktree the Checks are reading.
 
-Helm does not reach it, for `override_verdict`'s reason.
+`agent_access` is `Helm only`, `rerun_gate`'s reason: re-running mechanical Checks decides nothing a person did not already decide by asking for it.
 """
 
 [operations.show_again]
@@ -1931,7 +1951,7 @@ notes = """
 [operations.start_checkout_run]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Run one Check or Command in the main checkout's working tree - a rehearsal that records nothing anywhere"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
@@ -1950,7 +1970,7 @@ It answers at once with the run underway, output arrives on `observe_checkout_ru
 [operations.stop_checkout_run]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "End a checkout run's process group; its log keeps what printed"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
@@ -1961,7 +1981,7 @@ Answers with the run's record once it is written, `stop_run`'s reason: the calle
 [operations.undo_checkout_run]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Put back the files one checkout run changed, from the snapshot taken just before it"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
@@ -1974,7 +1994,7 @@ Refused while a run is in flight, on a run already undone or with no snapshot, a
 [operations.start_checkout_verify]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Run setup and every Check once in the main checkout, one after another - Verify's live dry-run, a rehearsal that records no verdict anywhere"
 notes = """
 **A sequence of ordinary checkout runs, not a record of its own.** Each step is `start_checkout_run`'s run, with its own log, snapshot, diff and Undo, listed by `list_checkout_runs` and followed on `observe_checkout_run`. What Verify adds rides `get_checkout_run_sheet` as `verify`: the order, which step is out, and why a step did not run. It is held in memory, as a run in flight is.
@@ -1995,7 +2015,7 @@ notes = """
 [operations.save_manifest_file]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Write a corrected armada.yml to disk, and stop there"
 notes = """
 **Save writes the file and stops.** No staging, no commit, no formatting and no reserialisation — the bytes the caller sends are the bytes on disk. The file is tracked, so the edit appears in the working tree and is committed along with everything else; Armada committing to git on a person's behalf would be a surprise in the one place a person is most sensitive to one. Journey 9, *Editing*.
@@ -2012,13 +2032,13 @@ Fleet compares against **the disk at the moment of the save**, never against its
 
 **Editing during a running Job needs no warning and no lock.** A Job is judged against the Checks and Commands it snapshotted at creation, so an edit here cannot reach it.
 
-`agent_access` is `No`, and more plainly than on the seven checkout-run operations it follows: those run in the main checkout, which is the tree a Drone is confined out of, and this writes a tracked file in it — the one that decides what every Job is gated on. A change to what Checks mean is a person's, made where the consequence is stated.
+`agent_access` is `Helm only`. The seven checkout-run operations it follows keep their `No`-turned-`Helm only` reasoning for Drone confinement, which does not apply here — Helm reaches this door, never a Drone's. What does still apply: a change to what Checks mean is a person's, and Helm writes this file only where that person just asked it to.
 """
 
 [operations.edit_manifest]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Apply a form's edits to armada.yml, changing only the lines they name, and write the result"
 notes = """
 **A form changes only the lines it touches.** The owner's decision on #721: every untouched line of `armada.yml` stays byte for byte, and removing a Check, a Command or a port takes the comment block directly above it — Journey 9, *Editing*. This repository's own file is two thirds comment, so a form that sent a re-serialised file through `save_manifest_file` would delete most of a tracked file on its first save. So edits cross as edits — a closed set of variants, keys and values, never text and never a dotted path a form could aim anywhere — and Fleet splices each into the file at the bytes its key occupies. `config::amend` is the writer; `ManifestEdited.text` is the file as written, which is the next edit's `read`.
@@ -2027,7 +2047,7 @@ notes = """
 
 **A file that moved under the edit is refused exactly as a save is.** `EditManifest.read` is required and whole, for `save_manifest_file`'s reasons. Fleet reads the disk before placing anything, so edits are never applied to text the form did not show, and writes through the same beside-and-rename `save`, which compares again at the write.
 
-`agent_access` is `No`, for `save_manifest_file`'s reason: this writes the tracked file that decides what every Job is gated on, in the checkout a Drone is confined out of. A change to what Checks mean is a person's.
+`agent_access` is `Helm only`, `save_manifest_file`'s reason: this writes the tracked file that decides what every Job is gated on. A change to what Checks mean is still a person's, and Helm applies one only on that person's ask.
 """
 
 [operations.get_manifest_spend]
@@ -2089,17 +2109,24 @@ Answers with the instance once it has ended. A Job's servers are also stopped wh
 [operations.restart_fleet]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Restarts the daemon"
 notes = """
 An API command, not a recovery path. It cannot serve the case it is named for — a dead Fleet cannot restart itself, and that path is Bridge calling `launchctl kickstart -k` directly. It exists for the reachable case: Fleet is alive and answering, and something wants a clean restart.
+
+Moot for now: nothing serves this row (`xtask`'s `NOT_BUILT` names why), so `agent_access` moving to `Helm only` with the rest of this ruling changes nothing until somebody builds it.
 """
 
 [operations.resume_interrupted_job]
 kind = "command"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "Restarts a Job after a Fleet crash"
+notes = """
+Moot for now: nothing serves this row (`xtask`'s `NOT_BUILT` names why), so
+`agent_access` moving to `Helm only` with the rest of this ruling changes
+nothing until somebody builds it.
+"""
 
 
 [operations."drone.exited"]
