@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
+import { Prose } from "../../primitives/Prose/Prose";
 
 /**
  * Helm's own conversation, under the dock's questions — #944.
@@ -130,7 +131,9 @@ export function HelmThread({
               </div>
               <div className="armada-helm-thread__message" data-mono={row.mono || undefined}>
                 {typeof row.message === "string"
-                  ? row.message.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)
+                  ? row.mono
+                    ? row.message
+                    : <Prose text={row.message} />
                   : row.message}
               </div>
               {row.cards === undefined
