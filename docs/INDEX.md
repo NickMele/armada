@@ -203,6 +203,7 @@ can find them.
 | Starting a Fleet of your own, to read or record a Job without the owner's | `dev-fleet` |
 | Finding out what a Job did and why it stopped | `what-happened-to-a-job` |
 | Reporting something Armada got wrong | `armada-bug` |
+| Filing what the owner finds while he walks the app | `app-walkthrough` |
 | Working one issue end to end — worktree, plan, implement, test, commit, merge | `work-issue` |
 | Cutting an agent worktree, and giving it back when its branch merges | `agent-worktrees` |
 | Running a whole milestone by dispatching agents at its issues | `orchestrate-milestone` |
