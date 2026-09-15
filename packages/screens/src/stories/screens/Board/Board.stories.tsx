@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import recorded from "../../../fixtures/boards/real-board.json";
 import { repository } from "../../../fixtures/build/base";
@@ -124,6 +124,33 @@ export const TaskBars: Story = {
       .map((el) => el.textContent ?? "")
       .filter((text) => /^\d+ of \d+ tasks$/.test(text));
     await expect(figures.length).toBe(2);
+  },
+};
+
+/**
+ * `list-keyboard.ts`'s own coverage: proves the extraction into a shared mechanism left the Board's
+ * own keyboard unchanged. `Screens/Overview lists`' "Keyboard moves the cursor and acts on it" is
+ * the same story on the other screen the mechanism now serves.
+ */
+export const KeyboardMovesTheCursorAndActs: Story = {
+  name: "Keyboard moves the cursor and acts on it",
+  args: { onOpen: fn(), onKill: fn() },
+  play: async ({ args, canvasElement }) => {
+    const rows = [...canvasElement.querySelectorAll<HTMLElement>("[data-job-id]")];
+    await expect(rows.length).toBeGreaterThan(3);
+    rows[0]!.focus();
+
+    await userEvent.keyboard("jj");
+    await expect(rows[2]).toHaveFocus();
+    await userEvent.keyboard("k");
+    await expect(rows[1]).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onOpen).toHaveBeenCalledWith(rows[1]!.dataset.jobId);
+
+    rows[0]!.focus();
+    await userEvent.keyboard("x");
+    await expect(args.onKill).toHaveBeenCalledWith(rows[0]!.dataset.jobId);
   },
 };
 

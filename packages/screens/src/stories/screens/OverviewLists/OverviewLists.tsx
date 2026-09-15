@@ -71,6 +71,8 @@ export function OverviewListsFrom({
   now = NOW,
   openSections,
   onSectionOpenChange,
+  onOpen = noop,
+  onKill = noop,
   onCursor,
 }: {
   jobs?: readonly JobSummary[];
@@ -83,6 +85,10 @@ export function OverviewListsFrom({
   now?: number;
   openSections?: Partial<Record<BoardSection, boolean>>;
   onSectionOpenChange?: (section: BoardSection, open: boolean) => void;
+  /** Open a Job — a story spies on this to prove the keyboard reaches it. */
+  onOpen?: (jobId: string) => void;
+  /** Ask to kill the Job under the cursor — a story spies on this the same way. */
+  onKill?: (jobId: string) => void;
   onCursor?: (jobId: string | null) => void;
 }) {
   return (
@@ -97,8 +103,8 @@ export function OverviewListsFrom({
       selected={null}
       openSections={openSections}
       onSectionOpenChange={onSectionOpenChange}
-      onOpen={noop}
-      onKill={noop}
+      onOpen={onOpen}
+      onKill={onKill}
       onRedispatch={noop}
       onClear={noop}
       onCopied={noop}
