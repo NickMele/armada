@@ -203,8 +203,8 @@ export function JobDetailHeaderActions({
               {headline}
             </span>
           </nav>
-          {/* No `pulsing`. The rail beneath takes the one pulse on this
-              screen, and this badge stays still. */}
+          {/* No `pulsing`. The rail's current step is the running mark, so
+              it carries the loop and this badge stays still. */}
           <Badge status={status} icon={statusIcon}>
             {statusLabel}
           </Badge>

@@ -30,8 +30,8 @@ export default meta;
 type Story = StoryObj<typeof JobDetailHeaderActions>;
 
 /**
- * A running job. The badge is static: the workflow rail beneath it on this
- * screen carries the one pulse, on its current step.
+ * A running job. The badge is static: the rail's current step is the running
+ * mark, so it carries the loop and the badge does not.
  *
  * The branch copies on click. A Job with no assigned Drone has one act, so the
  * split button is a button — and nothing to approve or merge while a Job works,
