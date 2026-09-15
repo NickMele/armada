@@ -32,6 +32,8 @@ export function BoardFrom({
   now = NOW,
   repositories = [repository()],
   picked,
+  onOpen = noop,
+  onKill = noop,
 }: {
   jobs: readonly JobSummary[];
   workflows: readonly WorkflowSummary[];
@@ -42,6 +44,10 @@ export function BoardFrom({
   connection?: Connection;
   /** When the Board is read. A recording passes its own, or run times go negative. */
   now?: number;
+  /** Open a Job — a story spies on this to prove the keyboard reaches it. */
+  onOpen?: (jobId: string) => void;
+  /** Ask to kill the Job under the cursor — a story spies on this the same way. */
+  onKill?: (jobId: string) => void;
 }) {
   const statement = statementOf(connection, now, now);
   const live = connection.state === "connected";
@@ -99,8 +105,8 @@ export function BoardFrom({
             all={pickedRepository === null}
             disconnected={live ? null : statement.headline}
             selected={null}
-            onOpen={noop}
-            onKill={noop}
+            onOpen={onOpen}
+            onKill={onKill}
             onRedispatch={noop}
             onClear={noop}
             onCompose={noop}

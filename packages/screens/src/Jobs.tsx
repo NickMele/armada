@@ -96,6 +96,7 @@ import {
 import { boardPressOf, SEARCH_KEY, verbOf } from "./keys";
 import type { BoardReach } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
+import { useListCursor, useListKeydown } from "./list-keyboard";
 import { readingOf } from "./reading";
 import { isTerminal, Row } from "./Row";
 
@@ -208,9 +209,10 @@ export function Jobs({
   // Whether the All tab's Done section is open. Folded by default, for the
   // reason the redispatch fold is: what is over is read on purpose.
   const [doneOpen, setDoneOpen] = useState(false);
-  // Where the cursor is, as a job id. It is set from DOM focus rather than kept
-  // beside it, so `j`, the arrows, Tab and the mouse all move one cursor.
-  const [cursor, setCursor] = useState<string | null>(null);
+  // Where the cursor is, as a job id — `list-keyboard.ts`'s own mechanism, DOM
+  // focus read back through the wrapper's `onFocusCapture` below, so `j`, the
+  // arrows, Tab and the mouse all move one cursor.
+  const { cursor, onFocusCapture, move, restoreCursor } = useListCursor(onCursor);
   const search = useRef<HTMLInputElement>(null);
 
   const showing = unfolded ? [...board.shown, ...board.folded] : board.shown;
@@ -259,53 +261,15 @@ export function Jobs({
     search.current?.select();
   }
 
-  /** The rows, as the DOM has them — the only place their drawn order is. */
-  function rowsOnScreen(): HTMLElement[] {
-    return Array.from(document.querySelectorAll<HTMLElement>("[data-job-id]"));
-  }
-
-  /**
-   * Move the cursor. Focus is what moves; `cursor` follows it through the
-   * wrapper's own focus handler, so this never has to keep two things in step.
-   *
-   * Clamped rather than wrapped, which is `Active jobs list`'s rule for the
-   * arrows and is the same rule here: a list that jumps from the last row to
-   * the first loses the reader's place, and a Board is scanned rather than
-   * cycled.
-   */
-  function move(by: 1 | -1): void {
-    const rows = rowsOnScreen();
-    if (rows.length === 0) return;
-    const at = rows.findIndex((row) => row.dataset.jobId === cursor);
-    const to = at < 0 ? (by === 1 ? 0 : rows.length - 1) : Math.min(Math.max(at + by, 0), rows.length - 1);
-    rows[to]?.focus();
-  }
-
-  /**
-   * Put the cursor back on the list without moving it — what `Esc` in the
-   * search field hands back to. The row it was on where that row is still
-   * drawn, and the first row where the search took it off screen.
-   */
-  function restoreCursor(): void {
-    const rows = rowsOnScreen();
-    const at = rows.findIndex((row) => row.dataset.jobId === cursor);
-    (at >= 0 ? rows[at] : rows[0])?.focus();
-  }
-
   /** The job the cursor is on, where the cursor is on one that is drawn. */
   function under(): JobSummary | undefined {
     return drawn.find((job) => job.id === cursor);
   }
 
   function press(event: KeyboardEvent): void {
-    // **A modal is up, so every key belongs to it.** The confirmation this
-    // surface opens is `App`'s and the bulk clear's is its own, and neither is
-    // inside this component — so focus is not what tells them apart, and a
-    // window listener would otherwise open a detail behind the dialog a person
-    // is answering. Read off the document rather than passed in, because the
-    // dialogs are on both sides of this file and a flag would have to be
-    // threaded through both.
-    if (document.querySelector('[role="dialog"], [role="alertdialog"]') !== null) return;
+    // The dialog guard — a modal up means every key belongs to it — and the
+    // latest-handler-in-a-ref registration both live in `useListKeydown` now,
+    // so this only has to say what a press means.
     const read = boardPressOf(event);
     if (read === null) return;
     const job = under();
@@ -358,20 +322,10 @@ export function Jobs({
     event.preventDefault();
   }
 
-  // The listener is registered once and reads the current handler out of a ref.
-  // Re-registering per render is what the deps array would ask for, and `now`
-  // moves once a second — so the whole board re-renders on a clock and the
-  // subscription would churn with it for no reason.
-  const latest = useRef(press);
   useEffect(() => {
-    latest.current = press;
     if (reach !== undefined) reach.current = { tab: chooseTab, search: focusSearch };
   });
-  useEffect(() => {
-    const listen = (event: KeyboardEvent): void => latest.current(event);
-    window.addEventListener("keydown", listen);
-    return () => window.removeEventListener("keydown", listen);
-  }, []);
+  useListKeydown(press);
 
   const why = emptiedBy(tab, query);
 
@@ -417,12 +371,7 @@ export function Jobs({
       // The cursor is DOM focus. Capturing here rather than on the list means a
       // row reached by mouse, by Tab, by the listbox's own arrows or by `j` all
       // set the same value — two cursors that drift is the alternative.
-      onFocusCapture={(event) => {
-        const row = (event.target as HTMLElement).closest<HTMLElement>("[data-job-id]");
-        if (row?.dataset.jobId === undefined) return;
-        setCursor(row.dataset.jobId);
-        onCursor?.(row.dataset.jobId);
-      }}
+      onFocusCapture={onFocusCapture}
     >
       {actions === undefined ? null : (
         <div className="armada-screen__board-actions">{actions}</div>

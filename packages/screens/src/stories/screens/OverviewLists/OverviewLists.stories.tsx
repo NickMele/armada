@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { expect, fn, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import type { BoardSection } from "../../../board";
 import { ARMADA, RUNNING_ONE_WITH_A_PLAN, acrossTwo, OverviewListsFrom, STOREFRONT } from "./OverviewLists";
 
@@ -94,6 +94,33 @@ export const CursorReportsTheFocusedRow: Story = {
     if (row === null) throw new Error("a row to focus");
     row.focus();
     await expect(args.onCursor).toHaveBeenCalledWith(row.dataset.jobId);
+  },
+};
+
+/**
+ * The gap the owner found: `j`/`k` didn't move Overview's cursor, and `Enter`/`x` reached nothing,
+ * because nothing wired `keys.ts`'s map to this screen. `list-keyboard.ts` is the fix — the same
+ * mechanism `Jobs.tsx` uses, so the cursor crosses every section's rows in the one DOM order.
+ */
+export const KeyboardMovesTheCursorAndActs: Story = {
+  name: "Keyboard moves the cursor and acts on it",
+  args: { onOpen: fn(), onKill: fn() },
+  play: async ({ args, canvasElement }) => {
+    const rows = [...canvasElement.querySelectorAll<HTMLElement>("[data-job-id]")];
+    await expect(rows.length).toBeGreaterThan(3);
+    rows[0]!.focus();
+
+    await userEvent.keyboard("jj");
+    await expect(rows[2]).toHaveFocus();
+    await userEvent.keyboard("k");
+    await expect(rows[1]).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onOpen).toHaveBeenCalledWith(rows[1]!.dataset.jobId);
+
+    rows[0]!.focus();
+    await userEvent.keyboard("x");
+    await expect(args.onKill).toHaveBeenCalledWith(rows[0]!.dataset.jobId);
   },
 };
 

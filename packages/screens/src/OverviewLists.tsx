@@ -14,19 +14,24 @@
 // last received, so a Needs you row from before an outage stays on screen; only a board with
 // nothing on it at all draws the disconnected message.
 //
+// **The keyboard shares `Jobs.tsx`'s mechanism rather than copying it.** `list-keyboard.ts` carries
+// the window listener and DOM-focus-as-cursor; `keys.ts`'s `boardPressOf` carries the map, unchanged.
+// Only `move`, `open`, `verb` and `kill` are answered — the rest have no target here yet.
+//
 // Not routed yet — #921 mounts this beneath the summary strip Overview 27 replaced the tile band
 // with — so a story draws it directly.
 
-import { useState } from "react";
 import { ActiveJobsList } from "@armada/components";
 import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { BoardEmpty } from "./BoardEmpty";
 import type { BoardSection } from "./board";
 import { columnsFor, repositoryOf } from "./board";
+import { boardPressOf, verbOf } from "./keys";
 import { headlineOf } from "./lineage";
+import { useListCursor, useListKeydown } from "./list-keyboard";
 import { overviewListsOf } from "./overview-lists";
 import { readingOf } from "./reading";
-import { Row } from "./Row";
+import { isTerminal, Row } from "./Row";
 
 /** `id` on a section's own outer element, so a press elsewhere can `scrollIntoView` it by name. */
 export function overviewPanelId(section: BoardSection): string {
@@ -99,9 +104,44 @@ export function OverviewLists({
   // The Board's own call, `Jobs.tsx`'s own name for it: the columns a row's own fact set names,
   // shared down the list so a column lines up whether or not every row carries that fact.
   const columns = columnsFor(jobs, repositories, all);
-  // Where the cursor is, as a job id — `Jobs.tsx`'s own state, held here for the same reason:
-  // DOM focus is the cursor, so this is what the focus handler below sets.
-  const [cursor, setCursor] = useState<string | null>(null);
+  // The cursor, and the keys that move or act on it — `list-keyboard.ts`'s shared mechanism.
+  const { cursor, onFocusCapture, move } = useListCursor(onCursor);
+  // Every drawn row, flattened across sections — what a verb or a kill key checks the cursor against.
+  const drawn = sections.flatMap((section) => section.jobs);
+
+  function press(event: KeyboardEvent): void {
+    const read = boardPressOf(event);
+    if (read === null) return;
+    const job = drawn.find((one) => one.id === cursor);
+    switch (read.act) {
+      case "move":
+        move(read.by);
+        break;
+      case "open":
+        if (job === undefined) return;
+        onOpen(job.id);
+        break;
+      case "verb":
+        // The row carries one control, so at most one verb key applies — `Jobs.tsx`'s own rule.
+        if (job === undefined) return;
+        if (verbOf(job, isTerminal(job)) !== read.verb) return;
+        onOpen(job.id);
+        break;
+      case "kill":
+        if (job === undefined || isTerminal(job)) return;
+        onKill(job.id);
+        break;
+      case "search":
+      case "tab":
+      case "copy":
+      case "compose":
+        // No search field, no state tabs, nothing to copy, nowhere to open a composer from here —
+        // the map still recognizes the key; this screen has nothing to do with it yet.
+        return;
+    }
+    event.preventDefault();
+  }
+  useListKeydown(press);
 
   const rowOf = (job: JobSummary) => (
     <Row
@@ -125,15 +165,10 @@ export function OverviewLists({
   return (
     <div
       className="armada-screen__overview-lists"
-      // The cursor is DOM focus, across every panel — `Jobs.tsx`'s own
-      // handler: a row reached by the mouse, by Tab or by a panel's own
-      // arrows all set the same value, whichever section it is in.
-      onFocusCapture={(event) => {
-        const row = (event.target as HTMLElement).closest<HTMLElement>("[data-job-id]");
-        if (row?.dataset.jobId === undefined) return;
-        setCursor(row.dataset.jobId);
-        onCursor?.(row.dataset.jobId);
-      }}
+      // The cursor is DOM focus, across every panel — a row reached by the
+      // mouse, by Tab or by a panel's own arrows all set the same value,
+      // whichever section it is in.
+      onFocusCapture={onFocusCapture}
     >
       {sections.length === 0 ? (
         <ActiveJobsList
