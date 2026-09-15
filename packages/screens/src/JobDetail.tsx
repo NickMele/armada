@@ -202,6 +202,16 @@ function OneJob({
   // `job.state_changed` event that missed or has not yet applied. Until then,
   // the prop is what there is.
   const job = whole?.job ?? jobProp;
+
+  // Select a step. **Clicking the running step resumes following it, the same
+  // way clicking anything else holds there** — `job.current_step_id` is the
+  // one value a click is compared against, so a Job that later advances onto
+  // whatever the reader is holding still reads as following it, and only a
+  // click on the step that is running now clears the hold. #1152.
+  function selectStep(stepId: string): void {
+    setSelected(stepId === job.current_step_id ? null : stepId);
+  }
+
   const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet: (which) => move({ move: "open", which }), onSaid });
 
   // The diff, for every Job that is open rather than only for one at review.
@@ -637,10 +647,10 @@ function OneJob({
       // tree's current step is behind the layer, so its mark stops and the
       // sheet's live mark takes it.
       pulsing={render === "working" && sheet === null}
-      onSelectStep={setSelected}
+      onSelectStep={selectStep}
       // A count in the tree opens its chapter: the step, then the reader on it.
       onOpenChapter={(stepId, chapterId) => {
-        setSelected(stepId);
+        selectStep(stepId);
         keys.onFocusChapter(chapterId);
       }}
       // The tree draws exactly what the keyboard holds. **Selecting a step
