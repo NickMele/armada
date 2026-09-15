@@ -190,6 +190,15 @@ pub struct StepDetail {
     /// a linear workflow — and absent where Fleet cannot say, as `checks` is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pass: Option<StepPass>,
+    /// Where this step goes on a verdict that neither advances nor ends,
+    /// naming the step name rather than the verdict. **On the step that sends
+    /// the work back**, [`pass`](Self::pass)'s own step — the pair are two
+    /// facts about the same edge, and a client drawing a loop's arrow needs
+    /// both: this says where it points, `pass.of` says how many times it may
+    /// be drawn. Absent on every step that sends nothing back, and where
+    /// Fleet cannot say, as `checks` is. Since 14.3, #1149.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict_routing_target: Option<StepId>,
     /// Absent until a gate has ruled on the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verdict: Option<Verdict>,
@@ -414,6 +423,9 @@ impl StepDetail {
                     number: facts.map_or(0, |facts| facts.returns) + 1,
                     of,
                 }),
+            verdict_routing_target: declared
+                .and_then(|declared| declared.verdict_routing().values().next())
+                .map(StepId::from),
             last_verdict: step
                 .last_verdict()
                 .map(|verdict| Verdict::of(latest_closed_attempt(facts), verdict)),

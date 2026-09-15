@@ -143,6 +143,11 @@ pub(crate) fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep>
             advance_gate: step.advance_gate().into(),
             delivers: step.delivers(),
             held_for_handoff: held_for_handoff(workflow.frozen(), step.id()),
+            verdict_routing_target: step.verdict_routing().values().next().map(StepId::from),
+            // Zero is `ResolvedStep`'s own "no loop", the same sentinel
+            // `ipc::StepDetail::of` reads off `StepPass` — absent on the wire
+            // rather than a cap of zero, which is not a cap anything declared.
+            iteration_cap: Some(step.iteration_cap()).filter(|cap| *cap > 0),
         })
         .collect()
 }

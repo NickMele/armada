@@ -16,6 +16,7 @@
 //! it is spent.
 
 use adapter_traits::WorktreeSpec;
+use api::Queries;
 use core_model::{Approach, EvidenceType, JobStatus, NewTask, PlanChange, StepId, StepState};
 use testkit::FakeWorkProduct;
 use verification::{Claimed, NotClaimed, ShownBy};
@@ -137,6 +138,79 @@ async fn a_verdict_that_routes_backwards_puts_the_job_on_the_earlier_step() {
         Some(StepState::AwaitingHuman),
         "and the gate did not move: a person who asked for another draft has \
          not answered the gate they are standing at, so it holds"
+    );
+}
+
+/// **What a person approves already names where a loop returns to, and its
+/// cap** — #1149. `verdict_routing` stops in `config`; `wire::declared` is what
+/// carries it onto `WorkflowStep`, in front of somebody deciding to approve a
+/// dispatch rather than only after one is running.
+#[tokio::test]
+async fn the_workflow_list_names_the_loop_s_target_and_cap() {
+    let home = TempDir::new();
+    let fleet = a_fleet_running_a_loop(&home, FakeWorkProduct::changed(&["src/log.rs"]), 5);
+    let workflows = fleet.list_workflows().await.expect("the workflow list");
+    let steps = &workflows[0].steps;
+
+    let implement = steps
+        .iter()
+        .find(|step| step.step_id.as_str() == "implement")
+        .expect("the drafting step");
+    assert_eq!(
+        implement.verdict_routing_target, None,
+        "a step nothing routes back to names no target"
+    );
+    assert_eq!(implement.iteration_cap, None);
+
+    let summarise = steps
+        .iter()
+        .find(|step| step.step_id.as_str() == "summarise")
+        .expect("the gate step");
+    assert_eq!(
+        summarise
+            .verdict_routing_target
+            .as_ref()
+            .map(ipc::StepId::as_str),
+        Some("implement"),
+        "the step that sends work back names where it goes"
+    );
+    assert_eq!(
+        summarise.iteration_cap,
+        Some(5),
+        "beside the pass cap it was declared with"
+    );
+}
+
+/// The same pair, read off a Job already at the gate — `get_job`'s `StepDetail`
+/// rather than `list_workflows`' `WorkflowStep`. `pass.of` already carried the
+/// cap; this is the target beside it.
+#[tokio::test]
+async fn the_gate_s_own_detail_names_the_loop_s_target_beside_its_pass() {
+    let home = TempDir::new();
+    let fleet = a_fleet_running_a_loop(&home, FakeWorkProduct::changed(&["src/log.rs"]), 5);
+    let job_id = at_the_loop_s_gate(&fleet, &home).await;
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(&job_id))
+        .await
+        .expect("the Job is served");
+    let gate_step = detail
+        .steps
+        .iter()
+        .find(|step| step.step_id.as_str() == "summarise")
+        .expect("the gate step");
+    assert_eq!(
+        gate_step
+            .verdict_routing_target
+            .as_ref()
+            .map(ipc::StepId::as_str),
+        Some("implement"),
+        "the step that sends work back names where it goes"
+    );
+    assert_eq!(
+        gate_step.pass.map(|pass| pass.of),
+        Some(5),
+        "the same pass cap `pass` already carried"
     );
 }
 

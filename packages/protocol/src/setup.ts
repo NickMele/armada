@@ -101,6 +101,19 @@ export type WorkflowStep = {
    * step. Absent is none. Since 13.48, #849.
    */
   held_for_handoff?: string[];
+  /**
+   * Where this step goes on a verdict that neither advances nor ends —
+   * `structure: loop`'s edge. **`structure` alone cannot say this**: only
+   * `verdict_routing` names which step a loop returns to. Absent on every step
+   * of a linear workflow, which is most steps of most workflows. Since 14.3,
+   * #1149.
+   */
+  verdict_routing_target?: string;
+  /**
+   * How many times this step may be returned to before the Job escalates.
+   * **Present exactly where `verdict_routing_target` is.** Since 14.3, #1149.
+   */
+  iteration_cap?: number;
 };
 
 /** One Manifest Fleet holds. */

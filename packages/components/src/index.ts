@@ -72,6 +72,7 @@ export * from "./compositions/StepBar/StepBar";
 export * from "./compositions/TaskMark/TaskMark";
 export * from "./compositions/TransitionHistory/TransitionHistory";
 export * from "./compositions/UnifiedDiff/UnifiedDiff";
+export * from "./compositions/WorkflowDiagram/WorkflowDiagram";
 export * from "./compositions/WorkflowRail/WorkflowRail";
 
 // What every job detail render shares. The five screens that took it are gone:
