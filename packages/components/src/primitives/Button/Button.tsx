@@ -1,9 +1,9 @@
 import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode, type Ref } from "react";
 
 /**
- * The four button variants of the design system contract, plus `tonal` —
- * chrome, carried over from `SplitButton`'s own `tonal` for the title row's
- * Dispatch (#1156).
+ * The five button variants of the design system contract. `tonal` is chrome,
+ * carried over from `SplitButton`'s own `tonal` for the title row's Dispatch
+ * (#1156).
  *
  * Emphasis comes from fill, not size. A primary is `--accent` fill at the
  * normal control height — never a scaled-up CTA — and there is one per view.

@@ -1079,6 +1079,7 @@ one claim.
 | Secondary | `--bg-sunken`, `--border-strong`, `--fg-default` | `--bg-hover` | Everything ordinary |
 | Ghost | transparent, `--fg-muted` | `--bg-hover` • `--fg-default` | Row actions, icon buttons, toolbars |
 | Destructive | transparent, `--status-completed-failed` text and border | fill at 12% | Kill only. Never a filled red button |
+| Tonal | `--accent-muted` fill, `--accent-hover` text, no border | 24% `--accent` mixed into `--accent-muted` | Chrome present on every screen, carrying the app's main entry. The title bar's Dispatch. Never the one solid accent of a view |
 
 ```
 height   36px default · 32px sm (use sm inside table rows)
