@@ -147,6 +147,36 @@ export const ApprovalDismissed: Story = {
   },
 };
 
+/**
+ * Helm's own reply carries the same subset `Prose` draws everywhere else —
+ * a heading, a list, inline code and bold, not the literal asterisks a
+ * naive paragraph split left on screen. `#1167`.
+ */
+export const AMarkdownReply: Story = {
+  args: {
+    rows: [
+      { id: "1", at: "14:29:40", actor: "you", message: "Why did job 12 stall?" },
+      {
+        id: "2",
+        at: "14:29:52",
+        actor: "helm",
+        message:
+          "# What stalled it\n\n" +
+          "Job 12 is waiting on a command it was **never given**:\n\n" +
+          "- `cargo nextest run -p store`\n" +
+          "- a workflow step that names it\n\n" +
+          "Add the step, or give the Job the command directly.",
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText(/\*\*never given\*\*/)).not.toBeInTheDocument();
+    await expect(canvas.getByText("What stalled it")).toBeInTheDocument();
+    await expect(canvas.getByText("cargo nextest run -p store").tagName).toBe("CODE");
+    await expect(canvas.getByText("never given").tagName).toBe("STRONG");
+  },
+};
+
 /** The Job left the gate by another road — Bridge, or a second card — while this one sat unread. */
 export const ApprovalAlreadyMoved: Story = {
   args: {
