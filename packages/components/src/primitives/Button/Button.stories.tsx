@@ -31,7 +31,7 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 /* The four variants at rest, one story each — the rows of the contract's
-   Button table. */
+   Button table — plus `Tonal`, chrome for the one caller outside it. */
 
 export const Primary: Story = {
   args: { variant: "primary", children: "Dispatch job" },
@@ -66,6 +66,19 @@ export const Destructive: Story = {
     <Card>
       <Button {...args} />
     </Card>
+  ),
+};
+
+/**
+ * Tonal — chrome, not a list row's act. Same tokens as `SplitButton`'s own
+ * `tonal`, drawn on `--bg-sunken`, the title row's own ground (#1156).
+ */
+export const Tonal: Story = {
+  args: { variant: "tonal", children: "Dispatch" },
+  render: (args) => (
+    <div style={{ padding: "var(--pad-card)", background: "var(--bg-sunken)" }}>
+      <Button {...args} />
+    </div>
   ),
 };
 

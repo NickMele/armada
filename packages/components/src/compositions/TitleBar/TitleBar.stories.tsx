@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { Select } from "../../primitives/Select/Select";
 import { TitleBar } from "./TitleBar";
 
@@ -39,7 +40,20 @@ export const Full: Story = {
   args: {
     repositoryPicker: picker,
     onSearch: () => {},
-    onDispatch: () => {},
+    onDispatch: fn(),
+  },
+  /**
+   * #1156: Dispatch is one button with no caret, and clicking it dispatches.
+   * `SplitButton` drew a second, separately-named control for the menu even
+   * with nothing behind it — `queryByRole` for that name is the regression
+   * this guards.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    const dispatch = canvas.getByRole("button", { name: "Dispatch" });
+    await expect(canvas.queryByRole("button", { name: "Dispatch a job" })).not.toBeInTheDocument();
+
+    await userEvent.click(dispatch);
+    await expect(args.onDispatch).toHaveBeenCalledTimes(1);
   },
 };
 
