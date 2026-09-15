@@ -7,7 +7,7 @@ use std::path::Path;
 
 use config::Manifest;
 
-use super::reach::{may, Authority};
+use super::reach::{Authority, RESERVED};
 
 /// The Machine Voice setting as it reads. It tunes length and formality and
 /// nothing else, and a blank one is no Voice, so no block is rendered empty.
@@ -57,21 +57,22 @@ what is in it rather than assuming the line carries its contents.";
 const MAY_ACT: &str = "\
 WHAT YOU MAY DO
 
-You may call every tool that reads. Of the tools that act, you may call these \
-and no others:
-";
+You may call every tool you are given that acts, once a person has asked you \
+to make that call, in this conversation, and never on your own initiative. \
+Approving a Job you drafted, redispatching, restarting a step, editing the \
+Manifest, merging a pull request, ending a Job: every act this Fleet's door \
+offers is yours on that ask, except ";
 
 const APPROVAL_ASK: &str = "\
-Approving a Job is never yours, whatever you are asked. Call \
-ask_person_to_approve instead, naming the Job, when you are asked to approve \
-one or a Job you drafted has reached the approval gate. It puts a card in \
-front of the person and decides nothing itself; only their own press on it \
-sends the Job on.";
+Approving a Job follows the same rule, including one you drafted yourself: \
+yours to call once a person asks you to, and not before. Where nobody has \
+asked yet and a Job you drafted has reached the approval gate, call \
+ask_person_to_approve instead, naming the Job. It puts a card in front of the \
+person and decides nothing itself; only their own press on it sends the Job \
+on, unless they tell you to press it for them.";
 
-const LEFT_TO_THE_PERSON: &str = "\
-Any other act is the person's, including a tool you have been given that is \
-not listed here. Where one would help, say which and why, and leave it to \
-them. How far you may raise a cap is bounded, and a raise past the bound is \
+const CAP_BOUND: &str = "\
+How far you may raise a cap is bounded, and a raise past the bound is \
 refused, naming the most you may ask for.";
 
 const READ_ONLY: &str = "\
@@ -135,22 +136,20 @@ fn this_repository(manifest: &Manifest) -> String {
     )
 }
 
-/// Listed from [`may`] over what the door could offer a Helm session, so the
-/// brief and the door's refusal cannot name different acts.
+/// States the rule in [`super::may`] rather than enumerating what it admits — the
+/// grant is most of a hundred acts wide now, and a list that long in a system
+/// prompt is noise a person never reads. [`RESERVED`] is named from the same
+/// constant the door's refusal reads, so the brief and the refusal cannot
+/// name a different exception.
 fn what_you_may_do(authority: Authority) -> String {
     match authority {
         Authority::ReadOnly => READ_ONLY.to_string(),
         Authority::Acting => {
-            let mut block = MAY_ACT.to_string();
-            for row in api::offerable().filter(|row| row.kind == "command" && may(authority, row)) {
-                block.push_str("\n  ");
-                block.push_str(row.operation);
-            }
-            block.push_str("\n\n");
-            block.push_str(APPROVAL_ASK);
-            block.push_str("\n\n");
-            block.push_str(LEFT_TO_THE_PERSON);
-            block
+            let reserved = RESERVED.join(", ");
+            format!(
+                "{MAY_ACT}{reserved}, which stays a person's whatever you are asked.\n\n\
+                 {APPROVAL_ASK}\n\n{CAP_BOUND}"
+            )
         }
     }
 }
