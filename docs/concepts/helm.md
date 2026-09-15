@@ -46,7 +46,7 @@ Anything genuinely cross-Manifest stays a Bridge job.
 
 Helm's advantage is not more access than you have. It is reasoning over results and chaining calls you would otherwise make one at a time — "why is Job 12 failing", "what needs my attention, one by one", "what is open that we could dispatch".
 
-**Helm gets a strict subset, not a mirror.** `../contracts/system-architecture.md`, section 6 carries the inventory of queries, commands and events. **Helm gets every query, and of the commands only the acts the owner gave it: redirecting a Drone, drafting Jobs, examining a Job, showing again, runs, servers, raising a cap within Fleet's Helm bound, and asking the person to approve a Job.** `fleet::helm::may` is that line, and the agent door refuses every other command to a Helm session by name — undoing a run stays the person's. With action authority set to read-only, Helm is refused every command.
+**Helm gets every query, and of the commands, every one but a person's own.** `../contracts/system-architecture.md`, section 6 carries the inventory of queries, commands and events. `fleet::helm::may` is the line: every read is Helm's, and a command is Helm's when the machine's authority setting allows acting at all and the act is not `undo_run`, the one command reserved to a person regardless of the ask. With action authority set to read-only, Helm is refused every command.
 
 **The 8 WebSocket events are Bridge-only.** Why: an agent cannot be interrupted mid-turn.
 
@@ -62,22 +62,20 @@ What Helm may *do* rather than read is a separate limit — see Action authority
 
 ## Action authority
 
-Helm's write access is deliberately narrow and maps onto the Intervention Ladder — what you do about a problem, ordered by how much you take over. It does **not** map onto alert levels, which are a separate axis.
+Helm may call any command it is offered once you ask it to, in this conversation — the ask is the human gate itself, not a step before one. `undo_run` is the sole exception, a person's regardless of what is asked. This replaced a narrower rule keyed to the Intervention Ladder — what you do about a problem, ordered by how much you take over — which is now a description of the acts rather than a boundary on Helm.
 
 | Rung | Action | Helm directly? |
 | --- | --- | --- |
-| 1 | Redirect — structured instruction sent to a Drone | **Yes**, on your behalf |
-| 2 | Kill & Redispatch — kill Drone, dispatch a fresh one with new context | **No** — your explicit approval |
+| 1 | Redirect — structured instruction sent to a Drone | **Yes**, on your ask |
+| 2 | Kill & Redispatch — kill Drone, dispatch a fresh one with new context | **Yes**, on your ask |
 | 3 | Break-glass Pilot — raw terminal takeover | **No, by definition** |
-| — | Any Job-level dispatch | **No** — Helm may draft only |
+| — | Approve dispatch, on a Job Helm drafted or any other | **Yes**, on your ask, never as a silent follow-on to drafting |
 
-Rung 2 routes through your approval even if Helm drafted the plan. Rung 3 is a human at a keyboard, which is what rung 3 is. A Job Helm drafts sits at the same approval gate every Job sits at: the primary autonomy control stays strict and human-gated, with no exception for Helm-originated proposals.
-
-The line sits at rung 1 because stopping or redirecting something already approved is much lower-stakes than starting something new. Job dispatch is the system's core autonomy control (see [Fleet](fleet.md) — Scheduling and gating) and stays untouched regardless of who is proposing it.
+Rung 3 carries no MCP operation for Helm to reach for, ladder or no. A Job Helm drafts still sits at the same approval gate every Job sits at; Helm may press it too, but only where you asked it to by name, exactly as it may take any other act.
 
 **The one exception is a cap.** A held Drone still costs money, and a Drone that was told to report and then went quiet is spending it without converging — so that one is killed rather than held. Holding is for a Drone waiting on a person, and a Drone that went quiet is not waiting, it is burning. **A Drone still writing inside its declared plan is doing neither, and is not killed.** Its worktree survives either way, which is what the rule was protecting.
 
-**A Helm-initiated Redirect on a healthy Drone is recorded on the Job, the same as a human one.** The rung-1 line is unchanged by that.
+**A Helm-initiated Redirect on a healthy Drone is recorded on the Job, the same as a human one.** The record is unchanged by that.
 
 ## Audit trail
 

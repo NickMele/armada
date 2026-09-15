@@ -103,7 +103,7 @@ Renamed from "Escalating Response Tiers" Aug 2026. The old name read as severity
 | 2 | Kill & Redispatch — kill Drone, capture learnings, dispatch a fresh one with new context | In-place on Debug | New Job at the first step, old learnings become reference context |
 | 3 | Break-glass Pilot — raw terminal takeover, you finish the work | Deliberate mode switch, entered rarely | Explicit manual-override event, never mixed into Drone evidence |
 
-**Helm's authority maps onto this ladder**, not onto the alert levels. Rung 1 it may take directly; rung 2 always routes through your approval; rung 3 is a human at a keyboard by definition and no agent can take it.
+**Helm's authority no longer maps onto this ladder alone.** Rung 1 and rung 2 it may both take directly, on your own ask in conversation — the ask is the gate, not a second approval step. Rung 3 is a human at a keyboard by definition and no agent can take it, ladder or no.
 
 ## Escalation Resource State
 

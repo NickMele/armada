@@ -88,8 +88,9 @@ Six layers, assembled in order — section 3. Its wording is section 5.
 
 **Told:** the Fleet MCP tools the agent door offers, and which of them it may
 act through. What it may act through is one predicate, `fleet::helm::may`, and
-the brief lists from it rather than this page restating it. The inventory under
-both is the `agent_access` column in `crates/ipc/operations.toml`, and this page
+the brief states the rule it draws from `may` — every act but `undo_run`, once
+asked — rather than this page restating it. The inventory under both is the
+`agent_access` column in `crates/ipc/operations.toml`, and this page
 does not count it: it held a count once, the count was wrong in both halves,
 and a number here is a second copy that drifts. The selected Manifest, named
 rather than quoted. Its resolved authority, a Machine setting between acting
@@ -1338,33 +1339,36 @@ selected Manifest, the resolved authority and Voice, once per session.
 | **This repository** | Say a question about another repository cannot be answered here | The scope is the door's, and a session cannot see it. Without the block a refusal arrives as an empty tool answer |
 | **Each turn** | Call `get_events_since` first, and fetch detail only where it bears | Fleet never wakes a session, so the poll is the only way a turn is current |
 | **Where they are** | Read one line naming the screen, the pick, a chipped Job and the cursor row — ahead of what was typed — and call `get_job` for a named Job's own contents | `#1075`: Bridge sends this with every ask, so the person never has to say which Job they mean |
-| **What you may do** | Act only through the listed tools, and leave every other act to the person | The door offers every `Yes` row, and `#73` drew Helm's line inside that set. Until the door refuses on it, the brief is the line |
+| **What you may do** | Call any tool that acts once a person asks for it, and never on your own initiative; `undo_run` stays theirs regardless | `#73` drew Helm's line as an allowlist inside the door's `Yes` rows; `#1150` reversed it to a denylist of one. `fleet::helm::may` is the rule, and the brief states it rather than restating a list |
 | **How you answer** | Answer first, add at most one flagged observation, say "I" only for Helm's own acts, hedge by source | [Helm](../concepts/helm.md)'s Voice & conduct, and the Design System's P3 and P4 |
 | **Voice** | None. It tunes length and formality | Rendered only where the setting is set. It comes last, so it adjusts what is above it and does not contradict it |
 
-**Acts are listed by tool name, and reads are not.** Every query the door
-offers is a read, and each carries its own description in the tool list. The
-acts are a subset of what the door offers, so a name is the only thing that
-tells a session which offered tool it may call. The list is generated from the
-predicate, so it cannot name a different set from the one the door enforces.
+**The rule is stated, not enumerated.** Every act the door offers is Helm's
+once asked for, except `undo_run` — `fleet::helm::reach::RESERVED`, named in
+the brief the same way it is named in the door's own refusal, so the two
+cannot state a different exception. Before `#1150` this block listed each
+admitted tool by name; the grant now runs to every act the door offers a Helm
+session, and a list that long in a system prompt is noise nobody reads.
 
 **The cap bound is stated without its figure.** `fleet::raising` holds the
 multiple. A number here would be a second copy, and the refusal already names
 the ceiling.
 
-**Drafting Jobs, and asking for approval, are listed.** The door offers a Helm
-session every `Yes` row and the `Drafts only` rows besides — `propose_job`,
-`propose_from_request` and `ask_person_to_approve` (`#1041`), and no other
-agent's door session sees any of the three. `fleet::helm::may` admits them
-all, so the brief lists them the same as any other act it admits.
+**Drafting Jobs is folded into the same rule.** The door offers a Helm session
+every `Yes` row, the `Drafts only` rows — `propose_job` and
+`propose_from_request` — and the `Helm only` rows besides (`#941`, `#1150`),
+and no other agent's door session sees any of the last two tiers. `fleet::helm::may`
+admits all three the same way, so the brief does not call drafting out
+separately from any other act.
 
-**Approving is never listed, and is named anyway.** `approve_dispatch` stays
-`No` for every agent, so it never reaches the generated list — but a session
-told nothing about approval reads a refusal as a gap to work around. The block
-names `ask_person_to_approve` by hand, once, under `Acting` authority alone:
-call it, naming the Job, when asked to approve one or when a Job the session
-drafted reaches the gate. It puts a card in front of the person and decides
-nothing; only their own press moves the Job.
+**Approving is granted by the rule, and named again for the one case the rule
+does not cover.** `approve_dispatch` reads `Helm only` now (`#1150`), so a
+session may call it once asked to — including approving a Job it drafted
+itself, on that same ask and never before it. `ask_person_to_approve` is
+named by hand, once, for the occasion nobody has asked yet and a Job the
+session drafted has reached the gate: it puts a card in front of the person
+and decides nothing; only their own press, or their own later ask to Helm,
+moves the Job.
 
 **The Manifest is named, not quoted:** its id and its folder. Everything else in
 it is for `get_manifest` to answer, which stays current where a copy in the
@@ -1415,25 +1419,29 @@ them with no reason given, reads the instruction as an error to work around.
 │ contents.
 └────────────────────────────────────────────────
 ┌─ WHAT YOU MAY DO ──────────────────────────────
-│ You may call every tool that reads. Of the tools
-│ that act, you may call these and no others:
+│ You may call every tool you are given that acts,
+│ once a person has asked you to make that call, in
+│ this conversation, and never on your own
+│ initiative. Approving a Job you drafted,
+│ redispatching, restarting a step, editing the
+│ Manifest, merging a pull request, ending a Job:
+│ every act this Fleet's door offers is yours on
+│ that ask, except undo_run, which stays a person's
+│ whatever you are asked.
 │
-│   [one line per tool name fleet::helm::may admits]
+│ Approving a Job follows the same rule, including
+│ one you drafted yourself: yours to call once a
+│ person asks you to, and not before. Where nobody
+│ has asked yet and a Job you drafted has reached
+│ the approval gate, call ask_person_to_approve
+│ instead, naming the Job. It puts a card in front
+│ of the person and decides nothing itself; only
+│ their own press on it sends the Job on, unless
+│ they tell you to press it for them.
 │
-│ Approving a Job is never yours, whatever you are
-│ asked. Call ask_person_to_approve instead, naming
-│ the Job, when you are asked to approve one or a
-│ Job you drafted has reached the approval gate. It
-│ puts a card in front of the person and decides
-│ nothing itself; only their own press on it sends
-│ the Job on.
-│
-│ Any other act is the person's, including a tool
-│ you have been given that is not listed here.
-│ Where one would help, say which and why, and
-│ leave it to them. How far you may raise a cap is
-│ bounded, and a raise past the bound is refused,
-│ naming the most you may ask for.
+│ How far you may raise a cap is bounded, and a
+│ raise past the bound is refused, naming the most
+│ you may ask for.
 └────────────────────────────────────────────────
 ┌─ HOW YOU ANSWER ───────────────────────────────
 │ Answer what was asked, first, with nothing
