@@ -1,7 +1,20 @@
 /* The sheet's own frame. The ground, the face and the body step are
    `@armada/tokens/base.css`'s, loaded before this exactly as Bridge loads
    them; what is left is the one thing a story wants that the app does not —
-   room around the thing being looked at. */
+   room around the thing being looked at.
+
+   **A `layout: "fullscreen"` story gets none of it** — `preview.tsx`'s own
+   decorator strips this padding back to zero for one, the same thing
+   Storybook's own preview does in `storybook dev` by toggling a class
+   `@storybook/addon-vitest`'s test renderer never applies. Without that, a
+   wired screen's own `height: "100vh"`
+   frame (`Setup.tsx` and its siblings) is sized to the real viewport but
+   *offset* from its top edge by this padding, so its bottom edge runs past
+   the window it was meant to fill by exactly this much. #1192. */
 body {
   padding: var(--space-6);
+}
+
+body[data-storybook-layout="fullscreen"] {
+  padding: 0;
 }
