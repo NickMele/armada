@@ -1,5 +1,5 @@
 import { MessageSquare } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { BoardEmptyState } from "../../compositions/BoardEmptyState/BoardEmptyState";
 import { FleetPanel, type FleetPanelProps } from "../../compositions/FleetPanel/FleetPanel";
 import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
@@ -75,6 +75,19 @@ export type TheShellDock = {
   /** The binding, beside the close and in the strip's tooltip. */
   binding?: string;
   onOpen: (open: boolean) => void;
+  /**
+   * The resting width in px. Absent draws `--w-dock`. Read while beside the
+   * content; a folded dock is the `Sheet`'s own width, never a drag.
+   */
+  width?: number;
+  /**
+   * Drags and arrow-key nudges the leading-edge handle, clamped to
+   * `--w-dock-min`/`--w-dock-max`. **Absent draws no handle at all** — an
+   * edge that looks grabbable and does nothing is worse than no edge.
+   * Persisting the result across a restart is the caller's, the same way
+   * `open` is.
+   */
+  onResize?: (width: number) => void;
   /** Absent draws one quiet line until the questions (#935) and the conversation (#944) arrive. */
   children?: ReactNode;
 };
@@ -129,23 +142,138 @@ export function TheShell({
 
 const DOCK_TITLE = "Helm";
 
-function Dock({ open, folded = false, questions = 0, binding, onOpen, children }: TheShellDock) {
+// Fallbacks only for a caller with no stylesheet loaded (a bare unit test);
+// the tokens are the real source and are read fresh on every drag.
+const DOCK_WIDTH_MIN_FALLBACK = 320;
+const DOCK_WIDTH_MAX_FALLBACK = 640;
+const DOCK_WIDTH_DEFAULT_FALLBACK = 380;
+
+function dockWidthBounds(): { min: number; max: number } {
+  if (typeof document === "undefined") {
+    return { min: DOCK_WIDTH_MIN_FALLBACK, max: DOCK_WIDTH_MAX_FALLBACK };
+  }
+  const style = getComputedStyle(document.documentElement);
+  const min = parseFloat(style.getPropertyValue("--w-dock-min"));
+  const max = parseFloat(style.getPropertyValue("--w-dock-max"));
+  return {
+    min: Number.isFinite(min) ? min : DOCK_WIDTH_MIN_FALLBACK,
+    max: Number.isFinite(max) ? max : DOCK_WIDTH_MAX_FALLBACK,
+  };
+}
+
+/** The dock's own resting width, in px, for a caller with none of its own to remember yet. */
+export function defaultDockWidth(): number {
+  if (typeof document === "undefined") return DOCK_WIDTH_DEFAULT_FALLBACK;
+  const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--w-dock"));
+  return Number.isFinite(value) ? value : DOCK_WIDTH_DEFAULT_FALLBACK;
+}
+
+/**
+ * Clamped to the drag range `--w-dock-min`/`--w-dock-max` names, so a width
+ * read back from storage — stale, or from a build that carried different
+ * tokens — never draws past what the tokens allow today.
+ */
+export function clampDockWidth(width: number): number {
+  const { min, max } = dockWidthBounds();
+  return Math.min(max, Math.max(min, width));
+}
+
+/** One `--space-4` per arrow press — the same step the dock's own padding uses. */
+const DOCK_WIDTH_STEP = 16;
+
+/**
+ * The dock's leading-edge handle. A drag or an arrow key moves it; both read
+ * the same clamp so neither can push the dock past what a mouse could reach.
+ *
+ * **Left widens the dock, right narrows it** — the dock sits on the window's
+ * trailing edge, so dragging toward the content is dragging the edge that
+ * grows it, the same direction a mouse drag moves. Home and End match: Home
+ * (the leftmost position a splitter can take) is the widest the dock gets.
+ */
+function DockHandle({ width, onResize }: { width: number; onResize: (width: number) => void }) {
+  const drag = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+
+  function pointerDown(event: PointerEvent<HTMLDivElement>): void {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: width };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    // Suppressing the drag's own text selection also suppresses the focus a
+    // click would otherwise grant — put back by hand, so the keyboard still
+    // works right after a press finds the handle.
+    event.currentTarget.focus();
+    event.preventDefault();
+  }
+
+  function pointerMove(event: PointerEvent<HTMLDivElement>): void {
+    if (drag.current === null || drag.current.pointerId !== event.pointerId) return;
+    const delta = drag.current.startX - event.clientX;
+    onResize(clampDockWidth(drag.current.startWidth + delta));
+  }
+
+  function endDrag(event: PointerEvent<HTMLDivElement>): void {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    drag.current = null;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  }
+
+  function keyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    const { min, max } = dockWidthBounds();
+    if (event.key === "ArrowLeft") onResize(clampDockWidth(width + DOCK_WIDTH_STEP));
+    else if (event.key === "ArrowRight") onResize(clampDockWidth(width - DOCK_WIDTH_STEP));
+    else if (event.key === "Home") onResize(max);
+    else if (event.key === "End") onResize(min);
+    else return;
+    event.preventDefault();
+  }
+
+  const { min, max } = dockWidthBounds();
+  return (
+    <div
+      className="armada-shell__dock-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${DOCK_TITLE}`}
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={Math.round(min)}
+      aria-valuemax={Math.round(max)}
+      tabIndex={0}
+      onPointerDown={pointerDown}
+      onPointerMove={pointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onKeyDown={keyDown}
+    />
+  );
+}
+
+function Dock({ open, folded = false, questions = 0, binding, width, onResize, onOpen, children }: TheShellDock) {
   const body = children ?? (
     <BoardEmptyState quiet>Questions waiting on you, and Helm, will be here.</BoardEmptyState>
   );
 
   if (open && !folded) {
+    const restingWidth = width ?? defaultDockWidth();
     return (
-      <aside className="armada-shell__dock" aria-label={DOCK_TITLE}>
-        <div className="armada-shell__dock-head">
-          <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
-          <Button variant="secondary" size="sm" ground="sunken" onClick={() => onOpen(false)}>
-            Close
-            {binding === undefined ? null : <Chord binding={binding} />}
-          </Button>
-        </div>
-        <div className="armada-shell__dock-body">{body}</div>
-      </aside>
+      <>
+        {onResize === undefined ? null : <DockHandle width={restingWidth} onResize={onResize} />}
+        <aside
+          className="armada-shell__dock"
+          aria-label={DOCK_TITLE}
+          style={width === undefined ? undefined : { width: `${clampDockWidth(width)}px` }}
+        >
+          <div className="armada-shell__dock-head">
+            <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
+            <Button variant="secondary" size="sm" ground="sunken" onClick={() => onOpen(false)}>
+              Close
+              {binding === undefined ? null : <Chord binding={binding} />}
+            </Button>
+          </div>
+          <div className="armada-shell__dock-body">{body}</div>
+        </aside>
+      </>
     );
   }
 

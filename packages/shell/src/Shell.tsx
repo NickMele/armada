@@ -65,6 +65,7 @@ import {
 import type { Connection } from "@armada/protocol";
 import type { JobSummary } from "@armada/protocol";
 import type { RepositorySummary } from "@armada/protocol";
+import { useDockWidth } from "./dock-width";
 import { ALL_REPOSITORIES } from "./RepositoryOptions";
 import { repositoryLabel } from "./repository-label";
 import { SURFACE, SURFACES } from "./surfaces";
@@ -129,6 +130,7 @@ export function Shell({
 }: ShellProps) {
   const collapsed = useNarrow();
   const dock = useDock(collapsed);
+  const [dockWidth, resizeDock] = useDockWidth();
   const live = connection.state === "connected";
 
   return (
@@ -138,6 +140,8 @@ export function Shell({
         folded: collapsed,
         binding: HELM_KEY,
         questions: questions.length,
+        width: dockWidth,
+        onResize: resizeDock,
         children: (
           <>
             {questions.length === 0 ? null : <DockQuestions questions={questions} />}

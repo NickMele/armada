@@ -482,6 +482,15 @@
      region inside job detail, and a dock that moved whenever the run tree was
      re-measured would be a second meaning on one name. */
   --w-dock: 380px;
+  /* The dock's own drag range, from the owner's request to make the dock
+     resizable. 320px is the narrowest that keeps the composer's head row —
+     the repository label, its switch and Start fresh — on one line before the
+     switch is forced to clip; the label already ellipsizes for room. 640px is
+     --w-dialog-wide's own figure, not borrowed for its meaning: it caps the
+     dock at less than half a 1280px window, so dragging it never costs the
+     work panel the room a diff needs. */
+  --w-dock-min: 320px;
+  --w-dock-max: 640px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 

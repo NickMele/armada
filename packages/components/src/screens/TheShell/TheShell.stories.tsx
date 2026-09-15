@@ -186,6 +186,14 @@ function WithDock(args: ComponentProps<typeof TheShell>) {
   return <TheShell {...args} dock={dock} />;
 }
 
+/** The dock's own width, so a story can drag and nudge what the app drags and nudges. */
+function WithResizableDock(args: ComponentProps<typeof TheShell>) {
+  const [open, setOpen] = useState(args.dock?.open ?? false);
+  const [width, setWidth] = useState(args.dock?.width ?? 380);
+  const dock = args.dock === undefined ? undefined : { ...args.dock, open, width, onOpen: setOpen, onResize: setWidth };
+  return <TheShell {...args} dock={dock} />;
+}
+
 /** At `--layout-breakpoint` and wider: Helm's dock beside the content, on every surface. */
 export const DockBesideTheContent: Story = {
   args: { ...shell, dock: { open: true, binding: "⌘J", onOpen: () => {} } },
@@ -263,6 +271,33 @@ export const DockWithQuestions: Story = {
     },
   },
   render: DockBesideTheContent.render,
+};
+
+/**
+ * The dock's leading edge, grabbable and keyboard-operable — dragged wider,
+ * dragged to `--w-dock-min`, or nudged by the arrow keys the ARIA separator
+ * pattern names. `onResize` absent draws no handle at all: `DockBesideTheContent`
+ * above is that case.
+ */
+export const DockResizable: Story = {
+  args: { ...shell, dock: { open: true, binding: "⌘J", width: 380, onOpen: () => {}, onResize: () => {} } },
+  render: (args) => (
+    <div className="armada-screen">
+      <div className="armada-screen__window">
+        <WithResizableDock {...args} />
+      </div>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const handle = canvas.getByRole("separator", { name: "Resize Helm" });
+    await expect(handle).toHaveAttribute("aria-valuenow", "380");
+    await userEvent.click(handle);
+    await expect(handle).toHaveFocus();
+    await userEvent.keyboard("{ArrowLeft}");
+    await expect(handle).toHaveAttribute("aria-valuenow", "396");
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}");
+    await expect(handle).toHaveAttribute("aria-valuenow", "364");
+  },
 };
 
 /** Below the breakpoint: the dock folds to an edge strip carrying the questions waiting, and opens as a sheet. */
