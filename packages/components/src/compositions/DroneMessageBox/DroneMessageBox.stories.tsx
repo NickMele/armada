@@ -11,7 +11,7 @@ const meta: Meta<typeof DroneMessageBox> = {
   component: DroneMessageBox,
   args: { value: "", onChange: fn(), onSend: fn() },
   render: (args) => (
-    <div style={{ width: "480px", background: "var(--bg-sunken)", padding: "var(--space-4)" }}>
+    <div style={{ width: "var(--w-sheet)", background: "var(--bg-sunken)", padding: "var(--space-4)" }}>
       <DroneMessageBox {...args} />
     </div>
   ),
