@@ -51,8 +51,8 @@ not decide it is finished: it submits evidence through a tool Armada gave it,
 Armada runs the repository's own checks against the result, and only then does
 the work move on. Saying "done" in prose does nothing.
 
-The problem it exists for is not throughput. It is that delegating work to
-something that reports on itself means reading everything anyway.
+It exists because delegating work to something that reports on itself means
+reading everything anyway, which costs more than doing the work yourself.
 
 **Three rules it is built around:**
 
@@ -98,7 +98,7 @@ crate graph, and the rules that hold everywhere, with diagrams.
 
 ## Building it
 
-**macOS, and three toolchains.** None of them comes with the machine.
+You need macOS and three toolchains that do not come with it.
 
 | Tool | Version | Where it comes from |
 |---|---|---|
@@ -106,9 +106,9 @@ crate graph, and the rules that hold everywhere, with diagrams.
 | Node | 24 — the version in `.nvmrc` | [`nvm`](https://github.com/nvm-sh/nvm), then `nvm use` |
 | pnpm | the version in `package.json` | `corepack enable`, bundled with Node |
 
-**pnpm is not installed separately.** It comes from corepack, which ships with
-Node, and the version is pinned in `package.json` rather than chosen. A wrong
-Node refuses the install outright rather than warning — `engineStrict` is on.
+**pnpm comes from corepack**, which ships with Node, at the version
+`package.json` pins. You do not install it yourself. A Node that does not match
+`.nvmrc` refuses the install rather than warning about it: `engineStrict` is on.
 
 ```sh
 git clone https://github.com/NickMele/armada.git
