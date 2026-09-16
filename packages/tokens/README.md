@@ -1,8 +1,7 @@
 # @armada/tokens
 
 **Authored here.** `src/*.css` is the authority on every design value in
-Armada. Notion is the authority on the decision and the reasoning behind one —
-a row whose value disagrees with the CSS is stale, not right.
+Armada, and the comment beside a value carries the reasoning for it.
 
 A value gets decided while looking at a rendering. So the design project draws
 first and proposes a change as a diff against `src/`, carrying the reasoning
@@ -38,6 +37,6 @@ classifying it in `xtask/src/tokens.rs`. An unclassified file, or a token whose
 name matches no entry in the theme table, fails the check rather than being
 guessed at.
 
-**Do not seed the generator from the Armada Tokens rows in Notion.** That
-inverts the direction of authority, and every later regeneration diffs against
-the wrong thing.
+**Do not seed the generator from anywhere but the CSS.** That inverts the
+direction of authority, and every later regeneration diffs against the wrong
+thing.

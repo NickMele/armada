@@ -32,8 +32,7 @@ use crate::{files_with_ext, Report};
 ///
 /// The `[slug]` form names a question in a `## Open questions` section and is
 /// the one to write — the gate follows it, so an answered question breaks its
-/// citations on purpose. A `docs/` path is accepted; a design-workspace link
-/// is refused by rule sixteen.
+/// citations on purpose. A `docs/` path is accepted.
 pub fn no_off_contract_design_value(root: &Path) -> Report {
     let mut report = Report::new("no off-contract design value in what a renderer ships");
     const MARKER: &str = "armada-allow-off-contract:";

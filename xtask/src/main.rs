@@ -118,7 +118,6 @@ fn verify_foundations() -> ExitCode {
         rules_design::no_off_contract_design_value(&root),
         rules_docs::every_open_question_is_collected(&root),
         rules_docs::every_document_is_indexed(&root),
-        rules_docs::nothing_links_to_the_design_workspace(&root),
         rules_docs::every_path_a_document_names_exists(&root),
         capabilities::every_capability_is_bound_and_indexed(&root),
         rules_icons::every_glyph_in_use_is_registered(&root),

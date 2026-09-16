@@ -4,7 +4,8 @@ v1 shipped 586 commits, 2,181 passing tests and a working screen, and the Jobs i
 completed did not do what they claimed. It is gone from the working tree and
 lives at tag `v1-final`. These notes are what was worth carrying out of it.
 
-**These are reference, not scope.** Notion decides what Armada v2 builds.
+**These are reference, not scope.** What Armada v2 builds is decided in its
+issues and milestones.
 Everything here answers a different question: *this is what happened, and either
 this is something you can use, or here is a trap we already hit.* Read the note
 that covers what you are about to build, before you build it.

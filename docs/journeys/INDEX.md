@@ -2,7 +2,7 @@
 
 The journeys carried out of the Armada User Journeys database in Notion, and the ones designed since. Each names a trigger — the moment a person reaches for Armada — and the surfaces that answer it. **These describe intent, not build order.** Notion's own phased plan is explicit that design order is not build order: journeys are designed in the order their conventions get reused, not in the order the milestones build them.
 
-Every journey names a **Milestone** — Notion decides what Armada v2 builds, and the milestone is where this journey's answer is currently expected to land, not a promise of when.
+Every journey names a **Milestone** — what Armada v2 builds is decided in its issues and milestones, and the milestone is where this journey's answer is currently expected to land, not a promise of when.
 
 Read the journey that covers what you are about to design or build, before you build it.
 
