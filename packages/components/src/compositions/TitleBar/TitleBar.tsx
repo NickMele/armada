@@ -2,7 +2,8 @@ import { MessageSquare, Plus, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { ArmadaLockupHorizontal } from "@armada/brand";
 import { Button } from "../../primitives/Button/Button";
-import { Kbd } from "../../primitives/Kbd/Kbd";
+import { Kbd, KbdCmd } from "../../primitives/Kbd/Kbd";
+import { useShortcutReveal } from "../../shortcut-reveal";
 
 /**
  * The title row — what used to be macOS's grey bar saying only "Armada".
@@ -52,6 +53,7 @@ export function TitleBar({
   dispatchDisabled = false,
   helm,
 }: TitleBarProps) {
+  const revealing = useShortcutReveal();
   return (
     <div className="armada-title-bar">
       <div className="armada-title-bar__start">
@@ -95,6 +97,14 @@ export function TitleBar({
             {helm.questions > 0 ? (
               <span className="armada-title-bar__helm-count">{helm.questions}</span>
             ) : null}
+            {/* Mounted whenever there is a binding, so the button's own width
+                does not shift when Cmd goes down — `visibility`, toggled by
+                `data-revealing`, the same shape `Sidebar.css`'s own badge uses. */}
+            {helm.binding === undefined ? null : (
+              <span className="armada-title-bar__helmkbd" data-revealing={revealing || undefined}>
+                <KbdCmd shortcut={helm.binding} />
+              </span>
+            )}
           </button>
         )}
 

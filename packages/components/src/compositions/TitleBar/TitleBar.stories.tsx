@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 import { Select } from "../../primitives/Select/Select";
+import { ShortcutRevealProvider } from "../../shortcut-reveal";
 import { TitleBar } from "./TitleBar";
 
 /**
@@ -69,5 +70,34 @@ export const HelmClosed: Story = {
 export const BeforeAnythingIsRead: Story = {
   args: {
     onSearch: () => {},
+  },
+};
+
+/**
+ * Holding Cmd grows Helm's own `⌘J` badge without moving the button beside
+ * it, and releasing it takes the badge away again — the row is drawn from
+ * `Full` and never itself. `useShortcutReveal()` needs a provider above it
+ * for the state to reach anywhere at all, which `TheShell` is in the running
+ * app and this story stands in for here.
+ */
+export const RevealedShortcuts: Story = {
+  args: {
+    ...Full.args,
+    helm: { questions: 3, binding: "⌘J", onOpen: () => {} },
+  },
+  render: (args) => (
+    <ShortcutRevealProvider>
+      <TitleBar {...args} />
+    </ShortcutRevealProvider>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const badge = canvas.getByText("J", { selector: "kbd" });
+    await expect(badge).not.toBeVisible();
+
+    await userEvent.keyboard("{Meta>}");
+    await expect(badge).toBeVisible();
+
+    await userEvent.keyboard("{/Meta}");
+    await expect(badge).not.toBeVisible();
   },
 };

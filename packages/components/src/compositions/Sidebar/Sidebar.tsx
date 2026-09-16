@@ -1,6 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { KbdCmd } from "../../primitives/Kbd/Kbd";
 import { Separator } from "../../primitives/Separator/Separator";
+import { useShortcutReveal } from "../../shortcut-reveal";
 
 /**
  * Sidebar — Bridge's navigation rail.
@@ -33,6 +35,14 @@ export type SidebarItem = {
    * here creates two places to check and two chances to disagree.
    */
   count?: number;
+  /**
+   * The `⌘`-digit that reaches this row, `bridge_surfaces`'s own binding —
+   * `surfaces.ts`'s `digitOf`, never retyped. Drawn only while Cmd is held
+   * (`useShortcutReveal()`) and only past the collapsed rail, which has no
+   * room for a badge beside a bare glyph and needs none: the digit already
+   * reaches every surface without a label to read.
+   */
+  shortcut?: string;
 };
 
 export type SidebarProps = {
@@ -73,6 +83,7 @@ function Item({
   collapsed: boolean;
   onSelect?: (id: string) => void;
 }) {
+  const revealing = useShortcutReveal();
   return (
     <button
       type="button"
@@ -88,6 +99,15 @@ function Item({
       {collapsed ? null : <span className="armada-sidebar__label">{item.label}</span>}
       {!collapsed && item.count !== undefined ? (
         <span className="armada-sidebar__count">{item.count}</span>
+      ) : null}
+      {/* Mounted whenever there is a binding to show, whatever `revealing` is,
+          so the row's own width does not shift the moment Cmd goes down —
+          `data-revealing` toggles `visibility` in `Sidebar.css`, the same
+          shape `JobRowStacked`'s own held-key `visibility` rule uses. */}
+      {!collapsed && item.shortcut !== undefined ? (
+        <span className="armada-sidebar__kbd" data-revealing={revealing || undefined}>
+          <KbdCmd shortcut={item.shortcut} />
+        </span>
       ) : null}
     </button>
   );

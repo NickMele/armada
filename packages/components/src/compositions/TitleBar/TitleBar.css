@@ -168,6 +168,18 @@
   color: var(--status-awaiting-review);
 }
 
+/* `⌘J`, held off screen by `visibility` until Cmd goes down — `display` would
+   reflow the button beside it the moment it grew a badge. `Sidebar.css`'s
+   `__kbd` is the same rule for the rail's own digit. */
+.armada-title-bar__helmkbd {
+  flex: none;
+  visibility: hidden;
+}
+
+.armada-title-bar__helmkbd[data-revealing] {
+  visibility: visible;
+}
+
 .armada-title-bar > svg,
 .armada-title-bar > [aria-hidden="true"] {
   flex: none;

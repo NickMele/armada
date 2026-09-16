@@ -173,6 +173,11 @@ export * from "./concepts";
 // the registry's.
 export * from "./actions";
 
+// Whether Cmd is held, for a control that carries a Global-tier binding to
+// show its own `Kbd` badge. `TheShell` is the one provider; any control
+// beneath it reads `useShortcutReveal()` rather than taking a prop for it.
+export * from "./shortcut-reveal";
+
 // The token specimens: what a value looks like, read off the running sheet.
 export * from "./foundations/Tokens/Tokens";
 

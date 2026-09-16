@@ -140,6 +140,20 @@
   color: var(--fg-muted);
 }
 
+/* The `⌘`-digit, held off screen by `visibility` until Cmd goes down —
+   `display` would reflow the label beside it the moment the row grew a badge,
+   which is the failure the v1 log recorded against a layout that shifted
+   under a keystroke. `JobRowStacked.css`'s `__key` is the same rule for a
+   held row's own trailing key. */
+.armada-sidebar__kbd {
+  flex: none;
+  visibility: hidden;
+}
+
+.armada-sidebar__kbd[data-revealing] {
+  visibility: visible;
+}
+
 /* Two levels, rendered structurally: the rule is what makes Helm a sibling of
    the group rather than one more peer inside it. The separator carries no
    margin of its own, so the spacing belongs here. */
