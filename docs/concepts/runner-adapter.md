@@ -1,0 +1,171 @@
+# Runner adapter
+
+**What it is:** a declarative description of one test runner — how to detect
+it, how to run one test by name or by another shape, and how to read its
+output — that lets `draft_fix` reach a runner nobody has hand-configured for
+this repository.
+
+Distinct from [Adapters](../contracts/adapters.md): that contract governs code
+Armada calls through a Rust trait, chosen by who decides when it runs. A
+runner adapter is data with no code behind it — a file signature, a template
+string and a regex — read by `checks_runner`, which already exists.
+
+## Why `draft_fix` needs one
+
+A Drone that hits a test already failing on main names the Check and the
+test; Fleet runs just that test against a checkout of main before drafting
+anything, using the command the Check's `one_test` declares
+(`crates/fleet/src/fixing.rs`, #999). Only a Check that declares `one_test`
+can be reached this way. In this repository that is `test`, `acceptance`,
+`components_test`, `screens_test` and `desktop_test` — every other Check has
+no way to isolate one test, so a Drone hitting a pre-existing failure there
+has no way to tell its own change apart from a break already on main.
+
+A hand-written `one_test` line does not generalize past the runner it was
+written for, and a small enum of known runners in Fleet's own code does not
+generalize past whichever ones somebody added. A runner adapter is data
+instead: something Fleet can match against a repository without anybody
+having configured that repository for it first.
+
+## The schema
+
+### `detect`
+
+| field | type | required | default | meaning |
+|---|---|---|---|---|
+| `manifest` | file path | no | none | manifest file the dependency is read from |
+| `dependency` | string | no | none | package name to find inside that manifest |
+| `files` | list of globs | no | none | files whose presence marks this runner |
+
+### `requires`
+
+| field | type | required | default | meaning |
+| --- | --- | --- | --- | --- |
+| `library` | string | yes | none | the runner's package name |
+| `version` | semver range | yes | none | version range this adapter was authored against |
+
+### `commands`
+
+| field | type | required | default | meaning |
+|---|---|---|---|---|
+| `run` | template string | no | none | run the whole suite |
+| `one_test` | template string, `{test}` | no | nearest supported shape | run exactly one test by name |
+| `run_failed` | template string, `{failed}` | no | nearest supported shape | rerun a named failed set |
+| `run_changed` | template string, `{files}` | no | nearest supported shape | run tests touching changed files |
+| `run_group` | template string, `{group}` | no | nearest supported shape | run one named group or project |
+| `run_pattern` | template string, `{glob}` | no | nearest supported shape | run tests matching a name glob |
+
+### `output`
+
+| field | type | required | default | meaning |
+|---|---|---|---|---|
+| `line` | regex, named groups `status`, `test` | yes | none | parses one output line into a structured result |
+
+```yaml
+# illustrative only — naming and versioning are not decided, see Deferred below
+detect:
+  manifest: "package.json"
+  dependency: "vitest"
+  files: ["vitest.config.*"]
+
+requires:
+  - vitest ^1.0.0
+
+commands:
+  run:         "pnpm -C {pkg} test"
+  one_test:    "pnpm -C {pkg} test -- -t {test}"
+  run_failed:  "pnpm -C {pkg} test -- --retry {failed}"
+  run_changed: "pnpm -C {pkg} test -- --changed {files}"
+  run_group:   "pnpm -C {pkg} test -- --project {group}"
+  run_pattern: "pnpm -C {pkg} test -- -t {glob}"
+
+output:
+  line: '^\s*(?<status>✓|×)\s+(?<test>.+?)\s+\d+ms$'
+```
+
+## The six shapes are fixed
+
+Fleet's caller code knows how to invoke exactly these six. Where an adapter
+omits one, Fleet falls back to the nearest shape it has, ordinarily plain
+`run`. A runner needing a seventh shape is a schema change and a change to
+every call site that reads `commands`, not something an adapter author
+reaches by editing a file.
+
+## Data, not code
+
+Every field above is a file signature, a template string, or a regex with
+named capture groups. None of it is a script Fleet executes as logic — Fleet
+only ever interpolates a test name into a fixed template and reads the result
+back through a regex.
+
+That constraint is what makes a learned adapter safe to keep and, later,
+share: nothing an adapter's author writes ever runs as a program on Fleet's
+side. It holds from this schema's first version, because the six shapes above
+and the one regex field are the whole surface an adapter can fill in — adding
+a seventh shape or an executable field is the schema change described above,
+not a config edit.
+
+## Learning one Fleet has not seen
+
+| step | what happens |
+|---|---|
+| unmatched | no `detect` block matches the repository's manifest, dependency or files |
+| docs lookup | reference material for the detected runner and version is fetched before drafting anything, keyed the way a Context7-style lookup keys on a package and its version — real documentation, not scraped examples alone |
+| draft | a bounded model call proposes a candidate adapter from that reference material |
+| verify | the candidate's `one_test` line runs against a fixture proven to isolate one named test |
+| confirm | a person sees the candidate and the verification result once, before it is trusted |
+| trusted | the adapter is kept and reused without repeating the draft-and-verify pipeline |
+
+Confirming once follows the same discipline as onboard-repo's guess-then-confirm
+bar and fixture-author's fixtures-before-detectors rule: a guess is attributed
+to what produced it, and nothing is trusted before somebody has seen it proven.
+The output regex is modeled on GitHub Actions' problem matchers — one pattern,
+named groups, no parser code — for the same reason those exist: to read a
+tool's output without writing a parser for every tool.
+
+### Verification is tri-state, not a boolean
+
+| outcome | what it means |
+|---|---|
+| ran and passed | the candidate isolated exactly the named test, and it passed |
+| ran and failed | the candidate isolated exactly the named test, and it failed |
+| matched nothing | the candidate exited as if it passed, without running the named test at all |
+
+A candidate that only distinguishes pass from fail repeats #1204: on both
+runners measured so far, a filter that matches nothing exits the same as a
+filter that matched and passed. Verification has to catch the third outcome
+against a fixture proven to isolate one test, because a live suite makes a
+false pass indistinguishable from a real one.
+
+## Deferred: sharing
+
+No registry, naming scheme, or trust tier is being designed or built now. What
+a future publish layer would need is already true of this schema, so building
+one later does not require reopening it:
+
+- a stable identity and version per adapter — the example above's comment
+  is illustrative only, not a decided naming scheme
+- `detect` staying pure data, so a registry could index adapters by it without
+  executing anything to do so
+- nothing in `detect`, `requires`, `commands` or `output` that only makes
+  sense scoped to one repository
+
+## Open questions
+
+- **[one-test-shape]** Whether a Check's `one_test` should be a full duplicate
+  of its own command, or an append-only suffix template on top of `run`.
+  `test`'s `one_test` today restates the whole invocation — `run: cargo
+  nextest run --workspace --exclude acceptance`, `one_test: run: cargo
+  nextest run --workspace --exclude acceptance -E test(={})` — because it
+  must keep `--exclude acceptance`, which the narrowed per-package `run` does
+  not carry. A full duplicate can diverge from `run` in ways a suffix cannot
+  express, and every Check that adds one has a second full command to keep in
+  sync by hand. An append-only suffix is shorter and tracks `run`
+  automatically — illustrated against `desktop_test`, which does not use this
+  shape today: `run: pnpm -C apps/desktop test` with a `one_test` suffix of
+  `-- -t {}` appended to it. Appending `-- -t {}` to that exact command is the
+  shape #1205 found broken: pnpm's own `--` forwarding collides with vitest's
+  argument parsing, and the suffixed command silently runs the whole suite
+  while still exiting 0. The working `one_test` line for `desktop_test`,
+  `pnpm --dir apps/desktop exec vitest run -t {}`, is not `run` plus a suffix
+  at all — it is a different command. Neither shape is chosen here.
