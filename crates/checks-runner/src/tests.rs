@@ -503,3 +503,8 @@ mod one_test {
         );
     }
 }
+
+/// Whether [`one_test`]'s command came to a pass, a failure, or the name
+/// matching nothing at all. `src/tests/matched.rs`, kept apart for the line
+/// ask.
+mod matched;

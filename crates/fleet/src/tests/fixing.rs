@@ -229,6 +229,29 @@ async fn a_test_passing_on_main_drafts_nothing() {
     );
 }
 
+/// **A name that matches nothing on main is neither a pass nor a failure.**
+/// nextest and vitest both exit `0` here, the same code a pass reports, so
+/// the fake runner does too — and the fix still must not draft. #1204.
+#[tokio::test]
+async fn a_test_matching_nothing_on_main_drafts_nothing() {
+    let home = TempDir::new();
+    let no_match = "/bin/sh -c 'echo error: no tests to run 1>&2; exit 0' {}";
+    let fleet = a_fleet(&home, gated_on(no_match), 1);
+    let reporter = started(&fleet, &home).await;
+
+    let refused = came_to(&fleet, &reporter, TEST)
+        .await
+        .expect_err("nothing is drafted");
+    assert!(matches!(refused, NotFixed::NoMatch { .. }), "{refused:?}");
+    let job = fleet.load(&reporter).await.expect("the reporter");
+    assert!(fleet.breakages_of(&job).await.expect("read").is_empty());
+    let told = told_fix(&fleet, &home, &reporter).await;
+    assert!(
+        told.iter().any(|row| row.contains("matched nothing")),
+        "{told:?}"
+    );
+}
+
 /// A second report of a claimed test names the fix already on it, and runs
 /// nothing — so a step's allowance spent on the first does not refuse it.
 #[tokio::test]
