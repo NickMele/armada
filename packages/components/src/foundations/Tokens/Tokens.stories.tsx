@@ -168,7 +168,6 @@ export const Shape: Story = {
   "h-badge",
   "h-kbd",
   "h-menu-item",
-  "h-status-bar",
   "pad-card",
   "pad-row-stacked",
   "sidebar-default",

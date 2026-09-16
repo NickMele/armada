@@ -1362,10 +1362,10 @@ exception, because it reports something already over.
 **A toast used to clear the status bar rather than cover it**, because the
 bar spanned the window's bottom edge and a bottom-right toast could
 otherwise sit over it. Fleet's liveness statement is now the left column's
-own Fleet panel, nowhere near a bottom-right toast — the toast's own bottom
-inset (`--h-status-bar` plus `--space-6`, in `Toast.css`) has not been
-revisited since. Reported, not fixed here: this document specifies what a
-surface draws, not `packages/components`' own catch-up.
+own Fleet panel, nowhere near a bottom-right toast. `Toast.css`, the app
+shell's own toast region and `ErrorNotice.css` all carried the stale inset
+against the deleted bar; all three now sit at the plain inset this document
+names, and `--h-status-bar` is gone.
 
 ### The debug payload, and what each placement does with it
 
