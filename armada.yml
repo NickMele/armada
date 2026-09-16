@@ -169,6 +169,11 @@ checks:
     # Main's own state machines in node, against a `ws` server on a loopback
     # port — nothing else here runs main (#324).
     run: pnpm -C apps/desktop test
+    # One test by exact name, which Fleet runs against a checkout of main
+    # before a Drone's `draft_fix` drafts anything — same shape as the two
+    # Rust one_test lines above, `vitest -t` in place of `nextest -E`. #1203.
+    one_test:
+      run: pnpm --dir apps/desktop exec vitest run -t {}
     # Lighter than the two browser suites below, but still node processes
     # against a real server: #1102.
     places: 2
@@ -185,6 +190,9 @@ checks:
     # Pure modules in node, and screens in a browser project, because a screen
     # cannot be storied: `xtask/src/rules_layers.rs` refuses the import.
     run: pnpm -C packages/screens test
+    # See desktop_test's one_test above. #1203.
+    one_test:
+      run: pnpm --dir packages/screens exec vitest run -t {}
     # A dozen Chromium processes against a shipped limit of 5 timed out
     # unrelated browser tests sharing the machine on 14 Sep. #1102.
     places: 3
@@ -201,6 +209,12 @@ checks:
     # `@storybook/addon-vitest`; a `play` function has its assertions run.
     run: pnpm -C packages/components test
     runs_at: gate
+    # See desktop_test's one_test above. The Storybook interaction tests'
+    # own names (a story's `name`, not its export) are what a Drone names
+    # here — confirmed against `ALongBatchScrolled`'s "A long batch,
+    # scrolled" in #1145/#1192. #1203.
+    one_test:
+      run: pnpm --dir packages/components exec vitest run -t {}
     # A dozen Chromium processes against a shipped limit of 5 timed out
     # unrelated browser tests sharing the machine on 14 Sep. #1102.
     places: 3
