@@ -179,6 +179,53 @@ export const OneRowInATallWindow: Story = {
   render: Shell.render,
 };
 
+/** The left column's own width, so a story can drag and nudge what the app drags and nudges. */
+function WithResizableLeftColumn(args: ComponentProps<typeof TheShell>) {
+  const [leftWidth, setLeftWidth] = useState(args.leftWidth ?? 200);
+  return <TheShell {...args} leftWidth={leftWidth} onResizeLeft={setLeftWidth} />;
+}
+
+/**
+ * The left column's trailing edge, grabbable and keyboard-operable — one
+ * handle for Navigation, Stats and Fleet together, dragged wider, dragged to
+ * `--sidebar-min`, or nudged by the arrow keys the ARIA separator pattern
+ * names. `onResizeLeft` absent draws no handle at all: `Shell` above is that
+ * case.
+ */
+export const LeftColumnResizable: Story = {
+  args: { ...shell, leftWidth: 200, onResizeLeft: () => {} },
+  render: (args) => (
+    <div className="armada-screen">
+      <div className="armada-screen__window">
+        <WithResizableLeftColumn {...args} />
+      </div>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const handle = canvas.getByRole("separator", { name: "Resize the left column" });
+    await expect(handle).toHaveAttribute("aria-valuenow", "200");
+    await userEvent.click(handle);
+    await expect(handle).toHaveFocus();
+    await userEvent.keyboard("{ArrowRight}");
+    await expect(handle).toHaveAttribute("aria-valuenow", "216");
+    await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
+    await expect(handle).toHaveAttribute("aria-valuenow", "184");
+  },
+};
+
+/**
+ * Below the breakpoint the rail collapses to 48px and there is nothing left
+ * to drag — the handle draws at all, the same way the dock's own disappears
+ * while folded.
+ */
+export const LeftColumnCollapsedHasNoHandle: Story = {
+  args: { ...shell, collapsed: true, leftWidth: 200, onResizeLeft: () => {} },
+  render: LeftColumnResizable.render,
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("separator", { name: "Resize the left column" })).not.toBeInTheDocument();
+  },
+};
+
 /** The dock's own open state, so a story can press what the app presses. */
 function WithDock(args: ComponentProps<typeof TheShell>) {
   const [open, setOpen] = useState(args.dock?.open ?? false);

@@ -1,4 +1,5 @@
-/* Helm's dock and the edge strip it folds to. The frame around them is screens.css's. */
+/* Helm's dock, the edge strip it folds to, and the left column's own handle.
+   The frame around them is screens.css's. */
 
 /* Positioned, so a folded dock's sheet covers the work and leaves the rail and the bar in view. */
 .armada-shell__work {
@@ -146,4 +147,41 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-default);
+}
+
+/* The left column's own handle — one drag for Navigation, Stats and Fleet
+   together, the same recipe as the dock's own handle above. Its margin
+   supplies the gap `.armada-shell__body` no longer does once it exists —
+   screens.css's `:has()` rule is the dock's own trick, read the other way. */
+.armada-shell__left-handle {
+  flex: none;
+  align-self: stretch;
+  position: relative;
+  width: var(--space-2);
+  margin: var(--space-4) var(--space-1);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.armada-shell__left-handle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--border-width);
+  height: var(--space-8);
+  border-radius: var(--radius-sm);
+  background: var(--border-default);
+  transform: translateY(-50%);
+}
+
+.armada-shell__left-handle:hover::before,
+.armada-shell__left-handle:focus-visible::before,
+.armada-shell__left-handle[data-dragging="true"]::before {
+  background: var(--border-strong);
+}
+
+.armada-shell__left-handle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--border-width) * -2);
 }

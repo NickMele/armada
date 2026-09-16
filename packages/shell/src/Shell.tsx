@@ -66,6 +66,7 @@ import type { Connection } from "@armada/protocol";
 import type { JobSummary } from "@armada/protocol";
 import type { RepositorySummary } from "@armada/protocol";
 import { useDockWidth } from "./dock-width";
+import { useLeftWidth } from "./left-width";
 import { ALL_REPOSITORIES } from "./RepositoryOptions";
 import { repositoryLabel } from "./repository-label";
 import { SURFACE, SURFACES } from "./surfaces";
@@ -131,6 +132,7 @@ export function Shell({
   const collapsed = useNarrow();
   const dock = useDock(collapsed);
   const [dockWidth, resizeDock] = useDockWidth();
+  const [leftWidth, resizeLeft] = useLeftWidth();
   const live = connection.state === "connected";
 
   return (
@@ -169,6 +171,8 @@ export function Shell({
       activeId={showing}
       onSelect={onSurface}
       collapsed={collapsed}
+      leftWidth={leftWidth}
+      onResizeLeft={resizeLeft}
       repositoryPicker={
         <DropdownMenu
           triggerLabel={repositoryTriggerLabel(repositories, scope, listed)}

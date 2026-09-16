@@ -56,6 +56,24 @@ export type TheShellProps = {
   stats: Omit<StatsPanelProps, "narrow">;
   /** The left column's third panel, what the status bar used to read. */
   fleet: Omit<FleetPanelProps, "narrow">;
+  /**
+   * The left column's resting width in px, for Navigation, Stats and Fleet
+   * together — one width, the same way `.armada-shell__left` already shares
+   * it among the three (#1124). Absent draws `--sidebar-default`. Ignored
+   * while `collapsed`, which always draws `--sidebar-rail` — there is nothing
+   * to size at 48px.
+   */
+  leftWidth?: number;
+  /**
+   * Drags and arrow-key nudges the trailing-edge handle, clamped between
+   * `--sidebar-min` and `--sidebar-max` — `clampLeftWidth`. **Absent draws no
+   * handle at all**, the dock's own reasoning: an edge that looks grabbable
+   * and does nothing is worse than no edge. Hidden outright while `collapsed`,
+   * the same way the dock's handle disappears while folded — nothing to drag
+   * at the rail's 48px. Persisting the result across a restart is the
+   * caller's, the same way the dock's own `width` is.
+   */
+  onResizeLeft?: (width: number) => void;
 };
 
 /**
@@ -108,7 +126,13 @@ export function TheShell({
   dock,
   stats,
   fleet,
+  leftWidth,
+  onResizeLeft,
 }: TheShellProps) {
+  // The effective width whether or not a caller passed one — read by the
+  // handle's own `width` and by the dock's chrome calc below, so a dock
+  // dragged wide never assumes the column is narrower than it actually is.
+  const leftWidthValue = clampLeftWidth(leftWidth ?? defaultLeftWidth());
   return (
     <ShortcutRevealProvider>
       <div className="armada-shell">
@@ -120,7 +144,10 @@ export function TheShell({
           helm={helmButtonOf(dock)}
         />
         <div className="armada-shell__body">
-          <div className="armada-shell__left">
+          <div
+            className="armada-shell__left"
+            style={collapsed || leftWidth === undefined ? undefined : { width: `${leftWidthValue}px` }}
+          >
             <Sidebar
               header={railHeader}
               sectionLabel={null}
@@ -132,11 +159,14 @@ export function TheShell({
             <StatsPanel {...stats} narrow={collapsed} />
             <FleetPanel {...fleet} narrow={collapsed} />
           </div>
+          {collapsed || onResizeLeft === undefined ? null : (
+            <LeftHandle width={leftWidthValue} onResize={onResizeLeft} />
+          )}
           <div className="armada-shell__work">
             <div className="armada-shell__panel">
               <div className="armada-shell__mount">{children}</div>
             </div>
-            {dock === undefined ? null : <Dock {...dock} />}
+            {dock === undefined ? null : <Dock {...dock} leftWidth={leftWidthValue} />}
           </div>
         </div>
       </div>
@@ -155,26 +185,23 @@ const DOCK_WIDTH_MAX_FALLBACK = 640;
 const DOCK_WIDTH_DEFAULT_FALLBACK = 380;
 
 /**
- * The dock's drag range. The floor is a token — `--w-dock-min` is what keeps
- * the composer's head row from clipping. **The ceiling has no token**, since
- * #1171/#1176: it is `availableWidth` (the window's own width, read by the
- * caller as `window.innerWidth`) minus the chrome around the dock that isn't
- * the panel or the dock itself — the left column's width, its own margin, the
- * gap beside it, the handle's hit area and the dock's own margin, four
- * `--space-4` gutters and `--sidebar-default` between them, all from
- * `TheShell.css` — minus `--w-work-min`, the panel's own floor. The left
- * column reads as `--sidebar-default` rather than a live measurement because
- * the dock only ever sits beside the panel at `--layout-breakpoint` and
- * wider, which is wider than `--layout-breakpoint-narrow` — the rail is never
- * collapsed while this figure matters.
+ * The dock's drag range. The floor is a token — `--w-dock-min` keeps the
+ * composer's head row from clipping. **The ceiling has no token**, since
+ * #1171/#1176: `availableWidth` (the caller's `window.innerWidth`) minus the
+ * chrome around the dock that isn't the panel or the dock itself — the left
+ * column's width, its margin, the gap, the handle's hit area and the dock's
+ * own margin, four `--space-4` gutters and the left column between them, all
+ * from `TheShell.css` — minus `--w-work-min`, the panel's own floor.
+ * `leftWidth` is the column's actual width now that it resizes too; absent
+ * falls back to `--sidebar-default`, what this always read before.
  */
-function dockWidthBounds(availableWidth: number): { min: number; max: number } {
+function dockWidthBounds(availableWidth: number, leftWidth?: number): { min: number; max: number } {
   if (typeof document === "undefined") {
     return { min: DOCK_WIDTH_MIN_FALLBACK, max: DOCK_WIDTH_MAX_FALLBACK };
   }
   const style = getComputedStyle(document.documentElement);
   const min = parseFloat(style.getPropertyValue("--w-dock-min"));
-  const sidebar = parseFloat(style.getPropertyValue("--sidebar-default"));
+  const sidebar = leftWidth ?? parseFloat(style.getPropertyValue("--sidebar-default"));
   const workMin = parseFloat(style.getPropertyValue("--w-work-min"));
   const gutter = parseFloat(style.getPropertyValue("--space-4"));
   const floor = Number.isFinite(min) ? min : DOCK_WIDTH_MIN_FALLBACK;
@@ -215,13 +242,54 @@ export function defaultDockWidth(): number {
  * stale, from a narrower window, or from a build that carried different
  * tokens — never draws past what today's window and today's tokens allow.
  */
-export function clampDockWidth(width: number, availableWidth: number): number {
-  const { min, max } = dockWidthBounds(availableWidth);
+export function clampDockWidth(width: number, availableWidth: number, leftWidth?: number): number {
+  const { min, max } = dockWidthBounds(availableWidth, leftWidth);
   return Math.min(max, Math.max(min, width));
 }
 
 /** One `--space-4` per arrow press — the same step the dock's own padding uses. */
 const DOCK_WIDTH_STEP = 16;
+
+const LEFT_WIDTH_MIN_FALLBACK = 160;
+const LEFT_WIDTH_MAX_FALLBACK = 320;
+const LEFT_WIDTH_DEFAULT_FALLBACK = 200;
+
+/**
+ * The left column's drag range — Navigation, Stats and Fleet resize as one,
+ * so the range is the rail's own tokens: `--sidebar-min` and `--sidebar-max`,
+ * the same ceiling Sidebar's own `max-width` already enforces (#1124).
+ * **No window-relative ceiling here**, unlike the dock — the dock holds
+ * whatever a Drone hands back with no natural size of its own; the left
+ * column is three panels of fixed content the design system already sized.
+ */
+function leftWidthBounds(): { min: number; max: number } {
+  if (typeof document === "undefined") {
+    return { min: LEFT_WIDTH_MIN_FALLBACK, max: LEFT_WIDTH_MAX_FALLBACK };
+  }
+  const style = getComputedStyle(document.documentElement);
+  const min = parseFloat(style.getPropertyValue("--sidebar-min"));
+  const max = parseFloat(style.getPropertyValue("--sidebar-max"));
+  return {
+    min: Number.isFinite(min) ? min : LEFT_WIDTH_MIN_FALLBACK,
+    max: Number.isFinite(max) ? max : LEFT_WIDTH_MAX_FALLBACK,
+  };
+}
+
+/** The left column's own resting width, for a caller with none of its own to remember yet. */
+export function defaultLeftWidth(): number {
+  if (typeof document === "undefined") return LEFT_WIDTH_DEFAULT_FALLBACK;
+  const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-default"));
+  return Number.isFinite(value) ? value : LEFT_WIDTH_DEFAULT_FALLBACK;
+}
+
+/** Clamped to `leftWidthBounds`, the same reasoning `clampDockWidth` uses for the dock. */
+export function clampLeftWidth(width: number): number {
+  const { min, max } = leftWidthBounds();
+  return Math.min(max, Math.max(min, width));
+}
+
+/** One `--space-4` per arrow press, matching the dock's own step. */
+const LEFT_WIDTH_STEP = 16;
 
 /**
  * The dock's leading-edge handle. A drag or an arrow key moves it; both read
@@ -235,10 +303,12 @@ const DOCK_WIDTH_STEP = 16;
 function DockHandle({
   width,
   availableWidth,
+  leftWidth,
   onResize,
 }: {
   width: number;
   availableWidth: number;
+  leftWidth: number;
   onResize: (width: number) => void;
 }) {
   const drag = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
@@ -264,7 +334,7 @@ function DockHandle({
   function pointerMove(event: PointerEvent<HTMLDivElement>): void {
     if (drag.current === null || drag.current.pointerId !== event.pointerId) return;
     const delta = drag.current.startX - event.clientX;
-    onResize(clampDockWidth(drag.current.startWidth + delta, availableWidth));
+    onResize(clampDockWidth(drag.current.startWidth + delta, availableWidth, leftWidth));
   }
 
   function endDrag(event: PointerEvent<HTMLDivElement>): void {
@@ -276,16 +346,16 @@ function DockHandle({
   }
 
   function keyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    const { min, max } = dockWidthBounds(availableWidth);
-    if (event.key === "ArrowLeft") onResize(clampDockWidth(width + DOCK_WIDTH_STEP, availableWidth));
-    else if (event.key === "ArrowRight") onResize(clampDockWidth(width - DOCK_WIDTH_STEP, availableWidth));
+    const { min, max } = dockWidthBounds(availableWidth, leftWidth);
+    if (event.key === "ArrowLeft") onResize(clampDockWidth(width + DOCK_WIDTH_STEP, availableWidth, leftWidth));
+    else if (event.key === "ArrowRight") onResize(clampDockWidth(width - DOCK_WIDTH_STEP, availableWidth, leftWidth));
     else if (event.key === "Home") onResize(max);
     else if (event.key === "End") onResize(min);
     else return;
     event.preventDefault();
   }
 
-  const { min, max } = dockWidthBounds(availableWidth);
+  const { min, max } = dockWidthBounds(availableWidth, leftWidth);
   return (
     <div
       className="armada-shell__dock-handle"
@@ -306,7 +376,85 @@ function DockHandle({
   );
 }
 
-function Dock({ open, folded = false, questions = 0, binding, width, onResize, onOpen, children }: TheShellDock) {
+/**
+ * The left column's trailing-edge handle — one handle for Navigation, Stats
+ * and Fleet together, never one per panel. Right widens the column, since it
+ * sits on the window's leading edge and dragging toward the content is
+ * dragging the edge that grows it; Home and End match a plain slider's own
+ * sense, unlike the dock's inverted one, since this column is not mirrored
+ * to the opposite edge the way the dock is.
+ */
+function LeftHandle({ width, onResize }: { width: number; onResize: (width: number) => void }) {
+  const drag = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function pointerDown(event: PointerEvent<HTMLDivElement>): void {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: width };
+    setDragging(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    event.currentTarget.focus();
+    event.preventDefault();
+  }
+
+  function pointerMove(event: PointerEvent<HTMLDivElement>): void {
+    if (drag.current === null || drag.current.pointerId !== event.pointerId) return;
+    const delta = event.clientX - drag.current.startX;
+    onResize(clampLeftWidth(drag.current.startWidth + delta));
+  }
+
+  function endDrag(event: PointerEvent<HTMLDivElement>): void {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    drag.current = null;
+    setDragging(false);
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  }
+
+  function keyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    const { min, max } = leftWidthBounds();
+    if (event.key === "ArrowRight") onResize(clampLeftWidth(width + LEFT_WIDTH_STEP));
+    else if (event.key === "ArrowLeft") onResize(clampLeftWidth(width - LEFT_WIDTH_STEP));
+    else if (event.key === "Home") onResize(min);
+    else if (event.key === "End") onResize(max);
+    else return;
+    event.preventDefault();
+  }
+
+  const { min, max } = leftWidthBounds();
+  return (
+    <div
+      className="armada-shell__left-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the left column"
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={Math.round(min)}
+      aria-valuemax={Math.round(max)}
+      data-dragging={dragging || undefined}
+      tabIndex={0}
+      onPointerDown={pointerDown}
+      onPointerMove={pointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onKeyDown={keyDown}
+    />
+  );
+}
+
+function Dock({
+  open,
+  folded = false,
+  questions = 0,
+  binding,
+  width,
+  onResize,
+  onOpen,
+  children,
+  leftWidth,
+}: TheShellDock & { leftWidth: number }) {
   const availableWidth = useWindowWidth();
   const body = children ?? (
     <BoardEmptyState quiet>Questions waiting on you, and Helm, will be here.</BoardEmptyState>
@@ -319,11 +467,11 @@ function Dock({ open, folded = false, questions = 0, binding, width, onResize, o
     // and its arrow-key math a number the aside on screen already disagrees
     // with. Clamping once here keeps every reader of `restingWidth` — the
     // aside's style included — looking at what is actually drawn.
-    const restingWidth = clampDockWidth(width ?? defaultDockWidth(), availableWidth);
+    const restingWidth = clampDockWidth(width ?? defaultDockWidth(), availableWidth, leftWidth);
     return (
       <>
         {onResize === undefined ? null : (
-          <DockHandle width={restingWidth} availableWidth={availableWidth} onResize={onResize} />
+          <DockHandle width={restingWidth} availableWidth={availableWidth} leftWidth={leftWidth} onResize={onResize} />
         )}
         <aside
           className="armada-shell__dock"
