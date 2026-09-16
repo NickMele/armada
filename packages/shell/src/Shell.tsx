@@ -153,6 +153,7 @@ export function Shell({
         id: surface.id,
         label: surface.label,
         icon: surface.icon,
+        shortcut: surface.shortcut,
         // Only the Board carries one. What Fleet is holding disk for is read
         // while that screen is open and not before, so a number here would be
         // right for as long as somebody was looking at it and stale after —

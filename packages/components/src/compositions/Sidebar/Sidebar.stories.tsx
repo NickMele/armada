@@ -7,7 +7,9 @@ import {
   MessageSquare,
   Stethoscope,
 } from "lucide-react";
+import { expect } from "storybook/test";
 import { Select } from "../../primitives/Select/Select";
+import { ShortcutRevealProvider } from "../../shortcut-reveal";
 import { Sidebar, type SidebarItem } from "./Sidebar";
 
 /**
@@ -39,11 +41,11 @@ export default meta;
 type Story = StoryObj<typeof Sidebar>;
 
 const surfaces: SidebarItem[] = [
-  { id: "board", label: "Job Board", icon: ClipboardList, count: 6 },
-  { id: "alerts", label: "Alerts", icon: Bell },
-  { id: "doctor", label: "Doctor", icon: Stethoscope },
-  { id: "manifest", label: "Manifest", icon: FileCog },
-  { id: "worktrees", label: "Cleanup", icon: HardDrive },
+  { id: "board", label: "Job Board", icon: ClipboardList, count: 6, shortcut: "⌘1" },
+  { id: "alerts", label: "Alerts", icon: Bell, shortcut: "⌘2" },
+  { id: "doctor", label: "Doctor", icon: Stethoscope, shortcut: "⌘3" },
+  { id: "manifest", label: "Manifest", icon: FileCog, shortcut: "⌘4" },
+  { id: "worktrees", label: "Cleanup", icon: HardDrive, shortcut: "⌘5" },
 ];
 
 const helm: SidebarItem = { id: "helm", label: "Helm", icon: MessageSquare };
@@ -112,4 +114,29 @@ export const WhatIsBuilt: Story = {
  */
 export const FlatForContrast: Story = {
   args: { surfaces, activeId: "board", sectionLabel: undefined, appName: "Armada" },
+};
+
+/**
+ * Holding Cmd grows every row's own `⌘`-digit without moving the label beside
+ * it, and releasing it takes every badge away at once. `useShortcutReveal()`
+ * needs a provider above it for the state to reach anywhere at all, which
+ * `TheShell` is in the running app and this story stands in for here.
+ */
+export const RevealedShortcuts: Story = {
+  args: { surfaces, activeId: "board", appName: "Armada" },
+  render: (args) => (
+    <ShortcutRevealProvider>
+      <Sidebar {...args} />
+    </ShortcutRevealProvider>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const badge = canvas.getByText("1", { selector: "kbd" });
+    await expect(badge).not.toBeVisible();
+
+    await userEvent.keyboard("{Meta>}");
+    await expect(badge).toBeVisible();
+
+    await userEvent.keyboard("{/Meta}");
+    await expect(badge).not.toBeVisible();
+  },
 };

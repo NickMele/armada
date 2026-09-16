@@ -28,3 +28,20 @@ export function KbdChord({ className, ...rest }: HTMLAttributes<HTMLSpanElement>
     <span className={className ? `armada-kbd-chord ${className}` : "armada-kbd-chord"} {...rest} />
   );
 }
+
+/**
+ * A Global-tier binding of the shape `⌘X` — every one of them but
+ * `bridge_surfaces` and `history`, which already spell a range or a pair —
+ * cut into its two boxes rather than one. `CommandPalette`'s own `Shortcut`
+ * cuts every binding it draws the same way, for the reason `KbdChord`'s own
+ * doc above states; this is that rule for the one shape the Cmd-hold reveal
+ * needs; a caller with a range or a pair to draw still owns its own cut.
+ */
+export function KbdCmd({ shortcut }: { shortcut: string }) {
+  return (
+    <KbdChord>
+      <Kbd>⌘</Kbd>
+      <Kbd>{shortcut.slice(1)}</Kbd>
+    </KbdChord>
+  );
+}

@@ -8,6 +8,7 @@ import { TitleBar } from "../../compositions/TitleBar/TitleBar";
 import { Button } from "../../primitives/Button/Button";
 import { Kbd, KbdChord } from "../../primitives/Kbd/Kbd";
 import { Sheet } from "../../primitives/Sheet/Sheet";
+import { ShortcutRevealProvider } from "../../shortcut-reveal";
 
 /**
  * The shell — the left column, panel and dock. Bridge/1088 replaced the rail
@@ -109,35 +110,37 @@ export function TheShell({
   fleet,
 }: TheShellProps) {
   return (
-    <div className="armada-shell">
-      <TitleBar
-        repositoryPicker={repositoryPicker}
-        onSearch={onSearch}
-        onDispatch={onDispatch}
-        dispatchDisabled={dispatchDisabled}
-        helm={helmButtonOf(dock)}
-      />
-      <div className="armada-shell__body">
-        <div className="armada-shell__left">
-          <Sidebar
-            header={railHeader}
-            sectionLabel={null}
-            surfaces={surfaces}
-            activeId={activeId}
-            collapsed={collapsed}
-            onSelect={onSelect}
-          />
-          <StatsPanel {...stats} narrow={collapsed} />
-          <FleetPanel {...fleet} narrow={collapsed} />
-        </div>
-        <div className="armada-shell__work">
-          <div className="armada-shell__panel">
-            <div className="armada-shell__mount">{children}</div>
+    <ShortcutRevealProvider>
+      <div className="armada-shell">
+        <TitleBar
+          repositoryPicker={repositoryPicker}
+          onSearch={onSearch}
+          onDispatch={onDispatch}
+          dispatchDisabled={dispatchDisabled}
+          helm={helmButtonOf(dock)}
+        />
+        <div className="armada-shell__body">
+          <div className="armada-shell__left">
+            <Sidebar
+              header={railHeader}
+              sectionLabel={null}
+              surfaces={surfaces}
+              activeId={activeId}
+              collapsed={collapsed}
+              onSelect={onSelect}
+            />
+            <StatsPanel {...stats} narrow={collapsed} />
+            <FleetPanel {...fleet} narrow={collapsed} />
           </div>
-          {dock === undefined ? null : <Dock {...dock} />}
+          <div className="armada-shell__work">
+            <div className="armada-shell__panel">
+              <div className="armada-shell__mount">{children}</div>
+            </div>
+            {dock === undefined ? null : <Dock {...dock} />}
+          </div>
         </div>
       </div>
-    </div>
+    </ShortcutRevealProvider>
   );
 }
 
