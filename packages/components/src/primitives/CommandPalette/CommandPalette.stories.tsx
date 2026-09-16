@@ -294,14 +294,16 @@ export const TheNewestSurfaceTookTheLastDigit: Story = {
 
     await userEvent.clear(canvas.getByRole("combobox"));
 
-    // Two caps and so two words: a chord is drawn as one `Kbd` per key.
+    // A chord is one `Kbd` box, its keys joined by " + ".
     await expect(canvas.getByRole("option", { name: /^Job Board/ })).toHaveAccessibleName(
-      "Job Board ⌘ 2",
+      "Job Board ⌘ + 2",
     );
     await expect(canvas.getByRole("option", { name: /^Cleanup/ })).toHaveAccessibleName(
-      "Cleanup ⌘ 6",
+      "Cleanup ⌘ + 6",
     );
-    await expect(canvas.getByRole("option", { name: /^Helm/ })).toHaveAccessibleName("Helm ⌘ J");
+    await expect(canvas.getByRole("option", { name: /^Helm/ })).toHaveAccessibleName(
+      "Helm ⌘ + J",
+    );
   },
 };
 

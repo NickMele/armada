@@ -41,10 +41,3 @@
   font-weight: var(--weight-body);
   white-space: nowrap;
 }
-
-/* One key per box. A chord set in one box reads as a key that does not exist. */
-.armada-kbd-chord {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}

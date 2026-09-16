@@ -2,7 +2,7 @@ import { MessageSquare, Plus, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { ArmadaLockupHorizontal } from "@armada/brand";
 import { Button } from "../../primitives/Button/Button";
-import { Kbd, KbdCmd } from "../../primitives/Kbd/Kbd";
+import { KbdCmd } from "../../primitives/Kbd/Kbd";
 import { useShortcutReveal } from "../../shortcut-reveal";
 
 /**
@@ -67,7 +67,7 @@ export function TitleBar({
           <button type="button" className="armada-title-bar__search" onClick={onSearch}>
             <Search size={16} strokeWidth={2} aria-hidden />
             <span className="armada-title-bar__search-label">Search jobs, commands, settings…</span>
-            <Kbd>⌘K</Kbd>
+            <KbdCmd shortcut="⌘K" />
           </button>
         )}
 

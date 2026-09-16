@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
-import { Kbd, KbdChord } from "../Kbd/Kbd";
+import { KbdChord } from "../Kbd/Kbd";
 
 /**
  * The palette is a superset of the UI, never a substitute for it, and it is
@@ -395,42 +395,44 @@ function Marked({ label, query, at }: { label: string; query: string; at: number
 }
 
 /**
- * The binding, cut into one box per key.
+ * The binding, cut into one box per chord and a separator between two.
  *
  * **The registry's spelling is the input and nothing is re-spelled here.**
  * `⌘K`, `j / k / ↓ / ↑`, `⌘1–⌘6` and `[ ]` are all how `actions.toml` writes
  * them, and the gate holds that file to the contract's map — so the palette
  * shows exactly the string a person will read in the contract. What this does
- * is put each key in its own box, because a chord set in one box reads as a
- * key that does not exist.
+ * is put every chord — the keys of one binding held together — in its own
+ * box, " + "-joined; `/` and `–` still separate two distinct bindings and are
+ * drawn as punctuation between boxes, never folded into one.
  */
 function Shortcut({ shortcut }: { shortcut: string }) {
   return (
-    <KbdChord className="armada-palette__keys">
+    <span className="armada-palette__keys">
       {piecesOf(shortcut).map((piece, i) =>
-        piece.key === undefined ? (
+        piece.chord === undefined ? (
           <span key={i} className="armada-palette__between">
             {piece.between}
           </span>
         ) : (
-          <Kbd key={i}>{piece.key}</Kbd>
+          <KbdChord key={i} keys={piece.chord} />
         ),
       )}
-    </KbdChord>
+    </span>
   );
 }
 
-/** A key that gets a box, or a separator that is drawn between two. */
-type Piece = { key: string; between?: undefined } | { key?: undefined; between: string };
+/** A chord that gets one box, or a separator drawn between two. */
+type Piece = { chord: string[]; between?: undefined } | { chord?: undefined; between: string };
 
 /**
- * Cut a binding into boxes and separators.
+ * Cut a binding into chords and separators.
  *
  * A space separates two whole bindings and needs no mark — the gap between
  * boxes is the separation. `/` and `–` are kept and drawn, because `j / k`
- * means either key and `⌘1–⌘6` means a range, and dropping them would turn
- * both into a chord. A leading `⌘` takes a box of its own for the same reason
- * the chord rule exists.
+ * means either key and `⌘1–⌘6` means a range: both are two distinct bindings,
+ * never one chord, so the separator stays outside every box. A leading `⌘`
+ * joins the box it already started rather than starting one of its own — the
+ * combination `⌘K` is one press, and one box is what reads as one.
  */
 function piecesOf(shortcut: string): Piece[] {
   return shortcut
@@ -439,8 +441,8 @@ function piecesOf(shortcut: string): Piece[] {
       if (part.trim() === "") return [];
       if (part === "/" || part === "–") return [{ between: part }];
       if (part.length > 1 && part.startsWith("⌘")) {
-        return [{ key: "⌘" }, { key: part.slice(1) }];
+        return [{ chord: ["⌘", part.slice(1)] }];
       }
-      return [{ key: part }];
+      return [{ chord: [part] }];
     });
 }

@@ -6,7 +6,7 @@ import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
 import { StatsPanel, type StatsPanelProps } from "../../compositions/StatsPanel/StatsPanel";
 import { TitleBar } from "../../compositions/TitleBar/TitleBar";
 import { Button } from "../../primitives/Button/Button";
-import { Kbd, KbdChord } from "../../primitives/Kbd/Kbd";
+import { KbdCmd } from "../../primitives/Kbd/Kbd";
 import { Sheet } from "../../primitives/Sheet/Sheet";
 import { ShortcutRevealProvider } from "../../shortcut-reveal";
 
@@ -334,7 +334,7 @@ function Dock({ open, folded = false, questions = 0, binding, width, onResize, o
             <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
             <Button variant="secondary" size="sm" ground="sunken" onClick={() => onOpen(false)}>
               Close
-              {binding === undefined ? null : <Chord binding={binding} />}
+              {binding === undefined ? null : <KbdCmd shortcut={binding} />}
             </Button>
           </div>
           <div className="armada-shell__dock-body">{body}</div>
@@ -372,17 +372,6 @@ function Dock({ open, folded = false, questions = 0, binding, width, onResize, o
         {body}
       </Sheet>
     </>
-  );
-}
-
-/** One cap per key, as `KbdChord` draws a chord. */
-function Chord({ binding }: { binding: string }) {
-  return (
-    <KbdChord>
-      {Array.from(binding).map((key, at) => (
-        <Kbd key={at}>{key}</Kbd>
-      ))}
-    </KbdChord>
   );
 }
 
