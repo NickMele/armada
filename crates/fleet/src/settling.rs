@@ -56,13 +56,18 @@ pub(crate) const UNDECIDED: &str = "the gate could not read what it needed to ru
 pub struct Settled {
     pub ruled: Option<Ruling>,
     pub declined: Option<Decline>,
+    /// Every repeat this ruling spotted, for `crate::turning` to probe once
+    /// it has an owned Fleet to spawn one against. Always empty beside
+    /// `declined` — nothing here was ruled on, so nothing was compared.
+    pub(crate) repeats: Vec<crate::fixing::Repeat>,
 }
 
 impl Settled {
-    fn ruling(ruling: Ruling) -> Settled {
+    fn ruling(ruling: Ruling, repeats: Vec<crate::fixing::Repeat>) -> Settled {
         Settled {
             ruled: Some(ruling),
             declined: None,
+            repeats,
         }
     }
 
@@ -70,6 +75,7 @@ impl Settled {
         Settled {
             ruled: None,
             declined: Some(why),
+            repeats: Vec::new(),
         }
     }
 }
@@ -312,6 +318,9 @@ where
         // never written down is a verdict with no trace.
         self.recorded_checks(&job_id, &job.handle(), &step, attempt, &ruling)
             .await?;
+        // After `recorded_checks`, which is what puts this attempt's own
+        // Checks where the read inside can find them beside the one before.
+        let repeats = self.spotted_repeats(&job_id, &step, &ruling).await;
         self.kept_timings(&job, announcing.timings()).await;
         drop(announcing);
         // And into the step's own transcript, in Fleet's voice. **A Drone never
@@ -380,7 +389,7 @@ where
             .await
             .forget_pending_evidence(&job_id)
             .map_err(Adrift::Writing)?;
-        Ok(Settled::ruling(ruling))
+        Ok(Settled::ruling(ruling, repeats))
     }
 
     /// Turn a delivering step's `Finished` ruling into a held one where its

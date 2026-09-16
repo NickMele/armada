@@ -14,10 +14,12 @@
 
 mod claims;
 mod refusal;
+mod repeated;
 mod running;
 mod waiting;
 
 pub use refusal::NotFixed;
+pub(crate) use repeated::Repeat;
 pub(crate) use waiting::{failures_said, FixStands};
 
 use std::sync::atomic::Ordering;
@@ -195,6 +197,20 @@ where
             let (job, step, _) = at_work.standing();
             (job, step)
         };
+        self.requested(job, step, &fix.check, test).await
+    }
+
+    /// The same resolution `what_fix_is_asked` does for a Drone's own call,
+    /// taken by a Job and a step directly — `fixing::repeated`'s reason: a
+    /// repeat Fleet spots itself has both in hand already and no slot to read
+    /// them off.
+    async fn requested(
+        &self,
+        job: JobId,
+        step: StepId,
+        check: &str,
+        test: &str,
+    ) -> Result<Request, NotFixed> {
         let record = self
             .load(&job)
             .await
@@ -206,7 +222,7 @@ where
         let (expect_exit_code, requires, template, places) = declared
             .checks()
             .iter()
-            .find_map(|check| match check {
+            .find_map(|c| match c {
                 ResolvedCheck::ManifestCheck {
                     name,
                     expect_exit_code,
@@ -214,7 +230,7 @@ where
                     one_test,
                     places,
                     ..
-                } if *name == fix.check => Some((
+                } if name == check => Some((
                     *expect_exit_code,
                     requires.clone(),
                     one_test.clone(),
@@ -223,10 +239,10 @@ where
                 _ => None,
             })
             .ok_or_else(|| NotFixed::NoSuchCheck {
-                check: fix.check.clone(),
+                check: check.to_string(),
             })?;
         let template = template.ok_or_else(|| NotFixed::NoWayToRunOneTest {
-            check: fix.check.clone(),
+            check: check.to_string(),
         })?;
         let command =
             checks_runner::one_test(&template, test).ok_or_else(|| NotFixed::NotOneArgument {
@@ -234,7 +250,7 @@ where
             })?;
         let owner = self
             .names()
-            .owner_of(caller)
+            .owner_of(&job)
             .ok_or(NotFixed::NothingIsWorking)?;
         let served = self.served_by(&record).map_err(|why| NotFixed::NoMain {
             why: why.to_string(),
@@ -243,7 +259,7 @@ where
             repository: ManifestId::carried(Ulid::carried(owner)),
             root: served.root().to_string(),
             run: ResolvedCheck::ManifestCheck {
-                name: fix.check.clone(),
+                name: check.to_string(),
                 run: command,
                 expect_exit_code,
                 when: None,

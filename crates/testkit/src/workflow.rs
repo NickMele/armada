@@ -264,9 +264,19 @@ pub struct OneTest<'a> {
 
 /// The same fixture with some of its Checks declaring how to run one test.
 pub fn testing_one(steps: &[Sketch<'_>], one_tests: &[OneTest<'_>]) -> ResolvedWorkflow {
+    retried_and_testing_one(steps, 0, one_tests)
+}
+
+/// [`retried`] and [`testing_one`] together — a test where a Check hands
+/// work back more than once, over a Check `draft_fix` can also reach.
+pub fn retried_and_testing_one(
+    steps: &[Sketch<'_>],
+    retry_limit: u32,
+    one_tests: &[OneTest<'_>],
+) -> ResolvedWorkflow {
     assembled_with(
         steps,
-        0,
+        retry_limit,
         &[],
         &[],
         &[],

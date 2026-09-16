@@ -28,10 +28,12 @@
 //! What comes back is a fact: a code, a signal, an expired budget, or a spawn
 //! that never happened. Whether it satisfies a step is `verification`'s — two
 //! crates, because the deciding half must be testable without a process and
-//! the running half cannot be. [`one_test_ran`] is the one exception: telling
-//! a name that matched nothing apart from a pass needs the runner's own
-//! printed summary, which only this crate captures at all.
+//! the running half cannot be. [`one_test_ran`] and [`failing_tests`] are the
+//! exceptions: one tells a name that matched nothing apart from a pass, the
+//! other names every test a run's own summary said failed — both read the
+//! runner's own printed words, which only this crate captures at all.
 
+mod failing;
 mod matched;
 mod narrow;
 mod run;
@@ -40,6 +42,7 @@ mod serving;
 #[cfg(test)]
 mod tests;
 
+pub use failing::{failing_tests, failing_tests_in};
 pub use matched::{one_test_ran, OneTestRan};
 pub use narrow::{narrowed, one_test, Narrowed};
 pub use run::{run, run_until, run_writing, run_writing_with_env, split, Attempt, Output, Writing};
