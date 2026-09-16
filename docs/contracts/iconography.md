@@ -494,9 +494,9 @@ reached for.
   ghost glyph above it adds nothing and reads as a consumer app.
 - **Spend, quota, elapsed, step N of M.** Numbers in mono. No gauge, no
   coin, no timer.
-- **Status bar.** Text only. The escalation and approval counts are the
-  only colour in the bar, and an icon beside them would make it a second
-  alert surface.
+- **Stats panel.** Text only. Its counts already carry their status token as
+  colour, and an icon beside them would make the panel a second alert
+  surface.
 
 ---
 

@@ -242,7 +242,7 @@ Four readings, and only the first two connect.
 
 | Reading | What is true | What Bridge does |
 |---|---|---|
-| Same | The majors and the minors agree | Connects. The status bar says nothing about versions |
+| Same | The majors and the minors agree | Connects. The Fleet panel says nothing about versions |
 | Fleet ahead | Same major, Fleet's minor is higher | **Connects, and carries a banner.** Everything drawn is current; Fleet has additions this Bridge cannot ask for |
 | Fleet behind | Same major, Fleet's minor is lower | **Refuses.** The screen names both versions and says to restart Fleet when no Job is running |
 | Incompatible | The majors differ, either way round | **Refuses.** The screen names both versions and says to update both to the same commit. This is what the v0 lifeboat is for |
@@ -257,9 +257,9 @@ arrive mid-Job rather than at startup, on a Job Board that gives no sign it is
 missing anything — which is worse than not connecting.
 
 The banner therefore says the connection is fine and names what it cannot
-reach. It goes in the status bar beside the running dot, as advice on a healthy
-connection, and **not** as a failure notice: a minor gap Bridge can survive is
-not a fault, and drawing it as one tells somebody something is broken when it is
+reach. It goes in the Fleet panel beside the running dot, as advice on a
+healthy connection, and **not** as a failure notice: a minor gap Bridge can
+survive is not a fault, and drawing it as one tells somebody something is broken when it is
 working. `packages/shell/src/fleet.ts` carries the sentences and
 `packages/protocol/src/version.ts` carries the rule; `crates/ipc/src/version.rs`
 is the same rule in Rust, where the four readings are tested.

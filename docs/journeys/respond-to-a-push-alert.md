@@ -75,7 +75,7 @@ Resolved Aug 2026, replacing a two-row Push/Passive split. That split described 
 | Evidence suspect | Waiting | Same shape |
 | Job awaiting dispatch approval | Waiting | Nothing started, nothing running |
 | Job Review ready | Waiting | Work finished, sign-off queued |
-| ~~Doctor module fail~~ | ~~Waiting~~ | **Reversed 2026-08-21.** A health check is a standing condition, not a queued decision — a failing module has no workspace, no spend, no step and no Job id, and nothing about it is *waiting* in the sense every Alerts row is. **Doctor never enters Alerts.** It renders as a one-line neutral strip above the Triage Queue tabs, naming which modules are failing and whether work is stopped, and disappears when they all pass (the window's fixed status bar reports health continuously, so the absence is not ambiguous) |
+| ~~Doctor module fail~~ | ~~Waiting~~ | **Reversed 2026-08-21.** A health check is a standing condition, not a queued decision — a failing module has no workspace, no spend, no step and no Job id, and nothing about it is *waiting* in the sense every Alerts row is. **Doctor never enters Alerts.** It renders as a one-line neutral strip above the Triage Queue tabs, naming which modules are failing and whether work is stopped, and disappears when they all pass (the left column's Fleet panel reports health continuously, so the absence is not ambiguous) |
 | Denial-frequency rollup | Noted | A suggestion. Ignoring it costs nothing |
 | Job completed and merged | Noted | Informational |
 

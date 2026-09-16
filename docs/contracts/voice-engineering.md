@@ -134,5 +134,3 @@ lint with the checks runner.*
   so this is that requirement's remaining gap. Left undone, designers
   hand-write these headlines and the copy rules get broken by omission,
   which is how "Judge passed" happened.
-
-Also bearing on this document, and written where each belongs: `[status-bar-loudness]` in `design-system.md`. A question has one home — answering it in two places is how one of them goes stale.

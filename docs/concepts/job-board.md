@@ -223,6 +223,14 @@ Blocked Jobs are shown rather than hidden, stepped down to `--border-subtle` and
 
 **A filter that empties the list says which filter did it.** A Board with nothing on it under a filter is not the same as a Manifest with no Jobs, and the empty state has to tell those apart — see [Bridge](bridge.md).
 
+### Recently ended, carved out of Done
+
+**A Job whose terminal status is `killed`, `completed_failed` or `rejected` sits in Recently ended, not Done.** `completed_success` and `superseded` stay in Done: nothing is owed on either, which is exactly what separates the two. Recently ended sits above Done and stays open where Done is folded — a Job here is still one somebody meant to come back to, to redispatch or to read, and Done being collapsed by default is what used to let one vanish.
+
+**A row here offers Redispatch, except `rejected`.** `killed` and `completed_failed` both redispatch cleanly; `rejected` never ran, so Fleet refuses to redispatch it by name, and its row keeps the plain Open a `rejected` Job has always had rather than a control that always fails.
+
+**A Job leaves the section the way any Done Job does: reclaimed.** `reclaimed_at` moves it to Cleared, the same row fact — not a registry status — that separates Cleared from Finished.
+
 ## Origin tagging
 
 Every Job shows a visible tag for where it came from.
