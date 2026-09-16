@@ -24,9 +24,8 @@ before you start.
 
 ## The boundary, before anything else
 
-**You are producing reference, not recommendations about scope.** Notion is the
-source of truth for what v2 is and what it builds. Nothing you find here changes
-that, and a finding that reads as "v2 may not need this" is out of bounds however
+**You are producing reference, not recommendations about scope.** What v2 is and
+what it builds is decided elsewhere. Nothing you find here changes that, and a finding that reads as "v2 may not need this" is out of bounds however
 well-evidenced it is.
 
 What you are for: an agent about to build something reaches for your note and

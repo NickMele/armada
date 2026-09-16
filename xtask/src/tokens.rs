@@ -1,10 +1,10 @@
 //! The design token pipeline: `packages/tokens/src/*.css` in, three checked-in
 //! outputs out, and a check that fails when they drift apart.
 //!
-//! **The CSS is the authority on values.** Notion is the authority on the
-//! decision and the reasoning; a row that disagrees with the CSS is stale. So
-//! this generator reads the CSS and never the other way round — seeded from
-//! Notion instead, every later regeneration would diff against the wrong thing.
+//! **The CSS is the authority on values**, and the comment beside one carries
+//! its reasoning. So this generator reads the CSS and never the other way round —
+//! seeded from anywhere else, every later regeneration would diff against the
+//! wrong thing.
 //!
 //! Two rules make the pipeline safe to leave alone:
 //!

@@ -1,7 +1,7 @@
 # Port allocation — what v1 did, and what it cost
 
-**Reference, not a scope recommendation.** Notion decides what v2 builds. This
-note says how v1 did it and what it cost, for whoever builds anything nearby.
+**Reference, not a scope recommendation.** This note says how v1 did it and
+what it cost, for whoever builds anything nearby.
 
 Read from `v1-final`: `crates/core/src/ports.rs`, `crates/manifest/src/db.rs`
 (`workspaces` and `leases` tables, `Db::claim_block`), `docs/PLAN.md` §3.1,

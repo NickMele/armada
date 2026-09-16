@@ -43,10 +43,6 @@ it before writing.
    resolves in neither this tree nor `v1-final`. A pointer to a directory where
    you meant a file passes the rule and fails the reader — write
    `crates/core-model/domain/job-statuses.toml`, not `crates/core-model/`.
-4. **Never write an address into the design workspace.** This repository is
-   public and that workspace is not; a link into it publishes an address to
-   something nobody outside can open. Gate rule sixteen enforces it.
-
 ## Cleaning one
 
 The same five failures recur: prose restating a decision that has since moved,

@@ -311,9 +311,9 @@ const CLAUDE_MD_WARN: usize = 40;
 /// No `CLAUDE.md` over fifty lines.
 ///
 /// **A CLAUDE.md routes; it does not explain.** Anything longer than a pointer
-/// belongs in a practice doc, a skill, or Notion — one of which is already the
-/// authority on it, so a copy in a CLAUDE.md can only drift downward while
-/// being read more often than the original.
+/// belongs in a practice doc or a skill — one of which is already the authority
+/// on it, so a copy in a CLAUDE.md can only drift downward while being read more
+/// often than the original.
 ///
 /// v1's single agent file reached 328 lines by accretion, one reasonable-looking
 /// paragraph at a time. No individual addition was wrong, which is exactly why a

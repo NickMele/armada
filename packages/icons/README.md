@@ -19,10 +19,9 @@ rather than a second top-level table overwriting the first.
 
 ## What did not survive the move
 
-Notion's `Concepts` and `Components` columns are relations — arrays of
-Notion page links — and this repo is public, so no Notion URL may appear in
-it. Neither column carried text beyond the link itself, so both are
-dropped rather than resolved to a title.
+Notion's `Concepts` and `Components` columns were relations — arrays of page
+links carrying no text beyond the link itself — so both are dropped rather than
+resolved to a title.
 
 ## Checking this file against the app
 

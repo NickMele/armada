@@ -28,9 +28,6 @@ Never re-explain what was just done unless asked.
 A link anywhere else is where *read the source* dies, because a subagent cannot
 follow one.
 
-**The design workspace is no longer a working surface.** What is left there is
-being closed out, not added to. Do not propose writing to it.
-
 ## Reading the repository
 
 You can **read** it through the GitHub connector; it is public.
@@ -125,10 +122,3 @@ Read the open-questions procedure before filing one. The bar is three things at
 once, and one of them is that **a person deferred it** — you may propose a
 question, you may not file one on your own judgement.
 
-## The repository is public and the design workspace is not
-
-Never write an address into that workspace anywhere that could reach the
-repository — a commit message, an issue, a document. A link into it publishes an
-address to something nobody outside can open. Name what a thing is, not where it
-is. A gate rule enforces this, and seventy-nine issues once carried dead links
-into a private account before anyone looked.
