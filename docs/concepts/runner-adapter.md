@@ -83,6 +83,27 @@ output:
   line: '^\s*(?<status>✓|×)\s+(?<test>.+?)\s+\d+ms$'
 ```
 
+### Each shape is one command, never `run` plus a suffix
+
+Every field in `commands` — `run`, `one_test`, `run_failed`, `run_changed`,
+`run_group`, `run_pattern` — is its own complete, independently written
+string, the way the example above shows. None is computed by appending
+something to `run`.
+
+**Decided, not left open.** An append-only suffix was the shorter-looking
+alternative — track `run` automatically, write less — and it was tried for
+real: `desktop_test`'s `run: pnpm -C apps/desktop test` with a suffix of
+`-- -t {test}` appended. It silently ran the *entire* suite instead of one
+test, exit code `0`, reading as an ordinary pass (#1205). pnpm's own `--`
+forwarding collides with vitest's argument parsing in a way nothing about the
+suffix syntax itself would warn a reader of. The working command,
+`pnpm --dir apps/desktop exec vitest run -t {test}`, isn't `run` plus
+anything — it's a different invocation. A full, independently-verified
+command per shape costs more typing and can drift from `run` if `run` changes
+later; an appended one can silently run the wrong thing while still looking
+right. Between "more to write" and "quietly wrong," this schema always takes
+the first.
+
 ## The six shapes are fixed
 
 Fleet's caller code knows how to invoke exactly these six. Where an adapter
@@ -149,23 +170,3 @@ one later does not require reopening it:
   executing anything to do so
 - nothing in `detect`, `requires`, `commands` or `output` that only makes
   sense scoped to one repository
-
-## Open questions
-
-- **[one-test-shape]** Whether a Check's `one_test` should be a full duplicate
-  of its own command, or an append-only suffix template on top of `run`.
-  `test`'s `one_test` today restates the whole invocation — `run: cargo
-  nextest run --workspace --exclude acceptance`, `one_test: run: cargo
-  nextest run --workspace --exclude acceptance -E test(={})` — because it
-  must keep `--exclude acceptance`, which the narrowed per-package `run` does
-  not carry. A full duplicate can diverge from `run` in ways a suffix cannot
-  express, and every Check that adds one has a second full command to keep in
-  sync by hand. An append-only suffix is shorter and tracks `run`
-  automatically — illustrated against `desktop_test`, which does not use this
-  shape today: `run: pnpm -C apps/desktop test` with a `one_test` suffix of
-  `-- -t {}` appended to it. Appending `-- -t {}` to that exact command is the
-  shape #1205 found broken: pnpm's own `--` forwarding collides with vitest's
-  argument parsing, and the suffixed command silently runs the whole suite
-  while still exiting 0. The working `one_test` line for `desktop_test`,
-  `pnpm --dir apps/desktop exec vitest run -t {}`, is not `run` plus a suffix
-  at all — it is a different command. Neither shape is chosen here.
