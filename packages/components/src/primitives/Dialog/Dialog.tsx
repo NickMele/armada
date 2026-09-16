@@ -213,10 +213,12 @@ export function Dialog({
             {/* The key is drawn where it fires. Reference material beside the
                 label, never a second label — `aria-hidden`, because the button
                 already answers `Enter` and a screen reader saying "Cancel
-                Enter" is the shortcut read as part of the name. */}
+                Enter" is the shortcut read as part of the name. The glyph
+                (`↵`), not the word — `Kbd`'s own precedent for `⌘` is a plain
+                Unicode character standing in for a key. */}
             {collects ? null : (
               <Kbd className="armada-dialog__kbd" aria-hidden="true">
-                Enter
+                ↵
               </Kbd>
             )}
           </button>
@@ -233,7 +235,7 @@ export function Dialog({
             {confirmLabel}
             {collects ? (
               <Kbd className="armada-dialog__kbd" aria-hidden="true">
-                Enter
+                ↵
               </Kbd>
             ) : null}
           </button>

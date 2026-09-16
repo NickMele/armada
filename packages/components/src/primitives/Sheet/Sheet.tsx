@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
 import { X } from "lucide-react";
 import { Button } from "../Button/Button";
-import { Kbd } from "../Kbd/Kbd";
+import { KbdBinding } from "../Kbd/Kbd";
 
 /**
  * A panel that enters from an edge. The contract gives it exactly one line —
@@ -199,7 +199,7 @@ export function Sheet({
               onClick={onClose}
             >
               {closeLabel}
-              {closeBinding === undefined ? null : <Kbd>{closeBinding}</Kbd>}
+              {closeBinding === undefined ? null : <KbdBinding binding={closeBinding} />}
             </Button>
           ) : (
             <button

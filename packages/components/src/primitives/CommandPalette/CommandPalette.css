@@ -170,9 +170,12 @@
   line-height: var(--leading-2xs);
 }
 
-/* One box per key. The chord's own gap is kbd's; this only holds the group
- * against the right edge. */
+/* One box per chord, plain punctuation between two distinct bindings. The
+ * gap here is between boxes; a chord's own "+" is drawn inside kbd's box. */
 .armada-palette__keys {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   flex: none;
 }
 
