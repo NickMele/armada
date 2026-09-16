@@ -83,6 +83,13 @@
   min-height: 0;
 }
 
+/* The handle (`TheShell.css`) carries its own margin in the gap it now
+   occupies — the same trick the dock's own handle already plays on its
+   side of `.armada-shell__work`, read here instead of doubled by `gap`. */
+.armada-shell__body:has(.armada-shell__left-handle) {
+  gap: 0;
+}
+
 /* Navigation, Stats and Fleet, stacked — the left column Bridge/1088 built to
    replace the rail and the status bar. Margined on three sides the way the
    dock already is, because the panel beside it stays flush by design — "the
