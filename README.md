@@ -98,17 +98,30 @@ crate graph, and the rules that hold everywhere, with diagrams.
 
 ## Building it
 
-You need macOS and three toolchains that do not come with it.
+You need macOS and four toolchains that do not come with it.
 
 | Tool | Version | Where it comes from |
 |---|---|---|
+| Command Line Tools | the one matching your macOS | `xcode-select --install`, and Software Update after a macOS upgrade |
 | Rust | 1.90 or later | [`rustup`](https://rustup.rs) |
 | Node | 24 — the version in `.nvmrc` | [`nvm`](https://github.com/nvm-sh/nvm), then `nvm use` |
 | pnpm | the version in `package.json` | `corepack enable`, bundled with Node |
 
+**Command Line Tools behind your macOS fail at the link, not the compile.**
+`clang` picks the newest SDK on the machine and hands it to whichever linker is
+installed, so a linker older than that SDK cannot read it and every Rust build
+ends in `ld: tapi error: malformed file` naming `libSystem.tbd`. It reads as a
+broken checkout and is a toolchain a version behind. `softwareupdate --list`
+names the one to install.
+
 **pnpm comes from corepack**, which ships with Node, at the version
 `package.json` pins. You do not install it yourself. A Node that does not match
 `.nvmrc` refuses the install rather than warning about it: `engineStrict` is on.
+
+**`cargo install` writes to `~/.cargo/bin`, and something has to put that on
+your PATH.** rustup does, through the `~/.cargo/env` it writes and your shell
+sources. A Rust from Homebrew writes no such file, so `pnpm dev` installs
+`armada`, calls it on the next line, and reports `command not found`.
 
 ```sh
 git clone https://github.com/NickMele/armada.git
