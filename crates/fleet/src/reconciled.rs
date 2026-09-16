@@ -36,4 +36,7 @@ pub struct Reconciled {
     /// no question — `#733`. Each is now `escalated`, reason `gate_failure`.
     /// Empty once every Job it could have stranded has passed through here.
     pub mended: Vec<JobId>,
+    /// Jobs whose Drone submitted evidence and did not survive the restart —
+    /// ruled on anyway, from the durable row it left. #796.
+    pub recovered_evidence: Vec<JobId>,
 }

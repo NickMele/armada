@@ -232,7 +232,7 @@ where
         // called anyway because a Drone that submitted between that reading and
         // this line left evidence against a step that has now stopped, and a
         // drop nobody wrote down is the defect that pair closes.
-        let dropped = self.empty_the_inbox(&job_id);
+        let dropped = self.empty_the_inbox(&job_id).await;
         self.dropped_with_the_job(&job_id, dropped);
         Ok(Some(stood_down))
     }

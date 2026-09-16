@@ -68,6 +68,8 @@ mod model_override;
 mod note;
 mod numbering;
 mod open;
+/// Evidence a Drone submitted, kept durable until the gate rules on it. #796.
+mod pending_evidence;
 /// What a step said its work would be, kept after the slot that held it is
 /// gone.
 mod plan;
@@ -134,6 +136,7 @@ pub use forget::Forgotten;
 pub use limits::SavedLimits;
 pub use migrations::KNOWN_SCHEMA_VERSION;
 pub use open::Store;
+pub use pending_evidence::PendingEvidence;
 pub use plan::DeclaredPlan;
 pub use ports::{PortClaim, PortClaimant};
 pub use preferences::Preferences;
