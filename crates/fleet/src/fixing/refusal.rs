@@ -9,18 +9,38 @@ use ipc::mcp::NotRecorded;
 #[derive(Debug)]
 pub enum NotFixed {
     NothingIsWorking,
-    NoSuchCheck { check: String },
-    NoWayToRunOneTest { check: String },
-    NotOneArgument { test: String },
+    NoSuchCheck {
+        check: String,
+    },
+    NoWayToRunOneTest {
+        check: String,
+    },
+    NotOneArgument {
+        test: String,
+    },
     AlreadyRunning,
     AlreadySubmitted,
     Unheard,
     MainIsBusy,
-    Spent { allowed: u32 },
-    NoMain { why: String },
+    Spent {
+        allowed: u32,
+    },
+    NoMain {
+        why: String,
+    },
     NeverRan,
-    PassesOnMain { test: String },
-    NotDrafted { why: String },
+    PassesOnMain {
+        test: String,
+    },
+    /// The name matched nothing on main — nextest and vitest both say so in
+    /// their own summary rather than the exit code, which reports the same
+    /// code a pass would. #1204.
+    NoMatch {
+        test: String,
+    },
+    NotDrafted {
+        why: String,
+    },
 }
 
 impl fmt::Display for NotFixed {
@@ -86,6 +106,12 @@ impl fmt::Display for NotFixed {
                 out,
                 "`{test}` passes on main, so the failure is in your change. Nothing is \
                  drafted; fix it on your branch"
+            ),
+            NotFixed::NoMatch { test } => write!(
+                out,
+                "`{test}` matched nothing at all on main — neither a pass nor a failure, so \
+                 nothing is drafted. Check the name against the Check's own output and ask \
+                 again if it was copied wrong"
             ),
             NotFixed::NotDrafted { why } => write!(out, "the fix Job could not be drafted: {why}"),
         }

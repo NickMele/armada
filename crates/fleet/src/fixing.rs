@@ -14,12 +14,12 @@
 
 mod claims;
 mod refusal;
+mod running;
 mod waiting;
 
 pub use refusal::NotFixed;
 pub(crate) use waiting::{failures_said, FixStands};
 
-use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -29,7 +29,6 @@ use core_model::{
 };
 use ipc::mcp::DraftFix;
 use tokio::task::JoinHandle;
-use verification::{Exit, Observed};
 
 use crate::checking::{Going, Stop};
 use crate::daemon::Fleet;
@@ -303,71 +302,6 @@ where
         Ok(())
     }
 
-    /// Whether the test fails on main. `false` is a pass there.
-    async fn run_on_main(&self, request: &Request, stop: &Stop) -> Result<bool, NotFixed> {
-        // Matched here rather than read off `NoBase::said`, whose sentences are
-        // about photographing a before; these say what running a test there met.
-        let (served, checkout) = self
-            .base_to_show_from(&request.record)
-            .await
-            .map_err(|why| NotFixed::NoMain {
-                why: match why {
-                    crate::basing::NoBase::Unnamed => String::from(
-                        "this repository names no base branch, so there is no main to run it against",
-                    ),
-                    crate::basing::NoBase::NotCheckedOut { why } => {
-                        format!("the checkout of main could not be made — {why}")
-                    }
-                    crate::basing::NoBase::NotPrepared { command, why } => format!(
-                        "`setup.requires` did not finish in the checkout of main: `{command}` — {why}"
-                    ),
-                },
-            })?;
-        let ports = self.main_checkout_ports(&served).await;
-        let env = self.main_checkout_port_env(&served).await;
-        let completed = crate::checking::ran(
-            std::slice::from_ref(&request.run),
-            &[],
-            false,
-            false,
-            Path::new(checkout.path()),
-            self.budget().duration(),
-            &self.room(crate::places::Asking::FixDraft),
-            &crate::underway::Announcing::nowhere(),
-            &ports,
-            &env,
-            None,
-            stop,
-            // No Drone and no dry run: proving a fix against main is not
-            // anything a Drone asked about first.
-            None,
-            core_model::Attempt::FIRST,
-            None,
-        )
-        .await;
-        // Kept apart from a whole run of this Check — the test alone is
-        // seconds where the Check is minutes. #1072.
-        if let Some(took) = completed.iter().find_map(|done| match &done.observed {
-            Observed::Command(Exit::Code(_)) => Some(done.took),
-            _ => None,
-        }) {
-            self.kept_one_test_timing(&request.repository, request.run.label(), took)
-                .await;
-        }
-        let exit = completed
-            .iter()
-            .rev()
-            .find_map(|done| match &done.observed {
-                Observed::Command(exit) => Some(exit),
-                _ => None,
-            });
-        match exit {
-            Some(Exit::Code(code)) if i64::from(*code) == request.expect_exit_code => Ok(false),
-            Some(Exit::NeverRan(_)) | None => Err(NotFixed::NeverRan),
-            Some(_) => Ok(true),
-        }
-    }
-
     /// Take the mark off, draft where main failed too, give the checkout back
     /// and tell the Drone — **only where this is still the run in flight**, so a
     /// step that ended or a submission that stopped the run drafts nothing.
@@ -376,19 +310,27 @@ where
         caller: &JobId,
         request: &Request,
         run: u64,
-        ran: Result<bool, NotFixed>,
+        ran: Result<checks_runner::OneTestRan, NotFixed>,
         fix: &DraftFix,
         test: &str,
     ) -> Option<Result<Drafted, NotFixed>> {
+        use checks_runner::OneTestRan;
         let came_to = match (self.fix_still_asked(caller, request, run).await, ran) {
             (false, _) => None,
             (true, Err(why)) => Some(Err(why)),
-            (true, Ok(false)) => Some(Err(NotFixed::PassesOnMain {
+            (true, Ok(OneTestRan::Passed)) => Some(Err(NotFixed::PassesOnMain {
+                test: test.to_string(),
+            })),
+            // Neither a pass nor a failure, so neither answer is honest —
+            // #1204. Reported the same way a refusal is, not drafted.
+            (true, Ok(OneTestRan::NoMatch)) => Some(Err(NotFixed::NoMatch {
                 test: test.to_string(),
             })),
             // Still holding the checkout, so no second fix for this repository
             // drafts meanwhile.
-            (true, Ok(true)) => Some(self.drafted_fix(caller, fix, request, test).await),
+            (true, Ok(OneTestRan::Failed)) => {
+                Some(self.drafted_fix(caller, fix, request, test).await)
+            }
         };
         self.fixing_on_main().lock().await.remove(&request.root);
         let came_to = came_to?;
