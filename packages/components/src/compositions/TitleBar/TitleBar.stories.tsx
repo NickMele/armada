@@ -74,11 +74,11 @@ export const BeforeAnythingIsRead: Story = {
 };
 
 /**
- * Holding Cmd grows Helm's own `⌘J` badge without moving the button beside
- * it, and releasing it takes the badge away again — the row is drawn from
- * `Full` and never itself. `useShortcutReveal()` needs a provider above it
- * for the state to reach anywhere at all, which `TheShell` is in the running
- * app and this story stands in for here.
+ * Holding Cmd mounts Helm's own `⌘J` badge, growing the button to fit it —
+ * shrinking it back and taking the badge away again on release — the row is
+ * drawn from `Full` and never itself. `useShortcutReveal()` needs a provider
+ * above it for the state to reach anywhere at all, which `TheShell` is in the
+ * running app and this story stands in for here.
  */
 export const RevealedShortcuts: Story = {
   args: {
@@ -91,13 +91,14 @@ export const RevealedShortcuts: Story = {
     </ShortcutRevealProvider>
   ),
   play: async ({ canvas, userEvent }) => {
-    const badge = canvas.getByText((_, el) => el?.tagName === "KBD" && el.textContent === "⌘J");
-    await expect(badge).not.toBeVisible();
+    const findBadge = () =>
+      canvas.queryByText((_, el) => el?.tagName === "KBD" && el.textContent === "⌘J");
+    await expect(findBadge()).not.toBeInTheDocument();
 
     await userEvent.keyboard("{Meta>}");
-    await expect(badge).toBeVisible();
+    await expect(findBadge()).toBeVisible();
 
     await userEvent.keyboard("{/Meta}");
-    await expect(badge).not.toBeVisible();
+    await expect(findBadge()).not.toBeInTheDocument();
   },
 };

@@ -168,16 +168,12 @@
   color: var(--status-awaiting-review);
 }
 
-/* `⌘J`, held off screen by `visibility` until Cmd goes down — `display` would
-   reflow the button beside it the moment it grew a badge. `Sidebar.css`'s
-   `__kbd` is the same rule for the rail's own digit. */
+/* `⌘J`, only in the tree while Cmd is held — unlike `Sidebar.css`'s `__kbd`,
+   this button shrink-wraps its content, so mounting the badge (rather than
+   reserving its width with `visibility`) is what lets the button sit tight
+   around "Helm" at rest. */
 .armada-title-bar__helmkbd {
   flex: none;
-  visibility: hidden;
-}
-
-.armada-title-bar__helmkbd[data-revealing] {
-  visibility: visible;
 }
 
 .armada-title-bar > svg,

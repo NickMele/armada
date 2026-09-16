@@ -97,14 +97,14 @@ export function TitleBar({
             {helm.questions > 0 ? (
               <span className="armada-title-bar__helm-count">{helm.questions}</span>
             ) : null}
-            {/* Mounted whenever there is a binding, so the button's own width
-                does not shift when Cmd goes down — `visibility`, toggled by
-                `data-revealing`, the same shape `Sidebar.css`'s own badge uses. */}
-            {helm.binding === undefined ? null : (
-              <span className="armada-title-bar__helmkbd" data-revealing={revealing || undefined}>
+            {/* Mounted only while Cmd is held, so the button shrinks to fit
+                "Helm" alone at rest rather than always reserving the badge's
+                width — the logo beside it shifts a few px when this mounts. */}
+            {helm.binding !== undefined && revealing ? (
+              <span className="armada-title-bar__helmkbd">
                 <KbdCmd shortcut={helm.binding} />
               </span>
-            )}
+            ) : null}
           </button>
         )}
 
