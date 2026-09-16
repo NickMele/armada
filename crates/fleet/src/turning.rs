@@ -80,6 +80,11 @@ pub struct Worked {
     /// a person redirected it. Empty on every turn no redirect is outstanding
     /// on, which is nearly all of them.
     pub roused: Option<Roused>,
+    /// Every repeat the ruling this turn made spotted — the same Check naming
+    /// the same failing test as the attempt before it. Read by
+    /// [`keep_turning`], which is where a real `Arc<Fleet>` to probe one
+    /// against exists; empty on nearly every turn, like the rest above.
+    pub(crate) repeats: Vec<crate::fixing::Repeat>,
 }
 
 impl Worked {
@@ -94,6 +99,7 @@ impl Worked {
             wandering: None,
             quiet: None,
             roused: None,
+            repeats: Vec::new(),
         }
     }
 }
@@ -347,11 +353,32 @@ where
         worked.after = self.reap(&mut *slot.lock().await).await?;
         worked.ruled = settled.ruled;
         worked.declined = settled.declined;
+        worked.repeats = settled.repeats;
         worked.drifting = drifting;
         worked.wandering = wandering;
         worked.quiet = quiet;
         worked.roused = roused;
         Ok(worked)
+    }
+
+    /// Start the probe against main for every repeat this turn spotted.
+    ///
+    /// **Fire-and-forget, and only reachable here.** `turn` itself runs
+    /// behind a plain `&self` everywhere else in this crate — including in
+    /// the several hundred tests that call it directly on a bare `Fleet` —
+    /// so nothing inside it can spawn a task that outlives the call. This
+    /// method exists because [`keep_turning`] is the one place a real
+    /// `Arc<Fleet>` is already in hand.
+    pub(crate) fn probed(self: &Arc<Self>, turned: &Turned) {
+        for worked in &turned.each {
+            for repeat in worked.repeats.clone() {
+                let fleet = Arc::clone(self);
+                let job = worked.job.clone();
+                tokio::spawn(async move {
+                    fleet.probed_repeat(&job, &repeat).await;
+                });
+            }
+        }
     }
 }
 
@@ -389,8 +416,9 @@ where
                 _ = asked.notified() => return,
                 _ = ticker.tick() => {}
             }
-            if let Err(why) = fleet.turn().await {
-                adrift(why);
+            match fleet.turn().await {
+                Ok(turned) => fleet.probed(&turned),
+                Err(why) => adrift(why),
             }
         }
     });

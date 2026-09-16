@@ -508,3 +508,6 @@ mod one_test {
 /// matching nothing at all. `src/tests/matched.rs`, kept apart for the line
 /// ask.
 mod matched;
+
+/// Which tests a run's own summary names as failing. `src/tests/failing.rs`.
+mod failing;
