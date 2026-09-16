@@ -1,4 +1,4 @@
-import { Fragment, type HTMLAttributes, type ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
 /**
  * kbd — the one non-shadcn primitive. It appears in command palette rows, in
@@ -20,16 +20,13 @@ export function Kbd({ className, ...rest }: KbdProps) {
 
 /**
  * A chord is every key of one binding pressed together, drawn as **one box**
- * with " + " between the keys — `Kbd`'s own box, holding more than one key.
+ * — `Kbd`'s own box, holding more than one key. That "one box" call is from
+ * 2026-09-16, against two boxes reading as keys pressed in sequence.
  *
- * **This reverses the prior rule.** The rule used to be one key per box,
- * because `⌘K` set in a single box read as a key that did not exist,
- * separated by a gap rather than a `+`. The owner reversed it 2026-09-16
- * against a reference image reading "Ctrl + B" as a single pill: two boxes
- * with a gap between them read as two keystrokes taken one after another,
- * which is the wrong claim for a combination — the "+"-joined single box is
- * what reads as keys held down together, and does not read as a key called
- * "Ctrl + B" any more than the two-box shape avoided reading as one.
+ * **No " + " between them.** Two text nodes in one line box do not share a
+ * baseline — `⌘` sat higher than the letter beside it — and a literal `+`
+ * read as a third key. Each key is its own flex child instead, spaced by
+ * `gap` on the box, so `align-items` centers every key on its own.
  */
 export function KbdChord({
   keys,
@@ -39,10 +36,9 @@ export function KbdChord({
   return (
     <Kbd className={className} {...rest}>
       {keys.map((key, i) => (
-        <Fragment key={i}>
-          {i > 0 ? " + " : null}
+        <span className="armada-kbd__key" key={i}>
           {key}
-        </Fragment>
+        </span>
       ))}
     </Kbd>
   );
@@ -51,8 +47,8 @@ export function KbdChord({
 /**
  * A Global-tier binding of the shape `⌘X` — every one of them but
  * `bridge_surfaces` and `history`, which already spell a range or a pair —
- * drawn as one box, `⌘` and the key joined by " + ". A caller with a range
- * or a pair to draw still owns its own cut.
+ * drawn as one box, `⌘` and the key as separate flex children. A caller
+ * with a range or a pair to draw still owns its own cut.
  */
 export function KbdCmd({ shortcut }: { shortcut: string }) {
   return <KbdChord keys={["⌘", shortcut.slice(1)]} />;

@@ -402,8 +402,8 @@ function Marked({ label, query, at }: { label: string; query: string; at: number
  * them, and the gate holds that file to the contract's map — so the palette
  * shows exactly the string a person will read in the contract. What this does
  * is put every chord — the keys of one binding held together — in its own
- * box, " + "-joined; `/` and `–` still separate two distinct bindings and are
- * drawn as punctuation between boxes, never folded into one.
+ * box; `/` and `–` still separate two distinct bindings and are drawn as
+ * punctuation between boxes, never folded into one.
  */
 function Shortcut({ shortcut }: { shortcut: string }) {
   return (

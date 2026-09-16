@@ -21,7 +21,7 @@ export const Default: Story = {
   args: { children: "Esc" },
 };
 
-/** A chord is one box, its keys joined by " + ". `⌘` and `K` held together. */
+/** A chord is one box, its keys spaced by a gap. `⌘` and `K` held together. */
 export const Chord: StoryObj = {
   render: () => <KbdChord keys={["⌘", "K"]} />,
 };

@@ -294,15 +294,16 @@ export const TheNewestSurfaceTookTheLastDigit: Story = {
 
     await userEvent.clear(canvas.getByRole("combobox"));
 
-    // A chord is one `Kbd` box, its keys joined by " + ".
+    // A chord is one `Kbd` box; the accessible name joins its keys with the
+    // space the accname algorithm inserts between elements, never a "+".
     await expect(canvas.getByRole("option", { name: /^Job Board/ })).toHaveAccessibleName(
-      "Job Board ⌘ + 2",
+      "Job Board ⌘ 2",
     );
     await expect(canvas.getByRole("option", { name: /^Cleanup/ })).toHaveAccessibleName(
-      "Cleanup ⌘ + 6",
+      "Cleanup ⌘ 6",
     );
     await expect(canvas.getByRole("option", { name: /^Helm/ })).toHaveAccessibleName(
-      "Helm ⌘ + J",
+      "Helm ⌘ J",
     );
   },
 };
