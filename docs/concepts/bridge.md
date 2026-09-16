@@ -51,9 +51,11 @@ Run and edit a Manifest reads a project's Checks and Commands, runs any one of t
 
 ## Top-level shell
 
-Bridge's shell is a **left resizable rail** for navigation, a **full-width panel** to its right where the journeys mount, and a **status bar fixed to the bottom**. Finer layout treatment within each journey remains UI/UX design phase work.
+Bridge's shell is a **title row** across the top — the repository picker, search, Dispatch and, once Helm's dock is closed, its own reopen button — a **left column** of three resizable panels beneath it, and a **full-width panel** to their right where the journeys mount. Finer layout treatment within each journey remains UI/UX design phase work.
 
-The rail carries Overview, Job Board, Alerts, Doctor, Manifest, Cleanup and Settings. Helm is not one of them — it is a dock beside the content on every surface, toggled by `⌘J` rather than a rail digit. See [Helm](helm.md).
+**The left column stacks Navigation, Stats and Fleet**, one panel each, resizing and collapsing as a single unit rather than three panels each settling their own width — Bridge/1088's replacement for the rail and the status bar. See `../contracts/design-system.md`, Left column, and Component → token mapping.
+
+Navigation carries Overview, Job Board, Alerts, Doctor, Manifest, Cleanup and Settings. Helm is not one of them — it is a dock beside the content on every surface, toggled by `⌘J` rather than a rail digit, and above the layout breakpoint a closed dock draws nothing at all: the title row's own Helm button is the one way back. See [Helm](helm.md).
 
 **Settings is Fleet's four limits and this machine's own settings, on one screen** — Helm's action authority first. It replaced a sheet reached from the status bar (#1088 removed the bar; #1089 gave the sheet's contents a rail row instead), and it is where a limit changed still takes the same way it always has.
 
@@ -68,11 +70,11 @@ What the rail draws is what is built, which is not yet the whole roster. A surfa
 > **Rule.** Alerts lists every repository Fleet serves, and never follows the Board's own pick.
 > Why: an escalation interrupts, and one held back until a person switched repositories would not.
 
-**The status bar reports Fleet and Doctor health continuously.** The Manifest surface's Doctor strip can therefore disappear when every module passes, without its absence being ambiguous.
+**The Fleet panel reports Fleet and Doctor health continuously**, in the left column rather than a bar fixed to the window's bottom. The Manifest surface's Doctor strip can therefore disappear when every module passes, without its absence being ambiguous.
 
-**The bar names Fleet's state rather than only reporting health, and it is present when Fleet is down.** Running, not running and unreachable each get a string — see `../contracts/design-system.md`, Status bar. Not running and unreachable are separate because a missing runtime file and a live pid that does not answer call for different things.
+**The panel names Fleet's state rather than only reporting health, and it draws even when Fleet is down.** Running, not running and unreachable each get a string — see `../contracts/design-system.md`, Component → token mapping, Fleet panel. Not running and unreachable are separate because a missing runtime file and a live pid that does not answer call for different things.
 
-Whether the bar reads the same during onboarding, before Fleet is reachable, is tracked in `../contracts/design-system.md`.
+Whether the panel reads the same during onboarding, before Fleet is reachable, is tracked in `../contracts/design-system.md` (`status-bar-onboarding` — the slug predates the panel and is unchanged, since a citation resolves by name).
 
 ## Still open
 

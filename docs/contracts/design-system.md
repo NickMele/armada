@@ -428,43 +428,62 @@ breakpoint.
 
 ### Window chrome
 
-Frameless, `titleBarStyle: 'hiddenInset'`, macOS traffic lights inset
-over the sidebar's top region. Reclaims ~28px of vertical space and lets
-the sidebar run to the top edge. Costs a custom drag region: the sidebar
-header and any empty area of a top toolbar are draggable; interactive
-elements inside them are not.
+Frameless, `titleBarStyle: 'hiddenInset'`, macOS traffic lights inset over
+the **title row** — the bar across the window's top carrying the repository
+picker, search, Dispatch and Helm's reopen control (#1087 moved all four off
+the left column and into this row). Costs a custom drag region: the whole
+row is a drag region, and every interactive control inside it opts out by
+hand.
 
-### Sidebar
+### Left column
 
-Collapsible and resizable, and both states are designed rather than one
-being an afterthought.
+Bridge/1088 replaced the rail and the status bar with one column of three
+rounded panels — **Navigation**, **Stats** and **Fleet** — collapsible and
+resizable, and both states are designed rather than one being an afterthought.
 
 ```
 default     200px
 drag range  160-320px
-collapsed   48px icon rail
+collapsed   48px icon rail — Navigation's own form; Stats and Fleet
+            collapse to one centred status dot at the same width
 persistence width and collapsed state survive app restart
 ```
 
-**One level, Bridge's own.** The rail lists Bridge's surfaces and nothing
-else — Helm left it for the dock (#948), so there is no second tier
+**One panel style, shared by all three.** `--radius-lg`, `--border-subtle`
+on `--bg-raised`, held apart by the column's own 16px gap (`--space-4`)
+rather than by margin on each panel. A panel's head is 40px
+(`--space-8` + `--space-2`), 12px horizontal padding (`--space-3`), and
+collapses to its head only — never to nothing, so a glance still answers
+the one question the panel is for. Token treatment for Stats and Fleet's
+own content is under Component → token mapping.
+
+**One width, shared by all three.** Navigation, Stats and Fleet resize and
+collapse together, on one drag handle at the column's trailing edge — never
+one handle per panel, and never three panels each resolving their own width.
+
+**Navigation is one level, Bridge's own.** It lists Bridge's surfaces and
+nothing else — Helm left it for the dock (#948), so there is no second tier
 beneath it any more.
 
-**The rail never disappears.** 48px is cheap and losing navigation
-entirely is worse than losing 48px, at any width.
+**The column never disappears.** 48px is cheap and losing Navigation, Stats
+and Fleet entirely is worse than losing 48px, at any width — Stats and Fleet
+keep their one status dot each at that width, so a glance still says whether
+anything needs attention.
 
-**Nav items do not carry escalation or approval counts.** The status bar
-already carries both on every surface, by contract. Duplicating them in
-the sidebar creates two places to check and two chances to disagree.
+**Nav items do not carry escalation or approval counts.** Stats already
+carries both, as its own rows. Duplicating them in Navigation creates two
+places to check and two chances to disagree.
 
 ### Content area
 
 **Full-width routes. No inspector pane, no modal for Job detail.** Board
 and detail are separate destinations. **Helm's dock is the one
-exception**: it sits beside the content at 1100px and wider, because it
-answers questions about whatever is on screen rather than inspecting one
-Job, and folds away entirely rather than resizing the content beneath it
-at any width. See Responsive behaviour, below, and [Helm](../concepts/helm.md).
+exception**: at `--layout-breakpoint` and wider it sits beside the content
+when open, because it answers questions about whatever is on screen rather
+than inspecting one Job, and draws nothing at all when closed — the title
+row's own Helm button is the one way back, since the edge strip that used to
+sit there at any width is gone. It never resizes the content beneath it.
+See Responsive behaviour, below, and [Helm](../concepts/helm.md).
 
 This follows from what a detail view actually holds: the escalation
 payload, the full attempt history including every prior Judge summary
@@ -478,47 +497,38 @@ layout. Not an inspector.
 
 #### The trail
 
-**A route reached from another route carries a trail.** The panel head opens
-with it, above the title, naming each destination back to the surface.
+**Job detail is the one screen that keeps its own head**, because it has to
+say which Job rather than repeat what Navigation already says — #1090 ended
+the page head every other screen used to spend on its own name. Its head
+carries the trail: where this Job was opened from, then the Job itself.
 
 | | |
 |---|---|
-| Placement | First line of the panel head, above the title |
-| Type | `--text-2xs`, `--fg-muted`, current segment `--fg-default` |
+| Placement | Job detail's own head, leading edge, before the status badge |
+| Type | Prior segment `--text-xs`, `--fg-subtle`; current segment (the Job's title) `--text-base`, `--fg-default`, weight medium |
 | Separator | `chevron-right` at 12px in `--fg-subtle` |
-| Segments | At most three. A fourth means the route is nested too deep |
+| Segments | Exactly two — where the Job was opened from, then the Job |
 
 > **Rule.** A trail segment is a control, never an `a`.
 > Why: the anchor rule is about addresses leaving the shell, and a trail that
 > was an anchor would be the one control able to break it.
 
-> **Rule.** A surface reached from the rail carries no trail.
-> Why: the rail is already the answer to where you are, and a one-segment trail
-> repeats the title underneath it.
+> **Rule.** A surface reached from Navigation carries no trail.
+> Why: Navigation is already the answer to where you are, and a one-segment
+> trail repeats the title underneath it.
 
 > **Rule.** The last segment is the current destination and does not act.
 > Why: a control that returns you where you already are is a control that does
 > nothing.
 
+> **Rule.** The repository is never a trail segment.
+> Why: it is a fact about the Job, read in the header's own field run one line
+> down, not a place the trail can open.
+
 **It replaces a back control rather than joining one.** A back button names one
 step and says nothing about where that step sits; the trail names the whole
-path, which is what a route reached from a dock rather than from the rail
+path, which is what a route reached from a dock rather than from Navigation
 needs.
-
-### Status bar
-
-Fixed to the bottom, full window width, spanning **beneath** the
-sidebar rather than inset to the content area.
-
-Fixed because a healthy state has to say "Fleet running" out loud, and
-that guarantee fails the moment the bar can scroll away — it is a
-liveness indicator for a daemon that outlives the window. Full width
-because the bar is app-level, not Bridge-level: it spans beneath Helm's
-dock the same as beneath the rail, and running it edge to edge makes
-that claim visible. Inset it and it reads as belonging to whatever
-surface is open.
-
-Token treatment is specified under Component → token mapping.
 
 ### Responsive behaviour
 
@@ -537,9 +547,9 @@ floors at 390px, which leaves 358px between its gutters.
 
 | | ≥ 1100px | < 1100px | Touch client |
 | --- | --- | --- | --- |
-| Sidebar | Expanded, user-resizable | Auto-collapses to the 48px rail | A bottom tab bar |
+| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
 | Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes | The same row, field run wrapped |
-| Helm's dock | Beside the content, open or closed | An edge strip; open draws it as a sheet over the content instead | Not built |
+| Helm's dock | Beside the content when open; closed draws nothing, and the title row's Helm button reopens it | An edge strip; open draws it as a sheet over the content instead | Not built |
 
 The third column is a client and not a window width. Nothing between 390px and
 768px is drawn, because the desktop window cannot get there and the touch
@@ -1188,43 +1198,66 @@ things that can disagree, which is the distinction the gate rests on.
 
 Placement, alignment and collision are under Floating layers.
 
-### Status bar
+### Stats panel
 
-Present on every surface, so it is a primitive rather than a screen
-element.
+The left column's second panel — what used to be the status bar's two
+counts, gathered with what Overview's own tiles already read for Drones and
+Manifest drift.
 
 ```
-height     32px · --bg-raised · top rule --border-subtle
-type       --text-2xs · --fg-muted
-separator  · in --fg-subtle
-healthy    "Fleet running" in --fg-muted, always stated out loud
-escalation count  --status-escalated, shown only when non-zero
-approval count    --status-awaiting-review, shown only when non-zero
+row     --text-xs, label in --fg-muted, value right-aligned in --font-mono
+value   --fg-default at rest; past zero, amber (--status-awaiting-review)
+        for Awaiting approval and Needs review, red (--status-escalated)
+        for Escalated
 ```
 
-Both counts span every repository Fleet serves, whichever one the rail has
-picked.
+**Three counts, not two.** Awaiting approval and Needs review are the old
+approval count, split by which gate a Job is waiting at; Escalated is the
+old escalation count, carrying the louder tone the same way it always did.
+All three span every repository Fleet serves, whichever one Navigation has
+picked. **No Queued row**: Overview's own Queued panel already lists those
+Jobs, and a count here would be a second place to check the same fact.
 
-The two counts are the only status color in the bar. Everything else
-stays `--fg-muted`, or the bar becomes a second alert surface and the
-escalations-interrupt / approvals-queue distinction collapses.
+**The panel's own dot, at the collapsed 48px width, is the worst tone among
+its rows** — red past an Escalated count, amber past any other, neutral
+otherwise — the same rollup reasoning Doctor's pass/warn/fail uses.
 
-**Fleet's state is one of three, and the bar names which.** A leading
-6px dot carries the hue — the one exception to the rule above, on the
-same grounds Doctor's pass, warn and fail reuse the Job values rather
-than inventing a third set. It is not a glyph, so "the status bar
-carries no icons" is unaffected.
+### Fleet panel
+
+The left column's third panel — what the status bar used to read.
+
+```
+state    --dot (6px) + --text-base weight-medium --fg-default
+detail   --font-mono --text-2xs --fg-subtle
+meta     --font-mono --text-2xs --fg-subtle
+doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
+         (--status-completed-success / --status-awaiting-review /
+         --status-escalated) and the modules checked, in --fg-muted
+```
+
+**Fleet's state is one of three, and the panel's dot names which** — the
+same three the status bar used to carry, on the same grounds Doctor's pass,
+warn and fail reuse the Job values rather than inventing a third set. A
+connection reading none of the three — reading the runtime file, connecting,
+a refused runtime file, a protocol Bridge does not speak — keeps a neutral
+dot and names itself in the label instead. It is not a glyph, so "this panel
+carries no icons" is unaffected; see [Iconography](iconography.md).
 
 ```
 running       --status-completed-success dot
-              "Fleet running" · mono: pid, port, drone count
-not running   --status-completed-failed dot
-              "Fleet is not running" · mono: no runtime file at its path
-              plus what to do, since Bridge cannot start it
+              "Fleet running" · mono: pid, port
+not running   --status-escalated dot
+              "Fleet is not running" · mono: what the runtime file says —
+              no file at its path, a pid held by nothing, or a pid held by
+              something else — plus what to do, since Bridge cannot start it
 unreachable   --status-awaiting-review dot
-              "Fleet unreachable" · mono: pid alive on its port, no response for N
-              plus how stale the last read is
+              "Fleet unreachable" · mono: pid alive on its port, no answer
+              for N, plus how stale the last read is
 ```
+
+**Drone count moved to Stats.** This panel's own mono line carries pid and
+port only; the running count is Overview's own arithmetic, read once and
+shared by both panels.
 
 The two failure states differ on the runtime file, which is the fact
 that separates them: Fleet writes port, pid and protocol version on
@@ -1232,6 +1265,12 @@ startup and removes them on a clean exit, so a missing file is a Fleet
 that is not there and a live pid with no answer is a Fleet that is
 wedged. Two different things to do about it, so two sentences rather
 than one timeout message.
+
+**A version gap rides the running state, not a fourth dot.** Where Fleet is
+newer than this Bridge — additive only, so nothing drawn is wrong — the
+detail line grows a clause naming both versions, as advice on a healthy
+connection rather than a failure notice. See `../practices/protocol.md`,
+What Bridge does with the version it reads.
 
 ### Closed
 
@@ -1242,12 +1281,12 @@ than one timeout message.
   confirmed against Phosphor, Tabler, Radix and Heroicons; hard rule 5
   stands. The enum→verb test asserts an icon entry in the same pass.
 - **~~Window and layout model~~** **Closed.** Specified in full under
-  Window and layout model above — frameless `hiddenInset` chrome, a
-  collapsible/resizable sidebar carrying Bridge's own surfaces,
-  full-width routes with no inspector but for Helm's dock, bottom-fixed
-  full-width status bar, and the floors and breakpoint under Responsive
-  behaviour. Delivered as one responsive prototype rather than per-width
-  comps.
+  Window and layout model above — frameless `hiddenInset` chrome insetting
+  the traffic lights over the title row, a collapsible/resizable left column
+  carrying Navigation, Stats and Fleet as one unit, full-width routes with no
+  inspector but for Helm's dock, no page head and no status bar, and the
+  floors and breakpoint under Responsive behaviour. Delivered as one
+  responsive prototype rather than per-width comps.
 
 ---
 
@@ -1307,7 +1346,7 @@ nothing but the edge.
 | Placement | Where | Rule |
 | --- | --- | --- |
 | Inline | In the row, or beside the act | Contained to the thing you touched |
-| Toast | Bottom trailing, inset `--space-6`, clear of the status bar, shadowed | The only one that may carry no act |
+| Toast | Bottom trailing, inset `--space-6`, shadowed | The only one that may carry no act |
 | Banner | Above the surface, inside it | Persistent. The surface works beneath |
 | Full-surface | Replaces the surface | The one placement that takes the screen |
 
@@ -1320,9 +1359,13 @@ the pulse continues.
 **Every placement names the failure and the act.** A toast is the one
 exception, because it reports something already over.
 
-**A toast clears the status bar rather than covering it.** The bar states
-Fleet's liveness out loud, which is the one thing still true while everything
-else fails.
+**A toast used to clear the status bar rather than cover it**, because the
+bar spanned the window's bottom edge and a bottom-right toast could
+otherwise sit over it. Fleet's liveness statement is now the left column's
+own Fleet panel, nowhere near a bottom-right toast — the toast's own bottom
+inset (`--h-status-bar` plus `--space-6`, in `Toast.css`) has not been
+revisited since. Reported, not fixed here: this document specifies what a
+surface draws, not `packages/components`' own catch-up.
 
 ### The debug payload, and what each placement does with it
 
@@ -1787,9 +1830,14 @@ visible, and removing it from the row breaks that trade.
 one.** The two billing modes produce strings of very different width
 and shape: `68% quota` against `~$2.40 of $20`. The column is sized for
 the wider of the two and the row survives both, rather than fitting
-whichever example appears first in this document. The same applies to the status bar's trailing segment.
-Neither mode is the default — which one renders depends on the machine,
-and both are first-class.
+whichever example appears first in this document. Neither mode is the
+default — which one renders depends on the machine, and both are
+first-class.
+
+**Spend and quota render on the row and on `JobDetail` only.** Bridge/1088
+removed both from the shell chrome along with the status bar — the left
+column's Stats and Fleet panels carry neither, and nothing in the shell
+states a running total any more.
 
 **Repetition.** A second stall at step 3 reads "stalled at step 3, 2nd
 time", and the detail view surfaces the prior attempt. Presentation
@@ -1827,11 +1875,11 @@ operations only, not your own clicks.
 
 ### Behaviour rules that shape copy
 
-**Collapsed when healthy, expanded when not.** Detail appears in
-proportion to what is wrong. Collapse the detail, never the assertion:
-a healthy state says "Fleet running" out loud, because an empty bar
-reads the same whether Fleet is healthy, loading or dead, and Fleet
-outlives Bridge.
+**A healthy state is stated, never implied.** "Fleet running" renders in
+the Fleet panel even when nothing is wrong, because an empty panel reads
+the same whether Fleet is healthy, loading or dead, and Fleet outlives
+Bridge. An unhealthy state adds a sentence naming what to do about it; a
+healthy one does not, because there is nothing to do.
 
 **Escalations interrupt, approvals queue.** Escalations cost money in
 real time. Approvals cost latency. Push inherits this, so escalations
@@ -1848,17 +1896,17 @@ classes mean different things. An escalation means work has stopped and
 nothing progresses until a person looks. An approval means work is
 waiting to start and will keep. If approvals could reach push, the
 distinction collapses and the escalation signal stops being trusted —
-which is what the status bar's two counts and the push-alert design
-both rest on. It is a product rule about what these events mean, not a
+which is what the Stats panel's counts and the push-alert design both
+rest on. It is a product rule about what these events mean, not a
 config-tier rule: notification routing is a Machine setting with one
 value and no merge, so no Manifest is party to it.
 
-**Status bar**, present beneath every surface and beneath Helm's dock. "Fleet
-running" when idle. "Fleet running · 3 jobs · 68% quota left" when
-working on a personal machine, or "Fleet running · 3 jobs · ~$2.40 of
-$20" on a work machine. It expands when something is wrong, and
-escalation and approval counts appear only when non-zero. Five items is
-the ceiling.
+**Stats and Fleet**, present in the left column on every surface. Stats
+reads Awaiting approval, Needs review and Escalated — amber past zero for
+the first two, red for the third — plus Jobs, Drones and Manifest drift.
+Fleet reads "Fleet running" when idle, and a mono `pid · port` beside it;
+neither panel carries spend or quota, which left the shell chrome
+entirely with the status bar Bridge/1088 replaced.
 
 **Two separate fields, not one.** These do different jobs and a reader
 should not have to guess which.
@@ -1904,24 +1952,19 @@ is verification source=Check with actor=Drone.
   Three neighbouring acts took keys in the same pass: Observe `v`, Submit for
   verification `u`, Redispatch `e`.
 
-- **[status-bar-loudness]** How loudly do the status bar's escalation and
-  approval counts render, beyond taking their status token?
-  The counts are the only status colour in the bar and show only when
-  non-zero. The constraint is that escalations interrupt and approvals
-  queue — styling an approval count as loudly as a broken drone would undo
-  that distinction and turn the bar into a second alert surface.
-
 - **[status-bar-onboarding]** During the hard-gated first-run sequence,
-  does the status bar read the same three runtime states as everywhere
+  does the Fleet panel read the same three runtime states as everywhere
   else, or does onboarding get its own reading?
-  The bar states a healthy status out loud rather than implying it, because
-  an empty bar reads the same whether Fleet is healthy or dead — that is
-  settled and gives the three runtime states. But "Fleet is not running" is
-  correct and reads as an error on a new user's first screen, and it was
-  written for someone who already knows what Fleet is. Fleet is started by
-  hand at M1 and becomes reachable partway through onboarding, so the bar
-  changes state mid-journey either way; whether the bar is even present
-  before the first onboarding step completes is part of the same question,
-  since onboarding is not yet a Bridge surface.
+  The panel states a healthy status out loud rather than implying it,
+  because an empty panel reads the same whether Fleet is healthy or dead —
+  that is settled and gives the three runtime states. But "Fleet is not
+  running" is correct and reads as an error on a new user's first screen,
+  and it was written for someone who already knows what Fleet is. Fleet is
+  started by hand at M1 and becomes reachable partway through onboarding,
+  so the panel changes state mid-journey either way; whether the panel is
+  even present before the first onboarding step completes is part of the
+  same question, since onboarding is not yet a Bridge surface. The slug
+  predates Bridge/1088's move from the status bar to this panel and is
+  unchanged, since a citation resolves by name.
 
 Also bearing on this document, and written where each belongs: `[attested-verdict-glyph]` in `iconography.md`; `[verdict-artifact-rows]` in `voice-engineering.md`. A question has one home — answering it in two places is how one of them goes stale.
