@@ -98,15 +98,29 @@ crate graph, and the rules that hold everywhere, with diagrams.
 
 ## Building it
 
-**Requirements:** macOS, Rust 1.90 or later, and Node 24 — the version in
-`.nvmrc`, which `pnpm` refuses to run without.
+**macOS, and three toolchains.** None of them comes with the machine.
+
+| Tool | Version | Where it comes from |
+|---|---|---|
+| Rust | 1.90 or later | [`rustup`](https://rustup.rs) |
+| Node | 24 — the version in `.nvmrc` | [`nvm`](https://github.com/nvm-sh/nvm), then `nvm use` |
+| pnpm | the version in `package.json` | `corepack enable`, bundled with Node |
+
+**pnpm is not installed separately.** It comes from corepack, which ships with
+Node, and the version is pinned in `package.json` rather than chosen. A wrong
+Node refuses the install outright rather than warning — `engineStrict` is on.
 
 ```sh
 git clone https://github.com/NickMele/armada.git
 cd armada
-cargo xtask verify-foundations   # read what each line names, not the exit code
+nvm use                          # Node 24, per .nvmrc
+corepack enable                  # puts pnpm on your PATH
 pnpm install
+cargo xtask verify-foundations   # read what each line names, not the exit code
 ```
+
+**One more, once per machine:** `armada run browsers`, before the component
+tests — see [Tests](#tests).
 
 **A gate that reports red is not a broken checkout.** A rule whose subject does
 not exist yet fails and names it, so the gate goes red whenever a milestone
