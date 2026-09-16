@@ -172,14 +172,14 @@
   background: var(--bg-raised);
 }
 
-/* Where a toast actually sits: bottom trailing, inset --space-6, and clear of
-   the status bar. The bar is a liveness indicator for a daemon that outlives
-   the window, so a toast that covers it hides the one thing guaranteed to be
-   true while everything else is failing. */
+/* Where a toast actually sits: bottom trailing, inset --space-6 — the Toast
+   row in design-system.md. The status bar this used to clear is gone
+   (#1088); Fleet's liveness lives in the left column's own panel now,
+   nowhere near this corner. */
 .armada-error-toast-region {
   position: fixed;
   inset-inline-end: var(--space-6);
-  inset-block-end: calc(var(--h-status-bar) + var(--space-6));
+  inset-block-end: var(--space-6);
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;

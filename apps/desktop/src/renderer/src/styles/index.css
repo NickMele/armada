@@ -57,11 +57,11 @@ body,
 /* Where a toast lands. Position and stacking order only — the toast owns its
    own surface and every value in it. `--z-toast` is a stacking order rather
    than a scale value, so the theme spells no utility for it and it is named
-   here. Clear of the status bar, which states Fleet's health continuously and
-   must not be covered by a confirmation that expires. */
+   here. The status bar this used to clear is gone (#1088); Fleet's liveness
+   lives in the left column's own panel now, nowhere near this corner. */
 .armada-app__toasts {
   position: fixed;
   right: var(--space-6);
-  bottom: calc(var(--h-status-bar) + var(--space-3));
+  bottom: var(--space-3);
   z-index: var(--z-toast);
 }
