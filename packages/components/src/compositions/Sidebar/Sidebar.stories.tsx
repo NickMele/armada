@@ -130,7 +130,7 @@ export const RevealedShortcuts: Story = {
     </ShortcutRevealProvider>
   ),
   play: async ({ canvas, userEvent }) => {
-    const badge = canvas.getByText("⌘ + 1", { selector: "kbd" });
+    const badge = canvas.getByText((_, el) => el?.tagName === "KBD" && el.textContent === "⌘1");
     await expect(badge).not.toBeVisible();
 
     await userEvent.keyboard("{Meta>}");
