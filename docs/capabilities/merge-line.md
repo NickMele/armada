@@ -68,6 +68,8 @@ runner (holds flock) -----------------------------+
 - **A conflict and a red keep their place.** Resubmitted, the entry reuses the place the outcome recorded: the wait was already served.
 - **A hung Check holds the turn until somebody kills the runner.** A timeout was ruled out, because a cold build plus the app suite runs past any fixed one and evicting a holder that is still working puts two merges in flight.
 - **State lives under the common git directory**, in `armada-land/`, so every worktree of one clone shares one line.
+- **The worktrees the Checks run in live under `.armada/gates/`**, inside the repository, beside the ones Fleet cuts for a Job. A checkout outside the repository directory is not somewhere this project's tooling runs: Vite refuses to serve a `node_modules` outside its allow list and `tsc` cannot name a type through one, so three Bridge Checks failed there for reasons that had nothing to do with the branch. `gates/` rather than `worktrees/` keeps them out of what `armada clean` accounts for, and `.armada/*` is already ignored.
+- **A gate worktree left by a killed runner is taken back by the next turn.** Holding the lock means nothing else is gating, so whatever is still under `.armada/gates/` belongs to a runner that died.
 
 ## Choosing what reruns
 
@@ -91,6 +93,7 @@ runner (holds flock) -----------------------------+
 | Line numbers normalised out of the subject | A line inserted above an old failure renumbers it |
 | Findings counted, not collected into a set | A second violation of one rule in one file reads like the first |
 | A non-zero exit naming no failing rule is red | A branch that breaks `xtask` prints one `error[E0433]` and would be gated on nothing |
+| A Check whose command is not installed stops the turn | A missing tool is not the branch breaking `main` |
 | The same on `main`'s own run, which stops the turn | There is nothing to compare against |
 | `main`'s run cached per commit, only once read as a report | A killed run cached empty makes every branch after it red |
 | One report carries the gate and the Checks together | An agent reads everything wrong once, not twice |
@@ -131,6 +134,7 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 | The line and the turn | The sweep, and the places line | 1 |
 | `armada covers` | `ResolvedCheck::covers`, already shared | 2 |
 | Merging `main` in | `crates/adapters/src/merging_in.rs` | 3 |
+| The gate worktree under `.armada/gates/` | `.armada/worktrees/<handle>`, cut by `Vcs` | 8 |
 | Rerunning the Checks | A gate run over the merged worktree | 4 |
 | The merge | `crates/adapters/src/landing.rs` | 5 |
 | First parent against the gated base | Proving what merged | 6 |
@@ -143,6 +147,7 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 5. It merges with `--merge` today. `--match-head-commit` and the base reread are what it lacks.
 6. `docs/concepts/manifest.md`, *Proving what merged*. The first-parent comparison belongs beside `after_merge`.
 7. An outcome becomes a Job event and a log line.
+8. Same directory, same reason: a Job's Checks run inside the repository because that is where this project's tooling works.
 
 ## What does not port
 

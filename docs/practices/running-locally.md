@@ -529,10 +529,11 @@ Until a build carrying it is installed, point `ARMADA_LAND_ARMADA` at that
 binary by its **absolute** path — the gate runs in a worktree of its own, so a
 relative one is refused.
 
-**A gated turn takes minutes.** It cuts a worktree at the commit being merged,
-clones the build directories into it, runs `verify-foundations` there and again
-in a worktree at `main` itself, then installs and runs each Check that either
-side hits. What landed is measured from the merge base, so an old branch meets
+**A gated turn takes minutes.** It cuts a worktree under `.armada/gates/` at the
+commit being merged — inside the repository, where this project's tooling works
+— clones the build directories into it, runs `verify-foundations` there and
+again in a worktree at `main` itself, then installs and runs each Check that
+either side hits. What landed is measured from the merge base, so an old branch meets
 nearly every Check on the way in.
 
 **`scripts/land` returns at once**, and a runner in the background does the work.
@@ -547,7 +548,7 @@ saying the branch is in line.
 | 4 | Red | Read the named logs; fix on your branch, then preflight and land |
 | 5 | Conflict | Merge `origin/main` in, commit, push, preflight and land |
 | 6 | Ungated | Landed, but `main` moved in the last instant; tell the owner |
-| 7 | Stopped | Read the reason; nothing was merged unless it says so |
+| 7 | Stopped | Read the reason; nothing was merged unless it says so. A Check naming a command this machine does not have lands here, not in red |
 | 8 | Nothing known | This branch has never been queued from this clone |
 
 **A red names only what the merged tree added.** A Check that failed, or a

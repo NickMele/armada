@@ -171,19 +171,20 @@ class Line(unittest.TestCase):
             "checks.json": json.dumps({"test": None, "ui": ["ui/"]}),
             # Red only in combination: each branch alone passes.
             "checks/test.sh": (
-                'printf "%s seed=%s setup=%s\\n" check '
+                'printf "%s seed=%s setup=%s at=%s\\n" check '
                 '"$([ -f seeded/mark.txt ] && echo yes || echo no)" '
-                '"$([ -f marker.stamp ] && echo yes || echo no)" >> "$LAND_TEST_EVIDENCE"\n'
+                '"$([ -f marker.stamp ] && echo yes || echo no)" "$PWD" >> "$LAND_TEST_EVIDENCE"\n'
                 "! { [ -f one.txt ] && [ -f two.txt ]; }\n"
             ),
             "foundations.sh": (
-                'printf "%s seed=%s setup=%s\\n" foundations '
+                'printf "%s seed=%s setup=%s at=%s\\n" foundations '
                 '"$([ -f seeded/mark.txt ] && echo yes || echo no)" '
-                '"$([ -f marker.stamp ] && echo yes || echo no)" >> "$LAND_TEST_EVIDENCE"\n'
+                '"$([ -f marker.stamp ] && echo yes || echo no)" "$PWD" >> "$LAND_TEST_EVIDENCE"\n'
                 "cat foundations.txt 2>/dev/null; true\n"
             ),
             "foundations.txt": "FAIL  a rule main already fails\n        missing: its subject\n\nverify-foundations: RED — 1 failing, 0 warning\n",
             "shared.txt": "base\n",
+            ".gitignore": ".armada/\n*.stamp\n",
         })
         self.git(self.repo, "add", "-A")
         self.git(self.repo, "commit", "--quiet", "-m", "base")
@@ -662,6 +663,34 @@ class Line(unittest.TestCase):
         self.assertIn('- ".claude/hooks/**"', hooks)
         self.assertTrue(os.path.exists(os.path.join(here, ".claude/hooks/test_guard_merge.py")))
 
+    def test_a_check_whose_command_is_missing_stops_rather_than_reds(self):
+        mover = self.branch("fix/moves-11", {"moved.txt": "1\n"})
+        where = self.branch("fix/no-such-tool", {
+            "checks/test.sh": 'echo "error: no such command: nextest" >&2\nexit 101\n',
+            "wanted.txt": "this must not land\n",
+        })
+        self.land(mover, "preflight")
+        self.land(mover)
+        self.assertEqual(self.settle(mover, "fix/moves-11").returncode, 0)
+        self.land(where, "preflight")
+        self.land(where)
+        done = self.settle(where, "fix/no-such-tool")
+        self.assertEqual(done.returncode, 7, done.stdout)
+        self.assertIn("nextest", done.stdout)
+        self.assertIn("not on this", done.stdout)
+        self.assertNotIn("wanted.txt", self.main_files(), "a tool nobody installed merges nothing")
+        self.assertNotEqual(self.git(where, "ls-remote", "origin", "refs/heads/fix/no-such-tool"), "",
+                            "nothing was merged, so the branch is still there")
+
+    def test_a_killed_runners_gate_worktree_is_reclaimed(self):
+        left = os.path.join(self.repo, ".armada", "gates", "left-behind")
+        self.git(self.repo, "worktree", "add", "--quiet", "--detach", left, "HEAD")
+        where = self.branch("fix/after-a-death", {"x.txt": "1\n"})
+        self.land(where, "preflight")
+        self.land(where)
+        self.assertEqual(self.settle(where, "fix/after-a-death").returncode, 0)
+        self.assertFalse(os.path.exists(left), "the next turn takes back what a dead runner left")
+
     def test_a_relative_binary_is_refused_rather_than_traced(self):
         where = self.branch("fix/relative", {"x.txt": "1\n"})
         self.env["ARMADA_LAND_ARMADA"] = "target/debug/armada"
@@ -711,10 +740,13 @@ class Line(unittest.TestCase):
         checks = [line for line in ran if line[0] == "check"]
         self.assertGreaterEqual(len(foundations), 2, "each turn reads the base's own run and its own tree's")
         for line in foundations:
-            self.assertEqual(line[1:], ["seed=yes", "setup=no"],
+            self.assertEqual(line[1:3], ["seed=yes", "setup=no"],
                              "both sides are seeded, and neither is installed into")
-        self.assertTrue(checks and all(line[1:] == ["seed=yes", "setup=yes"] for line in checks),
+        self.assertTrue(checks and all(line[1:3] == ["seed=yes", "setup=yes"] for line in checks),
                         "a Check runs after setup")
+        inside = os.path.join(os.path.realpath(self.repo), ".armada", "gates")
+        for line in foundations + checks:
+            self.assertTrue(line[3].startswith("at=" + inside), line)
 
     def test_a_check_that_writes_a_tracked_file_stops_the_turn(self):
         mover = self.branch("fix/moves-9", {"moved.txt": "1\n"})
