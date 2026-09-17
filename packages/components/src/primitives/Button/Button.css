@@ -170,9 +170,13 @@
   background: color-mix(in srgb, var(--accent) 24%, var(--accent-muted));
 }
 
+/* A press drops tonal's hover lift back to its --accent-muted rest. Not
+   --bg-sunken: the title row, its one caller, sits on --bg-sunken, and the box
+   would vanish into it. From the keyboard at rest the fill does not change,
+   and the line opening carries the press. */
 .armada-button[data-variant="tonal"]:active:not(:disabled):not([data-pending]),
 .armada-button[data-variant="tonal"][data-preview-press] {
-  background: var(--bg-sunken);
+  background: var(--accent-muted);
 }
 
 /* Focus is a 2px --accent ring at 2px offset, no glow — a resting edge and a

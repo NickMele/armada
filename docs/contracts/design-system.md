@@ -433,8 +433,9 @@ changed row decays; there is no cap yet.
 
 **Press moves colour, never geometry.** A pressed control walks one step
 down its ground ladder at `--duration-press`: `--accent` to
-`--accent-muted`, a secondary or ghost to `--bg-sunken`. Nothing
-transforms and nothing reflows. A focused field's ring grows from its
+`--accent-muted`, a secondary or ghost to `--bg-sunken`; tonal drops its
+hover lift back to its `--accent-muted` rest, because its only caller
+sits on `--bg-sunken`. Nothing transforms and nothing reflows. A focused field's ring grows from its
 edge and its ground lifts one step at `--duration-fast`.
 
 **Nothing may carry information by motion alone.** Under

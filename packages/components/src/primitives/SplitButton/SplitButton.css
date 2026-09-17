@@ -275,7 +275,8 @@
 .armada-split-button__control[data-variant="tonal"] .armada-split-button__caret:active:not(:disabled),
 [data-preview-press="action"] .armada-split-button__control[data-variant="tonal"] .armada-split-button__action,
 [data-preview-press="caret"] .armada-split-button__control[data-variant="tonal"] .armada-split-button__caret {
-  background: var(--bg-sunken);
+  /* Back down to the --accent-muted rest, as `Button`'s tonal press. */
+  background: var(--accent-muted);
   color: var(--accent-hover);
 }
 

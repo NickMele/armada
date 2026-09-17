@@ -176,8 +176,9 @@ const EVERY: { variant: ButtonVariant; label: string }[] = [
 
 /**
  * Pressed, every variant. A press walks one step down the button's ground at
- * `--duration-press` — `--accent` to `--accent-muted`, a secondary, ghost or
- * tonal to `--bg-sunken`, destructive's fill one step deeper — and the line
+ * `--duration-press` — `--accent` to `--accent-muted`, a secondary or ghost to
+ * `--bg-sunken`, tonal back to its `--accent-muted` rest, destructive's fill
+ * one step deeper — and the line
  * opens from the centre along the bottom edge. Nothing transforms and nothing
  * reflows. `data-preview-press` selects the same declarations as `:active`,
  * which a static story cannot hold.
