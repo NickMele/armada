@@ -161,6 +161,8 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 
 **`.claude/hooks/guard_merge.py` refuses `gh pr merge` and any `git push` whose destination is `main`**, including `--delete main`, and splits a compound command so `cd x && git push origin main` is caught too. Its refusal names `scripts/land preflight`, `scripts/land`, `scripts/land --status` and this page. `.claude/settings.json` registers it as a `PreToolUse` matcher on Bash.
 
+**Both halves are gated by the Manifest.** `scripts_test` runs the script's suite when anything under `scripts/` or `armada.yml` changes, and `hooks_test` runs the hook's when anything under `.claude/hooks/` does — two Checks rather than one, because a `run` gets no shell to chain them with and because the two are read by different changes.
+
 **It cannot see the line's own merge.** That runs in the detached runner, outside the Bash tool. An agent who goes around it lands a combination nothing checked, and the first-parent comparison is what says so afterwards.
 
 ## What it depends on

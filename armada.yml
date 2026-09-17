@@ -284,6 +284,36 @@ checks:
   # holds that Command as a Bash grant on every step, `fmt` being
   # non-destructive — Spike 011 — so nothing here is protecting a retry
   # budget it cannot also protect by running the fix itself.
+  # The two Python suites that hold the local merge line together. They are two
+  # Checks rather than one because a `run` gets no shell, so nothing here can
+  # chain two commands — and because the two are read by different changes: one
+  # is the script agents land through, the other is the hook that keeps them in
+  # it.
+  scripts_test:
+    # `scripts/land` against a throwaway repository with a local bare remote and
+    # stub `gh` and `armada`. A failure means the line would merge, refuse or
+    # stall differently from what `docs/capabilities/merge-line.md` says — read
+    # the named test, not the exit code. It needs `git` and `python3` and
+    # nothing else: no network, no build, no Fleet. Around a minute, spent
+    # almost entirely in git and in waiting for a background runner.
+    #
+    # `armada.yml` is named because one test reads this file: the copy of
+    # `setup.requires` inside `scripts/land` has to keep step with the one below.
+    run: python3 scripts/test_land.py
+    when:
+      - "scripts/**"
+      - "armada.yml"
+
+  hooks_test:
+    # What `.claude/hooks/guard_merge.py` refuses and what it lets through. A
+    # failure means either a merge to `main` can walk past the line, or — the
+    # half that costs more — an ordinary branch push is being refused and every
+    # agent in the repository is stuck. It runs no git and no `gh`: a payload in,
+    # a decision out, in under a second.
+    run: python3 .claude/hooks/test_guard_merge.py
+    when:
+      - ".claude/hooks/**"
+
   format:
     run: cargo fmt --all --check
     # The other shape of narrowing: the changed paths, verbatim, with no

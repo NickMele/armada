@@ -236,6 +236,24 @@ fn what_the_narrowed_checks_read_still_selects_them() {
     }
 }
 
+/// **The line's own two suites are gated too.** Nothing else runs them, so
+/// without these the script an agent lands through and the hook that keeps them
+/// in the line would be the only code here nothing checks.
+#[test]
+fn the_scripts_and_the_hooks_carry_their_own_checks() {
+    assert_eq!(hits(&["scripts/land"]), vec!["scripts_test"]);
+    assert_eq!(hits(&[".claude/hooks/guard_merge.py"]), vec!["hooks_test"]);
+    // The Manifest is read by a test in the script suite, and is the command.
+    assert!(hits(&["armada.yml"]).contains(&"scripts_test".to_string()));
+
+    let docs = hits(&["docs/capabilities/merge-line.md"]);
+    assert_eq!(docs, Vec::<String>::new(), "{docs:?}");
+
+    let rust = hits(&["crates/fleet/src/lib.rs"]);
+    assert!(!rust.contains(&"scripts_test".to_string()), "{rust:?}");
+    assert!(!rust.contains(&"hooks_test".to_string()), "{rust:?}");
+}
+
 /// This repository's Manifest, asked what a change hits.
 fn hits(paths: &[&str]) -> Vec<String> {
     let changed: Vec<String> = paths.iter().map(|path| path.to_string()).collect();
