@@ -482,13 +482,8 @@ function Dock({
           style={width === undefined ? undefined : { width: `${restingWidth}px` }}
         >
           <div className="armada-shell__dock-head">
-            <div className="armada-shell__dock-name">
-              {/* The registry's Helm glyph — never a wheel or a compass. */}
-              <span className="armada-shell__dock-chip" aria-hidden>
-                <MessageSquare size={16} strokeWidth={2} />
-              </span>
-              <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
-            </div>
+            <span className="armada-shell__dock-chip" aria-hidden><MessageSquare size={16} strokeWidth={2} /></span>
+            <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
             <Button variant="secondary" size="sm" ground="card" onClick={() => onOpen(false)}>
               Close
               {binding === undefined ? null : <KbdCmd shortcut={binding} />}
@@ -500,8 +495,7 @@ function Dock({
     );
   }
 
-  // Closed, at width: nothing. The title row's Helm button is the one way
-  // back — #1094.
+  // Closed, at width: nothing. The title row's Helm button is the one way back — #1094.
   if (!folded) return null;
 
   const waiting = questions > 0 ? `, ${questions} ${questions === 1 ? "question" : "questions"} waiting` : "";
