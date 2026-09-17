@@ -107,7 +107,7 @@
   border-end-start-radius: calc(var(--radius-sm) - var(--border-width));
 }
 
-.armada-split-button__action:hover,
+.armada-split-button__action:hover:not(:disabled),
 .armada-split-button__action[data-preview-hover] {
   background: var(--bg-hover);
 }
@@ -138,7 +138,7 @@
   width: calc(var(--h-control-sm) - var(--space-2));
 }
 
-.armada-split-button__caret:hover,
+.armada-split-button__caret:hover:not(:disabled),
 .armada-split-button__caret[data-preview-hover],
 .armada-split-button__caret[aria-expanded="true"] {
   background: var(--bg-hover);
@@ -173,13 +173,13 @@
   border-color: var(--accent);
 }
 
-.armada-split-button__control[data-variant="primary"] .armada-split-button__action,
-.armada-split-button__control[data-variant="primary"] .armada-split-button__caret {
+.armada-split-button__control[data-variant="primary"] .armada-split-button__action:not(:disabled),
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret:not(:disabled) {
   color: var(--fg-inverse);
 }
 
-.armada-split-button__control[data-variant="primary"] .armada-split-button__action:hover,
-.armada-split-button__control[data-variant="primary"] .armada-split-button__caret:hover,
+.armada-split-button__control[data-variant="primary"] .armada-split-button__action:hover:not(:disabled),
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret:hover:not(:disabled),
 .armada-split-button__control[data-variant="primary"] .armada-split-button__action[data-preview-hover],
 .armada-split-button__control[data-variant="primary"] .armada-split-button__caret[data-preview-hover],
 .armada-split-button__control[data-variant="primary"] .armada-split-button__caret[aria-expanded="true"] {
@@ -190,7 +190,7 @@
 /* The divider on an accent fill has no token of its own. --accent-hover is
  * the only step within the accent, and it is what separates the segments
  * without introducing a colour the fill does not already carry. */
-.armada-split-button__control[data-variant="primary"] .armada-split-button__caret {
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret:not(:disabled) {
   border-inline-start-color: var(--accent-hover);
 }
 
@@ -213,14 +213,14 @@
   border-color: var(--status-completed-failed);
 }
 
-.armada-split-button__control[data-variant="destructive"] .armada-split-button__action,
-.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret {
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__action:not(:disabled),
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret:not(:disabled) {
   color: var(--status-completed-failed);
   border-inline-start-color: var(--status-completed-failed);
 }
 
-.armada-split-button__control[data-variant="destructive"] .armada-split-button__action:hover,
-.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret:hover,
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__action:hover:not(:disabled),
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret:hover:not(:disabled),
 .armada-split-button__control[data-variant="destructive"] .armada-split-button__action[data-preview-hover],
 .armada-split-button__control[data-variant="destructive"] .armada-split-button__caret[data-preview-hover],
 .armada-split-button__control[data-variant="destructive"] .armada-split-button__caret[aria-expanded="true"] {
@@ -254,18 +254,18 @@
   border-color: transparent;
 }
 
-.armada-split-button__control[data-variant="tonal"] .armada-split-button__action,
-.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret {
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__action:not(:disabled),
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret:not(:disabled) {
   color: var(--accent-hover);
 }
 
-.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret {
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret:not(:disabled) {
   border-inline-start-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-.armada-split-button__control[data-variant="tonal"] .armada-split-button__action:hover,
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__action:hover:not(:disabled),
 .armada-split-button__control[data-variant="tonal"] .armada-split-button__action[data-preview-hover],
-.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret:hover,
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret:hover:not(:disabled),
 .armada-split-button__control[data-variant="tonal"] .armada-split-button__caret[data-preview-hover],
 .armada-split-button__control[data-variant="tonal"] .armada-split-button__caret[aria-expanded="true"] {
   background: color-mix(in srgb, var(--accent) 24%, var(--accent-muted));
@@ -280,7 +280,24 @@
   color: var(--accent-hover);
 }
 
-/* Disabled is --fg-subtle with hover suppressed. Never opacity. */
+/* Disabled is --fg-subtle with hover suppressed. Never opacity. Every variant
+ * collapses onto this one rendering, `Button`'s reasoning exactly: --fg-subtle
+ * on an accent fill is unreadable, and a disabled control has no variant left
+ * to express. The caret's chevron dims with the label it sits beside — a glyph
+ * inside a disabled control is the contract's exception to the icon contrast
+ * floor, not a reason to keep the caret bright on a dead control.
+ *
+ * **A variant paints a live segment, which is why every variant rule above
+ * carries `:not(:disabled)`.** `Button` gets this for free: its variant and its
+ * state are both selected on the one element, so the disabled rule is the same
+ * weight and lands later. Here the variant is on the control and the state is
+ * on the segment, so the variant's colour was a descendant selector at (0,3,0)
+ * beating this rule at (0,2,0) — bright accent text on the disabled ground, in
+ * `primary`, `destructive` and `tonal` alike, while the `:has` rule above
+ * swapped the ground underneath it. Out-specifying it would have left the next
+ * variant to lose the same race; scoping the paint means a disabled segment has
+ * no variant colour to beat. The divider goes with it, falling back to the
+ * --border-default every disabled control already drew. */
 .armada-split-button__control:has(.armada-split-button__action:disabled) {
   background: var(--bg-sunken);
   border-color: var(--border-strong);
