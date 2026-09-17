@@ -196,7 +196,7 @@ pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
     DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
-    Resumption, Side, StepState, StudioEdgeKind, StudioEdgeStanding, StudioNodeKind,
+    Resumption, Side, StepState, StudioAuthor, StudioEdgeKind, StudioEdgeStanding, StudioNodeKind,
     StudioNodeState, StudioRelation, TaskState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};

@@ -359,6 +359,16 @@ async fn what_helm_does_unasked_on_a_studio_is_proposed_and_starts_nothing() {
         assert_eq!(node.state.map(|state| state.as_wire()), Some("proposed"));
     }
     assert_eq!(now.edges[0].standing.as_wire(), "proposed");
+    let helms = Some("helm");
+    assert_eq!(now.named_by.map(|by| by.as_wire()), helms);
+    assert_eq!(now.edges[0].added_by.map(|by| by.as_wire()), helms);
+    for node in &now.nodes {
+        assert_eq!(
+            node.added_by.map(|by| by.as_wire()),
+            helms,
+            "kept on the record"
+        );
+    }
     let jobs = held.fleet.list_jobs(None).await.expect("listed");
     assert!(jobs.jobs.is_empty(), "nothing unasked made a Job");
 

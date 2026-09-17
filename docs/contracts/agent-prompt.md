@@ -1354,7 +1354,7 @@ selected Manifest, the resolved authority and Voice, once per session.
 | **Opening** | Make a tool call rather than say a thing was done | The Drone's reporting clause, for the same failure: a model holding tools and a conversation narrates acts it did not take |
 | **This repository** | Say a question about another repository cannot be answered here | The scope is the door's, and a session cannot see it. Without the block a refusal arrives as an empty tool answer |
 | **Each turn** | Call `get_events_since` first, and fetch detail only where it bears | Fleet never wakes a session, so the poll is the only way a turn is current |
-| **Where they are** | Read one line naming the screen, the pick, a chipped Job and the cursor row — ahead of what was typed — and call `get_job` for a named Job's own contents | `#1075`: Bridge sends this with every ask, so the person never has to say which Job they mean |
+| **Where they are** | Read one line naming the screen, the pick, a chipped Job, the cursor row and, on a Studio, the Studio — ahead of what was typed — and call `get_job` or `get_studio` for what the one it names holds | `#1075`: Bridge sends this with every ask, so the person never has to say which Job they mean. `#1287` adds the Studio's id, for the same reason |
 | **What you may do** | Call any tool that acts once a person asks for it, and never on your own initiative but for the calls *On a Studio* names; `undo_run` stays theirs regardless | `#73` drew Helm's line as an allowlist inside the door's `Yes` rows; `#1150` reversed it to a denylist of one. `fleet::helm::may` is the rule, and the brief states it rather than restating a list |
 | **On a Studio** | Read a Studio before answering about it; add a proposed node, propose an edge and name an untitled Studio unasked; start a run, write up and dispatch only on an ask, and dispatch only where the ask names it; read the runs it starts; leave accepting, deferring and deleting to the person | `#1288`, from [Studio](../concepts/studio.md)'s *Helm on a Studio*. The door cannot tell an ask from its absence, so the line between the two columns is drawn here and nowhere else |
 | **How you answer** | Answer first, add at most one flagged observation, say "I" only for Helm's own acts, hedge by source | [Helm](../concepts/helm.md)'s Voice & conduct, and the Design System's P3 and P4 |
@@ -1393,7 +1393,8 @@ brief would go stale over a long conversation.
 
 **Where they are is named, not quoted, the same way.** `fleet::helm::serving`
 composes one line ahead of what a person typed — the screen, the repository
-picked, a chipped Job's id, the cursor row's — and never a Job's own contents.
+picked, a chipped Job's id, the cursor row's, a Studio's id — and never a Job's
+or a Studio's own contents.
 The thread's `asked` row keeps only what was typed; this line is never stored.
 
 **Read-only says why.** A session holding tools that act, and told not to use
@@ -1458,7 +1459,9 @@ never receives, so the block names the reads that say how it ended.
 │ the row the cursor is on. It names a Job by id
 │ and nothing more — call get_job for what is in
 │ it rather than assuming the line carries its
-│ contents.
+│ contents. On a Studio it names the Studio by id
+│ the same way, and get_studio with that id reads
+│ it.
 └────────────────────────────────────────────────
 ┌─ WHAT YOU MAY DO ──────────────────────────────
 │ You may call every tool you are given that acts,

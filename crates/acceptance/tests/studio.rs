@@ -143,6 +143,16 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
         (&edge.from, &edge.to),
         (&studio.nodes[0].id, &studio.nodes[1].id)
     );
+    // #1288: who put each thing there reads back off the record, so a client
+    // that missed `studio.helm_acted` still tells Helm's proposal from a
+    // person's Notes.
+    let by = |author: Option<ipc::StudioAuthor>| author.map(|a| a.as_wire());
+    assert_eq!(by(edge.added_by), Some("helm"), "Helm proposed the edge");
+    assert!(studio
+        .nodes
+        .iter()
+        .all(|node| by(node.added_by) == Some("person")));
+    assert_eq!(by(studio.named_by), Some("person"));
 }
 
 /// **Accepting a relation, removing a node and deleting a Studio are a

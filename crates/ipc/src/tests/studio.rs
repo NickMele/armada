@@ -67,6 +67,7 @@ fn a_graph() -> StudioGraph {
             },
             core_model::StudioPosition { x, y: 0 },
             at(1),
+            core_model::StudioAuthor::Person,
         )
     };
     let first = node("01NOTE1", "The chip keeps its count", 0);
@@ -77,6 +78,7 @@ fn a_graph() -> StudioGraph {
         second.id().clone(),
         StudioRelation::SameAs,
         at(2),
+        core_model::StudioAuthor::Helm,
     )
     .expect("two nodes");
     StudioGraph {
@@ -84,6 +86,7 @@ fn a_graph() -> StudioGraph {
             id: StudioId::carried(Ulid::carried("01STUDIO")),
             manifest_id: ManifestId::carried(Ulid::carried("armada")),
             name: None,
+            named_by: None,
             created_at: at(0),
             touched_at: at(2),
         },
@@ -107,6 +110,17 @@ fn a_studio_round_trips_flat_and_an_untitled_one_sends_no_name() {
         "{json}"
     );
     assert!(!json.contains("\"state\""), "a Note has none: {json}");
+    assert!(json.contains(r#""added_by":"person""#), "{json}");
+    assert!(
+        json.contains(
+            r#""standing":"proposed","created_at":"2026-09-17T09:02:00.000Z","added_by":"helm""#
+        ),
+        "{json}"
+    );
+    assert!(
+        !json.contains("named_by"),
+        "untitled, so nobody named it: {json}"
+    );
     assert_eq!(
         decode::<Studio>("a Studio", json.as_bytes()).expect("round-trips"),
         studio

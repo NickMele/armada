@@ -13,8 +13,8 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Redirector, Refusal, Studios};
 use core_model::{
-    Studio, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName, StudioNode, StudioNodeId,
-    ToItself,
+    Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName, StudioNode,
+    StudioNodeId, ToItself,
 };
 use ipc::{
     AddStudioNode, CreateStudio, DecideStudioEdge, HelmStudioAct, ManifestId, MoveStudioNode,
@@ -47,6 +47,14 @@ const NODE_BLANK: &str = "fleet.studio_node_blank";
 const NODE_NOT_HELMS: &str = "fleet.studio_node_not_helms";
 /// A rename to nothing. A 422.
 const NAME_BLANK: &str = "fleet.studio_name_blank";
+/// Who is kept as having acted: the transport's word, never the body's.
+fn author(by: Redirector) -> StudioAuthor {
+    match by {
+        Redirector::Person => StudioAuthor::Person,
+        Redirector::Helm => StudioAuthor::Helm,
+    }
+}
+
 /// A stored Studio row that does not read back. A 500.
 const STUDIO_UNREADABLE: &str = "fleet.studio_unreadable";
 
@@ -190,6 +198,12 @@ where
             id: StudioId::carried(self.mint().ulid()),
             manifest_id: served.manifest().id().clone(),
             name: create.name.as_deref().and_then(StudioName::named),
+            // Bridge only, so a name given at the start is a person's.
+            named_by: create
+                .name
+                .as_deref()
+                .and_then(StudioName::named)
+                .map(|_| StudioAuthor::Person),
             created_at: now.clone(),
             touched_at: now,
         };
@@ -223,7 +237,7 @@ where
         let at = self.now();
         let studio = self
             .written(&studio_id, within, |store, id| {
-                store.rename_studio(id, &name, &at)
+                store.rename_studio(id, &name, author(by), &at)
             })
             .await?;
         let named = HelmStudioAct::Named {
@@ -289,6 +303,7 @@ where
             content,
             add.position.to_domain(),
             at.clone(),
+            author(by),
         );
         let produced_by = add
             .produced_by
@@ -351,6 +366,7 @@ where
             proposal.to.to_domain(),
             proposal.kind.domain(),
             at.clone(),
+            author(by),
         )
         .map_err(|ToItself { node }| {
             self.studio_unacceptable(

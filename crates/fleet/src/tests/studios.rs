@@ -104,6 +104,13 @@ async fn a_studio_reads_back_whole_after_fleet_restarts() {
     assert_eq!(read, left);
     assert_eq!(read.nodes[1].position, StudioPosition { x: 480, y: -120 });
     assert_eq!(read.edges[0].standing.as_wire(), "proposed");
+    let persons = Some("person");
+    assert_eq!(read.edges[0].added_by.map(|by| by.as_wire()), persons);
+    assert_eq!(
+        read.named_by.map(|by| by.as_wire()),
+        persons,
+        "named at the start"
+    );
     let listed = fleet.list_studios(None).await.expect("lists");
     assert_eq!(listed.studios.len(), 1);
     assert_eq!(listed.studios[0].name.as_deref(), Some("Stale counts"));

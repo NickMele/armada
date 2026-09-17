@@ -180,7 +180,7 @@ transport = "HTTP"
 agent_access = "Yes"
 description = "One Studio with every node and edge on it, each node where a person left it"
 notes = """
-A node's `kind` is its content's tag, beside its fields. **A Run or Job node carries a reference and no state**: its state is read off the run or the Job, never copied. A `proposed` edge is drawn dashed until a person accepts it.
+A node's `kind` is its content's tag, beside its fields. **Who put each thing there is on the record**: a node's and an edge's `added_by`, and the Studio's `named_by`, `person` or `helm`, absent only on what was kept before V78 recorded it (#1288). **A Run or Job node carries a reference and no state**: its state is read off the run or the Job, never copied. A `proposed` edge is drawn dashed until a person accepts it.
 
 A Studio in another repository than a door session's is refused as `fleet.studio_in_another_repository`, the way a Job is.
 """
@@ -2503,7 +2503,7 @@ description = "Helm took one act on a Studio: added a node, proposed an edge or 
 notes = """
 **Helm's act, as its own event type** — `docs/concepts/helm.md`, *Audit trail* (#1288). Published after the `studio.changed` the same write publishes, and only where the door placed the call in a Helm session; a person's act on a Studio publishes `studio.changed` alone. So a reader tells the two apart by kind, never by a field on the Studio.
 
-`act` names which, with the id of what was added or the name given. The Studio itself is `studio.changed`'s to carry. `manifest_id` is at the top level, so a poll's tally names the repository.
+`act` names which, with the id of what was added or the name given. The Studio itself is `studio.changed`'s to carry. **The stream is for a client that is connected**; who acted is also kept on the record, as `added_by` and `named_by` on `get_studio`, so a client that reconnects reads it there. `manifest_id` is at the top level, so a poll's tally names the repository.
 """
 
 [operations."studio.deleted"]

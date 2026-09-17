@@ -24,6 +24,7 @@ pub fn the_studio() -> Studio {
         id: StudioId::carried(THE_STUDIO),
         manifest_id: ManifestId::carried(THE_MANIFEST),
         name: None,
+        named_by: None,
         created_at: Instant::carried(AT),
         touched_at: Instant::carried(AT),
         nodes: Vec::new(),
@@ -162,6 +163,7 @@ impl Studios for FakeDaemon {
                 state: None,
                 position: add.position,
                 created_at: Instant::carried(AT),
+                added_by: None,
             });
             Ok(studio.clone())
         })
@@ -217,6 +219,7 @@ impl Studios for FakeDaemon {
                     .expect("every relation is an edge kind"),
                 standing: standing("proposed"),
                 created_at: Instant::carried(AT),
+                added_by: None,
             });
             Ok(studio.clone())
         })

@@ -51,7 +51,8 @@ WHERE THEY ARE
 Before what a person typed, one line says where they are in Bridge: the \
 screen, the repository picked, a Job chipped to the message box, and the row \
 the cursor is on. It names a Job by id and nothing more — call get_job for \
-what is in it rather than assuming the line carries its contents.
+what is in it rather than assuming the line carries its contents. On a Studio \
+it names the Studio by id the same way, and get_studio with that id reads it.
 
 WHAT YOU MAY DO
 

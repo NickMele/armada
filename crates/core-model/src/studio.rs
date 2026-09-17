@@ -54,6 +54,9 @@ pub struct Studio {
     pub id: StudioId,
     pub manifest_id: ManifestId,
     pub name: Option<StudioName>,
+    /// Who gave it the name it has. `None` on an untitled Studio, and on one
+    /// named before who named it was kept.
+    pub named_by: Option<StudioAuthor>,
     pub created_at: Timestamp,
     /// The last write to the Studio or anything on it.
     pub touched_at: Timestamp,
@@ -157,6 +160,16 @@ spelled! {
         SameAs => "same_as",
         Blocks => "blocks",
         Answers => "answers",
+    }
+}
+
+spelled! {
+    /// Who put something on a Studio. **Helm's act is kept apart from a
+    /// person's on the record itself**, not only on the stream —
+    /// `docs/concepts/helm.md`, *Audit trail*.
+    StudioAuthor {
+        Person => "person",
+        Helm => "helm",
     }
 }
 
@@ -300,6 +313,8 @@ pub struct StudioNode {
     state: Option<StudioNodeState>,
     position: StudioPosition,
     created_at: Timestamp,
+    /// `None` only on a node added before who added it was kept.
+    added_by: Option<StudioAuthor>,
 }
 
 /// A stored state its kind does not hold.
@@ -310,12 +325,13 @@ pub struct StateDoesNotFit {
 }
 
 impl StudioNode {
-    /// A node just added: in its kind's first state, or none.
+    /// A node just added by `by`: in its kind's first state, or none.
     pub fn added(
         id: StudioNodeId,
         content: StudioNodeContent,
         position: StudioPosition,
         created_at: Timestamp,
+        by: StudioAuthor,
     ) -> StudioNode {
         let state = content.kind().states().first().copied();
         StudioNode {
@@ -324,6 +340,7 @@ impl StudioNode {
             state,
             position,
             created_at,
+            added_by: Some(by),
         }
     }
 
@@ -334,6 +351,7 @@ impl StudioNode {
         state: Option<StudioNodeState>,
         position: StudioPosition,
         created_at: Timestamp,
+        added_by: Option<StudioAuthor>,
     ) -> Result<StudioNode, StateDoesNotFit> {
         let kind = content.kind();
         if !kind.admits(state) {
@@ -345,6 +363,7 @@ impl StudioNode {
             state,
             position,
             created_at,
+            added_by,
         })
     }
 
@@ -374,6 +393,9 @@ impl StudioNode {
     pub fn created_at(&self) -> &Timestamp {
         &self.created_at
     }
+    pub fn added_by(&self) -> Option<StudioAuthor> {
+        self.added_by
+    }
 }
 
 /// An edge between two nodes on one Studio.
@@ -385,6 +407,8 @@ pub struct StudioEdge {
     kind: StudioEdgeKind,
     standing: StudioEdgeStanding,
     created_at: Timestamp,
+    /// `None` only on an edge kept before who added it was.
+    added_by: Option<StudioAuthor>,
 }
 
 /// Both ends of an edge are one node.
@@ -403,38 +427,41 @@ pub enum EdgeRefused {
 }
 
 impl StudioEdge {
-    /// A relation proposed, by whoever proposed it. Only a person accepts one.
+    /// A relation proposed by `by`. Only a person accepts one.
     pub fn proposed(
         id: StudioEdgeId,
         from: StudioNodeId,
         to: StudioNodeId,
         relation: StudioRelation,
         created_at: Timestamp,
+        by: StudioAuthor,
     ) -> Result<StudioEdge, ToItself> {
         StudioEdge::joining(
             id,
-            from,
-            to,
+            (from, to),
             relation.into(),
             StudioEdgeStanding::Proposed,
             created_at,
+            Some(by),
         )
     }
 
-    /// The Studio's own record that `from` made `to`, accepted as drawn.
+    /// The Studio's own record that `from` made `to`, accepted as drawn, and
+    /// added by whoever added `to`.
     pub fn produced(
         id: StudioEdgeId,
         from: StudioNodeId,
         to: StudioNodeId,
         created_at: Timestamp,
+        by: StudioAuthor,
     ) -> Result<StudioEdge, ToItself> {
         StudioEdge::joining(
             id,
-            from,
-            to,
+            (from, to),
             StudioEdgeKind::Produced,
             StudioEdgeStanding::Accepted,
             created_at,
+            Some(by),
         )
     }
 
@@ -446,20 +473,22 @@ impl StudioEdge {
         kind: StudioEdgeKind,
         standing: StudioEdgeStanding,
         created_at: Timestamp,
+        added_by: Option<StudioAuthor>,
     ) -> Result<StudioEdge, EdgeRefused> {
         if kind == StudioEdgeKind::Produced && standing != StudioEdgeStanding::Accepted {
             return Err(EdgeRefused::ProducedUnaccepted);
         }
-        StudioEdge::joining(id, from, to, kind, standing, created_at).map_err(EdgeRefused::ToItself)
+        StudioEdge::joining(id, (from, to), kind, standing, created_at, added_by)
+            .map_err(EdgeRefused::ToItself)
     }
 
     fn joining(
         id: StudioEdgeId,
-        from: StudioNodeId,
-        to: StudioNodeId,
+        (from, to): (StudioNodeId, StudioNodeId),
         kind: StudioEdgeKind,
         standing: StudioEdgeStanding,
         created_at: Timestamp,
+        added_by: Option<StudioAuthor>,
     ) -> Result<StudioEdge, ToItself> {
         if from == to {
             return Err(ToItself { node: from });
@@ -471,6 +500,7 @@ impl StudioEdge {
             kind,
             standing,
             created_at,
+            added_by,
         })
     }
 
@@ -491,6 +521,9 @@ impl StudioEdge {
     }
     pub fn created_at(&self) -> &Timestamp {
         &self.created_at
+    }
+    pub fn added_by(&self) -> Option<StudioAuthor> {
+        self.added_by
     }
 }
 

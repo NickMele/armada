@@ -64,7 +64,7 @@ pub use job::{
     PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, WorkingWindow, PLAN_RECORDED,
 };
 pub use studio::{
-    EdgeRefused, StateDoesNotFit, Studio, StudioEdge, StudioEdgeId, StudioEdgeKind,
+    EdgeRefused, StateDoesNotFit, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind,
     StudioEdgeStanding, StudioGraph, StudioId, StudioName, StudioNode, StudioNodeContent,
     StudioNodeId, StudioNodeKind, StudioNodeState, StudioPosition, StudioRelation, ToItself,
 };

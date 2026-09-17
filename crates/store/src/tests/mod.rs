@@ -50,6 +50,7 @@ mod roundtrip;
 mod showing;
 mod spend;
 mod studio;
+mod studio_authors;
 mod timings;
 mod tmp;
 mod work_plan;
