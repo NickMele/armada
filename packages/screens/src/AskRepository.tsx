@@ -6,6 +6,7 @@
 // job cannot: a Job needs a Manifest, and #959 decided that picking one here must not route
 // anywhere or narrow the Board, so `onlySetUp` shows it greyed out and unpickable instead.
 
+import type { ReactNode } from "react";
 import type { RepositorySummary } from "@armada/protocol";
 import { Alert, Select } from "@armada/components";
 import { repositoryLabel, RepositoryOptions } from "@armada/shell";
@@ -19,6 +20,7 @@ export function AskRepository({
   next,
   onPick,
   onlySetUp = false,
+  action,
 }: {
   repositories: readonly RepositorySummary[];
   /** What the surface needs one repository for. Sentence case, no Wh- opener. */
@@ -34,10 +36,15 @@ export function AskRepository({
    * ask, which still picks one to open Setup on it.
    */
   onlySetUp?: boolean;
+  /**
+   * The one control the ask carries at its trailing edge — the composer's own
+   * way out, which has no card header to sit in here. Absent draws none.
+   */
+  action?: ReactNode;
 }) {
   const loose = repositories.filter((one) => one.manifest === undefined);
   return (
-    <Alert tone="neutral" title={title}>
+    <Alert tone="neutral" title={title} action={action}>
       <p>{next}</p>
       <Select
         label="Repository"

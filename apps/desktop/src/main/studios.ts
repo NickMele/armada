@@ -18,6 +18,7 @@ import type {
   StudioCapture,
   StudioDeleted,
   StudioList,
+  StudioNodeByHand,
   StudioPosition,
   StudioPromotion,
 } from "@armada/protocol";
@@ -149,6 +150,20 @@ export class StudioReads {
     if (!answer.ok) return 0;
     const nodes = (answer.body as Studio).nodes;
     return nodes.length === 0 ? 0 : Math.max(...nodes.map((node) => node.position.y)) + NOTE_APART;
+  }
+
+  /** Name a Studio, or name it again. A person's act as much as Helm's — #1364. */
+  async rename(studioId: string, name: string): Promise<Outcome> {
+    return this.acted(await this.act(member(studioId, "/rename"), { name }));
+  }
+
+  /**
+   * Put a Note, a Link or a Sketch on a Studio where the person is looking —
+   * #1364. **The kind is the narrow one**, so nothing the renderer can ask for
+   * is a kind Fleet would refuse as `fleet.studio_node_not_a_persons`.
+   */
+  async addNode(studioId: string, node: StudioNodeByHand, position: StudioPosition): Promise<Outcome> {
+    return this.acted(await this.act(member(studioId, "/add_node"), { ...node, position }));
   }
 
   async moveNode(studioId: string, nodeId: string, position: StudioPosition): Promise<Outcome> {

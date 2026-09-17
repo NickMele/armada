@@ -595,11 +595,14 @@ export const CHANNELS = {
   askHelm: "bridge:ask-helm",
   startHelmFresh: "bridge:start-helm-fresh",
   pointHelm: "bridge:point-helm",
-  // A repository's Studios — #1287. Two reads a surface holds open, and four acts, one per
-  // operation: a Studio is started, a node moved or removed, a proposed relation decided.
+  // A repository's Studios — #1287. Two reads a surface holds open, and one act per operation:
+  // a Studio is started, named (#1364), a node added by hand (#1364), moved or removed, a
+  // proposed relation decided.
   watchStudios: "bridge:watch-studios",
   watchStudio: "bridge:watch-studio",
   createStudio: "bridge:create-studio",
+  renameStudio: "bridge:rename-studio",
+  addStudioNode: "bridge:add-studio-node",
   moveStudioNode: "bridge:move-studio-node",
   removeStudioNode: "bridge:remove-studio-node",
   decideStudioEdge: "bridge:decide-studio-edge",

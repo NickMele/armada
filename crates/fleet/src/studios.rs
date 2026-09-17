@@ -49,6 +49,8 @@ pub(crate) const EDGE_TO_ITSELF: &str = "fleet.studio_edge_to_itself";
 pub(crate) const NODE_BLANK: &str = "fleet.studio_node_blank";
 /// A node Helm added of a kind that does not start proposed. A 422.
 const NODE_NOT_HELMS: &str = "fleet.studio_node_not_helms";
+/// A node a person added by hand of a kind only an act mints. A 422.
+const NODE_NOT_A_PERSONS: &str = "fleet.studio_node_not_a_persons";
 /// A Finding added claiming what only a scout records. A 422.
 const FINDING_IS_THE_SCOUTS: &str = "fleet.studio_finding_is_the_scouts";
 /// A Run node added rather than started. A 422.
@@ -452,6 +454,21 @@ where
                 NODE_NOT_HELMS,
                 format!(
                     "Helm adds only a node that starts proposed, and a {} is a person's to add",
+                    content.kind().as_wire()
+                ),
+            ));
+        }
+        // **And a person adds only what a person makes**, `#1364`: a Note
+        // typed, a Link pasted, a Sketch placed. Every other kind is made by
+        // the act that earns it, and one added by hand would carry a claim
+        // nothing stands behind — a Finding no scout read for, a Cluster
+        // nothing was grouped into.
+        if by == Redirector::Person && !content.kind().added_by_hand() {
+            return Err(self.studio_unacceptable(
+                NODE_NOT_A_PERSONS,
+                format!(
+                    "a person adds a note, a link or a sketch by hand, and a {} is made by the \
+                     act that earns it",
                     content.kind().as_wire()
                 ),
             ));

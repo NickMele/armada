@@ -1,0 +1,45 @@
+/* A Studio's name where it is drawn, and the field that renames it — #1364.
+   The rename sits on the name's own line, so nothing moves when it appears. */
+
+.armada-studio-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Naming takes a field's width and not the line's: a Studio's name is a phrase,
+   and a field spanning a 2000px window reads as a search box. */
+.armada-studio-name--naming .armada-input-field {
+  width: var(--w-dialog);
+  max-width: 100%;
+}
+
+.armada-studio-name__acts {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.armada-studio-name__heading {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-studio-name__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nobody has named it, so what is drawn is a word standing in for a name. */
+.armada-studio-name [data-untitled] {
+  color: var(--fg-muted);
+}

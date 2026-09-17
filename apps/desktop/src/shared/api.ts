@@ -52,7 +52,7 @@ import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
-import type { StudioCapture, StudioPosition, StudioPromotion } from "@armada/protocol";
+import type { StudioCapture, StudioNodeByHand, StudioPosition, StudioPromotion } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import type {
   ManifestProposalsRead,
@@ -742,6 +742,24 @@ export type BridgeApi = {
   watchStudio: (studioId: string | null) => Promise<void>;
   /** Start an untitled Studio in one repository. Answers with it, which also lands on the list. */
   createStudio: (manifestId: string) => Promise<StudioAnswer>;
+  /**
+   * Name a Studio, or name it again — #1364. A person's act as much as Helm's,
+   * and the only way an untitled one is named without asking Helm for it.
+   */
+  renameStudio: (studioId: string, name: string) => Promise<Outcome>;
+  /**
+   * Put a Note, a Link or a Sketch on a Studio, where the person is looking — #1364.
+   *
+   * **Three kinds, and the type is what says so.** Every other kind is made by
+   * the act that earns it, and Fleet refuses one from Bridge by name; a
+   * capability wide enough to ask for a Finding would be a capability the
+   * renderer has and the door has to keep taking away.
+   */
+  addStudioNode: (
+    studioId: string,
+    node: StudioNodeByHand,
+    position: StudioPosition,
+  ) => Promise<Outcome>;
   /** Save where a person put a node down. Position only: nothing else about a node is written. */
   moveStudioNode: (studioId: string, nodeId: string, position: StudioPosition) => Promise<Outcome>;
   /** Delete a node and every edge on it. A person's act, and only from the Studios surface. */

@@ -401,6 +401,10 @@ export function App() {
     return () => window.removeEventListener("keydown", pressed);
   }, [openJob]);
 
+  // Escape leaves the composer too — bound inside `Composing`, not here,
+  // because with anything typed it asks first and what has been typed is
+  // known there.
+
   // The row is back in the document only after the list re-renders, so the
   // focus move is an effect rather than part of the click that closed it.
   useEffect(() => {
@@ -1010,8 +1014,19 @@ export function App() {
       <Palette
         open={palette.open}
         onClose={palette.onClose}
-        context={reading === null ? "board" : "detail"}
-        on={onWhat === undefined ? null : `${onWhat.id} — ${onWhat.title}`}
+        // Three places, not two: a Studio open on its whiteboard is neither
+        // the Board nor a job read whole, and the acts scoped to it act on the
+        // board rather than on anything focused — #1364.
+        context={reading !== null ? "detail" : shownStudio === null ? "board" : "studio"}
+        // The block is titled with what its rows act on, which on a Studio is
+        // the Studio: the acts scoped there put a node on the board.
+        on={
+          shownStudio !== null && reading === null
+            ? `Studio — ${studioName(shownStudio)}`
+            : onWhat === undefined
+            ? null
+            : `${onWhat.id} — ${onWhat.title}`
+        }
         surfaces={SURFACES}
         filters={reading === null ? BOARD_TABS : []}
         // One row per Check and Command, off the same reading the Manifest

@@ -6,14 +6,50 @@
 // The rail's own pick stays exactly where it was; this component reads it only to skip the ask
 // once one is already picked, and never writes it.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { LeftOutWorkflow, ManifestReading, ManifestSummary, RepositorySummary } from "@armada/protocol";
-import { Button } from "@armada/components";
+import { Button, Dialog, KbdBinding } from "@armada/components";
 import { AskRepository, Composer, DispatchJob, watchOf } from "@armada/screens";
 import { Boundary } from "@armada/shell";
 
 import type { BridgeState } from "../../shared/bridge";
 import { readComposing, searchFiles, stageAttachment, type useCommands } from "./commands";
+
+/**
+ * The way out, on the head of the thing it closes — the owner's call of
+ * 2026-09-17, against a `Cancel` that sat on its own line above the card
+ * belonging to nothing. Same control and same word as the Job settings sheet
+ * and Helm's dock, key included: one act, one vocabulary.
+ *
+ * **`ground` is the surface it lands on**, and the two are not
+ * interchangeable: a secondary is filled one step from its ground, so a card
+ * takes `card` and the ask's sunken alert takes `sunken`.
+ */
+function WayOut({ ground, onClose }: { ground: "card" | "sunken"; onClose: () => void }) {
+  return (
+    <Button variant="secondary" size="sm" ground={ground} onClick={onClose} title="Close — Esc">
+      Close
+      <KbdBinding binding="Esc" />
+    </Button>
+  );
+}
+
+/**
+ * What the ask says before it throws a draft away — the owner's call of
+ * 2026-09-17: an untouched composer closes at once, one carrying anything
+ * typed asks first, the way killing a Job does.
+ *
+ * It states what happens and what survives, and what survives is the point:
+ * nothing was sent, so there is no job to lose.
+ */
+const DISCARD = {
+  title: "Discard what you typed?",
+  body:
+    "What you have typed here, and anything attached to it, is dropped and the composer closes. " +
+    "Nothing has been sent to Fleet, so no job exists yet and the board is unchanged. " +
+    "Dispatch opens on an empty composer next time.",
+  act: "Discard",
+};
 
 /** What the answered repository's own reads are, before they have come back. */
 const UNREAD: { leftOut: readonly LeftOutWorkflow[]; reading: ManifestReading | null } = {
@@ -62,6 +98,33 @@ export function Composing({
   // to the pick, which stays on All throughout. Off All, `state.holds`
   // already carries the right one, so nothing here is asked.
   const [composingFor, setComposingFor] = useState(UNREAD);
+  // What closing would throw away, reported by the two surfaces that hold it:
+  // the request and its attachments, and the hand form's fields and choices.
+  // Held as two, because either can carry something the other does not — the
+  // request survives a swap to hand entry and back.
+  const [typedRequest, setTypedRequest] = useState(false);
+  const [typedForm, setTypedForm] = useState(false);
+  // Whether the discard ask is up. While it is, the key below is the dialog's.
+  const [asking, setAsking] = useState(false);
+  const typed = typedRequest || typedForm;
+  /** The one act the control and the key share: leave, or ask first. */
+  const leave = useCallback(() => {
+    if (typed) setAsking(true);
+    else onClose();
+  }, [typed, onClose]);
+  // Escape leaves the composer, which is what the control on its head says it
+  // does. Here rather than in `App.tsx` because the ask depends on what has
+  // been typed, and this is where that is known. A press a layer above already
+  // answered is not a second exit — the `@` mention popup is one of them.
+  useEffect(() => {
+    if (asking) return;
+    const pressed = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      leave();
+    };
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
+  }, [asking, leave]);
   useEffect(() => {
     if (!all || answered === null) return;
     let current = true;
@@ -73,25 +136,18 @@ export function Composing({
       current = false;
     };
   }, [all, answered]);
-  // The way out, at the top of every state — #1090 moved it here from the
-  // page head that used to carry it.
-  const cancel = (
-    <div>
-      <Button variant="ghost" size="sm" onClick={onClose}>
-        Cancel
-      </Button>
-    </div>
-  );
   if (all && answered === null) {
     return (
       <div className="armada-screen__pane">
-        {cancel}
         <AskRepository
           repositories={repositories}
           title="Pick the repository this Job is for"
           next="A Job belongs to one repository. The Board stays on All; the new Job is listed under the repository you pick."
           onPick={setAnswered}
           onlySetUp
+          // The ask is an alert and has no card header, so the way out takes
+          // the one trailing-edge slot an alert has for a control.
+          action={<WayOut ground="sunken" onClose={leave} />}
         />
       </div>
     );
@@ -102,7 +158,6 @@ export function Composing({
   const guarded = { bridge: state.bridge, onCopied };
   return (
     <div className="armada-screen__pane">
-      {cancel}
       {/* Describing the work is the path and the form is the override, so
           the composer is what `Enter by hand` swaps to rather than what
           opens. What Fleet holds is read over the one connection and not
@@ -127,6 +182,11 @@ export function Composing({
         }
         onStage={stageAttachment}
         onSearchFiles={searchFiles}
+        // On the head of each card this surface draws, since each is its own
+        // way out of the same composer.
+        close={<WayOut ground="card" onClose={leave} />}
+        // What the request field and its attachments would lose.
+        onTyped={setTypedRequest}
         // What Fleet says the call is doing, against the same `now`
         // every other elapsed figure on screen is drawn from.
         watching={watchOf(state.proposing, now)}
@@ -150,6 +210,10 @@ export function Composing({
         onCopied={onCopied}
         byHand={
           <Composer
+            close={<WayOut ground="card" onClose={leave} />}
+            // What the hand form would lose. Its own, because swapping back to
+            // describing unmounts it and takes the fields with it.
+            onTyped={setTypedForm}
             workflows={state.holds.workflows}
             leftOut={all ? composingFor.leftOut : state.holds.leftOut}
             onStage={stageAttachment}
@@ -165,6 +229,24 @@ export function Composing({
         }
       />
       </Boundary>
+      {/* The ask, and only where something would be lost. Every destructive
+          act confirms through this one dialog, which owns `Cancel` holding
+          focus; this supplies the words. Cancelling leaves the composer
+          exactly as it was, since nothing here unmounts it. */}
+      {!asking ? null : (
+        <Dialog
+          open
+          title={DISCARD.title}
+          confirmLabel={DISCARD.act}
+          onCancel={() => setAsking(false)}
+          onConfirm={() => {
+            setAsking(false);
+            onClose();
+          }}
+        >
+          {DISCARD.body}
+        </Dialog>
+      )}
     </div>
   );
 }

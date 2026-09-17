@@ -20,7 +20,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { HelmContext } from "@armada/protocol";
-import type { StudioCapture, StudioPosition, StudioPromotion } from "@armada/protocol";
+import type { StudioCapture, StudioNodeByHand, StudioPosition, StudioPromotion } from "@armada/protocol";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
 import type { AddTask, DropTask } from "@armada/protocol";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
@@ -487,6 +487,12 @@ const api: BridgeApi = {
   watchStudio: (studioId: string | null): Promise<void> => ipcRenderer.invoke(CHANNELS.watchStudio, studioId),
   createStudio: (manifestId: string): Promise<StudioAnswer> =>
     ipcRenderer.invoke(CHANNELS.createStudio, manifestId),
+  renameStudio: (studioId: string, name: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.renameStudio, studioId, name),
+  // Three kinds and no more: the type is as narrow as the act, so the surface
+  // this bridge gains is a note, a link or a sketch rather than any node.
+  addStudioNode: (studioId: string, node: StudioNodeByHand, position: StudioPosition): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.addStudioNode, studioId, node, position),
   moveStudioNode: (studioId: string, nodeId: string, position: StudioPosition): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.moveStudioNode, studioId, nodeId, position),
   // The frame is main's: this hands over what was pointed at and nothing else,

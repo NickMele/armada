@@ -21,7 +21,7 @@ import type {
 } from "@armada/protocol";
 import type { EditManifest, SaveManifestFile, StartCheckoutRun, StartRun } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
-import type { StagedFrame, StudioCapture } from "@armada/protocol";
+import type { StagedFrame, StudioCapture, StudioNodeByHand, StudioPosition } from "@armada/protocol";
 import { ANNOTATE_FLAG } from "../shared/annotations";
 import { handleAnnotations } from "./annotations";
 import { FleetConnection } from "./connection";
@@ -867,6 +867,20 @@ void app.whenReady().then(() => {
     typeof value === "object" &&
     value !== null &&
     (STUDIO_PROMOTIONS as readonly string[]).includes((value as { act?: unknown }).act as string);
+  /** A position in whole canvas units, or `null` where it is not one. */
+  const whole = (value: unknown): StudioPosition | null => {
+    const at = (value ?? {}) as { x?: unknown; y?: unknown };
+    return Number.isInteger(at.x) && Number.isInteger(at.y)
+      ? { x: at.x as number, y: at.y as number }
+      : null;
+  };
+  /** One of the three kinds a person adds by hand, with its own field filled. */
+  const byHand = (value: unknown): value is StudioNodeByHand => {
+    const node = (value ?? {}) as { kind?: unknown; said?: unknown; address?: unknown; body?: unknown };
+    if (node.kind === "note") return text(node.said);
+    if (node.kind === "link") return text(node.address);
+    return node.kind === "sketch" && text(node.body);
+  };
   ipcMain.handle(CHANNELS.watchStudios, (_event, manifestId: unknown) =>
     text(manifestId) || manifestId === null ? connection?.studios.watchList(manifestId) : undefined,
   );
@@ -878,10 +892,21 @@ void app.whenReady().then(() => {
       ? ((await connection?.studios.create(manifestId)) ?? { ok: false, outcome: unsent })
       : undefined,
   );
+  ipcMain.handle(CHANNELS.renameStudio, async (_event, studioId: unknown, name: unknown) =>
+    text(studioId) && text(name) ? ((await connection?.studios.rename(studioId, name)) ?? unsent) : undefined,
+  );
+  // A node by hand — #1364. **The kind is checked here, not only typed**: the
+  // preload is the boundary, and a renderer that sent `finding` would otherwise
+  // reach a route Fleet refuses rather than one Bridge never offered.
+  ipcMain.handle(CHANNELS.addStudioNode, async (_event, studioId: unknown, node: unknown, position: unknown) => {
+    const at = whole(position);
+    if (!text(studioId) || at === null || !byHand(node)) return undefined;
+    return (await connection?.studios.addNode(studioId, node, at)) ?? unsent;
+  });
   ipcMain.handle(CHANNELS.moveStudioNode, async (_event, studioId: unknown, nodeId: unknown, position: unknown) => {
-    const at = (position ?? {}) as { x?: unknown; y?: unknown };
-    if (!text(studioId) || !text(nodeId) || !Number.isInteger(at.x) || !Number.isInteger(at.y)) return undefined;
-    return (await connection?.studios.moveNode(studioId, nodeId, { x: at.x as number, y: at.y as number })) ?? unsent;
+    const at = whole(position);
+    if (!text(studioId) || !text(nodeId) || at === null) return undefined;
+    return (await connection?.studios.moveNode(studioId, nodeId, at)) ?? unsent;
   });
   ipcMain.handle(CHANNELS.removeStudioNode, async (_event, studioId: unknown, nodeId: unknown) =>
     text(studioId) && text(nodeId) ? ((await connection?.studios.removeNode(studioId, nodeId)) ?? unsent) : undefined,

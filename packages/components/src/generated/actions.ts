@@ -44,6 +44,7 @@ export type ActionScope =
   | "job board"
   | "list"
   | "list and detail"
+  | "open studio"
   | "piloted job";
 
 /** Why an act's glyph column is empty. `null` where it is not. */
@@ -526,6 +527,45 @@ export const ACTIONS: readonly Action[] = [
     iconAbsent: "undecided",
     shortcut: "g",
     scope: "detail",
+    destructive: false,
+    confirms: false,
+    unbuilt: null,
+  },
+  {
+    id: "add_note",
+    kind: "Action",
+    tier: "Contextual",
+    verb: "Add a note",
+    icon: null,
+    iconAbsent: "undecided",
+    shortcut: "N",
+    scope: "open studio",
+    destructive: false,
+    confirms: false,
+    unbuilt: null,
+  },
+  {
+    id: "add_link",
+    kind: "Action",
+    tier: "Contextual",
+    verb: "Add a link",
+    icon: null,
+    iconAbsent: "undecided",
+    shortcut: "V",
+    scope: "open studio",
+    destructive: false,
+    confirms: false,
+    unbuilt: null,
+  },
+  {
+    id: "add_sketch",
+    kind: "Action",
+    tier: "Contextual",
+    verb: "Add a sketch",
+    icon: null,
+    iconAbsent: "undecided",
+    shortcut: "S",
+    scope: "open studio",
     destructive: false,
     confirms: false,
     unbuilt: null,

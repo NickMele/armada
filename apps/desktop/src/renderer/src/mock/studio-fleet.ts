@@ -11,7 +11,15 @@
 // dispatch mints one Job node: what the mock proves is the surface, and which workflow a model
 // picks is `fleet`'s.
 
-import type { Studio, StudioCapture, StudioEdge, StudioNode, StudioNodeContent, StudioPromotion } from "@armada/protocol";
+import type {
+  Studio,
+  StudioCapture,
+  StudioEdge,
+  StudioNode,
+  StudioNodeByHand,
+  StudioNodeContent,
+  StudioPromotion,
+} from "@armada/protocol";
 import { repository } from "@armada/screens/src/fixtures/build/base";
 import { foldStudio } from "@armada/screens/src/studio-reads";
 
@@ -31,6 +39,8 @@ export type StudioRoutes = Pick<
   | "watchStudios"
   | "watchStudio"
   | "createStudio"
+  | "renameStudio"
+  | "addStudioNode"
   | "captureStudioNote"
   | "readStudioFrame"
   | "moveStudioNode"
@@ -170,6 +180,27 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
         const studio: Studio = { id: mint("01STUDIO"), manifest_id: manifestId, created_at: now, touched_at: now, nodes: [], edges: [] };
         published(studio);
         return { ok: true, studio };
+      },
+      renameStudio: async (studioId, name) => {
+        const answer = write(studioId, (studio) => ({ ...studio, name, named_by: "person" }));
+        return answer.ok ? OK : answer.outcome;
+      },
+      // A node by hand — #1364. **The three kinds and no more**, the way Fleet
+      // refuses the rest from Bridge: a mock that took a Finding here would let
+      // a test pass against a door that would not open.
+      addStudioNode: async (studioId, node: StudioNodeByHand, position) => {
+        const answer = write(studioId, (studio) => {
+          const added: StudioNode = {
+            ...node,
+            id: mint(`${node.kind}-`),
+            position,
+            created_at: tick(),
+            added_by: "person",
+            ...(node.kind === "sketch" ? { state: "frozen" as const } : {}),
+          };
+          return { ...studio, nodes: [...studio.nodes, added] };
+        });
+        return answer.ok ? OK : answer.outcome;
       },
       // The frame is main's, and the mock has no window to take one of, so a
       // captured Note here carries everything but that.

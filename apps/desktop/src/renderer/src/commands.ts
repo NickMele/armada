@@ -52,7 +52,7 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { HelmContext, JobSummary } from "@armada/protocol";
-import type { StudioCapture } from "@armada/protocol";
+import type { StudioCapture, StudioNodeByHand } from "@armada/protocol";
 import type { ActAnswer, ActingAct, Answered, ConfirmableAct, DecidingAct, Taken, TakenAct } from "@armada/screens";
 import { takenNotice, takenStands } from "@armada/screens";
 import { patternFor, useHaptics } from "@armada/components";
@@ -76,6 +76,10 @@ export const readHeld = (want: boolean): void => void window.armada.readHeld(wan
 export const watchStudios = (manifestId: string | null): void => void window.armada.watchStudios(manifestId);
 export const watchStudio = (studioId: string | null): void => void window.armada.watchStudio(studioId);
 export const createStudio = (manifestId: string) => window.armada.createStudio(manifestId);
+// Named, and added to, by a person — #1364. Neither goes through Helm.
+export const renameStudio = (studioId: string, name: string) => window.armada.renameStudio(studioId, name);
+export const addStudioNode = (studioId: string, node: StudioNodeByHand, position: { x: number; y: number }) =>
+  window.armada.addStudioNode(studioId, node, position);
 export const moveStudioNode = (studioId: string, nodeId: string, position: { x: number; y: number }) =>
   window.armada.moveStudioNode(studioId, nodeId, position);
 export const removeStudioNode = (studioId: string, nodeId: string) => window.armada.removeStudioNode(studioId, nodeId);

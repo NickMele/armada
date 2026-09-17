@@ -1246,14 +1246,6 @@
   flex-wrap: wrap;
 }
 
-.armada-studio__name {
-  margin: 0;
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
-  font-weight: var(--weight-heading);
-  color: var(--fg-default);
-}
-
 .armada-studio__standing {
   font-size: var(--text-xs);
   line-height: var(--leading-xs);

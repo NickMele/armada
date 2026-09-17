@@ -37,7 +37,7 @@
 // two moments.
 
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, ClipboardEvent } from "react";
+import type { ChangeEvent, ClipboardEvent, ReactNode } from "react";
 import {
   AttachmentChip,
   Button,
@@ -99,11 +99,25 @@ export type ComposerProps = {
   models: ModelChoices | null;
   /** Nothing may be proposed while the connection is not live. */
   disabled: boolean;
+  /**
+   * The way out of the composer, on this card's own header — the caller's, so
+   * every state it opens carries the same control. Absent draws none.
+   */
+  close?: ReactNode;
+  /**
+   * Whether this form holds anything closing would throw away — a field typed
+   * in, a file staged, or a choice moved off what it rested on. Reported as it
+   * changes, and `false` on the way out, since swapping back to describing
+   * unmounts this form and its fields go with it. #1366.
+   */
+  onTyped?: (typed: boolean) => void;
   onPropose: (draft: Draft) => void;
 };
 
 export function Composer({
   workflows,
+  close,
+  onTyped,
   leftOut = [],
   manifest,
   models,
@@ -134,6 +148,22 @@ export function Composer({
   useEffect(() => {
     if (model === "" && models !== null) setModel(models.default);
   }, [models, model]);
+
+  // What a close would lose. A choice counts as much as a typed word — the
+  // resting values are the roster's first workflow, the configured model and
+  // the first urgency, so moving any of them is something a person did.
+  const typed =
+    title !== "" ||
+    brief !== "" ||
+    attachments.length > 0 ||
+    atomic ||
+    urgency !== (URGENCIES[0] ?? "") ||
+    (workflows.length > 0 && workflowId !== workflows[0]!.id) ||
+    (models !== null && model !== models.default);
+  useEffect(() => {
+    onTyped?.(typed);
+    return () => onTyped?.(false);
+  }, [typed, onTyped]);
 
   // The picked workflow, drawn as the rail it will become. Empty until one is
   // picked, and empty for a roster that has not arrived.
@@ -210,6 +240,7 @@ export function Composer({
     <Card>
       <CardHeader>
         <CardTitle>Propose a job</CardTitle>
+        {close}
       </CardHeader>
       <CardContent>
         <div>
