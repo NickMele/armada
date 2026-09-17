@@ -22,10 +22,11 @@ export type Mounted = { api: BridgeApi; scenario: Scenario; unmount: () => void 
  * Install a fake `window.armada` on `scenario` and mount the app into `host`.
  * **Throws on a name no scenario has**, so a test never passes against a default.
  */
-export function mountApp(scenario: string | Scenario, host: HTMLElement): Mounted {
+export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?: BridgeApi): Mounted {
   const chosen = typeof scenario === "string" ? scenarioNamed(scenario) : scenario;
   if (chosen === undefined) throw new Error(`no mock scenario named ${String(scenario)}`);
-  const api = fakeBridge(chosen);
+  // `shared` is a second window on the same main: both hear what either one's Fleet publishes.
+  const api = shared ?? fakeBridge(chosen);
   window.armada = api;
   const root = createRoot(host);
   root.render(

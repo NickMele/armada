@@ -261,6 +261,7 @@ back to the first scenario and says so in the browser console.
 | `first-launch` | A Fleet serving no repository, so Add a repository opens by itself |
 | `empty-store` | One repository and no Job yet |
 | `recorded-board` | The Board as Fleet served it, from `--board` above |
+| `setting-up` | A set-up repository and a folder nobody set up, over a Fleet that scans, proposes, applies each Setup edit and Write, and adds or clones a repository |
 | `job/<builder>` | One Job, already open, for each builder `packages/screens/src/fixtures/build/index.ts` exports |
 | `recorded/<slug>` | One recorded Job, already open, for each recording under `packages/screens/src/fixtures/recorded/` |
 
@@ -287,6 +288,11 @@ fails typecheck there until the fake answers it.
 new Job, a review approval does not advance the Job, and a proposal comes back
 unanswered. Guessing Fleet's next state would draw a Fleet that does not exist.
 
+**A scenario can answer a flow as Fleet would.** Its `behaves` replaces the
+fake's answer to the calls it names, over state it can publish. `setting-up`
+does this for Setup and Locate in `setup-fleet.ts`, because an edit is only
+worth drawing if the next read shows it applied.
+
 **A little is made up, and none of it is what a real Fleet says.** The Fleet
 panel's pid and port, the model list, and the root folder of a repository a
 recording names are invented. Bridge's clock is real while the fixtures' times
@@ -298,6 +304,13 @@ are fixed, so how long ago something happened reads in days.
 scenario** for a vitest browser test. Name the file `.test.tsx` under
 `apps/desktop/src/renderer/` and it runs in Chromium with `pnpm -C apps/desktop
 test`. `every-state.test.tsx` beside it opens every `every-state` row.
+
+**`testing.ts` is what a test starts from.** `mount(scenario)` mounts it and
+`unmountAfterEach()` takes it down. `openBoard()` reaches the Board by the rail,
+and `mountTwo` sets two windows on one main. `onBoard(jobs, …)` in
+`scenario.ts` builds a scenario from rows a test picks. A test that used to be a
+Storybook `play` asserts what `App` does with a press — the dialog, the
+composer, the file written — rather than that a callback was called.
 
 ## Running a Check or a Command by hand
 

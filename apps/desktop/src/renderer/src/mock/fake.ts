@@ -229,5 +229,5 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     startHelmFresh: async () => OK,
     pointHelm: async () => undefined,
   };
-  return api;
+  return { ...api, ...scenario.behaves?.({ state: () => state, publish }) };
 }

@@ -5,7 +5,7 @@ import { LocateForm, type LocateFormProps } from "./LocateForm";
 
 /**
  * Locate, as the app draws it: a folder to add, or the quieter clone. Controlled, so each story
- * is one moment; `Screens/Locate` presses them in order.
+ * is one moment; `apps/desktop/src/renderer/src/mock/locate.test.tsx` presses them in order, in the app.
  */
 const meta: Meta<typeof LocateForm> = {
   title: "Compositions/Locate form",
