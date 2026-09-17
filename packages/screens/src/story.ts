@@ -36,7 +36,7 @@
 import { ARMADA } from "@armada/protocol";
 import type { BlockKind, Observed, Turn } from "@armada/protocol";
 import type { ChangedFile, CheckRun } from "@armada/protocol";
-import { CHECK_ADVANCES, CHECK_OUTCOME, SILENCE } from "@armada/components";
+import { CHECK_ADVANCES, CHECK_OUTCOME, SILENCE, toolFamily } from "@armada/components";
 import { briefly, clock, instant } from "./duration";
 import { leading } from "./reading";
 
@@ -108,6 +108,28 @@ export type LogRow = {
    * nothing about how much there is, and there is still more of it to fetch.
    */
   call?: CutCall;
+  /**
+   * A call's parts, where the row is one, so a surface can hue the tool's name
+   * and its `+2 −2` rather than drawing one flat string. #1196.
+   *
+   * **`message` above is these joined and stays the string**: everything that
+   * reads a row without drawing colour — the narration, the resources reading,
+   * every test that asserts on text — is unchanged by this existing.
+   */
+  called?: CalledParts;
+};
+
+/** What a `called` row is made of. `LogRow.message` is these joined. */
+export type CalledParts = {
+  /** The tool as the wire spells it, for its family's hue. */
+  tool: string;
+  /** What the call named: the path, the command, or the call id where it sent none. */
+  detail: string;
+  /** The edit's own sizes, where the tool's detail carried them. */
+  added?: number;
+  deleted?: number;
+  /** How long the call was open — `46ms`. Absent while it is still open. */
+  took?: string;
 };
 
 /**
@@ -131,6 +153,28 @@ export function inside(detail: string): string {
 
 /** `<anything>/.armada/worktrees/<one segment>/`, wherever it appears. */
 const WORKTREE = new RegExp(`\\S*/${ARMADA.replace(".", "\\.")}/worktrees/[^/\\s]+/`, "g");
+
+/**
+ * `path +3 -2`, `path +3`, or a bare path, read back off a row's detail. The
+ * size is a suffix, so a path with a space reads whole; a cut detail has none.
+ *
+ * **Here rather than beside the task reading that also calls it**, because a
+ * row's detail is what this file is for — and a call row has to split the size
+ * off the path to hue the two apart, which is where it is now read first.
+ */
+export function editOf(
+  detail: string,
+  truncated: boolean,
+): { path: string; added?: number; deleted?: number } {
+  const sized = truncated ? null : /^(.*) \+(\d+)(?: -(\d+))?$/.exec(detail);
+  if (sized === null) return { path: detail };
+  const [, path, added, deleted] = sized;
+  return {
+    path: path as string,
+    added: Number(added),
+    ...(deleted === undefined ? {} : { deleted: Number(deleted) }),
+  };
+}
 
 /** A cut argument: which call, how much of it the row has, and how much there is. */
 export type CutCall = {
@@ -272,7 +316,19 @@ export function entriesOf(rows: readonly Turn[], stepId: string | undefined): Lo
     if (row.saw.event === "answered" && answers.get(row.saw.call)?.failed === false) continue;
     const made = rowOf(row);
     const answer = row.saw.event === "called" ? answers.get(row.saw.call) : undefined;
-    drawn.push(answer?.ms == null ? made : { ...made, message: `${made.message} · ${briefly(answer.ms)}` });
+    if (answer?.ms == null) {
+      drawn.push(made);
+      continue;
+    }
+    const took = briefly(answer.ms);
+    // On the string and on the parts, because they are one fact: a surface
+    // drawing the parts must not lose the figure a surface reading the string
+    // still has.
+    drawn.push({
+      ...made,
+      message: `${made.message} · ${took}`,
+      ...(made.called === undefined ? {} : { called: { ...made.called, took } }),
+    });
   }
   return drawn;
 }
@@ -348,13 +404,24 @@ function rowOf(row: Turn): LogRow {
       };
     case "called": {
       const size = sizeOf(saw.detail.length, saw.detail_length);
+      // The detail split from the sizes it ends with, so a surface can hue
+      // `+2` and `−2` apart from the path. Only on a tool that changes a
+      // file: a command ending in what looks like a size is a command.
+      const shown = saw.detail === "" ? saw.call : inside(saw.detail);
+      const edit =
+        toolFamily(saw.tool) === "changing" ? editOf(shown, saw.truncated) : { path: shown };
       return {
         id,
         at,
         actor,
         kind,
-        message:
-          saw.detail === "" ? `${saw.tool}  ${saw.call}` : `${saw.tool}  ${inside(saw.detail)}`,
+        message: `${saw.tool}  ${shown}`,
+        called: {
+          tool: saw.tool,
+          detail: edit.path,
+          ...(edit.added === undefined ? {} : { added: edit.added }),
+          ...(edit.deleted === undefined ? {} : { deleted: edit.deleted }),
+        },
         mono: true,
         // What was sent, and how much of it there is where the wire said. The
         // row never reports an absence: `detail` is what arrived, and the size

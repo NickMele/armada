@@ -27,6 +27,7 @@ import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import { askedOf, didNotPass, judgeAsking } from "./gates";
 import { declaredPatterns, declaresGaming, flagsOf, gamingReached, gamingSummary } from "./gaming";
+import { doingNow } from "./now";
 import { entriesOf } from "./story";
 
 /** Which phase a row is. What an attempt wrote rides on `working`. */
@@ -496,6 +497,9 @@ export function stepTimelineOf(
     const mine = new Map(
       story(attempt.read, !attempt.current).map((chapter) => [chapter.id, chapter]),
     );
+    // Read once per attempt rather than per row: one attempt has one Drone and
+    // one thing it is doing, whichever of its phases is holding the work.
+    const doing = attempt.current ? doingNow(attempt.read.turns, step.step_id, now) : undefined;
     return {
       id: attempt.id,
       name: `Attempt ${attempt.attempt}`,
@@ -521,6 +525,13 @@ export function stepTimelineOf(
           activity: row.mark,
           ...(meta === undefined ? {} : { meta }),
           ...(row.live === true ? { live: true } : {}),
+          // What the Drone is doing, on a live Working row and nowhere else.
+          // A finished phase has no now, and a live Checks or Judge row is
+          // Fleet or a model working — the Drone's last call says nothing
+          // about either, and drawn under them it would say it did. #1196.
+          ...(row.live === true && row.phase === "working" && doing !== undefined
+            ? { now: doing }
+            : {}),
           ...drawn.row,
           // The plan bar sits beside `Open the log`, as drawn. #1185, #1187.
           ...(row.phase === "working" && plan !== undefined

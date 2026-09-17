@@ -19,7 +19,7 @@
 // and the payload id this file already gave every row — both declared here,
 // both read through the helpers, and neither of them a component's internals.
 
-import { Button, LogEntry, PayloadLine } from "@armada/components";
+import { Button, LogEntry, PayloadLine, ToolName } from "@armada/components";
 import { useState } from "react";
 import type { ReactNode } from "react";
 
@@ -102,7 +102,7 @@ export function Log({
           key={row.id}
           at={row.at}
           actor={row.actor}
-          message={row.message}
+          message={messageOf(row)}
           mono={row.mono}
           working={row.working}
           open={open === row.id}
@@ -117,6 +117,47 @@ export function Log({
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * The line a row shows closed.
+ *
+ * **Three hues on one mono line, and every one of them is already declared.**
+ * The tool's name takes its family's colour, and the lines it added and removed
+ * take the diff colours the patch view has always used. The rest of the row —
+ * the path, the command, the figure — is unchanged, because a line where
+ * everything is coloured says nothing.
+ *
+ * A row with no parts draws its own string, which is every row that is not a
+ * call. #1196.
+ */
+function messageOf(row: LogRow): ReactNode {
+  const call = row.called;
+  if (call === undefined) return row.message;
+  return (
+    <>
+      <ToolName tool={call.tool} />
+      {"  "}
+      {call.detail}
+      {/* A zero is not drawn, for `ChangedFiles`'s reason: `−0` reads as a
+          value that failed to arrive. */}
+      {call.added === undefined || call.added === 0 ? null : (
+        <>
+          {" "}
+          <span className="text-diff-add-fg">{`+${call.added}`}</span>
+        </>
+      )}
+      {call.deleted === undefined || call.deleted === 0 ? null : (
+        <>
+          {" "}
+          <span className="text-diff-del-fg">{`−${call.deleted}`}</span>
+        </>
+      )}
+      {call.took === undefined ? null : (
+        <span className="text-fg-subtle">{` · ${call.took}`}</span>
+      )}
+    </>
   );
 }
 

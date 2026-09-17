@@ -38,8 +38,17 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * specific to this Job. **Dimming is a token, not an alpha**, per
  * `docs/contracts/design-system.md`: the name steps down to `--fg-subtle`
  * rather than losing opacity, which would muddy the tone hues beside it.
+ *
+ * `running` is the one the work is inside right now. It takes the running
+ * colour on its edge with a faint wash — `--phase-live-edge` and
+ * `--phase-live-bg`, declared in `tokens/status.css` — and a bar sweeps its
+ * top edge on `--duration-pulse`, which is the same line a control waiting on
+ * Fleet draws along its bottom. **The sweep is the card's one loop.** Under
+ * this tone the streaming dot holds still: a bar travelling and a dot
+ * breathing in one header are two things competing to say the same word, and
+ * the rule is one or the other.
  */
-export type ChapterTone = "neutral" | "waiting" | "muted";
+export type ChapterTone = "neutral" | "waiting" | "muted" | "running";
 
 export type ChapterProps = {
   /**
@@ -184,6 +193,11 @@ export function Chapter({
 
   return (
     <section className="armada-chapter" data-tone={tone} data-open={open || undefined}>
+      {/* The live phase's own line, along the top edge of the card rather than
+          inside its header. It is the whole of what says this card is moving —
+          the running mark is gone from here — so it belongs to the card and
+          not to the header, which a narrow window wraps into two lines. */}
+      {tone === "running" ? <span className="armada-chapter__sweep" aria-hidden /> : null}
       <div className="armada-chapter__line">
         {/* `asChild`, because the line is a grid and the header takes its first
             track — a wrapper here would push the act out of the row. */}

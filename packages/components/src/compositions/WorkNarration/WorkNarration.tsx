@@ -203,10 +203,10 @@ function Files({ files, say }: { files: NarrationFile[]; say?: string }) {
           <li key={file.path} title={file.path}>
             <span className="mono">{file.name}</span>
             {file.added === undefined || file.added === 0 ? null : (
-              <span className="mono">{`+${file.added}`}</span>
+              <span className="armada-narration__added mono">{`+${file.added}`}</span>
             )}
             {file.deleted === undefined || file.deleted === 0 ? null : (
-              <span className="mono">{`\u2212${file.deleted}`}</span>
+              <span className="armada-narration__deleted mono">{`\u2212${file.deleted}`}</span>
             )}
           </li>
         ))}

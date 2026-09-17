@@ -6,13 +6,11 @@
 // sizes**: the line counts `edited` in `crates/adapters/src/transcript.rs`
 // writes, not diff lines, so they are labelled as such. A file Bash wrote names
 // no task and goes in the row no task owns.
-import type { ChangedFile } from "@armada/components";
+import { toolFamily, type ChangedFile } from "@armada/components";
 import type { PlanTask, Turn } from "@armada/protocol";
 
 import { taskAt } from "./narration";
-
-/** The tools whose calls name a file they changed. Bash is not one. */
-const CHANGING = new Set(["Edit", "Write", "MultiEdit"]);
+import { editOf } from "./story";
 
 /** One call that changed a file. */
 export type Edit = {
@@ -26,21 +24,6 @@ export type Edit = {
   task?: string;
 };
 
-/**
- * `path +3 -2`, `path +3`, or a bare path, read back off a row's detail. The
- * size is a suffix, so a path with a space reads whole; a cut detail has none.
- */
-export function editOf(detail: string, truncated: boolean): Omit<Edit, "id" | "task"> {
-  const sized = truncated ? null : /^(.*) \+(\d+)(?: -(\d+))?$/.exec(detail);
-  if (sized === null) return { path: detail };
-  const [, path, added, deleted] = sized;
-  return {
-    path: path as string,
-    added: Number(added),
-    ...(deleted === undefined ? {} : { deleted: Number(deleted) }),
-  };
-}
-
 /** Every Edit and Write that went through, with its task. A failed or refused call changed nothing. */
 export function editsIn(turns: readonly Turn[], tasks: readonly PlanTask[]): Edit[] {
   const failed = new Set<string>();
@@ -51,7 +34,12 @@ export function editsIn(turns: readonly Turn[], tasks: readonly PlanTask[]): Edi
   const edits: Edit[] = [];
   for (const turn of turns) {
     const saw = turn.saw;
-    if (saw.event !== "called" || !CHANGING.has(saw.tool) || failed.has(saw.call)) continue;
+    // The tools whose calls name a file they changed — `toolFamily`'s own
+    // roster, so the set the log hues by and the set counted here cannot
+    // disagree. Bash is not one: nothing ties a Bash call to a file.
+    if (saw.event !== "called" || toolFamily(saw.tool) !== "changing" || failed.has(saw.call)) {
+      continue;
+    }
     if (saw.detail === "") continue;
     const task = taskAt(turn.ts, tasks);
     edits.push({

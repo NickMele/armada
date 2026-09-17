@@ -76,12 +76,16 @@
   background: var(--bg-hover);
 }
 
+/* The bar takes the same two hues as the counts beside it. It was neutral
+   grey when the panel arrived (#1187), which made the one thing on the row
+   readable at a glance — how much of a file's change is new and how much was
+   torn out — the one thing that carried no reading at all. #1196. */
 .armada-produced__size-added {
-  background: var(--fg-muted);
+  background: var(--diff-add-fg);
 }
 
 .armada-produced__size-deleted {
-  background: var(--border-strong);
+  background: var(--diff-del-fg);
 }
 
 .armada-produced__counts {

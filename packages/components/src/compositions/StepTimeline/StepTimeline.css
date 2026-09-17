@@ -86,6 +86,76 @@
   min-width: 0;
 }
 
+/* The live phase has no mark, so the gap that held it goes too — otherwise the
+   name starts one slot in from the three phases above it. */
+.armada-steps__mark[data-live] {
+  gap: 0;
+}
+
+/* The phase's name over what the Drone is doing under it. A column, because
+   the name is the heading and the line under it changes every few seconds:
+   side by side, the name would move every time the path got longer. */
+.armada-steps__title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.armada-steps__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What the Drone is doing right now. Mono, because it is a tool call and a
+   path; quieter than the name above it, because the name is what a person
+   navigates by and this is what they read once they have. One line, clipped —
+   a path that wrapped would change the header's height every few seconds. */
+.armada-steps__now {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-body);
+  color: var(--fg-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mono names machinery: a path or a command is, and the Drone's own sentence
+   between calls is not. */
+.armada-steps__now[data-mono] {
+  font-family: var(--font-mono);
+}
+
+/* The verb. Running, because what it names is the thing that is running — the
+   same hue the sweep above it and the dot beside it carry. Sans even on a mono
+   line: it is a word somebody wrote, not part of the call. */
+.armada-steps__now-verb {
+  font-family: var(--font-sans);
+  color: var(--status-running);
+}
+
+/* How long the call has been open. Quieter than the path — it is the figure
+   that says the call has not come back, and it is read second. */
+.armada-steps__now-took {
+  color: var(--fg-subtle);
+}
+
+/* The live phase's state, for a reader who has none of the visible channels.
+   The mark that used to carry it has left this header. */
+.armada-steps__state {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* A body held to a height of its own, scrolling past it.
 
    A HEIGHT AND NOT A LINE CLAMP. `-webkit-line-clamp` counts line boxes and a
