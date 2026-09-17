@@ -80,6 +80,9 @@ export class Questions {
     const answer = await ask(port, "GET", "/helm/calls");
     if (answer.ok !== true) return;
     const { waiting } = answer.body as HelmCallsWaiting;
+    // A body that is not a list is a fleet that does not serve this yet. Held
+    // helm calls stay as they are rather than being cleared by a 404's shape.
+    if (!Array.isArray(waiting)) return;
     const others = this.wiring.current().questions.filter((question) => question.kind !== "helm");
     this.wiring.publish({
       questions: [...others, ...waiting.map((call) => ({ kind: "helm" as const, call }))],

@@ -117,3 +117,57 @@ describe("the dock's cards", () => {
     expect(jobNumber(job({ handle: "unnumbered" }))).toBe("unnumbered");
   });
 });
+
+// #1389: a helm call has no job, so a card drawn from one names its repository and nothing else.
+const HELM: Outstanding = {
+  kind: "helm",
+  call: {
+    call: "helm-1",
+    manifest_id: "shop-01",
+    asked_at: "2026-09-13T10:02:00Z",
+    tool: "Bash",
+    detail: "gh issue list --milestone Helm",
+    truncated: false,
+    length: 30,
+    rule: "Bash(gh issue list:*)",
+    offers: ["allow_once", "allow_and_remember", "refuse"],
+    holding_for_seconds: 300,
+  },
+};
+
+describe("a helm call in the dock", () => {
+  it("names its repository where a job's card names a job", () => {
+    const [card] = dockQuestionsOf([HELM], [], REPOSITORIES, Date.parse("2026-09-13T10:03:00Z"));
+
+    expect(card?.repository).toBe("shop-01");
+    expect(card?.job).toBeUndefined();
+    expect(card?.label).toBe("Helm needs your permission");
+    expect(card?.detail).toBe("Your settings would have to allow Bash(gh issue list:*).");
+    expect(card?.answers.map((answer) => answer.id)).toEqual([
+      "allow_once",
+      "allow_and_remember",
+      "refuse",
+    ]);
+  });
+
+  // The board is where a job's question is dropped from when its job is not on it. A helm call is
+  // on no board, so nothing there can take it down — only its own answer does.
+  it("is drawn even where the board holds nothing", () => {
+    expect(dockQuestionsOf([HELM, DRONE], [], REPOSITORIES, Date.now())).toHaveLength(1);
+  });
+
+  it("sorts in among a job's questions by when each was asked", () => {
+    const cards = dockQuestionsOf([DRONE, HELM], [job()], REPOSITORIES, Date.now());
+
+    expect(cards.map((card) => card.id)).toEqual(["helm:helm-1", "a:drone"]);
+  });
+
+  it("sends its answer by the wire's own word", () => {
+    const onAnswer = vi.fn();
+    const [card] = dockQuestionsOf([HELM], [], REPOSITORIES, Date.now(), { onAnswer });
+
+    card?.onAnswer?.("allow_and_remember");
+
+    expect(onAnswer).toHaveBeenCalledWith(HELM, "allow_and_remember");
+  });
+});
