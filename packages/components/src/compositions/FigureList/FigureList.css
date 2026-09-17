@@ -1,12 +1,20 @@
-/* Label left, figure right, so figures of different lengths still line up as a
-   column a person reads down. Was `JobHoldsSummary`'s own figure rows.
+/* Label left, figure pushed to the list's right edge, so figures of different
+   lengths line up as a column a person reads down from the edge in. Was
+   `JobHoldsSummary`'s own figure rows.
+
+   **The right edge, not a second column.** Settled by the owner on 2026-09-17
+   against the Fleet panel: the values sit where the Stats panel's counts sit,
+   and they get there the same way — a value track that runs to the edge, with
+   the text aligned to its end. A second mechanism for one alignment is how the
+   two panels would drift apart.
 
    The tracks are declared once on the list and borrowed by each row, so a
    `fit` column is as wide as the longest label rather than each row's own. */
 .armada-figures {
   display: grid;
-  /* The label column Where things are draws, so Pulse and the rows under it
-     read as one list. WhereRow's own column says why it is this wide. */
+  /* The label column Where things are draws, so the labels of Pulse and the
+     rows under it start on one line. WhereRow's own column says why it is this
+     wide. The values no longer start there — they end at the right edge. */
   grid-template-columns: calc(var(--space-12) * 2) minmax(0, 1fr);
   column-gap: var(--space-2);
   row-gap: var(--space-2);
@@ -40,6 +48,8 @@
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
   color: var(--text-body);
+  /* The Stats panel's own line, on a track that already runs to the edge. */
+  text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
