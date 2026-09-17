@@ -1,13 +1,11 @@
-// The Plan region's own fixture data, beside the Job detail story files
-// (split across several by #1044) rather than inside one of them — moved out
-// when the Plan stories pushed the original file over the gate's 900-line
-// rule. **Not a `.stories.tsx` file on purpose**: the gate reads every file
-// with that suffix as a story, and this is data rather than one.
+// Work plans for Job detail's Plan region: a Job partway through its plan, one
+// with a task dropped, and one awaiting approval with its plan pending. Here
+// rather than beside one story file, since the mock's browser tests read it too.
 
 import type { DeclaredCheck, WorkPlan } from "@armada/protocol";
-import type { JobFixture } from "../../../fixtures/fixture";
-import { awaitingApproval, running } from "../../../fixtures/build/index";
-import { watchedRead } from "../../../fixtures/build/base";
+import type { JobFixture } from "./fixture";
+import { awaitingApproval, running } from "./build/index";
+import { watchedRead } from "./build/base";
 
 const PLAN_APPROACH =
   "Split the selectors module out of the reducer so the memoised selector can " +

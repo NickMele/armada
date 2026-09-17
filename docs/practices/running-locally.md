@@ -196,7 +196,7 @@ escalates rather than doing work or spending anything. Add `--copy-store` to
 start it on a copy of your Jobs; leave it off for an empty store.
 
 **Reach for it when you want a Job as Fleet serves it, without your Fleet** — to
-record one for Storybook with `scripts/record-job.mjs`, or to point a surface at a
+record one for the mock with `scripts/record-job.mjs`, or to point a surface at a
 real daemon. A second plain `armada serve` is not the same thing on another
 port: Fleet's store is found through `HOME`, so it would share yours, and its
 boot reconciliation would escalate your running Jobs as `interrupted`.
@@ -209,19 +209,19 @@ scratch directory inside the repository and answers a second start with the pid
 already running. Stop it the way you stop Fleet, then delete the directory — it
 holds a copy of your transcripts.
 
-## Recording a Job for Storybook
+## Recording a Job for the mock
 
 **`node scripts/record-job.mjs <job> <slug> "<the state, as a sentence>"` records
 one Job off a running Fleet** into `packages/screens/src/fixtures/recorded/<slug>/`,
-and Storybook draws it as a story of `Screens/Job detail`. It writes what Fleet
-answered — every read the job-detail screen makes, and every message on the
-Job's two sockets — and the story replays that through the same fold Bridge
-runs, so what you see there is what the app would draw.
+and the mock below opens it as `recorded/<slug>` and a row of `every-state`. It
+writes what Fleet answered — every read the job-detail screen makes, and every
+message on the Job's two sockets — and the mock replays that through the same
+fold Bridge runs, so what you see there is what the app would draw.
 
-**Run it when a Job is sitting in a state the stories do not have yet.** Pass
+**Run it when a Job is sitting in a state the mock does not have yet.** Pass
 `--dev-fleet <scratch-dir>` to read a dev Fleet (above) rather than yours. It
 needs a running Fleet and nothing else. A Job still running is recorded as far
-as it had got: each socket is cut after two quiet seconds, and the story draws
+as it had got: each socket is cut after two quiet seconds, and the mock draws
 it still watching.
 
 **It scrubs before it writes, and writes nothing it could not scrub.** Home paths
@@ -229,7 +229,7 @@ become `~`, your account name `owner`, and the machine's name and any email
 address are replaced. A line naming what was left means nothing was written —
 this repository is public. On success it prints each read's status and how many
 messages each socket carried. A read that answered 409 is recorded as the
-refusal it was, and the story draws it that way.
+refusal it was, and the mock draws it that way.
 
 **`node scripts/record-job.mjs --board <slug>` records the whole Board instead**:
 every row the Job list serves, and the workflows and manifests they name, into
