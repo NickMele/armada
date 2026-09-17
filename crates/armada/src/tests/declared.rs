@@ -138,3 +138,54 @@ async fn this_repositorys_own_checks_and_commands_resolve() {
         assert!(refused.contains("as a Command"), "{name}: {refused}");
     }
 }
+
+/// **Absent `when` means always**, and a declared one is read against the
+/// paths — the same answer a Job's gate gives, in the order the file writes.
+#[test]
+fn covering_names_the_checks_a_change_hits_in_the_order_written() {
+    let dir = TempDir::new();
+    dir.write(
+        "armada.yml",
+        "version: 1\n\
+         id: a-test-project\n\
+         checks:\n  \
+           test:\n    run: /usr/bin/true\n  \
+           ui:\n    run: /usr/bin/true\n    when: [\"packages/**\"]\n  \
+           rust:\n    run: /usr/bin/true\n    when: [\"crates/**\", \"Cargo.lock\"]\n",
+    );
+    let hits = |paths: &[&str]| {
+        let changed: Vec<String> = paths.iter().map(|p| p.to_string()).collect();
+        crate::declared::covering(dir.path(), &changed).expect("the Manifest reads")
+    };
+
+    assert_eq!(hits(&["docs/INDEX.md"]), vec!["test"]);
+    assert_eq!(
+        hits(&["packages/a/b.ts", "Cargo.lock"]),
+        vec!["test", "ui", "rust"]
+    );
+    assert_eq!(hits(&["crates/x/src/lib.rs"]), vec!["test", "rust"]);
+}
+
+#[test]
+fn covering_refuses_a_directory_with_no_manifest() {
+    let dir = TempDir::new();
+    let refused = crate::declared::covering(dir.path(), &["a".to_string()])
+        .expect_err("there is no Manifest here")
+        .to_string();
+    assert!(refused.contains("armada.yml"), "{refused}");
+}
+
+/// **This repository's own Manifest.** A Bridge-only change does not pay for
+/// `acceptance`, and a Rust one does.
+#[test]
+fn this_repositorys_checks_are_chosen_by_their_when() {
+    let bridge = crate::declared::covering(&repository(), &["apps/desktop/src/x.ts".to_string()])
+        .expect("this repository's Manifest reads");
+    assert!(bridge.contains(&"typecheck".to_string()), "{bridge:?}");
+    assert!(!bridge.contains(&"acceptance".to_string()), "{bridge:?}");
+
+    let rust = crate::declared::covering(&repository(), &["crates/fleet/src/lib.rs".to_string()])
+        .expect("this repository's Manifest reads");
+    assert!(rust.contains(&"acceptance".to_string()), "{rust:?}");
+    assert!(!rust.contains(&"typecheck".to_string()), "{rust:?}");
+}

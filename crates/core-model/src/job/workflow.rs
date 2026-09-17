@@ -194,15 +194,11 @@ impl ResolvedCheck {
 
     /// Whether this Check covers any of the paths the step changed.
     ///
-    /// **`true` where the Check declares no `when`.** The one place absent
-    /// means always is spelled, so no call site can re-derive it as "matches
-    /// nothing" — which is the failure that would silently stop a Check from
-    /// ever running again.
+    /// **`true` where the Check declares no `when`**, answered by
+    /// [`Covers::reach`] so no call site can re-derive it as "matches nothing"
+    /// — the failure that would silently stop a Check from ever running again.
     pub fn covers(&self, changed: &[String]) -> bool {
-        match self.when() {
-            None => true,
-            Some(covers) => covers.matches_any(changed),
-        }
+        Covers::reach(self.when(), changed)
     }
 
     /// Whether deciding to run this Check needs the step's changed paths read.

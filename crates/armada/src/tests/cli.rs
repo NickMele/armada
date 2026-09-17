@@ -136,3 +136,18 @@ fn clean_takes_no_path() {
 fn a_flag_that_does_not_exist_names_the_one_that_does() {
     assert!(said("clean --everything").contains("it takes `--all`, `--force`"));
 }
+
+/// `covers` takes its paths on stdin, so a path typed after it is refused by
+/// saying where paths go rather than read as a name.
+#[test]
+fn covers_parses_and_refuses_a_path_given_as_an_argument() {
+    assert_eq!(asked("covers"), Ok(Verb::Covers));
+    let refused = said("covers crates/fleet/src/lib.rs");
+    assert!(refused.contains("on stdin"), "{refused}");
+    assert!(asked("covers x")
+        .unwrap_err()
+        .faults
+        .contains(&Fault::PathsComeOnStdin {
+            given: "x".to_string()
+        }),);
+}

@@ -3,7 +3,7 @@
 //! # Parsed by hand, and that is not a stopgap
 //!
 //! There is no argument-parsing dependency and no workspace dependency table to
-//! add one to. Four verbs, one optional positional and one flag is less surface
+//! add one to. A handful of verbs, one optional positional and two flags is less surface
 //! than the derive macro that would read it, and a crate added here is added to
 //! the binary every other crate links into.
 //!
@@ -26,12 +26,14 @@ pub enum Verb {
     Check { name: String },
     /// One Command the Manifest declares, by name.
     Run { name: String },
+    /// The Checks a change hits, from the paths read on stdin.
+    Covers,
     /// Worktrees, branches and Jobs, given back.
     Clean { everything: bool, force: bool },
     /// The agent's door, spoken on stdin and stdout for an agent standing in
     /// this repository. Started by an agent's MCP client, never by a person.
     Mcp,
-    /// What the four verbs are.
+    /// What the verbs are.
     Help,
 }
 
@@ -46,6 +48,10 @@ const VERBS: &[(&str, &str)] = &[
     ),
     ("check", "run one Check the Manifest declares, by name"),
     ("run", "run one Command the Manifest declares, by name"),
+    (
+        COVERS,
+        "name the Checks a change hits, from the changed paths on stdin",
+    ),
     (
         "clean",
         "give this repository's worktrees, branches and Jobs back",
@@ -62,6 +68,9 @@ const VERBS: &[(&str, &str)] = &[
 /// `crate::mcp::publish` puts in a repository's `.mcp.json` names this verb, so
 /// a rename that missed one of the two would publish a door nothing answers.
 pub const MCP: &str = "mcp";
+
+/// The verb that answers which Checks a change hits. `scripts/land` names it.
+pub const COVERS: &str = "covers";
 
 /// Read the arguments after the program name.
 pub fn read<I: IntoIterator<Item = String>>(args: I) -> Result<Verb, Misread> {
@@ -96,6 +105,15 @@ pub fn read<I: IntoIterator<Item = String>>(args: I) -> Result<Verb, Misread> {
                     None
                 }
             }
+        }
+        COVERS => {
+            let positional = positionals(rest, &[], &mut faults);
+            if let Some(given) = positional.first() {
+                faults.push(Fault::PathsComeOnStdin {
+                    given: given.clone(),
+                });
+            }
+            Some(Verb::Covers)
         }
         MCP => {
             let positional = positionals(rest, &[], &mut faults);
@@ -194,6 +212,11 @@ pub enum Fault {
         verb: String,
         given: String,
     },
+    /// `covers` reads its paths on stdin, one per line, so a diff of any size
+    /// fits and a path is never mistaken for a flag.
+    PathsComeOnStdin {
+        given: String,
+    },
 }
 
 impl fmt::Display for Misread {
@@ -244,11 +267,16 @@ impl fmt::Display for Fault {
                 "`armada {verb}` acts on the repository you are standing in, so `{given}` \
                  is an argument it has nowhere to put"
             ),
+            Fault::PathsComeOnStdin { given } => write!(
+                out,
+                "`armada {COVERS}` reads the changed paths on stdin, one per line, so `{given}` \
+                 has nowhere to go — `git diff --name-only main | armada {COVERS}`"
+            ),
         }
     }
 }
 
-/// The four verbs, printed after any refusal and by `armada help`.
+/// The verbs, printed after any refusal and by `armada help`.
 pub struct Usage;
 
 impl fmt::Display for Usage {
@@ -260,6 +288,7 @@ impl fmt::Display for Usage {
                 "serve" => "serve [<path>]".to_string(),
                 "clean" => "clean [--all]".to_string(),
                 MCP => MCP.to_string(),
+                COVERS => format!("{COVERS} < <paths>"),
                 named => format!("{named} <name>"),
             };
             writeln!(out, "  armada {shape:<16}  {what}")?;

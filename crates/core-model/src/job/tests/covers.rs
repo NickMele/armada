@@ -148,3 +148,13 @@ fn the_written_form_is_what_a_message_quotes() {
     // Trimmed at parse, so a padded entry in a YAML list quotes back clean.
     assert_eq!(pattern("  packages/**  ").as_str(), "packages/**");
 }
+
+/// **Absent means always**, answered in one place for Fleet's gate and for
+/// `armada covers` alike.
+#[test]
+fn reach_is_true_without_a_when_and_reads_the_patterns_with_one() {
+    let changed = vec!["docs/INDEX.md".to_string()];
+    assert!(Covers::reach(None, &changed));
+    assert!(!Covers::reach(Some(&covering(&["crates/**"])), &changed));
+    assert!(Covers::reach(Some(&covering(&["docs/**"])), &changed));
+}

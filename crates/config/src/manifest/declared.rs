@@ -66,6 +66,12 @@ impl Check {
         self.when.as_ref()
     }
 
+    /// Whether this Check covers any of `changed`. **`true` where the file
+    /// declares no `when`**, by the same [`Covers::reach`] a Job's gate asks.
+    pub fn covers(&self, changed: &[String]) -> bool {
+        Covers::reach(self.when(), changed)
+    }
+
     /// The Commands that run before this Check, **in the order the file names
     /// them**, already resolved to their command lines.
     ///

@@ -173,6 +173,17 @@ impl Covers {
             .any(|path| self.patterns.iter().any(|pattern| pattern.matches(path)))
     }
 
+    /// Whether a Check declaring `when` covers any changed path. **`true`
+    /// where it declares none**, which is where "absent means always" is
+    /// spelled: Fleet's gate and `armada covers` both ask here, so the two
+    /// cannot disagree about which Checks a change hits.
+    pub fn reach(when: Option<&Covers>, changed: &[String]) -> bool {
+        match when {
+            None => true,
+            Some(covers) => covers.matches_any(changed),
+        }
+    }
+
     /// The patterns, comma-separated, for the sentence a skipped Check
     /// records.
     pub fn written(&self) -> String {
