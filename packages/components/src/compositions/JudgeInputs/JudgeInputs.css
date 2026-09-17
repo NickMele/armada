@@ -100,3 +100,12 @@
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
 }
+
+/* What the strip switches between — the assurance and the rows — laid out as
+   the block itself lays them, so wrapping them for the crossfade moves nothing. */
+.armada-judge-inputs__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { Tabs } from "../../primitives/Tabs/Tabs";
+import { TabPanel, Tabs } from "../../primitives/Tabs/Tabs";
 
 /**
  * Judge inputs — what the panel was shown, and the evidence that it was one
@@ -134,42 +134,50 @@ export function JudgeInputs({
           onChange={press}
         />
       )}
-      {/* The assurance belongs to the comparison. Repeating it over one judge's
-          object would attach a claim about the panel to a reading of one
-          member of it. */}
-      {showing !== undefined ? null : differed === undefined ? (
-        identical === undefined ? null : (
-          <p className="armada-judge-inputs__assurance" data-named="met">
-            {identical}
+      {/* One judge's object is a different reading from the comparison, not the
+          same rows filtered, so a switch fades the panel in. */}
+      <TabPanel
+        tab={open}
+        className="armada-judge-inputs__panel"
+        role={each === undefined || each.length === 0 ? undefined : "tabpanel"}
+      >
+        {/* The assurance belongs to the comparison. Repeating it over one judge's
+            object would attach a claim about the panel to a reading of one
+            member of it. */}
+        {showing !== undefined ? null : differed === undefined ? (
+          identical === undefined ? null : (
+            <p className="armada-judge-inputs__assurance" data-named="met">
+              {identical}
+            </p>
+          )
+        ) : (
+          <p className="armada-judge-inputs__assurance" data-named="not_met">
+            {differed}
           </p>
-        )
-      ) : (
-        <p className="armada-judge-inputs__assurance" data-named="not_met">
-          {differed}
-        </p>
-      )}
-      <dl className="armada-judge-inputs__rows">
-        {shown.map((row, at) => (
-          // Both halves are direct children of one grid, so every value starts
-          // on one edge and the block reads down. A wrapper per pair would give
-          // each its own grid and align nothing.
-          <div
-            className="armada-judge-inputs__pair"
-            key={at}
-            data-differs={row.differs ? "true" : undefined}
-          >
-            <dt className="armada-judge-inputs__name">{row.name}</dt>
-            <dd className="armada-judge-inputs__value">
-              {row.value}
-              {row.differs ? (
-                <span className="armada-judge-inputs__differs">
-                  not what every judge was handed
-                </span>
-              ) : null}
-            </dd>
-          </div>
-        ))}
-      </dl>
+        )}
+        <dl className="armada-judge-inputs__rows">
+          {shown.map((row, at) => (
+            // Both halves are direct children of one grid, so every value starts
+            // on one edge and the block reads down. A wrapper per pair would give
+            // each its own grid and align nothing.
+            <div
+              className="armada-judge-inputs__pair"
+              key={at}
+              data-differs={row.differs ? "true" : undefined}
+            >
+              <dt className="armada-judge-inputs__name">{row.name}</dt>
+              <dd className="armada-judge-inputs__value">
+                {row.value}
+                {row.differs ? (
+                  <span className="armada-judge-inputs__differs">
+                    not what every judge was handed
+                  </span>
+                ) : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </TabPanel>
     </div>
   );
 }
