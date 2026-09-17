@@ -536,10 +536,13 @@ wrench         job_status.awaiting_repair only. Never settings, never a
                off the badge, not a button Armada draws
 hard-drive     the Worktrees surface only. Never the act of reclaiming, and
                never a delete or a sweep control
-chevron-down   disclosure only. The caret segment of a split button, and the
-               one exception to "primary and secondary buttons are label-only"
-               — it is the whole content of its own divided segment, structural
-               rather than decorative, and never sits beside a label
+chevron-down   disclosure only, in two related forms. The caret segment of a
+               split button, and the one exception to "primary and secondary
+               buttons are label-only" — it is the whole content of its own
+               divided segment, structural rather than decorative, at 16px.
+               And, settled 2026-09-17, a button that opens a menu: 12px, right
+               of its label, inheriting the label's colour. A trigger with no
+               label never adds one. Never a direction or sort indicator
 triangle-alert Doctor only, plus generic warnings in toasts. A release on
                the grounds that Doctor draws no glyphs was made 21 Aug 2026 and
                WITHDRAWN 25 Aug: the reservation holds whether or not the health
