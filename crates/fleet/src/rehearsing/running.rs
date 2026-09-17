@@ -359,6 +359,7 @@ pub(super) fn wired(file: &adapter_traits::ChangedFile) -> ipc::ChangedFile {
         path: file.path().to_string(),
         change: crate::footprint::kind(file.change()),
         outside_plan: false,
+        lines: None,
     }
 }
 
