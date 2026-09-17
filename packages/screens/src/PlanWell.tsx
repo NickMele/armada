@@ -6,7 +6,7 @@
 // per control that owns a dialog or a field — now that the well owns two.
 
 import { useState } from "react";
-import { Button, Clamped, Dialog, Input, StepBar, TaskMark, Textarea } from "@armada/components";
+import { Button, Clamped, Dialog, Input, StepBar, TaskMark, Textarea, type ButtonAnswer } from "@armada/components";
 
 import type { Outcome } from "@armada/protocol";
 import { Eyebrow, type PlanRegionData, type PlanTaskRow } from "./InsideAJob";
@@ -133,6 +133,8 @@ function TaskRow({
   const [reason, setReason] = useState("");
   const [dropping, setDropping] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+  // Only a refusal is drawn on the control: an accepted drop closes the form it sits in.
+  const [dropAnswer, setDropAnswer] = useState<ButtonAnswer>();
   // Whether an empty reason has actually been submitted. **A pristine field
   // is a hint, never an error** — the other forms here draw the same
   // distinction, and a red border on a field nobody has touched yet reads as
@@ -157,6 +159,7 @@ function TaskRow({
     if (onDropTask === undefined) return;
     setDropping(true);
     setRefused(null);
+    setDropAnswer(undefined);
     try {
       const answer = await onDropTask(task.id, reason);
       if (answer.ok) {
@@ -165,6 +168,7 @@ function TaskRow({
         return;
       }
       setRefused(refusalSaid(answer.outcome));
+      setDropAnswer("refused");
     } finally {
       setDropping(false);
     }
@@ -221,6 +225,7 @@ function TaskRow({
                 size="sm"
                 ground="sunken"
                 pending={dropping}
+                answer={dropAnswer}
                 disabled={blank}
                 onClick={() => void drop()}
               >

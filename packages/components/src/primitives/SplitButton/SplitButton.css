@@ -65,7 +65,28 @@
   line-height: var(--leading-xs);
   font-weight: var(--weight-medium);
   cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease);
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+/* A press answers at --duration-press and eases back at --duration-fast, as
+ * `Button` does: a transition runs at the duration of the state it enters. */
+.armada-split-button__action:active:not(:disabled):not([data-pending]),
+.armada-split-button__caret:active:not(:disabled),
+[data-preview-press="action"] .armada-split-button__action,
+[data-preview-press="caret"] .armada-split-button__caret {
+  transition-duration: var(--duration-press);
+}
+
+/* Pressed, a segment walks one step down its ground — the variants below
+ * name each step. Colour only; nothing transforms and nothing reflows. */
+.armada-split-button__action:active:not(:disabled):not([data-pending]),
+.armada-split-button__caret:active:not(:disabled),
+[data-preview-press="action"] .armada-split-button__action,
+[data-preview-press="caret"] .armada-split-button__caret {
+  background: var(--bg-sunken);
+  color: var(--fg-default);
 }
 
 /* The label commits. It is the act the state calls for, so it changes with
@@ -74,6 +95,10 @@
  * the control's radius, which is exactly where the clip fell — the padding box
  * of a rounded border box. The joined edge stays square. */
 .armada-split-button__action {
+  /* The line along the face's bottom edge — `Button`'s, see there — is
+   * positioned against the face and clipped to its corners. */
+  position: relative;
+  overflow: clip;
   gap: var(--space-2);
   padding: 0 var(--space-3);
   color: var(--fg-default);
@@ -169,6 +194,16 @@
   border-inline-start-color: var(--accent-hover);
 }
 
+/* Pressed, a segment steps down off the accent, so the line along the face
+ * reads (Accent: a status mark never sits on an accent fill). */
+.armada-split-button__control[data-variant="primary"] .armada-split-button__action:active:not(:disabled):not([data-pending]),
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret:active:not(:disabled),
+[data-preview-press="action"] .armada-split-button__control[data-variant="primary"] .armada-split-button__action,
+[data-preview-press="caret"] .armada-split-button__control[data-variant="primary"] .armada-split-button__caret {
+  background: var(--accent-muted);
+  color: var(--fg-default);
+}
+
 /* Destructive is outlined, matching `### Button`'s destructive exactly: a solid
  * red control reads as an error state rather than as an act. The divider takes
  * the same edge, so the caret is part of the control rather than a neutral
@@ -190,6 +225,15 @@
 .armada-split-button__control[data-variant="destructive"] .armada-split-button__caret[data-preview-hover],
 .armada-split-button__control[data-variant="destructive"] .armada-split-button__caret[aria-expanded="true"] {
   background: var(--status-completed-failed-bg);
+  color: var(--status-completed-failed);
+}
+
+/* One step past the 12% hover fill, as `Button`'s destructive press. */
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__action:active:not(:disabled):not([data-pending]),
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret:active:not(:disabled),
+[data-preview-press="action"] .armada-split-button__control[data-variant="destructive"] .armada-split-button__action,
+[data-preview-press="caret"] .armada-split-button__control[data-variant="destructive"] .armada-split-button__caret {
+  background: color-mix(in srgb, var(--status-completed-failed) 24%, transparent);
   color: var(--status-completed-failed);
 }
 
@@ -227,6 +271,15 @@
   background: color-mix(in srgb, var(--accent) 24%, var(--accent-muted));
 }
 
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__action:active:not(:disabled):not([data-pending]),
+.armada-split-button__control[data-variant="tonal"] .armada-split-button__caret:active:not(:disabled),
+[data-preview-press="action"] .armada-split-button__control[data-variant="tonal"] .armada-split-button__action,
+[data-preview-press="caret"] .armada-split-button__control[data-variant="tonal"] .armada-split-button__caret {
+  /* Back down to the --accent-muted rest, as `Button`'s tonal press. */
+  background: var(--accent-muted);
+  color: var(--accent-hover);
+}
+
 /* Disabled is --fg-subtle with hover suppressed. Never opacity. */
 .armada-split-button__control:has(.armada-split-button__action:disabled) {
   background: var(--bg-sunken);
@@ -258,26 +311,83 @@
 }
 
 .armada-split-button__action[data-pending] {
-  position: relative;
-  overflow: hidden;
   cursor: default;
 }
 
-.armada-split-button__action[data-pending]::after {
+/* The line — `Button`'s one 2px object across press, pending, accepted and
+ * refused, drawn on the face with `Button.css`'s own keyframes so it is the
+ * same line everywhere it appears. Closed to nothing at the centre at rest. */
+.armada-split-button__action::after {
   content: "";
   position: absolute;
-  left: 0;
+  inset-inline: 0;
   bottom: 0;
-  width: 40%;
   height: var(--pending-bar);
   background: var(--status-running);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--duration-press) var(--ease);
+  pointer-events: none;
+}
+
+.armada-split-button__action:active:not(:disabled):not([data-pending])::after,
+[data-preview-press="action"] .armada-split-button__action::after {
+  transform: scaleX(1);
+}
+
+.armada-split-button__action[data-pending]::after {
+  inset-inline-end: auto;
+  width: 40%;
+  transition: none;
   animation: armada-button-waiting var(--duration-pulse) linear infinite;
+}
+
+/* Answered: the control keeps the pending rendering while the answer holds,
+ * for `Button`'s reason — the line never sits on an accent fill. */
+.armada-split-button__control:has(.armada-split-button__action[data-answer]:not(:disabled)),
+.armada-split-button__control:has(.armada-split-button__action[data-answer]:not(:disabled))
+  .armada-split-button__action,
+.armada-split-button__control:has(.armada-split-button__action[data-answer]:not(:disabled))
+  .armada-split-button__caret {
+  animation: armada-button-answering var(--duration-answer) linear;
+}
+
+.armada-split-button__action[data-answer="accepted"]::after {
+  animation:
+    armada-button-accepted var(--duration-answer) linear,
+    armada-button-opening var(--duration-press) var(--ease);
+}
+
+.armada-split-button__action[data-answer="refused"]::after {
+  animation: armada-button-refused var(--duration-answer) var(--ease);
+}
+
+/* A story holds the answer so it can be looked at. Nothing in the app sets it. */
+[data-preview-held]
+  .armada-split-button__control:has(.armada-split-button__action[data-answer]:not(:disabled)),
+[data-preview-held]
+  .armada-split-button__control:has(.armada-split-button__action[data-answer]:not(:disabled))
+  .armada-split-button__action,
+[data-preview-held]
+  .armada-split-button__control:has(.armada-split-button__action[data-answer]:not(:disabled))
+  .armada-split-button__caret,
+[data-preview-held] .armada-split-button__action[data-answer]::after {
+  animation-iteration-count: infinite;
+}
+
+[data-preview-held] .armada-split-button__action[data-answer="accepted"]::after {
+  animation-iteration-count: infinite, 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .armada-split-button__action[data-pending]::after {
     width: 100%;
     animation: none;
+    transform: none;
+  }
+
+  .armada-split-button__action[data-answer="refused"]::after {
+    animation-name: armada-button-refused-still;
   }
 }
 

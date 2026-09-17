@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
+import type { ButtonAnswer } from "../Button/Button";
 
 /**
  * The likely action, with the rest one click away — a button and a dropdown
@@ -75,6 +76,8 @@ export type SplitButtonProps = {
    * already on its way. #1117.
    */
   pending?: boolean;
+  /** Fleet's answer to the face's press, drawn as `Button`'s own `answer`. Pending wins. */
+  answer?: ButtonAnswer;
   /** The face's label while `pending` holds. Falls back to `children`. */
   pendingLabel?: string;
   onAction?: () => void;
@@ -92,6 +95,7 @@ export function SplitButton({
   defaultOpen = false,
   disabled = false,
   pending = false,
+  answer,
   pendingLabel,
   onAction,
   menuLabel = "More actions",
@@ -115,6 +119,7 @@ export function SplitButton({
           type="button"
           className="armada-split-button__action"
           data-pending={pending || undefined}
+          data-answer={pending ? undefined : answer}
           // Not `disabled`, on `Button`'s own reasoning: a disabled control
           // drops focus and is skipped by a screen reader, and this is the one
           // still standing for the press that is out.

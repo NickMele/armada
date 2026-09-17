@@ -45,7 +45,7 @@ import {
   Dialog,
   HeldWorktree,
 } from "@armada/components";
-import type { RowChoice } from "@armada/components";
+import type { ButtonAnswer, RowChoice } from "@armada/components";
 
 import type { BranchDeleted, HeldWorktrees, JobSummary, Outcome, WorktreeReclaimed } from "@armada/protocol";
 import { said } from "./copy";
@@ -165,6 +165,8 @@ export function Worktrees({
   const [refused, setRefused] = useState<RowFailure[]>([]);
   /** One act at a time, so a second press does not send the set twice. */
   const [sending, setSending] = useState(false);
+  /** What Fleet said to the last clean-up, drawn on the control until the next press. */
+  const [answer, setAnswer] = useState<ButtonAnswer>();
 
   /** The way out, at the top of every state — #1090 moved it here from the
    *  page head that used to carry it. */
@@ -220,6 +222,7 @@ export function Worktrees({
    */
   async function cleanUp(): Promise<void> {
     setConfirming(false);
+    setAnswer(undefined);
     setSending(true);
     const gaveBack: Record<string, WorktreeReclaimed> = {};
     const deletedBranches: Record<string, BranchDeleted> = {};
@@ -265,6 +268,8 @@ export function Worktrees({
     setBranchDeletions(deletedBranches);
     setRefused(failed);
     setChoices({});
+    // Any row refused is a refusal: the alerts above say which.
+    setAnswer(failed.length === 0 ? "accepted" : "refused");
     setSending(false);
   }
 
@@ -313,6 +318,7 @@ export function Worktrees({
             <Button
               variant="secondary"
               pending={sending}
+              answer={answer}
               disabled={picked.length === 0}
               onClick={() => setConfirming(true)}
             >

@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { RotateCw } from "lucide-react";
-import { expect, fn } from "storybook/test";
-import { Button } from "./Button";
+import { useState } from "react";
+import { expect, fn, waitFor } from "storybook/test";
+import { Button, type ButtonAnswer, type ButtonProps, type ButtonVariant } from "./Button";
 
 const meta: Meta<typeof Button> = {
   title: "Primitives/Button",
@@ -161,6 +162,184 @@ export const Pending: Story = {
     await userEvent.keyboard("{Enter}");
     await expect(args.onClick).not.toHaveBeenCalled();
     await expect(canvas.getByRole("button", { name: "Approve the work" })).toBeDisabled();
+  },
+};
+
+/** Every variant, with the label each story above gives it. */
+const EVERY: { variant: ButtonVariant; label: string }[] = [
+  { variant: "primary", label: "Dispatch job" },
+  { variant: "secondary", label: "Cancel" },
+  { variant: "ghost", label: "Ghost" },
+  { variant: "destructive", label: "Kill job" },
+  { variant: "tonal", label: "Dispatch" },
+];
+
+/**
+ * Pressed, every variant. A press walks one step down the button's ground at
+ * `--duration-press` — `--accent` to `--accent-muted`, a secondary or ghost to
+ * `--bg-sunken`, tonal back to its `--accent-muted` rest, destructive's fill
+ * one step deeper — and the line
+ * opens from the centre along the bottom edge. Nothing transforms and nothing
+ * reflows. `data-preview-press` selects the same declarations as `:active`,
+ * which a static story cannot hold.
+ */
+export const Pressed: Story = {
+  render: () => (
+    <Card>
+      {EVERY.map(({ variant, label }) => (
+        <Button key={variant} variant={variant} data-preview-press="">
+          {label}
+        </Button>
+      ))}
+      <Button variant="secondary" ground="sunken" data-preview-press="">
+        On a sunken row
+      </Button>
+    </Card>
+  ),
+};
+
+/** Pending, every variant: one rendering, `--bg-sunken`, with the line travelling. */
+export const PendingEveryVariant: Story = {
+  render: () => (
+    <Card>
+      {EVERY.map(({ variant, label }) => (
+        <Button key={variant} variant={variant} pending>
+          {label}
+        </Button>
+      ))}
+    </Card>
+  ),
+};
+
+/**
+ * Fleet accepted, every variant. The line fills the edge in
+ * `--status-completed-success` and the control keeps the pending rendering
+ * while it holds, so the mark is never on an accent fill. In the app it holds
+ * for `--duration-answer` and rests; `data-preview-held` keeps it here.
+ */
+export const Accepted: Story = {
+  render: () => (
+    <Card>
+      {EVERY.map(({ variant, label }) => (
+        <Button key={variant} variant={variant} answer="accepted" data-preview-held="">
+          {label}
+        </Button>
+      ))}
+    </Card>
+  ),
+};
+
+/**
+ * Fleet refused, every variant. The line retracts to the centre in
+ * `--status-escalated`, and nothing else moves. Held on a loop here so the
+ * retract can be watched; under reduced motion it holds full instead, and
+ * colour carries it.
+ */
+export const Refused: Story = {
+  render: () => (
+    <Card>
+      {EVERY.map(({ variant, label }) => (
+        <Button key={variant} variant={variant} answer="refused" data-preview-held="">
+          {label}
+        </Button>
+      ))}
+    </Card>
+  ),
+};
+
+/** A caller's half: pending while the act is out, then the answer until the next press. */
+function Sending({
+  label,
+  waiting,
+  answer,
+  variant,
+  onClick,
+}: {
+  label: string;
+  waiting: string;
+  answer: ButtonAnswer;
+  variant: ButtonVariant;
+  onClick?: ButtonProps["onClick"];
+}) {
+  const [pending, setPending] = useState(false);
+  const [answered, setAnswered] = useState<ButtonAnswer>();
+  return (
+    <Button
+      variant={variant}
+      pending={pending}
+      answer={answered}
+      onClick={(event) => {
+        onClick?.(event);
+        setAnswered(undefined);
+        setPending(true);
+        setTimeout(() => {
+          setPending(false);
+          setAnswered(answer);
+        }, 1200);
+      }}
+    >
+      {pending ? waiting : label}
+    </Button>
+  );
+}
+
+/**
+ * The whole line, pressed for real: press, pending, then Fleet's answer. One
+ * control is accepted and one refused. What a rendering cannot show is that an
+ * answered control is no longer waiting — it is not busy, and a refused act can
+ * be pressed again and is sent again.
+ */
+export const Answering: Story = {
+  args: { onClick: fn() },
+  render: (args) => (
+    <Card>
+      <Sending
+        variant="primary"
+        label="Approve"
+        waiting="Approving…"
+        answer="accepted"
+      />
+      <Sending
+        variant="secondary"
+        label="Request changes"
+        waiting="Requesting changes…"
+        answer="refused"
+        onClick={args.onClick}
+      />
+    </Card>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Request changes" }));
+    await expect(args.onClick).toHaveBeenCalledTimes(1);
+    const waiting = canvas.getByRole("button", { name: "Requesting changes…" });
+    await expect(waiting).toHaveAttribute("aria-busy", "true");
+
+    const refused = await waitFor(() => canvas.getByRole("button", { name: "Request changes" }), {
+      timeout: 3000,
+    });
+    await expect(refused).not.toHaveAttribute("aria-busy");
+    await expect(refused).not.toHaveAttribute("aria-disabled");
+    await userEvent.click(refused);
+    await expect(args.onClick).toHaveBeenCalledTimes(2);
+  },
+};
+
+/** Pending wins over a stale answer: the control waits, and a press sends nothing. */
+export const PendingOverAnAnswer: Story = {
+  args: { onClick: fn() },
+  render: (args) => (
+    <Card>
+      <Button variant="secondary" pending answer="refused" onClick={args.onClick}>
+        Requesting changes…
+      </Button>
+    </Card>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    const pressed = canvas.getByRole("button", { name: "Requesting changes…" });
+    await expect(pressed).toHaveAttribute("aria-busy", "true");
+    pressed.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onClick).not.toHaveBeenCalled();
   },
 };
 
