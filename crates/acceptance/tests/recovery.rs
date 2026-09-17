@@ -213,11 +213,10 @@ async fn ending_a_drone_leaves_a_step_a_restart_can_land_on() {
          person has"
     );
 
-    // **What it cost, asserted as the absence it was.** The Drone has gone and
-    // the step it was on has not moved, which is the reading `kill_drone` used
-    // to leave behind. `Stuck` has no stopped row to name, so the act that
-    // keeps the work is not offered and the only one left throws away the step
-    // that already advanced.
+    // **What it used to cost.** The Drone has gone and the step it was on has
+    // not moved, which is the reading `kill_drone` used to leave behind, and
+    // it offered only the redispatch. `#1034`: on a `stalled` Job that reading
+    // is a Drone that left, so the restart is offered before any row names it.
     let ended = Standing {
         drone: DroneStanding::Gone,
         ..live
@@ -225,9 +224,9 @@ async fn ending_a_drone_leaves_a_step_a_restart_can_land_on() {
     let unmoved = received_detail(&opened(&run.job, reason.as_ref(), ended, &[]));
     assert_eq!(
         acts(&unmoved),
-        vec!["redispatch_job"],
-        "a step left `running` beneath a Job holding no Drone leaves a person \
-         one act, and it is the one that costs everything"
+        vec!["restart_step", "redispatch_job"],
+        "a step left `running` beneath a `stalled` Job holding no Drone keeps \
+         the act that keeps the work"
     );
 
     // **The freeze admits this move and no other.** `escalated` keeps the
