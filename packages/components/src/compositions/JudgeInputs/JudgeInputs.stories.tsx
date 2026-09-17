@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, waitFor } from "storybook/test";
 import { JudgeInputs, type JudgeInputRow, type JudgeInputsFor } from "./JudgeInputs";
 
 /**
@@ -132,8 +132,9 @@ export const AJudgesOwnObject: Story = {
 
     await userEvent.click(canvas.getByRole("tab", { name: "j2" }));
 
-    // j2's own digest, not the comparison's two-line summary.
-    await expect(canvas.getByText("sha256:41ba07…cc19")).toBeVisible();
+    // j2's own digest, not the comparison's two-line summary. `waitFor`,
+    // because the panel crossfades in on a switch.
+    await waitFor(() => expect(canvas.getByText("sha256:41ba07…cc19")).toBeVisible());
     await expect(canvas.queryByText(/j2 was shown a different object/)).toBeNull();
   },
 };

@@ -57,6 +57,7 @@ import {
   ManifestFile,
   ManifestForm,
   RunPage,
+  TabPanel,
   Tabs,
   VerifyPanel,
 } from "@armada/components";
@@ -148,6 +149,7 @@ export function Manifest(props: ManifestProps) {
       : rootless || editing.view === "run"
         ? "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict."
         : "Edit this repository's Manifest. Save writes the file to disk and stops, without staging or committing it.";
+  const selected = props.settingUp || onlySetup ? "setup" : rootless ? "run" : editing.view;
   return (
     <div className="armada-screen__stack">
       {/* Above every view, so a freeze left on is seen wherever the page opens. */}
@@ -188,24 +190,30 @@ export function Manifest(props: ManifestProps) {
               ]),
           ...(props.setup === undefined ? [] : [{ id: "setup", label: "Set up workspaces" }]),
         ]}
-        value={props.settingUp || onlySetup ? "setup" : rootless ? "run" : editing.view}
+        value={selected}
         onChange={(id) => {
           props.onSettingUp?.(id === "setup");
           if (id !== "setup") editing.onView(id === "file" || id === "form" ? id : "run");
         }}
       />
-      {viewNote === null ? null : <p className="text-fg-muted">{viewNote}</p>}
-      {(props.settingUp || onlySetup) && props.setup !== undefined ? (
-        props.setup
-      ) : rootless ? (
-        <RunPage {...slot} />
-      ) : editing.view === "file" ? (
-        <FileView file={editing.file} />
-      ) : editing.view === "form" ? (
-        <FormView form={props.form} named={editing.named} onFile={() => editing.onView("file")} />
-      ) : (
-        <RunView {...props} slot={slot} verify={verify} />
-      )}
+      {/* The view and the note that says what it is for, faded in together on a
+          switch. Keyed on the selected tab, so a sheet re-reading under the
+          same view does not fade. A stack of its own, so the wrapper lays its
+          children out as the screen's stack did. */}
+      <TabPanel tab={selected} className="armada-screen__stack" role="tabpanel">
+        {viewNote === null ? null : <p className="text-fg-muted">{viewNote}</p>}
+        {(props.settingUp || onlySetup) && props.setup !== undefined ? (
+          props.setup
+        ) : rootless ? (
+          <RunPage {...slot} />
+        ) : editing.view === "file" ? (
+          <FileView file={editing.file} />
+        ) : editing.view === "form" ? (
+          <FormView form={props.form} named={editing.named} onFile={() => editing.onView("file")} />
+        ) : (
+          <RunView {...props} slot={slot} verify={verify} />
+        )}
+      </TabPanel>
     </div>
   );
 }

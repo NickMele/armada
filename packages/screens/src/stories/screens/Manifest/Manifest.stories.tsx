@@ -3,7 +3,7 @@ import type {
   CheckoutRunDiff,
   CheckoutRunRecord,
 } from "@armada/protocol";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import {
   BUILD_FOLLOWED,
   BUILD_OUT,
@@ -370,7 +370,8 @@ export const TheFile: Story = {
     await expect(canvas.getByText(/Save writes the file to disk and stops/)).toBeVisible();
     await expect(canvas.queryByText(/Nothing here is a verdict/)).toBeNull();
     await userEvent.click(canvas.getByRole("tab", { name: "Checks and Commands" }));
-    await expect(await canvas.findByText(/Nothing here is a verdict/)).toBeVisible();
+    // `waitFor`, because the view crossfades in on a switch.
+    await waitFor(() => expect(canvas.getByText(/Nothing here is a verdict/)).toBeVisible());
     await expect(canvas.queryByText(/Save writes the file to disk and stops/)).toBeNull();
   },
 };

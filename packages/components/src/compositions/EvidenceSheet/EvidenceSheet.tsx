@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
 import { Sheet } from "../../primitives/Sheet/Sheet";
-import { Tabs } from "../../primitives/Tabs/Tabs";
+import { TabPanel, Tabs } from "../../primitives/Tabs/Tabs";
 
 /**
  * The evidence viewer — one artifact, at full size, on the layer that can hold
@@ -159,7 +159,16 @@ export function EvidenceSheet({
       }
       onClose={onClose}
     >
-      <div className="armada-evidence-sheet__body">{children}</div>
+      {/* The artifact is what the views switch between, so it is what fades on
+          a switch. The strip under it stays: it is where to go next whichever
+          view is up. */}
+      <TabPanel
+        tab={tabs === undefined ? undefined : (view ?? views![0]!.id)}
+        className="armada-evidence-sheet__body"
+        role={tabs === undefined ? undefined : "tabpanel"}
+      >
+        {children}
+      </TabPanel>
       {strip === undefined ? null : (
         // Under the artifact, and shut.
         //

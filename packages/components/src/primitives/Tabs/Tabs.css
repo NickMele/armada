@@ -80,3 +80,22 @@
     width var(--duration-base) var(--ease),
     background-color var(--duration-fast) var(--ease);
 }
+
+/* A body under the strip, when the selected tab changes — `TabPanel`. Opacity
+ * only, so nothing moves or reflows, at --duration-fast: the contract's "a body
+ * crossfade". A switch is chrome a person summoned, not data arriving, so this
+ * is not an entrance on data.
+ *
+ * `data-switched` is set on a switch and never on first mount, so a panel that
+ * opens with its screen is simply there. No fill mode, as Dialog's entrance
+ * has none: nothing is held after it ends, and under reduced motion, where the
+ * duration is zero, the panel is never left at opacity 0. */
+.armada-tab-panel[data-switched] {
+  animation: armada-tab-panel-in var(--duration-fast) var(--ease);
+}
+
+@keyframes armada-tab-panel-in {
+  from {
+    opacity: 0;
+  }
+}

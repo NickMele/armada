@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, waitFor } from "storybook/test";
 import { JobBrief } from "../JobBrief/JobBrief";
 import { JobLogReference } from "../JobLogReference/JobLogReference";
 import { JobRecord } from "./JobRecord";
@@ -65,7 +65,8 @@ export const FoldedRecord: Story = {
     await expect(canvas.queryByText(/The transcript goes here/)).toBeNull();
 
     await userEvent.click(canvas.getByRole("tab", { name: "The drone's turns" }));
-    await expect(canvas.getByText(/The transcript goes here/)).toBeVisible();
+    // `waitFor`, because the panel crossfades in on a switch.
+    await waitFor(() => expect(canvas.getByText(/The transcript goes here/)).toBeVisible());
     await expect(canvas.queryByText(/The workflow rail goes here/)).toBeNull();
   },
 };

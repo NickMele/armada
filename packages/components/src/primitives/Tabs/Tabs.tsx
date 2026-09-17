@@ -1,10 +1,11 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type HTMLAttributes } from "react";
 
 /**
  * Sections of one object. The active tab takes a 2px `--accent` underline,
  * `--fg-default` and weight 500; the rest sit in `--fg-muted`. Nothing
  * animates in — no entrance animations on data — but the underline travels
- * from the tab it left to the tab that was chosen.
+ * from the tab it left to the tab that was chosen, and a body drawn under the
+ * strip in a `TabPanel` crossfades in.
  *
  * These carry no count. They are views of one job and there is nothing to
  * tally. The counted form is a separate component, and a separate row in the
@@ -116,6 +117,55 @@ export function Tabs({ items, value, defaultValue, onChange }: TabsProps) {
         </button>
       ))}
       <span ref={bar} className="armada-tabs__bar" aria-hidden="true" hidden />
+    </div>
+  );
+}
+
+export type TabPanelProps = HTMLAttributes<HTMLDivElement> & {
+  /**
+   * The selected tab's id. **The crossfade is keyed on this and on nothing
+   * else**, so the same panel re-rendering with new data does not fade: a
+   * person switching tabs summoned the panel, data arriving did not.
+   */
+  tab: string | undefined;
+};
+
+/**
+ * The body under a tab strip. When `tab` changes the panel fades in at
+ * `--duration-fast`, opacity only, and it does not fade on first mount — the
+ * contract's "a body crossfade". Under reduced motion the duration is zero and
+ * the new panel is simply there; the strip's selection says which one it is.
+ *
+ * **Not keyed by React.** A `key` would restart the fade by remounting
+ * everything under it, and a panel that holds state across a switch — a run in
+ * flight, a draft — would lose it. The attribute the animation hangs on is
+ * cleared and set again on the element instead, with one read of layout
+ * between so the browser sees a new animation rather than the old one.
+ *
+ * Carries no role of its own; a consumer passes `role="tabpanel"` where a
+ * strip is drawn over it.
+ */
+export function TabPanel({ tab, className, children, ...rest }: TabPanelProps) {
+  const panel = useRef<HTMLDivElement>(null);
+  const shown = useRef(tab);
+
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (el === null || shown.current === tab) return;
+    shown.current = tab;
+    el.removeAttribute("data-switched");
+    // Forces the style flush that makes the re-added attribute a new animation.
+    void el.offsetWidth;
+    el.setAttribute("data-switched", "");
+  }, [tab]);
+
+  return (
+    <div
+      ref={panel}
+      className={className === undefined ? "armada-tab-panel" : `armada-tab-panel ${className}`}
+      {...rest}
+    >
+      {children}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { Tabs } from "../../primitives/Tabs/Tabs";
+import { TabPanel, Tabs } from "../../primitives/Tabs/Tabs";
 
 /**
  * Job record — everything about a Job that is not what it was or what it
@@ -76,9 +76,9 @@ export function JobRecord({
           onChange?.(id);
         }}
       />
-      <div className="armada-record__panel" role="tabpanel">
+      <TabPanel tab={open?.id} className="armada-record__panel" role="tabpanel">
         {open?.panel}
-      </div>
+      </TabPanel>
     </div>
   );
 }
