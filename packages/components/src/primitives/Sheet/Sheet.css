@@ -22,12 +22,29 @@
   --armada-sheet-reading: 88%;
 }
 
+/* The scrim fades in over the same --duration-sheet the panel travels in, so
+ * the ground dims as the layer arrives rather than before it.
+ *
+ * `overflow: clip` because the panel starts its travel outside the scrim, and
+ * a transformed box counts towards its container's overflow: a contained
+ * sheet would otherwise put a scrollbar on the screen behind it for the length
+ * of the entrance. `clip` rather than `hidden`, so the scrim does not become a
+ * scroll container. */
 .armada-sheet-scrim {
   position: fixed;
   inset: 0;
   z-index: var(--z-modal);
   display: flex;
+  overflow: clip;
   background: var(--scrim);
+  animation: armada-sheet-scrim-in var(--duration-sheet) var(--ease);
+}
+
+/* Only the start is named, so the end is whatever --scrim computes to. */
+@keyframes armada-sheet-scrim-in {
+  from {
+    background-color: transparent;
+  }
 }
 
 /* A sheet belonging to the screen it was opened from rather than to the
@@ -57,6 +74,33 @@
 
 .armada-sheet[data-size="reading"] {
   max-width: var(--armada-sheet-reading);
+}
+
+/* The entrance: the panel travels in from the edge it is flush to, at
+ * --duration-sheet — the contract's "a sheet travels in from the trailing
+ * edge". Its own width, so it starts exactly out of sight whatever its size.
+ *
+ * No fill mode. Nothing is held after the travel ends, so under reduced motion,
+ * where the duration is zero, the panel is where its own style puts it from
+ * the first frame. */
+.armada-sheet[data-side="right"] {
+  animation: armada-sheet-in-right var(--duration-sheet) var(--ease);
+}
+
+.armada-sheet[data-side="left"] {
+  animation: armada-sheet-in-left var(--duration-sheet) var(--ease);
+}
+
+@keyframes armada-sheet-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes armada-sheet-in-left {
+  from {
+    transform: translateX(-100%);
+  }
 }
 
 /* Rounded on the inner edge only. A panel flush to the window edge that keeps
