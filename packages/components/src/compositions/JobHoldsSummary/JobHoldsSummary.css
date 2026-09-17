@@ -14,57 +14,15 @@
   background: var(--surface-well);
 }
 
-/* The last thing anyone did on this Job: who and when on one line, what they
-   did under it. One event, because the point is the latest; the whole log is a
-   press away. */
-.armada-holds-summary__latest {
-  display: grid;
-  /* The label column Where things are draws, so the two cards read as one
-     list. WhereRow's own column says why it is this wide. */
-  grid-template-columns: calc(var(--space-12) * 2) minmax(0, 1fr);
-  column-gap: var(--space-2);
-  align-items: baseline;
-  min-width: 0;
-}
+/* Every line of it is `FigureList`, which the Fleet panel draws too — the last
+   thing anyone did is the list's top row, who on the left and what they did on
+   the right edge with when under it. One event, because the point is the
+   latest; the whole log is a press away.
 
-
-.armada-holds-summary__at {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
-}
-
-.armada-holds-summary__who {
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  color: var(--text-label);
-}
-
-/* Held to two lines. A long Drone line is a turn to read in the log, and a
-   block that grew to fit it would push the pointers under it off the screen. */
-.armada-holds-summary__said {
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  color: var(--text-body);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-
-/* An event that recorded something going wrong. The hue on the text alone, as
-   the full reading's verdict takes it: no tint and no box, because a tinted
-   chip in this column is what a Job status is. */
-.armada-holds-summary__latest[data-wrong] .armada-holds-summary__said {
-  color: var(--error);
-}
-
-/* The figures themselves are `FigureList`, which Fleet panel draws too. */
+   That row is the list's `words`, and its hue when something went wrong is the
+   list's `wrong`: the text alone, as the full reading's verdict takes it — no
+   tint and no box, because a tinted chip in this column is what a Job status
+   is. */
 
 /* Why there is nothing yet, or no reading. Prose, because both are sentences and
    neither is a figure — an empty block here would read as a Job holding
@@ -99,12 +57,4 @@
 
 .armada-holds-summary__foot > .armada-button {
   margin-inline-start: auto;
-}
-
-/* What they did, and when, beside who. */
-.armada-holds-summary__what {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--space-1) / 2);
-  min-width: 0;
 }

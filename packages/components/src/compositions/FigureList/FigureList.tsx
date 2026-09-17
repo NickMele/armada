@@ -5,8 +5,9 @@
  *
  * **One treatment, not two.** This was `JobHoldsSummary`'s own `Figure`, and a
  * second key/value style would drift from it the day either changed. So the
- * right edge is both callers' or neither's, at the accepted cost that *Where
- * things are* — not a `FigureList` — keeps its left-aligned values.
+ * right edge is both callers' or neither's — Pulse's top line included, which
+ * is the whole of what `words` and `detail` are for — at the accepted cost
+ * that *Where things are*, not a `FigureList`, keeps its left-aligned values.
  *
  * **A figure with no value is not a row.** The caller leaves it out of the
  * list, because a label beside a blank reads the same whether the value is
@@ -14,10 +15,30 @@
  */
 
 export type Figure = {
-  /** Sans, `--text-label` — `Processes`, `pid`. */
+  /** Sans, `--text-label` — `Processes`, `pid`, `Drone`. */
   label: string;
   /** Mono, clipped from the right — `None`, `4242`, `171h 00m`. */
   value: string;
+  /**
+   * A second line under the value, ending on the same right edge — the instant
+   * Pulse's top line was said. Mono `--text-2xs` `--fg-subtle`, the Fleet
+   * panel's detail line at the width of one row.
+   *
+   * **It belongs to the value, so it goes where the value goes.** A time left
+   * under a right-aligned phrase reads as a third column that lines up with
+   * nothing.
+   */
+  detail?: string;
+  /**
+   * Whether the value is words somebody said rather than a figure — sans, and
+   * held to two lines instead of clipped to one.
+   *
+   * **Pulse's top line is a sentence, and a sentence is not a reading.** It
+   * carries a Drone's `Edit packages/settings/src/selectors.ts` as readily as
+   * `thinking`, which is a turn to read in the log; mono and one line would
+   * make it a figure that happens to be long.
+   */
+  words?: boolean;
   /** Whether the value is a fault. Draws it in `--error`. */
   wrong?: boolean;
 };
@@ -46,7 +67,13 @@ export function FigureList({ figures, column = "wide" }: FigureListProps) {
       {figures.map((figure) => (
         <div key={figure.label} className="armada-figures__row" data-wrong={figure.wrong || undefined}>
           <dt className="armada-figures__label">{figure.label}</dt>
-          <dd className="armada-figures__value">{figure.value}</dd>
+          {/* The value is a box of its own lines rather than the text itself,
+              because a detail under it has to clip on its own terms — and a
+              block dropped into a clipping `dd` takes none of its clipping. */}
+          <dd className="armada-figures__value" data-words={figure.words || undefined}>
+            <span className="armada-figures__reading">{figure.value}</span>
+            {figure.detail === undefined ? null : <span className="armada-figures__detail">{figure.detail}</span>}
+          </dd>
         </div>
       ))}
     </dl>
