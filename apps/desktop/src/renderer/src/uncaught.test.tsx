@@ -92,8 +92,10 @@ test("the whiteboard's nodes resizing raise the notice, and the surface stays qu
   window.addEventListener("error", listen);
   stops.push(() => window.removeEventListener("error", listen));
 
+  // The whole viewport, so the board has a box to lay nodes out in without this
+  // file naming a length — `armada.yml`'s design rule reads every file here.
   const host = document.createElement("div");
-  host.style.cssText = "position:fixed;inset:0;width:1100px;height:700px";
+  host.style.cssText = "position:fixed;inset:0";
   document.body.append(host);
   const root = createRoot(host);
   roots.push({ root, host });
