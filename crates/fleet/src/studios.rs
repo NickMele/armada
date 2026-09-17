@@ -19,10 +19,11 @@ use core_model::{
 use std::sync::Arc;
 
 use ipc::{
-    AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, HelmStudioAct,
-    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout,
-    StartStudioRun, StopScout, StudioDeleted, StudioHelmActed, StudioList, StudioRunStarted,
-    StudioSummary, WireError,
+    AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
+    DispatchStudioDraft, EditStudioDraft, GroupStudioNodes, HelmStudioAct, ManifestId,
+    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction,
+    StartScout, StartStudioRun, StopScout, StudioDeleted, StudioHelmActed, StudioList,
+    StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -66,7 +67,7 @@ const NO_FRAME_KEPT: &str = "fleet.studio_frame_not_kept";
 /// letting a Studio grow without bound, since nothing expires one.
 const MOST_A_FRAME_MAY_WEIGH: u64 = 4 * 1024 * 1024;
 /// Who is kept as having acted: the transport's word, never the body's.
-fn author(by: Redirector) -> StudioAuthor {
+pub(crate) fn author(by: Redirector) -> StudioAuthor {
     match by {
         Redirector::Person => StudioAuthor::Person,
         Redirector::Helm => StudioAuthor::Helm,
@@ -209,7 +210,12 @@ where
     /// only where the transport placed the call in a Helm session: a person's
     /// act on a Studio is `studio.changed` alone. `docs/concepts/helm.md`,
     /// *Audit trail*.
-    fn published_as_helms(&self, by: Redirector, studio: &ipc::Studio, act: HelmStudioAct) {
+    pub(crate) fn published_as_helms(
+        &self,
+        by: Redirector,
+        studio: &ipc::Studio,
+        act: HelmStudioAct,
+    ) {
         if by != Redirector::Helm {
             return;
         }
@@ -643,5 +649,65 @@ where
         within: Option<ManifestId>,
     ) -> Result<StudioRunStarted, Refusal> {
         Fleet::started_studio_run(self, studio_id, run, by, within).await
+    }
+
+    // Promotion — `crate::promoting`, `#1291`.
+
+    async fn group_studio_nodes(
+        &self,
+        studio_id: ipc::StudioId,
+        group: GroupStudioNodes,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.nodes_grouped(studio_id, group, within).await
+    }
+
+    async fn defer_on_studio(
+        &self,
+        studio_id: ipc::StudioId,
+        deferring: DeferOnStudio,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.deferred(studio_id, deferring, within).await
+    }
+
+    async fn write_up_studio_node(
+        &self,
+        studio_id: ipc::StudioId,
+        writing: WriteUpStudioNode,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.written_up(studio_id, writing, by, within).await
+    }
+
+    async fn edit_studio_draft(
+        &self,
+        studio_id: ipc::StudioId,
+        edit: EditStudioDraft,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.draft_edited(studio_id, edit, within).await
+    }
+
+    async fn settle_contradiction(
+        &self,
+        studio_id: ipc::StudioId,
+        settling: SettleContradiction,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.contradiction_settled(studio_id, settling, within)
+            .await
+    }
+
+    async fn dispatch_studio_draft(
+        self: Arc<Self>,
+        studio_id: ipc::StudioId,
+        dispatching: DispatchStudioDraft,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.draft_dispatched(studio_id, dispatching, by, within)
+            .await
     }
 }

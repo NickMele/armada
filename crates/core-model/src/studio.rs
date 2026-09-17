@@ -14,6 +14,7 @@
 mod edge;
 mod finding;
 mod note;
+mod promotion;
 
 use alloc::string::String;
 
@@ -23,6 +24,7 @@ pub use finding::{
     ScoutOutcome, Scouted, StudioFinding,
 };
 pub use note::{CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, StudioCapture};
+pub use promotion::{ContradictionOutcome, NotRewritable, Rewritten};
 
 use crate::envelope::{Timestamp, Ulid};
 use crate::job::{id_newtype, JobId, ManifestId};
@@ -300,8 +302,14 @@ pub enum StudioNodeContent {
     Cluster { title: String },
     /// What a scout was asked, and what it read.
     Finding(StudioFinding),
-    /// Two sources that disagree.
-    Contradiction { first: String, second: String },
+    /// Two sources that disagree, and the answer where a person settled it
+    /// here. `answer` is absent until then, and on the three outcomes that
+    /// record what was decided somewhere else.
+    Contradiction {
+        first: String,
+        second: String,
+        answer: Option<String>,
+    },
     /// A diagram or mockup, as text.
     Sketch { body: String },
     /// A board, document, issue, page or session, kept as its address.
@@ -340,7 +348,7 @@ impl StudioNodeContent {
             StudioNodeContent::Note { said, .. } => &[("said", said)],
             StudioNodeContent::Cluster { title } => &[("title", title)],
             StudioNodeContent::Finding(finding) => &[("asked", finding.ask())],
-            StudioNodeContent::Contradiction { first, second } => {
+            StudioNodeContent::Contradiction { first, second, .. } => {
                 &[("first", first), ("second", second)]
             }
             StudioNodeContent::Sketch { body } | StudioNodeContent::Outline { body } => {

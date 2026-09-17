@@ -56,6 +56,29 @@ impl StudioEdge {
         )
     }
 
+    /// A relation a person drew themselves, accepted as drawn. **Only a
+    /// person builds one**: `by` is the transport's word and the only value
+    /// any caller passes is [`StudioAuthor::Person`], because accepting a
+    /// relation is a person's act — `#1291`'s Deferral against what it blocks
+    /// is the one rung that draws one.
+    pub fn accepted(
+        id: StudioEdgeId,
+        from: StudioNodeId,
+        to: StudioNodeId,
+        relation: StudioRelation,
+        created_at: Timestamp,
+        by: StudioAuthor,
+    ) -> Result<StudioEdge, ToItself> {
+        StudioEdge::joining(
+            id,
+            (from, to),
+            relation.into(),
+            StudioEdgeStanding::Accepted,
+            created_at,
+            Some(by),
+        )
+    }
+
     /// The Studio's own record that `from` made `to`, accepted as drawn, and
     /// added by whoever added `to`.
     pub fn produced(

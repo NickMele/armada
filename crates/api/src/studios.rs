@@ -350,3 +350,124 @@ pub(crate) async fn start_studio_run<D: Studios>(
         .await;
     answered(&served, StatusCode::ACCEPTED, started)
 }
+
+// Promotion — `#1291`. Every one answers with the Studio whole, as every other
+// write on one does. Only the two Helm may take on a person's ask read `helm`;
+// the rest are a person's and nothing places a Helm session on them.
+
+pub(crate) async fn group_studio_nodes<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let group = match body(&served, "nodes to group", &bytes) {
+        Ok(group) => group,
+        Err(response) => return response,
+    };
+    let grouped = served
+        .daemon()
+        .group_studio_nodes(StudioId::carried(studio_id), group, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, grouped)
+}
+
+pub(crate) async fn defer_on_studio<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let deferring = match body(&served, "something to defer", &bytes) {
+        Ok(deferring) => deferring,
+        Err(response) => return response,
+    };
+    let deferred = served
+        .daemon()
+        .defer_on_studio(StudioId::carried(studio_id), deferring, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, deferred)
+}
+
+/// Who wrote it up is the transport's word, as on `add_studio_node`.
+pub(crate) async fn write_up_studio_node<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    helm: Option<Extension<HelmCalled>>,
+    bytes: Bytes,
+) -> Response {
+    let writing = match body(&served, "a node to write up", &bytes) {
+        Ok(writing) => writing,
+        Err(response) => return response,
+    };
+    let written = served
+        .daemon()
+        .write_up_studio_node(
+            StudioId::carried(studio_id),
+            writing,
+            acting(helm),
+            within(scope),
+        )
+        .await;
+    answered(&served, StatusCode::OK, written)
+}
+
+pub(crate) async fn edit_studio_draft<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let edit = match body(&served, "a draft to edit", &bytes) {
+        Ok(edit) => edit,
+        Err(response) => return response,
+    };
+    let edited = served
+        .daemon()
+        .edit_studio_draft(StudioId::carried(studio_id), edit, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, edited)
+}
+
+pub(crate) async fn settle_contradiction<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let settling = match body(&served, "how a Contradiction ended", &bytes) {
+        Ok(settling) => settling,
+        Err(response) => return response,
+    };
+    let settled = served
+        .daemon()
+        .settle_contradiction(StudioId::carried(studio_id), settling, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, settled)
+}
+
+/// **Reads the daemon by its `Arc`**, as a scout's ask does: the Job proposer
+/// is a model call made while the caller waits.
+pub(crate) async fn dispatch_studio_draft<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    helm: Option<Extension<HelmCalled>>,
+    bytes: Bytes,
+) -> Response {
+    let dispatching = match body(&served, "a draft to dispatch", &bytes) {
+        Ok(dispatching) => dispatching,
+        Err(response) => return response,
+    };
+    let dispatched = served
+        .shared()
+        .dispatch_studio_draft(
+            StudioId::carried(studio_id),
+            dispatching,
+            acting(helm),
+            within(scope),
+        )
+        .await;
+    answered(&served, StatusCode::OK, dispatched)
+}

@@ -5,11 +5,13 @@
 use std::sync::Arc;
 
 use ipc::{
-    AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, CreateStudio,
-    DecideStudioEdge, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode,
-    RenameStudio, StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioEdge,
-    StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId, StudioList, StudioNode,
-    StudioNodeContent, StudioNodeId, StudioNodeState, StudioRunStarted, StudioSummary, WireError,
+    AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, ContradictionSettled,
+    CreateStudio, DecideStudioEdge, DeferOnStudio, DispatchStudioDraft, EditStudioDraft,
+    GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode,
+    RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout, Studio,
+    StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
+    StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
+    StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
 
 use super::FakeDaemon;
@@ -421,4 +423,166 @@ impl Studios for FakeDaemon {
             })
         })
     }
+    // Promotion — `#1291`. Each one adds what its rung makes and the edges the
+    // Studio draws, so the route and the door are proved to carry the body;
+    // which kinds each refuses is `fleet`'s, tested there.
+
+    async fn group_studio_nodes(
+        &self,
+        studio_id: StudioId,
+        group: GroupStudioNodes,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let id = added(studio, group.content, group.position);
+            for from in group.from {
+                produced(studio, from, id.clone());
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    async fn defer_on_studio(
+        &self,
+        studio_id: StudioId,
+        deferring: DeferOnStudio,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let what = StudioNodeContent::Deferral {
+                what: deferring.what,
+            };
+            let id = added(studio, what, deferring.position);
+            produced(studio, deferring.raised_on, id.clone());
+            if let Some(blocks) = deferring.blocks {
+                studio.edges.push(StudioEdge {
+                    id: StudioEdgeId::carried(format!("01EDGE{}", studio.edges.len())),
+                    from: id,
+                    to: blocks,
+                    kind: StudioEdgeKind::from_wire("blocks").expect("a relation"),
+                    standing: standing("accepted"),
+                    created_at: Instant::carried(AT),
+                    added_by: None,
+                });
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    async fn write_up_studio_node(
+        &self,
+        studio_id: StudioId,
+        writing: WriteUpStudioNode,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
+        self.changing(&studio_id, within, |studio| {
+            let draft = StudioNodeContent::IssueDraft {
+                title: writing.title,
+                body: writing.body,
+            };
+            let id = added(studio, draft, writing.position);
+            produced(studio, writing.node_id, id);
+            Ok(studio.clone())
+        })
+    }
+
+    async fn edit_studio_draft(
+        &self,
+        studio_id: StudioId,
+        edit: EditStudioDraft,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            for node in studio
+                .nodes
+                .iter_mut()
+                .filter(|node| node.id == edit.node_id)
+            {
+                node.content = StudioNodeContent::IssueDraft {
+                    title: edit.title.clone(),
+                    body: edit.body.clone(),
+                };
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    async fn settle_contradiction(
+        &self,
+        studio_id: StudioId,
+        settling: SettleContradiction,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let (state, answer) = match &settling.outcome {
+                ContradictionSettled::NotAProblem => ("not_a_problem", None),
+                ContradictionSettled::ResolvedHere { answer } => {
+                    ("resolved_here", Some(answer.clone()))
+                }
+            };
+            for node in studio
+                .nodes
+                .iter_mut()
+                .filter(|node| node.id == settling.node_id)
+            {
+                node.state = StudioNodeState::from_wire(state);
+                if let StudioNodeContent::Contradiction { answer: kept, .. } = &mut node.content {
+                    *kept = answer.clone();
+                }
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    /// **No proposer runs in the fake**, so one Job node stands for the plan.
+    async fn dispatch_studio_draft(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        dispatching: DispatchStudioDraft,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
+        self.changing(&studio_id, within, |studio| {
+            let job = StudioNodeContent::Job {
+                job_id: ipc::JobId::carried("01JOB"),
+            };
+            let id = added(studio, job, dispatching.position);
+            produced(studio, dispatching.node_id, id);
+            Ok(studio.clone())
+        })
+    }
+}
+
+/// A node on the fake's Studio, by the next id, and what it was given.
+fn added(
+    studio: &mut Studio,
+    content: StudioNodeContent,
+    position: StudioPosition,
+) -> StudioNodeId {
+    let id = StudioNodeId::carried(format!("01NODE{}", studio.nodes.len()));
+    studio.nodes.push(StudioNode {
+        id: id.clone(),
+        content,
+        state: None,
+        position,
+        created_at: Instant::carried(AT),
+        added_by: None,
+    });
+    id
+}
+
+/// The Studio's own edge saying `from` made `to`.
+fn produced(studio: &mut Studio, from: StudioNodeId, to: StudioNodeId) {
+    studio.edges.push(StudioEdge {
+        id: StudioEdgeId::carried(format!("01EDGE{}", studio.edges.len())),
+        from,
+        to,
+        kind: StudioEdgeKind::from_wire("produced").expect("the Studio's own edge"),
+        standing: standing("accepted"),
+        created_at: Instant::carried(AT),
+        added_by: None,
+    });
 }
