@@ -45,6 +45,7 @@ import {
   Dialog,
   HeldWorktree,
 } from "@armada/components";
+import { patternFor, useHaptics } from "@armada/components";
 import type { ButtonAnswer, RowChoice } from "@armada/components";
 
 import type { BranchDeleted, HeldWorktrees, JobSummary, Outcome, WorktreeReclaimed } from "@armada/protocol";
@@ -167,6 +168,7 @@ export function Worktrees({
   const [sending, setSending] = useState(false);
   /** What Fleet said to the last clean-up, drawn on the control until the next press. */
   const [answer, setAnswer] = useState<ButtonAnswer>();
+  const tap = useHaptics();
 
   /** The way out, at the top of every state — #1090 moved it here from the
    *  page head that used to carry it. */
@@ -269,7 +271,9 @@ export function Worktrees({
     setRefused(failed);
     setChoices({});
     // Any row refused is a refusal: the alerts above say which.
-    setAnswer(failed.length === 0 ? "accepted" : "refused");
+    const answered: ButtonAnswer = failed.length === 0 ? "accepted" : "refused";
+    setAnswer(answered);
+    tap(patternFor(answered));
     setSending(false);
   }
 
