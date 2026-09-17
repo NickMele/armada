@@ -98,6 +98,13 @@ with ten unformatted hunks and an unused import. `format` is a Check in
 `armada.yml`, so the next Job cut from `main` would have failed on work that
 was not its own.
 
+**A shared primitive or hook runs the whole suite of every package that draws
+it, not the tests beside it.** Confirmed 17 Sep 2026: #1227 moved the hold into
+`useHold`, which subscribes to the reduced-motion query, and ran only its own
+stories and `Acts` tests. A row test in `packages/screens` faked that query as
+`{ matches: true }` and threw once a row's Kill held. The merge left `main` red
+until #1229.
+
 **Verify it yourself rather than on a report.** An agent's claim of green has
 been wrong here.
 

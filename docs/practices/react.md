@@ -83,8 +83,10 @@ whole object runs on every change to any field of it.
 
 ## Motion, and why React is involved
 
-`design-system.md` forbids entrance animation on a data surface and permits one
-continuous animation: the running mark's pulse. Two React consequences follow.
+`design-system.md` forbids entrance animation on a data surface. What loops is
+what is still working: the running mark's pulse and a control waiting on Fleet.
+A re-sorted row travels and a changed row decays, and neither is an entrance.
+Three React consequences follow.
 
 **A row must keep its identity across updates** or its transition restarts —
 see keys and remounting above.
@@ -92,6 +94,12 @@ see keys and remounting above.
 **The pulse is CSS on a stable element.** Driving it from state re-renders a row
 on every frame, and `prefers-reduced-motion` then has to be handled in two
 places rather than one.
+
+**Travel and decay are the exceptions, and each for a reason CSS cannot meet.**
+Travel measures where a row was before the render, so it is a layout effect
+(`ActiveJobsList/travel.ts`). Decay prints how long ago beside the fading tint,
+and a 45s CSS transition cannot be read back, so one shared ticker drives both
+(`screens/src/recent.ts`).
 
 ## Failure
 

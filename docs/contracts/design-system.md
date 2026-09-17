@@ -427,9 +427,10 @@ still holds: a layer never moves after it lands.
 new status hue at `--row-tint-recent`, falling to the resting
 `--row-tint` across `--duration-decay`, and a mono line in the same hue
 says what changed and how long ago, fading with it. It takes no edge:
-the left edge is focus and hover's. The decay rides on the resting tint and ends at it, so there
-is one tint channel and never two computed on top of each other. Every
-changed row decays; there is no cap yet.
+the left edge is focus and hover's. The decay rides on the resting tint
+and ends at it, so there is one tint channel and never two computed on
+top of each other. Every changed row decays, with no cap:
+`[decay-cap]`.
 
 **Press moves colour, never geometry.** A pressed control walks one step
 down its ground ladder at `--duration-press`: `--accent` to
@@ -2026,6 +2027,14 @@ is verification source=Check with actor=Drone.
 ---
 
 ## Open questions
+
+- **[decay-cap]** Does a Board with many changed rows cap how many carry a
+  decay mark? Today every row whose status changes takes its mark for 45s, so
+  thirty Jobs moving within a minute tint thirty rows at once and the mark stops
+  pointing at anything. What decides it is seeing a busy Board: whether the
+  marks still read at that density, and if not, whether a cap keeps the most
+  recent few or the most urgent. Change detection and the ticker are in
+  `packages/screens/src/recent.ts`.
 
 - **[running-mark-scope]** Should every running row's mark pulse, and should
   the step keep pulsing behind an open sheet? Today the running mark pulses in
