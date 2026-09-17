@@ -38,15 +38,15 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * specific to this Job. **Dimming is a token, not an alpha**, per
  * `docs/contracts/design-system.md`: the name steps down to `--fg-subtle`
  * rather than losing opacity, which would muddy the tone hues beside it.
+ */
+
+/**
+ * `running` is the one the work is inside right now: the running edge and wash
+ * `tokens/status.css` declares, and a bar sweeping its top edge.
  *
- * `running` is the one the work is inside right now. It takes the running
- * colour on its edge with a faint wash — `--phase-live-edge` and
- * `--phase-live-bg`, declared in `tokens/status.css` — and a bar sweeps its
- * top edge on `--duration-pulse`, which is the same line a control waiting on
- * Fleet draws along its bottom. **The sweep is the card's one loop.** Under
- * this tone the streaming dot holds still: a bar travelling and a dot
- * breathing in one header are two things competing to say the same word, and
- * the rule is one or the other.
+ * **The sweep is the card's one loop**, so the streaming dot holds still under
+ * this tone — a bar travelling and a dot breathing in one header are two
+ * things competing to say the same word.
  */
 export type ChapterTone = "neutral" | "waiting" | "muted" | "running";
 
