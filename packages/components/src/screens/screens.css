@@ -91,9 +91,9 @@
 }
 
 /* Navigation, Stats and Fleet, stacked — the left column Bridge/1088 built to
-   replace the rail and the status bar. Margined on three sides the way the
-   dock already is, because the panel beside it stays flush by design — "the
-   panel *is* the ground", below.
+   replace the rail and the status bar. Inset on three sides the way the dock
+   already is, because the panel beside it stays flush by design — "the panel
+   *is* the ground", below.
 
    **A shared width, not three siblings fighting over intrinsic sizing.**
    Sidebar carries its own resting width inline (`--sidebar-default`,
@@ -104,14 +104,31 @@
    Sidebar sat at its own inline width, narrower than both. One width, read by
    all three: Sidebar's own default when the column matches it, and its own
    rail width when Sidebar is collapsed — `:has()` is what lets this rule
-   follow a child's own state without a prop crossing the two files. */
+   follow a child's own state without a prop crossing the two files.
+
+   **The inset is padding, not margin, so the cards' shadow is inside the
+   clip.** A scroller clips at its padding box, and `--shadow-card` reaches
+   12px past a card's sides, 24px below it and 1px above. Held in margin,
+   Navigation, Stats and Fleet lost all three and read as cut out (#1319).
+   Each side keeps its old outer line: the left is all padding, the right's
+   padding is handed back by an equal negative margin (so the box reaches into
+   the gap, where the handle is later in the tree and still takes the pointer),
+   and the top is 12px margin over 4px padding, so what scrolls up still clips
+   under the title bar. Only the bottom moves: 24px of padding to the window's
+   edge, so the last card's drop shows at the end of a scroll too.
+
+   `content-box` so every width here — ours, the rail's 48px, and the inline
+   one a drag writes — stays the cards' width, and the padding adds outside
+   it instead of narrowing them. */
 .armada-shell__left {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   flex: none;
   min-height: 0;
-  margin: var(--space-4) 0 var(--space-4) var(--space-4);
+  box-sizing: content-box;
+  margin: calc(var(--space-4) - var(--space-1)) calc(var(--space-4) * -1) 0 0;
+  padding: var(--space-1) var(--space-4) var(--space-6);
   overflow-y: auto;
   width: var(--sidebar-default);
 }
