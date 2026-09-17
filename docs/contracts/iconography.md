@@ -87,8 +87,9 @@ and carries no stroke, so there is nothing in it to hold at 2, and its floor
 is 16px rather than 12. See Brand mark below. Every lucide glyph is governed,
 without exception.
 
-**Contrast floor.** Icons never render in `--fg-subtle`, with two exceptions:
-`circle-minus` and `circle-dashed`, below. `--fg-subtle` was `#5D6B7C` on
+**Contrast floor.** Icons never render in `--fg-subtle`, with three
+exceptions: `circle-minus`, `circle-dashed`, and a glyph inside a disabled
+control. `--fg-subtle` was `#5D6B7C` on
 `--bg-raised`, ~3.2:1, which a 1px stroke does not survive, so `--fg-muted`
 was the minimum for chrome and for badges alike. The 20 Aug legibility lift
 raised `--fg-subtle` to `#7E8CA0`, 4.58:1 on `--bg-overlay`
@@ -103,6 +104,21 @@ begun; `--fg-muted` was rejected for the same row because it is
 `retrying`'s colour, and `packages/tokens/src/status.css` keeps `not_started`
 one step dimmer than `retrying` on purpose. Full argument in
 `packages/icons/icons.toml`.
+
+**The third exception is a disabled control, added 2026-09-17.** A glyph that
+inherits a disabled control's text colour dims with that control's label, to
+`--fg-subtle`. The global disabled treatment is `--fg-subtle` text and never an
+opacity — *Component → token mapping*, Global, in
+[Design System](design-system.md) — so a glyph holding `--fg-muted` inside a
+dead control would be brighter than the label beside it and read as the live
+part of it.
+
+Two glyphs are covered today: the menu trigger's 12px `chevron-down`, drawn
+with no colour of its own by `DropdownMenu`'s trigger, and the split button's
+16px caret, which falls from `--fg-muted` with its label. **The exception is a
+property of the control, not a licence.** `--fg-muted` is still the floor for a
+glyph in a live control, and a disabled one is not a reason to draw subtle an
+icon that sets its own colour.
 
 > **Flag for the parent document.** The grey badges are the weakest in the
 > set — `--status-not-started` measures 4.39:1 as badge text on its own tint
@@ -576,9 +592,11 @@ no table has not been decided, whatever it looks like in a mockup.
 4. The outline must differ from every other icon **sharing its hue**.
    Across hue groups, collisions are fine.
 5. Never reuse a reserved glyph above.
-6. Never render an icon in `--fg-subtle`, except `circle-minus` and
-   `circle-dashed` (`step_state.not_started` only) — see Contrast floor
-   above — and never let an icon carry colour independently of its badge.
+6. Never render an icon in `--fg-subtle`, except `circle-minus`,
+   `circle-dashed` (`step_state.not_started` only), and a glyph inheriting a
+   disabled control's text colour, which dims to it with that control's
+   label — see Contrast floor above — and never let an icon carry colour
+   independently of its badge.
 7. **A new enum variant must add a table here.** The codegen test asserting
    every variant has a verb asserts it has an icon in the same pass, so a
    new reason cannot ship iconless.
