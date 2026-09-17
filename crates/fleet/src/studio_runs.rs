@@ -194,7 +194,10 @@ where
             };
             if let Ok(graph) = read {
                 self.events()
-                    .publish(ipc::Event::StudioChanged(ipc::Studio::of(&graph)));
+                    .publish(ipc::Event::StudioChanged(ipc::Studio::of(
+                        &graph,
+                        &adapters::forge_named,
+                    )));
             }
         }
         held_back

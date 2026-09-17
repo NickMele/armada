@@ -139,7 +139,8 @@ pub fn a_studio_with_two_notes() -> StudioGraph {
 
 /// The Studio as a client reads it: served, encoded, sent, and read back.
 pub fn received_studio(graph: &StudioGraph) -> ipc::Studio {
-    let body = ipc::encode(&ipc::Studio::of(graph)).expect("a Studio that serialises");
+    let body = ipc::encode(&ipc::Studio::of(graph, &adapters::forge_named))
+        .expect("a Studio that serialises");
     ipc::decode("a Studio", body.as_bytes()).expect("a Studio that reads back")
 }
 

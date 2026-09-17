@@ -152,7 +152,7 @@ where
             self.studio_held(&store, &id, within.as_ref())?;
             write(&mut store, &id).map_err(|why| self.studio_refusal(why))?;
             let graph = store.studio(&id).map_err(|why| self.studio_refusal(why))?;
-            ipc::Studio::of(&graph)
+            ipc::Studio::of(&graph, &adapters::forge_named)
         };
         self.events()
             .publish(ipc::Event::StudioChanged(studio.clone()));
@@ -259,7 +259,7 @@ where
     ) -> Result<ipc::Studio, Refusal> {
         let store = self.store().lock().await;
         self.studio_held(&store, &studio_id.to_domain(), within.as_ref())
-            .map(|graph| ipc::Studio::of(&graph))
+            .map(|graph| ipc::Studio::of(&graph, &adapters::forge_named))
     }
 
     /// **The record is the allowlist**, which is what makes a caller-supplied
@@ -350,7 +350,7 @@ where
             let graph = store
                 .studio(&studio.id)
                 .map_err(|why| self.studio_refusal(why))?;
-            ipc::Studio::of(&graph)
+            ipc::Studio::of(&graph, &adapters::forge_named)
         };
         self.events()
             .publish(ipc::Event::StudioChanged(created.clone()));

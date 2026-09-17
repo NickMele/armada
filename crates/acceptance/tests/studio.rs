@@ -192,7 +192,11 @@ fn an_issue_drafts_text_alone_reaches_the_proposer_and_the_job_is_told_all_of_it
 fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unaccepted() {
     let graph = a_studio_with_two_notes();
     let studio = received_studio(&graph);
-    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
+    assert_eq!(
+        studio,
+        ipc::Studio::of(&graph, &adapters::forge_named),
+        "nothing lost on the wire"
+    );
     assert_eq!(
         studio.manifest_id.as_str(),
         REPOSITORY,
@@ -259,7 +263,11 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
 fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
     let graph = a_studio_with_a_captured_note();
     let studio = received_studio(&graph);
-    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
+    assert_eq!(
+        studio,
+        ipc::Studio::of(&graph, &adapters::forge_named),
+        "nothing lost on the wire"
+    );
 
     let note = studio.nodes.first().expect("the Note");
     assert_eq!(note.added_by.map(|by| by.as_wire()), Some("person"));
@@ -514,7 +522,11 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
 fn a_scouts_finding_arrives_frozen_with_every_file_it_read_its_commit_and_its_cost() {
     let graph = a_studio_with_a_frozen_finding();
     let studio = received_studio(&graph);
-    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
+    assert_eq!(
+        studio,
+        ipc::Studio::of(&graph, &adapters::forge_named),
+        "nothing lost on the wire"
+    );
 
     let finding = studio.nodes.last().expect("the Finding");
     assert_eq!(
@@ -670,6 +682,7 @@ fn four_sources_read_in_leave_their_links_standing_with_what_came_back_hung_off_
             address: kept,
             said,
             named,
+            ..
         } = &node(link).content
         else {
             panic!("`{link}` is a Link");
