@@ -281,3 +281,30 @@
   --stat-drones: var(--status-running);
   --stat-manifest-current: var(--status-completed-success);
 }
+
+/* The live phase — the one row of a step's timeline the Drone is inside right
+   now. Declared 2026-09-17 (#1196): a Job spending money looked like a Job
+   asleep, because nothing on the card said which part of it was moving.
+
+   Hue below Job level, so hard rule 3 requires it here rather than picked at a
+   component, and every value aliases --status-running rather than carrying one
+   of its own. What a live phase is is a step running one level down, which is
+   exactly what --step-running already says on the mark these replace.
+
+   Two channels, because a card and a glyph are not read the same way. The EDGE
+   is the card's own border lifted toward running, at 45% — enough to tell the
+   live card from the quiet ones beside it across a desk, and not so much that
+   a column of phases reads as an alert. The WASH is 6%, below the 9% a summary
+   tile takes, because a phase card is larger again and its body is a log:
+   anything heavier tints the mono rows inside it.
+
+   The wash is mixed into `transparent` rather than into a ground, so the card
+   paints correctly on the panel and inside a sheet, which sit on different
+   grounds. */
+:root {
+  --phase-live-edge: color-mix(in srgb, var(--status-running) 45%, var(--border-default));
+  --phase-live-bg: color-mix(in srgb, var(--status-running) 6%, transparent);
+  /* The rule under the live phase's header. Quieter than the card's own edge:
+     it divides the header from the body and is not the thing that says live. */
+  --phase-live-rule: color-mix(in srgb, var(--status-running) 25%, var(--border-subtle));
+}

@@ -116,6 +116,12 @@
   --color-notice-caution-bg: var(--notice-caution-bg);
   --color-stat-drones: var(--stat-drones);
   --color-stat-manifest-current: var(--stat-manifest-current);
+  --color-phase-live-edge: var(--phase-live-edge);
+  --color-phase-live-bg: var(--phase-live-bg);
+  --color-phase-live-rule: var(--phase-live-rule);
+  --color-tool-look: var(--tool-look);
+  --color-tool-change: var(--tool-change);
+  --color-tool-run: var(--tool-run);
   --font-weight-body: var(--weight-body);
   --font-weight-medium: var(--weight-medium);
   --font-weight-heading: var(--weight-heading);
