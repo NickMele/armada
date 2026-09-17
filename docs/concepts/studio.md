@@ -41,6 +41,11 @@ flowchart LR
 
 > **Rule.** A Studio reopens read-only, and a person continues it on request.
 
+> **Rule.** A Studio is laid out by hand. A person places each node and moves it, and the Studio keeps every position.
+> Why: where a person put a node is part of how they read the work.
+
+> **Rule.** The whiteboard is drawn with React Flow.
+
 **It is part of the product, not a transcript of one.** The conversation with Helm drives a Studio; the nodes and edges are what persists and what an agent reads. See [Scope](../scope.md).
 
 ## Nodes
@@ -72,6 +77,9 @@ flowchart LR
 
 > **Rule.** A Run on a Studio writes no Evidence, the same as every run outside a Job.
 
+> **Rule.** A Run node keeps its log's tail and its result — command, exit code and duration — once the run's retention passes, marked partial.
+> Why: a Studio is kept until a person deletes it, and a run's full log is not.
+
 ### Names avoid words Armada already uses
 
 | Node | Not called | Because that word already means |
@@ -101,9 +109,15 @@ flowchart LR
 > **Rule.** A Note is fixed at capture, and nothing writes to it afterwards.
 > Why: it records a moment. What is learned about it later is a Finding, with its own cost and its own Produced edge.
 
-> **Rule.** Capture works on Bridge first, then on any web app a Studio's Run starts, opened in a Bridge window that carries the annotation layer.
+> **Rule.** Studio capture works on Bridge, under its own binding in the shipped app.
 
-A Note carries what the annotation layer records, in `apps/desktop/src/shared/annotations.ts`, and four fields that layer does not record yet.
+> **Rule.** Capture on another repository's web app does not exist. It waits on a security review, #1294.
+> Why: Bridge loads nothing but itself, and loosening that is a security review. See `../practices/bridge.md`, Security posture.
+
+> **Rule.** The development annotation layer stays beside Studio capture, unchanged: ⌥⌘A under `pnpm dev`, a file under `.armada/annotations/`, Send to Fleet, and `/annotations`.
+> Why: it is how a person annotates Bridge while building it. See `../practices/running-locally.md`, Annotating Bridge.
+
+A Note carries what the annotation layer records, in `apps/desktop/src/shared/annotations.ts`, and fields that layer does not record yet.
 
 | Field | Recorded by the annotation layer today |
 |---|---|

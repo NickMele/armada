@@ -105,7 +105,7 @@ One of the invocations carrying a toolset. Its wording is section 5a.
 ### Scout
 
 **Told:** the ask, verbatim. The repository root, read as the checkout on disk.
-The sources Kit allows it to read. Its budget cap. That it reads and never
+The sources Kit allows it to read. That it reads and never
 writes, and that its Finding lists everything it read.
 
 **Never told:** secrets. Any tool that edits, commits or writes outside
