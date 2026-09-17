@@ -206,7 +206,6 @@
    --error-edge — a fault's edge width, read beside --error
    --degraded-edge — a degraded edge's width, read beside --degraded
    --pending-bar — the height of the bar a control waiting on Fleet sweeps
-   --glass-blur — a backdrop-filter radius, not a scale value
    --duration-press — v4 has no --duration-* namespace; read it in CSS
    --duration-fast — v4 has no --duration-* namespace; read it in CSS
    --duration-base — v4 has no --duration-* namespace; read it in CSS

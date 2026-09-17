@@ -134,11 +134,10 @@ vibrating.
 --border-highlight  rgb(255 255 255 / 0.05) 1px light along a card's top inner edge
 --accent-faint      --accent at 10%        the canvas's pool of light
 --shadow-card       highlight + 1px contact + 28px soft drop
---glass-blur        12px                   backdrop blur under a card
 ```
 
 **A card** is a vertical gradient from `--bg-glass` to `--bg-glass-end`, with
-`--border-glass`, `--shadow-card` and a `--glass-blur` backdrop blur. It
+`--border-glass` and `--shadow-card`. It
 replaces `--bg-raised` and `--border-subtle` on every panel that sits directly
 on the canvas: the left column's three panels, Overview's cards and Helm's
 dock. A row, a well or an input inside a card stays flat on its Ground token.
@@ -153,9 +152,12 @@ measured under the accent pool. `--fg-subtle` reads 4.74:1 there, and every
 status badge clears 4.5:1 on its own 12% tint, `not_started` included at
 4.55:1. A lighter top, `rgb(30 41 55)`, dropped `--fg-subtle` to 4.37:1.
 
-**Blur is the one cost worth watching.** The window stays open all day on a
-second monitor. The glass is 86% opaque so that where blur is dropped for
-cost, the card paints nearly the same colour without it.
+**No backdrop blur.** Measured in Chromium against these tokens, it changed no
+pixel inside a card by more than 1/255, because only the canvas's smooth light
+sits behind a card. It also made the card the containing block for
+`position: fixed`, so a Tooltip, Popover or DropdownMenu inside a card was
+clipped at the card's edge. The glass is 86% opaque so it paints the same
+without one. A card with real detail behind it is the case that reopens this.
 
 ### Foreground
 
