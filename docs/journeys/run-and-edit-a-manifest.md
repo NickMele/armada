@@ -45,7 +45,7 @@ A monorepo's root `armada.yml` appears as its own entry in the switcher, since i
 > **Rule.** After a run that changed the checkout, the panel lists the changed files and offers Open the diff and Undo this run. Undo confirms, naming what it would discard.
 > Why: the snapshot restores the tree as it was just before the run, and this tree holds work of your own that no Job's worktree ever holds.
 
-> **Rule.** Output goes to a panel on this surface — exit code, duration, and the output — and stays until dismissed.
+> **Rule.** Output goes to a panel on this surface — the result in Job colours with its exit code, duration, and the output — and stays until dismissed.
 > Why: there is no Job, so no Job Board row and no Evidence, and a toast would throw away the thing you ran it to read.
 
 A server started here runs in the main checkout and draws its ports from that checkout's span; it stops on Stop, exit, or Fleet stopping.
@@ -130,8 +130,8 @@ A Command with `serve` stays running, on ports from the Job's span. [Manifest](.
 
 Each run writes its log under `./.armada` like every other ad-hoc run here, with the same retention. No Check row carries a result, and nothing from a run reaches the rail, the Job header or the Job Board.
 
-> **Rule.** The sheet's run list shows each run's exit code, unhued, and opens its log.
-> Why: a past rehearsal is worth scanning, and keeping it inside the sheet stops it reading as the gate's answer.
+> **Rule.** The sheet's run list shows each run's result in Job colours, with its exit code, and opens its log.
+> Why: a past rehearsal is worth scanning, a run reads the same on a Studio, on this surface and here, and keeping it inside the sheet stops it reading as the gate's answer. #1277.
 
 > **Rule.** After a run that changed the worktree, the sheet lists the changed files and offers Open the diff and Undo this run.
 > Why: nothing in a Manifest says in advance which Commands write, and a Check's `requires` can name one that does.

@@ -29,6 +29,11 @@ The owner's own description, and the shape everything is measured against:
 
 > Anything outside of that is bonus.
 
+**A Studio is where step 1 comes from, and it is part of the product.** You
+run the app and point at what is wrong, ask what the code does, read in what
+you already have, and promote what holds up into a Job. See
+[Studio](concepts/studio.md).
+
 ## The four pains it exists to remove
 
 He was juggling five or more agent sessions and hit these, in these words:
@@ -74,7 +79,7 @@ proposal that reintroduces one of them is answering a question already settled.
 |---|---|---|
 | Skills in a repository | Worked, but was not portable to other projects | The Manifest. A repository carries its own setup, and one Fleet serves every repository a person adds rather than being configured per project |
 | A CLI | Did not surface the information he needed | Bridge, and why it is a board that is scanned rather than output that is read |
-| Orchestrator agents with sub agents | **Having a conversation was not the tool he was looking for** | Armada has no chat. You dispatch, and it reports. The only conversational surface is Helm, and it is not built |
+| Orchestrator agents with sub agents | **Having a conversation was not the tool he was looking for** | Armada has no chat. You dispatch, and it reports. Helm is the conversational surface, and what a conversation produces is kept as structure: a Studio's nodes, a Job's Evidence, never a transcript read as a claim |
 | Armada v1 | Close | This |
 
 **The third one explains more of the design than it looks like.** Evidence is
@@ -119,7 +124,7 @@ not bring it.
 passes on a non-empty diff and the Judge alone — an empty Check registry expands
 to nothing in `crates/config/src/resolve.rs` — and #847 is what tells a person so.
 
-**It is not a chat.** See the third attempt.
+**It is not a chat.** Helm drives a Studio in conversation, and what persists and what an agent reads is the Studio's typed graph. See the third attempt.
 
 **It is not about throughput.** Running more agents was never the problem.
 

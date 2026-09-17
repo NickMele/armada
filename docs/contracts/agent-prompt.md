@@ -50,6 +50,7 @@ Model selection and budget, which are per-step configuration.
 | --- | --- | --- | --- |
 | **Drone** | `fleet` | At spawn, which is once per workflow step | Specified — section 5 |
 | **Helm** | `fleet` | Per session | Drafted — section 5a |
+| **Scout** | `fleet` | When a person asks from a Studio, directly or through Helm | Not specified |
 | **Judge** | `verification` | Per criterion, after a mechanical check passed | Not specified |
 | **Job-shape classifier** | `fleet` | At Job creation | Not specified |
 | **Manifest scanner** | `config` | During the setup wizard's Proposal phase | Not specified |
@@ -67,7 +68,7 @@ entries here:
 **Voice generation is not among them**, for the reason below. An entry
 saying so double-counts the thing it exists to exclude.
 
-**Two carry a toolset.** Drone and Helm are Agents; the Judge and the
+**Three carry a toolset.** Drone, Helm and Scout are Agents; the Judge and the
 classifier are model calls. The scanner is the open case. See
 [System Architecture](system-architecture.md) section 9.
 
@@ -99,7 +100,19 @@ and read-only with no Manifest tier. The obligation to call
 
 **Never told:** anything outside the selected Manifest. Secrets.
 
-One of two invocations carrying a toolset. Its wording is section 5a.
+One of the invocations carrying a toolset. Its wording is section 5a.
+
+### Scout
+
+**Told:** the ask, verbatim. The repository root, read as the checkout on disk.
+The sources Kit allows it to read. Its budget cap. That it reads and never
+writes, and that its Finding lists everything it read.
+
+**Never told:** secrets. Any tool that edits, commits or writes outside
+Armada. Anything belonging to another repository, including its sessions and
+Helm threads.
+
+[Scout](../concepts/scout.md) owns what it may read and what bounds it.
 
 ### Judge
 

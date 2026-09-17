@@ -1,0 +1,170 @@
+# Studio
+
+**What it is:** A typed graph of what one stretch of work produced — notes, findings, links, deferrals and what each became — kept per repository and driven through Helm.
+
+---
+
+**Kind:** Entity, Surface.
+
+A Studio is where a job is found before it is provided. You run the app and point at what is wrong, ask what the code does, read in a board or an old session, and promote what holds up into an issue draft and then a Job. The Studio keeps how that was reached, so it can be reread.
+
+```mermaid
+flowchart LR
+  LINK[Link] -->|read in| NOTE
+  LINK -->|read in| CON[Contradiction]
+  RUN[Run] -.->|capture| NOTE[Note]
+  NOTE -->|ask| FND[Finding]
+  NOTE -->|cluster| CL[Cluster]
+  CL -->|write up| ISS[Issue draft]
+  NOTE -->|write up| ISS
+  CON -->|write up| ISS
+  CON -->|defer| DEF[Deferral]
+  FND -->|answers| DEF
+  FND --> OUT[Outline]
+  DEF -->|blocks| OUT
+  OUT --> ISS
+  ISS -->|dispatch gate| JOB[Job]
+```
+
+## What it is
+
+> **Rule.** A Studio is a graph of typed nodes whose content is text, links or structured fields, and whose edges say where each node came from.
+> Why: an agent can read a record and cannot read a drawing, and a Studio is read by agents as much as by a person.
+
+> **Rule.** A Studio belongs to one repository.
+> Why: it is driven through [Helm](helm.md), and Helm answers for one repository.
+
+> **Rule.** The Studios list names each Studio and when it was last touched, and names no Workspace.
+
+> **Rule.** A Studio is kept until a person deletes it. Nothing expires it.
+> Why: rereading how a plan was reached is what it is for.
+
+> **Rule.** A Studio reopens read-only, and a person continues it on request.
+
+**It is part of the product, not a transcript of one.** The conversation with Helm drives a Studio; the nodes and edges are what persists and what an agent reads. See [Scope](../scope.md).
+
+## Nodes
+
+| Kind | Holds | States | Colour |
+|---|---|---|---|
+| Run | A Manifest command started from the Studio, and its log | Run states | Job colours |
+| Note | What a person pointed at and said, fixed at capture | None | None |
+| Cluster | Notes a person accepted as one thing | None | None |
+| Finding | What a scout learned, and everything it read | Proposed, Gathering, Frozen | None |
+| Contradiction | Two sources that disagree, and its outcome | Reported, then its outcome | None |
+| Sketch | A diagram or mockup, as structured content | Frozen | None |
+| Link | A board, document, issue, page or session, kept as its address | None | None |
+| Deferral | Something a person put off, against what it blocks | Open, Answered | None |
+| Outline | An ordered reading of the nodes feeding it | Draft, Frozen | None |
+| Issue draft | An issue's title and body, never filed by Armada | Draft | None |
+| Job | A dispatched [Job](job.md) | Job statuses | Job colours |
+
+| State | Means |
+|---|---|
+| Proposed | Suggested and not started. Carries its cost where it can be run |
+| Gathering | Working, and spending |
+| Frozen | Done changing. Still promotable |
+
+> **Rule.** Run and Job nodes are the only nodes that take status colour, and each Run state aliases a Job status in `packages/tokens/src/status.css`.
+> Why: a run reads the same on a Studio, on the Manifest surface and on a Job's run sheet. See [Run and edit a Manifest](../journeys/run-and-edit-a-manifest.md).
+
+> **Rule.** Every working node pulses. See `../contracts/design-system.md`, Motion.
+
+> **Rule.** A Run on a Studio writes no Evidence, the same as every run outside a Job.
+
+### Names avoid words Armada already uses
+
+| Node | Not called | Because that word already means |
+|---|---|---|
+| Note | Observation | The one flagged inference Helm may add to an answer |
+| Link | Source | Verification source, in the Design System's hedging rule |
+| Deferral | Question | A Drone's question on the dock, and an open question in `docs/` |
+| Outline | Plan | A Job's own [Plan](plan.md) |
+| Issue draft | Ticket | Banned by the lexicon as a word for a Job |
+
+## Edges
+
+| Edge | Means | Drawn by |
+|---|---|---|
+| Produced | The first node made the second | The Studio, always |
+| Same as | Two nodes say one thing | Proposed, and a person accepts |
+| Blocks | One has to land before the other | Proposed, and a person accepts |
+| Answers | A Finding settles a Deferral | Proposed, and a person accepts |
+
+> **Rule.** Only a person accepts a relation. Helm and a scout may propose one, drawn dashed until accepted.
+> Why: an agent reorganising a person's work is what separates a drawing surface from a record of decisions.
+
+> **Rule.** No edge carries colour. Weight and label tell them apart.
+
+## Notes
+
+> **Rule.** A Note is fixed at capture, and nothing writes to it afterwards.
+> Why: it records a moment. What is learned about it later is a Finding, with its own cost and its own Produced edge.
+
+> **Rule.** Capture works on Bridge first, then on any web app a Studio's Run starts, opened in a Bridge window that carries the annotation layer.
+
+A Note carries what the annotation layer records, in `apps/desktop/src/shared/annotations.ts`, and four fields that layer does not record yet.
+
+| Field | Recorded by the annotation layer today |
+|---|---|
+| What the person said | Yes |
+| Element selector and visible text | Yes |
+| Component and its owners | Yes, for React apps only |
+| Screen, layer, location | Yes |
+| Box and window size | Yes |
+| Computed styles | No |
+| Markup | No |
+| A frame of the screen | No |
+| Source file path | No |
+
+## Promotion
+
+| Rung | From | To | Who acts |
+|---|---|---|---|
+| Read in | A Link | Notes, Clusters, Contradictions, proposed edges | A scout, on a person's ask |
+| Capture | A person using an app | Note | The person |
+| Ask | Any node | Finding | A scout, on a person's ask |
+| Cluster | Notes | Cluster | A person accepts |
+| Defer | Anything raised on a node | Deferral | A person, only |
+| Write up | Note, Cluster or Contradiction | Issue draft | A person, or Helm on their ask |
+| Dispatch | Issue draft | Job | The dispatch gate |
+
+> **Rule.** Nothing promotes itself. A Note never written up is a finished outcome.
+
+> **Rule.** A Job dispatches from an Issue draft's text, through the [Job proposer](job-proposer.md). Filing the issue on GitHub is optional and a person's own act.
+> Why: nothing reaches outside Armada on a Studio's behalf. See [Scout](scout.md).
+
+A Contradiction ends in one of four ways, and a person picks which.
+
+| Outcome | When |
+|---|---|
+| Issue draft | One side is stale, and a file needs fixing |
+| Deferral | It is a real decision, and the person defers it |
+| Not a problem | Both statements hold, in different contexts |
+| Resolved here | The person settles it, and the node records the answer |
+
+## Helm on a Studio
+
+| Helm may, unasked | Helm may, only on a person's ask |
+|---|---|
+| Add a node marked Proposed, with its cost | Start a scout |
+| Propose an edge | Start a Run |
+| Name an untitled Studio | Write up, and dispatch |
+
+> **Rule.** One ask may cover writing up and dispatching when it names both. "Write it up" alone never dispatches.
+> Why: Helm approves a dispatch on a person's ask and never as a silent follow-on to drafting. See [Helm](helm.md), Action authority.
+
+> **Rule.** Accepting an edge, deferring, and deleting a node are a person's acts, whatever is asked.
+
+## The vocabulary is a table until code reads it
+
+> **Rule.** Node kinds, edge kinds and promotions live on this page until code reads them, then move to a data file beside `crates/core-model/domain/` with a check over it.
+> Why: a set nobody's code reads stays a table; a set code reads is a data file. See `.claude/skills/armada-documents/SKILL.md`.
+
+| The check will refuse | Rule it holds |
+|---|---|
+| Status colour on a kind other than Run or Job | Status colour stays tied to declared states |
+| A Run state with no alias in `status.css` | Run nodes take Job colours |
+| A relation drawn by anything but the Studio or a person's acceptance | Only a person accepts a relation |
+| A promotion that writes outside Armada | Scouts read and never write |
+| A node name on a lexicon *Never* list | Names avoid words Armada already uses |

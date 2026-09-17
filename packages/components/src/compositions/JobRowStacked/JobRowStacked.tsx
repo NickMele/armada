@@ -282,7 +282,7 @@ export function JobRowStacked({
   const roving = useContext(RovingOption);
   const onCursor = roving === null || roving.index === roving.active;
   const tabIndex = !opens ? undefined : onCursor ? 0 : -1;
-  // The running mark pulses in one place per screen, `[running-mark-scope]`. `pulsing` says this Job is running; the
+  // The running mark pulses in one place per screen until #1276 widens it. `pulsing` says this Job is running; the
   // cursor says which running row is being read, and only that one breathes.
   const pulses = pulsing && onCursor;
   // Long enough that the badge needs its own line at the 720px floor (#984).
