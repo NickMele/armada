@@ -10,7 +10,7 @@
     "build": "electron-vite build",
     "package": "electron-vite build && electron-builder",
     "start": "electron-vite preview",
-    "mock": "vite --config vite.mock.config.ts",
+    "mock": "vite --config vite.mock.config.ts --open",
     "typecheck": "tsc -b --force",
     "test": "vitest run"
   },

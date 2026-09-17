@@ -114,8 +114,9 @@ test("Fleet unreachable with nothing held says so flatly", async () => {
 test("the Running panel beside Helm's dock keeps each row's facts and its action", async () => {
   await overview(onOverview(RUNNING_ONE_WITH_A_PLAN(), { repositories: [ARMADA, STOREFRONT] }));
   await expect.element(page.getByRole("complementary", { name: "Helm" })).toBeVisible();
-  // In the DOM, not asserted visible: beside the dock the row hides its task
-  // figure, where the list's own story, standing alone at full width, showed it.
+  // In the DOM, not asserted visible: under 900px a card row gives up Run time,
+  // Repository and Tasks so its action stays reachable, by design —
+  // `JobRowStacked.narrow.css`. Beside the dock the Running panel is that narrow.
   await expect.poll(() => document.querySelector('[role="img"][aria-label="0 of 6 tasks"]')).not.toBeNull();
   await expect.element(page.getByRole("option", { name: /unanswered permission ask/ })).toBeVisible();
   await expect.element(page.getByRole("option", { name: /shows "queued"/ })).toBeVisible();

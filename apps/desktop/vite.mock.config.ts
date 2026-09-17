@@ -11,5 +11,6 @@ export default defineConfig({
   // `annotationsServer` saves the dev annotation layer's notes (#1226) to
   // `.armada/annotations/`, as main does inside Electron.
   plugins: [react(), tailwindcss(), annotationsServer()],
-  server: { open: true },
+  // No `server.open`: `pnpm mock` asks for a browser with `--open`, and a Job
+  // serving this for Evidence (`armada.yml`) must not open one on the owner's screen.
 });
