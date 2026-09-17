@@ -390,11 +390,16 @@ pub struct StudioEdge {
     created_at: Timestamp,
 }
 
-/// Why an edge cannot be made or read back.
+/// Both ends of an edge are one node.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToItself {
+    pub node: StudioNodeId,
+}
+
+/// Why an edge cannot be read back.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EdgeRefused {
-    /// Both ends are one node.
-    ToItself { node: StudioNodeId },
+    ToItself(ToItself),
     /// A `Produced` edge that is not accepted. The Studio draws those, so none
     /// is ever proposed.
     ProducedUnaccepted,
@@ -408,8 +413,8 @@ impl StudioEdge {
         to: StudioNodeId,
         relation: StudioRelation,
         created_at: Timestamp,
-    ) -> Result<StudioEdge, EdgeRefused> {
-        StudioEdge::recorded(
+    ) -> Result<StudioEdge, ToItself> {
+        StudioEdge::joining(
             id,
             from,
             to,
@@ -425,8 +430,8 @@ impl StudioEdge {
         from: StudioNodeId,
         to: StudioNodeId,
         created_at: Timestamp,
-    ) -> Result<StudioEdge, EdgeRefused> {
-        StudioEdge::recorded(
+    ) -> Result<StudioEdge, ToItself> {
+        StudioEdge::joining(
             id,
             from,
             to,
@@ -445,11 +450,22 @@ impl StudioEdge {
         standing: StudioEdgeStanding,
         created_at: Timestamp,
     ) -> Result<StudioEdge, EdgeRefused> {
-        if from == to {
-            return Err(EdgeRefused::ToItself { node: from });
-        }
         if kind == StudioEdgeKind::Produced && standing != StudioEdgeStanding::Accepted {
             return Err(EdgeRefused::ProducedUnaccepted);
+        }
+        StudioEdge::joining(id, from, to, kind, standing, created_at).map_err(EdgeRefused::ToItself)
+    }
+
+    fn joining(
+        id: StudioEdgeId,
+        from: StudioNodeId,
+        to: StudioNodeId,
+        kind: StudioEdgeKind,
+        standing: StudioEdgeStanding,
+        created_at: Timestamp,
+    ) -> Result<StudioEdge, ToItself> {
+        if from == to {
+            return Err(ToItself { node: from });
         }
         Ok(StudioEdge {
             id,

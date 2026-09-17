@@ -7,7 +7,7 @@ use crate::envelope::{Timestamp, Ulid};
 use crate::studio::{
     EdgeRefused, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioName,
     StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind, StudioNodeState, StudioPosition,
-    StudioRelation,
+    StudioRelation, ToItself,
 };
 
 fn node_id(id: &str) -> StudioNodeId {
@@ -99,7 +99,7 @@ fn an_edge_to_itself_and_an_unaccepted_produced_edge_are_refused() {
         StudioRelation::SameAs,
         at(),
     );
-    assert!(matches!(same, Err(EdgeRefused::ToItself { .. })));
+    assert!(matches!(same, Err(ToItself { .. })));
     let produced = StudioEdge::recorded(
         StudioEdgeId::carried(Ulid::carried("01EDGE")),
         node_id("01A"),

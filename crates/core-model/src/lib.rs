@@ -66,5 +66,5 @@ pub use job::{
 pub use studio::{
     EdgeRefused, StateDoesNotFit, Studio, StudioEdge, StudioEdgeId, StudioEdgeKind,
     StudioEdgeStanding, StudioGraph, StudioId, StudioName, StudioNode, StudioNodeContent,
-    StudioNodeId, StudioNodeKind, StudioNodeState, StudioPosition, StudioRelation,
+    StudioNodeId, StudioNodeKind, StudioNodeState, StudioPosition, StudioRelation, ToItself,
 };
