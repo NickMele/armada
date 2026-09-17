@@ -13,8 +13,8 @@ use adapter_traits::{AgentHarness, Delivery, DroneEvent, Vcs, WorkProduct};
 use api::{Conversations as Surface, ObservedHelm, Refusal};
 use core_model::StepId;
 use ipc::{
-    AskHelm, Freshness, HelmAsked, HelmContext, HelmConversation, HelmFresh, HelmMessage,
-    HelmScreen, HelmUnanswered, Instant, ManifestId, Shown, WireError,
+    AskHelm, Freshness, HelmAsked, HelmChangedCheckout, HelmContext, HelmConversation, HelmFresh,
+    HelmMessage, HelmScreen, HelmUnanswered, Instant, ManifestId, Shown, WireError,
 };
 
 use super::conversation::{Conversation, ConversationKey};
@@ -171,6 +171,9 @@ where
         let heard = Rows {
             conversation: Arc::clone(&conversation),
             clock: Arc::clone(self.clock()),
+            manifest_id: on_the_wire(&served),
+            root: served.root().to_string(),
+            events: self.events().clone(),
         };
         if let Err(why) = self
             .replied(&served, &key, &text, context.as_ref(), &heard)
@@ -309,16 +312,48 @@ fn on_the_wire(served: &Served) -> ManifestId {
     ManifestId::carried(served.manifest().id().as_str())
 }
 
-/// What a session says, as rows in its thread.
+/// What a session says, as rows in its thread — and, where it wrote a file in
+/// the checkout, as an event of Helm's own.
 struct Rows {
     conversation: Arc<Conversation>,
     clock: Arc<dyn Clock>,
+    manifest_id: ManifestId,
+    root: String,
+    events: api::Broadcaster,
+}
+
+impl Rows {
+    /// `helm.changed_checkout`, where this call was one of the built-ins that
+    /// edits a file. **A path and never the contents**: what was written is on
+    /// the thread, and this stream is for a client that is not watching the
+    /// dock. `docs/concepts/helm.md`, *Audit trail*.
+    fn published_as_a_write(&self, event: &DroneEvent, at: &core_model::Timestamp) {
+        let DroneEvent::Called { tool, detail, .. } = event else {
+            return;
+        };
+        if !adapters::wrote_the_checkout(tool) {
+            return;
+        }
+        let path = adapters::path_written(detail.whole().unwrap_or(detail.shown()));
+        if path.is_empty() {
+            return;
+        }
+        let inside = format!("{}/", self.root.trim_end_matches('/'));
+        self.events
+            .publish(ipc::Event::HelmChangedCheckout(HelmChangedCheckout {
+                manifest_id: self.manifest_id.clone(),
+                tool: tool.clone(),
+                path: path.strip_prefix(&inside).unwrap_or(path).to_string(),
+                at: Instant::from(at),
+            }));
+    }
 }
 
 impl Heard for Rows {
     fn heard(&self, events: &[DroneEvent]) {
         let at = self.clock.now();
         for event in events {
+            self.published_as_a_write(event, &at);
             // `seen` labels a row with a Drone's step, and a conversation has
             // none, so the label is taken off again.
             let mut row = crate::transcript::seen(&at, &StepId::new(""), event);

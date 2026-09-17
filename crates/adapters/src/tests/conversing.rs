@@ -4,7 +4,7 @@
 use adapter_traits::{Environment, McpConfig, Model};
 
 use super::harness::value_after;
-use crate::conversing::{door_tools, ConversationRefused, Conversing};
+use crate::conversing::{door_tools, wrote_the_checkout, ConversationRefused, Conversing};
 use crate::harness::HeadlessAgent;
 
 fn environment() -> Environment {
@@ -32,36 +32,95 @@ fn rendered(conversing: &Conversing) -> adapter_traits::Launch {
 }
 
 #[test]
-fn a_new_conversation_opens_in_the_repository_holding_only_the_door() {
+fn a_new_conversation_opens_in_the_repository_with_the_door_beside_what_a_person_has() {
     let launch = rendered(&fresh());
     let args = launch.args();
 
     assert_eq!(launch.directory(), "/repos/armada");
     assert_eq!(launch.environment(), &environment());
-    assert!(args.iter().any(|arg| arg == "--strict-mcp-config"));
     assert_eq!(
         value_after(args, "--mcp-config").as_deref(),
         Some("/var/armada/helm-mcp.json")
     );
-    assert_eq!(value_after(args, "--allowedTools"), Some(door_tools()));
     assert_eq!(door_tools(), "mcp__armada-fleet");
-    assert_eq!(
-        value_after(args, "--permission-mode").as_deref(),
-        Some("dontAsk")
-    );
     assert!(!args.iter().any(|arg| arg == "--resume"));
     assert!(!args.iter().any(|arg| arg == "--permission-prompt-tool"));
 }
 
+/// `#1373`: each of these withholds something a person has in a terminal, and
+/// spike 018 measured what. A conversation passes none of them.
 #[test]
-fn nothing_that_writes_the_checkout_is_callable() {
+fn nothing_narrows_what_a_conversation_resolves() {
     let args = rendered(&fresh()).args().to_vec();
-    let denied = value_after(&args, "--disallowedTools").expect("a deny list");
-    for tool in ["Bash", "Edit", "Write", "NotebookEdit"] {
+    for withheld in [
+        "--strict-mcp-config",
+        "--tools",
+        "--allowedTools",
+        "--disallowedTools",
+        "--restricted",
+    ] {
         assert!(
-            denied.split(',').any(|named| named == tool),
-            "{tool} denied"
+            !args.iter().any(|arg| arg == withheld),
+            "{withheld} is not on a conversation: {args:?}"
         );
+    }
+    assert_eq!(
+        value_after(&args, "--permission-mode").as_deref(),
+        Some("acceptEdits"),
+        "a write to the checkout is the ask; a command is not"
+    );
+}
+
+/// `#1373`: **widening Helm must not widen a Drone.** Rendered side by side,
+/// because the two are the same file's argument and the danger is that a flag
+/// taken off one comes off both.
+#[test]
+fn a_drones_launch_is_untouched_by_what_a_conversation_resolves() {
+    let drone = super::harness::rendered(adapter_traits::Toolbelt::evidence_only());
+    assert!(drone.iter().any(|arg| arg == "--strict-mcp-config"));
+    assert_eq!(
+        value_after(&drone, "--permission-mode").as_deref(),
+        Some("default")
+    );
+    assert_eq!(
+        value_after(&drone, "--permission-prompt-tool"),
+        Some(crate::harness::permission_tool().to_string())
+    );
+    assert!(drone.iter().any(|arg| arg == "--allowedTools"));
+    assert!(drone.iter().any(|arg| arg == "--disallowedTools"));
+
+    let helm = rendered(&fresh()).args().to_vec();
+    assert!(!helm.iter().any(|arg| arg == "--strict-mcp-config"));
+}
+
+/// A write is recognised so it can be recorded, and `Bash` is deliberately not
+/// one: nothing in the stream says whether a shell line wrote a file.
+#[test]
+fn the_tools_that_change_a_checkout_are_named_and_bash_is_not_among_them() {
+    for tool in ["Edit", "Write", "NotebookEdit"] {
+        assert!(wrote_the_checkout(tool), "{tool} changes the checkout");
+    }
+    for tool in ["Bash", "Read", "Grep", "Glob", "WebFetch"] {
+        assert!(!wrote_the_checkout(tool), "{tool} is not a write");
+    }
+}
+
+/// The detail a write call leaves on a row is the path and how much moved, and
+/// the event carries the path alone.
+#[test]
+fn the_file_a_write_named_is_read_back_out_of_its_row() {
+    for (detail, path) in [
+        (
+            "~/armada/crates/api/src/lib.rs +3 -1",
+            "~/armada/crates/api/src/lib.rs",
+        ),
+        ("~/armada/README.md +12", "~/armada/README.md"),
+        ("~/armada/README.md", "~/armada/README.md"),
+        ("a name with spaces.md +1 -0", "a name with spaces.md"),
+        // Not a size: left alone rather than guessed at.
+        ("notes -draft.md", "notes -draft.md"),
+    ] {
+        assert_eq!(crate::conversing::path_written(detail), path);
     }
 }
 

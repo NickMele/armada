@@ -2700,6 +2700,21 @@ notes = """
 `act` names which, with the id of what was added or the name given. The Studio itself is `studio.changed`'s to carry. **The stream is for a client that is connected**; who acted is also kept on the record, as `added_by` and `named_by` on `get_studio`, so a client that reconnects reads it there. `manifest_id` is at the top level, so a poll's tally names the repository.
 """
 
+[operations."helm.changed_checkout"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "Helm wrote a file in a repository's own checkout"
+notes = """
+**Helm's act, as its own event type** — `docs/concepts/helm.md`, *Audit trail*, the rule `studio.helm_acted` already follows one subject over. Helm edits the checkout directly when a person asks it to, with no worktree and no Job around the change (`#1373`), so the file moves under whatever else is open on it. This is what lets a person who finds a file changed and did not change it see that Helm did.
+
+Published as the session's stream says the write happened, so it arrives while the reply is still being written rather than after it. It names the tool and the path and never the contents: what was written is a `Called` row on the conversation's own socket, which `observe_helm` already carries, and this stream is for a client that is not watching the dock.
+
+**A write, not a run.** The tool is one of the built-ins that edits a file, so the path is known. A shell line Helm ran may have written something too and nothing in the stream says whether it did — so a `Bash` call produces none of these, and a person reading this stream is reading writes Armada could name rather than every change Helm caused.
+
+`manifest_id` is at the top level, so a poll's tally names the repository.
+"""
+
 [operations."studio.deleted"]
 kind = "event"
 transport = "WebSocket"

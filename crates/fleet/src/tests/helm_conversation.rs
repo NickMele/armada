@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapters::HeadlessAgent;
-use api::{Conversations, HelmSeen, HelmWatch, Refusal};
+use api::{Conversations, HelmSeen, HelmWatch, Next, Refusal, Subscription};
 use ipc::{
     AskHelm, Freshness, HelmContext, HelmMessage, HelmScreen, HelmSilence, HelmText, JobId, Saw,
     StudioId, StudioNodeId,
@@ -62,6 +62,12 @@ said=$(printf '%s' "$turn" | sed -e 's/"}}$//' -e 's/.*"content":"//' -e 's/.*\\
 printf '%s\n' "$said" >> "$state/sessions/$id"
 remembered=$(paste -s -d ',' "$state/sessions/$id" | sed 's/,/, /g')
 printf '{"type":"system","subtype":"init","session_id":"%s","model":"stand-in","mcp_servers":[]}\n' "$id"
+case "$said" in
+  *edit*)
+    printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Edit","input":{"file_path":"@ROOT@/crates/api/src/lib.rs","old_string":"a","new_string":"b"}}]}}\n'
+    printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_2","name":"Bash","input":{"command":"sed -i s/a/b/ elsewhere.rs"}}]}}\n'
+    ;;
+esac
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"remembered: %s"}]}}\n' "$remembered"
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.01,"permission_denials":[]}'
 "##;
@@ -76,7 +82,9 @@ fn state(home: &TempDir) -> PathBuf {
 fn hosted(home: &TempDir) -> Arc<Hosted> {
     std::fs::create_dir_all(state(home).join("sessions")).expect("a state directory");
     let script = home.path().join("stand-in.sh");
-    let written = STAND_IN.replace("@STATE@", &state(home).to_string_lossy());
+    let written = STAND_IN
+        .replace("@STATE@", &state(home).to_string_lossy())
+        .replace("@ROOT@", &home.path().to_string_lossy());
     std::fs::write(&script, written).expect("the stand-in is written");
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
         .expect("the stand-in runs");
@@ -414,4 +422,62 @@ async fn starting_fresh_while_a_reply_is_written_is_refused() {
         Err(Refusal::IllegalMove(error)) => assert_eq!(error.code, "fleet.helm_still_replying"),
         other => panic!("refused while replying, not {other:?}"),
     }
+}
+
+/// Every event offered within a short window, so a test says what was
+/// published rather than only what was not.
+async fn published(watching: &mut Subscription) -> Vec<ipc::Event> {
+    let mut seen = Vec::new();
+    while let Ok(Some(Next::Send(delivered))) =
+        tokio::time::timeout(Duration::from_millis(50), watching.next()).await
+    {
+        seen.push(delivered.event);
+    }
+    seen
+}
+
+/// `#1373`: Helm edits the repository's own checkout when asked, so the write
+/// is an event of its own — `docs/concepts/helm.md`, *Audit trail*. A person
+/// who finds the file changed reads this to see that Helm changed it.
+#[tokio::test]
+async fn a_write_to_the_checkout_is_helms_own_event_and_a_shell_line_is_not() {
+    let home = TempDir::new();
+    let fleet = hosted(&home);
+    let mut watching = fleet.events().subscribe();
+    let mut live = fleet.observe_helm(None).await.expect("a conversation").live;
+
+    asked(&fleet, "edit the api crate").await;
+    let messages = reply(&mut live).await;
+
+    let events = published(&mut watching).await;
+    let kinds: Vec<String> = events.iter().map(|event| event.kind()).collect();
+    assert_eq!(
+        kinds,
+        ["helm.changed_checkout"],
+        "the Edit is Helm's own event and the Bash line is not: {kinds:?}"
+    );
+    let [ipc::Event::HelmChangedCheckout(wrote)] = &events[..] else {
+        panic!("one write event: {events:?}");
+    };
+    assert_eq!(wrote.tool, "Edit");
+    assert_eq!(
+        wrote.path, "crates/api/src/lib.rs",
+        "named relative to the checkout, without how much moved"
+    );
+
+    let called: Vec<String> = messages
+        .iter()
+        .filter_map(|message| match message {
+            HelmMessage::Row(row) => match &row.row().saw {
+                Saw::Called { tool, .. } => Some(tool.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        called,
+        ["Edit", "Bash"],
+        "both calls are on the thread, whatever the stream published: {called:?}"
+    );
 }
