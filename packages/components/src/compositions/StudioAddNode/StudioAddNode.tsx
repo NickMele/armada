@@ -152,8 +152,8 @@ export function StudioAddNode({
       )}
       {adding === "sketch" ? (
         <p className="armada-studio-add-node__says">
-          A Studio is read by agents as much as by a person, and an agent reads a record rather than a
-          drawing. A Sketch is the diagram written out.
+          The diagram written out. A Studio is read by agents, and an agent reads a record rather than a
+          drawing.
         </p>
       ) : null}
       <div className="armada-studio-add-node__acts">

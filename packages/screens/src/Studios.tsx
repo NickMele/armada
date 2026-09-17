@@ -19,7 +19,9 @@ import {
   CardHeader,
   CardTitle,
   Dialog,
+  StudioAddNode,
   StudioFrameSheet,
+  StudioName,
   StudioWhiteboard,
   Table,
   TableBody,
@@ -27,13 +29,30 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
+  useStudioPlacement,
 } from "@armada/components";
-import type { JobSummary, Outcome, Studio, StudioPromotion, StudioSummary } from "@armada/protocol";
+import type { StudioNodeByHand, StudioNodeByHandKind } from "@armada/components";
+import type {
+  JobSummary,
+  Outcome,
+  Studio,
+  StudioPosition,
+  StudioPromotion,
+  StudioSummary,
+} from "@armada/protocol";
 
 import { said } from "./copy";
 import { absoluteOf } from "./duration";
-import { framesDrawn, nodeNamed, proposedRelations, studioName, whiteboardEdges, whiteboardNodes } from "./studio";
+import {
+  framesDrawn,
+  nodeNamed,
+  proposedRelations,
+  UNTITLED_STUDIO,
+  whiteboardEdges,
+  whiteboardNodes,
+} from "./studio";
 import { useStudioFrames, type ReadStudioFrame } from "./studio-frames";
+import { useAddNodeKeys } from "./studio-keys";
 import type { StudioAnswer, StudioRead, StudiosRead } from "./studio-reads";
 import { useStudioPromotion } from "./StudioPromotion";
 
@@ -70,6 +89,10 @@ export type StudiosProps = {
   onContinue: () => void;
   /** Start an untitled Studio in this repository. */
   onCreate: () => Promise<StudioAnswer>;
+  /** Name a Studio, or name it again. Reaches the list's rows and the open Studio alike. */
+  onRename: (studioId: string, name: string) => Promise<Outcome>;
+  /** Put a Note, a Link or a Sketch on the open Studio, where the person is looking. */
+  onAddNode: (node: StudioNodeByHand, position: StudioPosition) => Promise<Outcome>;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => Promise<Outcome>;
   onRemoveNode: (nodeId: string) => Promise<Outcome>;
   onDecideEdge: (edgeId: string, accepted: boolean) => Promise<Outcome>;
@@ -83,9 +106,10 @@ export function Studios(props: StudiosProps) {
   return props.open === null ? <StudioList {...props} /> : <OpenedStudio {...props} open={props.open} />;
 }
 
-function StudioList({ studios, live, onOpen, onCreate }: StudiosProps) {
+function StudioList({ studios, live, onOpen, onCreate, onRename }: StudiosProps) {
   const [creating, setCreating] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+  const [naming, setNaming] = useState<string | null>(null);
 
   function create(): void {
     setCreating(true);
@@ -93,6 +117,15 @@ function StudioList({ studios, live, onOpen, onCreate }: StudiosProps) {
     void onCreate().then((answer) => {
       setCreating(false);
       if (!answer.ok) setRefused(said(answer.outcome));
+    });
+  }
+
+  function rename(studioId: string, name: string): void {
+    setNaming(studioId);
+    setRefused(null);
+    void onRename(studioId, name).then((outcome) => {
+      setNaming(null);
+      if (!outcome.ok) setRefused(said(outcome));
     });
   }
 
@@ -107,18 +140,28 @@ function StudioList({ studios, live, onOpen, onCreate }: StudiosProps) {
         </CardHeader>
         <CardContent>
           {refused === null ? null : (
-            <Alert tone="escalated" title="The Studio was not started">
+            <Alert tone="escalated" title="Fleet did not take that">
               {refused}
             </Alert>
           )}
-          <ListBody studios={studios} onOpen={onOpen} />
+          <ListBody studios={studios} live={live} naming={naming} onOpen={onOpen} onRename={rename} />
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function ListBody({ studios, onOpen }: { studios: StudiosRead; onOpen: (studioId: string) => void }) {
+type ListBodyProps = {
+  studios: StudiosRead;
+  /** A live connection. A row draws its name and no rename without one. */
+  live: boolean;
+  /** The Studio whose rename is out to Fleet, or `null`. */
+  naming: string | null;
+  onOpen: (studioId: string) => void;
+  onRename: (studioId: string, name: string) => void;
+};
+
+function ListBody({ studios, live, naming, onOpen, onRename }: ListBodyProps) {
   if (studios.state === "failed") {
     return (
       <Alert tone="escalated" title="This repository's Studios could not be read">
@@ -141,20 +184,48 @@ function ListBody({ studios, onOpen }: { studios: StudiosRead; onOpen: (studioId
       </TableHead>
       <TableBody>
         {studios.list.studios.map((one) => (
-          <Row key={one.id} studio={one} onOpen={onOpen} />
+          <Row
+            key={one.id}
+            studio={one}
+            live={live}
+            saving={naming === one.id}
+            onOpen={onOpen}
+            onRename={onRename}
+          />
         ))}
       </TableBody>
     </Table>
   );
 }
 
-function Row({ studio, onOpen }: { studio: StudioSummary; onOpen: (studioId: string) => void }) {
+/**
+ * One row. **The name opens the Studio and the rename sits beside it**: a row's
+ * name is already the way in, so renaming cannot also take that press — #1364.
+ */
+function Row({
+  studio,
+  live,
+  saving,
+  onOpen,
+  onRename,
+}: {
+  studio: StudioSummary;
+  live: boolean;
+  saving: boolean;
+  onOpen: (studioId: string) => void;
+  onRename: (studioId: string, name: string) => void;
+}) {
   return (
     <TableRow>
       <TableCell>
-        <Button variant="ghost" size="sm" onClick={() => onOpen(studio.id)}>
-          {studioName(studio)}
-        </Button>
+        <StudioName
+          name={studio.name ?? null}
+          untitled={UNTITLED_STUDIO}
+          editable={live}
+          saving={saving}
+          onOpen={() => onOpen(studio.id)}
+          onRename={(name) => onRename(studio.id, name)}
+        />
       </TableCell>
       <TableCell>{absoluteOf(studio.touched_at) ?? studio.touched_at}</TableCell>
     </TableRow>
@@ -202,6 +273,12 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
   const [opened, setOpened] = useState<string | null>(null);
   /** Every node picked on the whiteboard. A cluster is of several, and `App` keeps one. */
   const [picked, setPicked] = useState<readonly string[]>([]);
+  const [naming, setNaming] = useState(false);
+  // Which kind is being written, and whether it is out to Fleet — #1364. Held
+  // here rather than in the control, because `N`, `V` and `S` open it too.
+  const [adding, setAdding] = useState<StudioNodeByHandKind | null>(null);
+  const [addingOut, setAddingOut] = useState(false);
+  useAddNodeKeys(open.editable && live, setAdding);
   // The pictures the Notes kept, and the `blob:` each one becomes — #1352.
   const frames = useStudioFrames(props.onReadFrame, open.id);
   const drawn = framesDrawn(studio, selectedNode);
@@ -226,6 +303,23 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
     onAnswered: answered,
   });
 
+  function rename(name: string): void {
+    setNaming(true);
+    void props.onRename(studio.id, name).then((outcome) => {
+      setNaming(false);
+      answered(outcome);
+    });
+  }
+
+  function add(node: StudioNodeByHand, position: StudioPosition): void {
+    setAddingOut(true);
+    void props.onAddNode(node, position).then((outcome) => {
+      setAddingOut(false);
+      answered(outcome);
+      if (outcome.ok) setAdding(null);
+    });
+  }
+
   function decide(edgeId: string, accepted: boolean): void {
     setDeciding(edgeId);
     void props.onDecideEdge(edgeId, accepted).then((outcome) => {
@@ -240,7 +334,14 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
         <Button variant="ghost" size="sm" onClick={onBack}>
           Back to Studios
         </Button>
-        <h2 className="armada-studio__name">{studioName(studio)}</h2>
+        <StudioName
+          heading
+          name={studio.name ?? null}
+          untitled={UNTITLED_STUDIO}
+          editable={editable}
+          saving={naming}
+          onRename={rename}
+        />
         {open.editable ? null : (
           <>
             <span className="armada-studio__standing">Read-only</span>
@@ -276,9 +377,22 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
             onSelectNode(ids[0] ?? null);
           }}
         >
+          {editable ? (
+            <Card aria-label="Add a node">
+              <CardContent>
+                <AddNode
+                  adding={adding}
+                  onAdding={setAdding}
+                  onAdd={add}
+                  saving={addingOut}
+                  disabled={!editable}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
           {studio.nodes.length === 0 ? (
             <Card>
-              <CardContent>Nothing on this Studio yet.</CardContent>
+              <CardContent>Nothing on this Studio yet. Add a note, a link or a sketch to start it.</CardContent>
             </Card>
           ) : null}
           {onBoard.length === 0 ? null : (
@@ -375,5 +489,32 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
         )}
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * The `+ Node` control, drawn on the board's own aside.
+ *
+ * **A component and not markup**, because `useStudioPlacement` reads the
+ * viewport React Flow is holding and only a component rendered inside the
+ * board is inside that provider. What it buys is the rule: a node lands where
+ * the person is looking rather than at the origin.
+ */
+function AddNode(props: {
+  adding: StudioNodeByHandKind | null;
+  onAdding: (kind: StudioNodeByHandKind | null) => void;
+  onAdd: (node: StudioNodeByHand, position: StudioPosition) => void;
+  saving: boolean;
+  disabled: boolean;
+}) {
+  const place = useStudioPlacement();
+  return (
+    <StudioAddNode
+      adding={props.adding}
+      onAdding={props.onAdding}
+      onAdd={(node) => props.onAdd(node, place())}
+      saving={props.saving}
+      disabled={props.disabled}
+    />
   );
 }

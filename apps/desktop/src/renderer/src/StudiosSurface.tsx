@@ -11,12 +11,14 @@ import { Boundary } from "@armada/shell";
 
 import type { BridgeState } from "../../shared/bridge";
 import {
+  addStudioNode,
   createStudio,
   decideStudioEdge,
   moveStudioNode,
-  readStudioFrame,
   promoteOnStudio,
+  readStudioFrame,
   removeStudioNode,
+  renameStudio,
   watchStudio,
   watchStudios,
 } from "./commands";
@@ -92,6 +94,8 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
           if (answer.ok) onOpenChange({ id: answer.studio.id, editable: true });
           return answer;
         }}
+        onRename={(studioId, name) => renameStudio(studioId, name)}
+        onAddNode={(node, position) => addStudioNode(openId ?? "", node, position)}
         onMoveNode={(nodeId, position) => moveStudioNode(openId ?? "", nodeId, position)}
         onRemoveNode={(nodeId) => removeStudioNode(openId ?? "", nodeId)}
         onDecideEdge={(edgeId, accepted) => decideStudioEdge(openId ?? "", edgeId, accepted)}

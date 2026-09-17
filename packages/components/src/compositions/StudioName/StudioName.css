@@ -8,15 +8,11 @@
   min-width: 0;
 }
 
-/* Naming takes the line: the field grows and its acts sit at the end of it. */
-.armada-studio-name--naming {
-  align-items: flex-end;
-  width: 100%;
-}
-
+/* Naming takes a field's width and not the line's: a Studio's name is a phrase,
+   and a field spanning a 2000px window reads as a search box. */
 .armada-studio-name--naming .armada-input-field {
-  flex: 1;
-  min-width: 0;
+  width: var(--w-dialog);
+  max-width: 100%;
 }
 
 .armada-studio-name__acts {
@@ -28,7 +24,7 @@
   margin: 0;
   font-size: var(--text-lg);
   line-height: var(--leading-lg);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-heading);
   color: var(--fg-default);
   min-width: 0;
   overflow: hidden;

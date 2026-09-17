@@ -96,7 +96,9 @@ export function StudioName({
       <div className="armada-studio-name armada-studio-name--naming">
         <Input
           ref={field}
-          label="Studio name"
+          // Labelled but not captioned: the name it is replacing is right
+          // there, and a caption over one field in a heading row is noise.
+          aria-label="Studio name"
           value={draft}
           disabled={saving}
           invalid={refused !== undefined}
