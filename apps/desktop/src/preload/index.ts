@@ -20,7 +20,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { HelmContext } from "@armada/protocol";
-import type { StudioPosition } from "@armada/protocol";
+import type { StudioCapture, StudioPosition } from "@armada/protocol";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
 import type { AddTask, DropTask } from "@armada/protocol";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
@@ -489,6 +489,10 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.createStudio, manifestId),
   moveStudioNode: (studioId: string, nodeId: string, position: StudioPosition): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.moveStudioNode, studioId, nodeId, position),
+  // The frame is main's: this hands over what was pointed at and nothing else,
+  // so the capability added here is a Note on a Studio and not a screenshot.
+  captureStudioNote: (studioId: string, said: string, capture: StudioCapture): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.captureStudioNote, studioId, said, capture),
   removeStudioNode: (studioId: string, nodeId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.removeStudioNode, studioId, nodeId),
   decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean): Promise<Outcome> =>

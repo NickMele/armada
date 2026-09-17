@@ -39,6 +39,7 @@ import { BridgeSettings } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Composing } from "./Composing";
 import { Overview } from "./Overview";
+import { CaptureLayer, type CaptureAim } from "./capture/Layer";
 import { StudiosSurface } from "./StudiosSurface";
 import { nodeNamed, studioName, type OpenStudio } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
@@ -96,6 +97,7 @@ import {
   readRemarks,
   deleteBranchOne,
   forgetOne,
+  captureStudioNote,
   readHeld,
   readReports,
   reclaimOne,
@@ -184,6 +186,10 @@ export function App() {
   const [studying, setStudying] = useState(false);
   const [openStudio, setOpenStudio] = useState<OpenStudio | null>(null);
   const [studioNode, setStudioNode] = useState<string | null>(null);
+  // What Studio capture lands on — #1290. **It outlives the surface**: what is
+  // wrong is on the Board or Overview, not on the whiteboard, so the aim is the
+  // Studio last open and continued rather than the one a surface is drawing.
+  const [captureAim, setCaptureAim] = useState<CaptureAim>(null);
   // The Check or Command the palette picked, or `null`. **It selects rather
   // than runs**, which is what Journey 9's own table says the palette does.
   const [picked, setPicked] = useState<string | null>(null);
@@ -493,6 +499,15 @@ export function App() {
     node: studioNode,
   });
   const shownStudio = state.studio.state === "read" && state.studio.studio.id === openStudio?.id ? state.studio.studio : null;
+  // Aimed during render rather than in an effect: it is a value this render
+  // already knows, and an effect would leave capture a frame behind the Studio.
+  const continued =
+    openStudio?.editable === true && shownStudio !== null
+      ? { id: shownStudio.id, name: studioName(shownStudio) }
+      : null;
+  if (continued !== null && (continued.id !== captureAim?.id || continued.name !== captureAim.name)) {
+    setCaptureAim(continued);
+  }
   // Helm's dock lists every repository's questions, whatever the pick. Answering is #936, Helm #944.
   const dockAnswering = useDockAnswering(commands);
   // "Discuss with Helm" points it at the card's own repository. The picker never moves for it.
@@ -945,6 +960,10 @@ export function App() {
           )}
         </div>
       </Shell>
+
+      {/* Studio capture — #1290. Last, so its layer paints over every surface
+          and every overlay the shell draws under it. */}
+      <CaptureLayer aim={captureAim} onCapture={captureStudioNote} />
 
       {/* Every destructive act confirms, and the confirmation states what
           happens and what survives rather than asking "are you sure". Cancel

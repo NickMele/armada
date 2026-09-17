@@ -280,6 +280,7 @@
 @import "./compositions/WorkNarration/WorkNarration.css";
 /* A Studio's nodes, and the whiteboard that places them. Above the rule below,
    per HeldFlag's note. #1286. */
+@import "./compositions/StudioCapture/StudioCapture.css";
 @import "./compositions/StudioNode/StudioNode.css";
 @import "./compositions/StudioWhiteboard/StudioWhiteboard.css";
 

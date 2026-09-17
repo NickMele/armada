@@ -52,7 +52,7 @@ import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
-import type { StudioPosition } from "@armada/protocol";
+import type { StudioCapture, StudioPosition } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import type {
   ManifestProposalsRead,
@@ -748,6 +748,12 @@ export type BridgeApi = {
   removeStudioNode: (studioId: string, nodeId: string) => Promise<Outcome>;
   /** Accept a proposed relation, or reject it, which removes it. A person's act, as above. */
   decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean) => Promise<Outcome>;
+  /**
+   * Put a Note on a Studio where a person pointed — #1290. **Main takes the
+   * frame**, of the window the call came from and no other, so the renderer
+   * never holds an image and asks for none.
+   */
+  captureStudioNote: (studioId: string, said: string, capture: StudioCapture) => Promise<Outcome>;
   /**
    * Take the work. **The counterpart to `approveDispatch`, at the other end of
    * the Job.** On the workflow's last step Fleet commits and delivers before

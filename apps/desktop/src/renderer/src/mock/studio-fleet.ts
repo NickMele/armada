@@ -6,7 +6,7 @@
 // the Studio reads and writes wherever `fake.ts` puts it, so a scenario that keeps none answers an
 // empty list and the surface draws its empty state; the `studios` scenario adds the Helm write.
 
-import type { Studio, StudioEdge, StudioNode } from "@armada/protocol";
+import type { Studio, StudioCapture, StudioEdge, StudioNode } from "@armada/protocol";
 import { repository } from "@armada/screens/src/fixtures/build/base";
 import { foldStudio } from "@armada/screens/src/studio-reads";
 
@@ -23,7 +23,13 @@ const MANIFEST_ID = repository().manifest!.id;
  */
 export type StudioRoutes = Pick<
   BridgeApi,
-  "watchStudios" | "watchStudio" | "createStudio" | "moveStudioNode" | "removeStudioNode" | "decideStudioEdge"
+  | "watchStudios"
+  | "watchStudio"
+  | "createStudio"
+  | "captureStudioNote"
+  | "moveStudioNode"
+  | "removeStudioNode"
+  | "decideStudioEdge"
 >;
 
 /** The Studios a mock Fleet keeps, and what Helm writes into one. */
@@ -116,6 +122,24 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
         const studio: Studio = { id: mint("01STUDIO"), manifest_id: manifestId, created_at: now, touched_at: now, nodes: [], edges: [] };
         published(studio);
         return { ok: true, studio };
+      },
+      // The frame is main's, and the mock has no window to take one of, so a
+      // captured Note here carries everything but that.
+      captureStudioNote: async (studioId, said, capture: StudioCapture) => {
+        const answer = write(studioId, (studio) => {
+          const y = studio.nodes.reduce((lowest, node) => Math.max(lowest, node.position.y), -260) + 260;
+          const note: StudioNode = {
+            id: mint("note-"),
+            kind: "note",
+            said,
+            capture,
+            position: { x: 0, y },
+            created_at: tick(),
+            added_by: "person",
+          };
+          return { ...studio, nodes: [...studio.nodes, note] };
+        });
+        return answer.ok ? OK : answer.outcome;
       },
       moveStudioNode: async (studioId, nodeId, position) => {
         const answer = write(studioId, (studio) => ({

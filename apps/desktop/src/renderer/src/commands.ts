@@ -52,6 +52,7 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { HelmContext, JobSummary } from "@armada/protocol";
+import type { StudioCapture } from "@armada/protocol";
 import type { ActAnswer, ActingAct, Answered, ConfirmableAct, DecidingAct, Taken, TakenAct } from "@armada/screens";
 import { takenNotice, takenStands } from "@armada/screens";
 import { patternFor, useHaptics } from "@armada/components";
@@ -80,6 +81,9 @@ export const moveStudioNode = (studioId: string, nodeId: string, position: { x: 
 export const removeStudioNode = (studioId: string, nodeId: string) => window.armada.removeStudioNode(studioId, nodeId);
 export const decideStudioEdge = (studioId: string, edgeId: string, accepted: boolean) =>
   window.armada.decideStudioEdge(studioId, edgeId, accepted);
+// Studio capture — #1290. What a person pointed at; the frame is main's to take.
+export const captureStudioNote = (studioId: string, said: string, capture: StudioCapture) =>
+  window.armada.captureStudioNote(studioId, said, capture);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 export const deleteBranchOne = (jobId: string, tip: string) => window.armada.deleteBranch(jobId, tip);
 export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);
