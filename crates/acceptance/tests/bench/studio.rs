@@ -92,6 +92,7 @@ pub fn a_studio_with_two_notes() -> StudioGraph {
             StudioNodeId::carried(Ulid::carried(id)),
             StudioNodeContent::Note {
                 said: said.to_string(),
+                capture: None,
             },
             StudioPosition { x, y: 0 },
             at(1),
@@ -222,6 +223,7 @@ pub fn a_studio_with_a_run_started_from_a_note(
         StudioNodeId::carried(Ulid::carried("01NOTEFIRST")),
         StudioNodeContent::Note {
             said: FIRST_NOTE.to_string(),
+            capture: None,
         },
         StudioPosition { x: 0, y: 0 },
         at(1),

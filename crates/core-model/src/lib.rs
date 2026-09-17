@@ -64,9 +64,10 @@ pub use job::{
     PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, WorkingWindow, PLAN_RECORDED,
 };
 pub use studio::{
-    EdgeRefused, FrozenFinding, GatheringFinding, NotScoutable, ScoutCheckout, ScoutEnded,
-    ScoutLook, ScoutOutcome, Scouted, StateDoesNotFit, Studio, StudioAuthor, StudioEdge,
-    StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioFinding, StudioGraph, StudioId,
-    StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind, StudioNodeState,
-    StudioPosition, StudioRelation, StudioRunKept, ToItself,
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, EdgeRefused, FrozenFinding,
+    GatheringFinding, NotScoutable, ScoutCheckout, ScoutEnded, ScoutLook, ScoutOutcome, Scouted,
+    StateDoesNotFit, Studio, StudioAuthor, StudioCapture, StudioEdge, StudioEdgeId, StudioEdgeKind,
+    StudioEdgeStanding, StudioFinding, StudioGraph, StudioId, StudioName, StudioNode,
+    StudioNodeContent, StudioNodeId, StudioNodeKind, StudioNodeState, StudioPosition,
+    StudioRelation, StudioRunKept, ToItself,
 };

@@ -697,6 +697,11 @@ fn assemble(
     let attachments_dir = machine.join("attachments");
     std::fs::create_dir_all(&attachments_dir)?;
 
+    // A Studio's frames, beside the Studio's records rather than inside the
+    // database — a screenshot in a row is read on every graph read. `#1290`.
+    let studio_frames_dir = machine.join("studios");
+    std::fs::create_dir_all(&studio_frames_dir)?;
+
     // The document names one server and there is no parameter through which a
     // second could arrive. The path is `api`'s own constant rather than a
     // literal: this address is in no route table a gate rule reads, so the one
@@ -730,6 +735,7 @@ fn assemble(
             user,
             mcp_config: mcp_config.to_string_lossy().to_string(),
             attachments_dir: attachments_dir.to_string_lossy().to_string(),
+            studio_frames_dir: studio_frames_dir.to_string_lossy().to_string(),
             // `judge_binary`'s reason: the same override reaches Helm's host.
             // `#943`.
             agent_binary: judge_binary.clone(),

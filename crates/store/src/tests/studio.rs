@@ -47,6 +47,7 @@ fn a_note(store: &mut Store, studio: &StudioId, id: &str, said: &str, x: i64) ->
         node_id(id),
         StudioNodeContent::Note {
             said: said.to_string(),
+            capture: None,
         },
         StudioPosition { x, y: 40 },
         at(1),

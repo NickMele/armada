@@ -5,11 +5,11 @@
 use std::sync::Arc;
 
 use ipc::{
-    AddStudioNode, AskScout, CheckoutRunUnderway, CreateStudio, DecideStudioEdge, Instant,
-    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout,
-    StartStudioRun, StopScout, Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind,
-    StudioEdgeStanding, StudioId, StudioList, StudioNode, StudioNodeContent, StudioNodeId,
-    StudioNodeState, StudioRunStarted, StudioSummary, WireError,
+    AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, CreateStudio,
+    DecideStudioEdge, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode,
+    RenameStudio, StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioEdge,
+    StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId, StudioList, StudioNode,
+    StudioNodeContent, StudioNodeId, StudioNodeState, StudioRunStarted, StudioSummary, WireError,
 };
 
 use super::FakeDaemon;
@@ -168,6 +168,31 @@ impl Studios for FakeDaemon {
                 content: add.content,
                 state: None,
                 position: add.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(studio.clone())
+        })
+    }
+
+    /// The frame is not kept here: what a fake proves is that the route
+    /// carries the body, and where a frame goes is `fleet`'s.
+    async fn capture_studio_note(
+        &self,
+        studio_id: StudioId,
+        capture: CaptureStudioNote,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let id = StudioNodeId::carried(format!("01NODE{}", studio.nodes.len()));
+            studio.nodes.push(StudioNode {
+                id,
+                content: StudioNodeContent::Note {
+                    said: capture.said.clone(),
+                    capture: Some(capture.capture.clone()),
+                },
+                state: None,
+                position: capture.position,
                 created_at: Instant::carried(AT),
                 added_by: None,
             });

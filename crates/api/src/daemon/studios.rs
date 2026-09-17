@@ -13,9 +13,9 @@ use std::future::Future;
 use std::sync::Arc;
 
 use ipc::{
-    AddStudioNode, AskScout, CreateStudio, DecideStudioEdge, ManifestId, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StartStudioRun, StopScout,
-    Studio, StudioDeleted, StudioId, StudioList, StudioRunStarted,
+    AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, ManifestId,
+    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StartStudioRun,
+    StopScout, Studio, StudioDeleted, StudioId, StudioList, StudioRunStarted,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -66,6 +66,16 @@ pub trait Studios: Send + Sync + 'static {
         studio_id: StudioId,
         add: AddStudioNode,
         by: Redirector,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `capture_studio_note` — a Note fixed at where a person pointed, with
+    /// its frame copied into Fleet's own keeping. **No `by`**: the route
+    /// reaches no agent, so a capture is a person's.
+    fn capture_studio_note(
+        &self,
+        studio_id: StudioId,
+        capture: CaptureStudioNote,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 

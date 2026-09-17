@@ -121,7 +121,7 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
         .nodes
         .iter()
         .map(|node| match &node.content {
-            StudioNodeContent::Note { said } => said.as_str(),
+            StudioNodeContent::Note { said, .. } => said.as_str(),
             other => panic!("only Notes were put on it: {other:?}"),
         })
         .collect();

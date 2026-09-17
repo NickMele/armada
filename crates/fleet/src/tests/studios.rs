@@ -34,6 +34,7 @@ fn a_note(said: &str, x: i64) -> AddStudioNode {
     AddStudioNode {
         content: StudioNodeContent::Note {
             said: said.to_string(),
+            capture: None,
         },
         position: StudioPosition { x, y: 0 },
         produced_by: None,
