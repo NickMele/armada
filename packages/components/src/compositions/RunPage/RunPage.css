@@ -225,8 +225,7 @@
 }
 
 /* Unhued. A Command that writes is not a failure and takes no caution colour —
-   `tokens/status.css` names nothing for it, and the words carry the reading
-   exactly as the exit code below does. */
+   `tokens/status.css` names nothing for it, and the words carry the reading. */
 .armada-run-page__writes {
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
@@ -240,10 +239,11 @@
   gap: var(--space-2);
 }
 
+/* A run in flight, in Job colours: --run-running aliases running. */
 .armada-run-page__elapsed {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--fg-subtle);
+  color: var(--run-running);
 }
 
 /* The panel that stays until it is dismissed. It is one region — output,
@@ -291,7 +291,8 @@
   min-height: 100%;
 }
 
-/* Unhued: no run from this surface is a verdict. */
+/* The line stays --fg-default and only its chip takes the run's hue: no run
+   from this surface is a verdict, so the colour sits on the code it came to. */
 .armada-run-page__result {
   margin: 0;
   display: flex;

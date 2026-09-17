@@ -41,10 +41,20 @@ export type FactChipNamed =
   | "refused"
   | "waiting";
 
+/**
+ * How a run started by hand ended, for its hue — `tokens/status.css`'s
+ * `--run-passed` and `--run-failed`, each an alias of its Job status. **A run
+ * is not a verdict**: it writes no Evidence, so it takes its own tokens rather
+ * than `named`'s, and the two are never passed together. A stopped run has
+ * none.
+ */
+export type FactChipRun = "passed" | "failed";
+
 export type FactChipProps = {
   /** The value. One line, mono, clipped where the column is narrower. */
   children: ReactNode;
   named?: FactChipNamed;
+  run?: FactChipRun;
   /**
    * The whole value, for the title, where `children` is a string the caller
    * has already shortened. A chip clips and a clipped value with nothing
@@ -53,9 +63,9 @@ export type FactChipProps = {
   title?: string;
 };
 
-export function FactChip({ children, named, title }: FactChipProps) {
+export function FactChip({ children, named, run, title }: FactChipProps) {
   return (
-    <span className="armada-chip" data-named={named} title={title}>
+    <span className="armada-chip" data-named={named} data-run={run} title={title}>
       {children}
     </span>
   );

@@ -294,6 +294,9 @@ new one. The mapping is declared, so it is read rather than inferred.
 --step-stopped-bg  var(--status-escalated-bg)
 --verdict-met      var(--status-completed-success)
 --verdict-not-met  var(--status-completed-failed)
+--run-running      var(--status-running)
+--run-passed       var(--status-completed-success)
+--run-failed       var(--status-completed-failed)
 ```
 
 **Step activity answers where the work is.** `retrying` and
@@ -337,6 +340,15 @@ criterion and why. **Verdict hue is per criterion and never sums onto
 the step or the Job** — that is the rule that lets a red cross sit under
 a running step beneath an escalated badge without any of the three
 contradicting the others.
+
+**A run started by hand takes Job colours, and is still no verdict.** A
+Check or Command run from a Job's run sheet or the Manifest surface hues its
+result: the code it expected is `--run-passed`, any other ending
+`--run-failed`, one in flight `--run-running`. A run somebody stopped takes
+none, for killed's reason. The hue sits on the result's chip and the
+elapsed figure, and it counts for nothing — a run writes no Evidence and no
+`check_runs` row, and on Job detail the run sheet keeps its own heading so a
+rehearsal never reads as the gate's result.
 
 **Refusals sort first, and every criterion row carries its number.** A
 card that reorders breaks correspondence with the frozen

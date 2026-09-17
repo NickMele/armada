@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
 import { Dialog } from "../../primitives/Dialog/Dialog";
-import { FactChip } from "../FactChip/FactChip";
+import { FactChip, type FactChipRun } from "../FactChip/FactChip";
 import { CheckRuns, type CheckRun } from "../CheckRuns/CheckRuns";
 import { ConsoleOutput, type ConsoleOutputProps } from "../ConsoleOutput/ConsoleOutput";
 import { ChangedFiles, type ChangedFile } from "../ChangedFiles/ChangedFiles";
@@ -42,13 +42,14 @@ import { RunDiffSheet, type RunDiffSheetProps } from "../RunDiffSheet/RunDiffShe
  * tree as it was just before the run, and this tree holds the owner's own
  * uncommitted work — which no Job's worktree ever does.
  *
- * # Nothing here is hued
+ * # Job colours, and still no verdict
  *
  * No run from this surface is a verdict: nothing writes Evidence, no Check
- * gets a stored pass or fail, and nothing reaches the rail or the Board. So an
- * exit code is a `FactChip` and never a status colour, exactly as it is on the
- * sheet, and for a stronger reason — a remembered verdict here would be the
- * path around verification that v1 proved becomes the default path.
+ * gets a stored pass or fail, and nothing reaches the rail or the Board — a
+ * remembered verdict here would be the path around verification that v1
+ * proved becomes the default path. **Its result still reads in Job colours**,
+ * as on the sheet: a `FactChip` hued through `--run-*`. How it looks, not
+ * what it counts for.
  *
  * **Data in, callbacks out.** No protocol type and no fetch: a caller resolves
  * the Manifest, starts the run and streams the output.
@@ -95,14 +96,20 @@ export type RunPageAlwaysAllowedRow = { run: string };
 export type RunPagePastRun = {
   id: string;
   name: ReactNode;
-  /** `exit 0 (expects 0)`. Unhued — a rehearsal is not a verdict. */
+  /** `exit 0 (expects 0)`, in a chip hued by `outcome`. */
   result: ReactNode;
+  /**
+   * How it ended, for its hue. `passed` is the code it expected; `failed` is
+   * any other ending. **Absent where a person pressed Stop** — a run somebody
+   * ended is not a failure, as a killed Job is not one.
+   */
+  outcome?: FactChipRun;
   time: ReactNode;
   duration: ReactNode;
   onOpen?: () => void;
 };
 
-/** The last run's own line. Unhued, and it says how it ended in words. */
+/** The last run's own line, in Job colours, and it says how it ended in words. */
 export type RunPageResult = {
   name: ReactNode;
   /** Absent where there was no code — a signal, a spawn that failed. */
@@ -111,6 +118,8 @@ export type RunPageResult = {
   /** How it ended, in a sentence, for the case with no code. */
   ended: ReactNode;
   duration: ReactNode;
+  /** As `RunPagePastRun`'s. Absent where a person stopped it. */
+  outcome?: FactChipRun;
 };
 
 /** An address a server offers, handed to a callback and never an `<a href>`. */
@@ -337,7 +346,7 @@ export function RunPage({
             {result === undefined ? null : (
               <p className="armada-run-page__result">
                 {result.name}{" "}
-                <FactChip>
+                <FactChip run={result.outcome}>
                   {result.exitCode === undefined
                     ? result.ended
                     : `exit ${result.exitCode} (expects ${result.expected})`}
@@ -353,7 +362,7 @@ export function RunPage({
                 ) : (
                   <p className="armada-run-page__changed-note">{changed.unreadable}</p>
                 )}
-                {/* Unhued, like everything here: undone is a fact about the
+                {/* Unhued, like everything but a result: undone is a fact about the
                     checkout since, not a result. */}
                 {changed.undone === undefined ? null : (
                   <p className="armada-run-page__changed-note">{changed.undone}</p>
@@ -389,12 +398,14 @@ export function RunPage({
                 id: past.id,
                 says: past.name,
                 identifier: past.time,
+                // The chip, not CheckRuns' own `named`: that hue is a gate's
+                // result, and a rehearsal must not read as one.
                 result: (
-                  <>
+                  <FactChip run={past.outcome}>
                     {past.result}
                     {" · "}
                     {past.duration}
-                  </>
+                  </FactChip>
                 ),
                 output: past.onOpen === undefined ? undefined : "log",
               }),
@@ -614,7 +625,14 @@ function RunPageServer({
     return (
       <p className="armada-run-page__server-status">
         {status.stopped === true ? "Stopped." : "Stopped on its own."}
-        {status.exitCode === undefined ? null : <> <FactChip>{`exit ${status.exitCode}`}</FactChip></>}
+        {status.exitCode === undefined ? null : (
+          <>
+            {" "}
+            <FactChip run={status.stopped === true ? undefined : "failed"}>
+              {`exit ${status.exitCode}`}
+            </FactChip>
+          </>
+        )}
       </p>
     );
   }

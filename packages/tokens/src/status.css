@@ -198,6 +198,25 @@
   --verdict-not-met: var(--status-completed-failed);
 }
 
+/* Runs — a Check or Command started by hand, from a Job's run sheet or the
+   Manifest surface. Declared 2026-09-17 (#1277): an exit code in plain text
+   made a failed run and a passed one look alike until the number was read.
+
+   A run takes Job colours, and the same run reads the same wherever it
+   appears. running aliases running; passed aliases completed_success, the
+   code it expected; failed aliases completed_failed, any other ending that was
+   not a person pressing Stop. A stopped run takes no hue, for the reason
+   killed does not read as an error: a person ended it.
+
+   Colour changes how a rehearsal looks, not what it counts for. A run still
+   writes no Evidence and no check_runs row, and its hue is per run — never
+   summed onto the step, the gate or the Job. */
+:root {
+  --run-running: var(--status-running);
+  --run-passed: var(--status-completed-success);
+  --run-failed: var(--status-completed-failed);
+}
+
 /* The error treatment: one red, told apart from a Job status by shape.
 
    A failed Job is Armada working and an error is Armada failing, so both are

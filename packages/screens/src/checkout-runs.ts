@@ -54,7 +54,8 @@ import {
 export { checkoutResultRunOf, runningEntryOf };
 import { absoluteOf, clockOf, span } from "./duration";
 import { openServerLink } from "./opening";
-import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, saying, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
+import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, runOutcomeOf } from "./rehearsal";
+import { saying, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
 import { seedSaid } from "./seed";
 
 /** What the Manifest surface asks of the host. One prop, `rehearsal`'s precedent. */
@@ -194,12 +195,14 @@ export function checkoutOutputOf(
   };
 }
 
-/** One row of *Earlier runs* — unhued, because a rehearsal carries no verdict. */
+/** One row of *Earlier runs*, in Job colours — `runOutcomeOf`'s reading. */
 export function checkoutPastRunOf(
   record: CheckoutRunRecord,
   onOpen: (id: string) => void,
 ): RunPagePastRun {
+  const outcome = runOutcomeOf(record);
   return {
+    ...(outcome === undefined ? {} : { outcome }),
     id: record.id,
     name: checkoutRunLabelOf(record),
     result:
@@ -476,9 +479,11 @@ export function exitedOf(instance: ServerState): RunPageServerStatus {
   };
 }
 
-/** The result line for a finished run. Unhued: a rehearsal is not a verdict. */
+/** The result line for a finished run, in Job colours. Still not a verdict. */
 function resultOf(record: CheckoutRunRecord): RunPageResult {
+  const outcome = runOutcomeOf(record);
   return {
+    ...(outcome === undefined ? {} : { outcome }),
     name: checkoutRunLabelOf(record),
     ...(record.exit_code === undefined ? {} : { exitCode: record.exit_code }),
     expected: record.expect_exit_code,

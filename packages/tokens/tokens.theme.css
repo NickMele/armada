@@ -103,6 +103,9 @@
   --color-step-stopped-bg: var(--step-stopped-bg);
   --color-verdict-met: var(--verdict-met);
   --color-verdict-not-met: var(--verdict-not-met);
+  --color-run-running: var(--run-running);
+  --color-run-passed: var(--run-passed);
+  --color-run-failed: var(--run-failed);
   --color-error: var(--error);
   --color-degraded: var(--degraded);
   --color-degraded-dot: var(--degraded-dot);
