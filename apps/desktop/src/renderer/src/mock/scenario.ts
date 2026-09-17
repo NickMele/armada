@@ -48,6 +48,7 @@ import realBoard from "@armada/screens/src/fixtures/boards/real-board.json";
 
 import type { BridgeApi } from "../../../shared/api";
 import { NOTHING_YET } from "../../../shared/bridge";
+import { SCRATCH, SHEET_READ, settingUp } from "./setup-fleet";
 import type { BridgeState } from "../../../shared/bridge";
 
 /** One moment: what is published before anything is opened, and the reads behind each Job. */
@@ -313,6 +314,7 @@ export const SCENARIOS: readonly Scenario[] = [
     reads: {},
   },
   recordedBoard(),
+  settingUp({ repositories: [repository(), SCRATCH], sheet: SHEET_READ }),
   ...BUILT.map(([name, fixture]) => holding(`job/${name}`, fixture.name, [fixture], fixture.job.id)),
   ...RECORDED.map(([slug, fixture]) => holding(`recorded/${slug}`, fixture.name, [fixture], fixture.job.id)),
 ];

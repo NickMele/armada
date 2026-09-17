@@ -370,7 +370,7 @@ export function ManifestFrom({
             onStartRun={onStartRun}
             {...(setUp === undefined
               ? {}
-              : { setUp, setup: <p className="text-fg-muted">Screens/Setup draws this tab.</p> })}
+              : { setUp, setup: <p className="text-fg-muted">The mock's setup.test.tsx drives this tab in the app.</p> })}
             drift={drift}
             onStartVerify={nothingHappens}
             onStopRun={nothingHappens}
