@@ -1,10 +1,14 @@
-// The Studios surface, through `App`, on a Fleet that keeps Studios — #1287's definition of done:
+// The Studios surface, through `App`, on a Fleet that keeps Studios — #1287's definition of done,
+// and #1341's: every scenario keeps Studios, so the surface opens wherever it is reached.
+//
+// #1287's is:
 // open Studios from the rail, start one, drag a node, close Bridge, reopen it read-only with the
 // node where it was left, press Continue, and accept a proposed relation, with Helm's footer naming
 // the Studio. `crates/acceptance/tests/studio.rs` lists the read-only reopen as proved here.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
+import { repository } from "@armada/screens/src/fixtures/build/base";
 
 import { mountApp, type Mounted } from "./mount";
 import { studying } from "./studio-fleet";
@@ -120,4 +124,37 @@ test("on All repositories the surface asks for one, since a Studio belongs to on
   open({ ...fleet.scenario, state: { ...fleet.scenario.state, repository: null } });
   await page.getByRole("button", { name: "Studios", exact: true }).first().click();
   await expect.element(page.getByText("Pick a repository to open its Studios")).toBeVisible();
+});
+
+/** Studios from the rail, answering the surface's own ask for a repository. */
+async function openStudios(): Promise<void> {
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await userEvent.selectOptions(page.getByLabelText("Repository", { exact: true }), repository().root);
+}
+
+const FAILED = "This repository's Studios could not be read";
+
+test("every-state keeps Studios, so the surface opens on a list and not a read failure", async () => {
+  open("every-state");
+  await openStudios();
+
+  await expect.element(page.getByRole("button", { name: "Every kind of node and edge" })).toBeVisible();
+  // Untitled, so the list draws what an unnamed Studio is called.
+  await expect.element(page.getByRole("button", { name: "Untitled Studio" })).toBeVisible();
+  expect(page.getByText(FAILED).query()).toBeNull();
+
+  await page.getByRole("button", { name: "Every kind of node and edge" }).click();
+  await expect.element(node(/^Note: The legend under the step bar is unreadable/)).toBeVisible();
+  // A Job node reads its state off the Board row this window already holds.
+  await expect.element(node(/^Job: /)).toBeVisible();
+  // Reopened read-only, so its proposed relations are listed and nothing acts on them.
+  await expect.element(page.getByText("Continue to accept or reject.")).toBeVisible();
+});
+
+test("a scenario keeping no Studios draws the empty state, not a read failure", async () => {
+  open("empty-store");
+  await openStudios();
+
+  await expect.element(page.getByText("No Studios yet.", { exact: false })).toBeVisible();
+  expect(page.getByText(FAILED).query()).toBeNull();
 });

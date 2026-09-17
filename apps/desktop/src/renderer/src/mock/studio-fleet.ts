@@ -1,6 +1,10 @@
 // A Fleet keeping this repository's Studios: started, a node moved or removed, a relation decided,
 // each written and published whole the way `studio.changed` carries it — #1287. `helmProposes` is
 // the one write a person does not make, standing in for Helm adding nodes and proposing a relation.
+//
+// **`keeping()` is every scenario's, and `studying()` is one scenario** — #1341. The store answers
+// the Studio reads and writes wherever `fake.ts` puts it, so a scenario that keeps none answers an
+// empty list and the surface draws its empty state; the `studios` scenario adds the Helm write.
 
 import type { Studio, StudioEdge, StudioNode } from "@armada/protocol";
 import { repository } from "@armada/screens/src/fixtures/build/base";
@@ -13,14 +17,27 @@ import type { FleetHandle, Scenario } from "./moment";
 const OK = { ok: true } as const;
 const MANIFEST_ID = repository().manifest!.id;
 
+/**
+ * Every Studio call a mock Fleet answers. **Named one by one**, so a Studio capability added to
+ * `BridgeApi` fails typecheck here rather than going unanswered at runtime — `fake.ts`'s own rule.
+ */
+export type StudioRoutes = Pick<
+  BridgeApi,
+  "watchStudios" | "watchStudio" | "createStudio" | "moveStudioNode" | "removeStudioNode" | "decideStudioEdge"
+>;
+
 /** The Studios a mock Fleet keeps, and what Helm writes into one. */
-export type StudioFleet = {
-  scenario: Scenario;
+export type StudioKeeping = {
+  /** What this Fleet answers the Studio calls with, over the window it publishes to. */
+  routes: (fleet: FleetHandle) => StudioRoutes;
   /** Every Studio as Fleet holds it now. */
   studios: () => readonly Studio[];
   /** Helm adds a Note and a Finding to a Studio, and proposes that the Finding answers the Note. */
   helmProposes: (studioId: string) => void;
 };
+
+/** One scenario's own Fleet, keeping Studios. */
+export type StudioFleet = StudioKeeping & { scenario: Scenario };
 
 let minted = 0;
 const mint = (prefix: string) => `${prefix}${String(++minted).padStart(4, "0")}`;
@@ -52,7 +69,8 @@ function legend(): Studio {
   };
 }
 
-export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
+/** A Fleet keeping these Studios, answering every read and write on them. */
+export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
   const store = new Map<string, Studio>(seeded.map((one) => [one.id, one]));
   let fleet: FleetHandle | null = null;
   let listing: string | null = null;
@@ -79,7 +97,7 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
     return { ok: true, studio } as const;
   }
 
-  const behaves = (handle: FleetHandle): Partial<BridgeApi> => {
+  const routes = (handle: FleetHandle): StudioRoutes => {
     fleet = handle;
     return {
       watchStudios: async (manifestId) => {
@@ -127,12 +145,7 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
   };
 
   return {
-    scenario: {
-      ...onBoard([], { picked: repository().root }),
-      name: "studios",
-      says: "This repository's Studios, on a Fleet that keeps them",
-      behaves,
-    },
+    routes,
     studios: () => [...store.values()],
     helmProposes: (studioId) =>
       void write(studioId, (studio) => {
@@ -149,5 +162,123 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
         const edge: StudioEdge = { id: mint("edge-"), from: finding.id, to: note.id, kind: "answers", standing: "proposed", created_at: now };
         return { ...studio, nodes: [...studio.nodes, note, finding], edges: [...studio.edges, edge] };
       }),
+  };
+}
+
+/** The `studios` scenario: this repository picked, and a Fleet keeping these Studios. */
+export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
+  const fleet = keeping(seeded);
+  return {
+    ...fleet,
+    scenario: {
+      ...onBoard([], { picked: repository().root }),
+      name: "studios",
+      says: "This repository's Studios, on a Fleet that keeps them",
+      behaves: fleet.routes,
+    },
+  };
+}
+
+/**
+ * The grid `everyKind()` is laid out on, wide enough for a node card and a gap. **Taller than it
+ * is wide, and its top-right corner left empty**: the whiteboard fits the graph to the window and
+ * draws the Proposed panel over that corner, so a node placed there is read through glass.
+ */
+const place = (column: number, row: number) => ({ x: column * 340, y: row * 220 });
+
+const MADE = "2026-09-15T11:00:00Z";
+const TOUCHED = "2026-09-17T08:40:00Z";
+
+/**
+ * A Studio holding a node of every kind and an edge of every kind, proposed and accepted — what
+ * `every-state` carries for Studios, the way it carries a Job in every state. `jobId` is a row on
+ * that Board, so the Job node draws the state the Board holds rather than a bare id.
+ */
+export function everyKind(jobId: string): Studio {
+  const nodes: StudioNode[] = [
+    { id: "every-link", kind: "link", address: "docs/contracts/design-system.md#the-board", position: place(0, 0), created_at: MADE },
+    { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", position: place(1, 0), created_at: MADE },
+    { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
+    { id: "every-note-states", kind: "note", said: "Queued and preparing read the same at a glance", position: place(1, 1), created_at: MADE },
+    { id: "every-cluster", kind: "cluster", title: "The legend cannot be read", position: place(0, 2), created_at: MADE },
+    {
+      id: "every-run",
+      kind: "run",
+      run_id: "01RUNEVERYKIND000000000000",
+      // Swept by retention, so the Studio kept the run whole — #1289. A Studio outlives a run's log.
+      kept: {
+        name: "typecheck",
+        command: "pnpm typecheck",
+        exit_code: 2,
+        expect_exit_code: 0,
+        stopped: false,
+        duration_ms: 8400,
+        lines: ["src/renderer/src/Board.tsx(212,9): error TS2322", "Found 1 error."],
+        total_lines: 96,
+        whole: false,
+      },
+      position: place(1, 2),
+      created_at: MADE,
+    },
+    { id: "every-finding", kind: "finding", asked: "Where do the legend's colours come from?", state: "frozen", position: place(2, 2), created_at: MADE },
+    { id: "every-finding-asked", kind: "finding", asked: "Which states share a token?", state: "proposed", position: place(2, 3), created_at: MADE },
+    {
+      id: "every-contradiction",
+      kind: "contradiction",
+      first: "The design contract gives the legend its own row",
+      second: "The Board draws it inside the step bar",
+      state: "reported",
+      position: place(0, 3),
+      created_at: MADE,
+    },
+    { id: "every-sketch", kind: "sketch", body: "Legend on its own row\nunder the step bar", state: "frozen", position: place(1, 3), created_at: MADE },
+    { id: "every-deferral", kind: "deferral", what: "Whether the legend collapses under 720", state: "open", position: place(2, 4), created_at: MADE },
+    { id: "every-outline", kind: "outline", body: "Give the legend its own row\nThen fix the contrast", state: "draft", position: place(1, 4), created_at: MADE },
+    { id: "every-draft", kind: "issue_draft", title: "The Board's legend is illegible", body: "…", state: "draft", position: place(0, 4), created_at: MADE },
+    { id: "every-job", kind: "job", job_id: jobId, position: place(1, 5), created_at: MADE },
+  ];
+  // `produced` is drawn by the Studio and never proposed (`docs/concepts/studio.md`, Edges), so
+  // only the three relations are here twice, once waiting on a person and once decided.
+  const edges: StudioEdge[] = ([
+    ["every-produced-note", "every-link", "every-note", "produced", "accepted"],
+    ["every-produced-contradiction", "every-link", "every-contradiction", "produced", "accepted"],
+    ["every-produced-capture", "every-run", "every-note-states", "produced", "accepted"],
+    ["every-produced-finding", "every-note", "every-finding", "produced", "accepted"],
+    ["every-produced-cluster", "every-note-wide", "every-cluster", "produced", "accepted"],
+    ["every-produced-outline", "every-finding", "every-outline", "produced", "accepted"],
+    ["every-produced-draft", "every-outline", "every-draft", "produced", "accepted"],
+    ["every-produced-sketch", "every-sketch", "every-draft", "produced", "accepted"],
+    ["every-produced-job", "every-draft", "every-job", "produced", "accepted"],
+    ["every-same-as", "every-note", "every-note-wide", "same_as", "accepted"],
+    ["every-same-as-asked", "every-note", "every-note-states", "same_as", "proposed"],
+    ["every-blocks", "every-deferral", "every-outline", "blocks", "accepted"],
+    ["every-blocks-asked", "every-contradiction", "every-draft", "blocks", "proposed"],
+    ["every-answers", "every-finding", "every-deferral", "answers", "accepted"],
+    ["every-answers-asked", "every-finding-asked", "every-deferral", "answers", "proposed"],
+  ] as const).map(([id, from, to, kind, standing]) => ({ id, from, to, kind, standing, created_at: MADE }));
+  return {
+    id: "01STUDIOEVERYKIND0000000000",
+    manifest_id: MANIFEST_ID,
+    name: "Every kind of node and edge",
+    created_at: MADE,
+    touched_at: TOUCHED,
+    nodes,
+    edges,
+  };
+}
+
+/** A Studio nobody has named, so the list draws what an untitled one is called. */
+export function untitled(): Studio {
+  const at = "2026-09-16T17:05:00Z";
+  return {
+    id: "01STUDIOUNTITLED00000000000",
+    manifest_id: MANIFEST_ID,
+    created_at: at,
+    touched_at: at,
+    nodes: [
+      { id: "untitled-link", kind: "link", address: "docs/concepts/studio.md#notes", position: place(0, 0), created_at: at },
+      { id: "untitled-note", kind: "note", said: "Capture on another repository's web app waits on a security review", position: place(0, 1), created_at: at },
+    ],
+    edges: [{ id: "untitled-produced", from: "untitled-link", to: "untitled-note", kind: "produced", standing: "accepted", created_at: at }],
   };
 }
