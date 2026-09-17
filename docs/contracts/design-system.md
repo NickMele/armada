@@ -133,12 +133,15 @@ vibrating.
 --border-glass      rgb(255 255 255 / 0.07) card edge
 --border-highlight  rgb(255 255 255 / 0.05) 1px light along a card's top inner edge
 --accent-faint      --accent at 10%        the canvas's pool of light
---shadow-card       highlight + 1px contact + 28px soft drop
+--shadow-card       1px contact + 28px soft drop
 --glass-blur        12px                   backdrop blur under a card
 ```
 
 **A card** is a vertical gradient from `--bg-glass` to `--bg-glass-end`, with
-`--border-glass`, `--shadow-card` and a `--glass-blur` backdrop blur. It
+`--border-glass`, `--shadow-card`, a `--border-highlight` line along its top
+inner edge and a `--glass-blur` backdrop blur. The gradient, the highlight and
+the blur sit on a layer behind the card's content rather than on the card, so
+a tooltip or menu inside a card is never clipped by it. It
 replaces `--bg-raised` and `--border-subtle` on every panel that sits directly
 on the canvas: the left column's three panels, Overview's cards and Helm's
 dock. A row, a well or an input inside a card stays flat on its Ground token.
