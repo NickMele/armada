@@ -430,6 +430,23 @@ pub(crate) async fn edit_studio_draft<D: Studios>(
     answered(&served, StatusCode::OK, edited)
 }
 
+pub(crate) async fn edit_studio_link<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let edit = match body(&served, "a Link's line", &bytes) {
+        Ok(edit) => edit,
+        Err(response) => return response,
+    };
+    let edited = served
+        .daemon()
+        .edit_studio_link(StudioId::carried(studio_id), edit, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, edited)
+}
+
 pub(crate) async fn settle_contradiction<D: Studios>(
     State(served): State<Served<D>>,
     Path(studio_id): Path<String>,

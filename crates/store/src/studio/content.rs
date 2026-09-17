@@ -70,7 +70,12 @@ pub(super) fn written(content: &StudioNodeContent) -> String {
         StudioNodeContent::Sketch { body } | StudioNodeContent::Outline { body } => {
             json!({ "body": body })
         }
-        StudioNodeContent::Link { address } => json!({ "address": address }),
+        // `said` is left out where there is none, which is what every row
+        // written before `#1378` already looks like.
+        StudioNodeContent::Link { address, said } => match said {
+            None => json!({ "address": address }),
+            Some(said) => json!({ "address": address, "said": said }),
+        },
         StudioNodeContent::Deferral { what } => json!({ "what": what }),
         StudioNodeContent::IssueDraft { title, body } => json!({ "title": title, "body": body }),
         StudioNodeContent::Job { job_id } => json!({ "job_id": job_id.as_str() }),
@@ -126,6 +131,10 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
         },
         StudioNodeKind::Link => StudioNodeContent::Link {
             address: text("address")?,
+            said: object
+                .get("said")
+                .and_then(Value::as_str)
+                .map(str::to_string),
         },
         StudioNodeKind::Deferral => StudioNodeContent::Deferral {
             what: text("what")?,

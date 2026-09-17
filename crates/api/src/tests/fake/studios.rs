@@ -7,9 +7,9 @@ use std::sync::Arc;
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, ContradictionSettled,
     CreateStudio, DecideStudioEdge, DeferOnStudio, DispatchStudioDraft, EditStudioDraft,
-    GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode,
-    RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout, Studio,
-    StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
+    EditStudioLink, GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge,
+    RemoveStudioNode, RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout,
+    Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
     StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
     StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
@@ -504,6 +504,29 @@ impl Studios for FakeDaemon {
                     title: edit.title.clone(),
                     body: edit.body.clone(),
                 };
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    async fn edit_studio_link(
+        &self,
+        studio_id: StudioId,
+        edit: EditStudioLink,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            for node in studio
+                .nodes
+                .iter_mut()
+                .filter(|node| node.id == edit.node_id)
+            {
+                if let StudioNodeContent::Link { address, .. } = &node.content {
+                    node.content = StudioNodeContent::Link {
+                        address: address.clone(),
+                        said: Some(edit.said.clone()),
+                    };
+                }
             }
             Ok(studio.clone())
         })

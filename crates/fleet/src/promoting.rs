@@ -22,8 +22,8 @@ use core_model::{
     TopLevelOrigin,
 };
 use ipc::{
-    ContradictionSettled, DeferOnStudio, DispatchStudioDraft, EditStudioDraft, GroupStudioNodes,
-    HelmStudioAct, ManifestId, SettleContradiction, WriteUpStudioNode,
+    ContradictionSettled, DeferOnStudio, DispatchStudioDraft, EditStudioDraft, EditStudioLink,
+    GroupStudioNodes, HelmStudioAct, ManifestId, SettleContradiction, WriteUpStudioNode,
 };
 
 use crate::daemon::Fleet;
@@ -39,6 +39,8 @@ const GROUP_IS_OF_SEVERAL: &str = "fleet.studio_group_is_of_several";
 const NOT_WRITABLE_UP: &str = "fleet.studio_not_writable_up";
 /// An edit or a dispatch of a node that is not an Issue draft. A 422.
 const NOT_A_DRAFT: &str = "fleet.studio_not_a_draft";
+/// A line written on a node that is not a Link. A 422.
+const NOT_A_LINK: &str = "fleet.studio_not_a_link";
 /// An outcome asked of a node that is not a Contradiction. A 422.
 const NOT_A_CONTRADICTION: &str = "fleet.studio_not_a_contradiction";
 /// A Contradiction ended twice. A 409.
@@ -365,6 +367,33 @@ where
         let at = self.now();
         self.written(&studio_id, within, |store, id| {
             store.keep_rewritten(id, &edited, &at)
+        })
+        .await
+    }
+
+    /// `edit_studio_link`: the line a person keeps beside a Link's address —
+    /// `#1378`.
+    ///
+    /// **The address is read off the node and never off the request**, so an
+    /// edit cannot move a Link somewhere else. A blank line clears it.
+    pub(crate) async fn link_relabelled(
+        &self,
+        studio_id: ipc::StudioId,
+        edit: EditStudioLink,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        let node_id = edit.node_id.to_domain();
+        let graph = {
+            let store = self.store().lock().await;
+            self.studio_held(&store, &studio_id.to_domain(), within.as_ref())?
+        };
+        let link = self.node_on(&graph, &node_id)?;
+        let relabelled = link
+            .relabelled(Some(edit.said))
+            .map_err(|fault| self.not_rewritable(NOT_A_LINK, fault))?;
+        let at = self.now();
+        self.written(&studio_id, within, |store, id| {
+            store.keep_rewritten(id, &relabelled, &at)
         })
         .await
     }

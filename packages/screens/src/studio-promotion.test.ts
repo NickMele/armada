@@ -72,6 +72,8 @@ describe("what a selection offers", () => {
       writeUp: false,
       defer: true,
       dispatch: false,
+      // #1378: the line beside the address is the person's to change.
+      editLink: true,
     });
   });
 
@@ -91,6 +93,7 @@ describe("what a selection offers", () => {
       edit: true,
       dispatch: true,
       writeUp: false,
+      editLink: false,
     });
   });
 

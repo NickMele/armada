@@ -20,7 +20,16 @@ import { nodeNamed } from "./studio";
 import { actsOn, aWriteUp, dispatchedAs, placedBeside, selectedNodes } from "./studio-promotion";
 
 /** Which rung a person is filling in, or `null`. */
-type Filling = "cluster" | "outline" | "defer" | "write_up" | "edit" | "resolved" | "settled" | "dispatch";
+type Filling =
+  | "cluster"
+  | "outline"
+  | "defer"
+  | "write_up"
+  | "edit"
+  | "line"
+  | "resolved"
+  | "settled"
+  | "dispatch";
 
 export type StudioPromotionProps = {
   studio: Studio;
@@ -51,8 +60,11 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
   function fill(rung: Filling): void {
     const written = rung === "write_up" && one !== undefined ? aWriteUp(studio, one) : null;
     const draft = rung === "edit" && one?.kind === "issue_draft" ? one : null;
+    // A Link's line opens on what is already there, so editing it is a change
+    // to what a person wrote rather than typing it again — #1378.
+    const link = rung === "line" && one?.kind === "link" ? one : null;
     setTitle(written?.title ?? draft?.title ?? "");
-    setBody(written?.body ?? draft?.body ?? "");
+    setBody(written?.body ?? draft?.body ?? link?.said ?? "");
     setBlocks("");
     setFilling(rung);
   }
@@ -101,6 +113,8 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
         return send({ act: "write_up", node_id, title, body, position });
       case "edit":
         return send({ act: "edit_draft", node_id, title, body });
+      case "line":
+        return send({ act: "edit_link", node_id, said: body });
       case "settled":
         return send({ act: "settle", node_id, outcome: "not_a_problem" });
       case "resolved":
@@ -126,6 +140,7 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
       {acts.writeUp ? <Act label="Write up" onPress={() => fill("write_up")} /> : null}
       {acts.defer ? <Act label="Defer" onPress={() => fill("defer")} /> : null}
       {acts.edit ? <Act label="Edit draft" onPress={() => fill("edit")} /> : null}
+      {acts.editLink ? <Act label="Edit line" onPress={() => fill("line")} /> : null}
       {acts.dispatch ? <Act label="Dispatch" onPress={() => fill("dispatch")} /> : null}
       {acts.settle ? <Act label="Not a problem" onPress={() => fill("settled")} /> : null}
       {acts.settle ? <Act label="Resolved here" onPress={() => fill("resolved")} /> : null}
@@ -176,6 +191,7 @@ const ASKED: Readonly<Record<Filling, string>> = {
   defer: "Put this off",
   write_up: "Write this up as an Issue draft",
   edit: "Edit this Issue draft",
+  line: "Say why you kept this",
   settled: "End this as Not a problem",
   resolved: "Resolve this here",
   dispatch: "Dispatch this Issue draft",
@@ -188,6 +204,7 @@ const CONFIRMS: Readonly<Record<Filling, string>> = {
   defer: "Defer",
   write_up: "Write up",
   edit: "Save draft",
+  line: "Save line",
   settled: "Not a problem",
   resolved: "Resolve",
   dispatch: "Dispatch",
@@ -283,6 +300,16 @@ function Filling(props: FillingProps) {
           </p>
           <Input label="Title" value={title} onChange={(event) => props.onTitle(event.target.value)} />
           <Textarea label="Body" rows={8} value={body} onChange={(event) => props.onBody(event.target.value)} />
+        </>
+      );
+    case "line":
+      return (
+        <>
+          <p>
+            The card reads this line, with the address under it. The address does not change, and clearing the
+            line leaves the Link as its address alone.
+          </p>
+          <Textarea label="Your line" rows={3} value={body} onChange={(event) => props.onBody(event.target.value)} />
         </>
       );
     case "settled":

@@ -329,6 +329,9 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
  */
 const place = (column: number, row: number) => ({ x: column * 340, y: row * 300 });
 
+/** Long enough that a card cannot hold it whole: it clips, and it does not overflow — #1378. */
+const LONG_ADDRESS = "https://example.invalid/armada/issues/1378#issuecomment-2847190034-and-then-some";
+
 const MADE = "2026-09-15T11:00:00Z";
 const TOUCHED = "2026-09-17T08:40:00Z";
 
@@ -339,7 +342,8 @@ const TOUCHED = "2026-09-17T08:40:00Z";
  */
 export function everyKind(jobId: string): Studio {
   const nodes: StudioNode[] = [
-    { id: "every-link", kind: "link", address: "docs/contracts/design-system.md#the-board", position: place(0, 0), created_at: MADE },
+    { id: "every-link", kind: "link", address: LONG_ADDRESS, said: "where the legend was drawn", position: place(0, 0), created_at: MADE },
+    { id: "every-link-bare", kind: "link", address: LONG_ADDRESS, position: place(-1, 0), created_at: MADE },
     // The one Note here that kept a picture — #1352. The rest draw no plate.
     { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", capture: pointedAt("every-note"), position: place(1, 0), created_at: MADE },
     { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
@@ -420,7 +424,7 @@ export function untitled(): Studio {
     created_at: at,
     touched_at: at,
     nodes: [
-      { id: "untitled-link", kind: "link", address: "docs/concepts/studio.md#notes", position: place(0, 0), created_at: at },
+      { id: "untitled-link", kind: "link", address: "https://example.invalid/armada/docs/concepts/studio.md#notes", said: "what a Note is, and what fixes it", position: place(0, 0), created_at: at },
       { id: "untitled-note", kind: "note", said: "Capture on another repository's web app waits on a security review", position: place(0, 1), created_at: at },
     ],
     edges: [{ id: "untitled-produced", from: "untitled-link", to: "untitled-note", kind: "produced", standing: "accepted", created_at: at }],
@@ -475,6 +479,12 @@ function promoted(studio: Studio, promotion: StudioPromotion): Studio {
           node.id === promotion.node_id && node.kind === "issue_draft" ? { ...node, title: promotion.title, body: promotion.body } : node,
         ),
       };
+    case "edit_link": {
+      // The address is read off the node and never off the request, and a blank line clears it.
+      const said = promotion.said.trim() === "" ? undefined : promotion.said.trim();
+      const line = (node: StudioNode) => (node.id === promotion.node_id && node.kind === "link" ? { ...node, said } : node);
+      return { ...studio, nodes: studio.nodes.map(line) };
+    }
     case "settle":
       return {
         ...studio,

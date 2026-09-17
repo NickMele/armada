@@ -14,10 +14,10 @@ use std::sync::Arc;
 
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
-    DispatchStudioDraft, EditStudioDraft, GroupStudioNodes, ManifestId, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction, StartScout,
-    StartStudioRun, StopScout, Studio, StudioDeleted, StudioId, StudioList, StudioNodeId,
-    StudioRunStarted, WriteUpStudioNode,
+    DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, ManifestId,
+    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction,
+    StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioId, StudioList,
+    StudioNodeId, StudioRunStarted, WriteUpStudioNode,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -212,6 +212,14 @@ pub trait Studios: Send + Sync + 'static {
         &self,
         studio_id: StudioId,
         edit: EditStudioDraft,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `edit_studio_link` — the line a person keeps beside a Link's address.
+    fn edit_studio_link(
+        &self,
+        studio_id: StudioId,
+        edit: EditStudioLink,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 

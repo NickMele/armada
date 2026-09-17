@@ -106,7 +106,10 @@ function cardOf(node: StudioNode, jobs: readonly JobSummary[], frameOf: FrameOf)
     case "sketch":
       return { kind: "sketch", state: "frozen", title: firstLine(node.body) };
     case "link":
-      return { kind: "link", title: node.address };
+      // **The person's line is the title and the address is under it** —
+      // #1378. A Link nobody wrote a line on is titled by its address, which
+      // is what keeps every node named and says it once rather than twice.
+      return { kind: "link", address: node.address, title: node.said ?? node.address };
     case "deferral":
       return { kind: "deferral", state: stateOf(node, "open"), title: node.what };
     case "outline":

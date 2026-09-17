@@ -15,6 +15,9 @@ import { foldStudio } from "./studio-reads";
 
 const AT = "2026-09-17T10:00:00Z";
 
+/** An address of the length the owner pasted, which the card clips. */
+const LONG_ADDRESS = "https://example.invalid/armada/issues/1378#issuecomment-2847190034-and-more";
+
 const STUDIO: Studio = {
   id: "s1",
   manifest_id: "armada",
@@ -26,6 +29,8 @@ const STUDIO: Studio = {
     { id: "n3", kind: "job", job_id: "j1", position: { x: 600, y: 0 }, created_at: AT },
     { id: "n4", kind: "run", run_id: "r1", position: { x: 0, y: 300 }, created_at: AT },
     { id: "n5", kind: "outline", body: "\nLegend, then width\nand more", position: { x: 300, y: 300 }, created_at: AT },
+    { id: "n6", kind: "link", address: LONG_ADDRESS, said: "the owner's own report", position: { x: 600, y: 300 }, created_at: AT },
+    { id: "n7", kind: "link", address: LONG_ADDRESS, position: { x: 900, y: 300 }, created_at: AT },
   ],
   edges: [
     { id: "e1", from: "n1", to: "n2", kind: "produced", standing: "accepted", created_at: AT },
@@ -67,6 +72,15 @@ test("a node draws where a person left it, titled from what it holds", () => {
   expect(nodes[0]!.node).toEqual({ kind: "note", title: "The legend is unreadable" });
   expect(nodes[1]!.node).toEqual({ kind: "finding", state: "gathering", title: "Where do its colours come from?" });
   expect(nodes[4]!.node).toMatchObject({ kind: "outline", state: "draft", title: "Legend, then width" });
+});
+
+test("a Link is titled by the person's line, and by its address where nobody wrote one", () => {
+  const nodes = whiteboardNodes(STUDIO, []);
+  expect(nodes[5]!.node).toEqual({ kind: "link", address: LONG_ADDRESS, title: "the owner's own report" });
+  // A Link never stops being its address: with no line, the address is the
+  // title, and the card says it once rather than twice — #1378.
+  expect(nodes[6]!.node).toEqual({ kind: "link", address: LONG_ADDRESS, title: LONG_ADDRESS });
+  expect(nodeNamed(STUDIO, "n6", [])).toBe("Link the owner's own report");
 });
 
 test("a Job node takes its state off the Board, and says none where the Board has no such Job", () => {
