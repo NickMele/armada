@@ -49,10 +49,13 @@ Reading Helm threads needs an operation: `observe_helm` in `crates/ipc/operation
 
 | Bound | How |
 |---|---|
-| Spend | Its own budget cap per scout, a Machine setting |
+| Spend | No cap. Its cost is shown on its Finding when it ends |
 | Stop | A stop on its node, at any time |
 | Record | Its Finding lists every file and source it read |
 | Start | A person's ask, and nothing else |
+
+> **Rule.** A scout has no budget cap. A person ends one with the stop on its node.
+> Why: its cost is shown on its Finding, and a person's ask is what started the spending.
 
 > **Rule.** A scout takes no place under Fleet's concurrency cap.
 > Why: research and Jobs then never wait on each other.
