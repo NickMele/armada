@@ -20,10 +20,10 @@ use std::sync::Arc;
 
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
-    DispatchStudioDraft, EditStudioDraft, GroupStudioNodes, HelmStudioAct, ManifestId,
-    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction,
-    StartScout, StartStudioRun, StopScout, StudioDeleted, StudioHelmActed, StudioList,
-    StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
+    DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, HelmStudioAct,
+    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio,
+    SettleContradiction, StartScout, StartStudioRun, StopScout, StudioDeleted, StudioHelmActed,
+    StudioList, StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -705,6 +705,15 @@ where
         within: Option<ManifestId>,
     ) -> Result<ipc::Studio, Refusal> {
         self.draft_edited(studio_id, edit, within).await
+    }
+
+    async fn edit_studio_link(
+        &self,
+        studio_id: ipc::StudioId,
+        edit: EditStudioLink,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.link_relabelled(studio_id, edit, within).await
     }
 
     async fn settle_contradiction(

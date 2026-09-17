@@ -1,11 +1,12 @@
 //! Promotion: what a person does with what is on a Studio. `#1291`,
 //! `docs/concepts/studio.md`, *Promotion*.
 //!
-//! **Two of the rungs rewrite a node, and both are here.** A Contradiction
-//! settles, and an Issue draft is edited before it is dispatched. Everything
-//! else a rung does is a node added with `Produced` edges, which needs nothing
-//! new. [`Rewritten`] is the second [`Scouted`](super::Scouted): only the two
-//! methods below make one, so the store's rewrite cannot reach a Note.
+//! **Every rewrite of a node a person wrote is here, and nowhere else.** A
+//! Contradiction settles, an Issue draft is edited before it is dispatched,
+//! and a Link takes the line beside its address (`#1378`). Everything else a
+//! rung does is a node added with `Produced` edges, which needs nothing new.
+//! [`Rewritten`] is the second [`Scouted`](super::Scouted): only the methods
+//! below make one, so the store's rewrite cannot reach a Note.
 //!
 //! **Nothing here files anything, anywhere.** Writing up makes an Issue draft
 //! and dispatching sends its text; a forge is a person's own act afterwards.
@@ -61,7 +62,7 @@ pub struct NotRewritable {
     pub state: Option<StudioNodeState>,
 }
 
-/// A node as one of the two rewrites below left it. **The store takes this and
+/// A node as one of the rewrites below left it. **The store takes this and
 /// never a bare node**, which is what keeps every other kind fixed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rewritten(StudioNode);
@@ -101,6 +102,23 @@ impl StudioNode {
         match self.content() {
             StudioNodeContent::IssueDraft { .. } => {
                 self.holding(StudioNodeContent::IssueDraft { title, body }, self.state())
+            }
+            content => Err(NotRewritable {
+                kind: content.kind(),
+                state: self.state(),
+            }),
+        }
+    }
+
+    /// The Link, with the line a person wrote beside its address — `#1378`.
+    ///
+    /// **The address is not touched.** A Link never stops being its address,
+    /// so this writes one field and reads the other back off the node; a blank
+    /// line clears it, which is how somebody takes back what they typed.
+    pub fn relabelled(&self, said: Option<String>) -> Result<Rewritten, NotRewritable> {
+        match self.content() {
+            StudioNodeContent::Link { address, .. } => {
+                self.holding(StudioNodeContent::link(address.clone(), said), self.state())
             }
             content => Err(NotRewritable {
                 kind: content.kind(),

@@ -327,8 +327,17 @@ pub enum StudioNodeContent {
     },
     /// A diagram or mockup, as text.
     Sketch { body: String },
-    /// A board, document, issue, page or session, kept as its address.
-    Link { address: String },
+    /// A board, document, issue, page or session, kept as its address, and
+    /// the line a person wrote beside it saying why they kept it.
+    ///
+    /// **`said` is additional and never a replacement.** A Link never stops
+    /// being its address (`#1378`), so the two are two fields: absent on one
+    /// pasted with nothing typed, and on every Link kept before the field
+    /// existed.
+    Link {
+        address: String,
+        said: Option<String>,
+    },
     /// Something a person put off.
     Deferral { what: String },
     /// An ordered reading of the nodes feeding it.
@@ -340,6 +349,19 @@ pub enum StudioNodeContent {
 }
 
 impl StudioNodeContent {
+    /// A Link, with the person's line normalised: trimmed, and absent where
+    /// nothing but whitespace was typed.
+    ///
+    /// **One place decides what a blank line is**, so a Link pasted with an
+    /// empty field and one whose line was cleared afterwards are the same
+    /// record rather than two shapes a reader has to tell apart.
+    pub fn link(address: String, said: Option<String>) -> StudioNodeContent {
+        let said = said
+            .map(|line| String::from(line.trim()))
+            .filter(|line| !line.is_empty());
+        StudioNodeContent::Link { address, said }
+    }
+
     pub fn kind(&self) -> StudioNodeKind {
         match self {
             StudioNodeContent::Run { .. } => StudioNodeKind::Run,
@@ -369,7 +391,9 @@ impl StudioNodeContent {
             StudioNodeContent::Sketch { body } | StudioNodeContent::Outline { body } => {
                 &[("body", body)]
             }
-            StudioNodeContent::Link { address } => &[("address", address)],
+            // `said` is not here: a Link with no line is a Link, and the field
+            // is normalised to absent rather than kept blank.
+            StudioNodeContent::Link { address, .. } => &[("address", address)],
             StudioNodeContent::Deferral { what } => &[("what", what)],
             StudioNodeContent::IssueDraft { title, body } => &[("title", title), ("body", body)],
             StudioNodeContent::Job { job_id } => &[("job_id", job_id.as_str())],

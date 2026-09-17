@@ -33,7 +33,10 @@ fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent
             answer: None,
         },
         K::Sketch => C::Sketch { body: text() },
-        K::Link => C::Link { address: text() },
+        K::Link => C::Link {
+            address: text(),
+            said: Some(text()),
+        },
         K::Deferral => C::Deferral { what: text() },
         K::Outline => C::Outline { body: text() },
         K::IssueDraft => C::IssueDraft {

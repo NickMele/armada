@@ -1179,6 +1179,17 @@ an unknown code as a refusal with the message beside it, which is what the error
 Bridge's own halves of both calls are new capabilities on the preload bridge and cross no wire of
 their own.
 
+## Protocol 14.15: a line of a person's own on a Link
+
+`StudioNodeContent::Link` gains `said`, optional: the line a person wrote beside the address saying
+why they kept it, and `edit_studio_link` is the operation that changes it afterwards. `#1378`.
+
+**Additive on both counts.** The field is left out where there is none, which is exactly the shape
+every Link written before it already has, so an older Bridge reads a Link as it always did. The new
+route carries the line and never the address — a Link never stops being its address — and a blank
+line clears it rather than being refused. A kind that is not a Link is refused as
+`fleet.studio_not_a_link`, a code added the way every other refusal here was.
+
 ## Open questions
 
 Naming these rather than deciding them, per this document's brief:

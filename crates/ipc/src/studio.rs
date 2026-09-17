@@ -136,6 +136,12 @@ pub enum StudioNodeContent {
     },
     Link {
         address: String,
+        /// The line a person wrote beside the address, saying why they kept
+        /// it — `#1378`. **Additional, never a replacement**: a Link never
+        /// stops being its address. Absent on one pasted with nothing typed,
+        /// and on every Link kept before the field existed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        said: Option<String>,
     },
     Deferral {
         what: String,
@@ -382,6 +388,19 @@ pub struct EditStudioDraft {
     pub body: String,
 }
 
+/// `edit_studio_link`: the line a person keeps beside a Link's address, as
+/// they left it — `#1378`.
+///
+/// **The address is not on this request.** A Link never stops being its
+/// address, so nothing on this seam can rewrite one; what is editable is the
+/// line beside it. A blank `said` clears the line, which is how somebody takes
+/// back what they typed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditStudioLink {
+    pub node_id: StudioNodeId,
+    pub said: String,
+}
+
 /// `settle_contradiction`: the two outcomes that write nothing else down.
 ///
 /// **The other two are the rungs that make a node**: *Issue draft* is
@@ -537,7 +556,7 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
                 answer,
             },
             C::Sketch { body } => StudioNodeContent::Sketch { body },
-            C::Link { address } => StudioNodeContent::Link { address },
+            C::Link { address, said } => StudioNodeContent::Link { address, said },
             C::Deferral { what } => StudioNodeContent::Deferral { what },
             C::Outline { body } => StudioNodeContent::Outline { body },
             C::IssueDraft { title, body } => StudioNodeContent::IssueDraft { title, body },
@@ -588,7 +607,8 @@ impl StudioNodeContent {
                 answer,
             },
             StudioNodeContent::Sketch { body } => C::Sketch { body },
-            StudioNodeContent::Link { address } => C::Link { address },
+            // The line is trimmed here, and a blank one is no line at all.
+            StudioNodeContent::Link { address, said } => C::link(address, said),
             StudioNodeContent::Deferral { what } => C::Deferral { what },
             StudioNodeContent::Outline { body } => C::Outline { body },
             StudioNodeContent::IssueDraft { title, body } => C::IssueDraft { title, body },

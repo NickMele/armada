@@ -335,14 +335,19 @@ fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
          new one — and not one of these writes over a node already there"
     );
 
-    // **The two routes that do write a node's content name the kind they may
-    // reach, and a Note is neither** (`#1291`). What holds them to it is
-    // `core_model`'s own transitions: `StudioNode::edited` takes an Issue
-    // draft and `StudioNode::settled` a Contradiction, and the store's rewrite
-    // takes what only those two make. `fleet::tests::promoting` drives both
-    // against a Note and reads back `fleet.studio_not_a_draft` and
-    // `fleet.studio_not_a_contradiction`.
-    for rewrites in ["edit_studio_draft", "settle_contradiction"] {
+    // **Every route that does write a node's content names the kind it may
+    // reach, and a Note is never one of them** (`#1291`, `#1378`). What holds
+    // them to it is `core_model`'s own transitions: `StudioNode::edited` takes
+    // an Issue draft, `settled` a Contradiction and `relabelled` a Link, and
+    // the store's rewrite takes what only those make.
+    // `fleet::tests::promoting` drives each against a Note and reads back
+    // `fleet.studio_not_a_draft`, `fleet.studio_not_a_contradiction` and
+    // `fleet.studio_not_a_link`.
+    for rewrites in [
+        "edit_studio_draft",
+        "edit_studio_link",
+        "settle_contradiction",
+    ] {
         let route = api::SERVED
             .iter()
             .find(|route| route.operation == rewrites)
@@ -383,6 +388,9 @@ fn no_agent_is_offered_a_persons_act_on_a_studio() {
         "defer_on_studio",
         "edit_studio_draft",
         "settle_contradiction",
+        // #1378: a Link's line is the person's own words, and Helm rewriting
+        // them is the act `studio.md` guards against.
+        "edit_studio_link",
     ] {
         assert!(!offered(persons), "`{persons}` reaches an agent");
     }
