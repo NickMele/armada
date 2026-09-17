@@ -38,13 +38,38 @@ export const PLAN_MID_TASK: WorkPlan = {
   ],
 };
 
+/** Every fixture's clock, and the moment `NOW` stands for in it. */
+const FIXTURE_NOW = Date.parse("2026-09-10T14:31:00Z");
+
+/** An ISO instant anywhere in a fixture, which is the only shape a time takes here. */
+const AN_INSTANT = /"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)"/g;
+
+/**
+ * The same fixture with every instant in it moved so its `NOW` is the moment
+ * this is read.
+ *
+ * **The mock reads the real clock**, so a Job dated last week draws an elapsed
+ * time in days and an empty Activity instrument — twelve minutes of windows
+ * with nothing in them. That is a fixture too old to measure, drawn correctly,
+ * and it reads as a Job asleep on the one screen built to say it is not.
+ * Every other fixture keeps its fixed times, which tests read.
+ */
+function asOfNow(fixture: JobFixture): JobFixture {
+  const moved = Date.now() - FIXTURE_NOW;
+  return JSON.parse(
+    JSON.stringify(fixture).replace(AN_INSTANT, (_whole, at: string) =>
+      JSON.stringify(new Date(Date.parse(at) + moved).toISOString()),
+    ),
+  ) as JobFixture;
+}
+
 /** `running()` carrying that plan, so the mock can open the Working area whole. */
 export function workingAPlan(): JobFixture {
   const fixture = running();
   if (fixture.watched.state !== "read") return fixture;
-  return {
+  return asOfNow({
     ...fixture,
     name: "running — working the plan's second task of three",
     watched: watchedRead({ ...fixture.watched.detail, work_plan: PLAN_MID_TASK }),
-  };
+  });
 }
