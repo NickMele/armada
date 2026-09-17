@@ -149,8 +149,8 @@ button.armada-chapter__head:focus-visible {
 
 /* Streaming. The running dot, at the size the error treatment's dot already
    uses — a count says how many there are and only this says they are still
-   arriving. It does not pulse: the pulse is one per screen and it belongs on
-   the step the Drone is working. */
+   arriving. It does not pulse: the step the Drone is working carries the
+   pulse, on the rail beside this chapter. */
 .armada-chapter__live {
   flex: none;
   width: var(--dot);

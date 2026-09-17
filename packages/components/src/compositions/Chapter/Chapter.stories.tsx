@@ -94,8 +94,8 @@ export const WithHeaderMeta: Story = {
  * than a snapshot — a count says how many entries there are and only the dot
  * says they are still arriving.
  *
- * It does not pulse. The pulse is one per screen and it belongs on the step
- * the Drone is working.
+ * It does not pulse. The step the Drone is working carries the pulse, on the
+ * rail beside this chapter.
  */
 export const Live: Story = {
   args: {
