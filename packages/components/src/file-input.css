@@ -1,0 +1,11 @@
+/* The file input behind an Attach button. The platform's own picker chrome is
+   not this app's to style, so the input is never drawn: a press on Attach opens
+   it through `click()`, which works on a `display: none` input.
+
+   Its own class rather than Tailwind's `hidden` utility. This package ships to
+   whatever compiles it, and Storybook loads these stylesheets without the app's
+   Tailwind build — so `hidden` resolved to nothing there and every story of the
+   Dispatch card drew a bare "Choose Files" control the app does not have. */
+.armada-file-input {
+  display: none;
+}

@@ -255,7 +255,7 @@ export function Composer({
             ref={fileInputRef}
             type="file"
             multiple
-            className="hidden"
+            className="armada-file-input"
             onChange={onFilesPicked}
             // A bare file input has no accessible role or label to query by —
             // the only handle a test has onto the seam a real pick reaches
