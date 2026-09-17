@@ -73,8 +73,9 @@ export type ConfirmableAct = Exclude<
 >;
 
 /**
- * The acts that confirm by being held where the header draws them as a control
- * of their own. Everywhere else, the menu and `x` included, they still ask.
+ * The acts that confirm by being held where the header draws them as its face —
+ * a control of their own, or a split button's face. Everywhere else, the menu
+ * entries, `x` and the palette included, they still ask.
  */
 export type HeldAct = Extract<ConfirmableAct, "kill_drone" | "kill_job">;
 
@@ -286,7 +287,7 @@ export function Acts({
   // carries them all**: the first is its face and the rest are its menu, so the
   // header never shows two buttons side by side. The face can be an act that
   // ends something, because every act here confirms before it does anything: a
-  // kill drawn alone is held, and every other face opens a dialog whose Cancel
+  // kill on the face is held, and every other face opens a dialog whose Cancel
   // a stray Enter lands on.
   //
   // Approving leads where a Job waits for it, redispatch leads a stopped Job
@@ -335,8 +336,9 @@ export function Acts({
       : []),
   ];
   const [lead, ...behind] = entries;
-  // A kill alone on the header is held; a kill on a split button's face asks.
-  const held = behind.length === 0 ? lead?.held : undefined;
+  // A kill on the face is held, alone or with a menu beside it. Its menu entry,
+  // wherever it is one, still asks.
+  const held = lead?.held;
   // The accent says a person is waited on and nothing else does. A terminal
   // Job's control is quiet, because there is nobody it is waiting for.
   const variant = job.status === "awaiting_approval" || life?.whoIsActing === "Person" ? "primary" : "secondary";
@@ -394,9 +396,9 @@ export function Acts({
       ) : null}
       {/* A split button with nothing in its menu is a button: a caret over an
           empty menu is a control that does not answer. */}
-      {/* A kill drawn alone is held rather than asked. As a split button's
-          face it still asks, because that face is `SplitButton`'s own button. */}
-      {lead === undefined ? null : held !== undefined ? (
+      {/* A kill on the face is held rather than asked, alone or as a split
+          button's face. The caret and the entries behind it still ask. */}
+      {lead === undefined ? null : held !== undefined && behind.length === 0 ? (
         <HoldButton
           pending={pendingHere(lead.actName)}
           disabled={busy}
@@ -425,6 +427,15 @@ export function Acts({
           pendingLabel={pendingAct === undefined ? undefined : ACTING_LABEL[pendingAct]}
           menuLabel="Everything else this job can do"
           onAction={lead.onSelect}
+          {...(held === undefined
+            ? {}
+            : {
+                hold: {
+                  label: HOLD_LABEL[held],
+                  description: HOLD_SAID[held],
+                  onCommit: () => onActHeld(held, job.id),
+                },
+              })}
         >
           {lead.face}
         </SplitButton>
@@ -513,7 +524,7 @@ export function heldForTurns(job: JobSummary): boolean {
  * waits on the same way: Approve already draws its own "Approving" face and
  * Report opens its own dialog that is not one of the seven `ACTING_LABEL`
  * names below. #1117. `held` is set on the two kills, which confirm by a
- * hold where one is drawn alone.
+ * hold where one is the face.
  */
 type Entry = SplitButtonItem & { face: string; actName?: ActingAct; held?: HeldAct };
 

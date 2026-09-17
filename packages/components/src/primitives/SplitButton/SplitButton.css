@@ -391,6 +391,31 @@
   }
 }
 
+/* A face that holds — `hold` set, and the hold offered. The fill is
+ * `HoldButton.css`'s `.armada-hold__fill`, drawn once and reused, positioned
+ * against the face and clipped to its corners as the line already is.
+ *
+ * **The fill is the press, and the line does not also open.** The line opening
+ * from the centre at --duration-press reads as "sent"; a hold that has only
+ * begun has sent nothing, and a fill growing from the left under a line
+ * growing from the centre is two clocks on one press. The segment's press step
+ * stays, since it is colour only, and pending and Fleet's answer still draw the
+ * line — both are animations and nothing here reaches them. */
+.armada-split-button__action[data-hold]:active:not(:disabled):not([data-pending])::after,
+[data-preview-press="action"] .armada-split-button__action[data-hold]::after {
+  transform: scaleX(0);
+}
+
+/* Above the fill, which is positioned and would otherwise paint over the icon. */
+.armada-split-button__action[data-hold] > :not(.armada-hold__fill) {
+  position: relative;
+}
+
+/* A hold caught halfway, for a screenshot that does not depend on timing. */
+[data-preview-held] .armada-split-button__action[data-hold] .armada-hold__fill {
+  transform: scaleX(0.5);
+}
+
 /* The menu is a floating layer, so it takes --bg-overlay and a shadow — one
  * of the few places a shadow is legal, and it is positioned out of flow. A
  * menu that pushed layout would move every row beneath the one being acted
