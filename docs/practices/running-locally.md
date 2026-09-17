@@ -263,6 +263,7 @@ back to the first scenario and says so in the browser console.
 | `recorded-board` | The Board as Fleet served it, from `--board` above |
 | `setting-up` | A set-up repository and a folder nobody set up, over a Fleet that scans, proposes, applies each Setup edit and Write, and adds or clones a repository |
 | `manifest` | This repository's own Manifest, on a Fleet that saves the file, applies the forms' edits, and lists runs, drift and an always-allowed command |
+| `studios` | This repository's Studios, on a Fleet that keeps them and takes the writes Helm makes on one |
 | `job/<builder>` | One Job, already open, for each builder `packages/screens/src/fixtures/build/index.ts` exports |
 | `recorded/<slug>` | One recorded Job, already open, for each recording under `packages/screens/src/fixtures/recorded/` |
 
@@ -284,6 +285,12 @@ fails typecheck there until the fake answers it.
 | A read that returns a value — `readCall`, `readFrame`, `readCheckOutput` | The fixture's answer, where it has one |
 | Any read the scenario holds nothing for | A failure whose sentence says it is not in this mock scenario |
 | An act | Succeeds. Where it changes one field on a Job — approve, kill, reject, a model, a clear — that field moves |
+| A Studio read or write | The scenario's own Studios, kept by the fake and written to as Fleet would |
+
+**Every scenario keeps Studios**, so the surface opens wherever it is reached. A
+scenario naming none keeps an empty list and draws its empty state, never a read
+failure — the defect #1341 fixed. `every-state` keeps one Studio holding a node
+of every kind and an edge of every kind, and a second nobody has named.
 
 **Anything a Fleet would have to decide moves nothing.** A redispatch makes no
 new Job, a review approval does not advance the Job, and a proposal comes back
