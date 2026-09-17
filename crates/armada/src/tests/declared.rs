@@ -179,13 +179,65 @@ fn covering_refuses_a_directory_with_no_manifest() {
 /// `acceptance`, and a Rust one does.
 #[test]
 fn this_repositorys_checks_are_chosen_by_their_when() {
-    let bridge = crate::declared::covering(&repository(), &["apps/desktop/src/x.ts".to_string()])
-        .expect("this repository's Manifest reads");
+    let bridge = hits(&["apps/desktop/src/x.ts"]);
     assert!(bridge.contains(&"typecheck".to_string()), "{bridge:?}");
     assert!(!bridge.contains(&"acceptance".to_string()), "{bridge:?}");
 
-    let rust = crate::declared::covering(&repository(), &["crates/fleet/src/lib.rs".to_string()])
-        .expect("this repository's Manifest reads");
+    let rust = hits(&["crates/fleet/src/lib.rs"]);
     assert!(rust.contains(&"acceptance".to_string()), "{rust:?}");
     assert!(!rust.contains(&"typecheck".to_string()), "{rust:?}");
+}
+
+/// **A change to the written record runs nothing**, which is what narrowing the
+/// three unscoped Checks bought. `cargo xtask verify-docs` is what reads these,
+/// and it is a Command rather than a Check.
+#[test]
+fn a_change_to_the_documents_alone_hits_no_check() {
+    assert_eq!(hits(&["docs/INDEX.md", "README.md"]), Vec::<String>::new());
+}
+
+/// **The lockfile is what `--locked` resolves**, so a bump nothing else in the
+/// tree shows still builds and tests the workspace. It is not what `cargo fmt`
+/// reads, and `format` says so by leaving it out.
+#[test]
+fn a_lockfile_bump_alone_still_builds_and_tests() {
+    let hit = hits(&["Cargo.lock"]);
+    assert!(hit.contains(&"build".to_string()), "{hit:?}");
+    assert!(hit.contains(&"test".to_string()), "{hit:?}");
+    assert!(!hit.contains(&"format".to_string()), "{hit:?}");
+}
+
+/// Each pattern the three narrowed Checks name is there because the command
+/// reads it, and this is that claim as a test.
+#[test]
+fn what_the_narrowed_checks_read_still_selects_them() {
+    for path in [
+        "crates/fleet/src/lib.rs",
+        "xtask/src/rules.rs",
+        "Cargo.toml",
+        "Cargo.lock",
+        ".cargo/config.toml",
+        "protocol-version.toml",
+        ".armada/workflows/bug.json",
+        "armada.yml",
+    ] {
+        let hit = hits(&[path]);
+        assert!(hit.contains(&"build".to_string()), "{path}: {hit:?}");
+        assert!(hit.contains(&"test".to_string()), "{path}: {hit:?}");
+    }
+    // `xtask`'s own tests read the Bridge tree, and nothing compiles it in.
+    for path in ["apps/desktop/src/x.ts", "packages/components/src/Badge.tsx"] {
+        let hit = hits(&[path]);
+        assert!(hit.contains(&"test".to_string()), "{path}: {hit:?}");
+        assert!(!hit.contains(&"build".to_string()), "{path}: {hit:?}");
+    }
+    for path in ["crates/ipc/build.rs", "xtask/src/main.rs", "Cargo.toml"] {
+        assert!(hits(&[path]).contains(&"format".to_string()), "{path}");
+    }
+}
+
+/// This repository's Manifest, asked what a change hits.
+fn hits(paths: &[&str]) -> Vec<String> {
+    let changed: Vec<String> = paths.iter().map(|path| path.to_string()).collect();
+    crate::declared::covering(&repository(), &changed).expect("this repository's Manifest reads")
 }
