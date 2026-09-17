@@ -20,11 +20,22 @@ unmountAfterEach();
 /** App with this Job open. `sheet` is the run sheet Fleet reads for it, and `also` more state beside. */
 async function opened(
   fixture: JobFixture,
-  { sheet, also = {}, whereOpen = false }: { sheet?: BridgeState["runSheet"]; also?: Partial<BridgeState>; whereOpen?: boolean } = {},
+  {
+    sheet,
+    followed,
+    also = {},
+    whereOpen = false,
+  }: { sheet?: BridgeState["runSheet"]; followed?: BridgeState["runFollowed"]; also?: Partial<BridgeState>; whereOpen?: boolean } = {},
 ): Promise<BridgeApi> {
   const scenario = onJob(fixture, { whereOpen });
-  const behaves = (fleet: FleetHandle): Partial<BridgeApi> =>
-    sheet === undefined ? {} : { watchRunSheet: async (jobId) => fleet.publish({ runSheet: jobId === null ? { state: "none" } : sheet }) };
+  const behaves = (fleet: FleetHandle): Partial<BridgeApi> => ({
+    ...(sheet === undefined
+      ? {}
+      : { watchRunSheet: async (jobId) => fleet.publish({ runSheet: jobId === null ? { state: "none" } : sheet }) }),
+    ...(followed === undefined
+      ? {}
+      : { observeRun: async (_jobId, runId) => fleet.publish({ runFollowed: runId === null ? { state: "none" } : followed }) }),
+  });
   const app = mount({ ...scenario, state: { ...scenario.state, ...also }, behaves });
   await expect.element(page.getByText(fixture.job.handle, { exact: true }).first()).toBeVisible();
   return app.api;
@@ -51,16 +62,19 @@ test("the log opens on a Job a failed Check stopped", async () => {
   await expect.element(dialog("Activity log")).toBeVisible();
 });
 
-test("the failed Check's output opens from the header's act", async () => {
-  await opened(escalatedGateFailure());
+test("the failed Check's output opens from the header's act, in the editor rather than a sheet", async () => {
+  const api = await opened(escalatedGateFailure());
+  const openArtifact = vi.spyOn(api, "openArtifact");
   await page.getByRole("button", { name: /Open the output/ }).first().click();
-  await expect.element(page.getByRole("dialog")).toBeVisible();
+  await expect.poll(() => openArtifact.mock.calls.length).toBe(1);
+  expect(openArtifact.mock.calls[0]![0]).toBe(JOB_ID);
 });
 
 test("a kept Check's row opens the output in a sheet, and Escape closes it", async () => {
   await opened(escalatedGateFailure());
   expect(page.getByRole("dialog").query()).toBeNull();
-  await page.getByRole("button", { name: "regression_verify.3.cargo_nextest.log", pressed: false }).click();
+  // The gate card names the same file as a chip to copy; the Checks row is the one that opens the sheet.
+  await page.getByRole("button", { name: "regression_verify.3.cargo_nextest.log", pressed: false }).last().click();
   const output = dialog("Console output");
   await expect.element(output.getByText(/visible_manifests_memoises/).first()).toBeVisible();
   await expect.element(output.getByText("cargo_nextest — output")).toBeVisible();
@@ -169,7 +183,8 @@ test("the run sheet replaces the log: one sheet at a time", async () => {
 test("a refused Check's Run it here opens the run sheet with that Check selected", async () => {
   await opened(escalatedGateFailure(), { sheet: RUN_SHEET_READ });
   await page.getByRole("button", { name: "Run it here" }).click();
-  await expect.element(dialog("Run").getByRole("button", { current: true })).toHaveTextContent("cargo_nextest");
+  await expect.element(dialog("Run")).toBeVisible();
+  await expect.poll(() => dialog("Run").element().querySelector('button[aria-current="true"]')?.textContent).toContain("cargo_nextest");
 });
 
 test("a Check running from the sheet streams its output as it prints", async () => {
@@ -188,8 +203,7 @@ test("a Check running from the sheet streams its output as it prints", async () 
         },
       },
     },
-    also: {
-      runFollowed: {
+    followed: {
         state: "following",
         jobId: JOB_ID,
         runId: "run-1",
@@ -197,7 +211,6 @@ test("a Check running from the sheet streams its output as it prints", async () 
         path: ".armada/runs/run-1/output.log",
         fromLine: 1,
         lines: ["running 2034 tests", "test settings::selectors::visible_manifests_memoises ... FAIL"],
-      },
     },
   });
   await page.getByRole("button", { name: "Run it here" }).click();

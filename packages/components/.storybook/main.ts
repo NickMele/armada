@@ -3,12 +3,9 @@ import type { StorybookConfig } from "@storybook/react-vite";
 import { notesPlugin } from "./notes.ts";
 
 const config: StorybookConfig = {
-  // Two roots. The component library's, and the screens package's own — a
-  // screen assembled from wire data can only be drawn where the package that
-  // does the assembling is reachable, and `components` may not import
-  // `screens`. The story there renders the app's `JobDetail` from a recorded
-  // Job rather than from props typed by hand, which is the whole point of it.
-  stories: ["../src/**/*.stories.tsx", "../../screens/src/stories/**/*.stories.tsx"],
+  // The component library alone. Whole screens are drawn by the app itself on a
+  // mock Fleet — `pnpm -C apps/desktop mock` — rather than re-assembled here, #1224.
+  stories: ["../src/**/*.stories.tsx"],
   // `addon-vitest` is what turns the stories above into a test suite — see
   // `../vitest.config.ts`. It is listed here as well as there because the panel
   // that reports a failing story is a Storybook panel, and because the tags a
