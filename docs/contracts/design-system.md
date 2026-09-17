@@ -1026,8 +1026,8 @@ Three reversals against what stood before, each with a reason:
 **`x` for kill and every safety rule below are unchanged.** Neither was
 in play, and the destructive-key rule is what kept `x` off `k`.
 
-**`⌘1`–`⌘8` follow the rail** — Overview, Job Board, Alerts, Doctor,
-Manifest, Cleanup, Settings, Studios — since Active Jobs, Reviews and the Activity
+**`⌘1`–`⌘8` follow the rail** — Overview, Job Board, Studios, Alerts,
+Doctor, Manifest, Cleanup, Settings — since Active Jobs, Reviews and the Activity
 Feed folded into the Board and Cleanup joined at the end of it.
 The digits shift if the rail does; the rule is rail order, not the
 numbers.
@@ -1053,9 +1053,12 @@ the ordinary case, not Overview's exception: it is Fleet's four limits and
 this machine's own settings, on the screen a sheet reached from the status
 bar used to hold before #1088 removed the bar.
 
-**Studios joined the rail last, on 2026-09-17 (#1287), taking `⌘8`** — the
-ordinary case again: a repository's Studios and the whiteboard one opens on.
-No learned digit moved.
+**Studios joined third, on 2026-09-17 (#1287), taking `⌘3`** — the second
+arrival to move digits other than its own, after Overview's. The owner placed
+it straight after the Job Board, because where a stretch of work is read
+belongs beside the work it becomes rather than after the settings; Alerts,
+Doctor, Manifest, Cleanup and Settings each moved down one, Settings from `⌘7`
+to `⌘8`. The rule is still rail order — only the arrival was the exception.
 
 **`1`–`5` and `⌘1`–`⌘8` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
