@@ -1165,6 +1165,20 @@ through the proposer takes — **a value already on the wire, so it moves no
 number.** What it changes is what a row says: *Found by Fleet* names work
 Armada noticed by itself, and a draft somebody wrote up and sent is neither.
 
+## Protocol 14.14: a person names a Studio and puts a node on one
+
+`#1364`. No shape moves. `rename_studio` and `add_studio_node` are reached from Bridge as well as
+Helm — the `agent_access` column says which *agents* a route is offered to, and a person's own
+call was never narrowed by it — and `add_studio_node` gains one refusal, `fleet.studio_node_not_a_persons`,
+for a kind a person may not mint by hand. A person adds a `note`, a `link` or a `sketch`; every
+other kind is made by the act that earns it, so the person's refusal and Helm's
+`fleet.studio_node_not_helms` meet over the kinds neither side adds.
+
+**Minor because a refusal code added is additive**, the way one removed is: an older Bridge reads
+an unknown code as a refusal with the message beside it, which is what the error contract promises.
+Bridge's own halves of both calls are new capabilities on the preload bridge and cross no wire of
+their own.
+
 ## Open questions
 
 Naming these rather than deciding them, per this document's brief:

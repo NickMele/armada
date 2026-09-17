@@ -150,6 +150,92 @@ async fn helm_adds_only_a_node_that_starts_proposed() {
     );
 }
 
+/// **A person adds a Note, a Link and a Sketch, and nothing else** — `#1364`.
+/// Every other kind is made by the act that earns it, and the door says so by
+/// name rather than letting a person mint a Cluster nothing was grouped into.
+#[tokio::test]
+async fn a_person_adds_only_what_a_person_makes() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home);
+    let studio = a_studio(&fleet).await;
+    let by_hand = [
+        StudioNodeContent::Note {
+            said: "the legend is unreadable".to_string(),
+            capture: None,
+        },
+        StudioNodeContent::Link {
+            address: "docs/contracts/design-system.md".to_string(),
+        },
+        StudioNodeContent::Sketch {
+            body: "legend on its own row".to_string(),
+        },
+    ];
+    for (n, content) in by_hand.into_iter().enumerate() {
+        let added = fleet
+            .add_studio_node(
+                studio.id.clone(),
+                AddStudioNode {
+                    content,
+                    position: StudioPosition {
+                        x: n as i64 * 340,
+                        y: 0,
+                    },
+                    produced_by: None,
+                },
+                Redirector::Person,
+                None,
+            )
+            .await
+            .expect("a person's own kind");
+        assert_eq!(
+            added.nodes[n].added_by.map(|by| by.as_wire()),
+            Some("person")
+        );
+    }
+
+    // A Note typed by hand is fixed the way a captured one is: no act on this
+    // seam writes a node's content after it is added.
+    let promoted = [
+        StudioNodeContent::Cluster {
+            title: "the legend cannot be read".to_string(),
+        },
+        StudioNodeContent::Deferral {
+            what: "whether it collapses under 720".to_string(),
+        },
+        StudioNodeContent::IssueDraft {
+            title: "The legend is illegible".to_string(),
+            body: "…".to_string(),
+        },
+        StudioNodeContent::Outline {
+            body: "give it its own row".to_string(),
+        },
+        StudioNodeContent::Contradiction {
+            first: "the contract gives it a row".to_string(),
+            second: "the Board draws it inside the bar".to_string(),
+        },
+        StudioNodeContent::finding_asked("where do the colours come from"),
+    ];
+    for content in promoted {
+        let refused = fleet
+            .add_studio_node(
+                studio.id.clone(),
+                AddStudioNode {
+                    content,
+                    position: StudioPosition { x: 0, y: 400 },
+                    produced_by: None,
+                },
+                Redirector::Person,
+                None,
+            )
+            .await
+            .expect_err("made by the act that earns it");
+        assert_eq!(code(&refused), "fleet.studio_node_not_a_persons");
+    }
+
+    let read = fleet.get_studio(studio.id, None).await.expect("read back");
+    assert_eq!(read.nodes.len(), 3, "nothing refused was written");
+}
+
 /// The Studio's own `produced` edge is not a proposal, so there is nothing to
 /// accept; and every write is on the stream, whole.
 #[tokio::test]
@@ -168,7 +254,9 @@ async fn every_write_is_published_and_a_produced_edge_is_not_decided() {
         .await
         .expect("added");
     let asked = AddStudioNode {
-        content: StudioNodeContent::finding_asked("what reads it"),
+        content: StudioNodeContent::Link {
+            address: "https://example.invalid/counts".to_string(),
+        },
         position: StudioPosition { x: 0, y: 160 },
         produced_by: Some(note.nodes[0].id.clone()),
     };

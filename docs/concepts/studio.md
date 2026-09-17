@@ -89,6 +89,15 @@ flowchart LR
 > **Rule.** A Run node is made by starting a run from the Studio, and by no other act.
 > Why: what a node says about a run is read off the run, so a node added by hand could carry a result no run ever had.
 
+> **Rule.** A person adds a Note, a Link and a Sketch by hand, and no other kind. Every other kind is made by the act that earns it.
+> Why: a Finding comes from a scout, a Run from a run, a Cluster or a Deferral from promotion, an Issue draft from writing up, a Job from dispatch. One of those added by hand would carry a claim nothing stands behind. Decided with the owner, #1364.
+
+> **Rule.** A Note typed by hand is fixed the moment it is made, as a captured one is.
+> Why: nothing writes a node's content afterwards, and the rule that makes a Note a record does not depend on how it arrived.
+
+> **Rule.** A node lands where the person is looking, not at the origin.
+> Why: a Studio is laid out by hand, and a node placed off-screen is a node a person has to go and find.
+
 ### Names avoid words Armada already uses
 
 | Node | Not called | Because that word already means |
@@ -201,6 +210,9 @@ A Contradiction ends in one of four ways, and a person picks which.
 | Add a node marked Proposed, with its cost | Start a scout |
 | Propose an edge | Start a Run |
 | Name an untitled Studio | Write up, and dispatch |
+
+> **Rule.** A person names a Studio where its name is drawn, on the list row and on the open Studio, and Helm keeps naming an untitled one unasked.
+> Why: naming is not an act that needs a conversation. Helm's half of it exists because an untitled Studio is worth naming whether or not anyone gets round to it.
 
 > **Rule.** One ask may cover writing up and dispatching when it names both. "Write it up" alone never dispatches.
 > Why: Helm approves a dispatch on a person's ask and never as a silent follow-on to drafting. See [Helm](helm.md), Action authority.
