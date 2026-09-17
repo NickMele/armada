@@ -163,6 +163,45 @@ The stored session and the thread's file both go, and every viewer is sent `clos
 `agent_access` is `No`, for `ask_helm`'s reason.
 """
 
+[operations.ask_the_person]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Put one call a Helm session's own settings do not cover to the person, and hold it open until they answer"
+notes = """
+**The only tool on this door a model never sees.** It is what `--permission-prompt-tool` names, so the CLI calls it and the session is not offered it — spike 15 measured that the `init` line lists none of a permission server's tools. `agent_access` is `Helm only` because a Drone's permission path is `crates/ipc/src/mcp` and is a different seam, and no other agent at this door has a person attached to ask.
+
+**Its arguments are the harness's, not this file's.** `tool_name`, `input` and `tool_use_id` arrive at the top level; `ipc::door::ASKS_A_PERSON` is the one name both the schema and the body-filling are keyed on. The answer is the harness's vocabulary too — `{"behavior":"allow","updatedInput":…}` or `{"behavior":"deny","message":…}` — and Fleet never rewrites `input`, because the CLI runs what comes back.
+
+**The call is held open while a person answers**, which is the whole point and is why this row has no sibling that polls. The bound is Fleet's and is on the answer: `helm_ask_hold` in `settings.toml`. Silence answers `deny`, never `allow`. Spike 19 measured a 120-second hold surviving; the door a Helm session holds is stdio, so spike 15's stdio column applies and not its 60-second HTTP one.
+"""
+
+[operations.list_helm_calls]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "Every Helm call waiting on a person right now, across every repository Fleet serves"
+notes = """
+**Read once on a resync, never polled.** `helm.asking_to_run` carries each ask as it arrives and `helm.call_answered` says it is over; this is what a Bridge started while one was already waiting reads to draw the dock.
+
+Fleet-wide rather than per Manifest, because the dock is: a person answers what is waiting on them wherever it is, which is how `#935` already gathers a Job's questions.
+
+`agent_access` is `No`: what is waiting on a person is a person's, and a session reading which of its own calls are held would be reading the dock over their shoulder.
+"""
+
+[operations.answer_helm_call]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Allow a held Helm call once, allow it and remember the rule, or refuse it"
+notes = """
+Named by `call`, which is Fleet's id for the ask and not the harness's: an answer from a window left open across two asks names an id nothing is waiting on and is a 409 rather than an answer to the wrong call.
+
+**`allow_and_remember` is the only thing in Armada that writes a person's settings**, and it writes one rule — `HelmCallInFlight.rule`, which a person read before choosing it — into the repository's own `.claude/settings.local.json`. Not `~/.claude/settings.json`, which is theirs across every repository and every tool, and not `.claude/settings.json`, which is committed and is everybody's. A file that will not be written still lets the call run and settles as `allowed_but_not_remembered`: the answer was theirs, and a settings file is not a reason to refuse them.
+
+`agent_access` is `No` for `answer_command`'s reason, one subject over: an agent answering the permission question asked about its own call is the question not being asked.
+"""
+
 [operations.list_studios]
 kind = "query"
 transport = "HTTP"
@@ -2713,6 +2752,30 @@ Published as the session's stream says the write happened, so it arrives while t
 **A write, not a run.** The tool is one of the built-ins that edits a file, so the path is known. A shell line Helm ran may have written something too and nothing in the stream says whether it did — so a `Bash` call produces none of these, and a person reading this stream is reading writes Armada could name rather than every change Helm caused.
 
 `manifest_id` is at the top level, so a poll's tally names the repository.
+"""
+
+[operations."helm.asking_to_run"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "A Helm session reached for something its person's settings do not cover, and is waiting inside the call"
+notes = """
+**What puts a Helm call in the dock's upper zone**, beside a Drone's held command. It carries the ask whole — the tool, the one-line argument, the rule that would have to allow it, the answers offered and how long Fleet will hold — so the card draws from the event and nothing is read to complete it. `job.command_waiting` carries a Drone's the same way.
+
+**No `job_id`, and that is the difference.** A Helm call has no Job: nothing is queued, no step is running, and nothing moves while it waits. `manifest_id` is what names where it came from.
+
+Every ask is ended by a `helm.call_answered`, whoever ended it — so a card is taken down on an event and never on a timer.
+"""
+
+[operations."helm.call_answered"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "What became of one held Helm call: allowed, allowed and remembered, refused, or nobody answered"
+notes = """
+**Helm's act as its own event type**, the rule `helm.changed_checkout` and `studio.helm_acted` already follow. Every answer is on the record — `docs/concepts/helm.md`, *Audit trail* — so a person who finds a command was run can see that they allowed it, and a person who finds one was not can see that the bound ran out.
+
+Published whoever ended the ask, including Fleet answering `deny` for a person who never came back. It repeats the tool, the detail and the rule, so the record reads without the `helm.asking_to_run` that preceded it.
 """
 
 [operations."studio.deleted"]

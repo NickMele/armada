@@ -28,16 +28,7 @@ pub fn merged_into<T: Serialize>(
     named: &str,
     entry: &T,
 ) -> Result<String, NotMerged> {
-    let mut document = match existing {
-        None => Value::Object(Map::new()),
-        Some(bytes) if bytes.iter().all(u8::is_ascii_whitespace) => Value::Object(Map::new()),
-        Some(bytes) => serde_json::from_slice(bytes).map_err(|why| {
-            NotMerged::Unreadable(Undecodable {
-                expected: "JSON document",
-                why: why.to_string(),
-            })
-        })?,
-    };
+    let mut document = read_object(existing)?;
     let entry = serde_json::to_value(entry).map_err(|why| {
         NotMerged::Unencodable(Unencodable {
             why: why.to_string(),
@@ -63,7 +54,66 @@ pub fn merged_into<T: Serialize>(
     };
     servers.insert(named.to_string(), entry);
 
-    let mut written = serde_json::to_string_pretty(&document).map_err(|why| {
+    printed(&document)
+}
+
+/// Append `said` to the list at `under`.`into`, keeping every other byte of
+/// meaning. [`merged_into`]'s rule for a document somebody else owns, where
+/// what is added is one line of a list rather than one keyed entry.
+///
+/// **`None` where it is already there.** A caller can then say nothing was
+/// written rather than moving an mtime and offering a person a diff of nothing,
+/// which is [`merged_into`]'s `AlreadyThere` reached one level down.
+pub fn appended_to(
+    existing: Option<&[u8]>,
+    under: &str,
+    into: &str,
+    said: &str,
+) -> Result<Option<String>, NotMerged> {
+    let mut document = read_object(existing)?;
+    let Value::Object(root) = &mut document else {
+        return Err(NotMerged::NotAnObject {
+            at: String::from("the document"),
+        });
+    };
+    let held = root
+        .entry(under.to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let Value::Object(held) = held else {
+        return Err(NotMerged::NotAnObject {
+            at: format!("`{under}`"),
+        });
+    };
+    let list = held
+        .entry(into.to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    let Value::Array(list) = list else {
+        return Err(NotMerged::NotAnObject {
+            at: format!("`{under}.{into}`"),
+        });
+    };
+    if list.iter().any(|held| held.as_str() == Some(said)) {
+        return Ok(None);
+    }
+    list.push(Value::String(said.to_string()));
+    Ok(Some(printed(&document)?))
+}
+
+fn read_object(existing: Option<&[u8]>) -> Result<Value, NotMerged> {
+    match existing {
+        None => Ok(Value::Object(Map::new())),
+        Some(bytes) if bytes.iter().all(u8::is_ascii_whitespace) => Ok(Value::Object(Map::new())),
+        Some(bytes) => serde_json::from_slice(bytes).map_err(|why| {
+            NotMerged::Unreadable(Undecodable {
+                expected: "JSON document",
+                why: why.to_string(),
+            })
+        }),
+    }
+}
+
+fn printed(document: &Value) -> Result<String, NotMerged> {
+    let mut written = serde_json::to_string_pretty(document).map_err(|why| {
         NotMerged::Unencodable(Unencodable {
             why: why.to_string(),
         })

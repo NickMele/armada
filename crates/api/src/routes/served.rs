@@ -89,6 +89,23 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/helm/start_fresh",
     },
+    // The permission path, `#1389`: the door calls the first, a person answers
+    // the third, and the second is what a Bridge started mid-wait reads.
+    Route {
+        operation: "ask_the_person",
+        method: "POST",
+        path: "/helm/permission",
+    },
+    Route {
+        operation: "list_helm_calls",
+        method: "GET",
+        path: "/helm/calls",
+    },
+    Route {
+        operation: "answer_helm_call",
+        method: "POST",
+        path: "/helm/calls/answer",
+    },
     // A repository's Studios, `#1285`: the collection reads `?manifest_id=`,
     // a member is its id, and each act is spelled in the last segment without
     // `studio_`, which the segment before it already says.

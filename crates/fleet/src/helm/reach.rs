@@ -47,6 +47,14 @@ pub(super) const UNASKED: &[&str] = &["add_studio_node", "propose_studio_edge", 
 /// Every query is a read and every read is Helm's. A command is Helm's where
 /// the machine lets Helm act at all and the operation is not [`RESERVED`].
 pub fn may(authority: Authority, offered: &Reachable) -> bool {
+    // **Not an act, so no authority decides it.** `ask_the_person` is the
+    // channel a person answers a call on, and a Fleet that withheld it under
+    // `ReadOnly` would leave every uncovered call refused with nobody asked —
+    // which is the state `#1389` exists to end. It grants nothing: what comes
+    // back is the person's own answer.
+    if offered.operation == ipc::door::ASKS_A_PERSON {
+        return true;
+    }
     match offered.kind {
         "query" => true,
         "command" => authority == Authority::Acting && !RESERVED.contains(&offered.operation),
