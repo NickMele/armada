@@ -454,3 +454,68 @@ test("an issue is read in and a milestone fills the board, with each Link left s
     named: "Studio — 3 of 3 issues read in",
   });
 });
+
+/**
+ * `#1379`'s definition of done, which is the owner's own walkthrough: paste a
+ * milestone's address, read it in, press Dispatch on one issue's node, open
+ * that Job from the node and watch it run, then come back and see the same
+ * node reading running.
+ *
+ * **The Job node holds no status.** What it draws here is the Board's row,
+ * which is why the last assertion is worth making: the Studio was left
+ * standing while the Job moved, and it says what the Job is doing rather than
+ * what it was doing when the node was made.
+ */
+test("an issue read in is dispatched, its Job opens from the node, and the node reads it running", async () => {
+  const fleet = studying();
+  open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  // The milestone fills the board with a Link per issue — #1293.
+  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/milestone\/17/);
+  await acts().getByRole("button", { name: "Read in" }).click();
+  await asked("Read in").click();
+  await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
+
+  // A milestone is read in, never dispatched: what it holds is the work.
+  await pick(/^Link: Studio — 3 of 3 issues read in/);
+  await expect.poll(() => acts().getByRole("button", { name: "Dispatch" }).query()).toBeNull();
+
+  await pick(/^Link: #1293 An issue cannot be read into a Studio — open/);
+  await acts().getByRole("button", { name: "Dispatch" }).click();
+  // The address is the whole request. Nothing is filed — the issue already is.
+  await expect
+    .poll(() => (page.getByRole("textbox", { name: "What is sent" }).element() as HTMLTextAreaElement).value)
+    .toBe("https://example.invalid/o/r/issues/1293");
+  await asked("Dispatch").click();
+
+  // The Job node lands with a `Produced` edge from the Link it came from, and
+  // stands at the gate like every other Job.
+  const dispatched = /^Job: #1293 An issue cannot be read into a Studio — open/;
+  await expect.element(node(dispatched)).toBeVisible();
+  const studio = () => fleet.studios()[0]!;
+  const jobNode = () => studio().nodes.find((one) => one.kind === "job")!;
+  const edge = studio().edges.find((one) => one.to === jobNode().id)!;
+  expect(edge.kind).toBe("produced");
+  expect(studio().nodes.find((one) => one.id === edge.from)).toMatchObject({
+    kind: "link",
+    address: "https://example.invalid/o/r/issues/1293",
+  });
+
+  // The node opens the Job, the way a Board row does.
+  await pick(dispatched);
+  await page.getByRole("button", { name: "Open Job" }).click();
+  // The gate is unchanged: a Job from a Studio stands at `awaiting_approval`
+  // like any other, and this is where it is approved.
+  await expect.element(page.getByRole("button", { name: "Approve dispatch" })).toBeVisible();
+  await expect.element(page.getByText("Dispatched by you")).toBeVisible();
+
+  await page.getByRole("button", { name: "Approve dispatch" }).click();
+  await userEvent.keyboard("{Escape}");
+
+  // Back on the Studio it was left on, and the node reads what the Job is
+  // doing now rather than what it was doing when it was made.
+  await expect.element(node(/^Job: #1293 An issue cannot be read into a Studio — open, running/)).toBeVisible();
+});

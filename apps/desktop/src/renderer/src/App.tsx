@@ -905,6 +905,10 @@ export function App() {
               onOpenChange={setOpenStudio}
               selectedNode={studioNode}
               onSelectNode={setStudioNode}
+              // A Job node opens its Job over the Studio, the way a Board row
+              // opens one over the list — and Escape comes back here, because
+              // `close` clears the Job and leaves the surface alone.
+              onOpenJob={setOpenJob}
               onCopied={setCopied}
             />
           ) : settingsShowing ? (
