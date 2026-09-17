@@ -305,7 +305,7 @@ fn counted(text: &str) -> usize {
 /// the capture. A row naming a file the Drone read would carry it again on
 /// every call, so the two leading components of a home-shaped path are replaced
 /// rather than sent.
-fn under_home(path: &str) -> String {
+pub(crate) fn under_home(path: &str) -> String {
     let mut parts = path.split('/');
     match (parts.next(), parts.next(), parts.next()) {
         (Some(""), Some("Users") | Some("home"), Some(_)) => {
