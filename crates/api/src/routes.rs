@@ -66,8 +66,8 @@ use crate::studios::{
     add_studio_node, ask_scout, capture_studio_note, create_studio, decide_studio_edge,
     defer_on_studio, delete_studio, dispatch_studio_draft, edit_studio_draft, edit_studio_link,
     get_studio, get_studio_frame, group_studio_nodes, list_studios, move_studio_node,
-    propose_studio_edge, remove_studio_node, rename_studio, settle_contradiction, start_scout,
-    start_studio_run, stop_scout, write_up_studio_node,
+    propose_studio_edge, read_in_link, remove_studio_node, rename_studio, settle_contradiction,
+    start_scout, start_studio_run, stop_scout, write_up_studio_node,
 };
 
 /// The inventory this router is compared against, row by row.
@@ -336,6 +336,7 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/studios/:studio_id/ask_scout", post(ask_scout::<D>))
         .route("/studios/:studio_id/start_scout", post(start_scout::<D>))
         .route("/studios/:studio_id/stop_scout", post(stop_scout::<D>))
+        .route("/studios/:studio_id/read_in", post(read_in_link::<D>))
         .route("/studios/:studio_id/start_run", post(start_studio_run::<D>))
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in

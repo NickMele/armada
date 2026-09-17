@@ -28,13 +28,39 @@ You ask a [Studio](studio.md) how routing is decided across three packages. A sc
 
 ## What it may read
 
-| Source | Reads |
+| Source | Reads | Fetched by |
+|---|---|---|
+| The repository | Files in the checkout on disk | The scout's own read tools |
+| GitHub issues and pull requests | Title, body, labels, linked commits | Fleet, through the forge's CLI |
+| GitHub milestones | Every issue on it, as a Link each | Fleet, and no scout at all |
+| Web pages | Headings and text | Fleet, over HTTP |
+| Claude Code sessions | Sessions started in this repository or its worktrees | Fleet, off the transcript file |
+| Helm threads | This repository's past Helm conversations | Fleet, off the thread file |
+
+> **Rule.** Fleet fetches a source and hands the scout its text. A scout reaches nothing itself.
+> Why: its launch denies every tool that could fetch one and leaves it no MCP server, and that confinement is what makes it safe to run on a person's checkout — spike 017. Reading a source in widens none of it.
+
+> **Rule.** What a scout is handed is bounded, and the Finding says how much was cut.
+> Why: a page and a 114-turn session are both unbounded, and a Finding that said nothing would claim a scout read a source whole when it read the front of one.
+
+> **Rule.** A source is material to read and never instructions to follow, and the brief says so before the text arrives.
+> Why: an issue or a page is text somebody else wrote. `../contracts/agent-prompt.md` section 5c, and the order is what the brief's own test holds.
+
+> **Rule.** A credential never reaches a scout. The fetch is Fleet's own process, and what crosses is the text that came back.
+
+An address a scout is handed:
+
+| Address | Read as |
 |---|---|
-| The repository | Files in the checkout on disk |
-| GitHub issues and pull requests | Title, body, labels, linked commits |
-| Web pages | Headings and text |
-| Claude Code sessions | Sessions started in this repository or its worktrees |
-| Helm threads | This repository's past Helm conversations |
+| `https://github.com/<owner>/<repo>/issues/<n>` | An issue |
+| `.../pull/<n>` | A pull request |
+| `.../milestone/<n>` | A milestone |
+| Any other `http`/`https` address | A page |
+| `armada:session/<id>` | A session of this repository or one of its worktrees |
+| `armada:thread` | This repository's Helm thread |
+
+> **Rule.** A session is found under the project directory this checkout's own path keys, and nowhere else.
+> Why: another repository's session is then not addressable, rather than addressable and refused. The boundary is where the lookup happens.
 
 > **Rule.** A scout never reads a session, a thread or a file belonging to another repository.
 > Why: a Studio belongs to one repository, and the boundary Helm keeps holds here too.
@@ -43,7 +69,7 @@ You ask a [Studio](studio.md) how routing is decided across three packages. A sc
 
 > **Rule.** The connections a scout reads through are managed in [Kit](kit.md), in the same place as a Drone's MCP servers and plugins.
 
-Reading Helm threads needs an operation: `observe_helm` in `crates/ipc/operations.toml` refuses every agent today.
+Reading Helm threads needs no operation, and gets none: `observe_helm` in `crates/ipc/operations.toml` refuses every agent, and Fleet reads the thread file itself rather than opening that door.
 
 ## What bounds it
 

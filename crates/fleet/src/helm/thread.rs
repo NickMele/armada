@@ -21,6 +21,38 @@ use ipc::{HelmClosed, HelmMessage, HelmSilence};
 /// counted.
 pub const THREAD: usize = 512;
 
+/// What was said in a thread, as its file holds it: the person's asks and the
+/// session's prose, in order. `#1293`.
+///
+/// **Fleet's own read and never a tool.** `observe_helm` refuses every agent,
+/// so a scout reaching a thread through a tool would be that door opened; a
+/// read-in hands over this text instead.
+///
+/// Everything else in the file is the session's working — its calls, their
+/// results and what each reply cost — which is not what was argued.
+pub fn what_was_said(kept: &str) -> String {
+    let mut said: Vec<String> = Vec::new();
+    for line in kept.lines().filter(|line| !line.trim().is_empty()) {
+        let Ok(message) = ipc::decode::<HelmMessage>("a Helm thread line", line.as_bytes()) else {
+            continue;
+        };
+        let spoke = match &message {
+            HelmMessage::Asked(asked) => Some(("The person", asked.text.clone())),
+            HelmMessage::Row(shown) => match &shown.row().saw {
+                ipc::Saw::Said { text } => Some(("Helm", text.clone())),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some((who, text)) = spoke {
+            if !text.trim().is_empty() {
+                said.push(format!("{who}: {}", text.trim()));
+            }
+        }
+    }
+    said.join("\n\n")
+}
+
 pub(crate) struct Thread {
     feed: HelmFeed,
     held: Mutex<Held>,

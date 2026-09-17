@@ -39,8 +39,8 @@ const GROUP_IS_OF_SEVERAL: &str = "fleet.studio_group_is_of_several";
 const NOT_WRITABLE_UP: &str = "fleet.studio_not_writable_up";
 /// An edit or a dispatch of a node that is not an Issue draft. A 422.
 const NOT_A_DRAFT: &str = "fleet.studio_not_a_draft";
-/// A line written on a node that is not a Link. A 422.
-const NOT_A_LINK: &str = "fleet.studio_not_a_link";
+/// A line written on, or a read-in asked of, a node that is not a Link. A 422.
+pub(crate) const NOT_A_LINK: &str = "fleet.studio_not_a_link";
 /// An outcome asked of a node that is not a Contradiction. A 422.
 const NOT_A_CONTRADICTION: &str = "fleet.studio_not_a_contradiction";
 /// A Contradiction ended twice. A 409.

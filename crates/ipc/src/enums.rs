@@ -125,6 +125,10 @@ wire_enum! {
     StudioAuthor, core_model::StudioAuthor, "who put something on a Studio"
 }
 wire_enum! {
+    /// What a source a scout was handed was read as. `#1293`.
+    ScoutSourceKind, core_model::ScoutSourceKind, "a source a scout reads"
+}
+wire_enum! {
     /// Whether a person has accepted an edge.
     StudioEdgeStanding, core_model::StudioEdgeStanding, "a Studio edge standing"
 }

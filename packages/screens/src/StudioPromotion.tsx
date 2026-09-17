@@ -29,7 +29,8 @@ type Filling =
   | "line"
   | "resolved"
   | "settled"
-  | "dispatch";
+  | "dispatch"
+  | "read_in";
 
 export type StudioPromotionProps = {
   studio: Studio;
@@ -126,6 +127,8 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
         });
       case "dispatch":
         return send({ act: "dispatch", node_id, position });
+      case "read_in":
+        return send({ act: "read_in", node_id, position });
       case null:
         return;
     }
@@ -142,6 +145,7 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
       {acts.edit ? <Act label="Edit draft" onPress={() => fill("edit")} /> : null}
       {acts.editLink ? <Act label="Edit line" onPress={() => fill("line")} /> : null}
       {acts.dispatch ? <Act label="Dispatch" onPress={() => fill("dispatch")} /> : null}
+      {acts.readIn ? <Act label="Read in" onPress={() => fill("read_in")} /> : null}
       {acts.settle ? <Act label="Not a problem" onPress={() => fill("settled")} /> : null}
       {acts.settle ? <Act label="Resolved here" onPress={() => fill("resolved")} /> : null}
     </div>
@@ -195,6 +199,7 @@ const ASKED: Readonly<Record<Filling, string>> = {
   settled: "End this as Not a problem",
   resolved: "Resolve this here",
   dispatch: "Dispatch this Issue draft",
+  read_in: "Read this Link in",
 };
 
 /** The action, keeping its name through the flow. */
@@ -208,6 +213,7 @@ const CONFIRMS: Readonly<Record<Filling, string>> = {
   settled: "Not a problem",
   resolved: "Resolve",
   dispatch: "Dispatch",
+  read_in: "Read in",
 };
 
 /** Whether the rung has what it needs. Fleet refuses a blank field; this does not offer one. */
@@ -311,6 +317,14 @@ function Filling(props: FillingProps) {
           </p>
           <Textarea label="Your line" rows={3} value={body} onChange={(event) => props.onBody(event.target.value)} />
         </>
+      );
+    case "read_in":
+      return (
+        <p>
+          Armada fetches {one === undefined ? "this address" : named(one)} and a scout reads what comes back, off
+          this Studio. The Link stays where it is and keeps its address. A milestone fills in as one Link per
+          issue, with no scout at all; an address Armada does not read comes back saying so.
+        </p>
       );
     case "settled":
       return (

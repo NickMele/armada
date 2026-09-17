@@ -111,6 +111,8 @@ mod proposing;
 mod raising;
 /// Fleet's last read of `armada.yml`, held rather than announced. **The one
 /// shape here about the fleet and not about a Job**, beside `capacity`.
+/// What a scout answers a read-in with. `#1293`.
+mod read_in;
 mod reading;
 /// What giving one Job's worktree and branch back did, half by half.
 /// **Two halves, because half of it happening is a real outcome.**
@@ -204,8 +206,8 @@ pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
     DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
-    Resumption, Side, StepState, StudioAuthor, StudioEdgeKind, StudioEdgeStanding, StudioNodeKind,
-    StudioNodeState, StudioRelation, TaskState, TopLevelOrigin, Urgency,
+    Resumption, ScoutSourceKind, Side, StepState, StudioAuthor, StudioEdgeKind, StudioEdgeStanding,
+    StudioNodeKind, StudioNodeState, StudioRelation, TaskState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
@@ -250,6 +252,10 @@ pub use overlap::{ScopeOverlap, SharedPath};
 pub use preferences::{Preferences, SavePreference};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
 pub use raising::{CapRaise, RaisedBy, TurnRaise};
+pub use read_in::{
+    what_a_scout_read_in, ReadIn, ReadInCluster, ReadInContradiction, ReadInNote, ReadInRelation,
+    MOST_CHARACTERS, MOST_CLUSTERS, MOST_CONTRADICTIONS, MOST_NOTES, MOST_RELATIONS,
+};
 pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
 pub use reclaimed::{
     BranchDeleted, DeleteBranch, ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed,
@@ -274,7 +280,10 @@ pub use scan::{
     PackageWorkspaces, RepositoryScan, Runnable, ScannedWorkspace, ToolFile, ToolSection,
     WorkspaceGlob, WorkspaceGlobs,
 };
-pub use scouting::{AskScout, ScoutCheckout, ScoutEnded, ScoutOutcome, StartScout, StopScout};
+pub use scouting::{
+    AskScout, ReadInLink, ScoutCheckout, ScoutEnded, ScoutOutcome, ScoutSource, StartScout,
+    StopScout,
+};
 pub use seeding::{DeclaredSeed, SeedWarmth, WorktreeSeeding};
 pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,

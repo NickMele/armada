@@ -66,8 +66,9 @@ pub use job::{
 pub use studio::{
     CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, ContradictionOutcome, EdgeRefused,
     FrozenFinding, GatheringFinding, NotRewritable, NotScoutable, Rewritten, ScoutCheckout,
-    ScoutEnded, ScoutLook, ScoutOutcome, Scouted, StateDoesNotFit, Studio, StudioAuthor,
-    StudioCapture, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioFinding,
-    StudioGraph, StudioId, StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind,
-    StudioNodeState, StudioPosition, StudioRelation, StudioRunKept, ToItself,
+    ScoutEnded, ScoutLook, ScoutOutcome, ScoutSource, ScoutSourceKind, Scouted, StateDoesNotFit,
+    Studio, StudioAuthor, StudioCapture, StudioEdge, StudioEdgeId, StudioEdgeKind,
+    StudioEdgeStanding, StudioFinding, StudioGraph, StudioId, StudioName, StudioNode,
+    StudioNodeContent, StudioNodeId, StudioNodeKind, StudioNodeState, StudioPosition,
+    StudioRelation, StudioRunKept, ToItself,
 };

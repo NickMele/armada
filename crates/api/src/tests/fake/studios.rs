@@ -358,6 +358,31 @@ impl Studios for FakeDaemon {
         })
     }
 
+    /// A Finding added Gathering off the Link. **Nothing is fetched in the
+    /// fake**: the route and who it records the act as is what is proved here.
+    async fn read_in_link(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        read_in: ipc::ReadInLink,
+        _by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            studio.nodes.push(StudioNode {
+                id: StudioNodeId::carried(format!("01NODE{}", studio.nodes.len())),
+                content: StudioNodeContent::finding_asked(&format!(
+                    "Read in {}",
+                    read_in.node_id.as_str()
+                )),
+                state: StudioNodeState::from_wire("gathering"),
+                position: read_in.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(studio.clone())
+        })
+    }
+
     async fn start_scout(
         self: Arc<Self>,
         studio_id: StudioId,
@@ -521,10 +546,11 @@ impl Studios for FakeDaemon {
                 .iter_mut()
                 .filter(|node| node.id == edit.node_id)
             {
-                if let StudioNodeContent::Link { address, .. } = &node.content {
+                if let StudioNodeContent::Link { address, named, .. } = &node.content {
                     node.content = StudioNodeContent::Link {
                         address: address.clone(),
                         said: Some(edit.said.clone()),
+                        named: named.clone(),
                     };
                 }
             }

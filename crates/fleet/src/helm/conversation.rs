@@ -30,7 +30,7 @@ impl ConversationKey {
 
     /// Where its thread is kept. A character a file name should not carry is
     /// written as `_`, so no key can name a path outside the directory.
-    fn thread_in(&self, records_root: &str) -> PathBuf {
+    pub(crate) fn thread_in(&self, records_root: &str) -> PathBuf {
         let name: String = self
             .0
             .chars()
