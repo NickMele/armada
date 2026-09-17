@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::commanding::CommandInFlight;
 use crate::detail::{JudgeInFlight, Settled};
 use crate::enums::{Actor, EvidenceType, JobStatus, StepState};
+use crate::helm::HelmChangedCheckout;
 use crate::ids::ProposalId;
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
@@ -160,6 +161,10 @@ pub enum Event {
     // same write publishes. `#1288`.
     #[serde(rename = "studio.helm_acted")]
     StudioHelmActed(StudioHelmActed),
+    // Helm wrote a file in the repository's own checkout, which it does on a
+    // person's ask and in no worktree. `#1373`.
+    #[serde(rename = "helm.changed_checkout")]
+    HelmChangedCheckout(HelmChangedCheckout),
 }
 
 impl Event {
