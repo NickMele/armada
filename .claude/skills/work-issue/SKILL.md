@@ -108,6 +108,14 @@ until #1229.
 **Verify it yourself rather than on a report.** An agent's claim of green has
 been wrong here.
 
+**The app suite passes twice in a row before a merge.** `desktop_test` on the
+branch, two full runs back to back. Confirmed 17 Sep 2026: three changes that
+put glass on Bridge's cards each failed a different `setup.test.tsx` test in
+one full run and passed the next, and the one that failed every time was
+caught only by running again. When a run fails, run `main` beside it: a test
+that fails on the branch and passes on `main` belongs to the branch, not to
+#1252.
+
 **A filtered Check that prints nothing did not pass.** `armada check` reads
 `armada.yml` from the working directory. Confirmed 14 Sep 2026 on #1117: a
 typecheck run from `packages/components` could not read the file, and the
