@@ -75,6 +75,11 @@ export function Layer({ sink }: { sink: Sink }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // A view over the notes, never written to a file. It starts off every time the
+  // layer comes on: the moment this exists for is turning the layer on after a
+  // batch has been fixed and reading only what is still open. Showing the done
+  // ones is a look back, so it lasts as long as the look.
+  const [showingDone, setShowingDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [frames, setFrames] = useState<Record<string, Box | null>>({});
   // Which send is out: one note's id, or every open note on this screen.
@@ -106,6 +111,7 @@ export function Layer({ sink }: { sink: Sink }) {
       setHovered(null);
       setDraft(null);
       setOpened(null);
+      setShowingDone(false);
       return;
     }
     setError(null);
@@ -253,12 +259,18 @@ export function Layer({ sink }: { sink: Sink }) {
   const measured = frames["window"];
   const size = { width: measured?.width ?? window.innerWidth, height: measured?.height ?? window.innerHeight };
   const view: Viewport = { ...size, floor: frames["bar"]?.y ?? size.height };
-  const openNote = notes.find((n) => n.id === opened) ?? null;
+  // Numbering runs over the open notes alone, oldest first, so marking one done
+  // renumbers nothing above it and a new note takes the next open number rather
+  // than counting everything ever written.
+  const numbers = new Map(notes.filter((n) => n.status === "open").map((n, i) => [n.id, i + 1]));
+  const drawn = showingDone ? notes : notes.filter((n) => n.status === "open");
+  const openNote = drawn.find((n) => n.id === opened) ?? null;
   const openBox = openNote === null ? null : frames[openNote.id] ?? null;
   const hoveredBox = draft === null ? frames["hovered"] ?? null : null;
   const draftBox = draft === null ? null : frames["draft"] ?? draft.note.box;
-  const offScreen = notes.filter((n) => frames[n.id] == null).length;
-  const open = notes.filter((n) => n.status === "open").length;
+  const offScreen = drawn.filter((n) => frames[n.id] == null).length;
+  const open = numbers.size;
+  const done = notes.length - open;
   const sendableHere = notes.filter((n) => n.status === "open" && n.sent === undefined && frames[n.id] != null).length;
 
   return (
@@ -271,9 +283,13 @@ export function Layer({ sink }: { sink: Sink }) {
         </div>
       )}
 
-      {notes.map((note, i) => {
+      {drawn.map((note) => {
         const box = frames[note.id];
         if (box == null) return null;
+        // A done note carries no number, here or in its label, so nothing a
+        // person reads on the screen counts work that is finished.
+        const number = numbers.get(note.id);
+        const where = number === undefined ? "Done note" : `Note ${number}, open`;
         return (
           <button
             key={note.id}
@@ -282,14 +298,14 @@ export function Layer({ sink }: { sink: Sink }) {
             data-status={note.status}
             data-sent={note.sent === undefined ? undefined : ""}
             style={place(box)}
-            aria-label={`Note ${i + 1}, ${note.status}${note.sent === undefined ? "" : `, sent as ${note.sent.handle}`}: ${note.text}`}
+            aria-label={`${where}${note.sent === undefined ? "" : `, sent as ${note.sent.handle}`}: ${note.text}`}
             onClick={() => {
               setDraft(null);
               setDeleting(false);
               setOpened(opened === note.id ? null : note.id);
             }}
           >
-            {i + 1}
+            {number}
           </button>
         );
       })}
@@ -357,9 +373,14 @@ export function Layer({ sink }: { sink: Sink }) {
       <div ref={barRef} className="armada-annotate__bar" role="status">
         <span>Annotating</span>
         <span>
-          {open} open, {notes.length - open} done
+          {open} open, {done} done
           {offScreen > 0 ? `, ${offScreen} not on this screen` : ""}
         </span>
+        {done > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setShowingDone(!showingDone)}>
+            {showingDone ? "Hide done notes" : "Show done notes"}
+          </Button>
+        )}
         {cannotSend === null && sendableHere > 0 && (
           <Button variant="secondary" size="sm" disabled={sending !== null} onClick={() => void sendHere()}>
             {sending === "here" ? "Sending…" : `Send ${sendableHere} to Fleet`}

@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
 import { page } from "vitest/browser";
 
+import type { Annotation, AnnotationStatus } from "../../../shared/annotations";
 import "../styles/index.css";
 import { Layer } from "./Layer";
 import type { Sink } from "./sink";
@@ -16,14 +17,24 @@ import type { Sink } from "./sink";
 const OWNER = { width: 1324, height: 922 };
 const SHORT = { width: 1324, height: 700 };
 
-const sink: Sink = {
-  via: "dev server",
-  list: async () => [],
-  save: async () => undefined,
-  remove: async () => undefined,
-  root: async () => null,
-  capture: async () => null,
-};
+/** Notes the layer reads, saves back to and deletes from, held in memory. */
+function sinkOf(notes: Annotation[] = []): Sink {
+  const held = new Map(notes.map((note) => [note.id, note]));
+  return {
+    via: "dev server",
+    list: async () => [...held.values()],
+    save: async (note) => {
+      held.set(note.id, note);
+    },
+    remove: async (id) => {
+      held.delete(id);
+    },
+    root: async () => null,
+    capture: async () => null,
+  };
+}
+
+const sink = sinkOf();
 
 let mounted: { root: Root; host: HTMLElement }[] = [];
 
@@ -33,13 +44,13 @@ afterEach(async () => {
     one.host.remove();
   }
   mounted = [];
-  document.querySelectorAll("[data-tall]").forEach((one) => one.remove());
+  document.querySelectorAll("[data-tall], [data-noted]").forEach((one) => one.remove());
   sessionStorage.removeItem("armada.annotate.on");
   await page.viewport(1440, 900);
 });
 
 /** The layer already on, as it comes up after ⌥⌘A and a reload. */
-async function annotating(): Promise<void> {
+async function annotating(sink: Sink): Promise<void> {
   sessionStorage.setItem("armada.annotate.on", "1");
   const host = document.createElement("div");
   host.setAttribute("data-armada-annotate", "");
@@ -82,7 +93,7 @@ function insideTheWindow(what: string, rect: DOMRect): void {
 
 async function cardOnTheTallSheet(size: { width: number; height: number }) {
   await page.viewport(size.width, size.height);
-  await annotating();
+  await annotating(sink);
   tallSheet().click();
   const card = page.getByRole("dialog", { name: "New note" });
   await expect.element(card).toBeVisible();
@@ -131,4 +142,124 @@ test("a window too short for the card gives it its own scroll rather than an edg
   await new Promise((settled) => requestAnimationFrame(() => requestAnimationFrame(settled)));
   const again = rectOf(card);
   expect([again.x, again.y, again.width, again.height]).toEqual([rect.x, rect.y, rect.width, rect.height]);
+});
+
+// A batch of notes has been fixed and the layer is turned on again. What the
+// owner saw was every fixed note still pinned to its screen, numbered, so a new
+// note came up as 9 while one was open. A done note is now out of the drawing
+// and out of the numbering, and the bar is where it is said how many there are.
+
+/** An element a note points at, found again by the selector the note carries. */
+function noted(name: string, top: number): string {
+  const element = document.createElement("button");
+  element.setAttribute("data-noted", name);
+  element.textContent = name;
+  // A share of the window, as the tall sheet above is: the pins only have to
+  // land clear of one another, and a length literal is off-contract here too.
+  element.style.cssText = `position:fixed;left:20%;top:${top}%;width:15%;height:4%`;
+  document.body.append(element);
+  return `[data-noted="${name}"]`;
+}
+
+/** A saved note on that element, written at a time the numbering sorts by. */
+function note(name: string, status: AnnotationStatus, at: string, top: number): Annotation {
+  return {
+    id: `2026091${at}`,
+    status,
+    text: `${name}: what the owner said`,
+    component: "JobRowStacked",
+    owners: ["ActiveJobsList", "Board"],
+    ownersFrom: "parent",
+    selector: noted(name, top),
+    element: { tag: "button", text: name, label: null },
+    screen: "Job Board",
+    layer: null,
+    location: "/",
+    scenario: null,
+    box: { x: 0, y: top, width: 0, height: 0 },
+    window: { width: 1440, height: 900 },
+    createdAt: `2026-09-1${at}T10:00:00.000Z`,
+    updatedAt: `2026-09-1${at}T10:00:00.000Z`,
+  };
+}
+
+/** Every pin drawn, as a person reads it: its number, or nothing where it has none. */
+function pinned(): { name: string; reads: string }[] {
+  return page
+    .getByRole("button", { name: /^(Note \d+, open|Done note)/ })
+    .elements()
+    .map((one) => ({ name: one.getAttribute("aria-label") ?? "", reads: one.textContent ?? "" }));
+}
+
+/** Three notes, the middle one already fixed by an agent, on three live elements. */
+const batch = (): Annotation[] => [
+  note("first", "open", "5", 15),
+  note("second", "done", "6", 30),
+  note("third", "open", "7", 45),
+];
+
+/** ⌥⌘A, which is how the layer is put away and brought back. */
+async function pressToggle(): Promise<void> {
+  window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyA", metaKey: true, altKey: true, bubbles: true }));
+  await new Promise((settled) => setTimeout(settled, 0));
+}
+
+test("a note marked done draws no pin, and the open ones are numbered 1 to n with no gap", async () => {
+  await annotating(sinkOf(batch()));
+
+  await expect.element(page.getByRole("button", { name: /^Note 1, open/ })).toBeVisible();
+  expect(pinned()).toEqual([
+    { name: "Note 1, open: first: what the owner said", reads: "1" },
+    { name: "Note 2, open: third: what the owner said", reads: "2" },
+  ]);
+
+  // The count is still said, because the file is still there.
+  await expect.element(page.getByRole("status")).toHaveTextContent("2 open, 1 done");
+});
+
+test("the bar shows the done notes again, unnumbered, and their cards still work", async () => {
+  await annotating(sinkOf(batch()));
+  const bar = page.getByRole("status");
+
+  await bar.getByRole("button", { name: "Show done notes" }).click();
+  const back = page.getByRole("button", { name: /^Done note/ });
+  await expect.element(back).toBeVisible();
+  expect(pinned()).toEqual([
+    { name: "Note 1, open: first: what the owner said", reads: "1" },
+    { name: "Done note: second: what the owner said", reads: "" },
+    { name: "Note 2, open: third: what the owner said", reads: "2" },
+  ]);
+
+  // The card opens off the pin, and reopening from it puts the note back into
+  // the numbering — at 2, where it was written, not at the end.
+  await back.click();
+  const card = page.getByRole("dialog", { name: "Note" });
+  await expect.element(card).toHaveTextContent("second: what the owner said");
+  await expect.element(card.getByRole("button", { name: "Delete" })).toBeVisible();
+  await card.getByRole("button", { name: "Reopen" }).click();
+  await expect.element(page.getByRole("button", { name: /^Note 2, open: second/ })).toBeVisible();
+  await expect.element(bar).toHaveTextContent("3 open, 0 done");
+});
+
+test("putting the layer away puts the done notes away with it, and looking wrote nothing", async () => {
+  const held = sinkOf(batch());
+  await annotating(held);
+  const bar = page.getByRole("status");
+
+  await bar.getByRole("button", { name: "Show done notes" }).click();
+  await expect.element(page.getByRole("button", { name: /^Done note/ })).toBeVisible();
+  await bar.getByRole("button", { name: "Hide done notes" }).click();
+  expect(page.getByRole("button", { name: /^Done note/ }).elements()).toHaveLength(0);
+
+  // ⌥⌘A off and on again, which is how the notes are read from the files a
+  // second time: the layer comes up on the open notes, as it did the first time.
+  await pressToggle();
+  await expect.element(bar).not.toBeInTheDocument();
+  await pressToggle();
+  await expect.element(page.getByRole("status")).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Show done notes" })).toBeVisible();
+  expect(page.getByRole("button", { name: /^Done note/ }).elements()).toHaveLength(0);
+
+  // Nothing about a note was written by looking: the files say what they said.
+  expect((await held.list()).map((one) => one.status)).toEqual(["open", "done", "open"]);
 });
