@@ -83,9 +83,9 @@ export const Running: Story = {
 };
 
 /**
- * The running mark on the focused row of a list: the inner dot of `circle-dot`
+ * The running mark on a list's running row: the inner dot of `circle-dot`
  * moves on opacity and scale at `--duration-pulse`, and the ring holds still.
- * One per screen, and never where a rail carries a more specific mark.
+ * Every running row takes it, and never where a rail carries a more specific mark.
  */
 export const RunningPulsing: Story = {
   args: { status: "running", icon: CircleDot, children: "Running", pulsing: true },

@@ -663,12 +663,11 @@ function OneJob({
           <ChevronRight size={12} strokeWidth={2} aria-hidden />
         </button>
       }
-      // The running mark pulses in one place, on the thing being read, until #1276 — and nothing
-      // pulses on a Job that is over, where "still working" is a claim no step
-      // is making. **The pulse moves with the reading**: with a sheet open the
-      // tree's current step is behind the layer, so its mark stops and the
-      // sheet's live mark takes it.
-      pulsing={render === "working" && sheet === null}
+      // The rail's current step pulses while the Job works, and nothing pulses
+      // on a Job that is over, where "still working" is a claim no step is
+      // making. **A sheet does not stop it** (#1276): the step is still
+      // working behind the layer, and the sheet's own live mark pulses beside it.
+      pulsing={render === "working"}
       onSelectStep={selectStep}
       // A count in the tree opens its chapter: the step, then the reader on it.
       onOpenChapter={(stepId, chapterId) => {
