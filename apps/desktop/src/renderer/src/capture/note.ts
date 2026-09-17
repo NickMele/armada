@@ -98,10 +98,18 @@ export function captureOf(
   };
 }
 
-/** `FilterChip ← Board · button.armada-chip`, so a person sees what they hit. */
+/**
+ * The card's one line: `FilterChip ← Board · button.armada-chip`.
+ *
+ * **The selector is cut to its last steps.** A chain that falls back to the
+ * whole tree runs to eight wrapped lines and pushes the field a person is
+ * typing into off the card; the Note keeps the selector whole either way.
+ */
 export function chainOf(capture: StudioCapture): string {
   const names = [capture.component, ...(capture.owners ?? [])].filter((name): name is string => name !== undefined);
-  return `${names.length > 0 ? names.slice(0, 4).join(" ← ") : capture.element.tag} · ${capture.selector}`;
+  const steps = capture.selector.split(" > ");
+  const shown = steps.length > 2 ? `… > ${steps.slice(-2).join(" > ")}` : capture.selector;
+  return `${names.length > 0 ? names.slice(0, 4).join(" ← ") : capture.element.tag} · ${shown}`;
 }
 
 /** What the outline calls the element under the pointer. */
