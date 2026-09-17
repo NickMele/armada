@@ -530,8 +530,10 @@ def prepare(repo, where, logs, setup=True):
 
 
 def foundations_delta(state, where, base, logs):
-    """Lines the merged tree prints that `base`'s own run does not. Red on main
-    is legitimate, so only a new line fails."""
+    """Failing lines the merged tree prints that `base`'s own run does not. Red
+    on main is legitimate, so only a new `FAIL` or `missing:` line is red; a new
+    warning is not a failure on main either, and the summary line's counts move
+    with every change."""
     repo = os.path.dirname(state)
     cached = os.path.join(state, "foundations", f"{base}.txt")
     if not os.path.exists(cached):
@@ -549,7 +551,7 @@ def foundations_delta(state, where, base, logs):
         known = {line.strip() for line in held if line.strip()}
     done = run(FOUNDATIONS, where, check=False, log=os.path.join(logs, "foundations.log"))
     return [line.strip() for line in (done.stdout + done.stderr).splitlines()
-            if line.strip() and line.strip() not in known]
+            if line.strip().startswith(("FAIL", "missing:")) and line.strip() not in known]
 
 
 def wait_for_head(repo, pr, candidate):

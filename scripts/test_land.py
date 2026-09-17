@@ -167,7 +167,7 @@ class Line(unittest.TestCase):
             # Red only in combination: each branch alone passes.
             "checks/test.sh": "! { [ -f one.txt ] && [ -f two.txt ]; }\n",
             "foundations.sh": "cat foundations.txt 2>/dev/null; true\n",
-            "foundations.txt": "a rule main already fails\n",
+            "foundations.txt": "FAIL  a rule main already fails\n        missing: its subject\n\nverify-foundations: RED — 1 failing, 0 warning\n",
             "shared.txt": "base\n",
         })
         self.git(self.repo, "add", "-A")
@@ -380,18 +380,22 @@ class Line(unittest.TestCase):
         self.assertEqual(done.returncode, 6, done.stdout)
         self.assertIn("ungated combination", done.stdout)
 
-    def test_only_a_new_foundations_line_is_red(self):
+    def test_only_a_new_failing_foundations_line_is_red(self):
+        known = "FAIL  a rule main already fails\n        missing: its subject\n"
         mover = self.branch("fix/move", {"moved.txt": "1\n"})
-        worse = self.branch("fix/worse", {"foundations.txt": "a rule main already fails\na new rule broken\n"})
-        self.land(mover, "preflight")
-        self.land(mover)
-        self.assertEqual(self.settle(mover, "fix/move").returncode, 0)
+        warned = self.branch("fix/warned", {"foundations.txt": known + "        warn:    a new warning\n\nverify-foundations: RED — 1 failing, 1 warning\n"})
+        worse = self.branch("fix/worse", {"foundations.txt": "FAIL  a new rule\n        missing: a new subject\n" + known + "\nverify-foundations: RED — 1 failing, 0 warning\n"})
+        for where, name in ((mover, "fix/move"), (warned, "fix/warned")):
+            self.land(where, "preflight")
+            self.land(where)
+            done = self.settle(where, name)
+            self.assertEqual(done.returncode, 0, done.stdout)
         self.land(worse, "preflight")
         self.land(worse)
         done = self.settle(worse, "fix/worse")
         self.assertEqual(done.returncode, 4, done.stdout)
-        self.assertIn("a new rule broken", done.stdout)
-        self.assertNotIn("  a rule main already fails", done.stdout)
+        self.assertIn("missing: a new subject", done.stdout)
+        self.assertNotIn("its subject", done.stdout.replace("a new subject", ""))
 
     def test_a_dirty_tree_or_a_missing_stamp_is_refused(self):
         where = self.branch("fix/dirty", {"x.txt": "1\n"})
