@@ -1,0 +1,76 @@
+/* React Flow's structural sheet: positions, stacking and pointer handling. Its
+   `style.css` theme is not loaded. base.css still names defaults of its own, so
+   every variable it reads is set to a token below, and nothing it would paint
+   is left at React Flow's value. */
+@import "@xyflow/react/dist/base.css";
+
+.armada-studio-whiteboard-frame {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.armada-studio-whiteboard {
+  --xy-background-color: transparent;
+  --xy-edge-stroke: var(--border-strong);
+  --xy-edge-stroke-width: var(--border-width);
+  --xy-edge-stroke-selected: var(--fg-muted);
+  --xy-connectionline-stroke: var(--border-strong);
+  --xy-connectionline-stroke-width: var(--border-width);
+  --xy-handle-background-color: transparent;
+  --xy-node-border: none;
+  --xy-node-border-selected: none;
+  --xy-node-color: var(--fg-default);
+  --xy-selection-background-color: var(--accent-faint);
+  --xy-selection-border: var(--border-width) solid var(--edge-focus);
+  --xy-attribution-background-color: transparent;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+}
+
+/* A node's focus ring follows its card's corner. */
+.armada-studio-whiteboard .react-flow__node {
+  border-radius: var(--radius-md);
+}
+
+/* The anchors edges hang from. Nothing connects by hand, so none is drawn. */
+.armada-studio-whiteboard .react-flow__handle {
+  min-width: 0;
+  min-height: 0;
+  width: var(--border-width);
+  height: var(--border-width);
+  border: none;
+  opacity: 0;
+}
+
+/* A selected relation thickens rather than taking a hue. */
+.armada-studio-whiteboard .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: var(--edge-active);
+}
+
+/* Proposed, and not yet accepted by a person. */
+.armada-studio-whiteboard .react-flow__edge-path.armada-studio-edge--proposed {
+  stroke-dasharray: var(--space-1) var(--space-1);
+}
+
+.armada-studio-edge__label {
+  position: absolute;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-canvas);
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.armada-studio-whiteboard .react-flow__panel {
+  margin: var(--space-3);
+}
+
+.armada-studio-whiteboard__controls {
+  display: flex;
+  gap: var(--space-2);
+}

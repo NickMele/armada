@@ -93,6 +93,13 @@ is allowed only as that light, and never where a person reads a state.
 4. **Dark is primary.** Design dark first. Light exists but is secondary.
 5. **Icons: lucide-react only**, used sparingly. A dashboard dense with
    icons reads as noise.
+6. **React Flow (`@xyflow/react`) is the one sanctioned graph surface**, and
+   a [Studio](../concepts/studio.md)'s whiteboard is what it draws. It
+   supplies placement, pan, zoom, fit and selection, and nothing that is
+   seen: every node inside it is built from the primitives above and the
+   tokens below, its controls are `button`, and every value its own
+   stylesheet would paint is set to a token. No second graph or canvas
+   library, and no node drawn from React Flow's defaults.
 
 ---
 
