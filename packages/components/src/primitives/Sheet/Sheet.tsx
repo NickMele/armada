@@ -61,6 +61,13 @@ export type SheetProps = {
    * `Fix · job_2d90bb · 1676 entries · live`.
    */
   subtitle?: ReactNode;
+  /**
+   * Beside the title, at the head's leading edge — Helm's chip, which marks
+   * its folded dock as Helm rather than one more sheet (#1320). Decoration: it
+   * adds nothing to the dialog's name, which stays `title`. Absent draws
+   * nothing, and the head is laid out exactly as without it.
+   */
+  leading?: ReactNode;
   children: ReactNode;
   side?: SheetSide;
   size?: SheetSize;
@@ -116,6 +123,7 @@ export function Sheet({
   open,
   title,
   subtitle,
+  leading,
   children,
   side = "right",
   size = "default",
@@ -176,6 +184,7 @@ export function Sheet({
         aria-label={title}
       >
         <div className="armada-sheet__head">
+          {leading === undefined ? null : <div className="armada-sheet__leading">{leading}</div>}
           <div className="armada-sheet__titles">
             <h2 className="armada-sheet__title" data-titled={subtitle !== undefined || undefined}>
               {title}
