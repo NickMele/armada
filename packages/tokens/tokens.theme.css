@@ -37,6 +37,8 @@
   --radius-md: 5px;
   --radius-lg: 8px;
   --shadow-overlay: 0 8px 24px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --shadow-card: inset 0 1px 0 var(--border-highlight), 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px -16px rgb(0 0 0 / 0.75);
+  --shadow-primary: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 2px 10px -3px color-mix(in srgb, var(--accent) 45%, transparent);
 
   --color-bg-base: var(--bg-base);
   --color-bg-sunken: var(--bg-sunken);
@@ -53,6 +55,15 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-muted: var(--accent-muted);
+  --color-bg-glass: var(--bg-glass);
+  --color-bg-glass-end: var(--bg-glass-end);
+  --color-border-glass: var(--border-glass);
+  --color-border-highlight: var(--border-highlight);
+  --color-accent-faint: var(--accent-faint);
+  --color-helm: var(--helm);
+  --color-helm-muted: var(--helm-muted);
+  --color-helm-edge: var(--helm-edge);
+  --color-helm-faint: var(--helm-faint);
   --color-diff-add-bg: var(--diff-add-bg);
   --color-diff-add-fg: var(--diff-add-fg);
   --color-diff-del-bg: var(--diff-del-bg);
@@ -97,6 +108,8 @@
   --color-degraded-dot: var(--degraded-dot);
   --color-notice-caution: var(--notice-caution);
   --color-notice-caution-bg: var(--notice-caution-bg);
+  --color-stat-drones: var(--stat-drones);
+  --color-stat-manifest-current: var(--stat-manifest-current);
   --font-weight-body: var(--weight-body);
   --font-weight-medium: var(--weight-medium);
   --font-weight-heading: var(--weight-heading);
@@ -180,6 +193,8 @@
 /* Read from CSS as var(--token). No namespace carries them:
    --row-tint — a mix percentage read inside color-mix(), not a colour
    --row-tint-recent — a mix percentage read inside color-mix(), not a colour
+   --status-wash — a mix percentage read inside color-mix(), not a colour
+   --dot-idle — a mix percentage read inside color-mix(), not a colour
    --window-floor — the desktop window's bound, read by the main process and floor.ts
    --touch-floor — the narrowest touch client drawn; no window to bound
    --z-menu — a stacking order, not a scale value
@@ -191,6 +206,7 @@
    --error-edge — a fault's edge width, read beside --error
    --degraded-edge — a degraded edge's width, read beside --degraded
    --pending-bar — the height of the bar a control waiting on Fleet sweeps
+   --glass-blur — a backdrop-filter radius, not a scale value
    --duration-press — v4 has no --duration-* namespace; read it in CSS
    --duration-fast — v4 has no --duration-* namespace; read it in CSS
    --duration-base — v4 has no --duration-* namespace; read it in CSS

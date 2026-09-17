@@ -111,6 +111,8 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--font-sans", Slot::Literal),
     ("--font-mono", Slot::Literal),
     ("--shadow-overlay", Slot::Literal),
+    ("--shadow-card", Slot::Literal),
+    ("--shadow-primary", Slot::Literal),
     ("--tracking-caps", Slot::Literal),
     ("--ease", Slot::Named("ease", "base")),
     ("--leading-", Slot::Leading),
@@ -156,6 +158,21 @@ pub const THEME: &[(&str, Slot)] = &[
         "--row-tint-recent",
         Slot::CssOnly("a mix percentage read inside color-mix(), not a colour"),
     ),
+    (
+        "--status-wash",
+        Slot::CssOnly("a mix percentage read inside color-mix(), not a colour"),
+    ),
+    (
+        "--dot-idle",
+        Slot::CssOnly("a mix percentage read inside color-mix(), not a colour"),
+    ),
+    (
+        "--glass-blur",
+        Slot::CssOnly("a backdrop-filter radius, not a scale value"),
+    ),
+    ("--helm", Slot::Named("color", "helm")),
+    ("--helm-", Slot::NsFull("color")),
+    ("--stat-", Slot::NsFull("color")),
     // A caution notice — an alias of --status-awaiting-review, not a new
     // value. Below Job level, so it is declared in status.css rather than
     // picked at a component, same as --degraded-dot above.

@@ -53,6 +53,19 @@
   /* A row that changed recently starts at this strength and decays to the
      resting --row-tint across --duration-decay. */
   --row-tint-recent: 14%;
+
+  /* Overview's summary tile. Each tile's corner takes its status hue at this
+     strength, so the four counts sort by colour before they are read. Lighter
+     than a badge's 12% because a tile is far larger. Its label stays at
+     4.39:1 or better on not_started, the lowest. */
+  --status-wash: 9%;
+
+  /* A status dot whose count is zero mixes its hue into the ground at this
+     strength, and a count past zero draws it at full. 65% is the lowest mix
+     that keeps every status dot at 3:1 against --bg-glass, where a mark has to
+     sit to be seen at all (not_started, the lowest, is 3.12:1). A full dot
+     still means waiting, and a dim one says which hue the row belongs to. */
+  --dot-idle: 65%;
 }
 
 /* The three statuses the CSS was missing, added 2026-08-25 after the M0 token
@@ -234,4 +247,11 @@
      is exactly that. */
   --notice-caution: var(--status-awaiting-review);
   --notice-caution-bg: var(--status-awaiting-review-bg);
+
+  /* Stats rows that count no Job state. Drones take running's hue because a
+     Drone is a Job's work in flight. A current Manifest takes success's,
+     because it is Fleet's own reading that nothing is behind; a Manifest
+     behind takes --notice-caution, which the drift reading already carries. */
+  --stat-drones: var(--status-running);
+  --stat-manifest-current: var(--status-completed-success);
 }
