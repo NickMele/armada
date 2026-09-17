@@ -41,20 +41,57 @@
   color: var(--text-label);
 }
 
+/* The value's box, which runs to the edge whatever it holds. Its lines are
+   what the reader sees; the box only says where they end. */
 .armada-figures__value {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
   margin: 0;
+  min-width: 0;
+  /* The Stats panel's own line, on a track that already runs to the edge. */
+  text-align: right;
+}
+
+.armada-figures__reading {
   min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
   color: var(--text-body);
-  /* The Stats panel's own line, on a track that already runs to the edge. */
-  text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.armada-figures__row[data-wrong] .armada-figures__value {
+/* Words somebody said, not a reading: sans, and held to two lines. A long
+   Drone line is a turn to read in the log, and a block that grew to fit it
+   would push the pointers under it off the screen. */
+.armada-figures__value[data-words] .armada-figures__reading {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-family: var(--font-sans);
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+/* The line under the value — when it was said. Subtler than the value, and on
+   the same edge, because it qualifies that value rather than standing beside
+   it. */
+.armada-figures__detail {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The hue on the reading alone. A detail is when, and a time is not wrong. */
+.armada-figures__row[data-wrong] .armada-figures__reading {
   color: var(--error);
 }

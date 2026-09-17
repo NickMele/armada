@@ -1,4 +1,4 @@
-import { FigureList } from "../FigureList/FigureList";
+import { FigureList, type Figure } from "../FigureList/FigureList";
 
 /**
  * The Job's pulse: the last thing anyone did on it, and what it holds on this
@@ -17,6 +17,12 @@ import { FigureList } from "../FigureList/FigureList";
  * and a person all act on a Job, and what a reader wants from this block is
  * the latest of them, not the last lines of one. The whole log is a press away.
  *
+ * **Every line of it is one list.** That top row is a `FigureList` row like the
+ * three under it — actor for a label, what was said for a value and the time as
+ * the value's second line — so the labels start on one edge and the values end
+ * on one. It kept its own markup until the figures were justified right, and
+ * the row left behind was what the owner saw.
+ *
  * **Absence still speaks, in less room.** A read that has not answered and a
  * Job that holds nothing are different things — `JobResources` is careful about
  * that and so is this. `figures` is `null` for the first and `note` says which;
@@ -34,7 +40,7 @@ export type HoldsLine = {
   at: string;
   /** Who wrote it — `Fleet`, `Drone`. */
   actor: string;
-  /** What it said, in a few words. One line, clipped rather than wrapped. */
+  /** What it said, in a few words. Held to two lines rather than growing. */
   said: string;
   /** Whether the line records something going wrong. */
   wrong?: boolean;
@@ -81,34 +87,34 @@ export type JobHoldsSummaryProps = {
 };
 
 export function JobHoldsSummary({ latest, latestNote, figures, note, age }: JobHoldsSummaryProps) {
+  /**
+   * Every row of the block, in one list, so the latest event lands on the same
+   * two edges as the figures under it — the label's on the left and the
+   * value's on the right. It was this block's own markup until the figures went
+   * to the right edge and left it behind; a second alignment for the line at
+   * the top is the drift `FigureList` was made to stop.
+   */
+  const rows: Figure[] = [
+    ...(latest === undefined
+      ? []
+      : [{ label: latest.actor, value: latest.said, detail: latest.at, words: true, wrong: latest.wrong }]),
+    ...(figures === null
+      ? []
+      : [
+          {
+            label: "Processes",
+            value: figures.processes === 0 ? "None" : String(figures.processes),
+            wrong: figures.processes === 0 && figures.nothingRunningIsWrong,
+          },
+          { label: "Worktree", value: figures.worktree, wrong: figures.worktreeIsWrong },
+          ...(figures.size === undefined ? [] : [{ label: "Size on disk", value: figures.size }]),
+        ]),
+  ];
   return (
     <section className="armada-holds-summary">
-      {latest === undefined ? (
-        <p className="armada-holds-summary__note">{latestNote ?? NOTHING_RECORDED}</p>
-      ) : (
-        <div className="armada-holds-summary__latest" data-wrong={latest.wrong || undefined}>
-          <span className="armada-holds-summary__who">{latest.actor}</span>
-          <span className="armada-holds-summary__what">
-            <span className="armada-holds-summary__said">{latest.said}</span>
-            <span className="armada-holds-summary__at">{latest.at}</span>
-          </span>
-        </div>
-      )}
-      {figures === null ? (
-        <p className="armada-holds-summary__note">{note ?? NOTHING_READ_YET}</p>
-      ) : (
-        <FigureList
-          figures={[
-            {
-              label: "Processes",
-              value: figures.processes === 0 ? "None" : String(figures.processes),
-              wrong: figures.processes === 0 && figures.nothingRunningIsWrong,
-            },
-            { label: "Worktree", value: figures.worktree, wrong: figures.worktreeIsWrong },
-            ...(figures.size === undefined ? [] : [{ label: "Size on disk", value: figures.size }]),
-          ]}
-        />
-      )}
+      {latest === undefined ? <p className="armada-holds-summary__note">{latestNote ?? NOTHING_RECORDED}</p> : null}
+      {rows.length === 0 ? null : <FigureList figures={rows} />}
+      {figures === null ? <p className="armada-holds-summary__note">{note ?? NOTHING_READ_YET}</p> : null}
       {/* The instant qualifies every figure above it, which is why it is here
           and not a caption: a process can exit between the reading and this
           screen. Absent rather than guessed where the caller has no age. */}

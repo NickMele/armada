@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, within } from "storybook/test";
 
 import { JobHoldsSummary, type HoldsLine } from "./JobHoldsSummary";
 
@@ -28,6 +28,45 @@ const LATEST: HoldsLine = {
   said: "Edit packages/settings/src/selectors.ts",
 };
 
+/** What a range says the text was actually drawn on, not the box holding it. */
+function drawn(element: Element): DOMRect {
+  const text = document.createRange();
+  text.selectNodeContents(element);
+  return text.getBoundingClientRect();
+}
+
+/**
+ * **Every row shares two edges: labels on the left, values on the right.** The
+ * top row is the one this measures — its value is words rather than a figure
+ * and it carries a time under it, and both sat hard left for a day while the
+ * three rows beneath them had gone to the edge.
+ *
+ * Alignment is geometry, so this measures rather than reading roles: a row
+ * drawn out of line reads identically through `getByRole`. Text is measured
+ * with a range, because every value's box runs to the edge whichever way its
+ * text is aligned.
+ */
+async function everyRowSharesItsEdges(canvasElement: HTMLElement, line: HoldsLine) {
+  const canvas = within(canvasElement);
+  const labels = canvas.getAllByRole("term");
+  const values = canvas.getAllByRole("definition");
+  const list = values[0]?.closest("dl");
+  await expect(list).toBeTruthy();
+  const edge = list!.getBoundingClientRect().right;
+  // A figure row's label, since the top row is the one on trial.
+  const start = drawn(labels.at(-1)!).left;
+  for (const [index, value] of values.entries()) {
+    await expect(Math.abs(drawn(value).right - edge)).toBeLessThanOrEqual(1);
+    await expect(Math.abs(drawn(labels[index]!).left - start)).toBeLessThanOrEqual(1);
+  }
+  // The top row by the words it drew rather than the markup it drew them in —
+  // what it said, the time under it, and who said it on the labels' own edge.
+  for (const text of [line.said, line.at]) {
+    await expect(Math.abs(drawn(canvas.getByText(text)).right - edge)).toBeLessThanOrEqual(1);
+  }
+  await expect(Math.abs(drawn(canvas.getByText(line.actor)).left - start)).toBeLessThanOrEqual(1);
+}
+
 /**
  * **A Job holding a live worktree.** Two processes, a checkout on disk and the
  * size it takes — the four figures a person came to this column for, in five
@@ -38,6 +77,9 @@ export const HoldingALiveWorktree: Story = {
     latest: LATEST,
     figures: { processes: 2, worktree: "healthy", size: "1.2 GiB" },
     age: "3s",
+  },
+  play: async ({ canvasElement }) => {
+    await everyRowSharesItsEdges(canvasElement, LATEST);
   },
 };
 
