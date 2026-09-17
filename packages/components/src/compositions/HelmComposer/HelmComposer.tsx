@@ -109,7 +109,10 @@ export function HelmComposer({
         {location === undefined ? null : (
           <span className="armada-helm-composer__location">{location}</span>
         )}
-        <Button type="submit" variant="primary" size="sm" disabled={disabled || blank}>
+        {/* Tinted Helm, not the accent: Send is not the view's one Primary
+            (design-system.md, Component → token mapping → Helm dock). The
+            tint is HelmComposer.css's, over a secondary. */}
+        <Button type="submit" variant="secondary" ground="card" size="sm" disabled={disabled || blank}>
           Send
         </Button>
       </div>

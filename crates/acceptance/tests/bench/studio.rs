@@ -14,8 +14,9 @@ use std::collections::BTreeMap;
 
 use config::ResolvedWorkflow;
 use core_model::{
-    ManifestId, Studio, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName, StudioNode,
-    StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation, Timestamp, Ulid, WorkflowId,
+    ManifestId, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName,
+    StudioNode, StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation, Timestamp, Ulid,
+    WorkflowId,
 };
 use ipc::JobRequest;
 
@@ -84,7 +85,7 @@ fn at(minute: u32) -> Timestamp {
 }
 
 /// A Studio in the bench's repository holding both Notes, the second moved to
-/// [`LEFT_AT`], and a Same as edge proposed between them and not yet accepted.
+/// [`LEFT_AT`], and a Same as edge Helm proposed between them, not yet accepted.
 pub fn a_studio_with_two_notes() -> StudioGraph {
     let note = |id: &str, said: &str, x: i64| {
         StudioNode::added(
@@ -94,6 +95,7 @@ pub fn a_studio_with_two_notes() -> StudioGraph {
             },
             StudioPosition { x, y: 0 },
             at(1),
+            StudioAuthor::Person,
         )
     };
     let first = note("01NOTEFIRST", FIRST_NOTE, 0);
@@ -104,6 +106,7 @@ pub fn a_studio_with_two_notes() -> StudioGraph {
         second.id().clone(),
         StudioRelation::SameAs,
         at(2),
+        StudioAuthor::Helm,
     )
     .expect("two different Notes");
     StudioGraph {
@@ -111,6 +114,7 @@ pub fn a_studio_with_two_notes() -> StudioGraph {
             id: StudioId::carried(Ulid::carried("01STUDIO")),
             manifest_id: ManifestId::carried(Ulid::carried(REPOSITORY)),
             name: StudioName::named(DRAFT_TITLE),
+            named_by: Some(StudioAuthor::Person),
             created_at: at(0),
             touched_at: at(3),
         },
@@ -123,4 +127,19 @@ pub fn a_studio_with_two_notes() -> StudioGraph {
 pub fn received_studio(graph: &StudioGraph) -> ipc::Studio {
     let body = ipc::encode(&ipc::Studio::of(graph)).expect("a Studio that serialises");
     ipc::decode("a Studio", body.as_bytes()).expect("a Studio that reads back")
+}
+
+/// The repository Helm is briefed for, named and never quoted.
+pub fn helms_manifest() -> config::Manifest {
+    config::Manifest::parse(
+        std::path::Path::new("/work/storefront/armada.yml"),
+        &format!("version: 1\nid: {REPOSITORY}\n"),
+    )
+    .expect("a Manifest")
+}
+
+/// Helm's act on a Studio as a client reads it off the stream.
+pub fn received_event(event: &ipc::Event) -> ipc::Event {
+    let body = ipc::encode(event).expect("an event that serialises");
+    ipc::decode("an event", body.as_bytes()).expect("an event that reads back")
 }

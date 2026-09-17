@@ -11,7 +11,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::enums::{StudioEdgeKind, StudioEdgeStanding, StudioNodeState, StudioRelation};
+use crate::enums::{
+    StudioAuthor, StudioEdgeKind, StudioEdgeStanding, StudioNodeState, StudioRelation,
+};
 use crate::ids::{Instant, JobId, ManifestId, StudioEdgeId, StudioId, StudioNodeId};
 
 /// Every Studio one repository keeps, the last touched first — `list_studios`.
@@ -44,6 +46,10 @@ pub struct Studio {
     pub manifest_id: ManifestId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Who gave it its name. Absent on an untitled Studio, and on one named
+    /// before who named it was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub named_by: Option<StudioAuthor>,
     pub created_at: Instant,
     pub touched_at: Instant,
     /// Oldest first.
@@ -64,6 +70,9 @@ pub struct StudioNode {
     pub state: Option<StudioNodeState>,
     pub position: StudioPosition,
     pub created_at: Instant,
+    /// A person or Helm. Absent only on a node added before it was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by: Option<StudioAuthor>,
 }
 
 /// What a node holds, tagged by its kind. `core_model::StudioNodeContent`'s
@@ -100,6 +109,9 @@ pub struct StudioEdge {
     pub kind: StudioEdgeKind,
     pub standing: StudioEdgeStanding,
     pub created_at: Instant,
+    /// A person or Helm. Absent only on an edge kept before it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by: Option<StudioAuthor>,
 }
 
 /// A Studio that is gone — `delete_studio`'s answer and `studio.deleted`'s body.
@@ -107,6 +119,36 @@ pub struct StudioEdge {
 pub struct StudioDeleted {
     pub id: StudioId,
     pub manifest_id: ManifestId,
+}
+
+/// `studio.helm_acted`: one act Helm took on a Studio. **Helm's act as its own
+/// event type** — `docs/concepts/helm.md`, *Audit trail*. The write publishes
+/// `studio.changed` as any write does, and this besides only where the door
+/// placed the call in a Helm session, so a person's act and Helm's are told
+/// apart by kind.
+///
+/// **Ids, not the Studio.** What the Studio holds now is `studio.changed`'s to
+/// carry; this says who did which part of it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudioHelmActed {
+    pub studio_id: StudioId,
+    pub manifest_id: ManifestId,
+    #[serde(flatten)]
+    pub act: HelmStudioAct,
+    pub at: Instant,
+}
+
+/// Which of the acts Helm may take on a Studio unasked it took.
+/// `fleet::helm::reach::UNASKED`'s calls, one variant each.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "act", rename_all = "snake_case")]
+pub enum HelmStudioAct {
+    /// A node that starts proposed, by the id it was given.
+    AddedNode { node_id: StudioNodeId },
+    /// An edge, proposed, by the id it was given.
+    ProposedEdge { edge_id: StudioEdgeId },
+    /// The Studio named, and what it was named.
+    Named { name: String },
 }
 
 /// `create_studio`. **A name is not required**: `studio.md` has Helm name an
@@ -184,6 +226,7 @@ impl Studio {
             id: summary.id,
             manifest_id: summary.manifest_id,
             name: summary.name,
+            named_by: graph.studio.named_by.map(StudioAuthor::from),
             created_at: summary.created_at,
             touched_at: summary.touched_at,
             nodes: graph.nodes.iter().map(StudioNode::of).collect(),
@@ -200,6 +243,7 @@ impl StudioNode {
             state: node.state().map(StudioNodeState::from),
             position: StudioPosition::from(node.position()),
             created_at: Instant::from(node.created_at()),
+            added_by: node.added_by().map(StudioAuthor::from),
         }
     }
 }
@@ -213,6 +257,7 @@ impl StudioEdge {
             kind: StudioEdgeKind::from(edge.kind()),
             standing: StudioEdgeStanding::from(edge.standing()),
             created_at: Instant::from(edge.created_at()),
+            added_by: edge.added_by().map(StudioAuthor::from),
         }
     }
 }

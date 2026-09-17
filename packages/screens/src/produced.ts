@@ -9,7 +9,7 @@
 // nothing at all.
 //
 // **A running Job's counts are Fleet's live reading**, taken once the Drone's
-// calls settle and at most every ten seconds, since protocol 14.7 — #1187. A
+// calls settle and at most every ten seconds, since protocol 14.8 — #1187. A
 // finished Job's are the count taken as it stopped.
 //
 // `files.ts` is the live half and says the same thing from the other side.

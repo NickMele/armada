@@ -26,7 +26,7 @@ use crate::reading::ManifestReading;
 use crate::rehearsal::{CheckoutRunRecord, RunRecord};
 use crate::repositories::RepositoryList;
 use crate::servers::ServerState;
-use crate::studio::{Studio, StudioDeleted};
+use crate::studio::{Studio, StudioDeleted, StudioHelmActed};
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
@@ -156,6 +156,10 @@ pub enum Event {
     StudioChanged(Studio),
     #[serde(rename = "studio.deleted")]
     StudioDeleted(StudioDeleted),
+    // Helm's act on a Studio, as its own kind beside the `studio.changed` the
+    // same write publishes. `#1288`.
+    #[serde(rename = "studio.helm_acted")]
+    StudioHelmActed(StudioHelmActed),
 }
 
 impl Event {
@@ -510,7 +514,7 @@ pub enum ChangeKind {
 /// file is the patch, which is deliberately not on this seam: a stream carrying
 /// diffs at Drone speed is the thing the event channel's bound exists to keep
 /// off it. How many lines it gained and lost is two numbers, and since protocol
-/// 14.7 the live reading carries them. #1187.
+/// 14.8 the live reading carries them. #1187.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangedFile {
     /// Repository-relative, exactly as git spells it.

@@ -23,11 +23,21 @@ async function setup(options: SettingUp = {}) {
   return list;
 }
 
-/** A workspace's proposal, opened from the picker. */
+/**
+ * A sheet that has finished travelling in. Visible holds from its first frame, while it can still
+ * sit wholly past the window's trailing edge with its travel not yet started: under a loaded full
+ * run a press aimed at it then reached nothing, and the test read on as if it had landed — #1252.
+ */
+async function entered(sheet: ReturnType<typeof page.getByRole>) {
+  await expect.element(sheet).toBeVisible();
+  await Promise.all(sheet.element().getAnimations().map((one) => one.finished));
+}
+
+/** A workspace's proposal, opened from the picker, in place to be pressed. */
 async function open(list: ReturnType<typeof page.getByRole>, dir: string) {
   await list.getByRole("button", { name: `Open ${dir}` }).click();
   const sheet = page.getByRole("dialog", { name: `Proposal for ${dir}` });
-  await expect.element(sheet).toBeVisible();
+  await entered(sheet);
   return sheet;
 }
 
@@ -52,7 +62,8 @@ test("a line is read for where it came from, corrected, moved, and the sheet clo
   await expect.element(lint.getByText("convention")).toBeVisible();
 
   await lint.getByRole("button", { name: "Edit lint command" }).click();
-  const field = lint.getByLabelText("lint command");
+  // The field alone: "lint command" is also inside the name of the Edit button it replaces.
+  const field = lint.getByRole("textbox", { name: "lint command", exact: true });
   await field.clear();
   await userEvent.type(field, "pnpm eslint . --max-warnings 0{Enter}");
   await expect.element(lint.getByText("edited during setup")).toBeVisible();
@@ -255,7 +266,7 @@ test("a batch taller than the window scrolls under tabs that stay put, and a pro
 
   await userEvent.click(last[0]!);
   const sheet = page.getByRole("dialog", { name: "Proposal for packages/pkg-16" });
-  await expect.element(sheet).toBeVisible();
+  await entered(sheet);
   const own = scrollerOf(sheet.getByRole("list", { name: "Checks" }).element());
   expect(own).not.toBeNull();
   expect(own).not.toBe(picker);

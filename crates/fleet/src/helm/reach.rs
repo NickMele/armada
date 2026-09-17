@@ -31,6 +31,17 @@ pub enum Authority {
 /// "any command Helm is offered, on request."
 pub(super) const RESERVED: &[&str] = &["undo_run"];
 
+/// The acts on a Studio Helm may take **without being asked**: adding a node
+/// that starts proposed, proposing an edge, and naming an untitled Studio.
+/// `docs/concepts/studio.md`, *Helm on a Studio*.
+///
+/// **Not a second predicate beside [`may`].** The door answers a call the same
+/// whether a person asked for it or not, so nothing there could read this; the
+/// brief names these from here, and every other act on a Studio falls under
+/// the rule that an act waits for an ask. Each is still a command `may`
+/// refuses under [`Authority::ReadOnly`].
+pub(super) const UNASKED: &[&str] = &["add_studio_node", "propose_studio_edge", "rename_studio"];
+
 /// Whether Helm, under `authority`, may call one operation the door offers.
 ///
 /// Every query is a read and every read is Helm's. A command is Helm's where

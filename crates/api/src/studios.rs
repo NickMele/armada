@@ -82,10 +82,20 @@ pub(crate) async fn create_studio<D: Studios>(
     answered(&served, StatusCode::CREATED, created)
 }
 
+/// Who acted is the transport's word: a Helm session the door placed, or a
+/// person.
+fn acting(helm: Option<Extension<HelmCalled>>) -> Redirector {
+    match helm {
+        Some(_) => Redirector::Helm,
+        None => Redirector::Person,
+    }
+}
+
 pub(crate) async fn rename_studio<D: Studios>(
     State(served): State<Served<D>>,
     Path(studio_id): Path<String>,
     scope: Scope,
+    helm: Option<Extension<HelmCalled>>,
     bytes: Bytes,
 ) -> Response {
     let rename = match body(&served, "a Studio's name", &bytes) {
@@ -94,7 +104,12 @@ pub(crate) async fn rename_studio<D: Studios>(
     };
     let renamed = served
         .daemon()
-        .rename_studio(StudioId::carried(studio_id), rename, within(scope))
+        .rename_studio(
+            StudioId::carried(studio_id),
+            rename,
+            acting(helm),
+            within(scope),
+        )
         .await;
     answered(&served, StatusCode::OK, renamed)
 }
@@ -125,13 +140,14 @@ pub(crate) async fn add_studio_node<D: Studios>(
         Ok(add) => add,
         Err(response) => return response,
     };
-    let by = match helm {
-        Some(_) => Redirector::Helm,
-        None => Redirector::Person,
-    };
     let added = served
         .daemon()
-        .add_studio_node(StudioId::carried(studio_id), add, by, within(scope))
+        .add_studio_node(
+            StudioId::carried(studio_id),
+            add,
+            acting(helm),
+            within(scope),
+        )
         .await;
     answered(&served, StatusCode::OK, added)
 }
@@ -174,6 +190,7 @@ pub(crate) async fn propose_studio_edge<D: Studios>(
     State(served): State<Served<D>>,
     Path(studio_id): Path<String>,
     scope: Scope,
+    helm: Option<Extension<HelmCalled>>,
     bytes: Bytes,
 ) -> Response {
     let proposal = match body(&served, "an edge to propose", &bytes) {
@@ -182,7 +199,12 @@ pub(crate) async fn propose_studio_edge<D: Studios>(
     };
     let proposed = served
         .daemon()
-        .propose_studio_edge(StudioId::carried(studio_id), proposal, within(scope))
+        .propose_studio_edge(
+            StudioId::carried(studio_id),
+            proposal,
+            acting(helm),
+            within(scope),
+        )
         .await;
     answered(&served, StatusCode::OK, proposed)
 }

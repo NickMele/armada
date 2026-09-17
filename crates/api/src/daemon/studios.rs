@@ -39,11 +39,14 @@ pub trait Studios: Send + Sync + 'static {
         manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 
-    /// `rename_studio`.
+    /// `rename_studio`. `by` is the transport's word, as on
+    /// [`add_studio_node`](Studios::add_studio_node): Helm's naming is
+    /// published as its own act.
     fn rename_studio(
         &self,
         studio_id: StudioId,
         rename: RenameStudio,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 
@@ -80,11 +83,13 @@ pub trait Studios: Send + Sync + 'static {
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 
-    /// `propose_studio_edge`. Lands proposed, whoever sent it.
+    /// `propose_studio_edge`. Lands proposed, whoever sent it; `by` says whose
+    /// act to publish it as.
     fn propose_studio_edge(
         &self,
         studio_id: StudioId,
         proposal: ProposeStudioEdge,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 

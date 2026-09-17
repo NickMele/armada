@@ -76,6 +76,7 @@ mod headings;
 mod headroom;
 mod helm_conversation;
 mod helm_door;
+mod helm_studio;
 mod history;
 mod holding;
 mod host;

@@ -15,8 +15,8 @@ mod content;
 mod reading;
 
 use core_model::{
-    ManifestId, Studio, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioGraph,
-    StudioId, StudioName, StudioNode, StudioNodeId, StudioPosition, Timestamp,
+    ManifestId, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding,
+    StudioGraph, StudioId, StudioName, StudioNode, StudioNodeId, StudioPosition, Timestamp,
 };
 use rusqlite::{OptionalExtension, Transaction};
 
@@ -74,6 +74,20 @@ CREATE TABLE studio_edges (
     CHECK (from_node <> to_node),
     CHECK (kind <> 'produced' OR standing = 'accepted')
 ) STRICT;
+"#;
+
+/// Version 78 — who put each thing on a Studio: a person or Helm. `#1288`.
+///
+/// **Nullable, and left null on every row before it.** Helm could add a node
+/// under V77 too, so a default would claim an author nobody recorded; a null
+/// reads back as unrecorded. A name gets one only where the Studio has a name.
+pub(crate) const V78: &str = r#"
+ALTER TABLE studios ADD COLUMN named_by TEXT
+    CHECK (named_by IS NULL OR named_by IN ('person', 'helm'));
+ALTER TABLE studio_nodes ADD COLUMN added_by TEXT
+    CHECK (added_by IS NULL OR added_by IN ('person', 'helm'));
+ALTER TABLE studio_edges ADD COLUMN added_by TEXT
+    CHECK (added_by IS NULL OR added_by IN ('person', 'helm'));
 "#;
 
 /// Why a Studio read or write did not happen.
@@ -147,14 +161,15 @@ impl Store {
     pub fn create_studio(&mut self, studio: &Studio) -> Result<(), StudioError> {
         self.conn
             .execute(
-                "INSERT INTO studios (id, manifest_id, name, created_at, touched_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO studios (id, manifest_id, name, created_at, touched_at, named_by) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 (
                     studio.id.as_str(),
                     studio.manifest_id.as_str(),
                     studio.name.as_ref().map(StudioName::as_str),
                     studio.created_at.as_str(),
                     studio.touched_at.as_str(),
+                    studio.named_by.map(|by| by.as_wire()),
                 ),
             )
             .map(|_| ())
@@ -166,7 +181,7 @@ impl Store {
         let mut asking = self
             .conn
             .prepare(
-                "SELECT id, manifest_id, name, created_at, touched_at FROM studios \
+                "SELECT id, manifest_id, name, created_at, touched_at, named_by FROM studios \
                  WHERE manifest_id = ?1 ORDER BY touched_at DESC, id DESC",
             )
             .map_err(database("reading a repository's Studios"))?;
@@ -182,7 +197,8 @@ impl Store {
         let studio = self
             .conn
             .query_row(
-                "SELECT id, manifest_id, name, created_at, touched_at FROM studios WHERE id = ?1",
+                "SELECT id, manifest_id, name, created_at, touched_at, named_by FROM studios \
+                 WHERE id = ?1",
                 [studio_id.as_str()],
                 studio_row,
             )
@@ -198,17 +214,18 @@ impl Store {
         })
     }
 
-    /// Name a Studio, or name it again.
+    /// Name a Studio, or name it again, as `by`.
     pub fn rename_studio(
         &mut self,
         studio_id: &StudioId,
         name: &StudioName,
+        by: StudioAuthor,
         at: &Timestamp,
     ) -> Result<(), StudioError> {
         let tx = self.writing()?;
         tx.execute(
-            "UPDATE studios SET name = ?2 WHERE id = ?1",
-            (studio_id.as_str(), name.as_str()),
+            "UPDATE studios SET name = ?2, named_by = ?3 WHERE id = ?1",
+            (studio_id.as_str(), name.as_str(), by.as_wire()),
         )
         .map_err(database("renaming a Studio"))?;
         touched(&tx, studio_id, at)?;
@@ -242,8 +259,9 @@ impl Store {
         let tx = self.writing()?;
         touched(&tx, studio_id, at)?;
         tx.execute(
-            "INSERT INTO studio_nodes (id, studio_id, kind, state, content, x, y, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO studio_nodes \
+             (id, studio_id, kind, state, content, x, y, created_at, added_by) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             (
                 node.id().as_str(),
                 studio_id.as_str(),
@@ -253,11 +271,13 @@ impl Store {
                 node.position().x,
                 node.position().y,
                 node.created_at().as_str(),
+                node.added_by().map(|by| by.as_wire()),
             ),
         )
         .map_err(database("adding a node to a Studio"))?;
         if let Some((from, id)) = produced_by {
-            let edge = StudioEdge::produced(id, from.clone(), node.id().clone(), at.clone())
+            let by = node.added_by().unwrap_or(StudioAuthor::Person);
+            let edge = StudioEdge::produced(id, from.clone(), node.id().clone(), at.clone(), by)
                 // Only reachable by naming the node being added as its own maker.
                 .map_err(|_| StudioError::NoSuchNode {
                     node_id: from.as_str().to_string(),
@@ -426,8 +446,9 @@ fn edge_kept(
         });
     }
     tx.execute(
-        "INSERT INTO studio_edges (id, studio_id, from_node, to_node, kind, standing, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO studio_edges \
+         (id, studio_id, from_node, to_node, kind, standing, created_at, added_by) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         (
             edge.id().as_str(),
             studio_id.as_str(),
@@ -436,6 +457,7 @@ fn edge_kept(
             edge.kind().as_wire(),
             edge.standing().as_wire(),
             edge.created_at().as_str(),
+            edge.added_by().map(|by| by.as_wire()),
         ),
     )
     .map(|_| ())

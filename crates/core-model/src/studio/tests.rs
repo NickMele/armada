@@ -5,9 +5,9 @@ use alloc::string::String;
 
 use crate::envelope::{Timestamp, Ulid};
 use crate::studio::{
-    EdgeRefused, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioName,
-    StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind, StudioNodeState, StudioPosition,
-    StudioRelation, ToItself,
+    EdgeRefused, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding,
+    StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind, StudioNodeState,
+    StudioPosition, StudioRelation, ToItself,
 };
 
 fn node_id(id: &str) -> StudioNodeId {
@@ -68,6 +68,7 @@ fn a_state_is_held_only_by_a_kind_that_has_it() {
         Some(StudioNodeState::Frozen),
         StudioPosition { x: 0, y: 0 },
         at(),
+        Some(StudioAuthor::Person),
     );
     assert!(refused.is_err(), "a Note has no state to be frozen in");
 }
@@ -81,6 +82,7 @@ fn a_node_starts_in_its_kinds_first_state_and_moving_it_changes_nothing_else() {
         },
         StudioPosition { x: 10, y: -4 },
         at(),
+        StudioAuthor::Helm,
     );
     assert_eq!(finding.state(), Some(StudioNodeState::Proposed));
     let moved = finding.moved(StudioPosition { x: 300, y: 12 });
@@ -88,6 +90,11 @@ fn a_node_starts_in_its_kinds_first_state_and_moving_it_changes_nothing_else() {
     assert_eq!(moved.content(), finding.content());
     assert_eq!(moved.state(), finding.state());
     assert_eq!(moved.id(), finding.id());
+    assert_eq!(
+        moved.added_by(),
+        Some(StudioAuthor::Helm),
+        "who added it moves with it"
+    );
 }
 
 #[test]
@@ -98,6 +105,7 @@ fn an_edge_to_itself_and_an_unaccepted_produced_edge_are_refused() {
         node_id("01A"),
         StudioRelation::SameAs,
         at(),
+        StudioAuthor::Person,
     );
     assert!(matches!(same, Err(ToItself { .. })));
     let produced = StudioEdge::recorded(
@@ -107,6 +115,7 @@ fn an_edge_to_itself_and_an_unaccepted_produced_edge_are_refused() {
         StudioEdgeKind::Produced,
         StudioEdgeStanding::Proposed,
         at(),
+        None,
     );
     assert_eq!(produced, Err(EdgeRefused::ProducedUnaccepted));
 }

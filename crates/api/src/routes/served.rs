@@ -908,6 +908,12 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // Helm's act on a Studio, beside the `studio.changed` it made. `#1288`.
+    Route {
+        operation: "studio.helm_acted",
+        method: "GET",
+        path: "/events",
+    },
     // A person's run ending. It names a Job and moves nothing on it; what the
     // run prints is `observe_run`'s, never this stream's.
     Route {

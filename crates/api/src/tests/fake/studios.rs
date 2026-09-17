@@ -24,6 +24,7 @@ pub fn the_studio() -> Studio {
         id: StudioId::carried(THE_STUDIO),
         manifest_id: ManifestId::carried(THE_MANIFEST),
         name: None,
+        named_by: None,
         created_at: Instant::carried(AT),
         touched_at: Instant::carried(AT),
         nodes: Vec::new(),
@@ -110,8 +111,10 @@ impl Studios for FakeDaemon {
         &self,
         studio_id: StudioId,
         rename: RenameStudio,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
         self.changing(&studio_id, within, |studio| {
             studio.name = Some(rename.name);
             Ok(studio.clone())
@@ -160,6 +163,7 @@ impl Studios for FakeDaemon {
                 state: None,
                 position: add.position,
                 created_at: Instant::carried(AT),
+                added_by: None,
             });
             Ok(studio.clone())
         })
@@ -202,8 +206,10 @@ impl Studios for FakeDaemon {
         &self,
         studio_id: StudioId,
         proposal: ProposeStudioEdge,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
         self.changing(&studio_id, within, |studio| {
             studio.edges.push(StudioEdge {
                 id: StudioEdgeId::carried(format!("01EDGE{}", studio.edges.len())),
@@ -213,6 +219,7 @@ impl Studios for FakeDaemon {
                     .expect("every relation is an edge kind"),
                 standing: standing("proposed"),
                 created_at: Instant::carried(AT),
+                added_by: None,
             });
             Ok(studio.clone())
         })
