@@ -402,7 +402,7 @@ export function DispatchRequest({
                 ref={fileInputRef}
                 type="file"
                 multiple
-                className="hidden"
+                className="armada-file-input"
                 onChange={onFilesPicked}
               />
               <div>
