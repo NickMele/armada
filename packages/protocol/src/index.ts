@@ -53,6 +53,7 @@ export * from "./report";
 export * from "./resources";
 export * from "./setup";
 export * from "./showing";
+export * from "./studio";
 export * from "./turn";
 export * from "./underway";
 export * from "./version";

@@ -26,6 +26,7 @@ use crate::reading::ManifestReading;
 use crate::rehearsal::{CheckoutRunRecord, RunRecord};
 use crate::repositories::RepositoryList;
 use crate::servers::ServerState;
+use crate::studio::{Studio, StudioDeleted};
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
@@ -148,6 +149,12 @@ pub enum Event {
     // The list `list_repositories` answers, whole, whenever it changes.
     #[serde(rename = "repositories.changed")]
     RepositoriesChanged(RepositoryList),
+    // A Studio after any write to it, whole, so an open whiteboard replaces
+    // what it holds. `#1285`.
+    #[serde(rename = "studio.changed")]
+    StudioChanged(Studio),
+    #[serde(rename = "studio.deleted")]
+    StudioDeleted(StudioDeleted),
 }
 
 impl Event {
