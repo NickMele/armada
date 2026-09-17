@@ -3,8 +3,12 @@
 // **Reopened read-only.** A Studio is kept to be reread (`docs/concepts/studio.md`), so one opened
 // from the list moves nothing and draws no act until Continue; one a person just started opens
 // editable. **A person's acts live here and nowhere else**: accepting or rejecting a proposed
-// relation, and deleting a node, which confirms because its edges go with it. What is drawn is
-// what Fleet wrote — every act answers with the Studio whole, and main folds it into `studio`.
+// relation, deleting a node, which confirms because its edges go with it, and every rung of
+// promotion, which is `StudioPromotion.tsx`'s panel. What is drawn is what Fleet wrote — every act
+// answers with the Studio whole, and main folds it into `studio`.
+//
+// **The whiteboard's selection is held here, not in `App`.** Clustering is of several nodes, and
+// the one `App` keeps is what Helm's footer names — so this keeps the list and reports its first.
 
 import { useEffect, useState } from "react";
 import {
@@ -24,16 +28,14 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@armada/components";
-import type { JobSummary, Outcome, StudioSummary } from "@armada/protocol";
+import type { JobSummary, Outcome, Studio, StudioPromotion, StudioSummary } from "@armada/protocol";
 
 import { said } from "./copy";
 import { absoluteOf } from "./duration";
 import { framesDrawn, nodeNamed, proposedRelations, studioName, whiteboardEdges, whiteboardNodes } from "./studio";
 import { useStudioFrames, type ReadStudioFrame } from "./studio-frames";
 import type { StudioAnswer, StudioRead, StudiosRead } from "./studio-reads";
-
-/** No frames at all, for the frame before the Studio is read. */
-const NONE: ReadonlySet<string> = new Set();
+import { useStudioPromotion } from "./StudioPromotion";
 
 /**
  * What a Note past `MOST_FRAMES_DRAWN` says on its plate. **One press away**:
@@ -41,6 +43,10 @@ const NONE: ReadonlySet<string> = new Set();
  * rather than reporting a limit nobody set.
  */
 const PAST_THE_BOUND = "Select this Note to draw it.";
+
+/** Two selections that name the same nodes in the same order. */
+const same = (held: readonly string[], ids: readonly string[]): boolean =>
+  held.length === ids.length && held.every((id, at) => id === ids[at]);
 
 /** Which Studio is open, and whether Continue has been pressed on it. */
 export type OpenStudio = { id: string; editable: boolean };
@@ -69,6 +75,8 @@ export type StudiosProps = {
   onDecideEdge: (edgeId: string, accepted: boolean) => Promise<Outcome>;
   /** The picture one Note kept, as bytes. The screen mints the `blob:` and revokes it — #1352. */
   onReadFrame: ReadStudioFrame;
+  /** One rung of promotion — cluster, outline, defer, write up, edit, settle, dispatch. */
+  onPromote: (promotion: StudioPromotion) => Promise<Outcome>;
 };
 
 export function Studios(props: StudiosProps) {
@@ -155,7 +163,9 @@ function Row({ studio, onOpen }: { studio: StudioSummary; onOpen: (studioId: str
 
 function OpenedStudio(props: StudiosProps & { open: OpenStudio }) {
   const { studio, open, onBack } = props;
-  if (studio.state === "read" && studio.studio.id === open.id) return <Board {...props} />;
+  if (studio.state === "read" && studio.studio.id === open.id) {
+    return <Board {...props} graph={studio.studio} />;
+  }
   return (
     <div className="armada-screen__pane">
       <div>
@@ -178,30 +188,43 @@ function OpenedStudio(props: StudiosProps & { open: OpenStudio }) {
   );
 }
 
-function Board(props: StudiosProps & { open: OpenStudio }) {
-  const { studio: read, open, jobs, live, selectedNode, onSelectNode, onBack, onContinue } = props;
+/**
+ * The whiteboard. **Takes the Studio rather than the read**, because promotion is a hook and a
+ * hook cannot sit under an early return: narrowing happens in `OpenedStudio`, which already only
+ * draws this when the read is one.
+ */
+function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
+  const { graph: studio, open, jobs, live, selectedNode, onSelectNode, onBack, onContinue } = props;
   const [refused, setRefused] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
   /** The Note whose frame is open, full size. */
   const [opened, setOpened] = useState<string | null>(null);
+  /** Every node picked on the whiteboard. A cluster is of several, and `App` keeps one. */
+  const [picked, setPicked] = useState<readonly string[]>([]);
   // The pictures the Notes kept, and the `blob:` each one becomes — #1352.
   const frames = useStudioFrames(props.onReadFrame, open.id);
-  const drawn = read.state === "read" ? framesDrawn(read.studio, selectedNode) : NONE;
+  const drawn = framesDrawn(studio, selectedNode);
   // `want` sends nothing twice, so asking again on every render asks once.
   useEffect(() => void frames.want([...drawn]), [drawn, frames]);
-  if (read.state !== "read") return null;
-  const studio = read.studio;
   const frameOf = (nodeId: string) =>
     drawn.has(nodeId) ? (frames.of(nodeId) ?? {}) : { why: PAST_THE_BOUND };
   const openedNote = studio.nodes.find((node) => node.id === opened && node.kind === "note");
   const editable = open.editable && live;
   const proposed = proposedRelations(studio, jobs);
-  const selected = selectedNode === null ? undefined : studio.nodes.find((node) => node.id === selectedNode);
+  const onBoard = picked.filter((id) => studio.nodes.some((node) => node.id === id));
+  const selected = onBoard.length === 1 ? studio.nodes.find((node) => node.id === onBoard[0]) : undefined;
 
   function answered(outcome: Outcome): void {
     setRefused(outcome.ok ? null : said(outcome));
   }
+
+  const promotion = useStudioPromotion({
+    studio,
+    selected: onBoard,
+    onPromote: props.onPromote,
+    onAnswered: answered,
+  });
 
   function decide(edgeId: string, accepted: boolean): void {
     setDeciding(edgeId);
@@ -243,26 +266,35 @@ function Board(props: StudiosProps & { open: OpenStudio }) {
             if (!editable) return;
             void props.onMoveNode(nodeId, { x: Math.round(position.x), y: Math.round(position.y) }).then(answered);
           }}
-          onSelectionChange={(ids) => onSelectNode(ids[0] ?? null)}
+          onSelectionChange={(ids) => {
+            // **The same list keeps its identity.** React Flow re-subscribes whenever this handler
+            // changes, and re-subscribing calls it — so a fresh array here is a state change that
+            // re-renders, re-subscribes and calls it again, which is an update loop with no end.
+            setPicked((held) => (same(held, ids) ? held : [...ids]));
+            // Helm is told one node, the first: its footer names what a person is looking at, and
+            // a cluster of four is not a place.
+            onSelectNode(ids[0] ?? null);
+          }}
         >
           {studio.nodes.length === 0 ? (
             <Card>
               <CardContent>Nothing on this Studio yet.</CardContent>
             </Card>
           ) : null}
-          {selected === undefined ? null : (
+          {onBoard.length === 0 ? null : (
             <Card aria-label="Selected node">
               <CardContent className="armada-studio__aside">
-                <p>{nodeNamed(studio, selected.id, jobs)}</p>
+                <p>{onBoard.map((id) => nodeNamed(studio, id, jobs)).join("; ")}</p>
+                {editable ? promotion.acts : null}
                 {/* Opening the picture is reading, so it is offered read-only
                     too — and it is an act on the node, where the acts on a node
                     already are, rather than a press on a card the board drags. */}
-                {selected.kind === "note" && selected.capture?.frame !== undefined ? (
+                {selected?.kind === "note" && selected.capture?.frame !== undefined ? (
                   <Button size="sm" onClick={() => setOpened(selected.id)}>
                     Open frame
                   </Button>
                 ) : null}
-                {editable ? (
+                {editable && selected !== undefined ? (
                   <Button variant="destructive" size="sm" onClick={() => setRemoving(selected.id)}>
                     Delete node
                   </Button>
@@ -311,6 +343,9 @@ function Board(props: StudiosProps & { open: OpenStudio }) {
           )}
         </StudioWhiteboard>
       </div>
+      {/* Outside the whiteboard, both of these: React Flow paints its nodes over anything inside
+          its own subtree, so a layer drawn in there is read through the Notes it is about. */}
+      {editable ? promotion.dialog : null}
       {openedNote === undefined || openedNote.kind !== "note" ? null : (
         <StudioFrameSheet
           open

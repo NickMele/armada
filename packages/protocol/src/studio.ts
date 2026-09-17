@@ -50,7 +50,8 @@ export type StudioNodeContent =
   | { kind: "cluster"; title: string }
   /** What a scout was asked, and from its start what it read. Since 14.7. */
   | ({ kind: "finding" } & StudioFinding)
-  | { kind: "contradiction"; first: string; second: string }
+  /** `answer` only where a person ended it as Resolved here. Since 14.11. */
+  | { kind: "contradiction"; first: string; second: string; answer?: string }
   | { kind: "sketch"; body: string }
   | { kind: "link"; address: string }
   | { kind: "deferral"; what: string }
@@ -128,11 +129,16 @@ export type StudioHelmActed = HelmStudioAct & {
   at: string;
 };
 
-/** Which of Helm's unasked acts, with the id of what it added or the name given. */
+/**
+ * Which act of Helm's, with the id of what it added or the name given. The first three are the
+ * unasked ones; the last two are what Helm takes on a person's ask. Since 14.11, #1291.
+ */
 export type HelmStudioAct =
   | { act: "added_node"; node_id: string }
   | { act: "proposed_edge"; edge_id: string }
-  | { act: "named"; name: string };
+  | { act: "named"; name: string }
+  | { act: "wrote_up"; from: string; node_id: string }
+  | { act: "dispatched"; from: string; node_ids: string[] };
 
 /** `POST /studios/create?manifest_id=`. A blank or absent name is untitled. */
 export type CreateStudio = { name?: string };
@@ -283,3 +289,46 @@ export type StudioRunStarted = {
   node_id: string;
   run: CheckoutRunUnderway;
 };
+
+// Promotion — `docs/concepts/studio.md`, Promotion. Since 14.11, #1291.
+//
+// **One union across six routes**, because Bridge offers promotion as one
+// capability: the preload carries `promoteOnStudio` and main reads `act` to
+// pick the route. Six methods on the bridge would be six capabilities the
+// renderer can reach for what a person does in one place.
+
+/** What a group of nodes becomes: the two kinds that are made of other nodes. */
+export type StudioGroup = { kind: "cluster"; title: string } | { kind: "outline"; body: string };
+
+/** How a person ended a Contradiction, where the outcome writes nothing else down. */
+export type StudioSettlement = { outcome: "not_a_problem" } | { outcome: "resolved_here"; answer: string };
+
+/** One rung of promotion, as Bridge asks for it. */
+export type StudioPromotion =
+  /** `POST /studios/:studio_id/group_nodes`. The order of `from` is the order kept. */
+  | ({ act: "group"; from: string[]; position: StudioPosition } & StudioGroup)
+  /** `POST /studios/:studio_id/defer`. Only a person. */
+  | {
+      act: "defer";
+      what: string;
+      raised_on: string;
+      blocks?: string;
+      position: StudioPosition;
+    }
+  /** `POST /studios/:studio_id/write_up`. Never filed anywhere. */
+  | {
+      act: "write_up";
+      node_id: string;
+      title: string;
+      body: string;
+      position: StudioPosition;
+    }
+  /** `POST /studios/:studio_id/edit_draft`. Only a person. */
+  | { act: "edit_draft"; node_id: string; title: string; body: string }
+  /** `POST /studios/:studio_id/settle`. The two outcomes that make no node. */
+  | ({ act: "settle"; node_id: string } & StudioSettlement)
+  /** `POST /studios/:studio_id/dispatch_draft`. The ordinary dispatch gate. */
+  | { act: "dispatch"; node_id: string; position: StudioPosition };
+
+/** Every act `StudioPromotion` spells, so main can refuse one it does not know. */
+export const STUDIO_PROMOTIONS = ["group", "defer", "write_up", "edit_draft", "settle", "dispatch"] as const;

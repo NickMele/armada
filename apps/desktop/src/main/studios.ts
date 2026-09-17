@@ -19,6 +19,7 @@ import type {
   StudioDeleted,
   StudioList,
   StudioPosition,
+  StudioPromotion,
 } from "@armada/protocol";
 import { foldStudio } from "@armada/screens/src/studio-reads";
 import type { StudioAnswer, StudioRead, StudiosRead } from "@armada/screens/src/studio-reads";
@@ -32,6 +33,16 @@ const member = (studioId: string, act = "") => `/studios/${encodeURIComponent(st
 
 /** How far under the lowest node a capture lands, in canvas units. A node card's height and a gap. */
 const NOTE_APART = 260;
+
+/** Where each rung of promotion is served. `crates/ipc/operations.toml` is the authority. */
+const PROMOTION_ROUTE: Readonly<Record<StudioPromotion["act"], string>> = {
+  group: "/group_nodes",
+  defer: "/defer",
+  write_up: "/write_up",
+  edit_draft: "/edit_draft",
+  settle: "/settle",
+  dispatch: "/dispatch_draft",
+};
 
 export class StudioReads {
   private readonly publish: Publish;
@@ -150,6 +161,16 @@ export class StudioReads {
 
   async decideEdge(studioId: string, edgeId: string, accepted: boolean): Promise<Outcome> {
     return this.acted(await this.act(member(studioId, "/decide_edge"), { edge_id: edgeId, accepted }));
+  }
+
+  /**
+   * One rung of promotion — #1291. **`act` picks the route and is not sent**: Fleet's six
+   * operations each take their own body, and the tag is how one capability on the bridge reaches
+   * all six. Every one answers with the Studio whole, so all six fold the one way.
+   */
+  async promote(studioId: string, promotion: StudioPromotion): Promise<Outcome> {
+    const { act, ...body } = promotion;
+    return this.acted(await this.act(member(studioId, PROMOTION_ROUTE[act]), body));
   }
 
   close(): void {

@@ -5,8 +5,13 @@
 // **`keeping()` is every scenario's, and `studying()` is one scenario** — #1341. The store answers
 // the Studio reads and writes wherever `fake.ts` puts it, so a scenario that keeps none answers an
 // empty list and the surface draws its empty state; the `studios` scenario adds the Helm write.
+//
+// **Promotion is the same shape** — #1291: each rung adds the node it makes and the `produced`
+// edges the Studio draws, and answers with the Studio whole. **No proposer runs here**, so a
+// dispatch mints one Job node: what the mock proves is the surface, and which workflow a model
+// picks is `fleet`'s.
 
-import type { Studio, StudioCapture, StudioEdge, StudioNode } from "@armada/protocol";
+import type { Studio, StudioCapture, StudioEdge, StudioNode, StudioNodeContent, StudioPromotion } from "@armada/protocol";
 import { repository } from "@armada/screens/src/fixtures/build/base";
 import { foldStudio } from "@armada/screens/src/studio-reads";
 
@@ -31,6 +36,7 @@ export type StudioRoutes = Pick<
   | "moveStudioNode"
   | "removeStudioNode"
   | "decideStudioEdge"
+  | "promoteOnStudio"
 >;
 
 /** The Studios a mock Fleet keeps, and what Helm writes into one. */
@@ -41,6 +47,10 @@ export type StudioKeeping = {
   studios: () => readonly Studio[];
   /** Helm adds a Note and a Finding to a Studio, and proposes that the Finding answers the Note. */
   helmProposes: (studioId: string) => void;
+  /** Two Notes a person captured, which #1291's rungs are worked from. */
+  twoNotes: (studioId: string) => void;
+  /** One Contradiction, Reported, which a person ends one of four ways. */
+  aContradiction: (studioId: string) => void;
 };
 
 /** One scenario's own Fleet, keeping Studios. */
@@ -213,12 +223,40 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
         }));
         return answer.ok ? OK : answer.outcome;
       },
+      promoteOnStudio: async (studioId, promotion) => {
+        const answer = write(studioId, (studio) => promoted(studio, promotion));
+        return answer.ok ? OK : answer.outcome;
+      },
     };
   };
 
   return {
     routes,
     studios: () => [...store.values()],
+    twoNotes: (studioId) =>
+      void write(studioId, (studio) => {
+        const now = tick();
+        const note = (said: string, x: number): StudioNode => ({ id: mint("note-"), kind: "note", said, position: { x, y: 0 }, created_at: now });
+        const first = note("The chip keeps its count after the filter is cleared", 0);
+        const second = note("Overview still says three waiting after I answered one", 360);
+        return { ...studio, nodes: [...studio.nodes, first, second] };
+      }),
+    aContradiction: (studioId) =>
+      void write(studioId, (studio) => ({
+        ...studio,
+        nodes: [
+          ...studio.nodes,
+          {
+            id: mint("contradiction-"),
+            kind: "contradiction",
+            first: "The chip reads the Board",
+            second: "The chip reads its own row",
+            state: "reported",
+            position: { x: 0, y: 0 },
+            created_at: tick(),
+          },
+        ],
+      })),
     helmProposes: (studioId) =>
       void write(studioId, (studio) => {
         const now = tick();
@@ -356,4 +394,66 @@ export function untitled(): Studio {
     ],
     edges: [{ id: "untitled-produced", from: "untitled-link", to: "untitled-note", kind: "produced", standing: "accepted", created_at: at }],
   };
+}
+
+/** A node the way Fleet writes one, with a `produced` edge from each node that made it. */
+function made(studio: Studio, content: StudioNodeContent, from: readonly string[], position: { x: number; y: number }): Studio {
+  const now = tick();
+  const node = { ...content, id: mint("node-"), position, created_at: now, added_by: "person" } as StudioNode;
+  const edges = from.map(
+    (source): StudioEdge => ({ id: mint("edge-"), from: source, to: node.id, kind: "produced", standing: "accepted", created_at: now }),
+  );
+  return { ...studio, nodes: [...studio.nodes, node], edges: [...studio.edges, ...edges] };
+}
+
+/** A Contradiction the rung ended as it went. Every other kind is left as it was. */
+function ended(studio: Studio, nodeId: string, outcome: string): Studio {
+  return {
+    ...studio,
+    nodes: studio.nodes.map((node) =>
+      node.id === nodeId && node.kind === "contradiction" && node.state === "reported" ? { ...node, state: outcome } : node,
+    ),
+  };
+}
+
+/** One rung, as Fleet writes it. Every refusal is Fleet's own and none of them is here. */
+function promoted(studio: Studio, promotion: StudioPromotion): Studio {
+  switch (promotion.act) {
+    case "group": {
+      const content: StudioNodeContent =
+        promotion.kind === "cluster" ? { kind: "cluster", title: promotion.title } : { kind: "outline", body: promotion.body };
+      return made(studio, content, promotion.from, promotion.position);
+    }
+    case "defer": {
+      const with_it = made(studio, { kind: "deferral", what: promotion.what }, [promotion.raised_on], promotion.position);
+      const deferral = with_it.nodes[with_it.nodes.length - 1]!;
+      const blocks: StudioEdge[] =
+        promotion.blocks === undefined
+          ? []
+          : [{ id: mint("edge-"), from: deferral.id, to: promotion.blocks, kind: "blocks", standing: "accepted", created_at: tick() }];
+      return ended({ ...with_it, edges: [...with_it.edges, ...blocks] }, promotion.raised_on, "deferral");
+    }
+    case "write_up": {
+      const draft: StudioNodeContent = { kind: "issue_draft", title: promotion.title, body: promotion.body };
+      return ended(made(studio, draft, [promotion.node_id], promotion.position), promotion.node_id, "issue_draft");
+    }
+    case "edit_draft":
+      return {
+        ...studio,
+        nodes: studio.nodes.map((node) =>
+          node.id === promotion.node_id && node.kind === "issue_draft" ? { ...node, title: promotion.title, body: promotion.body } : node,
+        ),
+      };
+    case "settle":
+      return {
+        ...studio,
+        nodes: studio.nodes.map((node) =>
+          node.id === promotion.node_id && node.kind === "contradiction"
+            ? { ...node, state: promotion.outcome, ...(promotion.outcome === "resolved_here" ? { answer: promotion.answer } : {}) }
+            : node,
+        ),
+      };
+    case "dispatch":
+      return made(studio, { kind: "job", job_id: mint("01JOB") }, [promotion.node_id], promotion.position);
+  }
 }

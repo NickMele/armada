@@ -154,6 +154,17 @@ function BoardEdgeView(props: EdgeProps<BoardEdge>) {
   );
 }
 
+/**
+ * Held down, a second node joins the selection rather than replacing it — which is how a person
+ * picks the Notes they are accepting as one Cluster (`#1291`).
+ *
+ * **Named rather than left to React Flow's default**, which reads the platform off the user agent
+ * and so differs between the app and a test of it. **A constant rather than a literal in the
+ * element**: React Flow writes this into its own store on every render it sees a new value, and a
+ * fresh array each time is an update loop it never leaves.
+ */
+const JOINS_THE_SELECTION = ["Meta", "Control"];
+
 const NODE_TYPES = { studio: BoardNodeView };
 const EDGE_TYPES = { studio: BoardEdgeView };
 
@@ -269,6 +280,7 @@ function Board({
       onSelectionChange={onPicked}
       nodesConnectable={false}
       nodesDraggable={!readOnly}
+      multiSelectionKeyCode={JOINS_THE_SELECTION}
       edgesReconnectable={false}
       deleteKeyCode={null}
       ariaLabelConfig={ARIA}

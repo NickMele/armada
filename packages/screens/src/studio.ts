@@ -95,7 +95,14 @@ function cardOf(node: StudioNode, jobs: readonly JobSummary[], frameOf: FrameOf)
     case "finding":
       return { kind: "finding", state: stateOf(node, "proposed"), title: node.asked };
     case "contradiction":
-      return { kind: "contradiction", state: stateOf(node, "reported"), title: node.first, facts: [node.second] };
+      // The answer is a fact beside the two statements, not in place of either: `Resolved here`
+      // records what was decided, and the disagreement it settles stays readable under it.
+      return {
+        kind: "contradiction",
+        state: stateOf(node, "reported"),
+        title: node.first,
+        facts: node.answer === undefined ? [node.second] : [node.second, node.answer],
+      };
     case "sketch":
       return { kind: "sketch", state: "frozen", title: firstLine(node.body) };
     case "link":
