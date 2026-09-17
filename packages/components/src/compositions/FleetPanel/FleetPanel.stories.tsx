@@ -86,6 +86,34 @@ export const NotRunning: Story = {
   },
 };
 
+const MACOS_RUNTIME_FILE = "no runtime file at /Users/user/Library/Application Support/Armada/fleet.json";
+
+/**
+ * **The whole path, at the left column's narrowest.** The path is what a
+ * person acts on and has no space to break at, so it wraps anywhere rather
+ * than running past the panel's right edge.
+ */
+export const NotRunningAtColumnMinimum: Story = {
+  args: { state: "not-running", label: "Not running", detail: MACOS_RUNTIME_FILE, open: true },
+  decorators: [
+    (Story) => (
+      <div style={{ width: "var(--sidebar-min)" }}>
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    const sentence = canvas.getByText(MACOS_RUNTIME_FILE);
+    await expect(sentence).toBeVisible();
+    await expect(sentence.scrollWidth).toBeLessThanOrEqual(sentence.clientWidth);
+    const panel = sentence.closest("section");
+    await expect(panel).not.toBeNull();
+    const text = document.createRange();
+    text.selectNodeContents(sentence);
+    await expect(text.getBoundingClientRect().right).toBeLessThanOrEqual(panel!.getBoundingClientRect().right);
+  },
+};
+
 /** **A live pid on a port that does not answer.** Two rows, because a socket that never opened has no protocol or uptime. */
 export const Unreachable: Story = {
   args: {
