@@ -6,7 +6,7 @@ import { Button, KbdChord, Textarea } from "@armada/components";
 
 import { byCreation, type Annotation, type Box } from "../../../shared/annotations";
 import { capture, locate } from "./capture";
-import { componentName, fiberOf } from "./fiber";
+import { componentsOf, fiberOf } from "./fiber";
 import type { Sink } from "./sink";
 import "./annotate.css";
 
@@ -202,7 +202,7 @@ export function Layer({ sink }: { sink: Sink }) {
       {hoveredBox !== null && hovered !== null && (
         <div className="armada-annotate__outline" style={place(hoveredBox)}>
           <span className="armada-annotate__tag">
-            {componentName(fiberOf(hovered)?.type) ?? hovered.tagName.toLowerCase()}
+            {componentsOf(fiberOf(hovered)).component ?? hovered.tagName.toLowerCase()}
           </span>
         </div>
       )}

@@ -16,7 +16,12 @@ export function shortText(text: string | null | undefined): string {
 function currentScreen(doc: Document): string | null {
   const current = doc.querySelector('[aria-current="page"]');
   if (current === null) return null;
-  return current.getAttribute("aria-label") ?? (shortText(current.textContent) || null);
+  const label = current.getAttribute("aria-label");
+  if (label !== null) return label;
+  // The rail item carries its binding as a `kbd`, which is not the screen's name.
+  const copy = current.cloneNode(true) as Element;
+  copy.querySelectorAll("kbd").forEach((kbd) => kbd.remove());
+  return shortText(copy.textContent) || null;
 }
 
 /** The dialog or sheet the element is inside, by its accessible name. */

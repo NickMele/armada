@@ -20,6 +20,8 @@
   width: var(--annotate-w);
   height: var(--annotate-h);
   outline: calc(var(--border-width) * 2) solid var(--accent);
+  /* Off the element's edge, so it still reads on an accent-filled control. */
+  outline-offset: calc(var(--border-width) * 2);
   pointer-events: none;
 }
 
