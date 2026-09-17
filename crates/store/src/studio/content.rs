@@ -6,7 +6,7 @@
 
 use core_model::{
     JobId, ScoutCheckout, ScoutEnded, ScoutOutcome, StudioFinding, StudioNodeContent,
-    StudioNodeKind, Ulid,
+    StudioNodeKind, StudioRunKept, Ulid,
 };
 use serde_json::{json, Map, Value};
 
@@ -32,7 +32,23 @@ pub enum UnreadableContent {
 /// The object written for `content`.
 pub(super) fn written(content: &StudioNodeContent) -> String {
     let object = match content {
-        StudioNodeContent::Run { run_id } => json!({ "run_id": run_id }),
+        StudioNodeContent::Run { run_id, kept } => match kept {
+            None => json!({ "run_id": run_id }),
+            Some(kept) => json!({
+                "run_id": run_id,
+                "kept": {
+                    "name": kept.name,
+                    "command": kept.command,
+                    "exit_code": kept.exit_code,
+                    "expect_exit_code": kept.expect_exit_code,
+                    "stopped": kept.stopped,
+                    "duration_ms": kept.duration_ms,
+                    "lines": kept.lines,
+                    "total_lines": kept.total_lines,
+                    "whole": kept.whole,
+                },
+            }),
+        },
         StudioNodeContent::Note { said } => json!({ "said": said }),
         StudioNodeContent::Cluster { title } => json!({ "title": title }),
         StudioNodeContent::Finding(finding) => finding_written(finding),
@@ -69,6 +85,10 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
     Ok(match kind {
         StudioNodeKind::Run => StudioNodeContent::Run {
             run_id: text("run_id")?,
+            kept: match object.get("kept") {
+                None | Some(Value::Null) => None,
+                Some(kept) => Some(run_kept(kept)?),
+            },
         },
         StudioNodeKind::Note => StudioNodeContent::Note {
             said: text("said")?,
@@ -213,4 +233,63 @@ fn finding_read(object: &Map<String, Value>) -> Result<StudioFinding, Unreadable
             .map(str::to_string),
         ended,
     ))
+}
+
+/// What a Run node kept of a swept run, as its `kept` object holds it.
+///
+/// **Every field or none.** A half-read result would put a wrong exit code or
+/// a wrong duration under a run nobody can go back and check, so a missing one
+/// fails the row by name the way every other node's does.
+fn run_kept(stored: &Value) -> Result<StudioRunKept, UnreadableContent> {
+    let object = stored
+        .as_object()
+        .ok_or_else(|| UnreadableContent::NotAnObject {
+            detail: String::from("a Run node's `kept` is not an object"),
+        })?;
+    let missing = |field: &'static str| UnreadableContent::MissingField { field };
+    let text = |field: &'static str| {
+        object
+            .get(field)
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or(missing(field))
+    };
+    Ok(StudioRunKept {
+        name: text("name")?,
+        command: text("command")?,
+        // Absent and null both read as killed before it exited: `ipc` leaves
+        // an absent option out rather than sending null, and this column is
+        // written from the same value.
+        exit_code: object
+            .get("exit_code")
+            .and_then(Value::as_i64)
+            .map(|code| code as i32),
+        expect_exit_code: object
+            .get("expect_exit_code")
+            .and_then(Value::as_i64)
+            .ok_or(missing("expect_exit_code"))?,
+        stopped: object
+            .get("stopped")
+            .and_then(Value::as_bool)
+            .ok_or(missing("stopped"))?,
+        duration_ms: object
+            .get("duration_ms")
+            .and_then(Value::as_u64)
+            .ok_or(missing("duration_ms"))?,
+        lines: object
+            .get("lines")
+            .and_then(Value::as_array)
+            .ok_or(missing("lines"))?
+            .iter()
+            .map(|line| line.as_str().unwrap_or_default().to_string())
+            .collect(),
+        total_lines: object
+            .get("total_lines")
+            .and_then(Value::as_u64)
+            .ok_or(missing("total_lines"))? as u32,
+        whole: object
+            .get("whole")
+            .and_then(Value::as_bool)
+            .ok_or(missing("whole"))?,
+    })
 }

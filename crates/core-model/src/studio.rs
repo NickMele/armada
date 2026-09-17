@@ -242,14 +242,51 @@ impl From<StudioRelation> for StudioEdgeKind {
     }
 }
 
+/// What a Run node keeps of its run once the run's own retention has swept it:
+/// the result, and the log's last lines. `#1289`.
+///
+/// **Only ever present on a run that is gone.** While the run's record is
+/// still on disk the node is a reference and nothing else, and its state is
+/// read off the run — so a node carrying one of these is saying that what is
+/// here is all there is, which is what *partial* means on a Studio.
+///
+/// **Taken before the sweep, never after.** A tail read after the directory
+/// was removed is no tail at all, and the node would point at nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StudioRunKept {
+    /// The entry the Manifest declared, by name.
+    pub name: String,
+    /// The command as it ran.
+    pub command: String,
+    /// `None` where the run was killed before it exited.
+    pub exit_code: Option<i32>,
+    /// What the entry declared a pass to be, so the node keeps its colour.
+    pub expect_exit_code: i64,
+    /// Whether a person stopped it.
+    pub stopped: bool,
+    pub duration_ms: u64,
+    /// The log's last lines, oldest first, bounded by the Studio's own bound
+    /// rather than by whatever the command printed.
+    pub lines: alloc::vec::Vec<String>,
+    /// How many lines the log held in all, whether or not they are here.
+    pub total_lines: u32,
+    /// Whether [`lines`](StudioRunKept::lines) is the whole log rather than
+    /// its tail.
+    pub whole: bool,
+}
+
 /// What a node holds, one variant per kind.
 ///
 /// **The smallest each kind needs to be drawn and read.** A later step adds
 /// what it builds beside these, never in place of them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StudioNodeContent {
-    /// A reference to the run, never its status or its log.
-    Run { run_id: String },
+    /// A reference to the run, never its status — and what was kept of it
+    /// once retention swept the run away. `#1289`.
+    Run {
+        run_id: String,
+        kept: Option<StudioRunKept>,
+    },
     /// What a person pointed at and said, fixed at capture.
     Note { said: String },
     /// Notes a person accepted as one thing.
@@ -292,7 +329,7 @@ impl StudioNodeContent {
     /// The first field left blank, by name, or `None` where every one is said.
     pub fn blank(&self) -> Option<&'static str> {
         let fields: &[(&'static str, &str)] = match self {
-            StudioNodeContent::Run { run_id } => &[("run_id", run_id)],
+            StudioNodeContent::Run { run_id, .. } => &[("run_id", run_id)],
             StudioNodeContent::Note { said } => &[("said", said)],
             StudioNodeContent::Cluster { title } => &[("title", title)],
             StudioNodeContent::Finding(finding) => &[("asked", finding.ask())],
@@ -311,6 +348,30 @@ impl StudioNodeContent {
             .iter()
             .find(|(_, text)| text.trim().is_empty())
             .map(|(name, _)| *name)
+    }
+
+    /// The run this node references, where it is a Run node whose run is still
+    /// the thing to read. `None` on every other kind, **and on a Run that has
+    /// already kept its tail**: what it references is gone.
+    pub fn run_still_read(&self) -> Option<&str> {
+        match self {
+            StudioNodeContent::Run { run_id, kept: None } => Some(run_id),
+            _ => None,
+        }
+    }
+
+    /// This content with what was kept of its run written into it.
+    ///
+    /// **The only method here that makes new content**, and the reason a Note
+    /// stays fixed at capture: it takes a Run node whose run is about to be
+    /// swept and no other, so nothing can reach a node's words through it, and
+    /// a tail already kept is never written over.
+    pub fn keeping(&self, kept: StudioRunKept) -> Option<StudioNodeContent> {
+        let run_id = self.run_still_read()?;
+        Some(StudioNodeContent::Run {
+            run_id: String::from(run_id),
+            kept: Some(kept),
+        })
     }
 }
 

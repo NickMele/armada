@@ -279,8 +279,9 @@ pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet, SpecPic
 pub use since::{EventTally, EventsSince};
 pub use studio::{
     AddStudioNode, CreateStudio, DecideStudioEdge, HelmStudioAct, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, Studio, StudioDeleted, StudioEdge,
-    StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioSummary,
+    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartStudioRun, Studio, StudioDeleted,
+    StudioEdge, StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition,
+    StudioRunKept, StudioRunStarted, StudioSummary,
 };
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,

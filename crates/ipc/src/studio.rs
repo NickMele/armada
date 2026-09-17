@@ -15,6 +15,7 @@ use crate::enums::{
     StudioAuthor, StudioEdgeKind, StudioEdgeStanding, StudioNodeState, StudioRelation,
 };
 use crate::ids::{Instant, JobId, ManifestId, StudioEdgeId, StudioId, StudioNodeId};
+use crate::rehearsal::CheckoutRunUnderway;
 use crate::scouting::{ScoutCheckout, ScoutEnded};
 
 /// Every Studio one repository keeps, the last touched first — `list_studios`.
@@ -83,6 +84,10 @@ pub struct StudioNode {
 pub enum StudioNodeContent {
     Run {
         run_id: String,
+        /// Absent while the run is still there to read. Present is **partial**:
+        /// the run's own record has been swept and this is all there is.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        kept: Option<StudioRunKept>,
     },
     Note {
         said: String,
@@ -134,6 +139,66 @@ pub enum StudioNodeContent {
     Job {
         job_id: JobId,
     },
+}
+
+/// What a Run node kept of its run, once retention swept the run away —
+/// `core_model::StudioRunKept`'s fields, one for one. `#1289`.
+///
+/// **A node carrying one is partial, and that is what says so.** There is no
+/// second flag: while the run is there the node is a reference and its state
+/// is read off the run, and this is what is left when it is not.
+///
+/// **The colour survives with it.** `exit_code`, `expect_exit_code` and
+/// `stopped` are the three a run's colour is derived from (`#1304`), so a
+/// swept run reads failed on the whiteboard the same as it did while it ran.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudioRunKept {
+    pub name: String,
+    pub command: String,
+    /// Absent where the run was killed before it exited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    pub expect_exit_code: i64,
+    pub stopped: bool,
+    pub duration_ms: u64,
+    /// The log's last lines, oldest first.
+    pub lines: Vec<String>,
+    /// How many lines the log held in all, whether or not they are here.
+    pub total_lines: u32,
+    /// Whether `lines` is the whole log rather than its tail.
+    pub whole: bool,
+}
+
+/// `start_studio_run`: run one Manifest entry in the checkout and put a Run
+/// node on the Studio for it.
+///
+/// **No repository**: the Studio names it, being a repository's own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartStudioRun {
+    /// The Check or Command the Manifest declares, by name.
+    pub name: String,
+    /// A directory below the repository root whose own `armada.yml` declares
+    /// `name`, run in that directory. Absent, empty or `.` is the root's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+    /// Where the Run node is placed.
+    pub position: StudioPosition,
+    /// The node this run was started from. The Studio draws the `produced`
+    /// edge itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub produced_by: Option<StudioNodeId>,
+}
+
+/// `start_studio_run`'s answer: the run is underway, and the Studio holds a
+/// node for it.
+///
+/// **The Studio whole, as every write on one answers**, and the node's id
+/// beside it so a client knows which of them is new without diffing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudioRunStarted {
+    pub studio: Studio,
+    pub node_id: StudioNodeId,
+    pub run: CheckoutRunUnderway,
 }
 
 /// Where a person left a node, in whole canvas units.
@@ -305,6 +370,22 @@ impl StudioEdge {
     }
 }
 
+impl StudioRunKept {
+    pub fn of(kept: &core_model::StudioRunKept) -> StudioRunKept {
+        StudioRunKept {
+            name: kept.name.clone(),
+            command: kept.command.clone(),
+            exit_code: kept.exit_code,
+            expect_exit_code: kept.expect_exit_code,
+            stopped: kept.stopped,
+            duration_ms: kept.duration_ms,
+            lines: kept.lines.clone(),
+            total_lines: kept.total_lines,
+            whole: kept.whole,
+        }
+    }
+}
+
 impl From<core_model::StudioPosition> for StudioPosition {
     fn from(at: core_model::StudioPosition) -> StudioPosition {
         StudioPosition { x: at.x, y: at.y }
@@ -324,7 +405,10 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
     fn from(content: &core_model::StudioNodeContent) -> StudioNodeContent {
         use core_model::StudioNodeContent as C;
         match content.clone() {
-            C::Run { run_id } => StudioNodeContent::Run { run_id },
+            C::Run { run_id, kept } => StudioNodeContent::Run {
+                run_id,
+                kept: kept.as_ref().map(StudioRunKept::of),
+            },
             C::Note { said } => StudioNodeContent::Note { said },
             C::Cluster { title } => StudioNodeContent::Cluster { title },
             C::Finding(finding) => crate::scouting::finding_on_the_wire(&finding),
@@ -348,7 +432,11 @@ impl StudioNodeContent {
     pub fn to_domain(&self) -> core_model::StudioNodeContent {
         use core_model::StudioNodeContent as C;
         match self.clone() {
-            StudioNodeContent::Run { run_id } => C::Run { run_id },
+            // **`kept` never decodes into a write.** What a node keeps of a
+            // swept run is taken from the run's own record by the sweep, and
+            // `add_studio_node` refuses a Run kind outright, so nothing on
+            // this seam can name a result the run did not have.
+            StudioNodeContent::Run { run_id, .. } => C::Run { run_id, kept: None },
             StudioNodeContent::Note { said } => C::Note { said },
             StudioNodeContent::Cluster { title } => C::Cluster { title },
             StudioNodeContent::Finding {
