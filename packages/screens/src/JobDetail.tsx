@@ -115,6 +115,7 @@ function OneJob({
   now,
   acting,
   actingAct,
+  answered,
   rerunningChecks,
   approving,
   deciding,
@@ -547,6 +548,7 @@ function OneJob({
     stale,
     acting,
     actingAct,
+    answered,
     deciding,
     decidingAct,
     onMergePullRequest,
@@ -591,6 +593,7 @@ function OneJob({
     stale,
     acting,
     actingAct,
+    answered,
     approving,
     reporting,
     onReporting: setReporting,
@@ -721,6 +724,7 @@ function OneJob({
                   render={render}
                   acting={acting}
                   actingAct={actingAct}
+                  answered={answered}
                   rerunningChecks={rerunningChecks}
                   stale={stale}
                   onAct={onAct}

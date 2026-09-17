@@ -5,12 +5,12 @@
 // boundary — nothing here knows which surface is open or what is drawn, and
 // nothing that draws knows how to reach the host.
 //
-// **The six pieces of state here are the ones a command in flight has**, and
+// **The pieces of state here are the ones a command in flight has**, and
 // they are here for that reason and not because they were nearby: which Job an
 // act is on, which Job a decision on its work is on, what the last command
-// answered, what the last reclaim gave back, whether a re-read is out, and
-// which Job is having its Checks run again. Every one of them is set by a call
-// below and read by nothing else.
+// answered and which control that answers on, what the last reclaim gave back,
+// whether a re-read is out, and which Job is having its Checks run again.
+// Every one of them is set by a call below and read by nothing else.
 //
 // # What is not decided here
 //
@@ -52,7 +52,7 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { HelmContext, JobSummary } from "@armada/protocol";
-import type { ActingAct, Answered, ConfirmableAct, DecidingAct, Taken, TakenAct } from "@armada/screens";
+import type { ActAnswer, ActingAct, Answered, ConfirmableAct, DecidingAct, Taken, TakenAct } from "@armada/screens";
 import { takenNotice, takenStands } from "@armada/screens";
 import { proposeRequest } from "./dispatch";
 import type { Proposing } from "./dispatch";
@@ -227,6 +227,24 @@ export function useCommands(sending: Sending) {
   const [refreshing, setRefreshing] = useState(false);
   // Which bulk sweep of finished Jobs is out, so its control waits and a second press sends nothing. #1117.
   const [sweeping, setSweeping] = useState<"clear" | "forget" | null>(null);
+  // What Fleet said to the last act on a Job, named, so only the control that
+  // sent it answers on its edge. Cleared as the next act goes out, and once the
+  // line's own hold is over — a stale answer would replay on the next mount.
+  const [lastAnswer, setLastAnswer] = useState<{ jobId: string; answered: ActAnswer } | null>(null);
+  useEffect(() => {
+    const hold = lastAnswer === null ? null : answerHoldMs();
+    if (hold === null) return;
+    const timer = setTimeout(() => setLastAnswer(null), hold);
+    return () => clearTimeout(timer);
+  }, [lastAnswer]);
+  /** Publish an act's outcome, and hand its answer to the control that sent it. */
+  function heard(jobId: string, act: ActingAct | DecidingAct, answer: Outcome): void {
+    setOutcome(answer);
+    // Accepted, a forget leaves no record and a redispatch opens its
+    // replacement: neither leaves the pressed control on screen to answer.
+    if (answer.ok && (act === "forget_job" || act === "redispatch")) return;
+    setLastAnswer({ jobId, answered: { act, answer: answer.ok ? "accepted" : "refused" } });
+  }
 
   async function propose(draft: Draft): Promise<void> {
     setOutcome(await window.armada.proposeJob(draft));
@@ -271,6 +289,7 @@ export function useCommands(sending: Sending) {
 
   /** Hold `acting` on a Job, with the act named, for as long as `work` is out. #1117. */
   async function acted<T>(jobId: string, act: ActingAct, work: () => Promise<T>): Promise<T> {
+    setLastAnswer(null);
     setActing(jobId);
     setActingAct(act);
     try {
@@ -283,6 +302,7 @@ export function useCommands(sending: Sending) {
 
   /** `acted`, for the acts at the review gate that `deciding` guards. */
   async function decided<T>(jobId: string, act: DecidingAct, work: () => Promise<T>): Promise<T> {
+    setLastAnswer(null);
     setDeciding(jobId);
     setDecidingAct(act);
     try {
@@ -377,7 +397,7 @@ export function useCommands(sending: Sending) {
                 : act === "forget_job"
                   ? await window.armada.forgetJob(jobId)
                   : await window.armada.killJob(jobId);
-      setOutcome(answer);
+      heard(jobId, act, answer);
       if (act === "restart_step") took(jobId, "restart", answer);
       if (answer.ok && answer.reclaimed !== undefined) setGivenBack([answer.reclaimed]);
       if (answer.ok && answer.jobId !== undefined) sending.onOpen(answer.jobId);
@@ -391,7 +411,7 @@ export function useCommands(sending: Sending) {
    */
   async function redirect(jobId: string, instruction: string): Promise<void> {
     return acted(jobId, "redirect", async () => {
-      setOutcome(await window.armada.redirectDrone(jobId, instruction));
+      heard(jobId, "redirect", await window.armada.redirectDrone(jobId, instruction));
     });
   }
 
@@ -503,7 +523,7 @@ export function useCommands(sending: Sending) {
    */
   async function overrule(jobId: string, reason: string): Promise<void> {
     return acted(jobId, "override_verdict", async () => {
-      setOutcome(await window.armada.overrideVerdict(jobId, reason));
+      heard(jobId, "override_verdict", await window.armada.overrideVerdict(jobId, reason));
     });
   }
 
@@ -516,7 +536,7 @@ export function useCommands(sending: Sending) {
    */
   async function rerun(jobId: string): Promise<void> {
     return acted(jobId, "rerun_gate", async () => {
-      setOutcome(await window.armada.rerunGate(jobId));
+      heard(jobId, "rerun_gate", await window.armada.rerunGate(jobId));
     });
   }
 
@@ -526,11 +546,12 @@ export function useCommands(sending: Sending) {
    * the step panel says so for as long as it does.
    */
   async function rerunChecks(jobId: string): Promise<void> {
+    setLastAnswer(null);
     setActing(jobId);
     setActingAct("rerun_checks");
     setRerunningChecks(jobId);
     try {
-      setOutcome(await window.armada.rerunChecks(jobId));
+      heard(jobId, "rerun_checks", await window.armada.rerunChecks(jobId));
     } finally {
       setActing(null);
       setActingAct(null);
@@ -546,7 +567,7 @@ export function useCommands(sending: Sending) {
    */
   async function raiseCap(jobId: string, costCapMicros: number): Promise<void> {
     return acted(jobId, "raise_cost_cap", async () => {
-      setOutcome(await window.armada.raiseCostCap(jobId, costCapMicros));
+      heard(jobId, "raise_cost_cap", await window.armada.raiseCostCap(jobId, costCapMicros));
     });
   }
 
@@ -557,7 +578,7 @@ export function useCommands(sending: Sending) {
    */
   async function raiseTurns(jobId: string, turnCap: number): Promise<void> {
     return acted(jobId, "raise_turn_cap", async () => {
-      setOutcome(await window.armada.raiseTurnCap(jobId, turnCap));
+      heard(jobId, "raise_turn_cap", await window.armada.raiseTurnCap(jobId, turnCap));
     });
   }
 
@@ -632,7 +653,7 @@ export function useCommands(sending: Sending) {
             : what === "changes"
               ? await window.armada.requestChanges(jobId, note)
               : await window.armada.rejectWork(jobId);
-      setOutcome(answer);
+      heard(jobId, what, answer);
       if (what === "merge" || what === "approve") took(jobId, what, answer);
     });
   }
@@ -650,7 +671,7 @@ export function useCommands(sending: Sending) {
    */
   async function takeUpRemarks(jobId: string, remarks: string[]): Promise<void> {
     return decided(jobId, "take_up_remarks", async () => {
-      setOutcome(await window.armada.takeUpRemarks(jobId, remarks));
+      heard(jobId, "take_up_remarks", await window.armada.takeUpRemarks(jobId, remarks));
     });
   }
 
@@ -714,6 +735,9 @@ export function useCommands(sending: Sending) {
     actingAct,
     deciding,
     decidingAct,
+    /** The answer the open Job's pressed control shows, where the last one was on it. */
+    answeredOn: (jobId: string): ActAnswer | undefined =>
+      lastAnswer?.jobId === jobId ? lastAnswer.answered : undefined,
     takeUpRemarks,
     dismissFinding,
     rerunFailedChecks,
@@ -753,6 +777,17 @@ export function useCommands(sending: Sending) {
     decide,
     refresh,
   };
+}
+
+/**
+ * `--duration-answer`, in milliseconds: the stylesheet's clock for how long an
+ * answer holds, read rather than retyped. `null` where it cannot be read, and
+ * the answer then stands until the next press clears it.
+ */
+function answerHoldMs(): number | null {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue("--duration-answer").trim();
+  const read = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(raw);
+  return read === null ? null : Number(read[1]) * (read[2] === "s" ? 1000 : 1);
 }
 
 /**

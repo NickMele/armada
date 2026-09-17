@@ -17,8 +17,8 @@ import { page } from "vitest/browser";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail, Stuck } from "@armada/protocol";
 import { ACT_LABEL } from "./copy";
-import { mount, unmount } from "./mounted";
-import type { ActingAct } from "./pending";
+import { mount, rerender, unmount } from "./mounted";
+import type { ActAnswer, ActingAct } from "./pending";
 import { StepActs } from "./StepActs";
 
 afterEach(unmount);
@@ -119,9 +119,15 @@ function awaitingRepair(): JobWhole {
 }
 
 /** The stopped step header, on a Job a failed Check left at `awaiting_repair`. */
-function stopped(rerunningChecks: boolean, acting = rerunningChecks, actingAct?: ActingAct): void {
+function stopped(
+  rerunningChecks: boolean,
+  acting = rerunningChecks,
+  actingAct?: ActingAct,
+  answered?: ActAnswer,
+  put: typeof mount = mount,
+): void {
   const whole = awaitingRepair();
-  mount(
+  put(
     <StepActs
       job={whole.job}
       whole={whole}
@@ -129,6 +135,7 @@ function stopped(rerunningChecks: boolean, acting = rerunningChecks, actingAct?:
       render="stopped"
       acting={acting}
       actingAct={actingAct}
+      answered={answered}
       rerunningChecks={rerunningChecks}
       stale={false}
       onAct={() => {}}
@@ -181,4 +188,28 @@ test("restart step is not busy for a different act, and stays disabled", async (
   const restart = page.getByRole("button", { name: ACT_LABEL.restart_step });
   await expect.element(restart).not.toHaveAttribute("aria-busy");
   await expect.element(restart).toBeDisabled();
+});
+
+// Fleet's answer lands on the edge of the control that sent the act, and on no
+// sibling. `data-answer` is read because no accessible property carries the
+// line — it is decoration, and the words of a refusal are drawn elsewhere.
+
+test("a refused restart answers on restart alone", async () => {
+  stopped(false, false, undefined, { act: "restart_step", answer: "refused" });
+  await expect
+    .element(page.getByRole("button", { name: ACT_LABEL.restart_step }))
+    .toHaveAttribute("data-answer", "refused");
+  await expect
+    .element(page.getByRole("button", { name: ACT_LABEL.rerun_checks }))
+    .not.toHaveAttribute("data-answer");
+});
+
+test("an accepted Checks re-run answers accepted, and the next press clears it", async () => {
+  stopped(false, false, undefined, { act: "rerun_checks", answer: "accepted" });
+  const rerun = page.getByRole("button", { name: ACT_LABEL.rerun_checks });
+  await expect.element(rerun).toHaveAttribute("data-answer", "accepted");
+  // The app drops the answer as the next act goes out, and that act waits.
+  stopped(false, true, "rerun_checks", undefined, rerender);
+  await expect.element(rerun).toHaveAttribute("aria-busy", "true");
+  await expect.element(rerun).not.toHaveAttribute("data-answer");
 });

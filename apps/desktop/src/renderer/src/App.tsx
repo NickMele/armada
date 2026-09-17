@@ -627,6 +627,7 @@ export function App() {
                 decidingAct={
                   commands.deciding === reading.id ? (commands.decidingAct ?? undefined) : undefined
                 }
+                answered={commands.answeredOn(reading.id)}
                 observed={state.observed}
                 journalled={state.journalled}
                 followed={state.followed}

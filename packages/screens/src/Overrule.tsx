@@ -11,7 +11,7 @@
 // partitioned.
 
 import { useState } from "react";
-import { Button, Dialog, GAMING_PATTERN, GamingFlags, Textarea } from "@armada/components";
+import { Button, type ButtonAnswer, Dialog, GAMING_PATTERN, GamingFlags, Textarea } from "@armada/components";
 
 import { flagsOf } from "./gaming";
 import { openKept, type Opens } from "./phases";
@@ -71,6 +71,7 @@ export function OverruleControl({
   opens,
   disabled,
   pending = false,
+  answer,
   onOverrule,
 }: {
   jobId: string;
@@ -89,6 +90,8 @@ export function OverruleControl({
    * still shows the wait. #1117.
    */
   pending?: boolean;
+  /** Fleet's answer to the `override_verdict` this control sent, drawn on its edge until the next press. */
+  answer?: ButtonAnswer | undefined;
   onOverrule: (jobId: string, reason: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -107,7 +110,7 @@ export function OverruleControl({
 
   return (
     <>
-      <Button variant="secondary" pending={pending} disabled={disabled} onClick={() => setOpen(true)}>
+      <Button variant="secondary" pending={pending} answer={answer} disabled={disabled} onClick={() => setOpen(true)}>
         {pending ? OVERRULING_UNDERWAY : words.label}
       </Button>
       <Dialog

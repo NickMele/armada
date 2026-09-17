@@ -2,7 +2,7 @@ import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting, type ButtonAnswer } from "../../primitives/Button/Button";
 import { Checkbox } from "../../primitives/Checkbox/Checkbox";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
@@ -71,6 +71,8 @@ export type ReviewCommentsProps = {
    * while it holds; `false` is nothing out. #1117.
    */
   pending?: boolean;
+  /** Fleet's answer to the last send, drawn on its control until the next press. Pending wins. */
+  answer?: ButtonAnswer;
   /** The line over the list. Sentence case, no Wh- opener. */
   label?: ReactNode;
   /** What picking commits to, on hover over the line above the list. */
@@ -141,6 +143,7 @@ export function ReviewComments({
   disabled = false,
   disabledNote,
   pending = false,
+  answer,
   label = "Comments on the pull request",
   note = "Pick the ones a drone should act on. It works on the same branch, so the pull request updates in place.",
   emptyNote = "No comments",
@@ -231,6 +234,7 @@ export function ReviewComments({
           <Button
             variant="primary"
             pending={pending}
+            answer={answer}
             disabled={off || chosen.length === 0}
             onClick={() => chosen.length > 0 && onTakeUp([...chosen])}
           >

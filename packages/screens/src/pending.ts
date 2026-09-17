@@ -1,7 +1,7 @@
 // Which act is out on a Job, named, so the control that sent it is the one that
 // waits rather than one grey among its siblings. #1117.
 
-import type { DecisionAct } from "@armada/components";
+import type { ButtonAnswer, DecisionAct } from "@armada/components";
 import type { JobAct } from "./Acts";
 
 /** Every act Bridge sends on a Job under `acting`. */
@@ -33,4 +33,16 @@ const DECISIONS: readonly string[] = ["merge", "approve", "changes", "reject"];
 /** One of the four answers `ReviewDecision` draws, rather than another act at the gate. */
 export function isDecision(act: DecidingAct | undefined): act is DecisionAct {
   return act !== undefined && DECISIONS.includes(act);
+}
+
+/**
+ * What Fleet said to the last act sent on this Job, and which act that was, so
+ * the control that sent it is the one whose edge answers. The app clears it as
+ * the next act goes out, and once the line's own hold is over.
+ */
+export type ActAnswer = { act: ActingAct | DecidingAct; answer: ButtonAnswer };
+
+/** The answer a control shows: set only where `act` is the one that was answered. */
+export function answerTo(answered: ActAnswer | undefined, act: ActingAct | DecidingAct): ButtonAnswer | undefined {
+  return answered?.act === act ? answered.answer : undefined;
 }
