@@ -36,6 +36,8 @@ export type StudiosSurfaceProps = {
   onOpenChange: (open: OpenStudio | null) => void;
   selectedNode: string | null;
   onSelectNode: (nodeId: string | null) => void;
+  /** Open one Job whole — the Board's own press, reached from a Job node (#1379). */
+  onOpenJob: (jobId: string) => void;
   onCopied: (value: string) => void;
 };
 
@@ -101,6 +103,9 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
         onDecideEdge={(edgeId, accepted) => decideStudioEdge(openId ?? "", edgeId, accepted)}
         onReadFrame={readStudioFrame}
         onPromote={(promotion) => promoteOnStudio(openId ?? "", promotion)}
+        // The Studio stays standing under the Job, so closing it comes back to
+        // the whiteboard with the node reading whatever the Job is doing now.
+        onOpenJob={props.onOpenJob}
       />
     </Boundary>
   );

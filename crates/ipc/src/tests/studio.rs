@@ -9,8 +9,17 @@ use core_model::{
 
 use crate::{
     decode, encode, Event, HelmStudioAct, Instant, ProposeStudioEdge, Studio, StudioHelmActed,
-    StudioNodeContent,
+    StudioLinkForge, StudioNodeContent,
 };
+
+/// What a test says a Link's address names — `#1379`. **A fixture's own**, and
+/// deliberately not the real rule: `crates/adapters` owns which host is the
+/// forge, and the gate keeps that host's name out of this crate.
+fn forge_of(address: &str) -> Option<StudioLinkForge> {
+    address
+        .contains("/issues/")
+        .then_some(StudioLinkForge::Issue)
+}
 
 fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent {
     use core_model::StudioNodeContent as C;
@@ -109,7 +118,7 @@ fn a_graph() -> StudioGraph {
 
 #[test]
 fn a_studio_round_trips_flat_and_an_untitled_one_sends_no_name() {
-    let studio = Studio::of(&a_graph());
+    let studio = Studio::of(&a_graph(), &forge_of);
     let json = encode(&studio).expect("plain data");
     assert!(!json.contains("\"name\""), "left out, not null: {json}");
     assert!(
@@ -145,7 +154,10 @@ fn a_studio_round_trips_flat_and_an_untitled_one_sends_no_name() {
         },
         ..a_graph()
     };
-    assert_eq!(Studio::of(&named).name.as_deref(), Some("Stale counts"));
+    assert_eq!(
+        Studio::of(&named, &forge_of).name.as_deref(),
+        Some("Stale counts")
+    );
 }
 
 /// **`produced` is the Studio's to draw.** A proposal naming it is refused by
@@ -238,4 +250,39 @@ fn a_finding_carries_what_its_scout_read_and_leaves_out_what_it_never_recorded()
     assert!(json.contains(r#""ended":{"outcome":"stopped"}"#), "{json}");
     let back: StudioNodeContent = decode("content", json.as_bytes()).expect("round-trips");
     assert_eq!(back.to_domain(), content);
+}
+
+/// `#1379`: **a Link says what its address names, and says nothing where it
+/// names nothing on the forge.** Bridge offers Dispatch off this and never off
+/// the address, because the address's forge is not a thing Bridge may know.
+#[test]
+fn a_link_carries_what_the_sender_says_its_address_names() {
+    let link = |address: &str| {
+        core_model::StudioNode::added(
+            StudioNodeId::carried(Ulid::carried("01LINK")),
+            core_model::StudioNodeContent::link(address.to_string(), None),
+            core_model::StudioPosition { x: 0, y: 0 },
+            Timestamp::from_rfc3339("2026-09-17T09:00:00.000Z".to_string()),
+            core_model::StudioAuthor::Person,
+        )
+    };
+    let sent = |address: &str| {
+        let graph = StudioGraph {
+            nodes: vec![link(address)],
+            edges: Vec::new(),
+            ..a_graph()
+        };
+        encode(&Studio::of(&graph, &forge_of)).expect("plain data")
+    };
+
+    assert!(
+        sent("https://forge.invalid/o/r/issues/1379").contains(r#""forge":"issue""#),
+        "an issue says so"
+    );
+    // Left out rather than sent as null — the wire's rule for every optional
+    // field, and here it is also the whole of *no Dispatch on this one*.
+    assert!(
+        !sent("https://example.invalid/a-board").contains("forge"),
+        "a board names nothing on the forge"
+    );
 }

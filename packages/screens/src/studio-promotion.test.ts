@@ -77,6 +77,26 @@ describe("what a selection offers", () => {
     });
   });
 
+  test("a Link naming an issue dispatches; one naming anything else does not", () => {
+    // `forge` is Fleet's reading of the address and nothing here reads one:
+    // which host is the forge is `crates/adapters`' to know — #1379.
+    const link = (id: string, forge?: "issue" | "pull_request" | "milestone"): StudioNode => ({
+      id,
+      kind: "link",
+      address: `https://example.invalid/o/r/${id}`,
+      ...(forge === undefined ? {} : { forge }),
+      position: { x: 0, y: 0 },
+      created_at: at,
+    });
+    const links = studio([link("issue", "issue"), link("milestone", "milestone"), link("pull", "pull_request"), link("board")]);
+    expect(actsOn(links, ["issue"])).toMatchObject({ dispatch: true, editLink: true, readIn: true });
+    // A milestone is read in, and what it holds is what is dispatched.
+    expect(actsOn(links, ["milestone"])).toMatchObject({ dispatch: false, readIn: true });
+    // Open with the owner, so the narrower answer stands: no Dispatch on one.
+    expect(actsOn(links, ["pull"])).toMatchObject({ dispatch: false });
+    expect(actsOn(links, ["board"])).toMatchObject({ dispatch: false });
+  });
+
   test("an Issue draft is the only kind edited or dispatched", () => {
     const draft = studio([
       {
@@ -180,6 +200,18 @@ describe("the words a rung opens with", () => {
     };
     expect(dispatchedAs(draft)).toBe("A title\n\nA body");
     expect(dispatchedAs(note("a", "said"))).toBeNull();
+    // A Link sends its address alone: the issue it names is already filed.
+    const issue: StudioNode = {
+      id: "l",
+      kind: "link",
+      address: "https://example.invalid/o/r/issues/1379",
+      forge: "issue",
+      named: "#1379 An issue on a Studio cannot be dispatched — open",
+      position: { x: 0, y: 0 },
+      created_at: at,
+    };
+    expect(dispatchedAs(issue)).toBe("https://example.invalid/o/r/issues/1379");
+    expect(dispatchedAs({ ...issue, forge: "milestone" })).toBeNull();
   });
 });
 

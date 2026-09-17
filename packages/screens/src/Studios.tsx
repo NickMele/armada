@@ -108,6 +108,11 @@ export type StudiosProps = {
   onReadFrame: ReadStudioFrame;
   /** One rung of promotion — cluster, outline, defer, write up, edit, settle, dispatch. */
   onPromote: (promotion: StudioPromotion) => Promise<Outcome>;
+  /**
+   * Read one Job whole, which is what a Board row's press does — #1379. The
+   * Studio stays open underneath it, so closing the Job comes back here.
+   */
+  onOpenJob: (jobId: string) => void;
 };
 
 export function Studios(props: StudiosProps) {
@@ -299,6 +304,10 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
   const proposed = proposedRelations(studio, jobs);
   const onBoard = picked.filter((id) => studio.nodes.some((node) => node.id === id));
   const selected = onBoard.length === 1 ? studio.nodes.find((node) => node.id === onBoard[0]) : undefined;
+  // **The row, not the node, is what opens.** A Job node holds a reference and
+  // no status, so a Job the Board no longer carries is one there is nothing to
+  // read — and the node draws its id, which is what says so.
+  const openable = selected?.kind === "job" ? jobs.find((job) => job.id === selected.job_id) : undefined;
 
   function answered(outcome: Outcome): void {
     setRefused(outcome.ok ? null : said(outcome));
@@ -416,6 +425,15 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
                     Open frame
                   </Button>
                 ) : null}
+                {/* **An act on the node, not a press on the card** — the board
+                    is a drag surface, and a control inside a node is a press
+                    fighting a drag, which is why Open frame is here too.
+                    Reading a Job is reading, so it is offered read-only. */}
+                {openable === undefined ? null : (
+                  <Button size="sm" onClick={() => props.onOpenJob(openable.id)}>
+                    Open Job
+                  </Button>
+                )}
                 {editable && selected !== undefined ? (
                   <Button variant="destructive" size="sm" onClick={() => setRemoving(selected.id)}>
                     Delete node
