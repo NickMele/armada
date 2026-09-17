@@ -459,6 +459,18 @@ impl StudioNodeContent {
         }
     }
 
+    /// The address a Link keeps, and `None` on every other kind — `#1379`.
+    ///
+    /// **What the address names is not decided here.** Which host is the forge
+    /// and which paths on it are an issue is `crates/adapters`' to know, so
+    /// this answers what the node holds and the caller answers what it is.
+    pub fn address(&self) -> Option<&str> {
+        match self {
+            StudioNodeContent::Link { address, .. } => Some(address),
+            _ => None,
+        }
+    }
+
     /// This content with what was kept of its run written into it.
     ///
     /// **The only method here that makes new content**, and the reason a Note

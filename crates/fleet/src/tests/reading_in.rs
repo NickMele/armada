@@ -153,6 +153,7 @@ async fn a_link(fleet: &Arc<Reading>, address: &str) -> (ipc::Studio, ipc::Studi
                     address: address.to_string(),
                     said: None,
                     named: None,
+                    forge: None,
                 },
                 position: StudioPosition { x: 0, y: 0 },
                 produced_by: None,

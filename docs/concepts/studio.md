@@ -62,7 +62,7 @@ flowchart LR
 | Deferral | Something a person put off, against what it blocks | Open, Answered | None |
 | Outline | An ordered reading of the nodes feeding it | Draft, Frozen | None |
 | Issue draft | An issue's title and body, never filed by Armada | Draft | None |
-| Job | A dispatched [Job](job.md) | Job statuses | Job colours |
+| Job | A dispatched [Job](job.md), as a reference to it | Job statuses | Job colours |
 
 | State | Means |
 |---|---|
@@ -72,6 +72,12 @@ flowchart LR
 
 > **Rule.** Run and Job nodes are the only nodes that take status colour, and each Run state aliases a Job status in `packages/tokens/src/status.css`.
 > Why: a run reads the same on a Studio, on the Manifest surface and on a Job's run sheet. See [Run and edit a Manifest](../journeys/run-and-edit-a-manifest.md).
+
+> **Rule.** A Job node holds a reference to its Job and no copy of its status. It reads that status off the same rows the [Job Board](job-board.md) reads, so a Studio left open and come back to says what the Job is doing now.
+> Why: a Studio is kept until somebody deletes it and a Job moves all day. A status written onto a node would be right once.
+
+> **Rule.** A Job node opens its Job, the way a Board row does. The press is an act on the selected node rather than on the card, because the whiteboard is a drag surface.
+> Why: reviewing and deciding happens on Job detail and nowhere else, so a Job on a Studio that could only be looked at would be a dead end. The way back is `#1362`.
 
 > **Rule.** Every working node pulses. See `../contracts/design-system.md`, Motion.
 
@@ -179,7 +185,7 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 | Outline | The nodes feeding it | Outline | A person orders |
 | Defer | Anything raised on a node | Deferral | A person, only |
 | Write up | Note, Cluster, Contradiction or Outline | Issue draft | A person, or Helm on their ask |
-| Dispatch | Issue draft | Job | The dispatch gate |
+| Dispatch | Issue draft, or a Link naming an issue | Job | The dispatch gate |
 
 > **Rule.** A Link read in keeps its address, and everything that came back hangs off it by `Produced` edges.
 > Why: the address is what a Job is dispatched from, and a Link rewritten by what was read in it would be a record of the reading rather than of the source.
@@ -200,6 +206,12 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 
 > **Rule.** A Job dispatches from an Issue draft's text, through the [Job proposer](job-proposer.md). Filing the issue on GitHub is optional and a person's own act.
 > Why: nothing reaches outside Armada on a Studio's behalf. See [Scout](scout.md).
+
+> **Rule.** A Link whose address names an issue on the repository's forge dispatches that address, through the same gate, and nothing is filed because the issue already exists.
+> Why: an Issue draft is Armada's own unfiled text and a Link is an issue somebody has, and the proposer takes a ticket link as a request. A milestone is read in rather than dispatched, and a Link naming anything else is offered no Dispatch at all.
+
+> **Rule.** What an address names is read off it by Fleet and said on the wire, and no surface works it out.
+> Why: which host is the forge is `crates/adapters`' to know, and a second reading of an address would be a second answer the day the first changes. See `../practices/protocol.md`, Protocol 14.17.
 
 > **Rule.** An Issue draft carries its title and body whole to the proposer, in that order, and nothing between the two summarises, trims or re-fetches it.
 > Why: a write-up is made from the nodes feeding it, and a lossy hop would hand a [Drone](drone.md) something other than what the person read.
