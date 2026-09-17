@@ -24,6 +24,8 @@ Helm is additive to Bridge, not a replacement: Bridge is state-monitoring (what'
 
 Cross-Job reasoning covers every Job in the selected Manifest, not one Job at a time. The control surface is for exploratory questions.
 
+**Helm drives a [Studio](studio.md).** It may add proposed nodes and propose edges unasked, and starts a [Scout](scout.md), a Run or a dispatch only on your ask. The Studio page owns which is which.
+
 ## Placement
 
 **Helm is a dock, not a surface.** It sits beside the content on every Bridge screen at 1100px and wider, folding to an edge strip that opens as a sheet below that; `⌘J` toggles it from anywhere, including from inside a field. It carries no rail digit and does not appear in the sidebar. See `../contracts/design-system.md`, Two tiers, for the layout and `../concepts/job-board.md` for how a question on the Board relates to a question on the dock.

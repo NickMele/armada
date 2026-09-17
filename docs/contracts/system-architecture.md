@@ -578,15 +578,16 @@ Surfaces need UX. Shapes and policies need a home on a parent, not a page.
 | Surface | Renders other things, owns no data | Layout, states, copy |
 | Shape / Policy | An attribute of, or a rule applied to, an entity. Code branches on it | A section on the parent entity's page |
 
-## Agent is closed at two
+## Agent is closed at three
 
 **The test is a toolset.** Not every model invocation Armada makes is an
-Agent. Nine invocations exist across the docs; two carry a toolset.
+Agent. Drone, Helm and Scout carry a toolset; every other invocation below does not.
 
 | Invocation | Toolset | Worktree | Lifetime | Verdict |
 | --- | --- | --- | --- | --- |
 | Drone | Kit + Manifest resolved, plus Evidence MCP | Yes | One Job | **Agent** |
 | Helm | Its own set, via the Fleet MCP. Manifest-scoped | No | A session | **Agent** |
+| Scout | Read-only: the checkout on disk and the sources Kit allows. See [Scout](../concepts/scout.md) | No | One ask | **Agent** |
 | Judge | None | No | One call | Model call, in `verification` |
 | Job proposer | None | No | One call | Model call, in `fleet`. Reads a request and proposes a Job — its workflow, its title and the split. Renamed from Job-shape classifier: shape became derived and scope became the workflow's first step, so neither half of that name survived. See [Job proposer](../concepts/job-proposer.md) |
 | Voice / copy generation | None | No | Per message | Model call |

@@ -537,26 +537,22 @@ current; only motion says it is still working, and that is the reading
 a static rail cannot give — it matters most on the step that has been
 running for nine minutes.
 
-**It pulses in one place per screen, on the most specific mark present,
-and on the thing being read.** Job detail has a rail, so the
-rail's current step pulses and the header's Running badge stays static —
-the rail names *which* step is working, the badge one line above only
-names the Job's state. A list has no rail, so the Running badge pulses
-there instead, **on the focused row only**: a list carries one running
-mark per Job, and fourteen breathing dots is the thing the first
-sentence of this section forbids. The step bar never pulses — its job is
-where the work got to, which is a static fact, and the badge sits in a
-fixed column on every row so the motion appears in one predictable place
-rather than moving with the workflow's length.
+**Every working mark pulses.** A list pulses every running row's Running
+badge. Job detail pulses the rail's current step, and the header's Running
+badge stays static, because the rail names *which* step is working and the
+badge only names the Job's state. A sheet open over Job detail does not stop
+the rail, and the sheet's own live mark pulses beside it. A
+[Studio](../concepts/studio.md) pulses every node that is still working. The
+step bar never pulses — its job is where the work got to, which is a static
+fact, and the badge sits in a fixed column on every row so the motion appears
+in one predictable place rather than moving with the workflow's length.
 
 Opacity and scale only, at `--duration-pulse`. The ring holds still, so
-no row shifts and nothing reflows. The scope narrowed three times — per
-rail, then the focused Job, then this — and the reading survived each
-time because the pulse never carried *which* step is current. Hue does
-that, unchanged on every running row. The pulse carries *still working*,
-and that is only asked of the thing being read, which is why it follows
-focus rather than status. Under `prefers-reduced-motion` the pulse stops and
-`--step-running` carries the reading alone.
+no row shifts and nothing reflows. Hue says *which* state, unchanged on
+every running row; the pulse says *still working*, which is true of every
+working thing on screen, so the pulse follows status rather than focus.
+Under `prefers-reduced-motion` the pulse stops and `--step-running`
+carries the reading alone. #1276 carries this to the screens.
 
 ---
 
@@ -1896,6 +1892,10 @@ read plausibly under a different job has failed.
 - **Doctor** the health check. Never diagnostics, system status.
 - **Workspace** one unit inside a repo. Never package, module,
   sub-repo.
+- **Studio** the typed graph of one stretch of work, kept per repository.
+  Never canvas, playground.
+- **Scout** the read-only agent a Studio sends to read and report back as a
+  Finding. Never researcher, explorer.
 - **Drone transcript** the record of a Drone's turns. Never the Drone
   log, the Drone output.
 - **Judge record** one Judge call and every judge's verdict inside it.
@@ -2238,16 +2238,6 @@ is verification source=Check with actor=Drone.
   marks still read at that density, and if not, whether a cap keeps the most
   recent few or the most urgent. Change detection and the ticker are in
   `packages/screens/src/recent.ts`.
-
-- **[running-mark-scope]** Should every running row's mark pulse, and should
-  the step keep pulsing behind an open sheet? Today the running mark pulses in
-  one place per screen: the focused row on a list, the rail's current step on
-  Job detail, and the sheet's live mark while a sheet is up. That scope was a
-  consequence of one-animation-per-screen, which is no longer a rule, so it is
-  now a choice. Every row pulsing says which Jobs are still working without
-  moving the cursor, at the cost of as many marks breathing as Jobs running;
-  a control waiting on Fleet already sweeps its own bar beside them.
-  `JobRowStacked`, `Row.tsx` and `JobDetail.tsx` carry the scope today.
 
 - **[pilot-exit-bindings]** What are the keys for Close as superseded and
   Override the verdict? Every action owes a verb, an icon and a shortcut, and
