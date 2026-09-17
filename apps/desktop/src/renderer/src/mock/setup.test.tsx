@@ -122,7 +122,7 @@ test("both policies read in words, each with what the selected value does", asyn
   await expect.element(policy.getByRole("radio", { name: "A person merges never" })).toBeChecked();
   await expect.element(policy.getByRole("radio", { name: "Fleet merges once the forge's checks pass checks-pass" })).not.toBeChecked();
   await expect.element(policy.getByText("A person merges every pull request here.")).toBeVisible();
-  policy.getByRole("radio", { name: "Fleet merges whatever ran always" }).element().click();
+  (policy.getByRole("radio", { name: "Fleet merges whatever ran always" }).element() as HTMLElement).click();
   await expect.element(policy.getByText("Fleet merges without waiting on the forge's checks.")).toBeVisible();
 });
 

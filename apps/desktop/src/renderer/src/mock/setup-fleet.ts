@@ -20,8 +20,8 @@ import { landsIn, type LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ProposalAnswer } from "@armada/screens/src/setup-reads";
 
 import type { BridgeApi } from "../../../shared/api";
-import { onBoard } from "./scenario";
-import type { FleetHandle, Scenario } from "./scenario";
+import { onBoard } from "./moment";
+import type { FleetHandle, Scenario } from "./moment";
 
 const OK = { ok: true } as const;
 const WROTE_AT = "2026-09-12T14:20:03.120Z";
