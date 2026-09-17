@@ -52,7 +52,7 @@ export const AFlagsCitation: Story = {
  * carries no marker glyph — a bullet is decorative iconography, and the indent
  * already says what it would have.
  *
- * The `#` line renders at `--weight-medium` and full contrast. **Not at
+ * The `#` line renders at `--weight-heading` and full contrast. **Not at
  * `--text-lg`**: panel headings own that step, and a renderer that took it
  * would put a second type scale inside the first.
  */

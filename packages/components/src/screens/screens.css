@@ -1136,7 +1136,7 @@
 .armada-inside__notice-title {
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-heading);
   color: var(--fg-default);
 }
 

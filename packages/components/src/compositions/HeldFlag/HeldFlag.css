@@ -31,7 +31,7 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-heading);
   color: var(--fg-default);
   text-wrap: pretty;
 }

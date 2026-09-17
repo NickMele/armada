@@ -583,7 +583,7 @@ carries the trail: where this Job was opened from, then the Job itself.
 | | |
 |---|---|
 | Placement | Job detail's own head, leading edge, before the status badge |
-| Type | Prior segment `--text-xs`, `--fg-subtle`; current segment (the Job's title) `--text-base`, `--fg-default`, weight medium |
+| Type | Prior segment `--text-xs`, `--fg-subtle`; current segment (the Job's title) `--text-base`, `--fg-default`, body weight |
 | Separator | `chevron-right` at 12px in `--fg-subtle` |
 | Segments | Exactly two — where the Job was opened from, then the Job |
 
@@ -1003,10 +1003,11 @@ so that "terminate" finds Kill, but the alias never renders. This is
 where the lexicon earns its keep: one vocabulary, searchable, with the
 shortcut shown beside every entry.
 
-**A matched span is marked by weight**, at `--weight-medium`, and never
-by a second colour or a fill. A row has one text colour, status hue is
-never chosen and the accent is reserved to interactive affordance, so
-weight is the channel left — and it is already in the type scale. **An
+**A matched span is marked by contrast**: `--fg-default` against the rest
+of its label at `--fg-muted`, and never by a hue or a fill. Status hue is
+never chosen and the accent is reserved to interactive affordance, so a
+step within the row's one hue is the channel left. A danger row marks the
+match by underline instead, because red has no contrast step. **An
 alias hit marks nothing**, because the match was on a word that never
 renders and there is nothing on the lexicon term to mark.
 
@@ -1319,7 +1320,7 @@ otherwise — the same rollup reasoning Doctor's pass/warn/fail uses.
 The left column's third panel — what the status bar used to read.
 
 ```
-state    --dot (6px) + --text-base weight-medium --fg-default
+state    --dot (6px) + --text-base --fg-default
 detail   --font-mono --text-2xs --fg-subtle
 meta     --font-mono --text-2xs --fg-subtle
 doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
