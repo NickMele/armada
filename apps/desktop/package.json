@@ -6,6 +6,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "codegen": "node codegen/vocabulary.mjs",
+    "tones": "node sounds/tones.mjs",
     "dev": "electron-vite build && electron-vite preview",
     "build": "electron-vite build",
     "package": "electron-vite build && electron-builder",

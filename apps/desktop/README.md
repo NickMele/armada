@@ -15,6 +15,7 @@ app draws rather than an error.
 | Command | What it does |
 |---|---|
 | `pnpm --filter @armada/desktop codegen` | Rewrites `src/shared/generated/` from the registries. Run it after changing `crates/core-model/domain/` or `protocol-version.toml` |
+| `pnpm --filter @armada/desktop tones` | Rewrites the two notification tones in `sounds/` from their shape in the design system's Sound section. Run it only after changing that shape; `tones -- --check` writes nothing and fails naming a file that is not what a fresh run would write |
 | `pnpm --filter @armada/desktop typecheck` | `tsc -b --force` across all three processes. Silence is success |
 | `pnpm --filter @armada/desktop build` | Bundles the three processes into `out/`. Does not build an app bundle |
 | `pnpm --filter @armada/desktop package` | Builds, then puts `release/mac-arm64/Armada.app` beside it. Unsigned, so it runs on the machine that built it and nowhere else |

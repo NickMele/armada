@@ -30,7 +30,7 @@ import { openFindingIssue, openPullRequest, openRemarkLink } from "./forge";
 import { RemarksPoll } from "./remarks-poll";
 import { openServerLink } from "./servers";
 import { frameStream, FRAME_SCHEME } from "./streaming";
-import { Attention } from "./telling";
+import { Attention, soundOf } from "./telling";
 
 // Bridge's window, and the one connection under it.
 //
@@ -338,7 +338,7 @@ function hand(window: BrowserWindow): void {
 const attention = new Attention({
   show: (told) => {
     if (!Notification.isSupported()) return;
-    const banner = new Notification({ title: told.title, body: told.body });
+    const banner = new Notification({ title: told.title, body: told.body, sound: soundOf(told.tone) });
     banner.on("click", () => summon({ jobId: told.jobId }));
     banner.show();
   },
