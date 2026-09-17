@@ -306,6 +306,19 @@ notes = """
 The answer is the Studio before the Finding freezes; the frozen one arrives on `studio.changed`. A node no scout is reading for is refused as `fleet.scout_not_running`. `Bridge only`: the stop is a press on a node, and no ask to Helm reaches it.
 """
 
+[operations.start_studio_run]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Run one Manifest entry in the checkout from a Studio, and answer with the Studio, the Run node it made and the run underway"
+notes = """
+The Studio names the repository, so nothing here does: a Studio belongs to one and a run started from it runs in that checkout. **A person's act on Bridge, or Helm's on a person's ask** — `Helm only`, and deliberately not one of `fleet::helm::reach::UNASKED`, so Helm starting a run without being asked is a brief failure rather than a door that was left open.
+
+The run starts first and the node is written after it: every refusal `start_checkout_run` makes is made here — a name nothing declares, a server (`start_server` is what a server takes), a run already out in the checkout — and a refused start leaves no node behind. `produced_by` names the node it was started from, and the Studio draws the `produced` edge itself.
+
+**A Run node reads its state off the run and copies no status.** Once `settings.ad-hoc-run-log-retention` sweeps the run, the node keeps what it said — command, exit code, duration and the log's last lines — and that is what `get_studio` answers as `kept`. A Run on a Studio writes no Evidence, as every run outside a Job does not.
+"""
+
 [operations.get_call]
 kind = "query"
 transport = "HTTP"

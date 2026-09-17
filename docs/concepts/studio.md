@@ -52,7 +52,7 @@ flowchart LR
 
 | Kind | Holds | States | Colour |
 |---|---|---|---|
-| Run | A Manifest command started from the Studio, and its log | Run states | Job colours |
+| Run | A Manifest command started from the Studio, and its log until retention takes it | Run states | Job colours |
 | Note | What a person pointed at and said, fixed at capture | None | None |
 | Cluster | Notes a person accepted as one thing | None | None |
 | Finding | What a scout learned, and everything it read | Proposed, Gathering, Frozen | None |
@@ -79,6 +79,15 @@ flowchart LR
 
 > **Rule.** A Run node keeps its log's tail and its result — command, exit code and duration — once the run's retention passes, marked partial.
 > Why: a Studio is kept until a person deletes it, and a run's full log is not.
+
+> **Rule.** What it keeps is taken before the sweep, never after, and a run whose node could not keep it is not swept.
+> Why: a tail read after the directory was removed is no tail, and the node would be left naming a run nobody can read.
+
+> **Rule.** The kept tail is the log's last lines, bounded, and it lives in the node's own content.
+> Why: a runner prints what failed last. A Studio crosses the wire whole on every write and is kept until a person deletes it, so a whole log on one is a cost with no end — and a file beside the Studio would be a second thing to sweep, which is the failure this rule exists against.
+
+> **Rule.** A Run node is made by starting a run from the Studio, and by no other act.
+> Why: what a node says about a run is read off the run, so a node added by hand could carry a result no run ever had.
 
 ### Names avoid words Armada already uses
 
@@ -135,6 +144,7 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 
 | Rung | From | To | Who acts |
 |---|---|---|---|
+| Run | Any node, or nothing | Run | A person, or Helm on their ask |
 | Read in | A Link | Notes, Clusters, Contradictions, proposed edges | A scout, on a person's ask |
 | Capture | A person using an app | Note | The person |
 | Ask | Any node | Finding | A scout, on a person's ask |

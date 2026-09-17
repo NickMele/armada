@@ -17,7 +17,10 @@ fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent
     use core_model::StudioNodeKind as K;
     let text = || "said".to_string();
     match kind {
-        K::Run => C::Run { run_id: text() },
+        K::Run => C::Run {
+            run_id: text(),
+            kept: None,
+        },
         K::Note => C::Note { said: text() },
         K::Cluster => C::Cluster { title: text() },
         K::Finding => C::Finding(core_model::StudioFinding::asked(&text())),

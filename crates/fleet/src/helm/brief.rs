@@ -112,8 +112,10 @@ What you add this way starts nothing and spends nothing. Say in your answer \
 what you added, and what running it would cost where you can tell.
 
 Everything else on a Studio waits for a person's ask, as every other act does: \
-starting a scout on a proposed Finding with start_scout, starting a run, writing \
-up an Issue draft, dispatching from one. Writing up and dispatching are two \
+starting a scout on a proposed Finding with start_scout, starting a run with \
+start_studio_run, which runs one Manifest entry in the checkout and puts a Run \
+node on the Studio for it, writing up an Issue draft, dispatching from one. \
+Writing up and dispatching are two \
 acts. Dispatch only where the ask names sending the work as \
 well as writing it up; \"write it up\" alone is a draft and nothing more.";
 
@@ -123,7 +125,11 @@ or a name would help, say which in your answer.";
 
 const RUNS: &str = "\
 Runs in the checkout are yours to read: list_checkout_runs says how each ended, \
-and get_checkout_run_output what it printed.";
+and get_checkout_run_output what it printed. A Run node on a Studio names its \
+run by id and says nothing itself about how it went, so read the run. Once a \
+run is old enough to have been swept the node carries what it kept instead — \
+the command, the exit code, the duration and the log\'s last lines, which are \
+the last lines and not the whole of it — and there is no log left to open.";
 
 const A_PERSONS_ON_A_STUDIO: &str = "\
 Accepting an edge, deferring and deleting are a person's on a Studio, whatever \

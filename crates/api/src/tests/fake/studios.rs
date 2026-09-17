@@ -5,11 +5,11 @@
 use std::sync::Arc;
 
 use ipc::{
-    AddStudioNode, AskScout, CreateStudio, DecideStudioEdge, Instant, ManifestId, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StopScout, Studio,
-    StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
-    StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioSummary,
-    WireError,
+    AddStudioNode, AskScout, CheckoutRunUnderway, CreateStudio, DecideStudioEdge, Instant,
+    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout,
+    StartStudioRun, StopScout, Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind,
+    StudioEdgeStanding, StudioId, StudioList, StudioNode, StudioNodeContent, StudioNodeId,
+    StudioNodeState, StudioRunStarted, StudioSummary, WireError,
 };
 
 use super::FakeDaemon;
@@ -21,6 +21,9 @@ use crate::{Redirector, Refusal, Studios};
 pub const THE_STUDIO: &str = "01STUDIO";
 
 const AT: &str = "2026-09-17T09:00:00.000Z";
+
+/// The run a Studio's own start answers with.
+pub const THE_RUN: &str = "01STUDIORUN";
 
 pub fn the_studio() -> Studio {
     Studio {
@@ -302,5 +305,43 @@ impl Studios for FakeDaemon {
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
         self.changing(&studio_id, within, |studio| Ok(studio.clone()))
+    }
+
+    /// The run is `THE_RUN`, started and not finished, and the node references
+    /// it. **Who acted is recorded, as on every other write here**, so the
+    /// door's word for a Helm call is what the route carries.
+    async fn start_studio_run(
+        self: std::sync::Arc<Self>,
+        studio_id: StudioId,
+        run: StartStudioRun,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<StudioRunStarted, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
+        self.changing(&studio_id, within, |studio| {
+            let node_id = StudioNodeId::carried(format!("01NODE{}", studio.nodes.len()));
+            studio.nodes.push(StudioNode {
+                id: node_id.clone(),
+                content: StudioNodeContent::Run {
+                    run_id: String::from(THE_RUN),
+                    kept: None,
+                },
+                state: None,
+                position: run.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(StudioRunStarted {
+                studio: studio.clone(),
+                node_id,
+                run: CheckoutRunUnderway {
+                    id: String::from(THE_RUN),
+                    name: run.name.clone(),
+                    command: format!("run {}", run.name),
+                    started_at: Instant::carried(AT),
+                    workspace: run.workspace.clone(),
+                },
+            })
+        })
     }
 }

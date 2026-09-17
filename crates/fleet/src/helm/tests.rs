@@ -87,13 +87,19 @@ this way starts nothing and spends nothing. Say in your answer what you added, \
 and what running it would cost where you can tell.
 
 Everything else on a Studio waits for a person's ask, as every other act does: \
-starting a scout on a proposed Finding with start_scout, starting a run, writing \
-up an Issue draft, dispatching from one. Writing up and dispatching are two \
+starting a scout on a proposed Finding with start_scout, starting a run with \
+start_studio_run, which runs one Manifest entry in the checkout and puts a Run \
+node on the Studio for it, writing up an Issue draft, dispatching from one. \
+Writing up and dispatching are two \
 acts. Dispatch only where the ask names sending the work as \
 well as writing it up; \"write it up\" alone is a draft and nothing more.
 
 Runs in the checkout are yours to read: list_checkout_runs says how each ended, \
-and get_checkout_run_output what it printed.
+and get_checkout_run_output what it printed. A Run node on a Studio names its \
+run by id and says nothing itself about how it went, so read the run. Once a \
+run is old enough to have been swept the node carries what it kept instead — \
+the command, the exit code, the duration and the log's last lines, which are \
+the last lines and not the whole of it — and there is no log left to open.
 
 Accepting an edge, deferring and deleting are a person's on a Studio, whatever \
 you are asked, and no tool you hold does them. Say which would help, and leave \
@@ -323,7 +329,9 @@ fn every_unasked_call_is_a_command_offered_to_helm_alone() {
 /// the brief's asked paragraph already covers it.
 #[test]
 fn every_studio_act_offered_to_helm_is_unasked_or_waits_for_an_ask() {
-    const ON_AN_ASK: &[&str] = &["start_scout"];
+    // `#1289`: starting a run spends and changes files, so it waits for an
+    // ask, as a scout does — `studio.md`'s table puts both in the asked column.
+    const ON_AN_ASK: &[&str] = &["start_scout", "start_studio_run"];
     for row in REACHABLE
         .iter()
         .chain(DRAFTING)
@@ -334,6 +342,17 @@ fn every_studio_act_offered_to_helm_is_unasked_or_waits_for_an_ask() {
             UNASKED.contains(&row.operation) || ON_AN_ASK.contains(&row.operation),
             "`{}` is offered to Helm and nothing says whether it may be called unasked",
             row.operation
+        );
+    }
+    let brief = brief(&a_manifest(), Authority::Acting, None);
+    for asked in ON_AN_ASK {
+        assert!(
+            !UNASKED.contains(asked),
+            "`{asked}` is in both columns at once"
+        );
+        assert!(
+            brief.as_str().contains(asked),
+            "the brief names `{asked}` among what waits for an ask"
         );
     }
 }

@@ -278,3 +278,27 @@ pub(crate) async fn stop_scout<D: Studios>(
         .await;
     answered(&served, StatusCode::OK, stopped)
 }
+
+/// 202: the run is underway, and the Studio holds a node for it. `#1289`.
+pub(crate) async fn start_studio_run<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    helm: Option<Extension<HelmCalled>>,
+    bytes: Bytes,
+) -> Response {
+    let asked = match body(&served, "a run to start from a Studio", &bytes) {
+        Ok(asked) => asked,
+        Err(response) => return response,
+    };
+    let started = served
+        .shared()
+        .start_studio_run(
+            StudioId::carried(studio_id),
+            asked,
+            acting(helm),
+            within(scope),
+        )
+        .await;
+    answered(&served, StatusCode::ACCEPTED, started)
+}

@@ -59,6 +59,9 @@ Each run writes its output to `./.armada`, one run directory per run in the same
 > **Rule.** Ad-hoc run log retention is a Machine setting, default 30 days — shorter than a Job's own retention window.
 > Why: a Job log is worth keeping as long as its history is worth reading, and a rehearsal is only worth keeping as long as you might still be debugging what you just ran.
 
+> **Rule.** A run a [Studio](../concepts/studio.md) holds keeps its result and its log's last lines on the Studio's own node before the sweep takes the run, and nothing else survives it.
+> Why: a Studio is kept until a person deletes it, and this window is the only thing that expires a run. #1289.
+
 > **Rule.** No run from this surface writes Evidence, and no Check gets a stored pass or fail against it.
 > Why: a pass that counted for a Job from the same tree is the path around verification that v1 proved becomes the default path.
 
