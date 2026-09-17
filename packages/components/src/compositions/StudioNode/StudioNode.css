@@ -48,8 +48,19 @@
   font-weight: var(--weight-medium);
 }
 
+/* The title's box is three lines whatever the title says — not up to three.
+   A card whose box changes with its words is what raised
+   `ResizeObserver loop completed with undelivered notifications.` off the
+   whiteboard: React Flow measures every node with a `ResizeObserver` and
+   writes what it measured into a store its own components read through
+   `useSyncExternalStore`, which commits in the microtask between two of the
+   observer's callbacks — inside the observer's own delivery loop. While the
+   cards keep resizing that loop never settles. A height rather than a clamp
+   alone costs two lines of glass under a one-line title and buys a board
+   whose nodes do not move when Helm writes to it. */
 .armada-studio-node__title {
   margin: 0;
+  height: calc(var(--leading-sm) * 3);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   font-weight: var(--weight-medium);
@@ -80,9 +91,15 @@
 /* A title that is itself an address — a Link nobody wrote a line on — is one
    line and not three. The clamp above already ends it in an ellipsis; what
    this changes is how many lines a URL is allowed to take, which is what the
-   card got wrong before #1378. */
+   card got wrong before #1378.
+
+   **The box still takes the address row's place**, because that row is the one
+   this card does not draw: a Link named by a read-in (#1293) would otherwise
+   grow by a line the moment the name landed, and a Link card is one height
+   whether anybody wrote a line beside it or not. */
 .armada-studio-node__title[data-clipped] {
   -webkit-line-clamp: 1;
+  height: calc(var(--leading-sm) * 3 + var(--leading-2xs) + var(--space-2));
 }
 
 .armada-studio-node__facts {
@@ -95,7 +112,14 @@
   min-width: 0;
 }
 
+/* A row of chips is as tall as a chip, not as tall as a line of text with a
+   chip sitting on its baseline. An `inline-block` on a baseline leaves the
+   strut's descent under it, and what that rounds to moved by a pixel between
+   one frame and the next — enough for the card's box to keep changing while
+   the board redrew. A flex item has no baseline to sit on, so the row is the
+   chip's own box and nothing else. */
 .armada-studio-node__facts > li {
+  display: flex;
   max-width: 100%;
 }
 
