@@ -65,3 +65,35 @@
   color: var(--fg-muted);
   text-wrap: pretty;
 }
+
+/* Overview's null result — a card on the canvas rather than a well in a list.
+   `armada-glass` beside this class carries the gradient, the blur, the
+   --border-glass edge and --shadow-card; this keeps what the recipe leaves to
+   the component: radius and layout. The attribute outranks the well's own
+   edge and fill above, whichever stylesheet loads last. */
+.armada-board-empty[data-card] {
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  border-color: var(--border-glass);
+  background: none;
+}
+
+/* The fact and what to do about it, held at --space-1 so the gap to the
+   action beneath is the larger one. */
+.armada-board-empty__lines {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* "No jobs." — the one emphasis in the card, at --fg-default. */
+.armada-board-empty__lead {
+  min-width: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+  text-wrap: pretty;
+}

@@ -20,10 +20,27 @@ import { useCallback } from "react";
  * milestone, so a button offering to would be a control that cannot act. It is
  * machine-derived, so it is mono, and like every machine value it copies on
  * click and carries no `copy` glyph.
+ *
+ * **Overview's null result is a card, not a well** — `design-system.md`,
+ * Overview empty state (#1262). The Board's list is the region, so its empty
+ * state is the region's own ground; Overview's middle is a column of cards, so
+ * an empty one is a card with the thing to do on it. `card` takes the shared
+ * `armada-glass` recipe and `lead` states the fact above the line. Still no
+ * glyph.
  */
 export type BoardEmptyStateProps = {
   /** The one line. The whole reading, before anything beneath it. */
   children: ReactNode;
+  /**
+   * The fact, stated above the line at `--text-base` weight 600 — "No jobs."
+   * over "Propose one." The line beneath then reads as what to do about it.
+   */
+  lead?: ReactNode;
+  /**
+   * Draw a glass card on the canvas rather than a well in a list — Overview's
+   * empty middle. The card treatment is `armada-glass`, never restated here.
+   */
+  card?: boolean;
   /**
    * Set back to `--fg-muted`, where the empty state is a null result rather
    * than a fault: nothing is wrong and the action is what the eye should
@@ -48,6 +65,8 @@ export type BoardEmptyStateProps = {
 
 export function BoardEmptyState({
   children,
+  lead,
+  card = false,
   quiet = false,
   command,
   note,
@@ -68,10 +87,24 @@ export function BoardEmptyState({
   );
 
   return (
-    <div className="armada-board-empty">
-      <span className="armada-board-empty__line" data-quiet={quiet || undefined}>
-        {children}
-      </span>
+    <div
+      className={card ? "armada-board-empty armada-glass" : "armada-board-empty"}
+      data-card={card || undefined}
+    >
+      {lead === undefined ? (
+        <span className="armada-board-empty__line" data-quiet={quiet || undefined}>
+          {children}
+        </span>
+      ) : (
+        // One reading in two weights, held together so the gap before the
+        // action stays the larger one.
+        <span className="armada-board-empty__lines">
+          <span className="armada-board-empty__lead">{lead}</span>
+          <span className="armada-board-empty__line" data-quiet={quiet || undefined}>
+            {children}
+          </span>
+        </span>
+      )}
       {command !== undefined ? (
         <span className="armada-board-empty__command" onClick={(e) => copy(e, command)}>
           {command}
