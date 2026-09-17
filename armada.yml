@@ -49,6 +49,27 @@ checks:
       run: cargo build --locked
       each: "-p {}"
       under: crates
+    # **What the command reads, not what it is usually about.** A pattern
+    # missing here is a Check that stops running on a change that breaks it.
+    #
+    # `crates/**` and `xtask/**` are the workspace's members. `Cargo.toml` and
+    # `Cargo.lock` are what `--workspace --locked` resolves, and `.cargo/**`
+    # carries the flags and aliases a build runs under. `protocol-version.toml`
+    # is read by `crates/ipc/build.rs`, and the shipped workflow definitions are
+    # compiled into `config` by `include_str!`. `armada.yml` is here because a
+    # change to this file is a change to the command itself.
+    #
+    # `apps/**` and `packages/**` are deliberately absent: nothing outside a
+    # test compiles them in, and `test` below says why it needs them.
+    when:
+      - "crates/**"
+      - "xtask/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - "protocol-version.toml"
+      - ".armada/workflows/**"
+      - "armada.yml"
 
   test:
     # `--exclude acceptance`: `acceptance` below reads a milestone's claim on
@@ -71,6 +92,23 @@ checks:
     # test this Check never runs cannot be named. #999.
     one_test:
       run: cargo nextest run --workspace --exclude acceptance -E test(={})
+    # Everything `build` reads, and the Bridge tree with it. **`xtask`'s own
+    # tests read `apps/` and `packages/`** — the error-code rule collects
+    # declarations from both, and the vocabulary rules read the generated
+    # modules under `packages/` — so a change there really can turn this run
+    # red. `docs/**` and `scripts/**` are absent because no test in the
+    # workspace reads them.
+    when:
+      - "crates/**"
+      - "xtask/**"
+      - "apps/**"
+      - "packages/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - "protocol-version.toml"
+      - ".armada/workflows/**"
+      - "armada.yml"
 
   acceptance:
     # A milestone's own claim, checked on its own so a red `acceptance` names
@@ -227,6 +265,36 @@ checks:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
 
+  # The two Python suites that hold the local merge line together. They are two
+  # Checks rather than one because a `run` gets no shell, so nothing here can
+  # chain two commands — and because the two are read by different changes: one
+  # is the script agents land through, the other is the hook that keeps them in
+  # it.
+  scripts_test:
+    # `scripts/land` against a throwaway repository with a local bare remote and
+    # stub `gh` and `armada`. A failure means the line would merge, refuse or
+    # stall differently from what `docs/capabilities/merge-line.md` says — read
+    # the named test, not the exit code. It needs `git` and `python3` and
+    # nothing else: no network, no build, no Fleet. Around a minute, spent
+    # almost entirely in git and in waiting for a background runner.
+    #
+    # `armada.yml` is named because one test reads this file: the copy of
+    # `setup.requires` inside `scripts/land` has to keep step with the one below.
+    run: python3 scripts/test_land.py
+    when:
+      - "scripts/**"
+      - "armada.yml"
+
+  hooks_test:
+    # What `.claude/hooks/guard_merge.py` refuses and what it lets through. A
+    # failure means either a merge to `main` can walk past the line, or — the
+    # half that costs more — an ordinary branch push is being refused and every
+    # agent in the repository is stuck. It runs no git and no `gh`: a payload in,
+    # a decision out, in under a second.
+    run: python3 .claude/hooks/test_guard_merge.py
+    when:
+      - ".claude/hooks/**"
+
   # `format`, not `fmt`: that name is a Command below and both registries
   # refuse a collision — the Command writes, this reads. No `clippy` beside it;
   # `[clippy-as-a-check]` in docs/OPEN.md is why.
@@ -262,6 +330,15 @@ checks:
       each: "{}"
       from:
         - "**/*.rs"
+    # Every Rust source in the workspace, wherever it sits — `build.rs` and
+    # `xtask/` included. `Cargo.toml` decides which members `--all` reaches and
+    # which edition each is read under, `rustfmt.toml` would change how every
+    # one of them is formatted, and `armada.yml` is the command itself.
+    when:
+      - "**/*.rs"
+      - "Cargo.toml"
+      - "rustfmt.toml"
+      - "armada.yml"
 
 # Commands gate nothing — they are what a Drone is given to run.
 commands:

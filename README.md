@@ -20,6 +20,7 @@
 | `armada serve [<path>]` | The daemon. Binds a loopback port, publishes a runtime file, serves the API and turns Jobs until it is signalled |
 | `armada check <name>` | Runs one Check the repository's `armada.yml` declares, and first any Command its `requires` names — so `armada check format` reformats before it reads, exactly as the gate does |
 | `armada run <name>` | Runs one Command it declares. Checks gate advancement; Commands do not |
+| `armada covers` | Reads changed paths on stdin and prints each Check they make run, by the same `when:` reading a Job's gate uses. Needs nothing running |
 | `armada clean [--all] [--force]` | Gives this repository's worktrees, branches and Jobs back, keeping any branch whose work is not merged |
 
 What holds today, and how each is known:

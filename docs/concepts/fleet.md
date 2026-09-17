@@ -195,6 +195,8 @@ This sentence used to say the opposite, and the overlap warning below was writte
 
 **Surfaced, never serialised.** Where two unfinished Jobs claim the same paths, Fleet says so on each one's detail — naming the other Job, its status, and the paths both reach. Nothing is held back and nothing is refused: approving anyway is allowed and is the common case.
 
+**Merges taking turns onto the base is a different thing from serialising work.** Only the step onto the base waits in line; [Merge line](../capabilities/merge-line.md) holds it.
+
 **The working Drones are told too, and only within one repository.** When a Job first claims a path another claims, both Drones hear which Job and which paths; when one lands, the other hears what it changed there. News is spaced so a busy repository does not interrupt a Drone every few seconds, and a Job with no live Drone hears it in its next opening brief. `docs/contracts/agent-prompt.md`, The peer turn, has the wording. It is the same comparison as the warning on detail, and it holds nothing either.
 
 **It is deliberately not a lease.** Why: `write_targets` is a declaration and a Drone's worktree is a whole-repo checkout, so a hold over declared paths would serialise the Jobs that declared honestly and miss the one that wrote somewhere it never named — which is the collision nobody saw coming.

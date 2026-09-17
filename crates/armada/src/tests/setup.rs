@@ -77,7 +77,9 @@ fn this_repositorys_own_setup_loads_and_resolves() {
             "components_test".to_string(),
             "desktop_test".to_string(),
             "format".to_string(),
+            "hooks_test".to_string(),
             "screens_test".to_string(),
+            "scripts_test".to_string(),
             "storybook".to_string(),
             "test".to_string(),
             "typecheck".to_string(),
@@ -87,7 +89,8 @@ fn this_repositorys_own_setup_loads_and_resolves() {
          unit test (#1130), the Bridge (#200: every Check used to compile \
          Rust), `format` (PR #199 merged unformatted files), and the Bridge's \
          tests one per package, so the story tests can stay out of a Drone's \
-         run (#849). There is no `clippy` — `[clippy-as-a-check]` in \
+         run (#849), and the merge line's own two Python suites, which no \
+         other Check reads. There is no `clippy` — `[clippy-as-a-check]` in \
          `docs/OPEN.md` says why"
     );
     assert_eq!(bug(&setup).name(), "bug");
@@ -131,6 +134,11 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             | ResolvedCheck::PlanRecorded { .. } => None,
         })
         .collect();
+    let named: Vec<(&str, &str)> = resolved
+        .iter()
+        .filter(|(name, _)| *name != "hooks_test")
+        .copied()
+        .collect();
 
     // **Declaration order, and it is the order they run in.** `WorkflowDef` has
     // no field for sequencing — see `config`'s own test saying so.
@@ -143,7 +151,7 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
     // order is a repository's to state — which is why this stayed an ordered
     // comparison rather than becoming a set.
     assert_eq!(
-        resolved,
+        named,
         vec![
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
@@ -159,6 +167,11 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("desktop_test", "pnpm -C apps/desktop test"),
             ("screens_test", "pnpm -C packages/screens test"),
             ("components_test", "pnpm -C packages/components test"),
+            // The local merge line's own two suites, which nothing else runs.
+            // `hooks_test` is checked below instead of here: its command names
+            // the agent harness, and this file is under the gate rule that
+            // keeps a vendor's name out of everything but the adapters.
+            ("scripts_test", "python3 scripts/test_land.py"),
             // **Last, where `armada.yml` put it, not for any claim this test
             // makes about scheduling.** `#387` once gave this `requires:
             // [fmt]`, so a gate evaluation reformatted the tree before
@@ -167,6 +180,11 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("format", "cargo fmt --all --check"),
         ]
     );
+    let hooks = resolved
+        .iter()
+        .find(|(name, _)| *name == "hooks_test")
+        .expect("the hook suite is declared");
+    assert!(hooks.1.ends_with("hooks/test_guard_merge.py"), "{hooks:?}");
 }
 
 /// **#849 in this repository.** A Drone's own run on `bug`'s `implement` leaves
@@ -251,6 +269,8 @@ fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
             "desktop_test",
             "screens_test",
             "components_test",
+            "scripts_test",
+            "hooks_test",
             "format",
         ],
         "the order `armada.yml` declares them in, which is the order they answer \

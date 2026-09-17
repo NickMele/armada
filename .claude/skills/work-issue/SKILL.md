@@ -150,16 +150,31 @@ The commit lands on the branch. **Whether it merges is not the agent's call** �
 which is exactly `human_always` on `handoff`, and the reason six of the seven
 shipped workflows now stop before landing.
 
-**A rebase re-opens the gate, and step 4's run does not survive one.** The gate
-reads the merged tree, and a branch and `main` can each sit under a limit that
-the two together cross. Confirmed 2026-09-12: #730 passed `verify-foundations`
-at 898 lines in `packages/screens/src/JobDetail.tsx`; `main` grew the same file
-by seven while the branch was open, and the rebase landed it at 905 — over the
-900-line rule. It merged on its own green measurement and left `main` red, with
-nothing to raise it until somebody ran the gate by hand. **After `git rebase`,
-rerun `verify-foundations` before the force-push when the commits you crossed
-touched a file you changed or a rule under `xtask/`; otherwise rerun nothing.**
-Where a file is near a threshold, leave headroom rather than sitting on it.
+**Once the owner says merge, `scripts/land` is how it merges** — never
+`gh pr merge`, never a push to `main`, and a hook refuses both.
+
+```
+scripts/land preflight   # once step 4's Checks pass, on a clean tree
+scripts/land             # joins the line and returns at once
+scripts/land --status    # poll in short foreground calls
+```
+
+**The line exists because a branch's Checks measure a `main` that moves.** The
+gate reads the merged tree, and a branch and `main` can each sit under a limit
+that the two together cross. Confirmed 2026-09-12: #730 passed
+`verify-foundations` at 898 lines in `packages/screens/src/JobDetail.tsx`;
+`main` grew the same file by seven while the branch was open, and the rebase
+landed it at 905 — over the 900-line rule. It merged on its own green
+measurement and left `main` red, with nothing to raise it until somebody ran
+the gate by hand. **`land` is what reruns that**: it merges `main` in, runs the
+Checks the combination hits and merges only on what it measured. Where a file
+is near a threshold, leave headroom rather than sitting on it.
+
+**Bring a moved `main` in by merging it, never by rebasing.** One pass meets
+every conflict at once, the commits already reviewed keep their ids, and a
+plain push carries the result — which is the same reason Fleet stopped rebasing
+in #1131. `docs/capabilities/merge-line.md` is the design, and
+`docs/practices/running-locally.md` has what each exit code means.
 
 Open a PR or hand back the branch, and say what you would want looked at
 closely. Then `milestone-step` steps 5, 6 and 7: close the issue with what

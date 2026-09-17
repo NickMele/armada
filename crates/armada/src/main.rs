@@ -1,7 +1,7 @@
-//! `armada` — one binary, five verbs.
+//! `armada` — one binary, six verbs.
 //!
 //! `serve` is the daemon; `check` and `run` execute one thing the repository's
-//! Manifest declares; `clean` gives its worktrees, branches and Jobs back;
+//! Manifest declares; `covers` names the Checks a change hits; `clean` gives its worktrees, branches and Jobs back;
 //! `mcp` relays an agent's session to the door Fleet serves. Each verb's own
 //! module holds what it does and why.
 //!
@@ -52,6 +52,7 @@ async fn main() -> ExitCode {
         },
         Verb::Check { name } => declared_by_the_manifest(Registry::Checks, &name, "check").await,
         Verb::Run { name } => declared_by_the_manifest(Registry::Commands, &name, "run").await,
+        Verb::Covers => checks_this_change_hits(),
         Verb::Clean { everything, force } => clean_this_repository(everything, force),
         // **Blocking, on the runtime's own thread, and alone there.** This
         // verb is a pipe with one message in flight; nothing else is running
@@ -78,6 +79,41 @@ async fn declared_by_the_manifest(registry: Registry, name: &str, verb: &str) ->
         Ok(ran) => {
             say::ran(&ran, verb);
             ExitCode::from(ran.status())
+        }
+        Err(why) => {
+            eprintln!("{why}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Print, one per line, every Check the Manifest in the working directory runs
+/// on the paths read from stdin. Nothing printed is an answer: no Check applies.
+fn checks_this_change_hits() -> ExitCode {
+    let root = match std::env::current_dir() {
+        Ok(root) => root,
+        Err(why) => {
+            eprintln!("the working directory could not be read: {why}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut read = String::new();
+    if let Err(why) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut read) {
+        eprintln!("the changed paths could not be read from stdin: {why}");
+        return ExitCode::FAILURE;
+    }
+    let changed: Vec<String> = read
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect();
+    match declared::covering(&root, &changed) {
+        Ok(names) => {
+            for name in names {
+                println!("{name}");
+            }
+            ExitCode::SUCCESS
         }
         Err(why) => {
             eprintln!("{why}");

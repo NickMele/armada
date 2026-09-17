@@ -5,8 +5,8 @@
 //!
 //! It will also carry `armada doctor --json`, the short-lived probe process
 //! Bridge spawns on demand — how Doctor sees what a long-running daemon cannot
-//! report about itself. **Not built**: `cli` knows four verbs, and `doctor` is
-//! not one of them yet. `docs/concepts/doctor.md` specifies it.
+//! report about itself. **Not built**: `doctor` is not among `cli`'s verbs
+//! yet. `docs/concepts/doctor.md` specifies it.
 //!
 //! # Where the composition actually is
 //!
@@ -19,8 +19,8 @@
 //! and resolves the second against the first — the part of starting Fleet that
 //! can be wrong on disk. [`agent`](mod@agent) is the same shape for the
 //! machine: which binary a Drone is started as, and which model.
-//! [`declared`](mod@declared) and [`clean`](mod@clean) are the three verbs that
-//! need no daemon at all. [`mcp`](mod@mcp) is the fifth verb and the one an
+//! [`declared`](mod@declared) and [`clean`](mod@clean) are the verbs that
+//! need no daemon at all. [`mcp`](mod@mcp) is the verb and the one an
 //! agent runs rather than a person: it publishes the agent door into a
 //! repository and, started by a client, relays a session to it over
 //! [`loopback`](mod@loopback). [`watching`](mod@watching) is what makes the

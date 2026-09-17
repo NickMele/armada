@@ -27,6 +27,10 @@ git branch -D <branch>
 Do both. A branch left behind with no worktree is cheap; a worktree left behind
 is not.
 
+**`scripts/land` prints these two commands when it lands a branch and runs
+neither**, deliberately: it cannot tell your worktree from one another agent is
+still writing in. The three checks below come first, every time.
+
 **Removing the worktree is the fix. Deleting its `target/` is not.** A build
 directory rebuilds; a worktree that nobody removes stays forever and takes a new
 build directory with it the next time anyone touches it. Clearing `target/` and

@@ -130,6 +130,29 @@ pub async fn execute(
     })
 }
 
+/// Every Check the Manifest in `root` would run on a change to `changed`, in
+/// the order `armada.yml` writes them.
+///
+/// **One answer with a Job's gate**: each Check is asked through the same
+/// [`config::Check::covers`], so `scripts/land` choosing what to rerun and
+/// Fleet choosing what to skip cannot come apart. `docs/capabilities/merge-line.md`.
+pub fn covering(root: &Path, changed: &[String]) -> Result<Vec<String>, NotDeclared> {
+    let manifest = Manifest::load(&root.join(MANIFEST)).map_err(|why| NotDeclared::NoManifest {
+        path: root.join(MANIFEST),
+        why: Box::new(why),
+    })?;
+    Ok(manifest
+        .checks_as_written()
+        .iter()
+        .filter(|name| {
+            manifest
+                .check(name)
+                .is_some_and(|check| check.covers(changed))
+        })
+        .cloned()
+        .collect())
+}
+
 /// Run a Check's prerequisites in order and answer with the first that failed.
 ///
 /// `None` where every one of them exited zero, which includes a Check that

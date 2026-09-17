@@ -147,8 +147,13 @@ pub struct Covers {
 }
 
 impl Covers {
-    /// Every pattern a Check declared. `None` where the list is empty, which
-    /// is a Check that could never run.
+    /// Every pattern a Check declared. **`None` where the list is empty**, so
+    /// nothing downstream holds a `Covers` matching nothing.
+    ///
+    /// That `None` is not the `None` a Check with no `when` carries, which
+    /// [`reach`](Covers::reach) reads as always. `config` never lets the two
+    /// meet: `when: []` is refused where it is parsed, so the only `None` that
+    /// reaches a Check is an absent key.
     pub fn of(patterns: Vec<PathPattern>) -> Option<Covers> {
         match patterns.is_empty() {
             true => None,
@@ -171,6 +176,17 @@ impl Covers {
         changed
             .iter()
             .any(|path| self.patterns.iter().any(|pattern| pattern.matches(path)))
+    }
+
+    /// Whether a Check declaring `when` covers any changed path. **`true`
+    /// where it declares none**, which is where "absent means always" is
+    /// spelled: Fleet's gate and `armada covers` both ask here, so the two
+    /// cannot disagree about which Checks a change hits.
+    pub fn reach(when: Option<&Covers>, changed: &[String]) -> bool {
+        match when {
+            None => true,
+            Some(covers) => covers.matches_any(changed),
+        }
     }
 
     /// The patterns, comma-separated, for the sentence a skipped Check
