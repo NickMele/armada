@@ -17,7 +17,7 @@ import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ConfirmableAct } from "./Acts";
 import { ACT_LABEL } from "./copy";
 import { OverruleControl } from "./Overrule";
-import type { ActingAct } from "./pending";
+import { answerTo, type ActAnswer, type ActingAct } from "./pending";
 import type { Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { RedirectControl } from "./Redirect";
@@ -67,6 +67,7 @@ export function StepActs({
   render,
   acting,
   actingAct,
+  answered,
   rerunningChecks,
   stale,
   onAct,
@@ -88,6 +89,8 @@ export function StepActs({
   acting: boolean;
   /** Which act `acting` is, so the control that sent it is the one that waits. #1117. */
   actingAct?: ActingAct | undefined;
+  /** What Fleet said to the last act on this Job, so the control that sent it answers. */
+  answered?: ActAnswer | undefined;
   /**
    * This Job's stopped step is having its Checks run again. **A wait worth
    * saying**: the press can run for minutes, and the button stays legible
@@ -156,6 +159,7 @@ export function StepActs({
             opens={opens}
             disabled={acting || stale}
             pending={acting && actingAct === "override_verdict"}
+            answer={answerTo(answered, "override_verdict")}
             onOverrule={onOverrule}
           />
         </Tooltip>
@@ -170,6 +174,7 @@ export function StepActs({
           <Button
             variant="secondary"
             pending={acting && actingAct === "rerun_gate"}
+            answer={answerTo(answered, "rerun_gate")}
             disabled={acting || stale}
             onClick={() => onRerun(job.id)}
           >
@@ -187,6 +192,7 @@ export function StepActs({
             drone={redirect.drone}
             disabled={acting || stale}
             pending={acting && actingAct === "redirect"}
+            answer={answerTo(answered, "redirect")}
             onRedirect={onRedirect}
           />
         </Tooltip>
@@ -203,6 +209,7 @@ export function StepActs({
           <Button
             variant="secondary"
             pending={(acting && actingAct === "rerun_checks") || rerunningChecks}
+            answer={answerTo(answered, "rerun_checks")}
             disabled={acting || stale}
             onClick={() => onRerunChecks(job.id)}
           >
@@ -215,6 +222,7 @@ export function StepActs({
           <Button
             variant="secondary"
             pending={acting && actingAct === "restart_step"}
+            answer={answerTo(answered, "restart_step")}
             disabled={acting || stale}
             onClick={() => onAct("restart_step", job.id)}
           >

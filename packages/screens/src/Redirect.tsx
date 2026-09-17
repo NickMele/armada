@@ -8,7 +8,7 @@
 // a person for before it sends is another.
 
 import { useState } from "react";
-import { Button, Dialog, Textarea } from "@armada/components";
+import { Button, type ButtonAnswer, Dialog, Textarea } from "@armada/components";
 
 import { ACT_LABEL } from "./copy";
 
@@ -32,6 +32,7 @@ export function RedirectControl({
   drone,
   disabled,
   pending = false,
+  answer,
   onRedirect,
 }: {
   jobId: string;
@@ -53,6 +54,8 @@ export function RedirectControl({
    * the wait. #1117.
    */
   pending?: boolean;
+  /** Fleet's answer to the `redirect` this control sent, drawn on its edge until the next press. */
+  answer?: ButtonAnswer | undefined;
   onRedirect: (jobId: string, instruction: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -65,7 +68,7 @@ export function RedirectControl({
 
   return (
     <>
-      <Button variant="secondary" pending={pending} disabled={disabled} onClick={() => setOpen(true)}>
+      <Button variant="secondary" pending={pending} answer={answer} disabled={disabled} onClick={() => setOpen(true)}>
         {pending ? "Redirecting…" : ACT_LABEL.redirect}
       </Button>
       <Dialog

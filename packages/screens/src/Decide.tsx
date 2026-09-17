@@ -51,9 +51,10 @@ import {
   ReviewDecision,
   UnifiedDiff,
   type DecisionChange,
+  type ReviewDecisionAnswered,
   type UnifiedDiffProps,
 } from "@armada/components";
-import { isDecision, type DecidingAct } from "./pending";
+import { answerTo, isDecision, type ActAnswer, type DecidingAct } from "./pending";
 import { noteWithChanges } from "./changes";
 
 import type { Diff, Evidence, Remarks } from "@armada/protocol";
@@ -109,6 +110,8 @@ export type DecideProps = {
    * group is off with the sentence. #1117.
    */
   decidingAct?: DecidingAct | undefined;
+  /** What Fleet said to the last act on this Job, so the answer pressed is the one that shows it. */
+  answered?: ActAnswer | undefined;
   /**
    * The address of the pull request this Job's branch went out on, where it
    * has one. **Absent is a Job with nothing to merge**, and it is what decides
@@ -167,6 +170,7 @@ export function Decide({
   stale,
   deciding,
   decidingAct,
+  answered,
   pullRequest,
   onMerge,
   conflicted = false,
@@ -220,6 +224,9 @@ export function Decide({
   const waiting = !stale && deciding && isDecision(decidingAct) ? decidingAct : undefined;
   // Whether the comments block's own press — `take_up_remarks` — is what is out. #1117.
   const takingUp = !stale && deciding && decidingAct === "take_up_remarks";
+  // The answer Fleet gave one of the four, where the last act here was one of them.
+  const decision = answered !== undefined && isDecision(answered.act as DecidingAct) ? answered : undefined;
+  const tookUp = answerTo(answered, "take_up_remarks");
 
   // **Read off the same address the merge control's own presence is decided
   // from.** `pullRequest` is undefined exactly where `onMerge` is absent below,
@@ -261,6 +268,7 @@ export function Decide({
         {...(waiting === undefined
           ? { disabled: off, ...(why === undefined ? {} : { disabledNote: why }) }
           : { pending: waiting })}
+        {...(decision === undefined ? {} : { answered: decision as ReviewDecisionAnswered })}
       />
 
       <Dialog
@@ -345,6 +353,7 @@ export function Decide({
           {...(takingUp
             ? { pending: true }
             : { disabled: off, ...(stale ? { disabledNote: NOT_LIVE } : {}) })}
+          {...(tookUp === undefined ? {} : { answer: tookUp })}
         />
       )}
 

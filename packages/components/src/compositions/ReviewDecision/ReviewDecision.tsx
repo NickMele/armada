@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react";
-import { Button, STILL_WAITING, useStillWaiting } from "../../primitives/Button/Button";
+import { Button, STILL_WAITING, useStillWaiting, type ButtonAnswer } from "../../primitives/Button/Button";
 import { Separator } from "../../primitives/Separator/Separator";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
@@ -109,6 +109,8 @@ export type ReviewDecisionProps = {
    * and every other one is off; absent is nothing out. #1117.
    */
   pending?: DecisionAct;
+  /** Fleet's answer to the last of the four pressed, drawn on that control alone. Pending wins. */
+  answered?: ReviewDecisionAnswered;
   /** The label over the note field. Sentence case, no Wh- opener. */
   noteLabel?: string;
   /** What approving does, on hover over its control. */
@@ -127,6 +129,9 @@ export type ReviewDecisionProps = {
 
 /** The four answers, named as the command that sends each. */
 export type DecisionAct = "merge" | "approve" | "changes" | "reject";
+
+/** Which of the four Fleet answered, and what it said. */
+export type ReviewDecisionAnswered = { act: DecisionAct; answer: ButtonAnswer };
 
 /** What each answer's control says while Fleet has not answered it. */
 const UNDERWAY: Record<DecisionAct, string> = {
@@ -156,6 +161,7 @@ export function ReviewDecision({
   disabled: refused = false,
   disabledNote,
   pending,
+  answered,
   noteLabel = "What should change",
   approveNote = "Takes the work as the drone left it.",
   requestChangesNote = "Sends this note to the drone as a turn. It keeps the worktree and the step, and comes back running.",
@@ -175,6 +181,7 @@ export function ReviewDecision({
   const disabled = refused || pending !== undefined;
   const stillWaiting = useStillWaiting(pending !== undefined);
   const mergeReasonId = useId();
+  const answerOn = (act: DecisionAct) => (answered?.act === act ? answered.answer : undefined);
 
   return (
     <div className="armada-decision">
@@ -225,6 +232,7 @@ export function ReviewDecision({
             <Button
               variant="primary"
               pending={pending === "merge"}
+              answer={answerOn("merge")}
               disabled={disabled || mergeBlockedReason !== undefined}
               aria-describedby={mergeBlockedReason === undefined ? undefined : mergeReasonId}
               onClick={onMerge}
@@ -237,6 +245,7 @@ export function ReviewDecision({
           <Button
             variant={merging ? "secondary" : "primary"}
             pending={pending === "approve"}
+            answer={answerOn("approve")}
             disabled={disabled}
             onClick={onApprove}
           >
@@ -248,6 +257,7 @@ export function ReviewDecision({
           <Button
             variant="secondary"
             pending={pending === "changes"}
+            answer={answerOn("changes")}
             disabled={disabled || blank}
             onClick={onRequestChanges}
           >
@@ -276,6 +286,7 @@ export function ReviewDecision({
           <Button
             variant="destructive"
             pending={pending === "reject"}
+            answer={answerOn("reject")}
             disabled={disabled}
             onClick={onReject}
           >

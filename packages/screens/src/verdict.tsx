@@ -51,7 +51,7 @@ import { Decide } from "./Decide";
 import { checksOf, didNotPass, mechanicalRunsOf, panelsOf } from "./gates";
 import { basename, keptOf, type Opens } from "./phases";
 import type { Render } from "./render";
-import type { ActingAct, DecidingAct } from "./pending";
+import type { ActAnswer, ActingAct, DecidingAct } from "./pending";
 
 /**
  * Whether this Job's frozen workflow ever opens a pull request.
@@ -518,6 +518,8 @@ export type VerdictSlotAtGateArgs = {
   decidingAct?: DecidingAct | undefined;
   /** Which act `acting` is. #1117. */
   actingAct?: ActingAct | undefined;
+  /** What Fleet said to the last act on this Job, so the gate's pressed control answers. */
+  answered?: ActAnswer | undefined;
   onMergePullRequest: (jobId: string) => void;
   /** Start the pull request's failed CI runs again. #905. */
   onRerunFailedChecks?: (jobId: string) => void;
@@ -565,6 +567,7 @@ export function verdictSlotAtGate({
   stale,
   acting,
   actingAct,
+  answered,
   deciding,
   decidingAct,
   onMergePullRequest,
@@ -661,6 +664,7 @@ export function verdictSlotAtGate({
           stale={stale}
           deciding={deciding}
           decidingAct={decidingAct}
+          answered={answered}
           {...(address === undefined ? {} : { pullRequest: address, conflicted })}
           onMerge={onMergePullRequest}
           onApprove={onApproveReview}

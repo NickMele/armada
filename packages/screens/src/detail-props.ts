@@ -18,7 +18,7 @@
 // which is why that file already re-exports `ConfirmableAct`, `FoldedReads`
 // and `Render` from their own modules.
 
-import type { ActingAct, DecidingAct } from "./pending";
+import type { ActAnswer, ActingAct, DecidingAct } from "./pending";
 
 import type {
   CommandAnswer,
@@ -76,6 +76,8 @@ export type JobDetailProps = {
   decidingAct?: DecidingAct | undefined;
   /** Which act `acting` is, so its own control waits. #1117. */
   actingAct?: ActingAct | undefined;
+  /** What Fleet said to the last act on this Job, so the control that sent it answers. */
+  answered?: ActAnswer | undefined;
   /** Ask for a confirmation. Nothing destructive is one press from here. */
   onAct: (act: ConfirmableAct, jobId: string) => void;
   /**

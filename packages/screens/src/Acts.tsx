@@ -17,7 +17,7 @@ import { JOB_LIFECYCLE } from "@armada/components";
 import type { Outcome } from "@armada/protocol";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import { ACT_LABEL, HOLD_LABEL, HOLD_SAID, MENU_LABEL, RAISE_CAP_LABEL, RAISE_TURN_CAP_LABEL, REPORT_LABEL } from "./copy";
-import type { ActingAct } from "./pending";
+import type { ActAnswer, ActingAct } from "./pending";
 import { RaiseCapControl } from "./RaiseCap";
 import { RaiseTurnCapControl } from "./RaiseTurnCap";
 import { recourseOf } from "./recovery";
@@ -182,6 +182,7 @@ export function Acts({
   render,
   acting,
   actingAct,
+  answered,
   approving,
   stale,
   onAct,
@@ -210,6 +211,11 @@ export function Acts({
   acting: boolean;
   /** Which act `acting` is, so the control that sent it is the one that waits. #1117. */
   actingAct?: ActingAct | undefined;
+  /**
+   * What Fleet said to the last act on this Job. The face answers where that
+   * act is one this header sends — its own press, or an entry behind its caret.
+   */
+  answered?: ActAnswer | undefined;
   approving: boolean;
   stale: boolean;
   onAct: (act: ConfirmableAct, jobId: string) => void;
@@ -356,6 +362,10 @@ export function Acts({
   const pendingAct = entries.some((entry) => entry.actName === rawPendingAct) ? rawPendingAct : undefined;
   const pendingHere = (name: ActingAct | undefined): boolean =>
     pendingAct !== undefined && name === pendingAct;
+  // **Not narrowed to this render's entries**, unlike `pendingAct`: an accepted
+  // kill takes its own entry away, and the answer is to the press that did it.
+  const answer =
+    answered !== undefined && isHeaderActingAct(answered.act as ActingAct) ? answered.answer : undefined;
   return (
     <>
       {/* The ceilings' dialogs, on a job held for money or for turns. Their
@@ -404,6 +414,7 @@ export function Acts({
           disabled={busy}
           askLabel={pendingHere(lead.actName) && pendingAct !== undefined ? ACTING_LABEL[pendingAct] : lead.face}
           description={HOLD_SAID[held]}
+          answer={answer}
           onAsk={() => onAct(held, job.id)}
           onCommit={() => onActHeld(held, job.id)}
         >
@@ -413,6 +424,7 @@ export function Acts({
         <Button
           variant={variant}
           pending={pendingHere(lead.actName)}
+          answer={answer}
           disabled={busy}
           onClick={lead.onSelect}
         >
@@ -424,6 +436,7 @@ export function Acts({
           items={behind.map(({ face: _face, actName: _actName, held: _held, ...item }) => item)}
           disabled={busy}
           pending={pendingAct !== undefined}
+          answer={answer}
           pendingLabel={pendingAct === undefined ? undefined : ACTING_LABEL[pendingAct]}
           menuLabel="Everything else this job can do"
           onAction={lead.onSelect}

@@ -37,7 +37,11 @@ function job(over: Partial<JobSummary> = {}): JobSummary {
   };
 }
 
-function acting(summary: JobSummary, actingAct?: Parameters<typeof Acts>[0]["actingAct"]): void {
+function acting(
+  summary: JobSummary,
+  actingAct?: Parameters<typeof Acts>[0]["actingAct"],
+  answered?: Parameters<typeof Acts>[0]["answered"],
+): void {
   mount(
     <Acts
       job={summary}
@@ -45,6 +49,7 @@ function acting(summary: JobSummary, actingAct?: Parameters<typeof Acts>[0]["act
       render="working"
       acting={actingAct !== undefined}
       actingAct={actingAct}
+      answered={answered}
       approving={false}
       stale={false}
       onAct={() => {}}
@@ -103,4 +108,28 @@ test("a lone act's button is unmarked and enabled with nothing out", async () =>
   const button = page.getByRole("button", { name: "Hold to kill job" });
   await expect.element(button).not.toHaveAttribute("aria-busy");
   await expect.element(button).toBeEnabled();
+});
+
+// The face answers for every act this header sends, a menu entry's included —
+// the menu has closed by the time Fleet answers, as with `pending` above.
+
+test("a refused kill from the menu answers on the face", async () => {
+  acting(job(), undefined, { act: "kill_job", answer: "refused" });
+  await expect
+    .element(page.getByRole("button", { name: "Hold to kill drone" }))
+    .toHaveAttribute("data-answer", "refused");
+});
+
+test("an accepted lone kill answers accepted on its own button", async () => {
+  acting(job({ assigned_drone: undefined }), undefined, { act: "kill_job", answer: "accepted" });
+  await expect
+    .element(page.getByRole("button", { name: "Hold to kill job" }))
+    .toHaveAttribute("data-answer", "accepted");
+});
+
+test("an answer to another region's act leaves the face unmarked", async () => {
+  acting(job(), undefined, { act: "redirect", answer: "refused" });
+  await expect
+    .element(page.getByRole("button", { name: "Hold to kill drone" }))
+    .not.toHaveAttribute("data-answer");
 });
