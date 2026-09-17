@@ -46,6 +46,7 @@ import { repository, workflow } from "@armada/screens/src/fixtures/build/base";
 import { recorded, RECORDED_SLUGS } from "@armada/screens/src/fixtures/recorded";
 import realBoard from "@armada/screens/src/fixtures/boards/real-board.json";
 
+import type { BridgeApi } from "../../../shared/api";
 import { NOTHING_YET } from "../../../shared/bridge";
 import type { BridgeState } from "../../../shared/bridge";
 
@@ -59,6 +60,18 @@ export type Scenario = {
   reads: Record<string, JobFixture>;
   /** A Job to open on start, the way a pressed notification opens one. */
   opens?: string;
+  /**
+   * Calls this scenario answers as Fleet would, over the fake's own. For a
+   * flow whose answers depend on what was pressed before — Setup's edits and
+   * Writes, a clone — which a fixed read cannot hold.
+   */
+  behaves?: (fleet: FleetHandle) => Partial<BridgeApi>;
+};
+
+/** What a scenario's `behaves` reaches: the state as published, and the one way to change it. */
+export type FleetHandle = {
+  state: () => BridgeState;
+  publish: (change: Partial<BridgeState>) => void;
 };
 
 /**

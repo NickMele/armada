@@ -8,14 +8,16 @@ import { mountApp } from "./mount";
 import type { Mounted } from "./mount";
 import type { Scenario } from "./scenario";
 
-let mounted: { app: Mounted; host: HTMLElement } | null = null;
+let mounted: { app: Mounted; host: HTMLElement }[] = [];
 
 /** Registers the teardown. Call once at the top of a test file. */
 export function unmountAfterEach(): void {
   afterEach(() => {
-    mounted?.app.unmount();
-    mounted?.host.remove();
-    mounted = null;
+    for (const one of mounted) {
+      one.app.unmount();
+      one.host.remove();
+    }
+    mounted = [];
   });
 }
 
@@ -25,8 +27,32 @@ export function mount(scenario: string | Scenario): Mounted {
   host.id = "root";
   document.body.append(host);
   const app = mountApp(scenario, host);
-  mounted = { app, host };
+  mounted.push({ app, host });
   return app;
+}
+
+/**
+ * Two windows on one main, side by side, each labelled as a region so a test
+ * can scope to it. Both talk to one fake, so a clone either sends lands in both.
+ */
+export function mountTwo(scenario: Scenario, labels: [string, string]): [HTMLElement, HTMLElement] {
+  const row = document.createElement("div");
+  row.style.display = "flex";
+  document.body.append(row);
+  let api: Mounted["api"] | undefined;
+  const hosts = labels.map((label) => {
+    const host = document.createElement("section");
+    host.setAttribute("aria-label", label);
+    host.style.flex = "1";
+    host.style.minWidth = "0";
+    row.append(host);
+    const app = mountApp(scenario, host, api);
+    api = app.api;
+    mounted.push({ app, host });
+    return host;
+  });
+  mounted.push({ app: { api: api!, scenario, unmount: () => undefined }, host: row });
+  return hosts as [HTMLElement, HTMLElement];
 }
 
 /** Every Board row drawn, in either arrangement. */
