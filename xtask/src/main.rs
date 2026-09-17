@@ -27,6 +27,7 @@ mod rules_design;
 mod rules_docs;
 mod rules_enums;
 mod rules_errors;
+mod rules_gitnexus;
 mod rules_icons;
 mod rules_layers;
 mod rules_node;
@@ -109,6 +110,7 @@ fn verify_foundations() -> ExitCode {
         rules::no_untyped_json_outside_store_and_ipc(&root),
         rules::no_vendor_literal_outside_adapters(&root),
         rules::no_bloated_claude_md(&root),
+        rules_gitnexus::no_skill_runs_a_bare_analyze(&root),
         rules::the_v1_harvest_has_an_index(&root),
         rules_privacy::nothing_names_a_person_or_a_machine(&root),
         rules_unsafe::unsafe_is_spoken_only_where_named(&root),
