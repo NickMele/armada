@@ -151,6 +151,7 @@ async fn a_link(fleet: &Arc<Reading>, address: &str) -> (ipc::Studio, ipc::Studi
             AddStudioNode {
                 content: StudioNodeContent::Link {
                     address: address.to_string(),
+                    said: None,
                     named: None,
                 },
                 position: StudioPosition { x: 0, y: 0 },
@@ -311,7 +312,7 @@ async fn a_session_of_this_repository_is_read_in_and_another_repositorys_is_not_
             false => '-',
         })
         .collect();
-    let projects = home.path().join(".claude/projects");
+    let projects = home.path().join(adapters::SESSIONS);
     for (project, id) in [(ours.as_str(), "aaaa"), ("-somewhere-else", "bbbb")] {
         std::fs::create_dir_all(projects.join(project)).expect("a project directory");
         std::fs::write(
@@ -377,7 +378,7 @@ async fn a_milestone_read_in_puts_one_link_per_issue_on_the_studio() {
         .expect("read in");
     assert_eq!(kinds(&read), ["link", "link", "link"], "no Finding is made");
 
-    let StudioNodeContent::Link { address, named } = &read.nodes[0].content else {
+    let StudioNodeContent::Link { address, named, .. } = &read.nodes[0].content else {
         panic!("a Link");
     };
     assert_eq!(address, &address_pasted, "a Link keeps its address");
@@ -390,7 +391,7 @@ async fn a_milestone_read_in_puts_one_link_per_issue_on_the_studio() {
     let issues: Vec<_> = read.nodes[1..]
         .iter()
         .map(|node| match &node.content {
-            StudioNodeContent::Link { address, named } => {
+            StudioNodeContent::Link { address, named, .. } => {
                 (address.clone(), named.clone().unwrap_or_default())
             }
             other => panic!("a Link: {other:?}"),

@@ -44,7 +44,7 @@ impl Store {
                     |row| row.get::<_, String>(0),
                 )
                 .map_err(database("reading the Link a read-in was on"))?;
-            let StudioNodeContent::Link { address, .. } =
+            let StudioNodeContent::Link { address, said, .. } =
                 content::read(StudioNodeKind::Link.as_wire(), &address).map_err(|why| {
                     StudioError::Unreadable {
                         table: "studio_nodes",
@@ -57,8 +57,11 @@ impl Store {
                     node_id: link.as_str().to_string(),
                 });
             };
+            // **The person's own line is carried over untouched.** A read-in
+            // that dropped it would be an agent deleting a person's words.
             let written = content::written(&StudioNodeContent::Link {
                 address,
+                said,
                 named: Some(named.to_string()),
             });
             tx.execute(

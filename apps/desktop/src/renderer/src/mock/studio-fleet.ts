@@ -517,7 +517,7 @@ function readIn(studio: Studio, nodeId: string, position: { x: number; y: number
   const down = (n: number) => ({ x: position.x, y: position.y + n * 180 });
   if (link.address.includes("/milestone/")) {
     const issues = [
-      { address: "https://example.invalid/o/r/issues/1293", named: "#1293 A GitHub issue cannot be read in — open" },
+      { address: "https://example.invalid/o/r/issues/1293", named: "#1293 An issue cannot be read into a Studio — open" },
       { address: "https://example.invalid/o/r/issues/1291", named: "#1291 Promotion: cluster, defer, write up — closed" },
       { address: "https://example.invalid/o/r/issues/1275", named: "#1275 Kit manages connections — open" },
     ];
@@ -545,7 +545,7 @@ function readIn(studio: Studio, nodeId: string, position: { x: number; y: number
     nodes: frozen.nodes.map((node) => (node.kind === "finding" && node.state === undefined ? { ...node, state: "frozen" } : node)),
   };
   const noted = made(marked, { kind: "note", said: "The issue wants Links read in as a second, refusable step" }, [nodeId], { x: position.x + 340, y: position.y });
-  const twice = made(noted, { kind: "note", said: "It names GitHub, web pages, sessions and Helm threads as the first sources" }, [nodeId], { x: position.x + 340, y: position.y + 180 });
+  const twice = made(noted, { kind: "note", said: "It names the forge, web pages, sessions and Helm threads as the first sources" }, [nodeId], { x: position.x + 340, y: position.y + 180 });
   const contradicted = made(
     twice,
     {

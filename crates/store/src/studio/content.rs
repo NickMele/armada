@@ -142,7 +142,10 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
         },
         StudioNodeKind::Link => StudioNodeContent::Link {
             address: text("address")?,
-            said: object.get("said").and_then(Value::as_str).map(str::to_string),
+            said: object
+                .get("said")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             named: object
                 .get("named")
                 .and_then(Value::as_str)

@@ -67,8 +67,7 @@ use crate::studios::{
     defer_on_studio, delete_studio, dispatch_studio_draft, edit_studio_draft, edit_studio_link,
     get_studio, get_studio_frame, group_studio_nodes, list_studios, move_studio_node,
     propose_studio_edge, read_in_link, remove_studio_node, rename_studio, settle_contradiction,
-    start_scout,
-    start_studio_run, stop_scout, write_up_studio_node,
+    start_scout, start_studio_run, stop_scout, write_up_studio_node,
 };
 
 /// The inventory this router is compared against, row by row.

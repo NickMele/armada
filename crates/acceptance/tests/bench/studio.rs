@@ -275,6 +275,7 @@ pub fn a_studio_with_sources_read_in() -> StudioGraph {
             StudioNodeId::carried(Ulid::carried(*id)),
             StudioNodeContent::Link {
                 address: address.to_string(),
+                said: None,
                 named: None,
             },
             StudioPosition {

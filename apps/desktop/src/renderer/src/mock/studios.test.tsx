@@ -437,7 +437,7 @@ test("an issue is read in and a milestone fills the board, with each Link left s
   await acts().getByRole("button", { name: "Read in" }).click();
   await asked("Read in").click();
   await expect.element(node(/^Link: Studio — 3 of 3 issues read in/)).toBeVisible();
-  await expect.element(node(/^Link: #1293 A GitHub issue cannot be read in — open/)).toBeVisible();
+  await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
   await expect.element(node(/^Link: #1275 Kit manages connections — open/)).toBeVisible();
 
   const issues = studio()

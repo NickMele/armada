@@ -555,6 +555,7 @@ async fn a_links_line_is_written_edited_and_cleared_and_its_address_never_moves(
                 content: StudioNodeContent::Link {
                     address: ADDRESS.to_string(),
                     said: Some("  why the card says nothing  ".to_string()),
+                    named: None,
                 },
                 position: StudioPosition { x: 0, y: 0 },
                 produced_by: None,
@@ -635,7 +636,7 @@ fn said_on<'a>(studio: &'a Studio, node_id: &ipc::StudioNodeId) -> (&'a str, Opt
         .iter()
         .find(|node| &node.id == node_id)
         .expect("the node");
-    let StudioNodeContent::Link { address, said } = &node.content else {
+    let StudioNodeContent::Link { address, said, .. } = &node.content else {
         panic!("a Link");
     };
     (address, said.as_deref())

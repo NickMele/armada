@@ -546,10 +546,11 @@ impl Studios for FakeDaemon {
                 .iter_mut()
                 .filter(|node| node.id == edit.node_id)
             {
-                if let StudioNodeContent::Link { address, .. } = &node.content {
+                if let StudioNodeContent::Link { address, named, .. } = &node.content {
                     node.content = StudioNodeContent::Link {
                         address: address.clone(),
                         said: Some(edit.said.clone()),
+                        named: named.clone(),
                     };
                 }
             }

@@ -24,7 +24,10 @@ use serde::Deserialize;
 /// the gate keeps inside this crate.
 pub const FORGE_HOST: &str = "github.com/";
 /// Where the agent CLI keeps a session's transcript, under a person's home.
-const SESSIONS: &str = ".claude/projects";
+///
+/// **Public so a fixture can write one**, for [`FORGE_HOST`]'s reason: a test
+/// elsewhere that plants a transcript would otherwise spell the vendor's name.
+pub const SESSIONS: &str = ".claude/projects";
 
 /// The scheme Armada answers for itself, for the two sources with no address
 /// anywhere else: its own Helm thread, and an agent session by id.

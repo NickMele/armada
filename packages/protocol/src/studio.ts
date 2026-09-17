@@ -259,7 +259,7 @@ export type StudioFinding = {
   checkout?: ScoutCheckout;
   /**
    * Every source Fleet fetched and handed it beyond the checkout. Empty on a
-   * scout asked about the code. Since 14.15, #1293.
+   * scout asked about the code. Since 14.16, #1293.
    */
   sources?: ScoutSource[];
   /** Every file read, relative to the checkout, in the order first read — a file a search returned lines of included. */
@@ -277,7 +277,7 @@ export type ScoutCheckout = { commit: string; uncommitted: boolean };
  * A source a scout was handed beyond the checkout: the Link's address, what it
  * was read as — `issue`, `pull_request`, `milestone`, `page`, `session` or
  * `thread` — and how many characters were cut where it did not fit. Since
- * 14.15, #1293.
+ * 14.16, #1293.
  */
 export type ScoutSource = { address: string; kind: string; cut: number };
 
@@ -314,7 +314,7 @@ export type StopScout = { node_id: string };
  * `POST /studios/:studio_id/read_in`. The Link named is read in: Fleet fetches
  * the source and hands a scout the text, and what comes back hangs off the
  * Link by `produced` edges. A milestone is Fleet's own read, with no scout —
- * one Link per issue. Since 14.15, #1293.
+ * one Link per issue. Since 14.16, #1293.
  *
  * `position` is where the first node it makes lands; the rest are laid out
  * from there.
@@ -392,7 +392,7 @@ export type StudioPromotion =
   | { act: "dispatch"; node_id: string; position: StudioPosition }
   /**
    * `POST /studios/:studio_id/read_in`. The Link stays, and what came back
-   * hangs off it. Since 14.15, #1293.
+   * hangs off it. Since 14.16, #1293.
    */
   | { act: "read_in"; node_id: string; position: StudioPosition };
 

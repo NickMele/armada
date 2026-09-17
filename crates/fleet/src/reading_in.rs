@@ -28,10 +28,9 @@ use tokio::process::Command;
 use tokio::time::timeout;
 
 use crate::daemon::Fleet;
+use crate::promoting::NOT_A_LINK;
 use crate::studios::author;
 
-/// A node that is not a Link. A 422.
-const NOT_A_LINK: &str = "fleet.studio_not_a_link";
 /// A Link to a board, a wiki or anything else no scout reads. A 422.
 const STAYS_A_LINK: &str = "fleet.studio_link_stays_a_link";
 /// A source Fleet could not fetch. A 422, and no node is written.
@@ -127,10 +126,7 @@ where
             made.push((
                 StudioNode::added(
                     StudioNodeId::carried(self.mint().ulid()),
-                    StudioNodeContent::Link {
-                        address: issue.address.clone(),
-                        named: Some(issue.named.clone()),
-                    },
+                    StudioNodeContent::link_named(issue.address.clone(), issue.named.clone()),
                     laid_out(from, n),
                     at.clone(),
                     author,

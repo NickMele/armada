@@ -642,17 +642,15 @@ fn a_run_node_reads_its_state_off_the_run_and_keeps_its_tail_and_result_once_it_
 /// and what was cut, and a Contradiction appears with both sides on it.**
 /// `docs/concepts/studio.md`, *Promotion*; `docs/concepts/scout.md`.
 ///
-/// **The failure this is against is a decision that has to be retyped.** What a
-/// person already worked out lives in an issue, a page, a session or a Helm
-/// thread, and a Studio that could only hold an address would make them read it
-/// again and write it out by hand. So what is held here is that each of the
-/// four first sources comes back as nodes, and that every one of them walks
-/// back to the Link it came from — a read-in that made nodes and drew no edge
-/// would render the same and record nothing about where any of it came from.
+/// **The failure this is against is a decision that has to be retyped.** A
+/// Studio that could hold only an address would send a person back to read
+/// their own issue again. So what is held is that every node a read-in made
+/// walks back to the Link — one that drew no edge would render the same and
+/// record nothing about where any of it came from.
 ///
-/// **A Contradiction's two sides are text**, quoted from each, because one side
-/// is outside the repository and has no node to point at. Nothing can mint one
-/// today but this, which is what makes `#1291`'s four outcomes reachable.
+/// **A Contradiction's two sides are text**, because one side is outside the
+/// repository and has no node to point at. Nothing else can mint one, which
+/// is what makes `#1291`'s four outcomes reachable.
 #[test]
 fn four_sources_read_in_leave_their_links_standing_with_what_came_back_hung_off_them() {
     let studio = received_studio(&a_studio_with_sources_read_in());
@@ -670,13 +668,18 @@ fn four_sources_read_in_leave_their_links_standing_with_what_came_back_hung_off_
     for (n, (link, address, kind)) in SOURCES.iter().enumerate() {
         let StudioNodeContent::Link {
             address: kept,
+            said,
             named,
         } = &node(link).content
         else {
             panic!("`{link}` is a Link");
         };
         assert_eq!(kept, address, "a Link keeps its address whatever came back");
-        assert_eq!(*named, None, "nothing a scout read renames it");
+        assert_eq!(*said, None, "nobody wrote a line on these");
+        assert_eq!(
+            *named, None,
+            "nothing a scout read renames the Link it read"
+        );
 
         let StudioNodeContent::Finding {
             sources,

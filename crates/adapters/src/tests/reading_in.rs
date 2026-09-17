@@ -19,7 +19,7 @@ fn at(path: &str) -> String {
 /// A checkout and a home no fixture writes to: the cases below that matter
 /// resolve without touching either.
 const ROOT: &str = "/repos/armada";
-const HOME: &str = "/home/nobody";
+const HOME: &str = "/home/user";
 
 /// **The forge's shapes, and everything else on the web as a page.** A link
 /// this does not recognise is still text somebody wrote, so it is read rather
@@ -56,20 +56,20 @@ fn a_forge_link_is_read_as_what_it_names_and_anything_else_on_the_web_as_a_page(
 fn a_session_resolves_only_under_this_checkouts_own_project_directory() {
     // A directory to hang project directories off, removed with the repo.
     let home = crate::tests::repo::TempRepo::empty();
-    let root = "/Users/someone/Development/armada";
-    let ours = "-Users-someone-Development-armada";
+    let root = "/Users/user/Development/armada";
+    let ours = "-Users-user-Development-armada";
     let projects = home.root().join(".claude/projects");
     for (project, id) in [
         (ours, "aaaa"),
         // A worktree of this repository: its key begins with ours.
         (
-            "-Users-someone-Development-armada--claude-worktrees-one",
+            "-Users-user-Development-armada--claude-worktrees-one",
             "bbbb",
         ),
         // Another repository entirely.
-        ("-Users-someone-Development-other", "cccc"),
+        ("-Users-user-Development-other", "cccc"),
         // A repository whose path merely begins with the same letters.
-        ("-Users-someone-Development-armadillo", "dddd"),
+        ("-Users-user-Development-armadillo", "dddd"),
     ] {
         std::fs::create_dir_all(projects.join(project)).expect("a project directory");
         std::fs::write(projects.join(project).join(format!("{id}.jsonl")), "{}\n")
