@@ -74,6 +74,17 @@
   font-weight: var(--weight-heading);
 }
 
+/* The head an alert grows when its action sits on the title rather than in the
+ * centred slot — `actionOn="title"`. Deliberately the same three declarations
+ * as .armada-card-header: this exists so an alert's way out reads as a card's
+ * does, and a second arrangement of the same row would be a second answer. */
+.armada-alert__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .armada-alert__body {
   color: var(--fg-muted);
   font-size: var(--text-xs);
