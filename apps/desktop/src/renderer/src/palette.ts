@@ -10,18 +10,21 @@
 // only one of them that drew it. It is `packages/shell/src/surfaces.ts` now,
 // beside both.
 //
-// # Every row is drawn, and a row that cannot act says why
+// # A row that cannot act says why, except an act on a Job with none focused
 //
 // The contract's rule about a registered binding nothing answers is that the
 // palette may draw it disabled or leave it out, **on a fact rather than on a
 // list of exceptions kept in the app**. The registry's own `unbuilt` column is
-// that fact for `p` and `X`. This file is the second kind: an act Bridge has,
-// which cannot reach anything at this moment or from this surface.
+// that fact for `p` and `X`, and those rows stay drawn. This file is the second
+// kind: an act Bridge has, which cannot reach anything at this moment or from
+// this surface.
 //
-// Leaving those rows out would be worse in exactly the way the issue says. The
-// palette is how a person learns forty shortcuts; a binding that disappears
-// whenever it is unavailable is one they never see long enough to learn, and
-// they cannot tell it from an act Armada does not have.
+// **An act on one Job, with no Job focused, is left out** (`absentIn`). The
+// owner settled it on 2026-09-17: six dimmed rows all saying "no job focused"
+// were the first thing the palette showed and said nothing a person could act
+// on. The shortcuts are still learned, just once a Job is focused, where every
+// one of those rows can act. Every other dormant row is still drawn and still
+// says why.
 //
 // # What is dormant here is a to-do list, not a design
 //
@@ -35,6 +38,17 @@ import type { PaletteChoice } from "@armada/shell";
 
 /** What the palette says when the act needs a Job and none is under the cursor. */
 const NO_JOB = "no job focused";
+
+/** The acts that need a Job to act on. With none focused, the palette leaves them out. */
+const ON_ONE_JOB = ["open", "review", "attest", "redirect", "kill", "redispatch", "restart_step"] as const;
+
+/**
+ * The acts the palette leaves out rather than dims: an act on one Job, where
+ * no Job is open and the Board's cursor is on none.
+ */
+export function absentIn(where: { reading: boolean; cursor: string | null }): readonly string[] {
+  return !where.reading && where.cursor === null ? ON_ONE_JOB : [];
+}
 
 /**
  * Why each act cannot be chosen, by action id. An id absent from the answer is
