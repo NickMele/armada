@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, DroneEvent, McpConfig, Model, Speaker};
-use adapters::{HeadlessAgent, Looked, Scouting};
+use adapters::{HeadlessAgent, Looked, Scouting, Shown};
 use core_model::{ScoutEnded, ScoutLook, ScoutOutcome};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Child;
@@ -150,6 +150,10 @@ impl ScoutHost {
 
         let mut lines = BufReader::new(output).lines();
         let mut asked: BTreeMap<String, ScoutLook> = BTreeMap::new();
+        // Content searches, by call, and what each returned: the files it
+        // showed lines of are read, and listed once the call is answered.
+        let mut searching: BTreeMap<String, Option<String>> = BTreeMap::new();
+        let mut returned: BTreeMap<String, String> = BTreeMap::new();
         let mut learned: Option<String> = None;
         let mut cost: Option<u64> = None;
         let mut interrupted = false;
@@ -166,6 +170,17 @@ impl ScoutHost {
             tokio::select! {
                 line = lines.next_line() => {
                     let Ok(Some(line)) = line else { break };
+                    for shown in self.agent.scout_shown(&line) {
+                        match shown {
+                            Shown::LinesSearched { call, within } => {
+                                searching.insert(call, within);
+                            }
+                            Shown::Returned { call, text } if searching.contains_key(&call) => {
+                                returned.insert(call, text);
+                            }
+                            Shown::Returned { .. } => {}
+                        }
+                    }
                     for event in AgentHarness::read(&self.agent, &line) {
                         if let Some((call, look)) = self.agent.scout_looked(&event, &directory) {
                             asked.insert(call, domain(look));
@@ -173,8 +188,19 @@ impl ScoutHost {
                         }
                         match event {
                             DroneEvent::Answered { call, failed } => {
+                                let shown = returned.remove(&call);
+                                let within = searching.remove(&call);
                                 if let (Some(look), false) = (asked.remove(&call), failed) {
                                     let _ = looked.send(look);
+                                    if let (Some(text), Some(within)) = (shown, within) {
+                                        for file in adapters::files_a_search_showed(
+                                            &text,
+                                            within.as_deref(),
+                                            &directory,
+                                        ) {
+                                            let _ = looked.send(ScoutLook::File(file));
+                                        }
+                                    }
                                 }
                             }
                             DroneEvent::Said { text, by: Speaker::Drone } => learned = Some(text),

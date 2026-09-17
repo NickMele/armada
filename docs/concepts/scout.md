@@ -72,7 +72,7 @@ Reading Helm threads needs an operation: `observe_helm` in `crates/ipc/operation
 | Servers | None, under `--strict-mcp-config` |
 | Asked | Once, on stdin, never resumed. Its wording is `../contracts/agent-prompt.md`, section 5b |
 
-A Finding lists a file when the agent answered the read, so a read refused as outside the checkout is not listed. A search is listed as its pattern and where it looked, not as the files it matched: the stream names what was searched for, and what came back is the tool's output, which Fleet does not read.
+A Finding lists a file when the agent answered the read, so a read refused as outside the checkout is not listed. A search is listed as its pattern and where it looked. **A search that returns lines of files is a read of them**, so the files it returned lines from are listed with the files read; a listing that returns only names reads nothing, and adds none.
 
 | Operation | Who | Does |
 |---|---|---|

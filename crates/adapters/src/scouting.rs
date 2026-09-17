@@ -6,6 +6,10 @@
 //! own allow. `--restricted` is what keeps the reads inside the checkout: a
 //! bare allow let a scout read another directory, measured.
 //!
+//! **A search that shows lines of files is a read of them.** A Grep in content
+//! mode returns what files hold, so the files it returned lines from are listed
+//! beside its pattern; a listing of names reads nothing.
+//!
 //! **Stopped by an interrupt, not a kill.** Spike 017: an interrupted run ends
 //! its turn and reports its cost; a terminated one reports nothing.
 
@@ -19,7 +23,7 @@ use adapter_traits::{
     DroneEvent, DroneSpawnConfig, Environment, Launch, McpConfig, Model, Prompt,
     SpawnConfigRefused, Toolbelt, Worktree,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::harness::HeadlessAgent;
 use crate::transcript::under_home;
@@ -27,6 +31,9 @@ use crate::transcript::under_home;
 /// The tools a scout is given: reading a file, searching files, listing them.
 const READ_TOOLS: &[&str] = &["Read", "Grep", "Glob"];
 const READ_FILE: &str = "Read";
+const SEARCH_CONTENT: &str = "Grep";
+/// The Grep mode that returns lines of files rather than names or counts.
+const SHOWS_LINES: &str = "content";
 
 /// Every built-in the CLI offered in spike 017 that is not a read: what edits,
 /// runs, schedules, messages or reaches the network. **Denied as well as left
@@ -244,3 +251,153 @@ impl fmt::Display for ScoutRefused {
 }
 
 impl Error for ScoutRefused {}
+
+/// What a scout's line says about content it was shown, which the transcript's
+/// rows deliberately do not carry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Shown {
+    /// A search that returns lines of files, and where it searched.
+    LinesSearched {
+        call: String,
+        within: Option<String>,
+    },
+    /// A call's returned text.
+    Returned { call: String, text: String },
+}
+
+impl HeadlessAgent {
+    /// The searches in `line` that return lines of files, and the text each
+    /// call returned. **A second read of a line the transcript already read**,
+    /// taken only where the line holds a call or a result, because a row carries
+    /// neither a search's mode nor what came back.
+    pub fn scout_shown(&self, line: &str) -> Vec<Shown> {
+        if !line.contains("\"tool_use\"") && !line.contains("\"tool_result\"") {
+            return Vec::new();
+        }
+        let Ok(read) = ipc::decode::<ShownLine>("scout transcript line", line.trim().as_bytes())
+        else {
+            return Vec::new();
+        };
+        let Some(ShownContent::Blocks(blocks)) = read.message.map(|message| message.content) else {
+            return Vec::new();
+        };
+        blocks
+            .into_iter()
+            .filter_map(|block| match block {
+                ShownBlock::ToolUse { id, name, input }
+                    if name == SEARCH_CONTENT
+                        && input.output_mode.as_deref() == Some(SHOWS_LINES) =>
+                {
+                    Some(Shown::LinesSearched {
+                        call: id,
+                        within: input.path,
+                    })
+                }
+                ShownBlock::ToolResult {
+                    tool_use_id,
+                    content: Some(content),
+                } => Some(Shown::Returned {
+                    call: tool_use_id,
+                    text: content.text(),
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+/// The files a content search returned lines from, relative to `directory`
+/// where inside it, each once, in the order first shown.
+///
+/// **A match line is `file:line:text`**, and a context line `file-line-text`.
+/// A search of one file names none, so its lines begin with the number, and the
+/// file is the one it searched.
+pub fn files_a_search_showed(text: &str, within: Option<&str>, directory: &str) -> Vec<String> {
+    let root = format!("{}/", directory.trim_end_matches('/'));
+    let relative = |path: &str| path.strip_prefix(&root).unwrap_or(path).to_string();
+    let mut files: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let Some((head, _)) = line.split_once(':') else {
+            continue;
+        };
+        let file = match head.chars().all(|c| c.is_ascii_digit()) {
+            true => match within {
+                Some(path) => relative(path),
+                None => continue,
+            },
+            false => relative(head),
+        };
+        if !file.is_empty() && !files.contains(&file) {
+            files.push(file);
+        }
+    }
+    files
+}
+
+#[derive(Deserialize)]
+struct ShownLine {
+    message: Option<ShownMessage>,
+}
+
+#[derive(Deserialize)]
+struct ShownMessage {
+    content: ShownContent,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ShownContent {
+    Blocks(Vec<ShownBlock>),
+    #[allow(dead_code)]
+    Prose(String),
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum ShownBlock {
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        name: String,
+        input: ShownInput,
+    },
+    #[serde(rename = "tool_result")]
+    ToolResult {
+        tool_use_id: String,
+        content: Option<Returned>,
+    },
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Deserialize)]
+struct ShownInput {
+    output_mode: Option<String>,
+    path: Option<String>,
+}
+
+/// A result's content: a string, or text blocks.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Returned {
+    Text(String),
+    Blocks(Vec<ReturnedBlock>),
+}
+
+#[derive(Deserialize)]
+struct ReturnedBlock {
+    text: Option<String>,
+}
+
+impl Returned {
+    fn text(self) -> String {
+        match self {
+            Returned::Text(text) => text,
+            Returned::Blocks(blocks) => blocks
+                .into_iter()
+                .filter_map(|block| block.text)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        }
+    }
+}

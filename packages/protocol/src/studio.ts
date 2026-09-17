@@ -148,7 +148,7 @@ export type StudioFinding = {
   asked: string;
   /** The commit read, and whether anything uncommitted sat on top of it. */
   checkout?: ScoutCheckout;
-  /** Every file read, relative to the checkout, in the order first read. */
+  /** Every file read, relative to the checkout, in the order first read — a file a search returned lines of included. */
   read?: string[];
   /** Every search run, as its pattern and where it looked. */
   searched?: string[];

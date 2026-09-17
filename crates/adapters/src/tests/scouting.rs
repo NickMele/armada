@@ -8,7 +8,9 @@ use super::harness::value_after;
 use super::repo::TempRepo;
 use crate::conversing::door_tools;
 use crate::harness::HeadlessAgent;
-use crate::scouting::{checkout_as_it_stands, denied_to_a_scout, Looked, Scouting};
+use crate::scouting::{
+    checkout_as_it_stands, denied_to_a_scout, files_a_search_showed, Looked, Scouting, Shown,
+};
 
 fn scouting() -> Scouting {
     Scouting::in_checkout(
@@ -155,4 +157,45 @@ fn a_checkout_is_read_as_its_commit_and_whether_anything_is_uncommitted() {
     assert!(dirty.uncommitted);
 
     assert!(checkout_as_it_stands("/nowhere/at/all").is_err());
+}
+
+/// Change 3 to `#1292`: **a content search is a read of what it showed.** The
+/// mode and the returned lines come off the line itself; a listing of names is
+/// not one.
+#[test]
+fn a_content_search_names_the_files_it_showed_lines_of() {
+    let agent = HeadlessAgent::at("/usr/local/bin/agent");
+    let searched = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_2","name":"Grep","input":{"pattern":"weight","path":"/repos/armada/src","output_mode":"content"}}]}}"#;
+    assert_eq!(
+        agent.scout_shown(searched),
+        [Shown::LinesSearched {
+            call: "toolu_2".to_string(),
+            within: Some("/repos/armada/src".to_string()),
+        }]
+    );
+    let names = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_3","name":"Grep","input":{"pattern":"weight","output_mode":"files_with_matches"}}]}}"#;
+    assert!(
+        agent.scout_shown(names).is_empty(),
+        "names are not contents"
+    );
+
+    let returned = r#"{"type":"user","message":{"content":[{"tool_use_id":"toolu_2","type":"tool_result","content":"src/routing.rs:1:fn route() {}\nsrc/routing.rs-2-}\n/repos/armada/src/weights.rs:4:const WEIGHT: u8 = 1;"}]}}"#;
+    let shown = agent.scout_shown(returned);
+    let [Shown::Returned { call, text }] = shown.as_slice() else {
+        panic!("one result");
+    };
+    assert_eq!(call, "toolu_2");
+    assert_eq!(
+        files_a_search_showed(text, Some("/repos/armada/src"), "/repos/armada"),
+        ["src/routing.rs", "src/weights.rs"]
+    );
+    assert_eq!(
+        files_a_search_showed(
+            "3:const WEIGHT: u8 = 1;",
+            Some("/repos/armada/src/weights.rs"),
+            "/repos/armada"
+        ),
+        ["src/weights.rs"],
+        "a search of one file names it by where it searched"
+    );
 }

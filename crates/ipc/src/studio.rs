@@ -97,7 +97,8 @@ pub enum StudioNodeContent {
         /// it. Absent until the scout starts.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         checkout: Option<ScoutCheckout>,
-        /// Every file read, relative to the checkout, in the order first read.
+        /// Every file read, relative to the checkout, in the order first read —
+        /// a file a search returned lines of included.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         read: Vec<String>,
         /// Every search run, as its pattern and where it looked.

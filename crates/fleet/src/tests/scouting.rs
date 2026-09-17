@@ -34,7 +34,7 @@ type Scouted = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 /// The agent CLI as a scout meets it. An ask naming `slowly` reads one file and
 /// then waits to be interrupted, answering the interrupt with the turn's end
 /// and its cost; any other reads two files, has a third refused as outside the
-/// checkout, searches once and answers.
+/// checkout, searches the contents of one file and lists names, and answers.
 const STAND_IN: &str = r##"#!/bin/sh
 state='@STATE@'
 root='@ROOT@'
@@ -43,7 +43,7 @@ IFS= read -r turn
 printf '%s\n' "$turn" >> "$state/turns.log"
 call() {
   printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"%s","name":"%s","input":{%s}}]}}\n' "$1" "$2" "$3"
-  printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"%s","is_error":%s}]}}\n' "$1" "$4"
+  printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"%s","is_error":%s,"content":"%s"}]}}\n' "$1" "$4" "$5"
 }
 said() {
   printf '{"type":"assistant","message":{"content":[{"type":"text","text":"%s"}]}}\n' "$1"
@@ -61,7 +61,8 @@ case "$turn" in
     ;;
   *)
     call toolu_1 Read "\"file_path\":\"$root/src/routing.rs\"" false
-    call toolu_2 Grep "\"pattern\":\"weight\",\"path\":\"$root/src\"" false
+    call toolu_2 Grep "\"pattern\":\"weight\",\"path\":\"$root/src\",\"output_mode\":\"content\"" false "src/lib.rs:3:// weight\\nsrc/lib.rs-4-fn main() {}"
+    call toolu_6 Glob "\"pattern\":\"**/*.toml\"" false "Cargo.toml"
     call toolu_3 Read "\"file_path\":\"/elsewhere/notes.txt\"" true
     call toolu_4 Read "\"file_path\":\"$root/src/weights.rs\"" false
     call toolu_5 Read "\"file_path\":\"$root/src/routing.rs\"" false
@@ -204,8 +205,12 @@ async fn an_ask_gathers_then_freezes_with_every_file_read_and_the_commit() {
         panic!("a Finding: {:?}", node.content);
     };
     assert_eq!(asked, "how is routing decided");
-    assert_eq!(read, ["src/routing.rs", "src/weights.rs"]);
-    assert_eq!(searched, ["weight in src"]);
+    assert_eq!(
+        read,
+        ["src/routing.rs", "src/lib.rs", "src/weights.rs"],
+        "a content search's files are read; a listing's names are not"
+    );
+    assert_eq!(searched, ["weight in src", "**/*.toml"]);
     let checkout = checkout.expect("the checkout is recorded");
     let head = Command::new("git")
         .args(["rev-parse", "HEAD"])

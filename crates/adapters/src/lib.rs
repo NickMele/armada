@@ -87,7 +87,7 @@ pub use reclaim::{
     RepoUnreadable, Standing, UnmergedWork, WorktreeGone, WorktreeStanding,
 };
 pub use scouting::{
-    checkout_as_it_stands, denied_to_a_scout, no_servers, CheckoutRead, Looked, ScoutRefused,
-    Scouting,
+    checkout_as_it_stands, denied_to_a_scout, files_a_search_showed, no_servers, CheckoutRead,
+    Looked, ScoutRefused, Scouting, Shown,
 };
 pub use worktree::GitVcs;
