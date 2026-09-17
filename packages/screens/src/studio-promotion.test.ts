@@ -77,7 +77,7 @@ describe("what a selection offers", () => {
     });
   });
 
-  test("a Link naming an issue dispatches; one naming anything else does not", () => {
+  test("a Link naming anything on the forge dispatches; one naming nothing there does not", () => {
     // `forge` is Fleet's reading of the address and nothing here reads one:
     // which host is the forge is `crates/adapters`' to know — #1379.
     const link = (id: string, forge?: "issue" | "pull_request" | "milestone"): StudioNode => ({
@@ -89,12 +89,14 @@ describe("what a selection offers", () => {
       created_at: at,
     });
     const links = studio([link("issue", "issue"), link("milestone", "milestone"), link("pull", "pull_request"), link("board")]);
+    // Three kinds of ask — a change to make, a judgement on work already
+    // written, a wave to split — and the proposer answers which workflow each
+    // runs under. A milestone is still read in as well; the two are not rivals.
     expect(actsOn(links, ["issue"])).toMatchObject({ dispatch: true, editLink: true, readIn: true });
-    // A milestone is read in, and what it holds is what is dispatched.
-    expect(actsOn(links, ["milestone"])).toMatchObject({ dispatch: false, readIn: true });
-    // Open with the owner, so the narrower answer stands: no Dispatch on one.
-    expect(actsOn(links, ["pull"])).toMatchObject({ dispatch: false });
-    expect(actsOn(links, ["board"])).toMatchObject({ dispatch: false });
+    expect(actsOn(links, ["milestone"])).toMatchObject({ dispatch: true, readIn: true });
+    expect(actsOn(links, ["pull"])).toMatchObject({ dispatch: true });
+    // A board names nothing filed, so there is nothing to dispatch against.
+    expect(actsOn(links, ["board"])).toMatchObject({ dispatch: false, readIn: true });
   });
 
   test("an Issue draft is the only kind edited or dispatched", () => {
@@ -211,7 +213,12 @@ describe("the words a rung opens with", () => {
       created_at: at,
     };
     expect(dispatchedAs(issue)).toBe("https://example.invalid/o/r/issues/1379");
-    expect(dispatchedAs({ ...issue, forge: "milestone" })).toBeNull();
+    // The same address whichever of the three it is: the node is its address,
+    // and which workflow the work runs under is the proposer's answer.
+    expect(dispatchedAs({ ...issue, forge: "pull_request" })).toBe("https://example.invalid/o/r/issues/1379");
+    expect(dispatchedAs({ ...issue, forge: "milestone" })).toBe("https://example.invalid/o/r/issues/1379");
+    const { forge: _, ...board } = issue;
+    expect(dispatchedAs(board)).toBeNull();
   });
 });
 

@@ -479,8 +479,20 @@ test("an issue read in is dispatched, its Job opens from the node, and the node 
   await asked("Read in").click();
   await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
 
-  // A milestone is read in, never dispatched: what it holds is the work.
+  // All three forge kinds dispatch, and the dialog names which it is about:
+  // an issue, a pull request and a milestone are three different asks — #1379.
+  await pick(/^Link: the branch that needs reading/);
+  await acts().getByRole("button", { name: "Dispatch" }).click();
+  await expect.element(page.getByRole("dialog", { name: "Dispatch the pull request this Link names" })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
   await pick(/^Link: Studio — 3 of 3 issues read in/);
+  await acts().getByRole("button", { name: "Dispatch" }).click();
+  await expect.element(page.getByRole("dialog", { name: "Dispatch the milestone this Link names" })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
+  // A Link naming nothing on the forge has nothing filed to dispatch against.
+  await pick(/^Link: where the legend was drawn/);
   await expect.poll(() => acts().getByRole("button", { name: "Dispatch" }).query()).toBeNull();
 
   await pick(/^Link: #1293 An issue cannot be read into a Studio — open/);
