@@ -11,6 +11,7 @@ import type {
 import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
 import {
   running,
+  workingAPlan,
   runningWaitingOnACommand,
   review,
   escalatedGateFailure,
@@ -140,6 +141,7 @@ function asRow(fixture: JobFixture, at: number, slug: string): JobFixture {
  */
 export const BUILDERS: Record<string, () => JobFixture> = {
   running,
+  workingAPlan,
   runningWaitingOnACommand,
   review,
   escalatedGateFailure,
