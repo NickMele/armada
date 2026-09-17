@@ -147,8 +147,13 @@ pub struct Covers {
 }
 
 impl Covers {
-    /// Every pattern a Check declared. `None` where the list is empty, which
-    /// is a Check that could never run.
+    /// Every pattern a Check declared. **`None` where the list is empty**, so
+    /// nothing downstream holds a `Covers` matching nothing.
+    ///
+    /// That `None` is not the `None` a Check with no `when` carries, which
+    /// [`reach`](Covers::reach) reads as always. `config` never lets the two
+    /// meet: `when: []` is refused where it is parsed, so the only `None` that
+    /// reaches a Check is an absent key.
     pub fn of(patterns: Vec<PathPattern>) -> Option<Covers> {
         match patterns.is_empty() {
             true => None,
