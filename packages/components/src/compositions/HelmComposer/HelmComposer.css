@@ -4,6 +4,10 @@
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
+  /* Space above, between the composer and the thread it answers — the owner's
+     note of 17 Sep 2026, one treatment with the drone message box. The dock's
+     own --space-3 gap was the only thing separating them. */
+  margin-block-start: var(--space-4);
 }
 
 .armada-helm-composer__head {
@@ -25,18 +29,31 @@
   white-space: nowrap;
 }
 
-.armada-helm-composer__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
+/* The field, with Send inside it. No frame of its own: `.armada-textarea-field`
+   fills it, so the edge, the well and the focus ring stay the Textarea's. */
+.armada-helm-composer__field {
+  position: relative;
+  min-width: 0;
 }
 
-/* Where the person is — #1094. `margin-right: auto` rather than
-   `justify-content: space-between` on the row, so Send still sits at the
-   trailing edge on its own once a caller draws no footer. */
+/* The room Send occupies, reserved as the field's own bottom padding rather
+   than left to overlap: a typed line stops above the button instead of running
+   under it. --h-control-sm is Send's height at `sm`; --space-4 is the
+   --space-2 inset below it plus the --space-2 gap above it. */
+.armada-helm-composer__field .armada-textarea {
+  padding-block-end: calc(var(--h-control-sm) + var(--space-4));
+}
+
+.armada-helm-composer__field > .armada-button {
+  position: absolute;
+  inset-block-end: var(--space-2);
+  inset-inline-end: var(--space-2);
+}
+
+/* Where the person is — #1094. Its own line under the field now that Send has
+   moved inside: the dock is too narrow to read a location beside a button. */
 .armada-helm-composer__location {
-  margin-right: auto;
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -62,14 +79,14 @@
    Button's line carry it, as tonal does. Disabled, pending and an answer keep
    Button's own renderings, which is why this skips them. Focus stays Button's
    --accent ring. */
-.armada-helm-composer__actions > .armada-button[type="submit"]:not(:disabled):not([data-pending]) {
+.armada-helm-composer__field > .armada-button[type="submit"]:not(:disabled):not([data-pending]) {
   background: var(--helm-muted);
   border-color: var(--helm-edge);
   color: var(--helm);
   box-shadow: none;
 }
 
-.armada-helm-composer__actions > .armada-button[type="submit"]:hover:not(:disabled):not([data-pending]),
-.armada-helm-composer__actions > .armada-button[type="submit"][data-preview-hover]:not(:disabled):not([data-pending]) {
+.armada-helm-composer__field > .armada-button[type="submit"]:hover:not(:disabled):not([data-pending]),
+.armada-helm-composer__field > .armada-button[type="submit"][data-preview-hover]:not(:disabled):not([data-pending]) {
   border-color: var(--helm);
 }
