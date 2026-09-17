@@ -62,10 +62,14 @@ export function entering(
 /** How many notifications the body of one names before it says "and 3 more". */
 const NAMED = 3;
 
-/** One notification: what it says, and where pressing it lands. */
+/** Which of the two waits a notification sounds as. `docs/contracts/design-system.md`, Sound. */
+export type Tone = "blocked" | "waiting";
+
+/** One notification: what it says, how it sounds, and where pressing it lands. */
 export type Telling = {
   title: string;
   body: string;
+  tone: Tone;
   /**
    * The one job it is about, or `null` where it is about several.
    *
@@ -93,11 +97,13 @@ export function telling(entered: readonly JobSummary[], now: number): Telling | 
   if (entered.length === 0) return null;
   const ordered = [...entered].sort(oldest);
   const first = ordered[0]!;
+  const tone = toneOf(ordered);
   if (ordered.length === 1) {
-    return { title: `${quoted(first.title)} needs you.`, body: whereItIs(first, now), jobId: first.id };
+    return { title: `${quoted(first.title)} needs you.`, body: whereItIs(first, now), tone, jobId: first.id };
   }
   return {
     title: needsYouClause(ordered.length),
+    tone,
     // One job a line, because a notification body wraps and a comma-separated
     // run of titles is one paragraph nobody finishes reading.
     body: [
@@ -106,6 +112,18 @@ export function telling(entered: readonly JobSummary[], now: number): Telling | 
     ].join("\n"),
     jobId: null,
   };
+}
+
+/**
+ * One tone for a batch, decided by its most urgent job: one escalation among
+ * four reviews is still work that has stopped.
+ *
+ * **`escalated` alone, not every status held for a person.** `awaiting_repair`
+ * is owed a repair rather than stopped over a disputed verdict, and sounds as a
+ * wait.
+ */
+function toneOf(batch: readonly JobSummary[]): Tone {
+  return batch.some((job) => job.status === "escalated") ? "blocked" : "waiting";
 }
 
 /**
