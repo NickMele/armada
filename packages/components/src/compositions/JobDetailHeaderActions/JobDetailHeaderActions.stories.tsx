@@ -228,15 +228,10 @@ export const ThePullRequestOnceItLanded: Story = {
  * one control with two labels, which is the thing they are least like; one
  * split button separates them, and each menu label says what survives.
  *
- * **The face is held, as `Acts.tsx` draws it.** The screen lists its acts
- * mildest first, so on a running Job with a drone the face is `Kill drone` and
- * it confirms by holding; `Kill job` is behind the caret and still asks. Under
- * reduced motion the hold is not offered and the face reads `Kill drone`.
- * Secondary, because a running Job waits on its drone rather than a person,
- * and nothing beside it: the screen draws no other act in this state.
- *
- * The drone act is drawn only where a drone is assigned, which is why the
- * `Drone` fact and that face appear together.
+ * **Drawn as `Acts.tsx` draws it:** mildest first, so `Kill drone` is the held
+ * face and `Kill job` asks from behind the caret. Secondary, because a running
+ * Job waits on its drone rather than a person. The drone act appears only where
+ * a drone is assigned, which is why the `Drone` fact and that face go together.
  */
 export const BothKills: Story = {
   args: {
