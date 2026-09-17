@@ -585,4 +585,6 @@ export const CHANNELS = {
   askHelm: "bridge:ask-helm",
   startHelmFresh: "bridge:start-helm-fresh",
   pointHelm: "bridge:point-helm",
+  // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
+  tap: "bridge:tap",
 } as const;

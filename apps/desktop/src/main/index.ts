@@ -6,8 +6,7 @@ import { join } from "node:path";
 import tokens from "@armada/tokens/tokens.json";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, PickedView, Summons } from "../shared/bridge";
-import type { Draft, StagedAttachment } from "@armada/protocol";
-import type { HelmContext } from "@armada/protocol";
+import type { Draft, HelmContext, StagedAttachment } from "@armada/protocol";
 import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
   Artifact,
@@ -18,12 +17,12 @@ import type {
   WhenBlocked,
   WhenRefused,
 } from "@armada/protocol";
-import type { StartCheckoutRun, StartRun } from "@armada/protocol";
-import type { EditManifest, SaveManifestFile } from "@armada/protocol";
+import type { EditManifest, SaveManifestFile, StartCheckoutRun, StartRun } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import { ANNOTATE_FLAG } from "../shared/annotations";
 import { handleAnnotations } from "./annotations";
 import { FleetConnection } from "./connection";
+import { handleTaps } from "./haptics";
 import { resolvedFolder } from "./locating";
 import { openArtifact } from "./open";
 import { openFindingIssue, openPullRequest, openRemarkLink } from "./forge";
@@ -384,6 +383,7 @@ void app.whenReady().then(() => {
     windowIds,
     now: () => Date.now(),
   });
+  handleTaps({ ipc: ipcMain, app });
 
   // The renderer initiates exactly these things and no others. There is no
   // arbitrary-channel invoke, which is what keeps the surface readable.
