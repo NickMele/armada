@@ -41,7 +41,8 @@ Each ends with the questions it found and did not answer.
   reconciling one costs, and what M1's proves.
 - [`practices/running-locally.md`](practices/running-locally.md) — starting,
   checking and stopping a local Fleet: what it prints, what it refuses before it
-  binds a port, and what `armada clean` will not delete
+  binds a port, what `armada clean` will not delete, and Bridge on a mock Fleet
+  with `pnpm mock`
 
 ## Contracts
 

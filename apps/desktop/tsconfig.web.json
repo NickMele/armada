@@ -25,6 +25,8 @@
     "noImplicitOverride": true,
     "noEmit": true,
     "skipLibCheck": true,
+    // The mock reads `@armada/screens`' recorded fixtures, which are JSON.
+    "resolveJsonModule": true,
     "types": []
   },
   "include": ["src/renderer/src/**/*.ts", "src/renderer/src/**/*.tsx", "src/shared/**/*.ts"]

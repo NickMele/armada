@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Bridge's renderer on a mock Fleet, served by `pnpm mock` and never by
+      Electron. No CSP, unlike `../../index.html`: Vite's dev server injects an
+      inline script for hot reload, and this page has no preload and reaches
+      no Fleet. `docs/practices/running-locally.md`.
+    -->
+    <title>Armada — mock</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="picker"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

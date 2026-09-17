@@ -1,7 +1,8 @@
 # Running Armada locally
 
 **Kind:** practice. **Governs:** starting, checking and stopping a local Fleet,
-running a Check by hand, and giving a Job's worktrees back.
+running Bridge with no Fleet at all, running a Check by hand, and giving a Job's
+worktrees back.
 
 `README.md` carries the commands. This carries what they do and what they
 refuse.
@@ -236,6 +237,66 @@ every row the Job list serves, and the workflows and manifests they name, into
 beside the rows it builds. It makes only those three reads, so it changes
 nothing on the Fleet it reads, and it scrubs and refuses exactly as above. It
 prints how many Jobs and workflows it wrote.
+
+## Bridge on a mock Fleet
+
+**`pnpm mock`, from `apps/desktop`, opens Bridge's renderer in your browser on
+a fake Fleet.** It runs `App.tsx` unchanged, with no Electron, no Fleet and no
+network, so you can see the real app in a state no running Fleet will hold still
+for. It needs `pnpm install` and nothing else, and it opens the page itself.
+
+**Run it when you change something Bridge draws and want to see it in place.**
+Vite prints the address and reloads the page as you edit. Ctrl-C stops it, and
+nothing is left running or written.
+
+**`?scenario=<name>` picks what the window shows**, and the picker in the
+bottom-right corner switches by reloading onto another. An unknown name falls
+back to the first scenario and says so in the browser console.
+
+| Scenario | What the window holds |
+|---|---|
+| `every-state` | One Job in every state, each opening onto its own detail. The page opens here |
+| `fleet-not-running` | No runtime file, so what Bridge draws with no Fleet |
+| `first-launch` | A Fleet serving no repository, so Add a repository opens by itself |
+| `empty-store` | One repository and no Job yet |
+| `recorded-board` | The Board as Fleet served it, from `--board` above |
+| `job/<builder>` | One Job, already open, for each builder `packages/screens/src/fixtures/build/index.ts` exports |
+| `recorded/<slug>` | One recorded Job, already open, for each recording under `packages/screens/src/fixtures/recorded/` |
+
+**Every Job is a Storybook fixture, never data made up for the mock.** A
+recording added to `packages/screens` is a scenario and an `every-state` row with
+no other edit. A builder needs its name added to `BUILDERS` in
+`apps/desktop/src/renderer/src/mock/scenario.ts`, and the test beside it fails
+until it is.
+
+### What the fake answers
+
+**The fake is typed against `BridgeApi` member by member**, in
+`apps/desktop/src/renderer/src/mock/fake.ts`. A capability added to the preload
+fails typecheck there until the fake answers it.
+
+| Call | Answer |
+|---|---|
+| A per-Job read — `watchJob`, `readHistory`, `readDiff` and the rest | The fixture's read, published as main would publish it |
+| A read that returns a value — `readCall`, `readFrame`, `readCheckOutput` | The fixture's answer, where it has one |
+| Any read the scenario holds nothing for | A failure whose sentence says it is not in this mock scenario |
+| An act | Succeeds. Where it changes one field on a Job — approve, kill, reject, a model, a clear — that field moves |
+
+**Anything a Fleet would have to decide moves nothing.** A redispatch makes no
+new Job, a review approval does not advance the Job, and a proposal comes back
+unanswered. Guessing Fleet's next state would draw a Fleet that does not exist.
+
+**A little is made up, and none of it is what a real Fleet says.** The Fleet
+panel's pid and port, the model list, and the root folder of a repository a
+recording names are invented. Bridge's clock is real while the fixtures' times
+are fixed, so how long ago something happened reads in days.
+
+### In a browser test
+
+**`mountApp` in `apps/desktop/src/renderer/src/mock/mount.tsx` mounts `App` on a
+scenario** for a vitest browser test. Name the file `.test.tsx` under
+`apps/desktop/src/renderer/` and it runs in Chromium with `pnpm -C apps/desktop
+test`. `every-state.test.tsx` beside it opens every `every-state` row.
 
 ## Running a Check or a Command by hand
 

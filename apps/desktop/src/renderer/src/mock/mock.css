@@ -1,0 +1,7 @@
+/* The picker floats over Helm's column, which is empty below its composer on every scenario. */
+.armada-mock-picker {
+  position: fixed;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  z-index: var(--z-menu);
+}
