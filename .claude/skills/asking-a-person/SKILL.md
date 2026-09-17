@@ -96,6 +96,34 @@ did not already agree.
 situation, put the identifiers in the table underneath, and let a reader stop
 after the first paragraph having understood what the page is about.
 
+## When the work argues against a decision
+
+**Stop and ask. Never drop, reverse or quietly narrow a decision the owner made**,
+whether it lives in a contract, an issue's `## In`, a mock he picked or an answer
+he gave in the conversation. A measurement against it is a reason to ask, not
+permission to change it. That holds for the main session and for every agent it
+dispatches.
+
+On 17 Sep 2026 a contract gave every card a backdrop blur, from a mock the owner
+had picked. The agent building it measured that the blur changed nothing visible
+and clipped tooltips inside cards. It left the blur out. The main session then
+removed the blur from the contract and deleted its token, and told the owner
+afterwards. The evidence was sound. The call was his, and he asked why it had
+been dropped.
+
+| The work finds | Do |
+|---|---|
+| A decision that costs more than it gives | Build nothing that depends on the answer. Put it to him with the measurement and the options, reverting included |
+| A decision that cannot be built as written | The same. Say what fails, and what each way round it gives up |
+| A gap the decision never covered | Choose, and say in the report which choice was made |
+
+**An agent that hits one stops and reports it as its `**QUESTION:**`**, rather
+than building its preferred answer and asking afterwards. Work already committed
+the other way stays unmerged until he answers.
+
+**The contract's own fallback is not permission.** "Where blur is dropped for
+cost" said what the design survives, not who decides to drop it.
+
 ## What this is not
 
 **It is not writing less.** The rewritten question is longer than the one it
