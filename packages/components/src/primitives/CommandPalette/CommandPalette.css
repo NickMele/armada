@@ -144,14 +144,31 @@
   white-space: nowrap;
 }
 
-/* The matched span, in weight rather than colour. The palette row has one text
- * colour, status hue is never chosen, and the accent is reserved to
- * interactive affordance — so weight is the channel left, and it is the one
- * already in the type scale. */
+/* The matched span, in contrast rather than weight or hue. Status hue is never
+ * chosen and the accent is reserved to interactive affordance, so the label a
+ * match lands in steps down to --fg-muted and the span keeps --fg-default: the
+ * row still speaks in one hue, and the mark is one step brighter than the rest.
+ *
+ * A dormant row is already --fg-subtle, so its span takes the step above that.
+ * A danger row has no contrast step inside its red, so its span stays the
+ * row's colour and is not marked. */
 .armada-palette__mark {
   background: transparent;
   color: inherit;
-  font-weight: var(--weight-medium);
+}
+
+.armada-palette__row:not(.armada-palette__row--danger, .armada-palette__row--dormant)
+  .armada-palette__label:has(.armada-palette__mark) {
+  color: var(--fg-muted);
+}
+
+.armada-palette__row:not(.armada-palette__row--danger, .armada-palette__row--dormant)
+  .armada-palette__mark {
+  color: var(--fg-default);
+}
+
+.armada-palette__row--dormant .armada-palette__mark {
+  color: var(--fg-muted);
 }
 
 /* A setting states its current value, in mono, right of the label. Metadata

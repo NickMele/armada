@@ -380,8 +380,9 @@ function Row({
  * on a word that never renders — no "matched terminate", no highlight, and
  * nothing faked onto the lexicon term standing in its place.
  *
- * The mark is weight and not colour. The palette row has one text colour and
- * status hue is never chosen; weight is the channel already in the type scale.
+ * The mark is contrast and not weight or hue: the rest of the label steps down
+ * to `--fg-muted` and the span keeps `--fg-default`. Status hue is never chosen
+ * and the accent is spoken for.
  */
 function Marked({ label, query, at }: { label: string; query: string; at: number | null }) {
   if (at === null || query === "") return <>{label}</>;

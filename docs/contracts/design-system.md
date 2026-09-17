@@ -1003,10 +1003,10 @@ so that "terminate" finds Kill, but the alias never renders. This is
 where the lexicon earns its keep: one vocabulary, searchable, with the
 shortcut shown beside every entry.
 
-**A matched span is marked by weight**, at `--weight-medium`, and never
-by a second colour or a fill. A row has one text colour, status hue is
-never chosen and the accent is reserved to interactive affordance, so
-weight is the channel left — and it is already in the type scale. **An
+**A matched span is marked by contrast**: `--fg-default` against the rest
+of its label at `--fg-muted`, and never by a hue or a fill. Status hue is
+never chosen and the accent is reserved to interactive affordance, so a
+step within the row's one hue is the channel left. **An
 alias hit marks nothing**, because the match was on a word that never
 renders and there is nothing on the lexicon term to mark.
 
@@ -1319,7 +1319,7 @@ otherwise — the same rollup reasoning Doctor's pass/warn/fail uses.
 The left column's third panel — what the status bar used to read.
 
 ```
-state    --dot (6px) + --text-base weight-medium --fg-default
+state    --dot (6px) + --text-base --fg-default
 detail   --font-mono --text-2xs --fg-subtle
 meta     --font-mono --text-2xs --fg-subtle
 doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
