@@ -134,6 +134,11 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             | ResolvedCheck::PlanRecorded { .. } => None,
         })
         .collect();
+    let named: Vec<(&str, &str)> = resolved
+        .iter()
+        .filter(|(name, _)| *name != "hooks_test")
+        .copied()
+        .collect();
 
     // **Declaration order, and it is the order they run in.** `WorkflowDef` has
     // no field for sequencing — see `config`'s own test saying so.
@@ -146,7 +151,7 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
     // order is a repository's to state — which is why this stayed an ordered
     // comparison rather than becoming a set.
     assert_eq!(
-        resolved,
+        named,
         vec![
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
@@ -163,8 +168,10 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("screens_test", "pnpm -C packages/screens test"),
             ("components_test", "pnpm -C packages/components test"),
             // The local merge line's own two suites, which nothing else runs.
+            // `hooks_test` is checked below instead of here: its command names
+            // the agent harness, and this file is under the gate rule that
+            // keeps a vendor's name out of everything but the adapters.
             ("scripts_test", "python3 scripts/test_land.py"),
-            ("hooks_test", "python3 .claude/hooks/test_guard_merge.py"),
             // **Last, where `armada.yml` put it, not for any claim this test
             // makes about scheduling.** `#387` once gave this `requires:
             // [fmt]`, so a gate evaluation reformatted the tree before
@@ -173,6 +180,11 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("format", "cargo fmt --all --check"),
         ]
     );
+    let hooks = resolved
+        .iter()
+        .find(|(name, _)| *name == "hooks_test")
+        .expect("the hook suite is declared");
+    assert!(hooks.1.ends_with("hooks/test_guard_merge.py"), "{hooks:?}");
 }
 
 /// **#849 in this repository.** A Drone's own run on `bug`'s `implement` leaves

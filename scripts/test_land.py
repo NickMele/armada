@@ -649,6 +649,19 @@ class Line(unittest.TestCase):
         default = open(LAND).read().split('ARMADA_LAND_SETUP", "')[1].split('"')[0].split()
         self.assertEqual(default, wanted, "the copy of setup.requires in scripts/land has drifted")
 
+    def test_the_manifest_gates_both_of_the_line_s_suites(self):
+        """Asserted here because this file may name the agent harness's own
+        directory, and the Rust tests under `crates/` may not."""
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        manifest = open(os.path.join(here, "armada.yml")).read()
+        scripts = manifest.split("scripts_test:")[1].split("hooks_test:")[0]
+        hooks = manifest.split("hooks_test:")[1].split("format:")[0]
+        self.assertIn("run: python3 scripts/test_land.py", scripts)
+        self.assertIn('- "scripts/**"', scripts)
+        self.assertIn("run: python3 .claude/hooks/test_guard_merge.py", hooks)
+        self.assertIn('- ".claude/hooks/**"', hooks)
+        self.assertTrue(os.path.exists(os.path.join(here, ".claude/hooks/test_guard_merge.py")))
+
     def test_a_relative_binary_is_refused_rather_than_traced(self):
         where = self.branch("fix/relative", {"x.txt": "1\n"})
         self.env["ARMADA_LAND_ARMADA"] = "target/debug/armada"
