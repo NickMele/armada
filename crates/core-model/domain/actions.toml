@@ -74,11 +74,11 @@ tier = "Global"
 verb = "Bridge surfaces"
 icon = ""
 icon_absent = "by design"
-shortcut = "⌘1–⌘7"
+shortcut = "⌘1–⌘8"
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "One binding over the rail rather than six over six destinations — the contract's rule is rail order, not the numbers, and the digits shift if the rail does. They shifted on 2026-09-03: Held worktrees joined the rail as its fifth surface and took ⌘5, so this range grew by a digit and Helm moved off it. They shifted again on 2026-09-13 (#921): Overview joined first rather than last, so it took ⌘1 and every other surface's digit moved down one — the one time a surface's arrival moved a digit other than its own. They shifted again on 2026-09-14 (#1089): Settings joined the rail last, taking ⌘7, once the status bar it used to open from went with #1088. Each destination carries its own navigation glyph in the icon registry, so a glyph on this row would be an eighth one standing for all of them."
+notes = "One binding over the rail rather than six over six destinations — the contract's rule is rail order, not the numbers, and the digits shift if the rail does. They shifted on 2026-09-03: Held worktrees joined the rail as its fifth surface and took ⌘5, so this range grew by a digit and Helm moved off it. They shifted again on 2026-09-13 (#921): Overview joined first rather than last, so it took ⌘1 and every other surface's digit moved down one — the one time a surface's arrival moved a digit other than its own. They shifted again on 2026-09-14 (#1089): Settings joined the rail last, taking ⌘7, once the status bar it used to open from went with #1088. They grew again on 2026-09-17 (#1287): Studios joined the rail last, taking ⌘8, so no other digit moved. Each destination carries its own navigation glyph in the icon registry, so a glyph on this row would be a ninth one standing for all of them."
 
 [actions.helm]
 kind = "Action"

@@ -6,7 +6,7 @@
 // disagrees with itself is worse than one that is missing.
 //
 // **The digit is computed from the rail order, never typed.** The contract
-// binds `⌘1–⌘6` to Bridge surfaces *in rail order*, so a digit is a place in
+// binds `⌘1–⌘8` to Bridge surfaces *in rail order*, so a digit is a place in
 // the rail and nothing else. A surface added at the end takes the next digit
 // by arithmetic — Overview is the one exception, joining first instead (#921).
 //
@@ -17,7 +17,7 @@
 // `docs/concepts/bridge.md`, and every digit falls out of it.
 
 import { useEffect, useRef } from "react";
-import { ClipboardList, FileCog, HardDrive, LayoutDashboard, Settings as SettingsIcon } from "lucide-react";
+import { ClipboardList, FileCog, HardDrive, LayoutDashboard, Presentation, Settings as SettingsIcon } from "lucide-react";
 
 import type { PaletteSurface } from "./Palette";
 
@@ -40,8 +40,11 @@ import type { PaletteSurface } from "./Palette";
  * settings sheet had no rail row to lose when #1088 removed it, so this is
  * the first digit the surface has ever taken — the next one, by the same
  * arithmetic as every arrival before Overview's own exception.
+ *
+ * **Studios joined last, 17 Sep 2026 (#1287), taking `⌘8`** — the ordinary
+ * case again, so no learned digit moved.
  */
-const RAIL = ["overview", "board", "alerts", "doctor", "manifest", "worktrees", "settings"] as const;
+const RAIL = ["overview", "board", "alerts", "doctor", "manifest", "worktrees", "settings", "studios"] as const;
 
 type SurfaceId = (typeof RAIL)[number];
 
@@ -52,6 +55,7 @@ export const SURFACE = {
   manifest: "manifest",
   worktrees: "worktrees",
   settings: "settings",
+  studios: "studios",
 } as const satisfies Record<string, SurfaceId>;
 
 /** What reaches a surface: its place in the rail, spelled as the contract does. */
@@ -109,6 +113,13 @@ export const SURFACES: readonly PaletteSurface[] = [
     // No alias: `fleet_settings` is the palette's own row, in its own
     // section, and it names an id rather than a word somebody already knows.
     icon: SettingsIcon,
+  },
+  {
+    id: SURFACE.studios,
+    label: "Studios",
+    shortcut: digitOf(SURFACE.studios),
+    // No alias, Manifest's reason: the first surface built at this name.
+    icon: Presentation,
   },
 ];
 
