@@ -51,7 +51,7 @@ body,
    half that was missing — so the arrangement read correctly in Storybook, which
    mounts a screen into a box it sized itself, and came apart in Bridge, which
    mounts it into the shell. Kept here, the same thing could happen again and
-   nothing would catch it. `Screens/The shell`'s tall-screen story is what
+   nothing would catch it. `Compositions/The shell`'s tall-screen story is what
    catches it now, and it can only do that if it can see this. */
 
 /* Where a toast lands. Position and stacking order only — the toast owns its

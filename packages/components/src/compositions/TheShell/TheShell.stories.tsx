@@ -3,9 +3,9 @@ import { useState, type ComponentProps } from "react";
 import { expect } from "storybook/test";
 import { ClipboardList, HardDrive, Megaphone } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
-import { ActiveJobsList } from "../../compositions/ActiveJobsList/ActiveJobsList";
-import { DockQuestions } from "../../compositions/DockQuestions/DockQuestions";
-import { JobRowStacked } from "../../compositions/JobRowStacked/JobRowStacked";
+import { ActiveJobsList } from "../ActiveJobsList/ActiveJobsList";
+import { DockQuestions } from "../DockQuestions/DockQuestions";
+import { JobRowStacked } from "../JobRowStacked/JobRowStacked";
 import { Select } from "../../primitives/Select/Select";
 import { TheShell } from "./TheShell";
 
@@ -17,7 +17,7 @@ import { TheShell } from "./TheShell";
  * waiting on you. `today ~$4.80` is left out — nothing measures spend.
  */
 const meta: Meta<typeof TheShell> = {
-  title: "Screens/The shell",
+  title: "Compositions/The shell",
   component: TheShell,
 };
 export default meta;

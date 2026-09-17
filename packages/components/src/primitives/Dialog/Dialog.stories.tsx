@@ -100,7 +100,7 @@ export const NeutralConfirm: Story = {
  * detail behind it carries both and stays on screen.
  *
  * Redirect is not among them. Its dialog carries the instruction itself and is
- * its own confirmation — see `Screens/A failed job` for that shape.
+ * its own confirmation — Job detail's redirect, in the app, has that shape.
  */
 export const KillTheDrone: Story = {
   args: {

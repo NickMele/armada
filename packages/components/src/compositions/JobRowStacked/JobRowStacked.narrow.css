@@ -83,7 +83,7 @@
    and Overview's own panel frame draws `overflow: visible` on purpose, so it
    had none to find. All three changed how tall the row is or where the
    action sits without changing the one thing actually too wide: the tracks
-   themselves. Every measurement below is against `Screens/Board` at 1284px
+   themselves. Every measurement below is against the Board at 1284px
    and Overview's own panel beside Helm's open dock, not assumed.
 
    **Shrink the tracks instead, from the one ancestor allowed to.** A

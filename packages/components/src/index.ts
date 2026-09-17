@@ -81,10 +81,10 @@ export * from "./compositions/WorkflowRail/WorkflowRail";
 export * from "./screens/detail";
 export * from "./screens/absent";
 
-// The shell. Rail, panel and status bar — the frame every screen mounts
-// inside. A screen like them, and lifted for the same reason: Bridge needs the
-// frame as a component, and the story renders it from the drawing's fixture.
-export * from "./screens/TheShell/TheShell";
+// The shell. Rail, panel and dock — the frame every screen mounts inside. A
+// composition, so its story renders it from props like any other; the screens
+// it frames are drawn by the app on a mock Fleet, #1225.
+export * from "./compositions/TheShell/TheShell";
 
 // The title row `TheShell` draws above the rail and the panel. #1087.
 export * from "./compositions/TitleBar/TitleBar";
