@@ -179,6 +179,22 @@ export const SixStates: Story = {
 };
 
 /**
+ * The same six, where the failed Job failed 12 seconds ago. Its row carries the stronger tint and
+ * the note; every other row rests at `--row-tint`. Held still, so a screenshot is stable.
+ */
+export const OneRowMidDecay: Story = {
+  name: "One row mid-decay",
+  args: {
+    ...SixStates.args,
+    children: (SixStates.args?.children as ReactElement<JobRowStackedProps>[]).map((row) =>
+      row.props.status === "completed-failed"
+        ? cloneElement(row, { changed: { note: "Failed · 12s ago", remaining: 0.73 } })
+        : row,
+    ),
+  },
+};
+
+/**
  * At the 768px floor with the rail at 48px. The rows keep their shape and
  * their whole field set; only the headline and the branch truncate.
  */

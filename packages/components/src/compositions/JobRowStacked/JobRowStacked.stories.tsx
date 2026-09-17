@@ -247,6 +247,16 @@ export const Dimmed: Story = {
 };
 
 /**
+ * A Job that started running 18 seconds ago, 40% of the way through `--duration-decay`: the tint sits
+ * between `--row-tint-recent` and `--row-tint`, and the note fades with it. The age is held still
+ * here; on a screen `useRecentChanges` walks it.
+ */
+export const ChangedMidDecay: Story = {
+  name: "Changed, mid-decay",
+  args: { ...Running.args, changed: { note: "Running · 18s ago", remaining: 0.6 } } as never,
+};
+
+/**
  * `escalated` renders its reason where one is set, never its own name — nobody
  * says a Job escalated at step 3. The status row has carried `needs you` behind
  * `megaphone` since #400, and it stands only where no reason reaches a surface.

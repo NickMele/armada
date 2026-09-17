@@ -257,6 +257,30 @@
   white-space: nowrap;
 }
 
+/* What changed and how long ago, in the status hue, fading as the tint decays. It holds its width
+   and the handle gives way first, since the handle is on `title` and the age is not; in a table it
+   takes only the slack of the handle's line, so a mark arriving never wraps the headline. */
+.armada-job-row__changed {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--armada-row-hue) calc(var(--armada-row-recent) * 100%), transparent);
+}
+
+.armada-job-row__headline:has(> .armada-job-row__changed) > .armada-job-row__id {
+  flex-shrink: 8;
+}
+
+.armada-job-row[data-view="table"] .armada-job-row__changed,
+.armada-job-row-list[data-view="table"] .armada-job-row__changed {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* A table's headline holds the title and the handle (#884). The handle sits beside the title only while
    the whole title fits, else under it, and breaks at hyphens only where wider than the cell (#925). */
 .armada-job-row[data-view="table"] .armada-job-row__headline,

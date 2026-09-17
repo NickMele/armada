@@ -98,6 +98,7 @@ import type { BoardReach } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
 import { useListCursor, useListKeydown } from "./list-keyboard";
 import { readingOf } from "./reading";
+import { useRecentChanges } from "./recent";
 import { isTerminal, Row } from "./Row";
 
 /**
@@ -213,6 +214,8 @@ export function Jobs({
   // focus read back through the wrapper's `onFocusCapture` below, so `j`, the
   // arrows, Tab and the mouse all move one cursor.
   const { cursor, onFocusCapture, move, restoreCursor } = useListCursor(onCursor);
+  // Every Job, not the drawn ones: a change that moves a Job to another tab still marks it there.
+  const recent = useRecentChanges(jobs);
   const search = useRef<HTMLInputElement>(null);
 
   const showing = unfolded ? [...board.shown, ...board.folded] : board.shown;
@@ -341,6 +344,7 @@ export function Jobs({
       repository={repositoryOf(job, served, all)}
       selected={job.id === selected}
       focused={job.id === cursor}
+      recent={recent.get(job.id)}
       onOpen={onOpen}
       onKill={onKill}
       onRedispatch={onRedispatch}
