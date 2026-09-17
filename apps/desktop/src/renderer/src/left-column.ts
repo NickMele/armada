@@ -28,25 +28,41 @@ export function statsOf(
   const queued = jobs.filter((job) => job.status === "queued").length;
   const drone = dronesReading(connection, capacity, queued);
   const drift = driftReading(drifts, picked);
+  // Only `driftReading`'s behind reading carries `notice-caution`; Current,
+  // Not read and Not set up all keep the current hue, dim.
+  const behind = drift.tone === "notice-caution";
   return [
     countRow("approval", "Awaiting approval", jobs.filter((job) => job.status === "awaiting_approval").length),
     countRow("review", "Needs review", jobs.filter((job) => job.status === "awaiting_review").length),
     countRow("escalated", "Escalated", jobs.filter((job) => job.status === "escalated").length, "hot"),
-    { id: "jobs", label: "Jobs", value: jobs.length },
-    { id: "drones", label: "Drones", value: drone.value ?? "—", hint: asString(drone.detail) },
+    { id: "jobs", label: "Jobs", value: jobs.length, hue: "status-not-started", idle: jobs.length === 0 },
+    {
+      id: "drones",
+      label: "Drones",
+      value: drone.value ?? "—",
+      hint: asString(drone.detail),
+      hue: "stat-drones",
+      idle: (capacity?.occupied ?? 0) === 0,
+    },
     {
       id: "manifest",
       label: "Manifest",
       value: drift.value ?? "—",
       tone: toneOf(drift.tone),
       hint: asString(drift.detail),
+      hue: behind ? "notice-caution" : "stat-manifest-current",
+      idle: !behind,
     },
   ];
 }
 
-/** A count row, amber past zero — Awaiting approval, Needs review and Escalated share the treatment. */
-function countRow(id: string, label: string, value: number, tone: StatRow["tone"] = "warn"): StatRow {
-  return { id, label, value, ...(value > 0 ? { tone } : {}) };
+/**
+ * A count row, amber past zero — Awaiting approval, Needs review and Escalated
+ * share the treatment. The dot's hue is the value's own loud colour, dim at zero.
+ */
+function countRow(id: string, label: string, value: number, tone: "warn" | "hot" = "warn"): StatRow {
+  const hue = tone === "hot" ? "status-escalated" : "status-awaiting-review";
+  return { id, label, value, hue, idle: value === 0, ...(value > 0 ? { tone } : {}) };
 }
 
 /** `ReadingTone` collapsed to the Stats panel's warn/hot pair. */
