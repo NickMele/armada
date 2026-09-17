@@ -6,18 +6,6 @@
       ],
       "command": "armada",
       "type": "stdio"
-    },
-    "gitnexus": {
-      "args": [
-        "--allow-build=@ladybugdb/core",
-        "--allow-build=gitnexus",
-        "--allow-build=tree-sitter",
-        "dlx",
-        "gitnexus@1.6.12",
-        "mcp"
-      ],
-      "command": "pnpm",
-      "type": "stdio"
     }
   }
 }

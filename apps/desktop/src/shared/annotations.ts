@@ -27,11 +27,16 @@ export const ANNOTATION_CHANNELS = {
   list: "annotations:list",
   save: "annotations:save",
   remove: "annotations:remove",
+  root: "annotations:root",
+  capture: "annotations:capture",
 } as const;
 
 export type AnnotationStatus = "open" | "done";
 
 export type Box = { x: number; y: number; width: number; height: number };
+
+/** The Job a note was sent to Fleet as, #1250. */
+export type Sent = { jobId: string; handle: string; at: string };
 
 /**
  * One note. Written for the agent that reads it, so each field is something a
@@ -41,6 +46,8 @@ export type Annotation = {
   /** Also the file name, less `.json`. Sorts by when it was written. */
   id: string;
   status: AnnotationStatus;
+  /** Where it went, once sent to Fleet. Absent until then. */
+  sent?: Sent;
   /** What the person said. */
   text: string;
   /** The innermost React component under the click, or null if none was found. */
@@ -71,11 +78,15 @@ export type Annotation = {
   updatedAt: string;
 };
 
-/** What `window.armadaDev` carries. Three operations, each on one note. */
+/** What `window.armadaDev` carries: three operations on one note, and two a Send needs. */
 export type AnnotationsDevApi = {
   list: () => Promise<Annotation[]>;
   save: (note: Annotation) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  /** The repository the notes are about, which is the one a sent note's Job belongs to. */
+  root: () => Promise<string | null>;
+  /** A PNG of this part of the window, or null where nothing can capture it. */
+  capture: (box: Box) => Promise<ArrayBuffer | null>;
 };
 
 /** An id is a file name, so it is held to what cannot leave the directory. */
@@ -99,6 +110,10 @@ const isNullableString = (v: unknown): v is string | null => v === null || isStr
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
+function isSent(v: unknown): v is Sent {
+  return isRecord(v) && isString(v["jobId"]) && isString(v["handle"]) && isString(v["at"]);
+}
+
 function isBox(v: unknown): v is Box {
   return isRecord(v) && isNumber(v["x"]) && isNumber(v["y"]) && isNumber(v["width"]) && isNumber(v["height"]);
 }
@@ -114,6 +129,7 @@ export function isAnnotation(value: unknown): value is Annotation {
   return (
     isAnnotationId(value["id"]) &&
     (value["status"] === "open" || value["status"] === "done") &&
+    (value["sent"] === undefined || isSent(value["sent"])) &&
     isString(value["text"]) &&
     isNullableString(value["component"]) &&
     Array.isArray(value["owners"]) &&
@@ -145,6 +161,7 @@ export function serializeAnnotation(note: Annotation): string {
   const ordered: Annotation = {
     id: note.id,
     status: note.status,
+    ...(note.sent === undefined ? {} : { sent: note.sent }),
     text: note.text,
     component: note.component,
     owners: note.owners,
@@ -166,4 +183,26 @@ export function serializeAnnotation(note: Annotation): string {
 /** Oldest first, which is the order they were written in and the pins' numbers. */
 export function byCreation(a: Annotation, b: Annotation): number {
   return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1;
+}
+
+/**
+ * What a sent note asks Fleet for, as the describe-the-work path reads a
+ * request: the person's words first, then where in Bridge they point, so the
+ * Drone can find the code without the person there to ask.
+ */
+export function requestOf(note: Annotation): string {
+  const components = [note.component, ...note.owners].filter((name): name is string => name !== null);
+  const lines = [
+    note.text,
+    "",
+    "This is feedback on Bridge's own UI, left with the annotation layer.",
+    `- Component: ${components.length > 0 ? components.slice(0, 6).join(" inside ") : note.element.tag}`,
+    `- Element: <${note.element.tag}>${note.element.text === "" ? "" : ` reading "${note.element.text}"`}`,
+    `- Selector: ${note.selector}`,
+  ];
+  if (note.screen !== null) lines.push(`- Screen: ${note.screen}`);
+  if (note.layer !== null) lines.push(`- Inside: ${note.layer}`);
+  if (note.scenario !== null) lines.push(`- Mock scenario: ${note.scenario}`);
+  lines.push(`- Window: ${note.window.width}×${note.window.height}`, `- Note file: .armada/annotations/${note.id}.json`);
+  return lines.join("\n");
 }
