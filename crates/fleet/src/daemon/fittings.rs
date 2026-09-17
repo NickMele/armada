@@ -81,6 +81,10 @@ pub struct Host {
     /// worktree. `drafted()` writes under `<attachments_dir>/<job_id>/`, and
     /// `dispatch` reads from there to seed the worktree a Drone actually sees.
     pub attachments_dir: String,
+    /// Where Fleet keeps a Studio's frames, beside the Studio's own records
+    /// rather than in the database — `#1290`. One directory per Studio under
+    /// this, and a Note names the file inside it.
+    pub studio_frames_dir: String,
 }
 
 /// [`Host`] without the repository: what is true of the machine whichever
@@ -94,6 +98,7 @@ pub(crate) struct Local {
     pub(crate) mcp_config: String,
     pub(crate) port: u16,
     pub(crate) attachments_dir: String,
+    pub(crate) studio_frames_dir: String,
 }
 
 /// One repository a Fleet is assembled already serving.
@@ -314,6 +319,7 @@ where
                 mcp_config: fittings.host.mcp_config,
                 port: fittings.host.port,
                 attachments_dir: fittings.host.attachments_dir,
+                studio_frames_dir: fittings.host.studio_frames_dir,
             },
             port_range: fittings.port_range,
             run_log_retention: fittings.run_log_retention,

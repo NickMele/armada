@@ -126,7 +126,13 @@ flowchart LR
 > **Rule.** The development annotation layer stays beside Studio capture, unchanged: ⌥⌘A under `pnpm dev`, a file under `.armada/annotations/`, Send to Fleet, and `/annotations`.
 > Why: it is how a person annotates Bridge while building it. See `../practices/running-locally.md`, Annotating Bridge.
 
-A Note carries what the annotation layer records, in `apps/desktop/src/shared/annotations.ts`, and fields that layer does not record yet.
+> **Rule.** A Note's frame is a file beside the Studio's records, and the Note names it. A frame over 4 MiB is refused.
+> Why: an image in the content column is read back on every graph read and rides every `studio.changed`, for the life of a Studio nothing expires.
+
+> **Rule.** A source file path is kept only where the build gives one, and absent otherwise.
+> Why: React 19 fibers carry no `_debugSource`, and a guessed path sends a reader to the wrong file.
+
+A Note carries what the annotation layer records, in `apps/desktop/src/shared/annotations.ts`, and four fields that layer does not record.
 
 | Field | Recorded by the annotation layer today |
 |---|---|

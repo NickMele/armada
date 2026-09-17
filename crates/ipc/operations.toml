@@ -233,6 +233,21 @@ From Helm it also publishes `studio.helm_acted`, after `studio.changed`: Helm's 
 **No act writes a node's content afterwards but a scout's own reading**, which is what fixes a Note at capture.
 """
 
+[operations.capture_studio_note]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Capture what a person pointed at in Bridge as a Note on a Studio, keeping its frame beside the Studio's records, and answer with the Studio"
+notes = """
+**A person's act and nobody else's**, so `agent_access` is `No`: pointing at something wrong is done with a pointer, and no agent has one. `add_studio_node` already refuses a Note from Helm; this route is not offered to an agent at all.
+
+A route of its own rather than a `note` through `add_studio_node`, because a capture carries a file. The frame crosses as `frame.staged_path` — the path Bridge's main process wrote the PNG to, the way `stage_attachment` stages one — and Fleet copies it into `<machine>/studios/<studio_id>/` before the node is written. The Note then names the file it kept and its size, never its bytes: a base64 image inside the content would sit in every `studio.changed` for the life of the Studio. A frame over 4 MiB is refused as `fleet.studio_frame_too_large`, and one Fleet cannot read as `fleet.studio_frame_unreadable` — refused rather than dropped, for `drafting`'s reason about an attachment a person believed they sent.
+
+**Nothing writes the Note afterwards.** `docs/concepts/studio.md` fixes a Note at capture, and the only route that could rewrite one is a scout's own reading, which takes a Finding. A blank `said` is refused as `fleet.studio_node_blank`.
+
+The development annotation layer (`⌥⌘A`, `.armada/annotations/`) is untouched by this and stays, decided with the owner: it annotates Bridge while Bridge is being built, and its notes become Jobs rather than Notes.
+"""
+
 [operations.move_studio_node]
 kind = "command"
 transport = "HTTP"

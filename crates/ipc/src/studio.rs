@@ -11,6 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::capturing::StudioCapture;
 use crate::enums::{
     StudioAuthor, StudioEdgeKind, StudioEdgeStanding, StudioNodeState, StudioRelation,
 };
@@ -91,6 +92,10 @@ pub enum StudioNodeContent {
     },
     Note {
         said: String,
+        /// Where a person pointed, `#1290`. Absent on a Note that was typed
+        /// rather than pointed, and on one kept before capture existed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        capture: Option<StudioCapture>,
     },
     Cluster {
         title: String,
@@ -409,7 +414,10 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
                 run_id,
                 kept: kept.as_ref().map(StudioRunKept::of),
             },
-            C::Note { said } => StudioNodeContent::Note { said },
+            C::Note { said, capture } => StudioNodeContent::Note {
+                said,
+                capture: capture.as_ref().map(StudioCapture::from),
+            },
             C::Cluster { title } => StudioNodeContent::Cluster { title },
             C::Finding(finding) => crate::scouting::finding_on_the_wire(&finding),
             C::Contradiction { first, second } => {
@@ -437,7 +445,10 @@ impl StudioNodeContent {
             // `add_studio_node` refuses a Run kind outright, so nothing on
             // this seam can name a result the run did not have.
             StudioNodeContent::Run { run_id, .. } => C::Run { run_id, kept: None },
-            StudioNodeContent::Note { said } => C::Note { said },
+            StudioNodeContent::Note { said, capture } => C::Note {
+                said,
+                capture: capture.map(StudioCapture::to_domain),
+            },
             StudioNodeContent::Cluster { title } => C::Cluster { title },
             StudioNodeContent::Finding {
                 asked,

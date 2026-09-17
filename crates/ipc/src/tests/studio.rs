@@ -21,7 +21,10 @@ fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent
             run_id: text(),
             kept: None,
         },
-        K::Note => C::Note { said: text() },
+        K::Note => C::Note {
+            said: text(),
+            capture: None,
+        },
         K::Cluster => C::Cluster { title: text() },
         K::Finding => C::Finding(core_model::StudioFinding::asked(&text())),
         K::Contradiction => C::Contradiction {
@@ -67,6 +70,7 @@ fn a_graph() -> StudioGraph {
             StudioNodeId::carried(Ulid::carried(id)),
             core_model::StudioNodeContent::Note {
                 said: said.to_string(),
+                capture: None,
             },
             core_model::StudioPosition { x, y: 0 },
             at(1),

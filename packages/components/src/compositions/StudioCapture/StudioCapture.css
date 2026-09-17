@@ -1,0 +1,109 @@
+/* Studio capture, #1290. Every value a token; positions arrive from the layer
+ * as `--capture-*`, measured off the element each frame.
+ *
+ * MISSING TOKEN: nothing stacks above `--z-palette`, so this sits level with it
+ * and wins on paint order as the last child of the app's root. A capture over
+ * an open palette is what a `--z-capture` token would settle. */
+.armada-capture {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-palette);
+  pointer-events: none;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+}
+
+.armada-capture__outline {
+  position: fixed;
+  left: var(--capture-x);
+  top: var(--capture-y);
+  width: var(--capture-w);
+  height: var(--capture-h);
+  outline: calc(var(--border-width) * 2) solid var(--accent);
+  /* Off the element's edge, so it still reads on an accent-filled control. */
+  outline-offset: calc(var(--border-width) * 2);
+  pointer-events: none;
+}
+
+.armada-capture__outline[data-held] {
+  outline-style: dashed;
+}
+
+.armada-capture__named {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.armada-capture__card {
+  position: fixed;
+  left: clamp(var(--space-2), var(--capture-x), calc(100vw - var(--w-tooltip) - var(--space-2)));
+  top: var(--capture-y);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--w-tooltip);
+  margin: var(--space-2) 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--text-sm);
+  pointer-events: auto;
+}
+
+.armada-capture__card[data-side="above"] {
+  transform: translateY(-100%);
+  margin-top: calc(var(--space-2) * -1);
+}
+
+.armada-capture__chain {
+  margin: 0;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  overflow-wrap: anywhere;
+}
+
+.armada-capture__refused {
+  margin: 0;
+  color: var(--error);
+}
+
+.armada-capture__acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.armada-capture__bar {
+  position: fixed;
+  bottom: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: calc(100vw - var(--space-6));
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  pointer-events: auto;
+}
+
+.armada-capture__bar > :first-child {
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}

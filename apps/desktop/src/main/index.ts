@@ -19,6 +19,7 @@ import type {
 } from "@armada/protocol";
 import type { EditManifest, SaveManifestFile, StartCheckoutRun, StartRun } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
+import type { StagedFrame, StudioCapture } from "@armada/protocol";
 import { ANNOTATE_FLAG } from "../shared/annotations";
 import { handleAnnotations } from "./annotations";
 import { FleetConnection } from "./connection";
@@ -125,6 +126,30 @@ async function stageAttachment(
   const path = join(dir, filename);
   await writeFile(path, Buffer.from(bytes));
   return { path };
+}
+
+/** Enough of a capture to be worth sending. The rest is Fleet's to refuse. */
+function isCapture(value: unknown): value is StudioCapture {
+  if (typeof value !== "object" || value === null) return false;
+  const capture = value as Record<string, unknown>;
+  return typeof capture["selector"] === "string" && typeof capture["markup"] === "string";
+}
+
+/**
+ * A PNG of the whole window the capture came from, written where an attachment
+ * is staged. **The window, not the element**: a Note keeps what was on screen,
+ * and the element's box within it says which part to look at.
+ */
+async function stagedFrame(event: Electron.IpcMainInvokeEvent): Promise<StagedFrame | null> {
+  const image = await event.sender.capturePage();
+  const png = image.toPNG();
+  if (png.byteLength === 0) return null;
+  const dir = join(app.getPath("temp"), "armada-frames", randomUUID());
+  await mkdir(dir, { recursive: true });
+  const staged = join(dir, "frame.png");
+  await writeFile(staged, png);
+  const size = image.getSize();
+  return { staged_path: staged, width: size.width, height: size.height };
 }
 
 let connection: FleetConnection | null = null;
@@ -852,6 +877,14 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.removeStudioNode, async (_event, studioId: unknown, nodeId: unknown) =>
     text(studioId) && text(nodeId) ? ((await connection?.studios.removeNode(studioId, nodeId)) ?? unsent) : undefined,
   );
+  // Studio capture — #1290. **Main takes the frame, of the sender's own window
+  // and no other**, so the one capability the preload gains is a Note on a
+  // Studio rather than a screenshot the renderer could ask for and keep.
+  ipcMain.handle(CHANNELS.captureStudioNote, async (event, studioId: unknown, said: unknown, capture: unknown) => {
+    if (!text(studioId) || !text(said) || !isCapture(capture)) return undefined;
+    const frame = await stagedFrame(event as Electron.IpcMainInvokeEvent).catch(() => null);
+    return (await connection?.studios.captureNote(studioId, said, capture, frame)) ?? unsent;
+  });
   ipcMain.handle(CHANNELS.decideStudioEdge, async (_event, studioId: unknown, edgeId: unknown, accepted: unknown) =>
     text(studioId) && text(edgeId) && typeof accepted === "boolean"
       ? ((await connection?.studios.decideEdge(studioId, edgeId, accepted)) ?? unsent)

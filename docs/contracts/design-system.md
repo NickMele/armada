@@ -943,6 +943,7 @@ is the back-fill by hand that this section existed to prevent.
 ⌘K       command palette
 ⌘1–⌘8    Bridge surfaces, in rail order
 ⌘J       Helm, toggles the dock on every surface
+⌥⌘C      capture a note onto the open Studio
 ⌘\       toggle sidebar
 ⌘[ ⌘]    back / forward
 Esc      close an overlay, or return to the list from a detail route

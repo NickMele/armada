@@ -47,6 +47,7 @@ fn a_note(store: &mut Store, studio: &StudioId, id: &str, said: &str, x: i64) ->
         node_id(id),
         StudioNodeContent::Note {
             said: said.to_string(),
+            capture: None,
         },
         StudioPosition { x, y: 40 },
         at(1),
@@ -356,4 +357,98 @@ fn a_scouts_finding_is_kept_as_it_gathers_and_reads_back_frozen_after_a_reopen()
     assert_eq!(ended.cost_micros, Some(420));
     assert!(matches!(&ended.outcome, ScoutOutcome::Failed { why } if why == "the agent exited 1"));
     assert_eq!(graph.studio.touched_at, at(3));
+}
+
+/// **A Note's capture reads back whole after a reopen.** `#1290`.
+///
+/// The failure this is against is a capture that survives the write and loses
+/// a field on the way back — a selector, a style or the frame's name, each of
+/// which is what turns the Note back into the element it was left on.
+#[test]
+fn a_captured_notes_styles_markup_and_frame_read_back_after_a_reopen() {
+    let dir = TempDir::new();
+    let capture = core_model::StudioCapture {
+        component: Some("FilterChip".to_string()),
+        owners: vec!["BoardFilters".to_string(), "Board".to_string()],
+        selector: "button.armada-chip:nth-of-type(2)".to_string(),
+        element: core_model::CaptureElement {
+            tag: "button".to_string(),
+            text: "Queued 3".to_string(),
+            label: Some("Queued, 3 Jobs".to_string()),
+        },
+        screen: Some("Job Board".to_string()),
+        layer: None,
+        location: "/".to_string(),
+        bounds: core_model::CaptureBounds {
+            x: 312,
+            y: 148,
+            width: 96,
+            height: 28,
+        },
+        window: core_model::CaptureWindow {
+            width: 1440,
+            height: 900,
+        },
+        styles: [("color".to_string(), "rgb(232, 232, 237)".to_string())]
+            .into_iter()
+            .collect(),
+        markup: "<button class=\"armada-chip\">Queued 3</button>".to_string(),
+        source: None,
+        frame: Some(core_model::CaptureFrame {
+            filename: "01POINTED.png".to_string(),
+            byte_size: 214_880,
+            width: 2880,
+            height: 1800,
+        }),
+    };
+    let studio = {
+        let mut store = open(&dir);
+        let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+        let node = StudioNode::added(
+            node_id("01POINTED"),
+            StudioNodeContent::Note {
+                said: "The chip keeps its count".to_string(),
+                capture: Some(capture.clone()),
+            },
+            StudioPosition { x: 0, y: 0 },
+            at(1),
+            StudioAuthor::Person,
+        );
+        store
+            .add_studio_node(&studio, &node, None, &at(1))
+            .expect("added");
+        studio
+    };
+
+    let store = open(&dir);
+    let graph = store.studio(&studio).expect("read back");
+    let StudioNodeContent::Note {
+        said,
+        capture: read,
+    } = graph.nodes[0].content()
+    else {
+        panic!("a Note: {:?}", graph.nodes[0].content());
+    };
+    assert_eq!(said, "The chip keeps its count");
+    assert_eq!(
+        read.as_ref(),
+        Some(&capture),
+        "every field of the capture, the frame's name and size included"
+    );
+}
+
+/// A Note kept before capture existed has no capture and still reads back:
+/// the field is absent from the content object rather than written as null.
+#[test]
+fn a_note_with_no_capture_reads_back_as_one() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+    a_note(&mut store, &studio, "01PLAIN", "typed, not pointed", 0);
+
+    let graph = store.studio(&studio).expect("read back");
+    let StudioNodeContent::Note { capture, .. } = graph.nodes[0].content() else {
+        panic!("a Note");
+    };
+    assert!(capture.is_none(), "nothing was pointed at");
 }

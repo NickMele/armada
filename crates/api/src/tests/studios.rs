@@ -21,6 +21,7 @@ use crate::{door_within, router, Broadcaster, Redirector, Served, DOOR_PATH};
 const A_PERSONS: &[&str] = &[
     "create_studio",
     "delete_studio",
+    "capture_studio_note",
     "move_studio_node",
     "remove_studio_node",
     "decide_studio_edge",
@@ -372,4 +373,39 @@ async fn a_scout_is_asked_from_bridge_and_started_by_helm_alone_and_stopped_by_n
     )
     .await;
     assert_eq!(status, StatusCode::OK, "stop_scout is routed");
+}
+
+/// **The capture route carries the whole capture.** What Fleet does with the
+/// staged frame is `fleet`'s; what this holds is that nothing the body says
+/// about where a person pointed is dropped between the wire and the daemon.
+#[tokio::test]
+async fn a_captured_note_reaches_the_daemon_with_everything_it_was_sent() {
+    let app = shared(&helm_holding());
+    let at = format!("/studios/{THE_STUDIO}/capture_note");
+    let body = r#"{"said":"The chip keeps its count","capture":{"component":"FilterChip",
+        "owners":["Board"],"selector":"button.armada-chip","element":{"tag":"button",
+        "text":"Queued 3"},"screen":"Job Board","location":"/","bounds":{"x":312,"y":148,
+        "width":96,"height":28},"window":{"width":1440,"height":900},
+        "styles":{"color":"rgb(232, 232, 237)"},"markup":"<button>Queued 3</button>"},
+        "position":{"x":0,"y":0},"frame":{"staged_path":"/tmp/f.png","width":2880,"height":1800}}"#;
+    let (status, answer) = call(&app, "POST", &at, body).await;
+    assert_eq!(status, StatusCode::OK, "{answer}");
+
+    let node = studio(&answer).nodes.into_iter().next().expect("the Note");
+    let ipc::StudioNodeContent::Note { said, capture } = node.content else {
+        panic!("a Note");
+    };
+    assert_eq!(said, "The chip keeps its count");
+    let capture = capture.expect("where they pointed");
+    assert_eq!(capture.component.as_deref(), Some("FilterChip"));
+    assert_eq!(capture.selector, "button.armada-chip");
+    assert_eq!(capture.markup, "<button>Queued 3</button>");
+    assert_eq!(
+        capture.styles.get("color").map(String::as_str),
+        Some("rgb(232, 232, 237)")
+    );
+    assert!(
+        capture.source.is_none(),
+        "no path was sent and none appears"
+    );
 }

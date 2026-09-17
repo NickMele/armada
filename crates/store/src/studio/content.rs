@@ -5,10 +5,12 @@
 //! a kind cannot be said twice in two places that disagree.
 
 use core_model::{
-    JobId, ScoutCheckout, ScoutEnded, ScoutOutcome, StudioFinding, StudioNodeContent,
-    StudioNodeKind, StudioRunKept, Ulid,
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, JobId, ScoutCheckout, ScoutEnded,
+    ScoutOutcome, StudioCapture, StudioFinding, StudioNodeContent, StudioNodeKind, StudioRunKept,
+    Ulid,
 };
 use serde_json::{json, Map, Value};
+use std::collections::BTreeMap;
 
 /// Why a stored content object does not read back.
 #[derive(Debug)]
@@ -49,7 +51,10 @@ pub(super) fn written(content: &StudioNodeContent) -> String {
                 },
             }),
         },
-        StudioNodeContent::Note { said } => json!({ "said": said }),
+        StudioNodeContent::Note { said, capture } => match capture {
+            None => json!({ "said": said }),
+            Some(capture) => json!({ "said": said, "capture": capture_written(capture) }),
+        },
         StudioNodeContent::Cluster { title } => json!({ "title": title }),
         StudioNodeContent::Finding(finding) => finding_written(finding),
         StudioNodeContent::Contradiction { first, second } => {
@@ -92,6 +97,10 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
         },
         StudioNodeKind::Note => StudioNodeContent::Note {
             said: text("said")?,
+            capture: match object.get("capture") {
+                None => None,
+                Some(capture) => Some(capture_read(capture)?),
+            },
         },
         StudioNodeKind::Cluster => StudioNodeContent::Cluster {
             title: text("title")?,
@@ -291,5 +300,146 @@ fn run_kept(stored: &Value) -> Result<StudioRunKept, UnreadableContent> {
             .get("whole")
             .and_then(Value::as_bool)
             .ok_or(missing("whole"))?,
+    })
+}
+/// A Note's capture. **Only what it holds is written**, so a Note with no
+/// styles and no frame reads back the shape it was written in.
+fn capture_written(capture: &StudioCapture) -> Value {
+    let mut object = Map::new();
+    if let Some(component) = &capture.component {
+        object.insert("component".into(), json!(component));
+    }
+    if !capture.owners.is_empty() {
+        object.insert("owners".into(), json!(capture.owners));
+    }
+    object.insert("selector".into(), json!(capture.selector));
+    let mut element = Map::new();
+    element.insert("tag".into(), json!(capture.element.tag));
+    element.insert("text".into(), json!(capture.element.text));
+    if let Some(label) = &capture.element.label {
+        element.insert("label".into(), json!(label));
+    }
+    object.insert("element".into(), Value::Object(element));
+    for (field, said) in [("screen", &capture.screen), ("layer", &capture.layer)] {
+        if let Some(said) = said {
+            object.insert(field.into(), json!(said));
+        }
+    }
+    object.insert("location".into(), json!(capture.location));
+    let bounds = &capture.bounds;
+    object.insert(
+        "bounds".into(),
+        json!({ "x": bounds.x, "y": bounds.y, "width": bounds.width, "height": bounds.height }),
+    );
+    object.insert(
+        "window".into(),
+        json!({ "width": capture.window.width, "height": capture.window.height }),
+    );
+    if !capture.styles.is_empty() {
+        object.insert("styles".into(), json!(capture.styles));
+    }
+    object.insert("markup".into(), json!(capture.markup));
+    if let Some(source) = &capture.source {
+        object.insert("source".into(), json!(source));
+    }
+    if let Some(frame) = &capture.frame {
+        object.insert(
+            "frame".into(),
+            json!({
+                "filename": frame.filename,
+                "byte_size": frame.byte_size,
+                "width": frame.width,
+                "height": frame.height,
+            }),
+        );
+    }
+    Value::Object(object)
+}
+
+fn capture_read(stored: &Value) -> Result<StudioCapture, UnreadableContent> {
+    let missing = |field| UnreadableContent::MissingField { field };
+    let said = |at: &Value, field: &'static str| -> Result<String, UnreadableContent> {
+        at.get(field)
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or(missing(field))
+    };
+    let whole = |at: Option<&Value>, field: &'static str| -> Result<i64, UnreadableContent> {
+        at.and_then(|at| at.get(field))
+            .and_then(Value::as_i64)
+            .ok_or(missing(field))
+    };
+    let element = stored.get("element").ok_or(missing("capture.element"))?;
+    let bounds = stored.get("bounds");
+    let window = stored.get("window");
+    let maybe = |field: &str| {
+        stored
+            .get(field)
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
+    Ok(StudioCapture {
+        component: maybe("component"),
+        owners: match stored.get("owners") {
+            None => Vec::new(),
+            Some(Value::Array(items)) => items
+                .iter()
+                .map(|item| {
+                    item.as_str()
+                        .map(str::to_string)
+                        .ok_or(missing("capture.owners"))
+                })
+                .collect::<Result<Vec<String>, UnreadableContent>>()?,
+            Some(_) => return Err(missing("capture.owners")),
+        },
+        selector: said(stored, "selector")?,
+        element: CaptureElement {
+            tag: said(element, "tag")?,
+            text: said(element, "text")?,
+            label: element
+                .get("label")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        },
+        screen: maybe("screen"),
+        layer: maybe("layer"),
+        location: said(stored, "location")?,
+        bounds: CaptureBounds {
+            x: whole(bounds, "x")?,
+            y: whole(bounds, "y")?,
+            width: whole(bounds, "width")?,
+            height: whole(bounds, "height")?,
+        },
+        window: CaptureWindow {
+            width: whole(window, "width")?,
+            height: whole(window, "height")?,
+        },
+        styles: match stored.get("styles") {
+            None => BTreeMap::new(),
+            Some(Value::Object(styles)) => styles
+                .iter()
+                .map(|(property, value)| {
+                    value
+                        .as_str()
+                        .map(|value| (property.clone(), value.to_string()))
+                        .ok_or(missing("capture.styles"))
+                })
+                .collect::<Result<BTreeMap<String, String>, UnreadableContent>>()?,
+            Some(_) => return Err(missing("capture.styles")),
+        },
+        markup: said(stored, "markup")?,
+        source: maybe("source"),
+        frame: match stored.get("frame") {
+            None => None,
+            Some(frame) => Some(CaptureFrame {
+                filename: said(frame, "filename")?,
+                byte_size: frame
+                    .get("byte_size")
+                    .and_then(Value::as_u64)
+                    .ok_or(missing("capture.frame.byte_size"))?,
+                width: whole(Some(frame), "width")?,
+                height: whole(Some(frame), "height")?,
+            }),
+        },
     })
 }

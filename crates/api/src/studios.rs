@@ -152,6 +152,25 @@ pub(crate) async fn add_studio_node<D: Studios>(
     answered(&served, StatusCode::OK, added)
 }
 
+/// **No `Redirector`**: the route is offered to no agent, so a capture is a
+/// person's by construction.
+pub(crate) async fn capture_studio_note<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let capture = match body(&served, "a Note to capture", &bytes) {
+        Ok(capture) => capture,
+        Err(response) => return response,
+    };
+    let captured = served
+        .daemon()
+        .capture_studio_note(StudioId::carried(studio_id), capture, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, captured)
+}
+
 pub(crate) async fn move_studio_node<D: Studios>(
     State(served): State<Served<D>>,
     Path(studio_id): Path<String>,

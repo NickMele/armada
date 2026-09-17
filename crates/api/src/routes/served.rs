@@ -123,6 +123,11 @@ pub const SERVED: &[Route] = &[
         path: "/studios/:studio_id/add_node",
     },
     Route {
+        operation: "capture_studio_note",
+        method: "POST",
+        path: "/studios/:studio_id/capture_note",
+    },
+    Route {
         operation: "move_studio_node",
         method: "POST",
         path: "/studios/:studio_id/move_node",
