@@ -45,6 +45,7 @@ import realBoard from "@armada/screens/src/fixtures/boards/real-board.json";
 import { NOTHING_YET } from "../../../shared/bridge";
 import { connected } from "./moment";
 import type { Scenario } from "./moment";
+import { DRIFT_GONE, GH_ISSUE_VIEW, manifesting } from "./manifest-fleet";
 import { SCRATCH, SHEET_READ, settingUp } from "./setup-fleet";
 
 export { connected, onBoard, unanswered } from "./moment";
@@ -226,6 +227,7 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   recordedBoard(),
   settingUp({ repositories: [repository(), SCRATCH], sheet: SHEET_READ }),
+  manifesting({ alwaysAllowed: [GH_ISSUE_VIEW], drift: DRIFT_GONE }),
   ...BUILT.map(([name, fixture]) => holding(`job/${name}`, fixture.name, [fixture], fixture.job.id)),
   ...RECORDED.map(([slug, fixture]) => holding(`recorded/${slug}`, fixture.name, [fixture], fixture.job.id)),
 ];

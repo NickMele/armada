@@ -18,7 +18,7 @@ import type { ChangedFile } from "../ChangedFiles/ChangedFiles";
  * person is working in.
  *
  * The page fills the panel it is mounted in, so the story draws a
- * viewport-high column — the same mount `Screens/Manifest` uses.
+ * viewport-high column, as `App` mounts the Manifest surface.
  */
 const meta: Meta<typeof RunPage> = {
   title: "Compositions/Run page",
