@@ -122,6 +122,16 @@ const NAMES_ITS_SCOPE: &[&str] = &[
     "get_manifest_spend",
     "start_server",
     "list_studios",
+    // The main checkout's runs, which a Helm session starts and reads (#1288).
+    // Absent a name they answer about the first repository served, so a
+    // session standing in another would start and read runs in that one.
+    "get_checkout_run_sheet",
+    "list_checkout_runs",
+    "get_checkout_run_output",
+    "start_checkout_run",
+    "stop_checkout_run",
+    "undo_checkout_run",
+    "start_checkout_verify",
 ];
 
 /// Set on every call the door makes, so a `:job_id` resolves inside the

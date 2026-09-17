@@ -3,9 +3,9 @@
 //! back refused by name rather than dropped.
 
 use core_model::{
-    ManifestId, Studio, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
-    StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation,
-    Timestamp, Ulid,
+    ManifestId, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding,
+    StudioId, StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioPosition,
+    StudioRelation, Timestamp, Ulid,
 };
 
 use crate::migrations::tables_pointing_at_a_job;
@@ -33,6 +33,7 @@ fn a_studio(store: &mut Store, id: &str, manifest: &str, minute: u32) -> StudioI
         id: studio_id(id),
         manifest_id: ManifestId::carried(Ulid::carried(manifest)),
         name: StudioName::named("Stale counts"),
+        named_by: Some(StudioAuthor::Person),
         created_at: at(minute),
         touched_at: at(minute),
     };
@@ -48,6 +49,7 @@ fn a_note(store: &mut Store, studio: &StudioId, id: &str, said: &str, x: i64) ->
         },
         StudioPosition { x, y: 40 },
         at(1),
+        StudioAuthor::Person,
     );
     store
         .add_studio_node(studio, &node, None, &at(1))
@@ -62,6 +64,7 @@ fn proposed(id: &str, from: &StudioNodeId, to: &StudioNodeId) -> StudioEdge {
         to.clone(),
         StudioRelation::SameAs,
         at(2),
+        StudioAuthor::Person,
     )
     .expect("two different nodes")
 }
@@ -120,6 +123,7 @@ fn a_repository_lists_its_own_studios_the_last_touched_first() {
         .rename_studio(
             &older,
             &StudioName::named("Renamed").expect("a name"),
+            StudioAuthor::Person,
             &at(7),
         )
         .expect("renamed");
@@ -153,6 +157,7 @@ fn a_proposed_edge_is_accepted_or_rejected_and_nothing_else_is() {
         },
         StudioPosition { x: 0, y: 200 },
         at(1),
+        StudioAuthor::Helm,
     );
     store
         .add_studio_node(&studio, &finding, Some((&note, edge_id("01MADE"))), &at(1))

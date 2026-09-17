@@ -5,9 +5,9 @@
 //! different plan than the one a person left.
 
 use core_model::{
-    EdgeRefused, ManifestId, StateDoesNotFit, Studio, StudioEdge, StudioEdgeId, StudioEdgeKind,
-    StudioEdgeStanding, StudioId, StudioName, StudioNode, StudioNodeId, StudioNodeState,
-    StudioPosition, Timestamp, Ulid,
+    EdgeRefused, ManifestId, StateDoesNotFit, Studio, StudioAuthor, StudioEdge, StudioEdgeId,
+    StudioEdgeKind, StudioEdgeStanding, StudioId, StudioName, StudioNode, StudioNodeId,
+    StudioNodeState, StudioPosition, Timestamp, Ulid,
 };
 
 use super::content::{self, UnreadableContent};
@@ -28,7 +28,7 @@ impl Store {
         let mut asking = self
             .conn
             .prepare(
-                "SELECT id, kind, state, content, x, y, created_at FROM studio_nodes \
+                "SELECT id, kind, state, content, x, y, created_at, added_by FROM studio_nodes \
                  WHERE studio_id = ?1 ORDER BY created_at, id",
             )
             .map_err(database("reading a Studio's nodes"))?;
@@ -44,12 +44,13 @@ impl Store {
                         y: row.get(5)?,
                     },
                     row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(7)?,
                 ))
             })
             .map_err(database("reading a Studio's nodes"))?;
         let mut nodes = Vec::new();
         for row in rows {
-            let (id, kind, state, stored, position, created_at) =
+            let (id, kind, state, stored, position, created_at, added_by) =
                 row.map_err(database("reading one node"))?;
             let unreadable = |why| StudioError::Unreadable {
                 table: "studio_nodes",
@@ -67,12 +68,14 @@ impl Store {
                     })
                 })?),
             };
+            let added_by = author(added_by).map_err(unreadable)?;
             let node = StudioNode::recorded(
                 StudioNodeId::carried(Ulid::carried(id.clone())),
                 content,
                 state,
                 position,
                 Timestamp::from_rfc3339(created_at),
+                added_by,
             )
             .map_err(|why| unreadable(Unreadable::StateDoesNotFit(why)))?;
             nodes.push(node);
@@ -84,7 +87,8 @@ impl Store {
         let mut asking = self
             .conn
             .prepare(
-                "SELECT id, from_node, to_node, kind, standing, created_at FROM studio_edges \
+                "SELECT id, from_node, to_node, kind, standing, created_at, added_by \
+                 FROM studio_edges \
                  WHERE studio_id = ?1 ORDER BY created_at, id",
             )
             .map_err(database("reading a Studio's edges"))?;
@@ -97,12 +101,13 @@ impl Store {
                     row.get::<_, String>(3)?,
                     row.get::<_, String>(4)?,
                     row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
                 ))
             })
             .map_err(database("reading a Studio's edges"))?;
         let mut edges = Vec::new();
         for row in rows {
-            let (id, from, to, kind, standing, created_at) =
+            let (id, from, to, kind, standing, created_at, added_by) =
                 row.map_err(database("reading one edge"))?;
             let unreadable = |why| StudioError::Unreadable {
                 table: "studio_edges",
@@ -121,6 +126,7 @@ impl Store {
                     value: standing.clone(),
                 })
             })?;
+            let added_by = author(added_by).map_err(unreadable)?;
             let node = |id: String| StudioNodeId::carried(Ulid::carried(id));
             let edge = StudioEdge::recorded(
                 StudioEdgeId::carried(Ulid::carried(id.clone())),
@@ -129,6 +135,7 @@ impl Store {
                 kind,
                 standing,
                 Timestamp::from_rfc3339(created_at),
+                added_by,
             )
             .map_err(|why| unreadable(Unreadable::Edge(why)))?;
             edges.push(edge);
@@ -137,6 +144,21 @@ impl Store {
     }
 }
 
+/// A stored author, `None` where the row predates V78.
+fn author(stored: Option<String>) -> Result<Option<StudioAuthor>, Unreadable> {
+    stored
+        .map(|value| {
+            StudioAuthor::from_wire(&value).ok_or(Unreadable::UnknownValue {
+                column: "added_by",
+                value,
+            })
+        })
+        .transpose()
+}
+
+/// **A `named_by` this build does not spell reads as unrecorded** rather than
+/// failing the list: the column's `CHECK` holds the set, so only a newer
+/// writer could leave one, and a name is not a graph a person plans from.
 pub(super) fn studio_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Studio> {
     Ok(Studio {
         id: StudioId::carried(Ulid::carried(row.get::<_, String>(0)?)),
@@ -147,5 +169,9 @@ pub(super) fn studio_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Studio> {
             .and_then(StudioName::named),
         created_at: Timestamp::from_rfc3339(row.get::<_, String>(3)?),
         touched_at: Timestamp::from_rfc3339(row.get::<_, String>(4)?),
+        named_by: row
+            .get::<_, Option<String>>(5)?
+            .as_deref()
+            .and_then(StudioAuthor::from_wire),
     })
 }

@@ -7,7 +7,10 @@ use core_model::{
     Timestamp, Ulid,
 };
 
-use crate::{decode, encode, ProposeStudioEdge, Studio, StudioNodeContent};
+use crate::{
+    decode, encode, Event, HelmStudioAct, Instant, ProposeStudioEdge, Studio, StudioHelmActed,
+    StudioNodeContent,
+};
 
 fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent {
     use core_model::StudioNodeContent as C;
@@ -64,6 +67,7 @@ fn a_graph() -> StudioGraph {
             },
             core_model::StudioPosition { x, y: 0 },
             at(1),
+            core_model::StudioAuthor::Person,
         )
     };
     let first = node("01NOTE1", "The chip keeps its count", 0);
@@ -74,6 +78,7 @@ fn a_graph() -> StudioGraph {
         second.id().clone(),
         StudioRelation::SameAs,
         at(2),
+        core_model::StudioAuthor::Helm,
     )
     .expect("two nodes");
     StudioGraph {
@@ -81,6 +86,7 @@ fn a_graph() -> StudioGraph {
             id: StudioId::carried(Ulid::carried("01STUDIO")),
             manifest_id: ManifestId::carried(Ulid::carried("armada")),
             name: None,
+            named_by: None,
             created_at: at(0),
             touched_at: at(2),
         },
@@ -104,6 +110,17 @@ fn a_studio_round_trips_flat_and_an_untitled_one_sends_no_name() {
         "{json}"
     );
     assert!(!json.contains("\"state\""), "a Note has none: {json}");
+    assert!(json.contains(r#""added_by":"person""#), "{json}");
+    assert!(
+        json.contains(
+            r#""standing":"proposed","created_at":"2026-09-17T09:02:00.000Z","added_by":"helm""#
+        ),
+        "{json}"
+    );
+    assert!(
+        !json.contains("named_by"),
+        "untitled, so nobody named it: {json}"
+    );
     assert_eq!(
         decode::<Studio>("a Studio", json.as_bytes()).expect("round-trips"),
         studio
@@ -135,4 +152,33 @@ fn a_proposal_naming_the_produced_edge_does_not_decode() {
 fn a_node_of_a_kind_the_studio_has_no_name_for_does_not_decode() {
     let body = br#"{"kind":"observation","said":"not a node"}"#;
     decode::<StudioNodeContent>("content", body).expect_err("not a kind");
+}
+
+/// **Helm's act is its own kind**, flat: which act beside the ids, and the
+/// repository at the top level where a poll's tally reads it.
+#[test]
+fn helms_act_on_a_studio_is_its_own_kind_and_names_its_repository() {
+    let acted = Event::StudioHelmActed(StudioHelmActed {
+        studio_id: crate::StudioId::carried("01STUDIO"),
+        manifest_id: crate::ManifestId::carried("armada"),
+        act: HelmStudioAct::AddedNode {
+            node_id: crate::StudioNodeId::carried("01NODE"),
+        },
+        at: Instant::from(&Timestamp::from_rfc3339("2026-09-17T09:00:00.000Z")),
+    });
+    let json = encode(&acted).expect("plain data");
+    assert!(
+        json.starts_with(r#"{"kind":"studio.helm_acted","studio_id":"01STUDIO""#),
+        "{json}"
+    );
+    assert!(
+        json.contains(r#""act":"added_node","node_id":"01NODE""#),
+        "{json}"
+    );
+    assert_eq!(acted.kind(), "studio.helm_acted");
+    assert_eq!(acted.about(), (None, Some("armada".to_string())));
+    assert_eq!(
+        decode::<Event>("an event", json.as_bytes()).expect("round-trips"),
+        acted
+    );
 }

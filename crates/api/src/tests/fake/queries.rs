@@ -551,9 +551,13 @@ impl Queries for FakeDaemon {
 
     async fn list_checkout_runs(
         &self,
-        _manifest_id: Option<ipc::ManifestId>,
+        manifest_id: Option<ipc::ManifestId>,
         _repository: Option<String>,
     ) -> Result<ipc::CheckoutRunList, Refusal> {
+        self.checkout_runs_named
+            .lock()
+            .expect("not poisoned")
+            .push(manifest_id);
         Ok(ipc::CheckoutRunList {
             runs: Vec::new(),
             unreadable: Vec::new(),

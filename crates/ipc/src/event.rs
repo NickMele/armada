@@ -26,7 +26,7 @@ use crate::reading::ManifestReading;
 use crate::rehearsal::{CheckoutRunRecord, RunRecord};
 use crate::repositories::RepositoryList;
 use crate::servers::ServerState;
-use crate::studio::{Studio, StudioDeleted};
+use crate::studio::{Studio, StudioDeleted, StudioHelmActed};
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
@@ -155,6 +155,10 @@ pub enum Event {
     StudioChanged(Studio),
     #[serde(rename = "studio.deleted")]
     StudioDeleted(StudioDeleted),
+    // Helm's act on a Studio, as its own kind beside the `studio.changed` the
+    // same write publishes. `#1288`.
+    #[serde(rename = "studio.helm_acted")]
+    StudioHelmActed(StudioHelmActed),
 }
 
 impl Event {

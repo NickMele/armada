@@ -121,6 +121,10 @@ wire_enum! {
     StudioRelation, core_model::StudioRelation, "a relation that may be proposed"
 }
 wire_enum! {
+    /// Who put something on a Studio: a person or Helm.
+    StudioAuthor, core_model::StudioAuthor, "who put something on a Studio"
+}
+wire_enum! {
     /// Whether a person has accepted an edge.
     StudioEdgeStanding, core_model::StudioEdgeStanding, "a Studio edge standing"
 }

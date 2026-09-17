@@ -247,3 +247,85 @@ async fn a_door_session_reads_no_studio_of_another_repository() {
     assert!(listed.contains("\"isError\":true"), "{listed}");
     assert!(listed.contains("the one it stands in"), "{listed}");
 }
+
+/// **Helm's other unasked acts say who took them too** (#1288): proposing an
+/// edge and naming a Studio through the door are Helm's, and the same calls from
+/// Bridge are a person's, so Fleet can publish the one as Helm's act.
+#[tokio::test]
+async fn an_edge_helm_proposes_and_a_name_it_gives_are_recorded_as_helms() {
+    let daemon = helm_holding();
+    let app = shared(&daemon);
+    let proposed = from(
+        &app,
+        HELM,
+        DOOR_PATH,
+        &calling(
+            "propose_studio_edge",
+            &format!(
+                r#"{{"studio_id":"{THE_STUDIO}","body":{{"from":"01A","to":"01B","kind":"same_as"}}}}"#
+            ),
+        ),
+    )
+    .await;
+    assert!(proposed.contains("\"isError\":false"), "{proposed}");
+    let named = from(
+        &app,
+        HELM,
+        DOOR_PATH,
+        &calling(
+            "rename_studio",
+            &format!(r#"{{"studio_id":"{THE_STUDIO}","body":{{"name":"Stale counts"}}}}"#),
+        ),
+    )
+    .await;
+    assert!(named.contains("\"isError\":false"), "{named}");
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/studios/{THE_STUDIO}/rename"),
+        r#"{"name":"A person's name for it"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        *daemon.added_by.lock().expect("not poisoned"),
+        vec![Redirector::Helm, Redirector::Helm, Redirector::Person]
+    );
+}
+
+/// **Helm reads the checkout runs it can start, in its own repository** (#1288).
+/// A checkout route answers about the first repository served when none is
+/// named, so the door names the session's; a plain agent is offered none of
+/// them.
+#[tokio::test]
+async fn helm_reads_checkout_runs_in_the_repository_it_stands_in() {
+    let daemon = helm_holding();
+    let app = shared(&daemon);
+    let anyone = from(&app, ANYONE, DOOR_PATH, LISTING).await;
+    let helm = from(&app, HELM, DOOR_PATH, LISTING).await;
+    for read in [
+        "list_checkout_runs",
+        "get_checkout_run_sheet",
+        "get_checkout_run_output",
+    ] {
+        let named = format!("\"name\":\"{read}\"");
+        assert!(helm.contains(&named), "{read} is not offered to Helm");
+        assert!(!anyone.contains(&named), "{read} is offered to an agent");
+    }
+
+    let listed = from(
+        &app,
+        HELM,
+        &door_within("01MF"),
+        &calling("list_checkout_runs", "{}"),
+    )
+    .await;
+    assert!(listed.contains("\"isError\":false"), "{listed}");
+    let (status, _) = call(&app, "GET", "/manifest/runs", "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        *daemon.checkout_runs_named.lock().expect("not poisoned"),
+        vec![Some(ipc::ManifestId::carried("01MF")), None],
+        "the door names the session's repository, and Bridge names none"
+    );
+}

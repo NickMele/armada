@@ -26,6 +26,8 @@ export type StudioSummary = {
  * Studio it holds with it.
  */
 export type Studio = StudioSummary & {
+  /** `person` or `helm`. Absent when untitled, or named before this was kept. Since 14.7. */
+  named_by?: string;
   /** Oldest first. */
   nodes: StudioNode[];
   /** Oldest first. */
@@ -61,6 +63,8 @@ export type StudioNode = StudioNodeContent & {
   state?: string;
   position: StudioPosition;
   created_at: string;
+  /** `person` or `helm`. Absent only on a node added before it was kept. Since 14.7. */
+  added_by?: string;
 };
 
 /** One edge. `proposed` is drawn dashed until a person accepts it. */
@@ -73,6 +77,8 @@ export type StudioEdge = {
   /** `proposed` or `accepted`. */
   standing: string;
   created_at: string;
+  /** `person` or `helm`. Absent only on an edge kept before it was. Since 14.7. */
+  added_by?: string;
 };
 
 /** A Studio that is gone — `delete_studio`'s answer and `studio.deleted`'s body. */
@@ -80,6 +86,23 @@ export type StudioDeleted = {
   id: string;
   manifest_id: string;
 };
+
+/**
+ * `studio.helm_acted`'s body: one act Helm took on a Studio, published after
+ * the write's `studio.changed`. A person's act publishes `studio.changed`
+ * alone, so the two are told apart by kind. Since 14.7, #1288.
+ */
+export type StudioHelmActed = HelmStudioAct & {
+  studio_id: string;
+  manifest_id: string;
+  at: string;
+};
+
+/** Which of Helm's unasked acts, with the id of what it added or the name given. */
+export type HelmStudioAct =
+  | { act: "added_node"; node_id: string }
+  | { act: "proposed_edge"; edge_id: string }
+  | { act: "named"; name: string };
 
 /** `POST /studios/create?manifest_id=`. A blank or absent name is untitled. */
 export type CreateStudio = { name?: string };
