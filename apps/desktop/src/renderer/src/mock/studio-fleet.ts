@@ -179,10 +179,12 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
   };
 }
 
-/** A column on the grid `everyKind()` is laid out on, wide enough for a node card and a gap. */
-const COLUMN = 340;
-const ROW = 220;
-const place = (at: number) => ({ x: (at % 4) * COLUMN, y: Math.floor(at / 4) * ROW });
+/**
+ * The grid `everyKind()` is laid out on, wide enough for a node card and a gap. **Taller than it
+ * is wide, and its top-right corner left empty**: the whiteboard fits the graph to the window and
+ * draws the Proposed panel over that corner, so a node placed there is read through glass.
+ */
+const place = (column: number, row: number) => ({ x: column * 340, y: row * 220 });
 
 const MADE = "2026-09-15T11:00:00Z";
 const TOUCHED = "2026-09-17T08:40:00Z";
@@ -194,28 +196,28 @@ const TOUCHED = "2026-09-17T08:40:00Z";
  */
 export function everyKind(jobId: string): Studio {
   const nodes: StudioNode[] = [
-    { id: "every-link", kind: "link", address: "https://github.com/NickMele/armada/issues/1341", position: place(0), created_at: MADE },
-    { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", position: place(1), created_at: MADE },
-    { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(2), created_at: MADE },
-    { id: "every-note-states", kind: "note", said: "Queued and preparing read the same at a glance", position: place(3), created_at: MADE },
-    { id: "every-cluster", kind: "cluster", title: "The legend cannot be read", position: place(4), created_at: MADE },
-    { id: "every-run", kind: "run", run_id: "01RUNEVERYKIND000000000000", position: place(5), created_at: MADE },
-    { id: "every-finding", kind: "finding", asked: "Where do the legend's colours come from?", state: "frozen", position: place(6), created_at: MADE },
-    { id: "every-finding-asked", kind: "finding", asked: "Which states share a token?", state: "proposed", position: place(7), created_at: MADE },
+    { id: "every-link", kind: "link", address: "docs/contracts/design-system.md#the-board", position: place(0, 0), created_at: MADE },
+    { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", position: place(1, 0), created_at: MADE },
+    { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
+    { id: "every-note-states", kind: "note", said: "Queued and preparing read the same at a glance", position: place(1, 1), created_at: MADE },
+    { id: "every-cluster", kind: "cluster", title: "The legend cannot be read", position: place(0, 2), created_at: MADE },
+    { id: "every-run", kind: "run", run_id: "01RUNEVERYKIND000000000000", position: place(1, 2), created_at: MADE },
+    { id: "every-finding", kind: "finding", asked: "Where do the legend's colours come from?", state: "frozen", position: place(2, 2), created_at: MADE },
+    { id: "every-finding-asked", kind: "finding", asked: "Which states share a token?", state: "proposed", position: place(2, 3), created_at: MADE },
     {
       id: "every-contradiction",
       kind: "contradiction",
       first: "The design contract gives the legend its own row",
       second: "The Board draws it inside the step bar",
       state: "reported",
-      position: place(8),
+      position: place(0, 3),
       created_at: MADE,
     },
-    { id: "every-sketch", kind: "sketch", body: "Legend on its own row\nunder the step bar", state: "frozen", position: place(9), created_at: MADE },
-    { id: "every-deferral", kind: "deferral", what: "Whether the legend collapses under 720", state: "open", position: place(10), created_at: MADE },
-    { id: "every-outline", kind: "outline", body: "Give the legend its own row\nThen fix the contrast", state: "draft", position: place(11), created_at: MADE },
-    { id: "every-draft", kind: "issue_draft", title: "The Board's legend is illegible", body: "…", state: "draft", position: place(12), created_at: MADE },
-    { id: "every-job", kind: "job", job_id: jobId, position: place(13), created_at: MADE },
+    { id: "every-sketch", kind: "sketch", body: "Legend on its own row\nunder the step bar", state: "frozen", position: place(1, 3), created_at: MADE },
+    { id: "every-deferral", kind: "deferral", what: "Whether the legend collapses under 720", state: "open", position: place(2, 4), created_at: MADE },
+    { id: "every-outline", kind: "outline", body: "Give the legend its own row\nThen fix the contrast", state: "draft", position: place(1, 4), created_at: MADE },
+    { id: "every-draft", kind: "issue_draft", title: "The Board's legend is illegible", body: "…", state: "draft", position: place(0, 4), created_at: MADE },
+    { id: "every-job", kind: "job", job_id: jobId, position: place(1, 5), created_at: MADE },
   ];
   // `produced` is drawn by the Studio and never proposed (`docs/concepts/studio.md`, Edges), so
   // only the three relations are here twice, once waiting on a person and once decided.
@@ -256,8 +258,8 @@ export function untitled(): Studio {
     created_at: at,
     touched_at: at,
     nodes: [
-      { id: "untitled-link", kind: "link", address: "https://github.com/NickMele/armada/issues/1294", position: place(0), created_at: at },
-      { id: "untitled-note", kind: "note", said: "Capture on another repository's web app waits on a security review", position: place(1), created_at: at },
+      { id: "untitled-link", kind: "link", address: "docs/concepts/studio.md#notes", position: place(0, 0), created_at: at },
+      { id: "untitled-note", kind: "note", said: "Capture on another repository's web app waits on a security review", position: place(0, 1), created_at: at },
     ],
     edges: [{ id: "untitled-produced", from: "untitled-link", to: "untitled-note", kind: "produced", standing: "accepted", created_at: at }],
   };
