@@ -128,15 +128,15 @@ describe("what one telling says", () => {
 });
 
 describe("how one telling sounds", () => {
-  it("falls for a job that escalated", () => {
+  it("falls for a job that escalated, and for one out of retries", () => {
     expect(telling([job({ status: "escalated" })], NOON)?.tone).toBe("blocked");
+    expect(telling([job({ status: "awaiting_repair" })], NOON)?.tone).toBe("blocked");
   });
 
-  it("is one note for a review, an approval, a repair and a question", () => {
+  it("is one note for a review, an approval and a question", () => {
     const waits: Partial<JobSummary>[] = [
       { status: "awaiting_review" },
       { status: "awaiting_approval" },
-      { status: "awaiting_repair" },
       { status: "running", asking: true },
     ];
     for (const over of waits) expect(telling([job(over)], NOON)?.tone).toBe("waiting");
