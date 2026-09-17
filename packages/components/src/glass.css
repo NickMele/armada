@@ -9,9 +9,10 @@
 
        <section className="armada-panel armada-glass">
 
-   Today: the left column's panels (`Panel`), Helm's dock (`TheShell`), and
-   Drift and Verify on the Manifest surface. Next: Overview's summary tiles
-   (#1261), Overview's empty state (#1262) and the dock's Helm frame (#1264).
+   Today: the left column's panels (`Panel`), Helm's dock (`TheShell`, its
+   Helm frame laid over the glass by #1264), and Drift and Verify on the
+   Manifest surface. Next: Overview's summary tiles (#1261) and Overview's
+   empty state (#1262).
    Drift and Verify are named by their own class below only because #1260 did
    not reach their markup; each moves onto `armada-glass` with one className.
 
