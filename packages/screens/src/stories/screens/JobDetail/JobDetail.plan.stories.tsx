@@ -3,7 +3,7 @@ import { expect, waitFor, within } from "storybook/test";
 
 import { preparing, running } from "../../../fixtures/build/index";
 import { JobDetailFrom } from "./JobDetail";
-import { awaitingApprovalPlanPending, PLAN_PARTWAY, PLAN_WITH_A_DROPPED_TASK, withPlan } from "../../../../../../../apps/desktop/src/renderer/src/mock/job-plan-fixtures";
+import { awaitingApprovalPlanPending, PLAN_PARTWAY, PLAN_WITH_A_DROPPED_TASK, withPlan } from "../../../../../../apps/desktop/src/renderer/src/mock/job-plan-fixtures";
 
 /** Job detail, split by group — #1044. Same `title` as the rest of this directory, so ids hold. */
 const meta: Meta<typeof JobDetailFrom> = {
