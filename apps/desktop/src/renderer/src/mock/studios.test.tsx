@@ -12,6 +12,7 @@ import { repository } from "@armada/screens/src/fixtures/build/base";
 
 import { mountApp, type Mounted } from "./mount";
 import { studying } from "./studio-fleet";
+import { entered } from "./testing";
 
 const windows: { app: Mounted; host: HTMLElement }[] = [];
 
@@ -111,9 +112,11 @@ test("Delete node confirms, with Cancel first, and takes the node's edges with i
   node(/^Finding: /).element().focus();
   await userEvent.keyboard("{Enter}");
   await page.getByRole("button", { name: "Delete node" }).click();
-  await expect.element(page.getByRole("dialog")).toBeVisible();
+  // Scaling up, so the press inside it waits for it to land — #1323.
+  const confirm = page.getByRole("dialog");
+  await entered(confirm);
   await expect.element(page.getByRole("button", { name: "Cancel" })).toHaveFocus();
-  await page.getByRole("dialog").getByRole("button", { name: "Delete node" }).click();
+  await confirm.getByRole("button", { name: "Delete node" }).click();
 
   await expect.poll(() => fleet.studios()[0]!.nodes.map((one) => one.kind)).toEqual(["note"]);
   expect(fleet.studios()[0]!.edges).toEqual([]);
