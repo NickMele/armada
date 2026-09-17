@@ -54,12 +54,13 @@ export type StudioNodeContent =
   | { kind: "contradiction"; first: string; second: string; answer?: string }
   | { kind: "sketch"; body: string }
   /**
-   * A board, document, issue, page or session, kept as its address, and the
-   * line a person wrote beside it saying why they kept it. **`said` is
-   * additional, never a replacement** — a Link never stops being its address,
-   * and it is absent on one pasted with nothing typed. Since 14.15, #1378.
+   * A board, document, issue, page or session, kept as its address, the line
+   * a person wrote beside it (`said`, since 14.15, #1378), and what the source
+   * calls itself where a read-in learned one (`named`, since 14.16, #1293 — an
+   * issue's number, title and state on one line). **Both are additional, never
+   * a replacement**: a Link never stops being its address.
    */
-  | { kind: "link"; address: string; said?: string }
+  | { kind: "link"; address: string; said?: string; named?: string }
   | { kind: "deferral"; what: string }
   | { kind: "outline"; body: string }
   | { kind: "issue_draft"; title: string; body: string }
@@ -144,6 +145,7 @@ export type HelmStudioAct =
   | { act: "proposed_edge"; edge_id: string }
   | { act: "named"; name: string }
   | { act: "wrote_up"; from: string; node_id: string }
+  | { act: "read_in"; from: string; node_ids: string[] }
   | { act: "dispatched"; from: string; node_ids: string[] };
 
 /** `POST /studios/create?manifest_id=`. A blank or absent name is untitled. */
@@ -255,6 +257,11 @@ export type StudioFinding = {
   asked: string;
   /** The commit read, and whether anything uncommitted sat on top of it. */
   checkout?: ScoutCheckout;
+  /**
+   * Every source Fleet fetched and handed it beyond the checkout. Empty on a
+   * scout asked about the code. Since 14.15, #1293.
+   */
+  sources?: ScoutSource[];
   /** Every file read, relative to the checkout, in the order first read — a file a search returned lines of included. */
   read?: string[];
   /** Every search run, as its pattern and where it looked. */
@@ -265,6 +272,14 @@ export type StudioFinding = {
 };
 
 export type ScoutCheckout = { commit: string; uncommitted: boolean };
+
+/**
+ * A source a scout was handed beyond the checkout: the Link's address, what it
+ * was read as — `issue`, `pull_request`, `milestone`, `page`, `session` or
+ * `thread` — and how many characters were cut where it did not fit. Since
+ * 14.15, #1293.
+ */
+export type ScoutSource = { address: string; kind: string; cut: number };
 
 /**
  * How a scout ended. `cost_micros` is millionths of a dollar, **absent where
@@ -294,6 +309,20 @@ export type StartScout = { node_id: string };
  * freezes; the frozen one arrives on `studio.changed`.
  */
 export type StopScout = { node_id: string };
+
+/**
+ * `POST /studios/:studio_id/read_in`. The Link named is read in: Fleet fetches
+ * the source and hands a scout the text, and what comes back hangs off the
+ * Link by `produced` edges. A milestone is Fleet's own read, with no scout —
+ * one Link per issue. Since 14.15, #1293.
+ *
+ * `position` is where the first node it makes lands; the rest are laid out
+ * from there.
+ */
+export type ReadInLink = {
+  node_id: string;
+  position: StudioPosition;
+};
 
 /**
  * `POST /studios/:studio_id/start_run`. Runs one Manifest entry in the
@@ -360,7 +389,12 @@ export type StudioPromotion =
   /** `POST /studios/:studio_id/settle`. The two outcomes that make no node. */
   | ({ act: "settle"; node_id: string } & StudioSettlement)
   /** `POST /studios/:studio_id/dispatch_draft`. The ordinary dispatch gate. */
-  | { act: "dispatch"; node_id: string; position: StudioPosition };
+  | { act: "dispatch"; node_id: string; position: StudioPosition }
+  /**
+   * `POST /studios/:studio_id/read_in`. The Link stays, and what came back
+   * hangs off it. Since 14.15, #1293.
+   */
+  | { act: "read_in"; node_id: string; position: StudioPosition };
 
 /** Every act `StudioPromotion` spells, so main can refuse one it does not know. */
 export const STUDIO_PROMOTIONS = [
@@ -371,4 +405,5 @@ export const STUDIO_PROMOTIONS = [
   "edit_link",
   "settle",
   "dispatch",
+  "read_in",
 ] as const;

@@ -182,3 +182,15 @@ describe("the words a rung opens with", () => {
     expect(dispatchedAs(note("a", "said"))).toBeNull();
   });
 });
+
+test("a Link offers Read in, and no other kind does", () => {
+  const board = studio([
+    { id: "link", kind: "link", address: "miro://board/uXjVK", position: { x: 0, y: 0 }, created_at: at },
+    { id: "note", kind: "note", said: "the rail is unreadable", position: { x: 0, y: 200 }, created_at: at },
+  ]);
+  // **Offered on every Link, whatever its address.** Which addresses are
+  // sources is Fleet's, and a rule copied here would drift from it.
+  expect(actsOn(board, ["link"]).readIn).toBe(true);
+  expect(actsOn(board, ["note"]).readIn).toBe(false);
+  expect(actsOn(board, ["link", "note"]).readIn).toBe(false);
+});
