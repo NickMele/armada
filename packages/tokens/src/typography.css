@@ -15,7 +15,7 @@
   --text-2xl: 28px;   --leading-2xl: 36px;   /* the rare hero number */
 
   --weight-body: 400;
-  --weight-medium: 500;   /* labels and emphasis */
+  --weight-medium: 500;   /* labels only */
   --weight-heading: 600;  /* never 700+ */
 
   --tracking-caps: 0.04em; /* the one legal ALL CAPS: 13px table headers */
