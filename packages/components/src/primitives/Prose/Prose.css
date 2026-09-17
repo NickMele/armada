@@ -27,7 +27,7 @@
 .armada-prose__said {
   margin: 0;
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-heading);
 }
 
 .armada-prose__strong {

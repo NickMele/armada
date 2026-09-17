@@ -170,12 +170,12 @@
 }
 
 /* A title with a line under it is the name of a reading rather than the
-   heading of a panel, so it takes the drawn --text-base at medium and lets the
-   subtitle carry the facts. */
+   heading of a panel, so it takes the drawn --text-base and lets the subtitle
+   carry the facts. Still the sheet's title, so still --weight-heading. */
 .armada-sheet__title[data-titled] {
   font-size: var(--text-base);
   line-height: var(--leading-base);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-heading);
 }
 
 .armada-sheet[data-floor] .armada-sheet__title[data-titled] {

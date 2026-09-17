@@ -88,7 +88,7 @@
    degraded headline takes --fg-default: what it says is true, and nothing it
    names is broken. */
 .armada-failure__headline {
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-heading);
 }
 
 /* What to do. One step down, like every Alert body, because the headline is

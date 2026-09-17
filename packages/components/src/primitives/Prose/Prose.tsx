@@ -29,7 +29,7 @@ import { Fragment, type ReactNode } from "react";
  * | Fenced blocks | a mono block that wraps rather than clips — the failing render was an expression broken mid-token |
  * | `- ` and `* ` lists | one row per item, no marker glyph |
  * | `**bold**`, `*italic*` | full contrast against the muted body, and slant |
- * | `# heading` | the line at `--weight-medium` and full contrast — the structure without a second scale |
+ * | `# heading` | the line at `--weight-heading` and full contrast — the structure without a second scale |
  * | Links, images, tables, blockquotes, raw HTML | the characters, literally |
  *
  * **Links are refused rather than unimplemented.** Bridge's CSP reaches

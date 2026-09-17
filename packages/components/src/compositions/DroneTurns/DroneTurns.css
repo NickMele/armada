@@ -168,14 +168,14 @@
   grid-column: 2;
 }
 
-/* Sans and medium: the step's name is Fleet's own label for the work, read as
+/* Sans and heading weight: the step's name is Fleet's own label for the work, read as
    language, and it is the one thing in the transcript that is a heading. */
 .armada-turns__step-name {
   grid-column: 3;
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-heading);
   color: var(--fg-default);
   text-wrap: pretty;
   min-width: 0;
