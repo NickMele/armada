@@ -2,6 +2,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, FocusEvent, ReactNode } from 
 import { Children, Fragment, isValidElement, useCallback, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { JOB_ROW_LIST, RovingOption } from "../JobRowStacked/JobRowStacked";
+import { useTravel } from "./travel";
 
 /**
  * Active jobs list — the framed list of Job rows, and the header above it.
@@ -167,6 +168,8 @@ export function ActiveJobsList({
       ? sections.length === 0
       : rows === undefined || rows === null || (Array.isArray(rows) && rows.length === 0);
   const frame = useRef<HTMLDivElement>(null);
+  // Rows re-sorting under a person travel to their new place; the order is still the caller's.
+  useTravel(frame);
   // Where the one tab stop is. Zero is the first row, which is where a list
   // that has never been touched should put it.
   const [active, setActive] = useState(0);

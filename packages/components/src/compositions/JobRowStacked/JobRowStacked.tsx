@@ -182,6 +182,13 @@ export type JobRowStackedProps = {
   /** De-emphasised: `--border-subtle` and `--fg-subtle`, never an alpha. */
   dimmed?: boolean;
   /**
+   * The status changed while the list was showing it. `remaining` walks from 1 to 0 across
+   * `--duration-decay`, taking the tint from `--row-tint-recent` down to `--row-tint`, and `note`
+   * says what changed and how long ago, fading with it. The caller keeps the clock, so a story can
+   * hold one still.
+   */
+  changed?: { note: ReactNode; remaining: number };
+  /**
    * The row opens the Job. Setting it makes the row a real control — a focus
    * stop that Enter and Space activate, announced as an option in the list it
    * selects from rather than as a listitem with a click handler bolted on.
@@ -252,6 +259,7 @@ export function JobRowStacked({
   focused,
   selected,
   dimmed,
+  changed,
   onOpen,
   onCopied,
 }: JobRowStackedProps) {
@@ -295,6 +303,15 @@ export function JobRowStacked({
       data-selected={selected || undefined}
       data-dimmed={dimmed || undefined}
       data-badge-wide={badgeWide || undefined}
+      // **The row's tint is the badge's own hue**, from the same `status` stem the
+      // badge maps to `--status-{stem}` — one prop feeding both, so the row and its
+      // badge cannot name two states. The stylesheet mixes it at `--row-tint`.
+      style={
+        {
+          "--armada-row-hue": `var(--status-${status})`,
+          ...(changed === undefined ? {} : { "--armada-row-recent": clamp01(changed.remaining) }),
+        } as CSSProperties
+      }
       onClick={onOpen}
       onKeyDown={opens ? handleKeyDown : undefined}
     >
@@ -320,6 +337,14 @@ export function JobRowStacked({
               title={handle}
             />
           ) : null}
+          {changed === undefined ? null : (
+            <span
+              className="armada-job-row__changed"
+              title={typeof changed.note === "string" ? changed.note : undefined}
+            >
+              {changed.note}
+            </span>
+          )}
         </div>
 
         {/* The track list is a custom property rather than
@@ -412,6 +437,10 @@ const DRAWN_TRACKS = [
   "var(--armada-track-spend)",
   "var(--armada-track-provenance)",
 ];
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
 
 function trackList(count: number): string {
   return Array.from({ length: count }, (_, i) => DRAWN_TRACKS[i] ?? "minmax(0, auto)").join(" ");

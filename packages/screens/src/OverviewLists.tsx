@@ -32,6 +32,7 @@ import { headlineOf } from "./lineage";
 import { useListCursor, useListKeydown } from "./list-keyboard";
 import { overviewListsOf } from "./overview-lists";
 import { readingOf } from "./reading";
+import { useRecentChanges } from "./recent";
 import { isTerminal, Row } from "./Row";
 
 /** `id` on a section's own outer element, so a press elsewhere can `scrollIntoView` it by name. */
@@ -114,6 +115,8 @@ export function OverviewLists({
   const columns = columnsFor(jobs, repositories, all);
   // The cursor, and the keys that move or act on it — `list-keyboard.ts`'s shared mechanism.
   const { cursor, onFocusCapture, move } = useListCursor(onCursor);
+  // Which rows changed while this was showing them — `recent.ts`, the Board's own mark.
+  const recent = useRecentChanges(jobs);
   // Every drawn row, flattened across sections — what a verb or a kill key checks the cursor against.
   const drawn = sections.flatMap((section) => section.jobs);
 
@@ -164,6 +167,7 @@ export function OverviewLists({
       repository={repositoryOf(job, repositories, all)}
       selected={job.id === selected}
       focused={job.id === cursor}
+      recent={recent.get(job.id)}
       onOpen={onOpen}
       onKill={onKill}
       onRedispatch={onRedispatch}

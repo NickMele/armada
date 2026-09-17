@@ -82,11 +82,12 @@ import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { sectionOf, taskBarSegmentsOf, taskFigureOf } from "./board";
 import { ACT_LABEL } from "./copy";
-import { absoluteOf, elapsedSince } from "./duration";
+import { absoluteOf, elapsedSince, lasting } from "./duration";
 import { activityFor } from "./frozen";
 import { rowFreezeOf } from "./freeze";
 import { ROW_VERBS, verbOf } from "./keys";
-import { readingOf } from "./reading";
+import { leading, readingOf } from "./reading";
+import type { Recent } from "./recent";
 
 /** Whether the Job is over, from the registry that says so. */
 export function isTerminal(job: JobSummary): boolean {
@@ -125,6 +126,7 @@ export function Row({
   repository,
   selected,
   focused,
+  recent,
   onOpen,
   onKill,
   onRedispatch,
@@ -142,6 +144,8 @@ export function Row({
   selected: boolean;
   /** The cursor is on this row, so this row draws its key. */
   focused: boolean;
+  /** The status changed while the list was showing it, from `useRecentChanges`. */
+  recent?: Recent;
   onOpen: (jobId: string) => void;
   onKill: (jobId: string) => void;
   /**
@@ -322,6 +326,12 @@ export function Row({
       pulsing={job.status === "running" && !stale}
       dimmed={stale}
       focused={focused || undefined}
+      // The badge's own word, so the note names the state the row now reads and invents no verb.
+      changed={
+        recent === undefined
+          ? undefined
+          : { note: `${leading(reading.verb)} · ${lasting(recent.age)} ago`, remaining: recent.remaining }
+      }
       action={
         // **One control, and it is secondary.** A list row never takes a
         // primary action — fourteen rows offering a decision would be fourteen

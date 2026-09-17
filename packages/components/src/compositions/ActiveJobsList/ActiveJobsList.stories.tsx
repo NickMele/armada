@@ -39,7 +39,8 @@ const menu = [
 
 /**
  * Six states, one row shape. The running row is the only one here, so it
- * carries the loop.
+ * carries the loop. **Each row is washed in its own status hue** at
+ * `--row-tint`, so the list sorts by state before a badge is read.
  *
  * **One, because one row is running here — not because only one can be.** This
  * paragraph used to say the pulse rode the status "focused or not, because
@@ -174,6 +175,22 @@ export const SixStates: Story = {
         action={<SplitButton ground="card" items={menu}>Open</SplitButton>}
       />,
     ],
+  },
+};
+
+/**
+ * The same six, where the failed Job failed 12 seconds ago. Its row carries the stronger tint and
+ * the note; every other row rests at `--row-tint`. Held still, so a screenshot is stable.
+ */
+export const OneRowMidDecay: Story = {
+  name: "One row mid-decay",
+  args: {
+    ...SixStates.args,
+    children: (SixStates.args?.children as ReactElement<JobRowStackedProps>[]).map((row) =>
+      row.props.status === "completed-failed"
+        ? cloneElement(row, { changed: { note: "Failed · 12s ago", remaining: 0.73 } })
+        : row,
+    ),
   },
 };
 
