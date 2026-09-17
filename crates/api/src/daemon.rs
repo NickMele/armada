@@ -70,12 +70,8 @@ use ipc::WireError;
 /// # Why who opened the door is a fifth
 ///
 /// [`Admitting`] answers for a caller rather than for a Job or a message, and
-/// its module says why the answer is placed rather than asked for.
-///
-/// # Why a Studio is a sixth
-///
-/// [`Studios`] answers for a repository's record rather than a Job, and its
-/// module says why that is not spread over the first two.
+/// its module says why the answer is placed rather than asked for. [`Studios`]
+/// is a sixth, for a reason its own module gives.
 pub trait Daemon: Queries + Commands + Tools + Conversations + Admitting + Studios {}
 
 impl<D: Queries + Commands + Tools + Conversations + Admitting + Studios> Daemon for D {}

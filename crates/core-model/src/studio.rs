@@ -59,19 +59,16 @@ pub struct Studio {
     pub touched_at: Timestamp,
 }
 
-/// A Studio and everything on it, as one read answers it.
+/// A Studio and everything on it, as one read answers it, oldest first.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StudioGraph {
     pub studio: Studio,
-    /// Oldest first.
     pub nodes: alloc::vec::Vec<StudioNode>,
-    /// Oldest first.
     pub edges: alloc::vec::Vec<StudioEdge>,
 }
 
-/// Where a person left a node. **Whole canvas units**: placement by hand needs
-/// no fraction, and an integer reads back exactly through SQLite, JSON and a
-/// JavaScript number alike.
+/// Where a person left a node, in whole canvas units: an integer reads back
+/// exactly through SQLite, JSON and a JavaScript number alike.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StudioPosition {
     pub x: i64,
