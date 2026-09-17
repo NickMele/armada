@@ -187,6 +187,14 @@
   gap: var(--gap-section);
   flex: 1;
   min-height: 0;
+  /* **The one inset the mount keeps: its top, and every screen shares it.**
+     The left column and Helm's dock each hold their first panel `--space-4`
+     under the title bar (their own margin, `TheShell.css`), so a surface
+     between them starts on the same line. Only Overview padded its own top,
+     so every other surface — the Board, Settings, Cleanup, and the Manifest
+     surface's ask on All repositories — sat flush against the title bar.
+     Sides stay the screen's own to decide, as `.armada-shell__mount` says. */
+  padding-top: var(--space-4);
 }
 
 /* A screen that is one region: it fits the mount and scrolls inside itself.
@@ -379,9 +387,9 @@
 
    **No right padding.** Helm's dock carries its own `--space-4` margin on
    every side (`TheShell.css`), so padding this surface's right edge as well
-   doubled the gap between the content and the dock to 32px. The other three
-   edges still pad — the dock's margin says nothing about the rail or the
-   head above. */
+   doubled the gap between the content and the dock to 32px. **No top
+   padding either**: `.armada-screen__mounted` keeps the gap under the title
+   bar for every surface, and padding it here too doubled it the same way. */
 .armada-screen__overview {
   /* So the summary strip can query its own available width — narrower with
      Helm's dock open, which is what its two-up form answers. */
@@ -393,7 +401,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--space-4) 0 var(--space-4) var(--space-4);
+  padding: 0 0 var(--space-4) var(--space-4);
 }
 
 /* Overview's own lists: `Needs you`, `Running` and `Queued`, each a panel in
@@ -409,6 +417,13 @@
 }
 
 /* ---- job detail --------------------------------------------------------- */
+
+/* Mounted in the shell, the mount already keeps the gap under the title bar
+   (`.armada-screen__mounted`), so the detail's own top inset would double it.
+   Outside the shell there is no mount, and the card padding stands whole. */
+.armada-screen__mounted > .armada-screen__detail {
+  padding-top: 0;
+}
 
 .armada-screen__detail {
   display: flex;
