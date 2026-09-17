@@ -42,6 +42,20 @@ pub struct PlanTask {
     /// Present on a dropped task and on nothing else.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    /// Each stretch the task was marked `working`, oldest first — what Bridge
+    /// places a turn in a task by. **Left out where empty**, which is every
+    /// task no change ever marked working. Since 14.5.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub working_windows: Vec<WorkingWindow>,
+}
+
+/// From the change that marked a task `working` to the change that moved it
+/// out. `left` is absent while it is still marked working.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkingWindow {
+    pub entered: Instant,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub left: Option<Instant>,
 }
 
 /// How many tasks stand where. `done` over `done + working + open` is the
@@ -129,6 +143,14 @@ impl From<&core_model::WorkPlan> for WorkPlan {
                     detail: task.detail().to_string(),
                     state: task.state().into(),
                     reason: task.reason().map(str::to_string),
+                    working_windows: task
+                        .working_windows()
+                        .iter()
+                        .map(|window| WorkingWindow {
+                            entered: (&window.entered).into(),
+                            left: window.left.as_ref().map(Instant::from),
+                        })
+                        .collect(),
                 })
                 .collect(),
         }

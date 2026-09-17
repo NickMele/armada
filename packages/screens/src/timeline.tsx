@@ -489,6 +489,8 @@ export function stepTimelineOf(
   now: number,
   /** The step's story over one of its runs. `ended` is a run that is over. */
   story: (read: AttemptRead, ended: boolean) => readonly StepChapter[],
+  /** The plan bar, leading every Working row's meta where the Job has a plan. #1185. */
+  plan?: ReactNode,
 ): StepTimelineAttempt[] {
   return timelineOf(step, turns, now).map((attempt) => {
     const mine = new Map(
@@ -516,7 +518,11 @@ export function stepTimelineOf(
           marker: namesChapter(`${attempt.id}-${row.id}`),
           name: row.name,
           activity: row.mark,
-          ...(meta === undefined ? {} : { meta }),
+          ...(row.phase === "working" && plan !== undefined
+            ? { meta: <>{plan}{meta === undefined ? null : ` · ${meta}`}</> }
+            : meta === undefined
+              ? {}
+              : { meta }),
           ...(row.live === true ? { live: true } : {}),
           ...drawn.row,
         };

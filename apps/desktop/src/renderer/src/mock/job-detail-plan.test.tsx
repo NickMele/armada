@@ -11,6 +11,7 @@ import { WAITING_CALL } from "@armada/screens/src/fixtures/build/running";
 import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
 import {
   awaitingApprovalPlanPending,
+  PLAN_MID_TASK,
   PLAN_PARTWAY,
   PLAN_WITH_A_DROPPED_TASK,
   withPlan,
@@ -41,18 +42,18 @@ function shownWithText(text: string): boolean {
   );
 }
 
-/** A plan row, found by its task's title. */
+/** A plan row, found by its task's title. A list item, because the Working area names the task too. */
 async function rowOf(title: string) {
-  const found = page.getByText(title);
-  await expect.element(found).toBeVisible();
-  return page.elementLocator(found.element().closest("li")!);
+  const row = page.getByRole("listitem").filter({ hasText: title });
+  await expect.element(row).toBeVisible();
+  return row;
 }
 
 test("a plan partway done: its region, its count, its tasks, and the branch in Where things are", async () => {
   await opened(withPlan(PLAN_PARTWAY));
   await expect.element(page.getByText("Plan", { exact: true })).toBeVisible();
   await expect.poll(() => shownWithText("1 of 3")).toBe(true);
-  await expect.element(page.getByText("T1", { exact: true })).toBeVisible();
+  await expect.element(page.getByRole("listitem").getByText("T1", { exact: true })).toBeVisible();
   await expect.poll(() => shownWithText("Re-point the reducer's own import at it")).toBe(true);
   const where = page.getByRole("button", { expanded: false, name: /Where things are/i });
   await expect.element(where.getByText("fix/settings-split-selectors")).toBeVisible();
@@ -64,6 +65,21 @@ test("a dropped task reads its reason, and offers no second drop", async () => {
   await expect.poll(() => shownWithText("1 of 3")).toBe(true);
   const dropped = await rowOf("Add a unit test that does not construct the store");
   expect(dropped.getByRole("button", { name: "Drop…" }).query()).toBeNull();
+});
+
+test("the Working area opens the task being worked, folds the one done, and carries the plan bar", async () => {
+  await opened(withPlan(PLAN_MID_TASK));
+  const working = page.getByRole("button", { name: /T2\s*Re-point the reducer's own import at it/ });
+  await expect.element(working).toHaveAttribute("aria-expanded", "true");
+  const done = page.getByRole("button", { name: /T1\s*Extract selectColumnOrder into its own module/ });
+  await expect.element(done).toHaveAttribute("aria-expanded", "false");
+  await expect.element(page.getByRole("img", { name: "1 of 3 tasks" }).first()).toBeInTheDocument();
+  // The Drone's sentence, as written, and its call one press away.
+  await done.click();
+  const calls = page.getByRole("button", { name: "1 call · Edit" }).first();
+  await expect.element(calls).toHaveAttribute("aria-expanded", "false");
+  await calls.click();
+  await expect.element(calls).toHaveAttribute("aria-expanded", "true");
 });
 
 test("no plan on the workflow draws no Plan region", async () => {

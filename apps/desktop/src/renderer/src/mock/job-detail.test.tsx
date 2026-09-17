@@ -142,9 +142,9 @@ test.fails("n opens the composer from a Job's detail", async () => {
 
 test("typing n into a task's drop reason is typing, not the dispatch key", async () => {
   await opened(withPlan(PLAN_PARTWAY));
-  const found = page.getByText("Add a unit test that does not construct the store");
-  await expect.element(found).toBeVisible();
-  const row = page.elementLocator(found.element().closest("li")!);
+  // A list item, because the Working area names the task too.
+  const row = page.getByRole("listitem").filter({ hasText: "Add a unit test that does not construct the store" });
+  await expect.element(row).toBeVisible();
   await row.getByRole("button", { name: "Drop…" }).click();
   await userEvent.type(row.getByLabelText("Reason"), "n");
   expect(page.getByText("Pick the repository this Job is for").query()).toBeNull();

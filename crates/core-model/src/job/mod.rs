@@ -113,7 +113,7 @@ pub use transition::{
 pub use verdict::GateVerdict;
 pub use work_plan::{
     Approach, DropReason, NewTask, NotAnUpdate, PlanAuthor, PlanChange, PlanEntry, PlanRefused,
-    PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan,
+    PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, WorkingWindow,
 };
 pub use workflow::{
     FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS, DIFF_NONEMPTY,

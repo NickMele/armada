@@ -276,12 +276,22 @@ impl fmt::Display for PlanRefused {
     }
 }
 
+/// A stretch a task was marked `working`, read off the history and never guessed
+/// from the work: a Drone that never marks a task leaves none.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkingWindow {
+    pub entered: Timestamp,
+    /// `None` while the task is still marked working.
+    pub left: Option<Timestamp>,
+}
+
 /// One line of the plan, as the history leaves it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PlanTask {
     id: TaskId,
     task: NewTask,
     state: TaskUpdate,
+    windows: Vec<WorkingWindow>,
 }
 
 impl PlanTask {
@@ -304,6 +314,11 @@ impl PlanTask {
     /// Present on a dropped task and on nothing else.
     pub fn reason(&self) -> Option<&str> {
         self.state.reason()
+    }
+
+    /// Every stretch it was marked working, oldest first.
+    pub fn working_windows(&self) -> &[WorkingWindow] {
+        &self.windows
     }
 }
 
@@ -358,6 +373,7 @@ impl WorkPlan {
                         id: TaskId(NonZeroU32::MIN.saturating_add(n - 1)),
                         task: task.clone(),
                         state: TaskUpdate::Open,
+                        windows: Vec::new(),
                     })
                     .collect(),
             });
@@ -380,6 +396,7 @@ impl WorkPlan {
                         id: TaskId(NonZeroU32::MIN.saturating_add(next)),
                         task: task.clone(),
                         state: TaskUpdate::Open,
+                        windows: Vec::new(),
                     },
                 );
             }
@@ -392,7 +409,22 @@ impl WorkPlan {
                 {
                     return Err(PlanRefused::StaysDropped { named: *task });
                 }
-                plan.tasks[at].state = to.clone();
+                let task = &mut plan.tasks[at];
+                let was = task.state();
+                // Opened by the move into `working`, closed by the move out.
+                match (was == TaskState::Working, to.state() == TaskState::Working) {
+                    (false, true) => task.windows.push(WorkingWindow {
+                        entered: entry.at.clone(),
+                        left: None,
+                    }),
+                    (true, false) => {
+                        if let Some(open) = task.windows.last_mut() {
+                            open.left = Some(entry.at.clone());
+                        }
+                    }
+                    _ => {}
+                }
+                task.state = to.clone();
             }
         }
         Ok(plan)

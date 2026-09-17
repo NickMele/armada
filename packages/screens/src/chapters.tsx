@@ -69,7 +69,7 @@ import {
   type Paired,
 } from "./frames";
 import { fileRowsOf, readingFor, whyNoFootprint } from "./files";
-import { WorkGrouped } from "./grouped";
+import { WorkNarrated } from "./grouped";
 import { Log } from "./Log";
 import { keptOf, type KeptRead, type Opens } from "./phases";
 import { noteUnder, producedIn } from "./produced";
@@ -382,10 +382,12 @@ export function chaptersOf({
               are the ones that were always there. The unread count is not
               passed: the header summary above already carries it, and one
               fact twice on one chapter is two places to disagree. */}
-          <WorkGrouped
+          <WorkNarrated
             rows={rows}
             turns={watching === null ? [] : watching.rows}
             stepId={step.step_id}
+            plan={whole?.work_plan}
+            live={live}
             most={PREVIEWED}
             emptyNote={transcript ?? NOTHING_YET_ON_THIS_STEP}
             calls={calls}

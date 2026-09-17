@@ -975,6 +975,18 @@ precedent**: `escalation_reason` carries no `wire_enum!` in `crates/ipc`, so
 Bridge reads it as an opaque string through the generated vocabulary rather
 than matching on it, and a new value is additive while nothing branches on it.
 
+## Protocol 14.5: when each plan task was being worked
+
+`#1185`. `PlanTask.working_windows`, additive and left out where empty: each
+stretch a task was marked `working`, as `WorkingWindow { entered, left? }`,
+oldest first. Fleet folds it from the plan's history — a move into `working`
+opens one, any move out (`open`, `done`, `dropped`) closes it, and a new
+recording starts every task with none. `left` is absent while the task is
+still working. Bridge places a turn in the task whose window holds its
+instant, so the Working area can group a step's activity by task. **A claim,
+like the state it comes from**: a Drone that never calls `update_task` sends no
+windows, and its work belongs to no task.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file
