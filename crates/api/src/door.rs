@@ -121,6 +121,7 @@ const NAMES_ITS_SCOPE: &[&str] = &[
     "get_manifest_drift",
     "get_manifest_spend",
     "start_server",
+    "list_studios",
 ];
 
 /// Set on every call the door makes, so a `:job_id` resolves inside the

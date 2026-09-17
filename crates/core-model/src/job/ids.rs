@@ -45,6 +45,9 @@ macro_rules! id_newtype {
     };
 }
 
+/// A Studio's ids are the same shape, so `crate::studio` declares them here too.
+pub(crate) use id_newtype;
+
 id_newtype! {
     /// The `jobs` row's own key, and the `job_id` half of `job_steps`'
     /// composite key.

@@ -164,6 +164,7 @@ mod snapshotting;
 mod starting;
 mod starting_empty;
 mod stuck;
+mod studios;
 mod sub_dispatch;
 mod superseding;
 mod terms;

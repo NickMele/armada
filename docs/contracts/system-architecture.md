@@ -377,9 +377,11 @@ second notification channel alongside Alerts. See the decision in Armada
 Decisions.
 
 On a command, a plain agent's access is `agent_access = "Yes"`; a Helm session
-also reaches `Drafts only` and `Helm only` rows, which is every command but
-`undo_run` once a person asks for it in conversation — `fleet::helm::may` is
-the rule, and the Intervention Ladder no longer bounds it. The full set of
+also reaches `Drafts only` and `Helm only` rows, which is every command the door
+offers but `undo_run` once a person asks for it in conversation —
+`fleet::helm::may` is the rule, and the Intervention Ladder no longer bounds it.
+**A `Bridge only` command reaches no agent, Helm included**: accepting a Studio
+edge, removing a node and deleting a Studio are a person's acts. The full set of
 operations — each with its kind, its transport and what an agent may reach
 directly — is in `crates/ipc/operations.toml`.
 

@@ -389,7 +389,10 @@ async fn read_only_refuses_every_command_and_still_reads() {
         let body = from(
             &app,
             HELM,
-            &calling(row.operation, r#"{"job_id":"1","body":{}}"#),
+            &calling(
+                row.operation,
+                r#"{"job_id":"1","studio_id":"01STUDIO","body":{}}"#,
+            ),
         )
         .await;
         // An operation nothing serves (`xtask`'s `NOT_BUILT`) 404s before the

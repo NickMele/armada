@@ -62,6 +62,10 @@ use crate::repository_allow::{get_repository_allowed_commands, remove_repository
 use crate::served::Served;
 use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
+use crate::studios::{
+    add_studio_node, create_studio, decide_studio_edge, delete_studio, get_studio, list_studios,
+    move_studio_node, propose_studio_edge, remove_studio_node, rename_studio,
+};
 
 /// The inventory this router is compared against, row by row.
 mod served;
@@ -277,6 +281,25 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/helm/observe", get(observe_helm::<D>))
         .route("/helm/ask", post(ask_helm::<D>))
         .route("/helm/start_fresh", post(start_helm_fresh::<D>))
+        .route("/studios", get(list_studios::<D>))
+        .route("/studios/create", post(create_studio::<D>))
+        .route("/studios/:studio_id", get(get_studio::<D>))
+        .route("/studios/:studio_id/rename", post(rename_studio::<D>))
+        .route("/studios/:studio_id/delete", post(delete_studio::<D>))
+        .route("/studios/:studio_id/add_node", post(add_studio_node::<D>))
+        .route("/studios/:studio_id/move_node", post(move_studio_node::<D>))
+        .route(
+            "/studios/:studio_id/remove_node",
+            post(remove_studio_node::<D>),
+        )
+        .route(
+            "/studios/:studio_id/propose_edge",
+            post(propose_studio_edge::<D>),
+        )
+        .route(
+            "/studios/:studio_id/decide_edge",
+            post(decide_studio_edge::<D>),
+        )
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in
         // `SERVED`: it is the Fleet/Drone seam rather than the Fleet/Bridge

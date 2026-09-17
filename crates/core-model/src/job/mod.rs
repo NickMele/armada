@@ -84,6 +84,7 @@ pub use gaming::{
 };
 pub use guard::Guard;
 pub use handle::{handle_of, names_a_credential, JobNumber, JobReference, CREDENTIAL_NAMES};
+pub(crate) use ids::id_newtype;
 pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, ProposalId,
     RepoPath, StepId, Title, WorkflowId,

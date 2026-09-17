@@ -29,6 +29,8 @@ extern crate alloc;
 
 mod envelope;
 mod job;
+/// A Studio, its nodes and its edges. `docs/concepts/studio.md`.
+mod studio;
 
 pub use envelope::{
     env_keys, Actor, AuditLine, Component, Envelope, FieldValue, Level, Timestamp, Ulid,
@@ -60,4 +62,9 @@ pub use job::{
 pub use job::{
     Approach, DropReason, NewTask, NotAnUpdate, PlanAuthor, PlanChange, PlanEntry, PlanRefused,
     PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, WorkingWindow, PLAN_RECORDED,
+};
+pub use studio::{
+    EdgeRefused, StateDoesNotFit, Studio, StudioEdge, StudioEdgeId, StudioEdgeKind,
+    StudioEdgeStanding, StudioGraph, StudioId, StudioName, StudioNode, StudioNodeContent,
+    StudioNodeId, StudioNodeKind, StudioNodeState, StudioPosition, StudioRelation, ToItself,
 };

@@ -104,6 +104,27 @@ wire_enum! {
     Urgency, core_model::Urgency, "an urgency"
 }
 wire_enum! {
+    /// What a node on a Studio is. `docs/concepts/studio.md`, *Nodes*.
+    StudioNodeKind, core_model::StudioNodeKind, "a Studio node kind"
+}
+wire_enum! {
+    /// Where a node on a Studio stands, for the kinds that have states.
+    StudioNodeState, core_model::StudioNodeState, "a Studio node state"
+}
+wire_enum! {
+    /// What an edge on a Studio says.
+    StudioEdgeKind, core_model::StudioEdgeKind, "a Studio edge kind"
+}
+wire_enum! {
+    /// A relation that may be proposed. **Never `produced`**, which the Studio
+    /// draws itself, so a proposal naming it does not decode.
+    StudioRelation, core_model::StudioRelation, "a relation that may be proposed"
+}
+wire_enum! {
+    /// Whether a person has accepted an edge.
+    StudioEdgeStanding, core_model::StudioEdgeStanding, "a Studio edge standing"
+}
+wire_enum! {
     /// Where a Job came from.
     Origin, DomainOrigin, "an origin"
 }

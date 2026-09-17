@@ -12,7 +12,7 @@ use http_body_util::BodyExt;
 use ipc::{JobDetail, JobList, JobSummary, StreamMessage, WireError};
 use tower::ServiceExt;
 
-use crate::tests::fake::{at, running, FakeDaemon};
+use crate::tests::fake::{at, running, FakeDaemon, THE_STUDIO};
 use crate::tests::shapes;
 use crate::tests::shapes::{
     run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL, THE_DRONE, THE_FRAME, THE_MANIFEST, THE_OUTPUT,
@@ -64,7 +64,9 @@ async fn every_operation_the_table_names_is_routed() {
     // that apart from a route that is not there.
     call(&app, "POST", "/jobs", A_PROPOSAL).await;
     for route in SERVED {
-        if route.operation == "forget_job" {
+        // `delete_studio` for `forget_job`'s reason: the rows after it name the
+        // Studio it would take away.
+        if route.operation == "forget_job" || route.operation == "delete_studio" {
             continue;
         }
         let uri = route
@@ -74,6 +76,7 @@ async fn every_operation_the_table_names_is_routed() {
             .replace(":kept", THE_OUTPUT)
             .replace(":drone_id", THE_DRONE)
             .replace(":manifest_id", THE_MANIFEST)
+            .replace(":studio_id", THE_STUDIO)
             .replace(":run/:name", THE_FRAME);
         let (status, _) = call(&app, route.method, &uri, A_PROPOSAL).await;
         assert_ne!(
@@ -102,6 +105,8 @@ async fn every_operation_the_table_names_is_routed() {
     let kill_uri = format!("/jobs/{}/kill_job", proposed.id.as_str());
     let (status, _) = call(&app, "POST", &kill_uri, "").await;
     assert_eq!(status, StatusCode::OK, "terminal before it is forgettable");
+    let (status, _) = call(&app, "POST", &format!("/studios/{THE_STUDIO}/delete"), "").await;
+    assert_eq!(status, StatusCode::OK, "delete_studio is routed");
     let forget_uri = format!("/jobs/{}/forget_job", proposed.id.as_str());
     let (status, _) = call(&app, "POST", &forget_uri, "").await;
     assert_ne!(

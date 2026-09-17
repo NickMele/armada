@@ -1,18 +1,22 @@
-//! Studio's apparatus: the text an Issue draft would hold, the catalogue a
-//! proposer reads it against, and the round trip a dispatch request makes. It
-//! asserts nothing.
+//! Studio's apparatus: a Studio with two Notes on it, the text an Issue draft
+//! would hold, the catalogue a proposer reads it against, and the round trip a
+//! request and a record make. It asserts nothing.
 //!
-//! **No Studio type appears here, because none exists.** The two Notes and the
-//! draft written up from them are strings, not nodes: a Note, a Cluster and an
-//! Issue draft are #1285's to mint, and a fixture that invented their shape
-//! here would be a second vocabulary for #1285 to find and reconcile. When the
-//! record lands, the draft below is read off an Issue draft node rather than
-//! written out, and this file's constants go.
+//! **The record is `core_model`'s and its wire form is `ipc`'s.** What this
+//! file adds is the assembly — which Notes, where a person left them, and the
+//! Same as edge proposed between them — built through the constructors `store`
+//! reads a row back with, so nothing here is a second vocabulary for a node.
+//!
+//! The draft is still written out rather than read off an Issue draft node:
+//! writing one up from Notes is #1291's, and its constants go when that lands.
 
 use std::collections::BTreeMap;
 
 use config::ResolvedWorkflow;
-use core_model::WorkflowId;
+use core_model::{
+    ManifestId, Studio, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName, StudioNode,
+    StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation, Timestamp, Ulid, WorkflowId,
+};
 use ipc::JobRequest;
 
 use super::bug_workflow_with_the_fix_judged;
@@ -67,4 +71,56 @@ pub fn one_job_under(workflow: &WorkflowId) -> String {
         "workflow: {}\ntitle: {DRAFT_TITLE}\nbecause: a fault in what two screens draw",
         workflow.as_str()
     )
+}
+
+/// The repository the bench's Studio belongs to.
+pub const REPOSITORY: &str = "01FIXTUREMANIFEST";
+
+/// Where a person left the second Note, having dragged it off where it landed.
+pub const LEFT_AT: StudioPosition = StudioPosition { x: 480, y: -120 };
+
+fn at(minute: u32) -> Timestamp {
+    Timestamp::from_rfc3339(format!("2026-09-17T09:{minute:02}:00.000Z"))
+}
+
+/// A Studio in the bench's repository holding both Notes, the second moved to
+/// [`LEFT_AT`], and a Same as edge proposed between them and not yet accepted.
+pub fn a_studio_with_two_notes() -> StudioGraph {
+    let note = |id: &str, said: &str, x: i64| {
+        StudioNode::added(
+            StudioNodeId::carried(Ulid::carried(id)),
+            StudioNodeContent::Note {
+                said: said.to_string(),
+            },
+            StudioPosition { x, y: 0 },
+            at(1),
+        )
+    };
+    let first = note("01NOTEFIRST", FIRST_NOTE, 0);
+    let second = note("01NOTESECOND", SECOND_NOTE, 240).moved(LEFT_AT);
+    let same_as = StudioEdge::proposed(
+        StudioEdgeId::carried(Ulid::carried("01EDGESAMEAS")),
+        first.id().clone(),
+        second.id().clone(),
+        StudioRelation::SameAs,
+        at(2),
+    )
+    .expect("two different Notes");
+    StudioGraph {
+        studio: Studio {
+            id: StudioId::carried(Ulid::carried("01STUDIO")),
+            manifest_id: ManifestId::carried(Ulid::carried(REPOSITORY)),
+            name: StudioName::named(DRAFT_TITLE),
+            created_at: at(0),
+            touched_at: at(3),
+        },
+        nodes: vec![first, second],
+        edges: vec![same_as],
+    }
+}
+
+/// The Studio as a client reads it: served, encoded, sent, and read back.
+pub fn received_studio(graph: &StudioGraph) -> ipc::Studio {
+    let body = ipc::encode(&ipc::Studio::of(graph)).expect("a Studio that serialises");
+    ipc::decode("a Studio", body.as_bytes()).expect("a Studio that reads back")
 }
