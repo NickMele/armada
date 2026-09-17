@@ -19,6 +19,7 @@ import type {
   Criterion,
   Diff,
   Footprint,
+  JobFootprint,
   JobSummary,
   KeptFrame,
   StepDetail,
@@ -156,6 +157,9 @@ function chapters(
     steps?: StepDetail[];
     transcript?: string;
     criteria?: Criterion[];
+    live?: boolean;
+    kept?: JobFootprint;
+    now?: number;
   } = {},
 ) {
   return chaptersOf({
@@ -169,9 +173,9 @@ function chapters(
     frames: NO_FRAMES,
     watching: { rows: over.rows ?? [], skipped: 0 },
     footprint: { state: "none" } as Footprint,
-    kept: { files: [], recorded_at: "2026-09-02T13:18:00Z", plans: [] },
+    kept: over.kept ?? { files: [], recorded_at: "2026-09-02T13:18:00Z", plans: [] },
     diff: { state: "none" } as Diff,
-    live: false,
+    live: over.live ?? false,
     transcript: over.transcript,
     log: (region) => ({ region, openId: null, onOpen: () => {} }),
     calls: { of: () => undefined, fetch: () => {} },
@@ -180,7 +184,7 @@ function chapters(
     onOpenSheet: () => {},
     onRedirect: () => {},
     // No gate is running on any step here, so nothing is followed or aged.
-    now: 0,
+    now: over.now ?? 0,
   });
 }
 
@@ -705,5 +709,39 @@ describe("a step that shows its work", () => {
     // And no `content`: opening a chapter to find out that there are pictures
     // is the gesture this exists to remove.
     expect(built[2]!.content).toBeUndefined();
+  });
+});
+
+describe("the instruments, beside what they measure", () => {
+  const now = Date.parse("2026-09-02T13:30:00Z");
+
+  it("draws Activity above the log on a running step, and says a quiet Drone is quiet", () => {
+    const markup = renderToStaticMarkup(chapters({ live: true, now })[1]!.preview);
+    expect(markup).toContain("Tool calls per 30 seconds");
+    expect(markup).toContain("No tool calls for the last 12 minutes");
+  });
+
+  it("draws no Activity once nothing is running", () => {
+    expect(renderToStaticMarkup(chapters({ now })[1]!.preview)).not.toContain("Tool calls per 30 seconds");
+  });
+
+  it("draws Footprint above the kept files, and counts the file it could not measure", () => {
+    const footprint: JobFootprint = {
+      recorded_at: "2026-09-02T13:18:00Z",
+      plans: [{ step_id: "plan", attempt: 1, declared_at: "2026-09-02T13:12:00Z", paths: ["src/"] }],
+      files: [
+        { path: "src/a.ts", change: "modified", lines: { added: 10, deleted: 2 }, planned_by: ["plan"] },
+        { path: "docs/x.md", change: "added", lines: { added: 4, deleted: 0 }, planned_by: [] },
+        { path: "logo.png", change: "added", planned_by: [] },
+      ],
+    };
+    const markup = renderToStaticMarkup(chapters({ kept: footprint })[2]!.preview);
+    expect(markup).toContain("Lines changed per file");
+    expect(markup).toContain("outside every declared plan");
+    expect(markup).toContain("1 file not counted");
+  });
+
+  it("draws no Footprint on a record with no files", () => {
+    expect(renderToStaticMarkup(chapters()[2]!.preview)).not.toContain("Lines changed per file");
   });
 });

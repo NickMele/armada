@@ -283,6 +283,10 @@
 @import "./compositions/StudioNode/StudioNode.css";
 @import "./compositions/StudioWhiteboard/StudioWhiteboard.css";
 
+/* Activity and Footprint, the two instruments on a Job page. #1268. */
+@import "./compositions/ActivityInstrument/ActivityInstrument.css";
+@import "./compositions/FootprintInstrument/FootprintInstrument.css";
+
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */
 .armada-helm-dock {

@@ -1,0 +1,82 @@
+/* Footprint instrument. A column's place arrives as two percentages; the
+   hairline between neighbours and the outline are spelled off --border-width
+   in CSS geometry properties, so nothing here is a px literal. No transition
+   anywhere: a new reading replaces the drawing. */
+.armada-instrument-footprint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-instrument-footprint__head,
+.armada-instrument-footprint__key {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-instrument-footprint__head {
+  justify-content: space-between;
+}
+
+.armada-instrument-footprint__plot {
+  display: block;
+  width: 100%;
+  height: var(--space-8);
+  overflow: visible;
+}
+
+/* A hairline between neighbours, taken out of the column's own width, so two
+   files are two columns and the widths still add up to the whole. */
+.armada-instrument-footprint__plot rect {
+  x: calc(var(--armada-footprint-x) + var(--border-width) / 2);
+  width: max(0%, calc(var(--armada-footprint-w) - var(--border-width)));
+}
+
+.armada-instrument-footprint__added {
+  fill: var(--diff-add-fg);
+  fill-opacity: 0.55;
+}
+
+.armada-instrument-footprint__deleted {
+  fill: var(--diff-del-fg);
+  fill-opacity: 0.45;
+}
+
+/* Neutral: drift is not a status. */
+.armada-instrument-footprint__outside {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: calc(var(--border-width) * 1.5);
+}
+
+.armada-instrument-footprint__entry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.armada-instrument-footprint__swatch {
+  width: var(--space-2);
+  height: var(--space-2);
+  flex: none;
+  overflow: visible;
+}
+
+/* The reading, for the accessible description only. */
+.armada-instrument-footprint__description {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
