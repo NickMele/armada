@@ -12,7 +12,6 @@
 //!
 //! | Step of the claim | Carried by |
 //! |---|---|
-//! | 2. A Run node is started from it and ends failed, and keeps its log's tail and result past retention | #1289. **What it meets:** a checkout run today is `ipc::CheckoutRunRecord`, whose end is an exit code and a sentence documented as unhued — there is no run state for a Run node to alias to a Job status |
 //! | 3. A Note is captured, and nothing writes to it afterwards | #1290 |
 //! | 4. A scout's Finding lists the sources it read beyond the checkout — an issue, a page, a session, a Helm thread | #1293. **The checkout half is asserted below** |
 //! | 5. An issue from the repository's forge is read in, and a Contradiction appears | #1293 |
@@ -24,6 +23,7 @@
 //! | That a proposer reading the draft chooses well | Choosing is a model's, and this file calls none. The answer below is written by the test |
 //! | That the proposed Job is created at `awaiting_approval` | `fleet::drafting`'s conversion from a proposal to a Job is `pub(crate)`, so building one here would assert what the test built. `fleet`'s own tests create one |
 //! | That a Studio survives a restart on disk | It touches a file. `store` and `fleet` reopen one in their own tests; what is asserted here is the record reading back through the wire |
+//! | That a sweep past retention is what fills a Run node in | It deletes a directory. `fleet`'s `studio_runs` drives a real run past a real sweep; what is asserted here is the tail that sweep takes and the node carrying it over the wire |
 //! | That a reopened Studio is read-only until Continue | A Bridge state; #1287's mock browser test proves it |
 //! | Anything a person sees | Nothing here renders. The whiteboard is #1286 and #1287 |
 //! | That Helm keeps to what it is told | A model's. `fleet`'s `helm_studio` drives the door through a stand-in agent |
@@ -39,9 +39,11 @@ use ipc::door::{DRAFTING, HELM_ONLY, REACHABLE};
 use ipc::{HelmStudioAct, StudioNodeContent};
 
 use bench::studio::{
-    a_studio_with_a_frozen_finding, a_studio_with_two_notes, an_issue_draft, held, helms_manifest,
-    one_job_under, received_event, received_request, received_studio, ASKED, COMMIT, COST,
-    DRAFT_TITLE, FIRST_NOTE, LEFT_AT, READ, REPOSITORY, SECOND_NOTE,
+    a_failed_run, a_long_log, a_studio_with_a_frozen_finding,
+    a_studio_with_a_run_started_from_a_note, a_studio_with_two_notes, an_issue_draft, held,
+    helms_manifest, one_job_under, received_event, received_request, received_studio, ASKED,
+    COMMIT, COST, DRAFT_TITLE, FIRST_NOTE, LEFT_AT, READ, REPOSITORY, SECOND_NOTE, THE_COMMAND,
+    THE_FAILURE, THE_RUN,
 };
 
 /// Step 6's far half: **an Issue draft is dispatched from its text, through the
@@ -220,9 +222,25 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
         studio.contains("\"write it up\" alone is a draft and nothing more"),
         "writing up never dispatches on its own: {studio}"
     );
+    // #1289 and #1292: starting a run and starting a scout both spend, so each
+    // is named where the asked acts are named and nowhere above them.
+    let (_, on_an_ask) = studio
+        .split_once("waits for a person's ask")
+        .expect("the asked acts are named");
+    for asked in ["start_scout", "start_studio_run"] {
+        assert!(
+            on_an_ask.contains(asked),
+            "`{asked}` waits for a person's ask: {studio}"
+        );
+    }
     assert!(
-        studio.contains("start_scout"),
-        "starting a scout waits for a person's ask: {studio}"
+        HELM_ONLY
+            .iter()
+            .any(|row| row.operation == "start_studio_run" && row.kind == "command")
+            && !REACHABLE
+                .iter()
+                .any(|row| row.operation == "start_studio_run"),
+        "`start_studio_run` is offered to Helm alone"
     );
     for read in ["list_checkout_runs", "get_checkout_run_output"] {
         assert!(HELM_ONLY
@@ -299,5 +317,87 @@ fn a_scouts_finding_arrives_frozen_with_every_file_it_read_its_commit_and_its_co
         (&asked_from.from, &asked_from.to),
         (&studio.nodes[0].id, &finding.id),
         "the Note it was asked from made it"
+    );
+}
+
+/// Step 2: **a Run started from a Studio is a node that reads its state off
+/// the run, and keeps that run's result and its log's last lines once
+/// retention sweeps it.** `docs/concepts/studio.md`, *Nodes*.
+///
+/// **The failure this is against is a Studio that outlives what it points
+/// at.** A Studio is kept until a person deletes it and a run's log is not, so
+/// a node holding only a reference is a dead end the day retention passes. The
+/// node crosses the wire with a reference alone while the run is there; the
+/// tail is then taken by the code the sweep calls, from the run's own record
+/// and log; and the node carrying it crosses the wire with the command, the
+/// exit code, the duration and the last lines a person would have opened it
+/// for.
+#[test]
+fn a_run_node_reads_its_state_off_the_run_and_keeps_its_tail_and_result_once_it_is_swept() {
+    let underway = received_studio(&a_studio_with_a_run_started_from_a_note(None));
+    let node = &underway.nodes[1];
+    assert!(
+        node.state.is_none(),
+        "a Run node copies no status: its state is the run's"
+    );
+    assert_eq!(
+        node.content,
+        StudioNodeContent::Run {
+            run_id: THE_RUN.to_string(),
+            kept: None,
+        },
+        "a reference, while the run is still there to read"
+    );
+    let edge = &underway.edges[0];
+    assert_eq!(
+        edge.kind.as_wire(),
+        "produced",
+        "from what it was started on"
+    );
+    assert_eq!(
+        edge.standing.as_wire(),
+        "accepted",
+        "the Studio draws Produced itself, so nobody accepts it"
+    );
+
+    // Retention comes for the run, and what it said is taken before it goes.
+    let record = a_failed_run();
+    let log = a_long_log();
+    let kept = fleet::studio_runs::kept(&record, Some(&log));
+    assert_eq!(kept.command, THE_COMMAND, "what was run");
+    assert_eq!(kept.exit_code, Some(1));
+    assert_eq!(kept.expect_exit_code, 0, "so the node still reads failed");
+    assert!(!kept.stopped, "it failed rather than being stopped");
+    assert_eq!(kept.duration_ms, record.duration_ms, "how long it took");
+    assert_eq!(
+        kept.total_lines, log.total_lines,
+        "how much there was, whether or not it is here"
+    );
+
+    assert!(
+        kept.lines.len() < log.lines.len() && !kept.whole,
+        "a Studio does not quietly hold a whole log: {} of {} lines",
+        kept.lines.len(),
+        log.lines.len()
+    );
+    assert_eq!(
+        kept.lines,
+        log.lines[log.lines.len() - kept.lines.len()..],
+        "the tail, where a runner prints what failed, and not the head"
+    );
+    assert_eq!(kept.lines.last().map(String::as_str), Some(THE_FAILURE));
+
+    let swept = received_studio(&a_studio_with_a_run_started_from_a_note(Some(kept.clone())));
+    assert_eq!(
+        swept.nodes[1].content,
+        StudioNodeContent::Run {
+            run_id: THE_RUN.to_string(),
+            kept: Some(ipc::StudioRunKept::of(&kept)),
+        },
+        "the node carries all of it across the wire, and still says which run"
+    );
+    assert!(
+        swept.nodes[1].state.is_none(),
+        "a swept run is still read off what the node kept, never off a status"
     );
 }

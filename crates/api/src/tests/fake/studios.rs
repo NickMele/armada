@@ -9,8 +9,7 @@ use ipc::{
     ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout,
     StartStudioRun, StopScout, Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind,
     StudioEdgeStanding, StudioId, StudioList, StudioNode, StudioNodeContent, StudioNodeId,
-    StudioNodeState, StudioRunStarted, StudioSummary,
-    WireError,
+    StudioNodeState, StudioRunStarted, StudioSummary, WireError,
 };
 
 use super::FakeDaemon;

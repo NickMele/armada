@@ -200,3 +200,102 @@ pub fn a_studio_with_a_frozen_finding() -> StudioGraph {
     graph.edges.push(produced);
     graph
 }
+
+/// The run a person started from the Studio, by id.
+pub const THE_RUN: &str = "01RUNTHATFAILED";
+
+/// What the failed run's log ended on, and what a person opens the node for.
+pub const THE_FAILURE: &str = "4 failed";
+
+/// The command the Run node was started for.
+pub const THE_COMMAND: &str = "pnpm test";
+
+/// A Studio holding one Note and the Run a person started from it, with the
+/// Produced edge between them.
+///
+/// `kept` is what retention left behind: `None` while the run is still there
+/// to read, and `Some` once the sweep has been and gone.
+pub fn a_studio_with_a_run_started_from_a_note(
+    kept: Option<core_model::StudioRunKept>,
+) -> StudioGraph {
+    let note = StudioNode::added(
+        StudioNodeId::carried(Ulid::carried("01NOTEFIRST")),
+        StudioNodeContent::Note {
+            said: FIRST_NOTE.to_string(),
+        },
+        StudioPosition { x: 0, y: 0 },
+        at(1),
+        StudioAuthor::Person,
+    );
+    let run = StudioNode::added(
+        StudioNodeId::carried(Ulid::carried("01RUNNODE")),
+        StudioNodeContent::Run {
+            run_id: THE_RUN.to_string(),
+            kept,
+        },
+        StudioPosition { x: 240, y: 0 },
+        at(2),
+        StudioAuthor::Person,
+    );
+    let produced = StudioEdge::produced(
+        StudioEdgeId::carried(Ulid::carried("01EDGEPRODUCED")),
+        note.id().clone(),
+        run.id().clone(),
+        at(2),
+        StudioAuthor::Person,
+    )
+    .expect("a Note and the Run it started");
+    StudioGraph {
+        studio: Studio {
+            id: StudioId::carried(Ulid::carried("01STUDIO")),
+            manifest_id: ManifestId::carried(Ulid::carried(REPOSITORY)),
+            name: StudioName::named(DRAFT_TITLE),
+            named_by: Some(StudioAuthor::Person),
+            created_at: at(0),
+            touched_at: at(3),
+        },
+        nodes: vec![note, run],
+        edges: vec![produced],
+    }
+}
+
+/// The run's own record, as the checkout wrote it: it failed, and nobody
+/// stopped it.
+pub fn a_failed_run() -> ipc::CheckoutRunRecord {
+    ipc::CheckoutRunRecord {
+        id: THE_RUN.to_string(),
+        name: String::from("test"),
+        workspace: None,
+        command: THE_COMMAND.to_string(),
+        required: Vec::new(),
+        started_at: ipc::Instant::carried("2026-09-17T09:01:00.000Z"),
+        ended_at: ipc::Instant::carried("2026-09-17T09:01:12.400Z"),
+        duration_ms: 12_400,
+        exit_code: Some(1),
+        expect_exit_code: 0,
+        ended: String::from("exited 1"),
+        stopped: false,
+        changed: Vec::new(),
+        changed_unreadable: None,
+        undoable: false,
+        undone_at: None,
+        log: format!(".armada/runs/main/{THE_RUN}/output.log"),
+    }
+}
+
+/// The run's log, longer than any node would carry: the failure is on the last
+/// line, where a test runner puts it.
+pub fn a_long_log() -> ipc::RunOutput {
+    let mut lines: Vec<String> = (1..5_000).map(|at| format!("line {at}")).collect();
+    lines.push(THE_FAILURE.to_string());
+    ipc::RunOutput {
+        id: THE_RUN.to_string(),
+        name: String::from("test"),
+        path: format!(".armada/runs/main/{THE_RUN}/output.log"),
+        from_line: 1,
+        total_lines: lines.len() as u32,
+        bytes: lines.iter().map(|line| line.len() as u64 + 1).sum(),
+        whole: true,
+        lines,
+    }
+}
