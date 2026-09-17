@@ -408,9 +408,6 @@
    padding either**: `.armada-screen__mounted` keeps the gap under the title
    bar for every surface, and padding it here too doubled it the same way. */
 .armada-screen__overview {
-  /* So the summary strip can query its own available width — narrower with
-     Helm's dock open, which is what its two-up form answers. */
-  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
