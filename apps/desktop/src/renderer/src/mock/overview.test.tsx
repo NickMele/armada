@@ -114,9 +114,9 @@ test("Fleet unreachable with nothing held says so flatly", async () => {
 test("the Running panel beside Helm's dock keeps each row's facts and its action", async () => {
   await overview(onOverview(RUNNING_ONE_WITH_A_PLAN(), { repositories: [ARMADA, STOREFRONT] }));
   await expect.element(page.getByRole("complementary", { name: "Helm" })).toBeVisible();
-  // Present, not asserted visible: beside the dock the row draws no task figure,
-  // where the list's own story, standing alone at full width, did.
-  await expect.element(page.getByRole("img", { name: "0 of 6 tasks" })).toBeInTheDocument();
+  // In the DOM, not asserted visible: beside the dock the row hides its task
+  // figure, where the list's own story, standing alone at full width, showed it.
+  await expect.poll(() => document.querySelector('[role="img"][aria-label="0 of 6 tasks"]')).not.toBeNull();
   await expect.element(page.getByRole("option", { name: /unanswered permission ask/ })).toBeVisible();
   await expect.element(page.getByRole("option", { name: /shows "queued"/ })).toBeVisible();
   await expect.element(page.getByRole("button", { name: /Redirect/ }).first()).toBeVisible();
@@ -143,6 +143,13 @@ test("j and k move Overview's cursor across sections, Enter opens, x asks to kil
   await userEvent.keyboard("{Enter}");
   await expect.poll(() => rows().length).toBe(0);
   await expect.element(page.getByText(handle, { exact: true }).first()).toBeVisible();
+});
+
+test("the focused row is Overview's cursor, and Helm's footer names it", async () => {
+  await overview(onOverview(JOBS()));
+  await expect.element(page.getByText("Overview", { exact: true }).last()).toBeVisible();
+  rows()[0]!.focus();
+  await expect.element(page.getByText(/^Overview · cursor on Job \d+$/)).toBeVisible();
 });
 
 test("n opens the composer from Overview", async () => {
