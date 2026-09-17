@@ -21,6 +21,8 @@ import type {
 import type { StartCheckoutRun, StartRun } from "@armada/protocol";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
+import { ANNOTATE_FLAG } from "../shared/annotations";
+import { handleAnnotations } from "./annotations";
 import { FleetConnection } from "./connection";
 import { resolvedFolder } from "./locating";
 import { openArtifact } from "./open";
@@ -156,6 +158,8 @@ function createWindow(): BrowserWindow {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      // The dev-only annotation layer, #1226: the preload exposes it on this flag alone.
+      additionalArguments: app.isPackaged ? [] : [ANNOTATE_FLAG],
     },
   });
 
@@ -346,6 +350,7 @@ const attention = new Attention({
 
 void app.whenReady().then(() => {
   wearTheMark();
+  if (!app.isPackaged) handleAnnotations(ipcMain, app.getAppPath());
 
   // A recording plays from here, forwarded to the port main already holds.
   // **The port is read at request time and never captured**, for the reason

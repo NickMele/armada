@@ -1,0 +1,143 @@
+/* The dev-only annotation layer, #1226. Every value a token; positions arrive
+ * from the layer as `--annotate-*`, measured off the element each frame.
+ *
+ * MISSING TOKEN: nothing stacks above `--z-palette`, and this layer has to sit
+ * over the palette to annotate it. One step above is the contract's refused
+ * "above my sibling" shape, accepted here because nothing ships this layer. */
+.armada-annotate {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-palette) + 1);
+  pointer-events: none;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+}
+
+.armada-annotate__outline {
+  position: fixed;
+  left: var(--annotate-x);
+  top: var(--annotate-y);
+  width: var(--annotate-w);
+  height: var(--annotate-h);
+  outline: calc(var(--border-width) * 2) solid var(--accent);
+  /* Off the element's edge, so it still reads on an accent-filled control. */
+  outline-offset: calc(var(--border-width) * 2);
+  pointer-events: none;
+}
+
+.armada-annotate__outline[data-held] {
+  outline-style: dashed;
+}
+
+.armada-annotate__tag {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+/* The pin sits on the element's top trailing corner, kept inside the window. */
+.armada-annotate__pin {
+  position: fixed;
+  left: clamp(var(--space-3), calc(var(--annotate-x) + var(--annotate-w)), calc(100vw - var(--space-3)));
+  top: clamp(var(--space-3), var(--annotate-y), calc(100vh - var(--space-3)));
+  transform: translate(-50%, -50%);
+  min-width: var(--h-badge);
+  height: var(--h-badge);
+  padding: 0 var(--space-1);
+  border: var(--border-width) solid var(--bg-base);
+  border-radius: var(--h-badge);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.armada-annotate__pin[data-status="done"] {
+  border-color: var(--border-default);
+  background: var(--bg-raised);
+  color: var(--fg-subtle);
+}
+
+.armada-annotate__pin:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-annotate__card {
+  position: fixed;
+  left: clamp(var(--space-2), var(--annotate-x), calc(100vw - var(--w-tooltip) - var(--space-2)));
+  top: var(--annotate-y);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--w-tooltip);
+  margin: var(--space-2) 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--text-sm);
+  pointer-events: auto;
+}
+
+.armada-annotate__card[data-side="above"] {
+  transform: translateY(-100%);
+  margin-top: calc(var(--space-2) * -1);
+}
+
+.armada-annotate__meta {
+  margin: 0;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  overflow-wrap: anywhere;
+}
+
+.armada-annotate__text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.armada-annotate__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.armada-annotate__bar {
+  position: fixed;
+  bottom: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: calc(100vw - var(--space-6));
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  pointer-events: auto;
+}
+
+.armada-annotate__bar > :first-child {
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+
+.armada-annotate__error {
+  color: var(--error);
+}
