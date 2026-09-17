@@ -43,9 +43,9 @@
 /* The menu-trigger mark, right of the label. 12px because it trails text at
  * the text's own size, as chevron-right's "goes to" does; 16px is for a caret
  * that is a segment's whole content. No colour of its own: it inherits the
- * label's, so disabled dims it with the text to --fg-subtle — which the
- * contrast floor lists no exception for, and which SplitButton's disabled
- * caret already draws; reported rather than decided here. */
+ * label's, so disabled dims it with the text to --fg-subtle — the contrast
+ * floor's third exception in docs/contracts/iconography.md, not a breach of
+ * it. */
 .armada-dropdown-menu__chevron {
   flex: none;
 }
