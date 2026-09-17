@@ -233,8 +233,9 @@ refusal it was, and the story draws it that way.
 
 **`node scripts/record-job.mjs --board <slug>` records the whole Board instead**:
 every row the Job list serves, and the workflows and manifests they name, into
-`packages/screens/src/fixtures/boards/<slug>.json`. `Screens/Board` replays it
-beside the rows it builds. It makes only those three reads, so it changes
+`packages/screens/src/fixtures/boards/<slug>.json`. The mock's `recorded-board`
+scenario replays `real-board.json`; another slug needs its own scenario in
+`apps/desktop/src/renderer/src/mock/scenario.ts`. It makes only those three reads, so it changes
 nothing on the Fleet it reads, and it scrubs and refuses exactly as above. It
 prints how many Jobs and workflows it wrote.
 
