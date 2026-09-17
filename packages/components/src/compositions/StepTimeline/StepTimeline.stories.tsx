@@ -159,10 +159,17 @@ function liveAttempt(live: "working" | "checks"): StepTimelineAttempt {
  */
 function PhaseGoesLiveDrawn() {
   const [live, setLive] = useState<"working" | "checks">("working");
+  // Both ways, because the play below presses it on load: a one-way press
+  // leaves anyone opening the story looking at the move's far side, with a
+  // button that does nothing.
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setLive("checks")}>
-        Move the step on
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setLive(live === "working" ? "checks" : "working")}
+      >
+        {live === "working" ? "Move the step on" : "Back to Working"}
       </Button>
       <StepTimeline label="Where this step is" attempts={[liveAttempt(live)]} />
     </>
