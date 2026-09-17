@@ -58,7 +58,12 @@ const shell: ComponentProps<typeof TheShell> = {
   fleet: {
     state: "running",
     label: "Running",
-    detail: "pid 4417 · port 7411",
+    rows: [
+      { label: "pid", value: "4417" },
+      { label: "port", value: "7411" },
+      { label: "protocol", value: "14.5" },
+      { label: "up", value: "2h 14m" },
+    ],
     doctor: { outcome: "pass", checked: "Fleet, SQLite, Manifest, System stats" },
     open: true,
     onOpenChange: () => {},

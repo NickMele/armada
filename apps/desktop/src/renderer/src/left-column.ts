@@ -4,10 +4,10 @@
 // Reuses Overview's own tile arithmetic rather than re-deriving it, so the
 // two readings cannot drift apart. Bridge/1088.
 
-import type { StatRow, FleetPanelProps } from "@armada/components";
+import type { Figure, StatRow, FleetPanelProps } from "@armada/components";
 import type { Connection, FleetCapacity, JobSummary, RepositorySummary } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
-import { fleetStateOf, shortLabelOf, type Statement } from "@armada/shell";
+import { fleetStateOf, shortLabelOf, silenceOf, versionsOf, type Statement } from "@armada/shell";
 import { doctorReading, driftReading, dronesReading } from "@armada/screens/src/overview";
 import type { DriftsRead, HealthRead } from "@armada/screens/src/overview-reads";
 // `instant` and `lasting` are the Job elapsed-time figure's own parse-and-format
@@ -80,16 +80,17 @@ function asString(node: unknown): string | undefined {
 const DOCTOR_OUTCOMES = new Set(["pass", "warn", "fail"]);
 
 /**
- * Fleet — Running, pid · port, and Doctor as a rollup of what `GET /health`
- * answered. **Not Doctor's own grid**, which is unbuilt (#99): the worst of
- * the probes Fleet itself can run, the same reading Overview's own Doctor
- * tile already computes.
+ * Fleet — Running, the pid / port / protocol / up rows, and Doctor as a rollup
+ * of what `GET /health` answered. **Not Doctor's own grid**, which is unbuilt
+ * (#99): the worst of the probes Fleet itself can run, the same reading
+ * Overview's own Doctor tile already computes.
  */
 export function fleetPanelOf(
   connection: Connection,
   statement: Statement,
   health: HealthRead,
   now: number,
+  readAt: number | null,
 ): Omit<FleetPanelProps, "open" | "onOpenChange"> {
   const reading = doctorReading(health);
   const outcome = asString(reading.value);
@@ -100,25 +101,54 @@ export function fleetPanelOf(
   return {
     state: fleetStateOf(connection),
     label: shortLabelOf(connection),
-    detail: statement.detail === "" ? undefined : statement.detail,
-    meta: metaOf(connection, now),
+    rows: rowsOf(connection, now),
+    detail: sentenceOf(connection, statement, now, readAt),
     doctor,
   };
 }
 
 /**
- * `protocol 13.49 · up 2h 14m` — only once a connection has one to read.
+ * pid, port, protocol and up, one row each — **only the ones this state has a
+ * value for.** Settled 2026-09-17. A runtime file names pid and port, so a
+ * Fleet being connected to or not answering has those two; protocol and uptime
+ * are read only once a connection holds, as they were on the old meta line.
  *
  * **Ticks off the app's one `now`** (`App.tsx`'s `setInterval`, already
  * running for every other elapsed figure on screen) rather than a second
  * clock. The uptime is relative to `FleetIdentity.startedAt` — the instant
  * `ps -o lstart=` gave Fleet's own process, the spelling `crates/fleet`
  * chose specifically so Bridge could parse it too — not a static read taken
- * once at connect time.
+ * once at connect time. A `startedAt` that will not parse drops the row.
  */
-function metaOf(connection: Connection, now: number): string | undefined {
-  if (connection.state !== "connected") return undefined;
-  const protocol = `protocol ${spoken(connection.fleet.protocolVersion)}`;
+function rowsOf(connection: Connection, now: number): Figure[] | undefined {
+  if (connection.state !== "connected" && connection.state !== "connecting" && connection.state !== "unreachable") {
+    return undefined;
+  }
+  const rows: Figure[] = [
+    { label: "pid", value: String(connection.fleet.pid) },
+    { label: "port", value: String(connection.fleet.port) },
+  ];
+  if (connection.state !== "connected") return rows;
+  rows.push({ label: "protocol", value: spoken(connection.fleet.protocolVersion) });
   const startedMs = instant(connection.fleet.startedAt);
-  return startedMs === null ? protocol : `${protocol} · up ${lasting(now - startedMs)}`;
+  if (startedMs !== null) rows.push({ label: "up", value: lasting(now - startedMs) });
+  return rows;
+}
+
+/**
+ * The line under the rows, where a state has more to say than its figures.
+ * **Never the pid or port again**: the states that have rows say only what the
+ * rows cannot, and the rest keep the statement's own detail whole.
+ */
+function sentenceOf(connection: Connection, statement: Statement, now: number, readAt: number | null) {
+  switch (connection.state) {
+    case "connected":
+      return connection.skew === "fleet_ahead" ? versionsOf(connection) : undefined;
+    case "connecting":
+      return undefined;
+    case "unreachable":
+      return `alive, ${silenceOf(connection, now, readAt)}`;
+    default:
+      return statement.detail === "" ? undefined : statement.detail;
+  }
 }

@@ -287,6 +287,9 @@
 @import "./compositions/ActivityInstrument/ActivityInstrument.css";
 @import "./compositions/FootprintInstrument/FootprintInstrument.css";
 
+/* A label and its figure in one aligned column — Pulse and the Fleet panel. */
+@import "./compositions/FigureList/FigureList.css";
+
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */
 .armada-helm-dock {

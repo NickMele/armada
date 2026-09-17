@@ -308,3 +308,5 @@ export * from "./compositions/WorkNarration/WorkNarration";
 // A Studio's nodes, and the whiteboard React Flow draws them on. #1286.
 export * from "./compositions/StudioNode/StudioNode";
 export * from "./compositions/StudioWhiteboard/StudioWhiteboard";
+// A label and its figure in one aligned column — Pulse and the Fleet panel.
+export * from "./compositions/FigureList/FigureList";

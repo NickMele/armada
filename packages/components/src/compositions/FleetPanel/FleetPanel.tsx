@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FigureList, type Figure } from "../FigureList/FigureList";
 import { Panel } from "../Panel/Panel";
 
 /** Where Bridge's one connection is, collapsed to what a dot can carry. Was `StatusBar`'s. */
@@ -20,10 +21,22 @@ export type FleetPanelProps = {
   state: FleetState;
   /** "Running", "Not running", "Unreachable", "Reading" — the panel already says "Fleet". */
   label: ReactNode;
-  /** `pid 61372 · port 40000`, mono. */
+  /**
+   * `pid`, `port`, `protocol`, `up` — the facts the runtime file and the
+   * connection carry, one row each, labels left and values in one aligned
+   * column. Settled 2026-09-17, replacing two `·`-joined mono lines.
+   *
+   * **Only the rows a state has a value for.** A Fleet that is not running has
+   * no port to name, and a `port` row with nothing beside it would read as a
+   * port that failed to arrive. The caller leaves it out.
+   */
+  rows?: Figure[];
+  /**
+   * The sentence a state carries beside or instead of its rows, mono — what
+   * the runtime file says, how long an unreachable Fleet has been silent, or
+   * the two protocol versions when Fleet is ahead.
+   */
   detail?: ReactNode;
-  /** `protocol 13.49 · up 2h 14m`, mono. */
-  meta?: ReactNode;
   doctor?: DoctorLine;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,7 +50,7 @@ const DOT_TONE: Record<FleetState, "success" | "escalated" | "warn" | "muted"> =
   unknown: "muted",
 };
 
-export function FleetPanel({ state, label, detail, meta, doctor, open, onOpenChange, narrow }: FleetPanelProps) {
+export function FleetPanel({ state, label, rows, detail, doctor, open, onOpenChange, narrow }: FleetPanelProps) {
   return (
     <Panel label="Fleet" open={open} onOpenChange={onOpenChange} narrow={narrow} dotTone={DOT_TONE[state]}>
       <div className="armada-fleet-panel">
@@ -45,8 +58,8 @@ export function FleetPanel({ state, label, detail, meta, doctor, open, onOpenCha
           <span className="armada-fleet-panel__dot" data-tone={DOT_TONE[state]} aria-hidden />
           {label}
         </div>
+        {rows === undefined || rows.length === 0 ? null : <FigureList figures={rows} column="fit" />}
         {detail === undefined ? null : <div className="armada-fleet-panel__mono">{detail}</div>}
-        {meta === undefined ? null : <div className="armada-fleet-panel__mono">{meta}</div>}
         {doctor === undefined ? null : (
           <div className="armada-fleet-panel__doctor">
             <span className="armada-fleet-panel__dot" data-tone={DOCTOR_TONE[doctor.outcome]} aria-hidden />
