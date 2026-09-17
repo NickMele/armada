@@ -64,15 +64,14 @@
   color: var(--verdict-not-met);
 }
 
-/* The frozen position. Mono and tabular so a column of them lines up, and
-   never dropped — a citation names the number, not the row's place on screen. */
+/* The frozen position. Mono, and never dropped — a citation names the number,
+   not the row's place on screen. */
 .armada-verdicts__ordinal {
   flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  font-variant-numeric: tabular-nums;
 }
 
 /* The requester's own words. Sans, because a criterion is a sentence somebody

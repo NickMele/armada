@@ -114,7 +114,6 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  font-variant-numeric: tabular-nums;
 }
 
 .armada-diff-sheet__rail-note {
@@ -144,13 +143,11 @@
 .armada-diff-sheet__added {
   font-family: var(--font-mono);
   color: var(--diff-add-fg);
-  font-variant-numeric: tabular-nums;
 }
 
 .armada-diff-sheet__removed {
   font-family: var(--font-mono);
   color: var(--diff-del-fg);
-  font-variant-numeric: tabular-nums;
 }
 
 /* The ref the patch was measured against — a branch name, so mono. */

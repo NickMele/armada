@@ -50,11 +50,9 @@
 .armada-run-diff-sheet__added {
   font-family: var(--font-mono);
   color: var(--diff-add-fg);
-  font-variant-numeric: tabular-nums;
 }
 
 .armada-run-diff-sheet__removed {
   font-family: var(--font-mono);
   color: var(--diff-del-fg);
-  font-variant-numeric: tabular-nums;
 }

@@ -55,8 +55,7 @@
   border-inline-start: var(--border-width) solid var(--step-running);
 }
 
-/* What it is doing, and for how long — one line, the two ends apart. The
-   elapsed figure is tabular so it does not jog as the digits change. */
+/* What it is doing, and for how long — one line, the two ends apart. */
 .armada-dispatch__wait-head {
   display: flex;
   gap: var(--space-3);
@@ -78,7 +77,6 @@
   color: var(--fg-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
-  font-variant-numeric: tabular-nums;
 }
 
 .armada-dispatch__wait-where,
@@ -87,7 +85,6 @@
   color: var(--fg-subtle);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
-  font-variant-numeric: tabular-nums;
 }
 
 /* Where the surface asks. Separated from the readings above it, because it is

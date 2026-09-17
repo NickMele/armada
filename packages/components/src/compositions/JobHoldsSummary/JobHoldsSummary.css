@@ -33,7 +33,6 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  font-variant-numeric: tabular-nums;
 }
 
 .armada-holds-summary__who {
@@ -96,7 +95,6 @@
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
   color: var(--text-body);
-  font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

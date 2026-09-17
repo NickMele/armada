@@ -82,15 +82,13 @@
   color: var(--fg-muted);
 }
 
-/* Machine-written, so mono, and tabular so the column does not shimmer as the
-   seconds change. */
+/* Machine-written, so mono. */
 .armada-activity__at {
   flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  font-variant-numeric: tabular-nums;
 }
 
 /* Who. A fixed track, so the column reads down rather than ragged, and sans

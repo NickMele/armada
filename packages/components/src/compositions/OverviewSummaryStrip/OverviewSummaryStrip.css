@@ -48,7 +48,6 @@
   line-height: var(--leading-lg);
   font-weight: var(--weight-medium);
   color: var(--fg-default);
-  font-variant-numeric: tabular-nums;
 }
 
 .armada-overview-summary__item[data-tone="awaiting-review"] .armada-overview-summary__count {

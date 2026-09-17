@@ -100,14 +100,13 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-/* The head's row count, opposite the heading. Muted and tabular: a fact read
+/* The head's row count, opposite the heading. Muted: a fact read
    at a glance, not a value compared across rows. */
 .armada-active-jobs__count {
   flex: none;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
-  font-variant-numeric: tabular-nums;
   color: var(--fg-muted);
 }
 
@@ -334,6 +333,5 @@
 }
 
 .armada-active-jobs__section-count {
-  font-variant-numeric: tabular-nums;
   color: var(--fg-subtle);
 }

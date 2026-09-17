@@ -176,7 +176,6 @@
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 /* --- Gate rows ------------------------------------------------------------ */

@@ -780,7 +780,6 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 .armada-inside__plan-tasks {
@@ -1089,7 +1088,6 @@
 
 .armada-inside__field-value[data-mono="true"] {
   font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
 }
 
 /* The step acts. The accent goes with them, because they act on the object of
