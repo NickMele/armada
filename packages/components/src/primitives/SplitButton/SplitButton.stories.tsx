@@ -176,6 +176,102 @@ function EveryVariant({
 }
 
 /**
+ * Disabled, one control per variant. Each carries its own act and its own menu
+ * name so the `play` below can name the segment it reads rather than count
+ * them.
+ */
+const DISABLED_VARIANTS: {
+  variant: SplitButtonProps["variant"];
+  label: string;
+  menuLabel: string;
+}[] = [
+  { variant: "secondary", label: "Approve", menuLabel: "More for approve" },
+  { variant: "primary", label: "Approve all", menuLabel: "More for approve all" },
+  { variant: "destructive", label: "Kill job", menuLabel: "More for kill job" },
+  { variant: "tonal", label: "Dispatch", menuLabel: "More for dispatch" },
+];
+
+/**
+ * The colour a token resolves to inside this canvas, read rather than typed.
+ * The assertion below compares two computed values, so no hex is spelled in a
+ * story and `packages/tokens` stays the one place the value lives.
+ */
+function tokenColour(within: HTMLElement, token: string) {
+  const probe = document.createElement("span");
+  probe.style.color = `var(${token})`;
+  within.append(probe);
+  const colour = getComputedStyle(probe).color;
+  probe.remove();
+  return colour;
+}
+
+/**
+ * Disabled, every variant. A disabled control has no variant left to express:
+ * all four collapse onto `--fg-subtle` on `--bg-sunken`, as `Button` does, and
+ * the caret's chevron dims with the label beside it.
+ *
+ * **This one colour earns a `play` because the rule was there and losing.**
+ * `primary`, `destructive` and `tonal` each paint their segments through a
+ * descendant selector, which outweighed the disabled rule on the segment
+ * itself — so the ground went dead while the text stayed bright, and every
+ * story that drew it looked plausible next to the secondary one that worked.
+ * Reading the computed colour is what tells the two apart.
+ */
+export const DisabledEveryVariant: Story = {
+  render: () => (
+    <Row>
+      {DISABLED_VARIANTS.map(({ variant, label, menuLabel }) => (
+        <SplitButton
+          key={variant}
+          variant={variant}
+          ground="sunken"
+          items={reviewActions}
+          menuLabel={menuLabel}
+          disabled
+        >
+          {label}
+        </SplitButton>
+      ))}
+    </Row>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    const subtle = tokenColour(canvasElement, "--fg-subtle");
+
+    const drawn: Record<string, { label: string; chevron: string }> = {};
+    const disabled: Record<string, { face: boolean; caret: boolean }> = {};
+    for (const { variant, label, menuLabel } of DISABLED_VARIANTS) {
+      const face = canvas.getByRole("button", { name: label });
+      const caret = canvas.getByRole("button", { name: menuLabel });
+      // The chevron is drawn in `currentColor`, so its own computed colour is
+      // what a person sees, not the colour the button was asked for.
+      const chevron = caret.querySelector("svg");
+      await expect(chevron).not.toBeNull();
+      disabled[variant as string] = {
+        face: (face as HTMLButtonElement).disabled,
+        caret: (caret as HTMLButtonElement).disabled,
+      };
+      drawn[variant as string] = {
+        label: getComputedStyle(face).color,
+        chevron: getComputedStyle(chevron as SVGElement).color,
+      };
+    }
+
+    // One assertion over all four, so a failure names every variant that kept
+    // its live colour rather than stopping at the first.
+    await expect(drawn).toEqual(
+      Object.fromEntries(
+        DISABLED_VARIANTS.map(({ variant }) => [variant, { label: subtle, chevron: subtle }]),
+      ),
+    );
+    await expect(disabled).toEqual(
+      Object.fromEntries(
+        DISABLED_VARIANTS.map(({ variant }) => [variant, { face: true, caret: true }]),
+      ),
+    );
+  },
+};
+
+/**
  * Pressed, every variant — the face on the first row, the caret on the second.
  * A segment walks one step down its ground at `--duration-press` and the face's
  * line opens from the centre; the caret carries no line, since it sends

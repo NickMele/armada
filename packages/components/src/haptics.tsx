@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import type { ButtonAnswer } from "./primitives/Button/Button";
 
 /**
@@ -27,25 +27,13 @@ export function useHaptics(): PerformHaptic {
 }
 
 /**
- * Plays the answer's pattern once, on the render a control that was waiting on
- * Fleet shows it.
+ * Which pattern answers a press, and the whole of the mapping.
  *
- * **Only a control that was itself pending.** An answer a control mounts with,
- * or one set on it without a press, replays the line and plays nothing: a
- * second control drawing the same answer would otherwise tap the trackpad
- * twice for one press.
+ * **Played where Fleet's answer arrives, never by the control that drew it.**
+ * A control is often gone by then — an accepted Forget leaves no row, and an
+ * event can swap a control while its act is still out — and a tap tied to that
+ * control's own render is lost in exactly those cases. #1326.
  */
-export function useAnswerTap(pending: boolean, answer: ButtonAnswer | undefined): void {
-  const perform = useHaptics();
-  const waited = useRef(false);
-  useEffect(() => {
-    if (pending) {
-      waited.current = true;
-      return;
-    }
-    if (waited.current && answer !== undefined) {
-      perform(answer === "accepted" ? "alignment" : "level_change");
-    }
-    waited.current = false;
-  }, [pending, answer, perform]);
+export function patternFor(answer: ButtonAnswer): HapticPattern {
+  return answer === "accepted" ? "alignment" : "level_change";
 }

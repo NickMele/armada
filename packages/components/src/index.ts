@@ -309,7 +309,14 @@ export * from "./compositions/DroneMessageBox/DroneMessageBox";
 // A step's work as the Drone told it, under the plan task it served. #1185.
 export * from "./compositions/WorkNarration/WorkNarration";
 // A Studio's nodes, and the whiteboard React Flow draws them on. #1286.
+export * from "./compositions/StudioCapture/StudioCapture";
 export * from "./compositions/StudioNode/StudioNode";
 export * from "./compositions/StudioWhiteboard/StudioWhiteboard";
 // A label and its figure in one aligned column — Pulse and the Fleet panel.
 export * from "./compositions/FigureList/FigureList";
+// What the Job has changed, as its own panel beside the run. #1187.
+export * from "./compositions/ProducedPanel/ProducedPanel";
+// A tool's name, in the colour of what the call does. #1196.
+export * from "./compositions/ToolName/ToolName";
+// A Note's frame, opened over the Studios surface. #1352.
+export * from "./compositions/StudioFrameSheet/StudioFrameSheet";

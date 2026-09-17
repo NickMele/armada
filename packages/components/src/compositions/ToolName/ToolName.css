@@ -1,0 +1,14 @@
+/* A tool's name, hued by what the call does. One declaration per family and
+   nothing else: the name sits inside a mono line the caller already drew, so
+   weight, size and face are the line's. */
+.armada-tool[data-family="looking"] {
+  color: var(--tool-look);
+}
+
+.armada-tool[data-family="changing"] {
+  color: var(--tool-change);
+}
+
+.armada-tool[data-family="running"] {
+  color: var(--tool-run);
+}

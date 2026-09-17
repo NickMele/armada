@@ -121,17 +121,19 @@ export function running(): JobFixture {
       "Splitting the selector block into its own module so the tests can import it without " +
         "constructing the store.",
     ),
-    called("fix", "2026-09-10T14:17:20Z", "call_edit_1", "Edit", "packages/settings/src/selectors.ts"),
+    called("fix", "2026-09-10T14:17:20Z", "call_edit_1", "Edit", "packages/settings/src/selectors.ts +58 -4"),
     answered("fix", "2026-09-10T14:17:21Z", "call_edit_1"),
-    called("fix", "2026-09-10T14:20:05Z", "call_edit_2", "Edit", "packages/settings/src/reducer.ts"),
+    called("fix", "2026-09-10T14:20:05Z", "call_edit_2", "Edit", "packages/settings/src/reducer.ts +12 -27"),
     answered("fix", "2026-09-10T14:20:06Z", "call_edit_2"),
     said("fix", "2026-09-10T14:24:00Z", "thinking"),
   ];
 
+  // Counted, as Fleet's live reading is once the Drone settles. `index.ts` no
+  // edit names, which is the file a plan's tasks do not account for. #1187.
   const files = [
-    { path: "packages/settings/src/selectors.ts", change: "modified" },
-    { path: "packages/settings/src/reducer.ts", change: "modified" },
-    { path: "packages/settings/src/index.ts", change: "added" },
+    { path: "packages/settings/src/selectors.ts", change: "modified", lines: { added: 61, deleted: 4 } },
+    { path: "packages/settings/src/reducer.ts", change: "modified", lines: { added: 12, deleted: 27 } },
+    { path: "packages/settings/src/index.ts", change: "added", lines: { added: 21, deleted: 0 } },
   ];
 
   return {

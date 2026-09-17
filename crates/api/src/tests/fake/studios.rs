@@ -2,11 +2,16 @@
 //! place. **It proves the routes and the door carry what they are handed**;
 //! the record and its refusals are `store`'s and `fleet`'s, tested there.
 
+use std::sync::Arc;
+
 use ipc::{
-    AddStudioNode, CreateStudio, DecideStudioEdge, Instant, ManifestId, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, Studio, StudioDeleted, StudioEdge,
-    StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId, StudioList, StudioNode,
-    StudioNodeContent, StudioNodeId, StudioSummary, WireError,
+    AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, ContradictionSettled,
+    CreateStudio, DecideStudioEdge, DeferOnStudio, DispatchStudioDraft, EditStudioDraft,
+    GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode,
+    RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout, Studio,
+    StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
+    StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
+    StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
 
 use super::FakeDaemon;
@@ -19,11 +24,20 @@ pub const THE_STUDIO: &str = "01STUDIO";
 
 const AT: &str = "2026-09-17T09:00:00.000Z";
 
+/// The run a Studio's own start answers with.
+pub const THE_RUN: &str = "01STUDIORUN";
+
+/// What a frame's bytes are here. A PNG's own first eight bytes and nothing
+/// after them: the route answers what it was given, and a whole image would
+/// only make the fixture longer.
+pub const THE_FRAME: &[u8] = &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+
 pub fn the_studio() -> Studio {
     Studio {
         id: StudioId::carried(THE_STUDIO),
         manifest_id: ManifestId::carried(THE_MANIFEST),
         name: None,
+        named_by: None,
         created_at: Instant::carried(AT),
         touched_at: Instant::carried(AT),
         nodes: Vec::new(),
@@ -89,6 +103,43 @@ impl Studios for FakeDaemon {
         self.changing(&studio_id, within, |studio| Ok(studio.clone()))
     }
 
+    /// The bytes are [`THE_FRAME`], whatever the node kept: what this proves is
+    /// that the route answers the file rather than JSON, and that a node with
+    /// no picture is refused apart from a node that is not there.
+    async fn get_studio_frame(
+        &self,
+        studio_id: StudioId,
+        node_id: StudioNodeId,
+        within: Option<ManifestId>,
+    ) -> Result<(String, Vec<u8>), Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let node = studio
+                .nodes
+                .iter()
+                .find(|node| node.id == node_id)
+                .ok_or_else(|| {
+                    Refusal::Unacceptable(refused(
+                        "fake.no_such_studio_node",
+                        format!("no node of this Studio is `{}`", node_id.as_str()),
+                    ))
+                })?;
+            let kept = match &node.content {
+                StudioNodeContent::Note {
+                    capture: Some(capture),
+                    ..
+                } => capture.frame.as_ref(),
+                _ => None,
+            };
+            let frame = kept.ok_or_else(|| {
+                Refusal::Unacceptable(refused(
+                    "fake.studio_frame_not_kept",
+                    format!("node `{}` kept no frame", node_id.as_str()),
+                ))
+            })?;
+            Ok((frame.filename.clone(), THE_FRAME.to_vec()))
+        })
+    }
+
     async fn create_studio(
         &self,
         create: CreateStudio,
@@ -110,8 +161,10 @@ impl Studios for FakeDaemon {
         &self,
         studio_id: StudioId,
         rename: RenameStudio,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
         self.changing(&studio_id, within, |studio| {
             studio.name = Some(rename.name);
             Ok(studio.clone())
@@ -160,6 +213,42 @@ impl Studios for FakeDaemon {
                 state: None,
                 position: add.position,
                 created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(studio.clone())
+        })
+    }
+
+    /// The frame is not kept here: what a fake proves is that the route
+    /// carries the body, and where a frame goes is `fleet`'s.
+    async fn capture_studio_note(
+        &self,
+        studio_id: StudioId,
+        capture: CaptureStudioNote,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let id = StudioNodeId::carried(format!("01NODE{}", studio.nodes.len()));
+            // What Fleet does with the staged PNG, in the one way a client can
+            // see: the Note names the file kept for it, never where it was
+            // staged. `get_studio_frame` reads that name back.
+            let mut pointed = capture.capture.clone();
+            pointed.frame = capture.frame.as_ref().map(|staged| ipc::CaptureFrame {
+                filename: format!("{}.png", id.as_str()),
+                byte_size: THE_FRAME.len() as u64,
+                width: staged.width,
+                height: staged.height,
+            });
+            studio.nodes.push(StudioNode {
+                id,
+                content: StudioNodeContent::Note {
+                    said: capture.said.clone(),
+                    capture: Some(pointed),
+                },
+                state: None,
+                position: capture.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
             });
             Ok(studio.clone())
         })
@@ -202,8 +291,10 @@ impl Studios for FakeDaemon {
         &self,
         studio_id: StudioId,
         proposal: ProposeStudioEdge,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
         self.changing(&studio_id, within, |studio| {
             studio.edges.push(StudioEdge {
                 id: StudioEdgeId::carried(format!("01EDGE{}", studio.edges.len())),
@@ -213,6 +304,7 @@ impl Studios for FakeDaemon {
                     .expect("every relation is an edge kind"),
                 standing: standing("proposed"),
                 created_at: Instant::carried(AT),
+                added_by: None,
             });
             Ok(studio.clone())
         })
@@ -244,4 +336,253 @@ impl Studios for FakeDaemon {
             Ok(studio.clone())
         })
     }
+
+    /// A Finding added Gathering. **No scout runs in the fake**: the route
+    /// carrying the ask is what is proved here.
+    async fn ask_scout(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        ask: AskScout,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            studio.nodes.push(StudioNode {
+                id: StudioNodeId::carried(format!("01NODE{}", studio.nodes.len())),
+                content: StudioNodeContent::finding_asked(&ask.asked),
+                state: StudioNodeState::from_wire("gathering"),
+                position: ask.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(studio.clone())
+        })
+    }
+
+    async fn start_scout(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        start: StartScout,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            for node in studio
+                .nodes
+                .iter_mut()
+                .filter(|node| node.id == start.node_id)
+            {
+                node.state = StudioNodeState::from_wire("gathering");
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    /// Nothing is running to stop, so this answers the Studio as it stands.
+    async fn stop_scout(
+        &self,
+        studio_id: StudioId,
+        _stop: StopScout,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| Ok(studio.clone()))
+    }
+
+    /// The run is `THE_RUN`, started and not finished, and the node references
+    /// it. **Who acted is recorded, as on every other write here**, so the
+    /// door's word for a Helm call is what the route carries.
+    async fn start_studio_run(
+        self: std::sync::Arc<Self>,
+        studio_id: StudioId,
+        run: StartStudioRun,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<StudioRunStarted, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
+        self.changing(&studio_id, within, |studio| {
+            let node_id = StudioNodeId::carried(format!("01NODE{}", studio.nodes.len()));
+            studio.nodes.push(StudioNode {
+                id: node_id.clone(),
+                content: StudioNodeContent::Run {
+                    run_id: String::from(THE_RUN),
+                    kept: None,
+                },
+                state: None,
+                position: run.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(StudioRunStarted {
+                studio: studio.clone(),
+                node_id,
+                run: CheckoutRunUnderway {
+                    id: String::from(THE_RUN),
+                    name: run.name.clone(),
+                    command: format!("run {}", run.name),
+                    started_at: Instant::carried(AT),
+                    workspace: run.workspace.clone(),
+                },
+            })
+        })
+    }
+    // Promotion — `#1291`. Each one adds what its rung makes and the edges the
+    // Studio draws, so the route and the door are proved to carry the body;
+    // which kinds each refuses is `fleet`'s, tested there.
+
+    async fn group_studio_nodes(
+        &self,
+        studio_id: StudioId,
+        group: GroupStudioNodes,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let id = added(studio, group.content, group.position);
+            for from in group.from {
+                produced(studio, from, id.clone());
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    async fn defer_on_studio(
+        &self,
+        studio_id: StudioId,
+        deferring: DeferOnStudio,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let what = StudioNodeContent::Deferral {
+                what: deferring.what,
+            };
+            let id = added(studio, what, deferring.position);
+            produced(studio, deferring.raised_on, id.clone());
+            if let Some(blocks) = deferring.blocks {
+                studio.edges.push(StudioEdge {
+                    id: StudioEdgeId::carried(format!("01EDGE{}", studio.edges.len())),
+                    from: id,
+                    to: blocks,
+                    kind: StudioEdgeKind::from_wire("blocks").expect("a relation"),
+                    standing: standing("accepted"),
+                    created_at: Instant::carried(AT),
+                    added_by: None,
+                });
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    async fn write_up_studio_node(
+        &self,
+        studio_id: StudioId,
+        writing: WriteUpStudioNode,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
+        self.changing(&studio_id, within, |studio| {
+            let draft = StudioNodeContent::IssueDraft {
+                title: writing.title,
+                body: writing.body,
+            };
+            let id = added(studio, draft, writing.position);
+            produced(studio, writing.node_id, id);
+            Ok(studio.clone())
+        })
+    }
+
+    async fn edit_studio_draft(
+        &self,
+        studio_id: StudioId,
+        edit: EditStudioDraft,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            for node in studio
+                .nodes
+                .iter_mut()
+                .filter(|node| node.id == edit.node_id)
+            {
+                node.content = StudioNodeContent::IssueDraft {
+                    title: edit.title.clone(),
+                    body: edit.body.clone(),
+                };
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    async fn settle_contradiction(
+        &self,
+        studio_id: StudioId,
+        settling: SettleContradiction,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let (state, answer) = match &settling.outcome {
+                ContradictionSettled::NotAProblem => ("not_a_problem", None),
+                ContradictionSettled::ResolvedHere { answer } => {
+                    ("resolved_here", Some(answer.clone()))
+                }
+            };
+            for node in studio
+                .nodes
+                .iter_mut()
+                .filter(|node| node.id == settling.node_id)
+            {
+                node.state = StudioNodeState::from_wire(state);
+                if let StudioNodeContent::Contradiction { answer: kept, .. } = &mut node.content {
+                    *kept = answer.clone();
+                }
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    /// **No proposer runs in the fake**, so one Job node stands for the plan.
+    async fn dispatch_studio_draft(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        dispatching: DispatchStudioDraft,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
+        self.changing(&studio_id, within, |studio| {
+            let job = StudioNodeContent::Job {
+                job_id: ipc::JobId::carried("01JOB"),
+            };
+            let id = added(studio, job, dispatching.position);
+            produced(studio, dispatching.node_id, id);
+            Ok(studio.clone())
+        })
+    }
+}
+
+/// A node on the fake's Studio, by the next id, and what it was given.
+fn added(
+    studio: &mut Studio,
+    content: StudioNodeContent,
+    position: StudioPosition,
+) -> StudioNodeId {
+    let id = StudioNodeId::carried(format!("01NODE{}", studio.nodes.len()));
+    studio.nodes.push(StudioNode {
+        id: id.clone(),
+        content,
+        state: None,
+        position,
+        created_at: Instant::carried(AT),
+        added_by: None,
+    });
+    id
+}
+
+/// The Studio's own edge saying `from` made `to`.
+fn produced(studio: &mut Studio, from: StudioNodeId, to: StudioNodeId) {
+    studio.edges.push(StudioEdge {
+        id: StudioEdgeId::carried(format!("01EDGE{}", studio.edges.len())),
+        from,
+        to,
+        kind: StudioEdgeKind::from_wire("produced").expect("the Studio's own edge"),
+        standing: standing("accepted"),
+        created_at: Instant::carried(AT),
+        added_by: None,
+    });
 }

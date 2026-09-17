@@ -409,6 +409,74 @@
   --stat-manifest-current: var(--status-completed-success);
 }
 
+/* The live phase — the one row of a step's timeline the Drone is inside right
+   now. Declared 2026-09-17 (#1196): a Job spending money looked like a Job
+   asleep, because nothing on the card said which part of it was moving.
+
+   Hue below Job level, so hard rule 3 requires it here rather than picked at a
+   component, and every value aliases --status-running rather than carrying one
+   of its own. What a live phase is is a step running one level down, which is
+   exactly what --step-running already says on the mark these replace.
+
+   Two channels, because a card and a glyph are not read the same way. The EDGE
+   is the card's own border lifted toward running, at 45% — enough to tell the
+   live card from the quiet ones beside it across a desk, and not so much that
+   a column of phases reads as an alert. The WASH is 6%, below the 9% a summary
+   tile takes, because a phase card is larger again and its body is a log:
+   anything heavier tints the mono rows inside it.
+
+   The wash is mixed into `transparent` rather than into a ground, so the card
+   paints correctly on the panel and inside a sheet, which sit on different
+   grounds. */
+:root {
+  --phase-live-edge: color-mix(in srgb, var(--status-running) 45%, var(--border-default));
+  --phase-live-bg: color-mix(in srgb, var(--status-running) 6%, transparent);
+  /* The rule under the live phase's header. Quieter than the card's own edge:
+     it divides the header from the body and is not the thing that says live. */
+  --phase-live-rule: color-mix(in srgb, var(--status-running) 25%, var(--border-subtle));
+}
+
+/* ── tools.css ─────────────────────────────── */
+/* Tool families — what a Drone's call DOES, in three hues.
+
+   Its own file, and that separation is the whole point. Hard rule 3 says hue
+   below Job level exists only where status.css declares it, and every value
+   there aliases a Job status so the mapping is declared rather than inferred.
+   These three alias nothing, because they answer a different question: not
+   where a Job stands, but what the call in front of you reaches for. Declared
+   in status.css they would be four lines away from eight hues that do mean
+   status, and the next person reading that file would have no way to tell
+   which kind a value was.
+
+   So: **a tool colour never carries status, and a status colour never carries
+   a tool family.** A surface that wants to say a call failed says it the way
+   every other surface does — the row's own treatment — and leaves the tool
+   name in its family's hue.
+
+   The three are deliberately soft. Every strong colour on this screen is
+   already spoken for, and these sit on a mono log line beside timestamps and
+   paths, where a saturated hue would out-shout the status marks in the same
+   card. Measured 2026-09-17 on --bg-sunken, the log's own ground: look 7.7:1,
+   change 7.61:1, run 9.33:1. The weakest ground a tool name sits on is
+   --bg-hover, under the pointer, and the lowest reading anywhere in the set is
+   change at 5.75:1 there — clear of 4.5:1 at --text-2xs.
+
+   They sit near two statuses on purpose and are told apart by where they are,
+   which is the risk hard rule 3 was guarding. --tool-change is a pink that
+   reads near --status-completed-failed's red, and --tool-run a khaki that
+   reads near --status-awaiting-review's amber. Nothing in a log row is a
+   status, so the two never appear in the same slot: a status is a badge, a
+   mark or a row surface, and a tool family is one word at the head of a mono
+   line. */
+:root {
+  /* Looking: Read, Grep, Glob. The Drone is finding out. */
+  --tool-look: #8FA3D9;
+  /* Changing: Edit, Write, MultiEdit, NotebookEdit. The Drone is writing. */
+  --tool-change: #D98BB5;
+  /* Running: Bash. The Drone is making the machine do something. */
+  --tool-run: #C2B48A;
+}
+
 /* ── typography.css ─────────────────────────────── */
 /* Tighter than web defaults. This is a dashboard.
    Mono signals "this is a fact the system reported" and runs one step

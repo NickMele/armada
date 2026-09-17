@@ -47,6 +47,7 @@ import { connected } from "./moment";
 import type { Scenario } from "./moment";
 import { DRIFT_GONE, GH_ISSUE_VIEW, manifesting } from "./manifest-fleet";
 import { SCRATCH, SHEET_READ, settingUp } from "./setup-fleet";
+import { everyKind, studying, untitled } from "./studio-fleet";
 
 export { connected, onBoard, unanswered } from "./moment";
 export type { FleetHandle, Scenario } from "./moment";
@@ -172,6 +173,9 @@ const BUILT: [string, JobFixture][] = Object.entries(BUILDERS).map(([name, make]
 /** Every recording, by its directory. */
 const RECORDED: [string, JobFixture][] = RECORDED_SLUGS.map((slug) => [slug, recorded(slug)]);
 
+/** Every builder as an `every-state` row, each on its own id. Held, so a Studio can name one. */
+const EVERY_STATE_ROWS: JobFixture[] = BUILT.map(([name, fixture], at) => asRow(fixture, at + 1, name));
+
 /** A Fleet that is not running: no runtime file, so nothing was ever connected. */
 const NOT_RUNNING: Scenario = {
   name: "fleet-not-running",
@@ -215,16 +219,21 @@ function recordedBoard(): Scenario {
  * row with no edit here; a builder needs its line in `BUILDERS`.
  */
 export const SCENARIOS: readonly Scenario[] = [
-  holding(
-    "every-state",
-    "One Job in every state, each openable",
-    [
-      ...BUILT.map(([name, fixture], at) => asRow(fixture, at + 1, name)),
-      // A recording keeps its own id, which no built row shares. The one
-      // recorded today is the Board's Cleared tab, which no builder reaches.
-      ...RECORDED.map(([, fixture]) => fixture),
-    ],
-  ),
+  {
+    ...holding(
+      "every-state",
+      "One Job in every state, each openable",
+      [
+        ...EVERY_STATE_ROWS,
+        // A recording keeps its own id, which no built row shares. The one
+        // recorded today is the Board's Cleared tab, which no builder reaches.
+        ...RECORDED.map(([, fixture]) => fixture),
+      ],
+    ),
+    // Studios worth looking at, the way the rows are Jobs worth looking at: every node kind and
+    // every edge kind on one, and a second nobody has named — #1341.
+    studios: [everyKind(EVERY_STATE_ROWS[0]!.job.id), untitled()],
+  },
   NOT_RUNNING,
   {
     name: "first-launch",
@@ -241,6 +250,7 @@ export const SCENARIOS: readonly Scenario[] = [
   recordedBoard(),
   settingUp({ repositories: [repository(), SCRATCH], sheet: SHEET_READ }),
   manifesting({ alwaysAllowed: [GH_ISSUE_VIEW], drift: DRIFT_GONE }),
+  studying().scenario,
   ...BUILT.map(([name, fixture]) => holding(`job/${name}`, fixture.name, [fixture], fixture.job.id)),
   ...RECORDED.map(([slug, fixture]) => holding(`recorded/${slug}`, fixture.name, [fixture], fixture.job.id)),
 ];

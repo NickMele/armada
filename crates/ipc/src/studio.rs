@@ -11,8 +11,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::enums::{StudioEdgeKind, StudioEdgeStanding, StudioNodeState, StudioRelation};
+use crate::capturing::StudioCapture;
+use crate::enums::{
+    StudioAuthor, StudioEdgeKind, StudioEdgeStanding, StudioNodeState, StudioRelation,
+};
 use crate::ids::{Instant, JobId, ManifestId, StudioEdgeId, StudioId, StudioNodeId};
+use crate::rehearsal::CheckoutRunUnderway;
+use crate::scouting::{ScoutCheckout, ScoutEnded};
 
 /// Every Studio one repository keeps, the last touched first — `list_studios`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +49,10 @@ pub struct Studio {
     pub manifest_id: ManifestId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Who gave it its name. Absent on an untitled Studio, and on one named
+    /// before who named it was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub named_by: Option<StudioAuthor>,
     pub created_at: Instant,
     pub touched_at: Instant,
     /// Oldest first.
@@ -64,6 +73,9 @@ pub struct StudioNode {
     pub state: Option<StudioNodeState>,
     pub position: StudioPosition,
     pub created_at: Instant,
+    /// A person or Helm. Absent only on a node added before it was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by: Option<StudioAuthor>,
 }
 
 /// What a node holds, tagged by its kind. `core_model::StudioNodeContent`'s
@@ -71,17 +83,133 @@ pub struct StudioNode {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StudioNodeContent {
-    Run { run_id: String },
-    Note { said: String },
-    Cluster { title: String },
-    Finding { asked: String },
-    Contradiction { first: String, second: String },
-    Sketch { body: String },
-    Link { address: String },
-    Deferral { what: String },
-    Outline { body: String },
-    IssueDraft { title: String, body: String },
-    Job { job_id: JobId },
+    Run {
+        run_id: String,
+        /// Absent while the run is still there to read. Present is **partial**:
+        /// the run's own record has been swept and this is all there is.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        kept: Option<StudioRunKept>,
+    },
+    Note {
+        said: String,
+        /// Where a person pointed, `#1290`. Absent on a Note that was typed
+        /// rather than pointed, and on one kept before capture existed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        capture: Option<StudioCapture>,
+    },
+    Cluster {
+        title: String,
+    },
+    /// What a scout was asked, and from its start what it read. `#1292`.
+    Finding {
+        asked: String,
+        /// The commit read, and whether anything uncommitted was on top of
+        /// it. Absent until the scout starts.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        checkout: Option<ScoutCheckout>,
+        /// Every file read, relative to the checkout, in the order first read —
+        /// a file a search returned lines of included.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        read: Vec<String>,
+        /// Every search run, as its pattern and where it looked.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        searched: Vec<String>,
+        /// What the scout said last.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        learned: Option<String>,
+        /// How it ended, and what it cost. Absent until it ends.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ended: Option<ScoutEnded>,
+    },
+    /// Two sources that disagree, and the answer where a person settled it
+    /// here. `#1291`.
+    Contradiction {
+        first: String,
+        second: String,
+        /// Absent until a person ends it as *Resolved here*, and on the three
+        /// outcomes that record what was decided somewhere else.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        answer: Option<String>,
+    },
+    Sketch {
+        body: String,
+    },
+    Link {
+        address: String,
+    },
+    Deferral {
+        what: String,
+    },
+    Outline {
+        body: String,
+    },
+    IssueDraft {
+        title: String,
+        body: String,
+    },
+    Job {
+        job_id: JobId,
+    },
+}
+
+/// What a Run node kept of its run, once retention swept the run away —
+/// `core_model::StudioRunKept`'s fields, one for one. `#1289`.
+///
+/// **A node carrying one is partial, and that is what says so.** There is no
+/// second flag: while the run is there the node is a reference and its state
+/// is read off the run, and this is what is left when it is not.
+///
+/// **The colour survives with it.** `exit_code`, `expect_exit_code` and
+/// `stopped` are the three a run's colour is derived from (`#1304`), so a
+/// swept run reads failed on the whiteboard the same as it did while it ran.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudioRunKept {
+    pub name: String,
+    pub command: String,
+    /// Absent where the run was killed before it exited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    pub expect_exit_code: i64,
+    pub stopped: bool,
+    pub duration_ms: u64,
+    /// The log's last lines, oldest first.
+    pub lines: Vec<String>,
+    /// How many lines the log held in all, whether or not they are here.
+    pub total_lines: u32,
+    /// Whether `lines` is the whole log rather than its tail.
+    pub whole: bool,
+}
+
+/// `start_studio_run`: run one Manifest entry in the checkout and put a Run
+/// node on the Studio for it.
+///
+/// **No repository**: the Studio names it, being a repository's own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartStudioRun {
+    /// The Check or Command the Manifest declares, by name.
+    pub name: String,
+    /// A directory below the repository root whose own `armada.yml` declares
+    /// `name`, run in that directory. Absent, empty or `.` is the root's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+    /// Where the Run node is placed.
+    pub position: StudioPosition,
+    /// The node this run was started from. The Studio draws the `produced`
+    /// edge itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub produced_by: Option<StudioNodeId>,
+}
+
+/// `start_studio_run`'s answer: the run is underway, and the Studio holds a
+/// node for it.
+///
+/// **The Studio whole, as every write on one answers**, and the node's id
+/// beside it so a client knows which of them is new without diffing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudioRunStarted {
+    pub studio: Studio,
+    pub node_id: StudioNodeId,
+    pub run: CheckoutRunUnderway,
 }
 
 /// Where a person left a node, in whole canvas units.
@@ -100,6 +228,9 @@ pub struct StudioEdge {
     pub kind: StudioEdgeKind,
     pub standing: StudioEdgeStanding,
     pub created_at: Instant,
+    /// A person or Helm. Absent only on an edge kept before it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by: Option<StudioAuthor>,
 }
 
 /// A Studio that is gone — `delete_studio`'s answer and `studio.deleted`'s body.
@@ -107,6 +238,49 @@ pub struct StudioEdge {
 pub struct StudioDeleted {
     pub id: StudioId,
     pub manifest_id: ManifestId,
+}
+
+/// `studio.helm_acted`: one act Helm took on a Studio. **Helm's act as its own
+/// event type** — `docs/concepts/helm.md`, *Audit trail*. The write publishes
+/// `studio.changed` as any write does, and this besides only where the door
+/// placed the call in a Helm session, so a person's act and Helm's are told
+/// apart by kind.
+///
+/// **Ids, not the Studio.** What the Studio holds now is `studio.changed`'s to
+/// carry; this says who did which part of it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudioHelmActed {
+    pub studio_id: StudioId,
+    pub manifest_id: ManifestId,
+    #[serde(flatten)]
+    pub act: HelmStudioAct,
+    pub at: Instant,
+}
+
+/// Which act on a Studio Helm took. **Every act Helm takes, not only the
+/// unasked ones** — `docs/concepts/studio.md`, *Helm on a Studio*: the three
+/// `fleet::helm::reach::UNASKED` calls, and the two it takes on a person's
+/// ask.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "act", rename_all = "snake_case")]
+pub enum HelmStudioAct {
+    /// A node that starts proposed, by the id it was given.
+    AddedNode { node_id: StudioNodeId },
+    /// An edge, proposed, by the id it was given.
+    ProposedEdge { edge_id: StudioEdgeId },
+    /// The Studio named, and what it was named.
+    Named { name: String },
+    /// A node written up, and the Issue draft it produced. `#1291`.
+    WroteUp {
+        from: StudioNodeId,
+        node_id: StudioNodeId,
+    },
+    /// An Issue draft dispatched, and every Job node the proposal put on the
+    /// Studio. **A list**, because one request can be several Jobs. `#1291`.
+    Dispatched {
+        from: StudioNodeId,
+        node_ids: Vec<StudioNodeId>,
+    },
 }
 
 /// `create_studio`. **A name is not required**: `studio.md` has Helm name an
@@ -158,6 +332,94 @@ pub struct ProposeStudioEdge {
     pub kind: StudioRelation,
 }
 
+/// `group_studio_nodes`: several nodes on a Studio accepted as one. **A
+/// Cluster or an Outline and nothing else** — every other kind is added by the
+/// rung that makes it. `#1291`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GroupStudioNodes {
+    #[serde(flatten)]
+    pub content: StudioNodeContent,
+    /// The nodes it is made of, **in the order they were given**: an Outline
+    /// is an ordered reading, and the `produced` edges are kept in this order.
+    pub from: Vec<StudioNodeId>,
+    pub position: StudioPosition,
+}
+
+/// `defer_on_studio`: something raised on a node, put off. **Only a person
+/// defers**, whatever Helm is asked.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeferOnStudio {
+    /// What is being put off, in the person's words.
+    pub what: String,
+    /// The node it was raised on. The Studio draws the `produced` edge.
+    pub raised_on: StudioNodeId,
+    /// What it holds up, where it holds anything up. The Studio draws an
+    /// accepted `blocks` edge from the Deferral to it — accepted, because the
+    /// person drawing it is the one who accepts a relation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocks: Option<StudioNodeId>,
+    pub position: StudioPosition,
+}
+
+/// `write_up_studio_node`: a Note, Cluster, Contradiction or Outline written up
+/// as an Issue draft. **Never filed anywhere** — an issue on a forge is a
+/// person's own act afterwards.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WriteUpStudioNode {
+    pub node_id: StudioNodeId,
+    pub title: String,
+    pub body: String,
+    pub position: StudioPosition,
+}
+
+/// `edit_studio_draft`: the title and body of an Issue draft, as a person left
+/// them. **The one act that rewrites a node a person wrote**, and it reaches
+/// no other kind.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditStudioDraft {
+    pub node_id: StudioNodeId,
+    pub title: String,
+    pub body: String,
+}
+
+/// `settle_contradiction`: the two outcomes that write nothing else down.
+///
+/// **The other two are the rungs that make a node**: *Issue draft* is
+/// `write_up_studio_node` on the Contradiction, and *Deferral* is
+/// `defer_on_studio` raised on it, each moving the Contradiction itself. So
+/// there is one way to make an Issue draft and one way to make a Deferral,
+/// rather than two.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SettleContradiction {
+    pub node_id: StudioNodeId,
+    #[serde(flatten)]
+    pub outcome: ContradictionSettled,
+}
+
+/// Which of the two. `outcome` is the tag the answer hangs off.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum ContradictionSettled {
+    /// Both statements hold, in different contexts.
+    NotAProblem,
+    /// The person settled it, and the node records the answer.
+    ResolvedHere { answer: String },
+}
+
+/// `dispatch_studio_draft`: an Issue draft's text, through the Job proposer, to
+/// the ordinary dispatch gate.
+///
+/// **No field carries a workflow and none carries an issue.** The draft's text
+/// is the whole request, exactly as `propose_from_request` carries one, and
+/// every Job it becomes stands at `awaiting_approval` like any other.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DispatchStudioDraft {
+    pub node_id: StudioNodeId,
+    /// Where the first Job node is placed. A split's later Jobs are placed
+    /// below it, so a person sees all of them without moving anything.
+    pub position: StudioPosition,
+}
+
 /// `decide_studio_edge`: accept a proposed edge, or reject it, which removes it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DecideStudioEdge {
@@ -184,6 +446,7 @@ impl Studio {
             id: summary.id,
             manifest_id: summary.manifest_id,
             name: summary.name,
+            named_by: graph.studio.named_by.map(StudioAuthor::from),
             created_at: summary.created_at,
             touched_at: summary.touched_at,
             nodes: graph.nodes.iter().map(StudioNode::of).collect(),
@@ -200,6 +463,7 @@ impl StudioNode {
             state: node.state().map(StudioNodeState::from),
             position: StudioPosition::from(node.position()),
             created_at: Instant::from(node.created_at()),
+            added_by: node.added_by().map(StudioAuthor::from),
         }
     }
 }
@@ -213,6 +477,23 @@ impl StudioEdge {
             kind: StudioEdgeKind::from(edge.kind()),
             standing: StudioEdgeStanding::from(edge.standing()),
             created_at: Instant::from(edge.created_at()),
+            added_by: edge.added_by().map(StudioAuthor::from),
+        }
+    }
+}
+
+impl StudioRunKept {
+    pub fn of(kept: &core_model::StudioRunKept) -> StudioRunKept {
+        StudioRunKept {
+            name: kept.name.clone(),
+            command: kept.command.clone(),
+            exit_code: kept.exit_code,
+            expect_exit_code: kept.expect_exit_code,
+            stopped: kept.stopped,
+            duration_ms: kept.duration_ms,
+            lines: kept.lines.clone(),
+            total_lines: kept.total_lines,
+            whole: kept.whole,
         }
     }
 }
@@ -236,13 +517,25 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
     fn from(content: &core_model::StudioNodeContent) -> StudioNodeContent {
         use core_model::StudioNodeContent as C;
         match content.clone() {
-            C::Run { run_id } => StudioNodeContent::Run { run_id },
-            C::Note { said } => StudioNodeContent::Note { said },
+            C::Run { run_id, kept } => StudioNodeContent::Run {
+                run_id,
+                kept: kept.as_ref().map(StudioRunKept::of),
+            },
+            C::Note { said, capture } => StudioNodeContent::Note {
+                said,
+                capture: capture.as_ref().map(StudioCapture::from),
+            },
             C::Cluster { title } => StudioNodeContent::Cluster { title },
-            C::Finding { asked } => StudioNodeContent::Finding { asked },
-            C::Contradiction { first, second } => {
-                StudioNodeContent::Contradiction { first, second }
-            }
+            C::Finding(finding) => crate::scouting::finding_on_the_wire(&finding),
+            C::Contradiction {
+                first,
+                second,
+                answer,
+            } => StudioNodeContent::Contradiction {
+                first,
+                second,
+                answer,
+            },
             C::Sketch { body } => StudioNodeContent::Sketch { body },
             C::Link { address } => StudioNodeContent::Link { address },
             C::Deferral { what } => StudioNodeContent::Deferral { what },
@@ -260,13 +553,40 @@ impl StudioNodeContent {
     pub fn to_domain(&self) -> core_model::StudioNodeContent {
         use core_model::StudioNodeContent as C;
         match self.clone() {
-            StudioNodeContent::Run { run_id } => C::Run { run_id },
-            StudioNodeContent::Note { said } => C::Note { said },
+            // **`kept` never decodes into a write.** What a node keeps of a
+            // swept run is taken from the run's own record by the sweep, and
+            // `add_studio_node` refuses a Run kind outright, so nothing on
+            // this seam can name a result the run did not have.
+            StudioNodeContent::Run { run_id, .. } => C::Run { run_id, kept: None },
+            StudioNodeContent::Note { said, capture } => C::Note {
+                said,
+                capture: capture.map(StudioCapture::to_domain),
+            },
             StudioNodeContent::Cluster { title } => C::Cluster { title },
-            StudioNodeContent::Finding { asked } => C::Finding { asked },
-            StudioNodeContent::Contradiction { first, second } => {
-                C::Contradiction { first, second }
-            }
+            StudioNodeContent::Finding {
+                asked,
+                checkout,
+                read,
+                searched,
+                learned,
+                ended,
+            } => C::Finding(core_model::StudioFinding::recorded(
+                asked,
+                checkout.map(ScoutCheckout::to_domain),
+                read,
+                searched,
+                learned,
+                ended.map(ScoutEnded::to_domain),
+            )),
+            StudioNodeContent::Contradiction {
+                first,
+                second,
+                answer,
+            } => C::Contradiction {
+                first,
+                second,
+                answer,
+            },
             StudioNodeContent::Sketch { body } => C::Sketch { body },
             StudioNodeContent::Link { address } => C::Link { address },
             StudioNodeContent::Deferral { what } => C::Deferral { what },

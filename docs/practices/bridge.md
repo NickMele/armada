@@ -92,6 +92,15 @@ These four are load-bearing together. Loosening any one of them to make a
 feature easier is a security review, not a local decision — say so explicitly
 in review rather than quietly relaxing a flag to unblock yourself.
 
+**A file on disk is drawn by handing its bytes over, never by widening
+`img-src`.** A step's frame and a Note's are both read by main, cross the
+preload as an array, and become a `blob:` the window makes itself — which
+`img-src 'self' blob:` already draws. `armada-frame:` exists for the one case
+that cannot work that way, a recording too long to hold whole, and it is on
+`media-src` alone. So the answer to *how does this picture reach the renderer*
+is a read on the preload surface, and a proposal to add a scheme to `img-src`
+is the security review this section describes rather than a shortcut.
+
 ## The component constraint
 
 A Job Board row, a diff view, a legend — every visible surface in Bridge is

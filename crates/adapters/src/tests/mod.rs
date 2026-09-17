@@ -27,6 +27,7 @@ mod mcp;
 mod reclaim;
 pub mod repo;
 mod rerunning;
+mod scouting;
 mod snapshot;
 mod standing;
 mod transcript;

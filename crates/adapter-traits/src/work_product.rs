@@ -387,10 +387,11 @@ pub trait WorkProduct {
     /// four orders of magnitude: the walk is flat in the size of the change,
     /// which is the property the sentence below rests on, and it is not free.
     ///
-    /// **So this is called once, at the transition that ends a Job**, and never
-    /// on the live seam: `fleet`'s watcher reads every two seconds inside a
-    /// 250ms turn, and 90ms of that turn is a third of Fleet's budget spent on
-    /// a number nobody can read changing that fast.
+    /// **So it is never taken on every live reading.** `fleet`'s watcher reads
+    /// every two seconds inside a 250ms turn, and 90ms of that turn is a third
+    /// of Fleet's budget. It is taken at the transition that ends a Job, and on
+    /// the live seam only once a Drone's calls settle and at most every ten
+    /// seconds — `fleet::footprint`. #1187.
     ///
     /// A failure is an error rather than an empty answer, for
     /// [`changed_files`](WorkProduct::changed_files)'s reason. A file whose

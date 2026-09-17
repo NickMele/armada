@@ -26,10 +26,11 @@ use crate::reading::ManifestReading;
 use crate::rehearsal::{CheckoutRunRecord, RunRecord};
 use crate::repositories::RepositoryList;
 use crate::servers::ServerState;
-use crate::studio::{Studio, StudioDeleted};
+use crate::studio::{Studio, StudioDeleted, StudioHelmActed};
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
+use crate::work::LineCount;
 use crate::work_plan::JobPlanChanged;
 
 /// A position in the stream. Monotonic, assigned by Fleet, never reused.
@@ -155,6 +156,10 @@ pub enum Event {
     StudioChanged(Studio),
     #[serde(rename = "studio.deleted")]
     StudioDeleted(StudioDeleted),
+    // Helm's act on a Studio, as its own kind beside the `studio.changed` the
+    // same write publishes. `#1288`.
+    #[serde(rename = "studio.helm_acted")]
+    StudioHelmActed(StudioHelmActed),
 }
 
 impl Event {
@@ -505,10 +510,11 @@ pub enum ChangeKind {
 
 /// One file in the Drone's footprint.
 ///
-/// **A name and a kind, never bytes.** What changed inside a file is the patch,
-/// which is read only when a Judge fires and is deliberately not on this seam:
-/// a stream carrying diffs at Drone speed is the thing the event channel's
-/// bound exists to keep off it.
+/// **A name, a kind and at most a count, never bytes.** What changed inside a
+/// file is the patch, which is deliberately not on this seam: a stream carrying
+/// diffs at Drone speed is the thing the event channel's bound exists to keep
+/// off it. How many lines it gained and lost is two numbers, and since protocol
+/// 14.10 the live reading carries them. #1187.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangedFile {
     /// Repository-relative, exactly as git spells it.
@@ -523,6 +529,19 @@ pub struct ChangedFile {
     /// [`JobFilesChanged::plan_declared`] is for.
     #[serde(default)]
     pub outside_plan: bool,
+    /// What the file gained and lost, as of the last counted reading.
+    ///
+    /// **Absent where nothing counted it**, for [`TouchedFile::lines`]'s reason,
+    /// and also where the file appeared after the last count: counting is the
+    /// walk that renders the patch, so `fleet::footprint` takes it only once
+    /// the Drone's calls settle and never more often than its interval, and a
+    /// reading between two counts carries the older one. Only
+    /// `job.files_changed` fills it; a step's boundary reading and the diff
+    /// route leave it out.
+    ///
+    /// [`TouchedFile::lines`]: crate::TouchedFile::lines
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lines: Option<LineCount>,
 }
 
 /// What one working Drone has changed in its worktree, as of one reading.

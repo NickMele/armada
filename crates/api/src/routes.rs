@@ -63,8 +63,11 @@ use crate::served::Served;
 use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
 use crate::studios::{
-    add_studio_node, create_studio, decide_studio_edge, delete_studio, get_studio, list_studios,
-    move_studio_node, propose_studio_edge, remove_studio_node, rename_studio,
+    add_studio_node, ask_scout, capture_studio_note, create_studio, decide_studio_edge,
+    defer_on_studio, delete_studio, dispatch_studio_draft, edit_studio_draft, get_studio,
+    get_studio_frame, group_studio_nodes, list_studios, move_studio_node, propose_studio_edge,
+    remove_studio_node, rename_studio, settle_contradiction, start_scout, start_studio_run,
+    stop_scout, write_up_studio_node,
 };
 
 /// The inventory this router is compared against, row by row.
@@ -284,9 +287,17 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/studios", get(list_studios::<D>))
         .route("/studios/create", post(create_studio::<D>))
         .route("/studios/:studio_id", get(get_studio::<D>))
+        .route(
+            "/studios/:studio_id/frames/:node_id",
+            get(get_studio_frame::<D>),
+        )
         .route("/studios/:studio_id/rename", post(rename_studio::<D>))
         .route("/studios/:studio_id/delete", post(delete_studio::<D>))
         .route("/studios/:studio_id/add_node", post(add_studio_node::<D>))
+        .route(
+            "/studios/:studio_id/capture_note",
+            post(capture_studio_note::<D>),
+        )
         .route("/studios/:studio_id/move_node", post(move_studio_node::<D>))
         .route(
             "/studios/:studio_id/remove_node",
@@ -300,6 +311,31 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             "/studios/:studio_id/decide_edge",
             post(decide_studio_edge::<D>),
         )
+        .route(
+            "/studios/:studio_id/group_nodes",
+            post(group_studio_nodes::<D>),
+        )
+        .route("/studios/:studio_id/defer", post(defer_on_studio::<D>))
+        .route(
+            "/studios/:studio_id/write_up",
+            post(write_up_studio_node::<D>),
+        )
+        .route(
+            "/studios/:studio_id/edit_draft",
+            post(edit_studio_draft::<D>),
+        )
+        .route(
+            "/studios/:studio_id/settle",
+            post(settle_contradiction::<D>),
+        )
+        .route(
+            "/studios/:studio_id/dispatch_draft",
+            post(dispatch_studio_draft::<D>),
+        )
+        .route("/studios/:studio_id/ask_scout", post(ask_scout::<D>))
+        .route("/studios/:studio_id/start_scout", post(start_scout::<D>))
+        .route("/studios/:studio_id/stop_scout", post(stop_scout::<D>))
+        .route("/studios/:studio_id/start_run", post(start_studio_run::<D>))
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in
         // `SERVED`: it is the Fleet/Drone seam rather than the Fleet/Bridge

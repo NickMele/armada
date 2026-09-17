@@ -50,6 +50,8 @@ Helm's advantage is not more access than you have. It is reasoning over results 
 
 **Helm gets every query, and of the commands, every one but a person's own.** `../contracts/system-architecture.md`, section 6 carries the inventory of queries, commands and events. `fleet::helm::may` is the line: every read is Helm's, and a command is Helm's when the machine's authority setting allows acting at all and the act is not `undo_run`, the one command reserved to a person regardless of the ask. With action authority set to read-only, Helm is refused every command.
 
+**On a Studio, a few commands are Helm's without an ask**: adding a node that starts proposed, proposing an edge, and naming an untitled Studio — `fleet::helm::reach::UNASKED`, named in the brief. The door cannot tell an ask from its absence, so that line is drawn in the brief and not at the door. See [Studio](studio.md), Helm on a Studio.
+
 **The 8 WebSocket events are Bridge-only.** Why: an agent cannot be interrupted mid-turn.
 
 **Helm polls instead.** `get_events_since(cursor)` runs at the start of each turn, returning a count plus one line per event kind rather than the events themselves. Helm is never more than one turn stale, and fetches detail through the other queries only when it bears on what was asked.
@@ -82,6 +84,8 @@ Rung 3 carries no MCP operation for Helm to reach for, ladder or no. A Job Helm 
 ## Audit trail
 
 **Every Helm-initiated action is logged as its own distinct event type**, never conflated with your manual actions or with Drone self-reports. Manual actions are already distinguished from Drone evidence, per the Debug/Pilot design. Three-way separation: Drone evidence, human manual action, Helm-initiated action.
+
+**On a Studio, Helm's act is `studio.helm_acted`**, published beside the `studio.changed` every write publishes, naming the Studio, the act and what it added. A person's act on a Studio publishes `studio.changed` alone, so the two are told apart by kind rather than by a field someone has to remember to read. **The record keeps it too**: each node and edge carries `added_by` and a Studio its `named_by`, a person or Helm, so a client that was not connected when Helm acted reads who did what off `get_studio`.
 
 ## Session model
 

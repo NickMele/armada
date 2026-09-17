@@ -173,6 +173,9 @@ approximations.
   — whether `--resume` recovers a headless session after it exits, whether it
   needs the original working directory, how an unknown id fails, and what
   `cleanupPeriodDays` governs.
+- [`spikes/017-what-confines-a-scout-and-what-a-stop-leaves.md`](spikes/017-what-confines-a-scout-and-what-a-stop-leaves.md)
+  — whether `--tools` and `--restricted` hold a read-only agent to one checkout,
+  and what `SIGINT` and `SIGTERM` each leave of a run's cost.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 

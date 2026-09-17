@@ -151,3 +151,57 @@ span.armada-narration__fold {
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
 }
+
+/* The files a task changed, on one wrapping line under its heading, in the
+   log's quiet register. No hue: diff colour on these is #1196's. */
+.armada-narration__files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  padding: 0 var(--space-3) var(--space-1) calc(var(--space-3) + var(--space-3) + var(--space-2));
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  min-width: 0;
+}
+
+.armada-narration__files ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-narration__files li {
+  display: inline-flex;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+/* The same diff tokens the patch view and Produced already give these
+   counts. What the numbers ARE still differs by section — a task's are the
+   sizes of its own edits, the row no task owns carries the diff's lines — and
+   `filesSay` beside them is what says which. Colour says added and removed;
+   it does not say which kind of number. #1196. */
+.armada-narration__added {
+  color: var(--diff-add-fg);
+}
+
+.armada-narration__deleted {
+  color: var(--diff-del-fg);
+}
+
+.armada-narration__files-say {
+  color: var(--fg-subtle);
+}
+
+/* The row no task owns, set apart from the tasks above it. */
+.armada-narration__section[data-apart] {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: var(--border-width) dashed var(--border-default);
+}

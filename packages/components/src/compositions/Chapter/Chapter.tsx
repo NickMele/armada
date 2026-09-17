@@ -39,7 +39,16 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * `docs/contracts/design-system.md`: the name steps down to `--fg-subtle`
  * rather than losing opacity, which would muddy the tone hues beside it.
  */
-export type ChapterTone = "neutral" | "waiting" | "muted";
+
+/**
+ * `running` is the one the work is inside right now: the running edge and wash
+ * `tokens/status.css` declares, and a bar sweeping its top edge.
+ *
+ * **The sweep is the card's one loop**, so the streaming dot holds still under
+ * this tone — a bar travelling and a dot breathing in one header are two
+ * things competing to say the same word.
+ */
+export type ChapterTone = "neutral" | "waiting" | "muted" | "running";
 
 export type ChapterProps = {
   /**
@@ -184,6 +193,11 @@ export function Chapter({
 
   return (
     <section className="armada-chapter" data-tone={tone} data-open={open || undefined}>
+      {/* The live phase's own line, along the top edge of the card rather than
+          inside its header. It is the whole of what says this card is moving —
+          the running mark is gone from here — so it belongs to the card and
+          not to the header, which a narrow window wraps into two lines. */}
+      {tone === "running" ? <span className="armada-chapter__sweep" aria-hidden /> : null}
       <div className="armada-chapter__line">
         {/* `asChild`, because the line is a grid and the header takes its first
             track — a wrapper here would push the act out of the row. */}

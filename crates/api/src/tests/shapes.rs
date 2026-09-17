@@ -449,6 +449,7 @@ pub fn diff(job_id: JobId) -> JobDiff {
                 path: "crates/store/src/read.rs".to_string(),
                 change: ipc::ChangeKind::Modified,
                 outside_plan: false,
+                lines: None,
             }],
             plan_declared: false,
             patch: Some(

@@ -380,6 +380,14 @@
   status = "Specified"
   notes = "The universal deliberate-stop glyph. Pairs against unplug to encode deliberate against accidental."
 
+[icons.presentation]
+  means = "Studios — a whiteboard on its stand, which is what a Studio is drawn as"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  reserved = "The Studios surface only. Never a node, a slide, a report or a preview."
+  notes = "Added 2026-09-17 with the Studios surface (#1287), accepted by the owner with the surface's place in the rail. The only Navigation glyph that is a board on legs, which keeps it clear of clipboard-list (an upright board with a clip and no stand), layout-dashboard (a grid of panes), hard-drive (a horizontal vessel) and the outline-with-something-inside family. Refused before it was proposed: waypoints is Graph's view toggle, and workflow and network would each name something Armada already has — a workflow, and the fleet."
+
 [icons.refresh-cw]
   means = "Two arrows chasing each other round a closed loop"
   group = "Escalation reason"
@@ -539,7 +547,7 @@
   size = "16px"
   status = "Specified"
   reserved = "Disclosure only. Never an ornament on a label — a menu trigger's mark, the usage below, says the button opens a menu and is not ornament — and never a sort or direction indicator. Never an inline expander on a row of data — a Job row does not grow a caret. Expanding a nested structure in chrome is disclosure and is the paired use below; the distinction is whether the thing expanding is a record or a tree."
-  notes = "Added 2026-08-21 with the split button. 16px in --fg-muted, in its own 28px segment divided from the label by a 1px --border-default rule. The one exception to \"primary and secondary buttons are label-only\": a disclosure caret is the whole content of its own segment, structural rather than decorative, and never sits beside a label. A menu trigger is the second usage below: beside a label, by design, since 2026-09-17."
+  notes = "Added 2026-08-21 with the split button. 16px in --fg-muted while the control is live, in its own 28px segment divided from the label by a 1px --border-default rule. The one exception to \"primary and secondary buttons are label-only\": a disclosure caret is the whole content of its own segment, structural rather than decorative, and never sits beside a label. A menu trigger is the second usage below: beside a label, by design, since 2026-09-17."
   # The reservation above was first written against the split button and
   # said "never an accordion chevron on a data row", which read as banning
   # the Chrome use below. It was wording, not a conflict: a record does not

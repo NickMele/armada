@@ -3,9 +3,10 @@
 //! back refused by name rather than dropped.
 
 use core_model::{
-    ManifestId, Studio, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
-    StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation,
-    Timestamp, Ulid,
+    ManifestId, ScoutCheckout, ScoutEnded, ScoutLook, ScoutOutcome, Studio, StudioAuthor,
+    StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioFinding, StudioId,
+    StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
+    StudioRelation, Timestamp, Ulid,
 };
 
 use crate::migrations::tables_pointing_at_a_job;
@@ -33,6 +34,7 @@ fn a_studio(store: &mut Store, id: &str, manifest: &str, minute: u32) -> StudioI
         id: studio_id(id),
         manifest_id: ManifestId::carried(Ulid::carried(manifest)),
         name: StudioName::named("Stale counts"),
+        named_by: Some(StudioAuthor::Person),
         created_at: at(minute),
         touched_at: at(minute),
     };
@@ -45,9 +47,11 @@ fn a_note(store: &mut Store, studio: &StudioId, id: &str, said: &str, x: i64) ->
         node_id(id),
         StudioNodeContent::Note {
             said: said.to_string(),
+            capture: None,
         },
         StudioPosition { x, y: 40 },
         at(1),
+        StudioAuthor::Person,
     );
     store
         .add_studio_node(studio, &node, None, &at(1))
@@ -62,6 +66,7 @@ fn proposed(id: &str, from: &StudioNodeId, to: &StudioNodeId) -> StudioEdge {
         to.clone(),
         StudioRelation::SameAs,
         at(2),
+        StudioAuthor::Person,
     )
     .expect("two different nodes")
 }
@@ -120,6 +125,7 @@ fn a_repository_lists_its_own_studios_the_last_touched_first() {
         .rename_studio(
             &older,
             &StudioName::named("Renamed").expect("a name"),
+            StudioAuthor::Person,
             &at(7),
         )
         .expect("renamed");
@@ -148,11 +154,10 @@ fn a_proposed_edge_is_accepted_or_rejected_and_nothing_else_is() {
     let note = a_note(&mut store, &studio, "01NOTE", "The chip keeps its count", 0);
     let finding = StudioNode::added(
         node_id("01FINDING"),
-        StudioNodeContent::Finding {
-            asked: "what reads the count".to_string(),
-        },
+        StudioNodeContent::Finding(StudioFinding::asked("what reads the count")),
         StudioPosition { x: 0, y: 200 },
         at(1),
+        StudioAuthor::Helm,
     );
     store
         .add_studio_node(&studio, &finding, Some((&note, edge_id("01MADE"))), &at(1))
@@ -290,4 +295,160 @@ fn a_node_whose_content_does_not_read_back_is_refused_by_name() {
         ),
         "{refused}"
     );
+}
+
+/// `#1292`: **a Finding is the one node rewritten, and only as its scout
+/// moves it.** Gathering, it is listed as one a restart has to settle; Frozen,
+/// it reads back after a reopen with every file, its checkout and its cost.
+#[test]
+fn a_scouts_finding_is_kept_as_it_gathers_and_reads_back_frozen_after_a_reopen() {
+    let dir = TempDir::new();
+    let studio = {
+        let mut store = open(&dir);
+        let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+        let proposed = StudioNode::added(
+            node_id("01FINDING"),
+            StudioNodeContent::Finding(StudioFinding::asked("how is routing decided")),
+            StudioPosition { x: 0, y: 0 },
+            at(1),
+            StudioAuthor::Person,
+        );
+        store
+            .add_studio_node(&studio, &proposed, None, &at(1))
+            .expect("added");
+        let mut gathering = proposed
+            .scouting(ScoutCheckout {
+                commit: "4bdb169c".to_string(),
+                uncommitted: true,
+            })
+            .expect("proposed");
+        gathering.looked(ScoutLook::File("crates/fleet/src/routing.rs".to_string()));
+        store
+            .keep_scouted(&studio, &gathering, &at(2))
+            .expect("kept");
+        let listed = store.gathering_findings().expect("read");
+        assert_eq!(listed, vec![(studio.clone(), gathering.clone())]);
+
+        let frozen = gathering.frozen(
+            Some("By weight.".to_string()),
+            ScoutEnded {
+                outcome: ScoutOutcome::Failed {
+                    why: "the agent exited 1".to_string(),
+                },
+                cost_micros: Some(420),
+            },
+        );
+        store.keep_scouted(&studio, &frozen, &at(3)).expect("kept");
+        assert!(store.gathering_findings().expect("read").is_empty());
+        studio
+    };
+
+    let store = open(&dir);
+    let graph = store.studio(&studio).expect("reads back");
+    let node = &graph.nodes[0];
+    assert_eq!(node.state(), Some(StudioNodeState::Frozen));
+    let StudioNodeContent::Finding(finding) = node.content() else {
+        panic!("a Finding");
+    };
+    assert_eq!(finding.read(), ["crates/fleet/src/routing.rs".to_string()]);
+    assert_eq!(finding.checkout().map(|at| at.uncommitted), Some(true));
+    assert_eq!(finding.learned(), Some("By weight."));
+    let ended = finding.ended().expect("ended");
+    assert_eq!(ended.cost_micros, Some(420));
+    assert!(matches!(&ended.outcome, ScoutOutcome::Failed { why } if why == "the agent exited 1"));
+    assert_eq!(graph.studio.touched_at, at(3));
+}
+
+/// **A Note's capture reads back whole after a reopen.** `#1290`.
+///
+/// The failure this is against is a capture that survives the write and loses
+/// a field on the way back — a selector, a style or the frame's name, each of
+/// which is what turns the Note back into the element it was left on.
+#[test]
+fn a_captured_notes_styles_markup_and_frame_read_back_after_a_reopen() {
+    let dir = TempDir::new();
+    let capture = core_model::StudioCapture {
+        component: Some("FilterChip".to_string()),
+        owners: vec!["BoardFilters".to_string(), "Board".to_string()],
+        selector: "button.armada-chip:nth-of-type(2)".to_string(),
+        element: core_model::CaptureElement {
+            tag: "button".to_string(),
+            text: "Queued 3".to_string(),
+            label: Some("Queued, 3 Jobs".to_string()),
+        },
+        screen: Some("Job Board".to_string()),
+        layer: None,
+        location: "/".to_string(),
+        bounds: core_model::CaptureBounds {
+            x: 312,
+            y: 148,
+            width: 96,
+            height: 28,
+        },
+        window: core_model::CaptureWindow {
+            width: 1440,
+            height: 900,
+        },
+        styles: [("color".to_string(), "rgb(232, 232, 237)".to_string())]
+            .into_iter()
+            .collect(),
+        markup: "<button class=\"armada-chip\">Queued 3</button>".to_string(),
+        source: None,
+        frame: Some(core_model::CaptureFrame {
+            filename: "01POINTED.png".to_string(),
+            byte_size: 214_880,
+            width: 2880,
+            height: 1800,
+        }),
+    };
+    let studio = {
+        let mut store = open(&dir);
+        let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+        let node = StudioNode::added(
+            node_id("01POINTED"),
+            StudioNodeContent::Note {
+                said: "The chip keeps its count".to_string(),
+                capture: Some(capture.clone()),
+            },
+            StudioPosition { x: 0, y: 0 },
+            at(1),
+            StudioAuthor::Person,
+        );
+        store
+            .add_studio_node(&studio, &node, None, &at(1))
+            .expect("added");
+        studio
+    };
+
+    let store = open(&dir);
+    let graph = store.studio(&studio).expect("read back");
+    let StudioNodeContent::Note {
+        said,
+        capture: read,
+    } = graph.nodes[0].content()
+    else {
+        panic!("a Note: {:?}", graph.nodes[0].content());
+    };
+    assert_eq!(said, "The chip keeps its count");
+    assert_eq!(
+        read.as_ref(),
+        Some(&capture),
+        "every field of the capture, the frame's name and size included"
+    );
+}
+
+/// A Note kept before capture existed has no capture and still reads back:
+/// the field is absent from the content object rather than written as null.
+#[test]
+fn a_note_with_no_capture_reads_back_as_one() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+    a_note(&mut store, &studio, "01PLAIN", "typed, not pointed", 0);
+
+    let graph = store.studio(&studio).expect("read back");
+    let StudioNodeContent::Note { capture, .. } = graph.nodes[0].content() else {
+        panic!("a Note");
+    };
+    assert!(capture.is_none(), "nothing was pointed at");
 }

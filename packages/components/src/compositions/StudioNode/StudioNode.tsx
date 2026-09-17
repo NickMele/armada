@@ -36,10 +36,30 @@ export type StudioContradictionState =
 export type StudioDeferralState = "open" | "answered";
 export type StudioOutlineState = "draft" | "frozen";
 
+/**
+ * The picture a Note kept, as the caller resolved it — #1352.
+ *
+ * **The bytes are the caller's problem and the drawing is this one's**, which
+ * is `ShownFrame`'s rule: a frame reaches the renderer over the preload and
+ * becomes a `blob:`, which needs a live Fleet, so what arrives here is a URL
+ * or a reason there is not one. A frame with neither is one still being read.
+ *
+ * **Absent is a Note that kept no picture**, and it draws no plate at all: a
+ * Note typed rather than pointed, or one whose capture could take no frame, is
+ * an ordinary Note, and a board of dashed empty boxes would say otherwise.
+ */
+export type StudioNodeFrame = {
+  /** What to draw, once the caller has it. */
+  src?: string;
+  /** Why there is nothing to draw. Absent beside an absent `src` is a read in flight. */
+  why?: string;
+};
+
 /** Each kind, with the states `studio.md` gives it. A kind with none takes no `state`. */
 export type StudioNodeOf =
-  | { kind: "run"; state: StudioRunState }
-  | { kind: "note" }
+  /** `state` absent: the run has not been read, and nothing is said about it. */
+  | { kind: "run"; state?: StudioRunState }
+  | { kind: "note"; frame?: StudioNodeFrame }
   | { kind: "cluster" }
   | { kind: "finding"; state: StudioFindingState }
   | { kind: "contradiction"; state: StudioContradictionState }
@@ -48,8 +68,8 @@ export type StudioNodeOf =
   | { kind: "deferral"; state: StudioDeferralState }
   | { kind: "outline"; state: StudioOutlineState }
   | { kind: "issue_draft"; state: "draft" }
-  /** `state` is the `job_status` wire value. */
-  | { kind: "job"; state: string };
+  /** `state` is the `job_status` wire value, absent where the Job has not been read. */
+  | { kind: "job"; state?: string };
 
 export type StudioNodeKind = StudioNodeOf["kind"];
 
@@ -111,8 +131,16 @@ export type StudioNodeReading = {
   working: boolean;
 };
 
+/**
+ * A Run or Job whose state has not been read. A Studio carries a reference to
+ * the run or the Job and never its state, so until one is read there is nothing
+ * to say — and saying nothing beats guessing.
+ */
+const UNREAD: StudioNodeReading = { words: null, status: null, run: null, missing: null, working: false };
+
 export function studioNodeReading(node: StudioNodeOf): StudioNodeReading {
   if (node.kind === "job") {
+    if (node.state === undefined) return UNREAD;
     const rendering = JOB_STATUS[node.state] ?? null;
     const usable = rendering?.verb != null && rendering.badgeStatus != null && rendering.icon != null;
     return {
@@ -124,6 +152,7 @@ export function studioNodeReading(node: StudioNodeOf): StudioNodeReading {
     };
   }
   if (node.kind === "run") {
+    if (node.state === undefined) return UNREAD;
     return { words: node.state, status: null, run: node.state, missing: null, working: node.state === "running" };
   }
   if (!("state" in node)) return { words: null, status: null, run: null, missing: null, working: false };
@@ -141,6 +170,38 @@ export function studioNodeLabel(node: StudioNodeOf & { title: string }): string 
   const { words } = studioNodeReading(node);
   const head = `${STUDIO_NODE_KIND[node.kind]}: ${node.title}`;
   return words === null ? head : `${head}, ${words}`;
+}
+
+/** What a frame is called where it is read aloud. The Note's own words are already above it. */
+export const STUDIO_FRAME_LABEL = "The screen this Note was captured from";
+
+/**
+ * The picture on the card: what was on screen when the Note was made.
+ *
+ * **A figure and never a control.** The board is a drag surface, so a button
+ * inside a node would be a press fighting a drag; opening the frame is an act
+ * on the selected node, where every other act on a node already is.
+ *
+ * **The box is a screen's shape and is drawn before the bytes land**, so a
+ * board does not jump as the pictures arrive — `FramesShown`'s rule, and the
+ * same reason: a reflow is how a person loses the node they were reading.
+ */
+function Frame({ frame }: { frame: StudioNodeFrame }) {
+  if (frame.src === undefined) {
+    return (
+      <span className="armada-studio-node__frame" data-empty>
+        {/* Nothing to draw and no reason yet is a read in flight, and it says
+            so rather than drawing a blank that reads as a photograph of a
+            blank screen. */}
+        <span className="armada-studio-node__why">{frame.why ?? "reading…"}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="armada-studio-node__frame">
+      <img className="armada-studio-node__image" src={frame.src} alt={STUDIO_FRAME_LABEL} />
+    </span>
+  );
 }
 
 export function StudioNode(props: StudioNodeProps) {
@@ -173,6 +234,7 @@ export function StudioNode(props: StudioNodeProps) {
         )}
       </div>
       <p className="armada-studio-node__title">{title}</p>
+      {props.kind !== "note" || props.frame === undefined ? null : <Frame frame={props.frame} />}
       {facts.length === 0 ? null : (
         <ul className="armada-studio-node__facts">
           {facts.map((fact) => (

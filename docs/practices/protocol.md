@@ -987,6 +987,86 @@ instant, so the Working area can group a step's activity by task. **A claim,
 like the state it comes from**: a Drone that never calls `update_task` sends no
 windows, and its work belongs to no task.
 
+## Protocol 14.7: Helm's act on a Studio is its own event
+
+`#1288`. `studio.helm_acted`, a new event kind, additive: published after the
+`studio.changed` a write publishes, only where the door placed the call in a
+Helm session, carrying `StudioHelmActed { studio_id, manifest_id, act, at }`
+with `act` one of `added_node { node_id }`, `proposed_edge { edge_id }` or
+`named { name }`. A person's act on a Studio publishes `studio.changed` alone,
+so Helm's act is told apart by kind — `docs/concepts/helm.md`, *Audit trail*.
+
+`StudioNode.added_by`, `StudioEdge.added_by` and `Studio.named_by`, additive
+and left out where absent: `person` or `helm`, kept by store migration V78. A
+row from before V78 has none, since Helm could already act under V77 and a
+default would name an author nobody recorded.
+
+`get_checkout_run_sheet`, `list_checkout_runs` and `get_checkout_run_output`
+move from `No` to `Helm only`. **That half moves no number**: `agent_access`
+decides what the agent door offers, which is not the Fleet/Bridge seam, and no
+message either side parses changed.
+
+## Protocol 14.8: a scout, and what its Finding read
+
+`#1292`. Three commands and a Finding's fields, all additive. `ask_scout` (`Bridge only`) adds a Finding Gathering and starts its scout; `start_scout` (`Helm only`) starts a Finding already Proposed; `stop_scout` (`Bridge only`) is the stop on its node. A Finding's content keeps `asked` and gains `checkout` (`commit`, `uncommitted`), `read`, `searched`, `learned` and `ended` (`outcome` of `answered`, `stopped` or `failed` with `why`, and `cost_micros`), each left out until the scout records it — so a Proposed Finding is on the wire exactly as it was at 14.6.
+
+**`cost_micros` is absent, never nought, where no cost was reported**: a scout whose group had to be ended rather than interrupted reports none, spike 017. `outcome` is a serde tag rather than a `wire_enum!`, for the node's own `kind`'s reason: it is the field the rest hang off. A Finding added through `add_studio_node` carrying any of the new fields is refused as `fleet.studio_finding_is_the_scouts`.
+
+## Protocol 14.9: Helm is told which Studio a person has open
+
+`#1287`. `HelmScreen` gains `studio`, the Studios surface, and `HelmContext` gains `studio` and
+`node`, both optional and left out where empty: the Studio open on that surface, and the node
+selected on its whiteboard, only beside its Studio. Fleet's line to the session names both by id,
+so Helm can read the Studio with `get_studio` rather than guess one. **Minor, though Fleet matches
+on the screen**: Bridge sends `studio` only to a Fleet at 14.9 or later, because a Fleet behind
+Bridge is refused before an ask is ever sent.
+
+## Protocol 14.10: counts on the live file list
+
+`#1187`. `ChangedFile.lines`, additive and left out where absent: what a file
+gained and lost, on `job.files_changed` only. Counting is the walk that renders
+the patch, so Fleet counts on a due reading only once the Drone has made no call
+since the reading before, something moved since the last count, and ten seconds
+have passed since it. A reading between two counts carries the last count for
+each file still listed, and none for a file that arrived since. Absent is not
+zero, as on `TouchedFile.lines`.
+
+## Protocol 14.11: Studio capture, and what a Note keeps of it
+
+`#1290`. One command and one optional field, both additive. `capture_studio_note` (`agent_access`
+`No`) puts a Note on a Studio where a person pointed in Bridge. A `note` node's content keeps
+`said` and gains `capture`, left out on a Note that was typed rather than pointed — so a Note from
+before this is on the wire exactly as it was at 14.6.
+
+`capture` carries the development annotation layer's own fields — `component`, `owners`,
+`selector`, `element`, `screen`, `layer`, `location`, `bounds` and `window` — and four the layer
+does not record: `styles`, `markup`, `source` and `frame`. **`source` is absent, never guessed**:
+React 19 fibers carry no `_debugSource`, so Bridge sends a path only where the build gives it one.
+
+**The frame crosses as a staged file and reads back as a kept one.** The request's `frame` is
+`staged_path`, `width` and `height` — the PNG Bridge's main process wrote where `stage_attachment`
+writes one. Fleet copies it under `<machine>/studios/<studio_id>/` and the Note's `capture.frame`
+names `filename`, `byte_size`, `width` and `height`. Nothing about where Bridge staged it reaches
+a client, and no image crosses in a `studio.changed`. A staged frame over 4 MiB is
+`fleet.studio_frame_too_large`, and one Fleet cannot read is `fleet.studio_frame_unreadable`.
+
+## Protocol 14.12: a Note's frame, read back
+
+`#1352`. One route, additive: `GET /studios/:studio_id/frames/:node_id` answers the picture a Note
+kept as the file itself, the way `get_frame` answers a step's. 14.11 wrote the frame and gave a
+client no way to read it.
+
+**One path segment where a step's frame takes two.** A Studio keeps one frame per node, under the
+node's own id, so the node names the file — and the name is read off the node's `capture.frame`
+before anything is opened, which is what keeps a caller's text off a path. A node that is not on
+the Studio is `fleet.no_such_studio_node`, a node that kept no frame is
+`fleet.studio_frame_not_kept`, and a file that will not open is `fleet.studio_frame_unreadable`.
+
+`agent_access` is `Bridge only`, where `get_frame` is `Yes`: a Note's frame is a photograph of the
+window a person was working in, not of a harness's own page. **The bytes reach Bridge's renderer
+over the preload and become a `blob:`** — the CSP's `img-src 'self' blob:` is unchanged, and no
+scheme was added to it.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file
@@ -1048,6 +1128,42 @@ in exchange for not carrying codegen where it isn't earning its keep — see
 gRPC's rejection above. It means route changes need a `curl` or integration
 check in the same change, because the type system will not catch this class
 of mistake for you.
+
+## Protocol 14.13: what is on a Studio becomes work
+
+`#1291`. Six commands and one optional field, all additive.
+`group_studio_nodes` (`Bridge only`) accepts several nodes as one Cluster or
+reads them in order as one Outline, with a `produced` edge from each in the
+order given; `defer_on_studio` (`Bridge only`) adds a Deferral with an accepted
+`blocks` edge to what it holds up; `write_up_studio_node` (`Helm only`) adds an
+Issue draft; `edit_studio_draft` (`Bridge only`) replaces that draft's title and
+body; `settle_contradiction` (`Bridge only`) ends a Contradiction as
+`not_a_problem` or `resolved_here` with its answer; `dispatch_studio_draft`
+(`Helm only`) sends the draft's text through the Job proposer and answers with
+the Studio carrying a Job node per Job, each on a `produced` edge from the
+draft.
+
+A Contradiction's content gains `answer`, **absent unless a person ended it as
+*Resolved here***, so a node written before this is on the wire exactly as it
+was at 14.6. `HelmStudioAct` gains `wrote_up { from, node_id }` and
+`dispatched { from, node_ids }`, the two acts Helm takes on a person's ask —
+`docs/concepts/studio.md` publishes every act of Helm's, not only the unasked
+ones.
+
+**No new node kind, no new state and no migration.** Every kind a rung makes —
+Cluster, Deferral, Issue draft, Outline, Job — and every state it sets was
+already in `core-model` and in V77's `CHECK`, because `#1285` wrote the whole
+vocabulary down. What was missing was the calls.
+
+**Nothing here reaches a forge.** No operation files an issue, and dispatch
+carries the draft's own text with nothing to point at: filing is optional and a
+person's own act.
+
+A Job dispatched from a Studio takes `manual` or `helm_drafted` for its
+`origin`, by who pressed it, rather than the `auto_detected` every other request
+through the proposer takes — **a value already on the wire, so it moves no
+number.** What it changes is what a row says: *Found by Fleet* names work
+Armada noticed by itself, and a draft somebody wrote up and sent is neither.
 
 ## Open questions
 

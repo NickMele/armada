@@ -41,6 +41,9 @@ mod breakage;
 /// How many Drones Fleet may run, how many it is running, and what holds the
 /// next one back. **Fleet-wide, and not a Job's field.**
 mod capacity;
+/// A scout's run, as its Finding records it, and the acts that start and stop one.
+/// `#1292`.
+mod capturing;
 mod checks;
 mod codec;
 /// A command a Drone was not given, and what a person answers about it. **Two
@@ -129,6 +132,7 @@ mod resources;
 /// What Scan found in a repository nobody set up for Armada. **Evidence,
 /// never a proposal** — every finding carries the file it came from.
 mod scan;
+mod scouting;
 mod seeding;
 /// A Command that stays running, held by Fleet. **Lifecycle on `/events`,
 /// output on a socket of its own.**
@@ -172,6 +176,10 @@ pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, When
 pub use attempt::{ended_at, first_started_at, Move, StepAttempt};
 pub use breakage::{ClaimedBreakage, WaitingOnFix};
 pub use capacity::{AdmissionHold, FleetCapacity};
+pub use capturing::{
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureStudioNote, CaptureWindow, StagedFrame,
+    StudioCapture,
+};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use commanding::{
@@ -196,7 +204,7 @@ pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
     DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
-    Resumption, Side, StepState, StudioEdgeKind, StudioEdgeStanding, StudioNodeKind,
+    Resumption, Side, StepState, StudioAuthor, StudioEdgeKind, StudioEdgeStanding, StudioNodeKind,
     StudioNodeState, StudioRelation, TaskState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
@@ -265,6 +273,7 @@ pub use scan::{
     PackageWorkspaces, RepositoryScan, Runnable, ScannedWorkspace, ToolFile, ToolSection,
     WorkspaceGlob, WorkspaceGlobs,
 };
+pub use scouting::{AskScout, ScoutCheckout, ScoutEnded, ScoutOutcome, StartScout, StopScout};
 pub use seeding::{DeclaredSeed, SeedWarmth, WorktreeSeeding};
 pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,
@@ -274,9 +283,11 @@ pub use setup::{LeftOutWorkflow, ManifestSummary, ModelChoices, WorkflowStep, Wo
 pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet, SpecPicked};
 pub use since::{EventTally, EventsSince};
 pub use studio::{
-    AddStudioNode, CreateStudio, DecideStudioEdge, MoveStudioNode, ProposeStudioEdge,
-    RemoveStudioNode, RenameStudio, Studio, StudioDeleted, StudioEdge, StudioList, StudioNode,
-    StudioNodeContent, StudioPosition, StudioSummary,
+    AddStudioNode, ContradictionSettled, CreateStudio, DecideStudioEdge, DeferOnStudio,
+    DispatchStudioDraft, EditStudioDraft, GroupStudioNodes, HelmStudioAct, MoveStudioNode,
+    ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction, StartStudioRun, Studio,
+    StudioDeleted, StudioEdge, StudioHelmActed, StudioList, StudioNode, StudioNodeContent,
+    StudioPosition, StudioRunKept, StudioRunStarted, StudioSummary, WriteUpStudioNode,
 };
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,

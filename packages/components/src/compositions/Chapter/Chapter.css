@@ -9,6 +9,9 @@
   /* The drawn 14px, the body's padding and the header's inline padding. No
      token spells it: --space-3 plus a half --space-1. */
   --armada-chapter-pad: calc(var(--space-3) + var(--space-1) / 2);
+  /* The live phase's sweep sits on the card's top edge, so the card is what it
+     is positioned against. */
+  position: relative;
   background: var(--bg-sunken);
   border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -166,6 +169,84 @@ button.armada-chapter__head:focus-visible {
   .armada-chapter__live {
     animation: none;
   }
+}
+
+/* --- The live phase ------------------------------------------------------- */
+
+/* The chapter the work is inside right now. Running on the edge, a wash across
+   the card, and the header's rule lifted with it — the three values are
+   declared in `tokens/status.css` because hue below Job level lives there. */
+.armada-chapter[data-tone="running"] {
+  border-color: var(--phase-live-edge);
+  background: linear-gradient(var(--phase-live-bg), var(--phase-live-bg)), var(--bg-sunken);
+}
+
+.armada-chapter[data-tone="running"][data-open] .armada-chapter__line {
+  border-bottom-color: var(--phase-live-rule);
+}
+
+/* The live phase's name has a second line under it saying what is happening
+   right now, and that line is a path — it changes every few seconds and can be
+   any length. So this is the one tone where the name YIELDS: it takes the
+   space that is left and clips, rather than claiming its content width and
+   pushing the act onto a line of its own every time the Drone opens a deeper
+   file. The caller's own stylesheet clips each line inside it. */
+.armada-chapter[data-tone="running"] .armada-chapter__name {
+  flex: 1 1 auto;
+}
+
+/* The bar, along the top edge. The same line a control waiting on Fleet
+   sweeps: --pending-bar tall, --status-running, one segment travelling at
+   --duration-pulse, linear rather than --ease for Button's own reason — a
+   fast-out curve parks the segment off the end for most of the loop and a
+   screenshot shows no bar at all. */
+.armada-chapter__sweep {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: var(--pending-bar);
+  overflow: hidden;
+  pointer-events: none;
+  /* Above the header's own ground, which paints over the card's top edge. */
+  z-index: 1;
+}
+
+.armada-chapter__sweep::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 40%;
+  background: var(--status-running);
+  animation: armada-chapter-sweep var(--duration-pulse) linear infinite;
+}
+
+@keyframes armada-chapter-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+/* The bar holds still at full width, and nothing is lost: the edge and the
+   wash already say which phase is live. The streaming dot beside it is stopped
+   by the rule above, so the card is still at one loop — none. */
+@media (prefers-reduced-motion: reduce) {
+  .armada-chapter__sweep::after {
+    animation: none;
+    width: 100%;
+    transform: none;
+  }
+}
+
+/* One loop per card. The sweep says still working for the whole phase, so the
+   dot in the meta beside it stops travelling and carries hue alone — two
+   things moving in one header compete, and the reader has to decide which one
+   they were watching. */
+.armada-chapter[data-tone="running"] .armada-chapter__live {
+  animation: none;
 }
 
 /* The chapter that asks rather than reports. Amber on the header alone, and a

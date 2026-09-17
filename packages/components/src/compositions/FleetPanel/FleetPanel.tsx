@@ -23,8 +23,8 @@ export type FleetPanelProps = {
   label: ReactNode;
   /**
    * `pid`, `port`, `protocol`, `up` — the facts the runtime file and the
-   * connection carry, one row each, labels left and values in one aligned
-   * column. Settled 2026-09-17, replacing two `·`-joined mono lines.
+   * connection carry, one row each, labels left and values justified to the
+   * panel's right edge. Settled 2026-09-17, replacing two `·`-joined mono lines.
    *
    * **Only the rows a state has a value for.** A Fleet that is not running has
    * no port to name, and a `port` row with nothing beside it would read as a

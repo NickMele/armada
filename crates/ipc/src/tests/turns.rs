@@ -156,6 +156,7 @@ fn what_armada_said_and_what_fleet_did_reach_the_viewer_with_their_voice() {
                 path: "crates/api/src/routes.rs".to_string(),
                 change: crate::ChangeKind::Modified,
                 outside_plan: false,
+                lines: None,
             }],
         })
     };

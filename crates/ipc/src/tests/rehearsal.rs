@@ -68,6 +68,7 @@ fn a_record() -> RunRecord {
             path: "src/lib.rs".to_string(),
             change: ChangeKind::Modified,
             outside_plan: false,
+            lines: None,
         }],
         changed_unreadable: None,
         shared_with_drone: false,

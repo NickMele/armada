@@ -10,6 +10,7 @@ import type {
   ModelChoices,
   Outcome,
   RepositorySummary,
+  Studio,
   WorkflowSummary,
 } from "@armada/protocol";
 import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
@@ -29,6 +30,12 @@ export type Scenario = {
   reads: Record<string, JobFixture>;
   /** A Job to open on start, the way a pressed notification opens one. */
   opens?: string;
+  /**
+   * The Studios this scenario's Fleet keeps. **Every scenario answers the Studio reads and
+   * writes** (#1341), so one that names none keeps an empty list and the surface draws its empty
+   * state rather than a read failure.
+   */
+  studios?: readonly Studio[];
   /**
    * Calls this scenario answers as Fleet would, over the fake's own. For a
    * flow whose answers depend on what was pressed before — Setup's edits and

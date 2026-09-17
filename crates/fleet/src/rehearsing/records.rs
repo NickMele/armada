@@ -111,27 +111,47 @@ pub(crate) fn every(
     (runs, unreadable)
 }
 
-/// Take away this owner's runs that ended longer ago than `kept_for` allows,
-/// letting each one's snapshot go with it.
+/// This owner's runs that ended longer ago than `kept_for` allows: what a
+/// sweep is about to take away, read before any of it is gone.
+///
+/// **Named apart from [`sweep`] so that whatever holds a run can be asked
+/// first.** A Studio keeps a Run node against one of these, and the tail it
+/// keeps has to be read while the log is still there — `crate::studio_runs`.
 ///
 /// `kept_for` is `settings.ad-hoc-run-log-retention`, resolved by the
 /// composition root — [`Fleet::run_log_retention`](crate::daemon::Fleet) —
 /// and handed in rather than read from a constant here, the same reason every
 /// other Machine setting is.
-pub(crate) fn swept(
-    root: &str,
-    handle: &str,
-    now: &Timestamp,
-    kept_for: Duration,
-    forget: impl Fn(&str),
-) {
+pub(crate) fn due(root: &str, handle: &str, now: &Timestamp, kept_for: Duration) -> Vec<Record> {
     let Some(now) = now.epoch_millis() else {
-        return;
+        return Vec::new();
     };
     let kept_for = i64::try_from(kept_for.as_millis()).unwrap_or(i64::MAX);
-    for run in every(root, handle, None).0 {
-        let ended = Timestamp::from_rfc3339(run.ended_at.as_str()).epoch_millis();
-        if !ended.is_some_and(|ended| now.saturating_sub(ended) > kept_for) {
+    every(root, handle, None)
+        .0
+        .into_iter()
+        .filter(|run| {
+            Timestamp::from_rfc3339(run.ended_at.as_str())
+                .epoch_millis()
+                .is_some_and(|ended| now.saturating_sub(ended) > kept_for)
+        })
+        .collect()
+}
+
+/// Take away the runs [`due`] named, letting each one's snapshot go with it.
+///
+/// **`held_back` names the runs to leave where they are**, by id: a run whose
+/// holder could not keep what it said is worth another retention cycle on
+/// disk, where a node pointing at nothing is worth none.
+pub(crate) fn sweep(
+    root: &str,
+    handle: &str,
+    due: &[Record],
+    held_back: &[String],
+    forget: impl Fn(&str),
+) {
+    for run in due {
+        if held_back.contains(&run.id) {
             continue;
         }
         if let Some(reference) = &run.snapshot {

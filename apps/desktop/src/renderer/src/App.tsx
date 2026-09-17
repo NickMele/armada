@@ -39,6 +39,9 @@ import { BridgeSettings } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Composing } from "./Composing";
 import { Overview } from "./Overview";
+import { CaptureLayer, type CaptureAim } from "./capture/Layer";
+import { StudiosSurface } from "./StudiosSurface";
+import { nodeNamed, studioName, type OpenStudio } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
 import { Manifest, checkoutRunnablesOf, useManifestEditing, useManifestForm } from "@armada/screens";
 import { Setup, useSetup } from "@armada/screens";
@@ -94,6 +97,7 @@ import {
   readRemarks,
   deleteBranchOne,
   forgetOne,
+  captureStudioNote,
   readHeld,
   readReports,
   reclaimOne,
@@ -177,6 +181,15 @@ export function App() {
   // where Bridge opens (#921), so the Board is what a press away from it
   // reaches rather than the surface a fresh window starts on.
   const [overviewing, setOverviewing] = useState(true);
+  // Whether the Studios surface is open, which Studio is open on it, and the node selected there —
+  // #1287. The last two are Helm's context as well as the screen's.
+  const [studying, setStudying] = useState(false);
+  const [openStudio, setOpenStudio] = useState<OpenStudio | null>(null);
+  const [studioNode, setStudioNode] = useState<string | null>(null);
+  // What Studio capture lands on — #1290. **It outlives the surface**: what is
+  // wrong is on the Board or Overview, not on the whiteboard, so the aim is the
+  // Studio last open and continued rather than the one a surface is drawing.
+  const [captureAim, setCaptureAim] = useState<CaptureAim>(null);
   // The Check or Command the palette picked, or `null`. **It selects rather
   // than runs**, which is what Journey 9's own table says the palette does.
   const [picked, setPicked] = useState<string | null>(null);
@@ -450,6 +463,9 @@ export function App() {
     setManifesting(surfaceId === SURFACE.manifest);
     setOverviewing(surfaceId === SURFACE.overview);
     setSettingsShowing(surfaceId === SURFACE.settings);
+    setStudying(surfaceId === SURFACE.studios);
+    setOpenStudio(null);
+    setStudioNode(null);
     if (surfaceId !== SURFACE.manifest) setPicked(null);
     if (surfaceId !== SURFACE.manifest) setSettingUp(false);
   }
@@ -472,14 +488,26 @@ export function App() {
   // Where the person is, for Helm — #1075. `cursorRowFor` picks the Board's
   // or Overview's row by which screen is showing, so neither's stale row
   // reaches an ask made on the other.
-  const helmScreen = screenOf({ reading: reading !== null, clearing, manifesting, overviewing });
+  const helmScreen = screenOf({ reading: reading !== null, clearing, manifesting, overviewing, studying });
   const chippedJob = state.jobs.find((job) => job.id === chippedJobId(chip));
   const helmContext: HelmContext = contextOf({
     screen: helmScreen,
     picked: scoped?.id ?? null,
     chip: chippedJob?.id ?? null,
     cursor: cursorRowFor({ screen: helmScreen, board: cursor, overview: overviewCursor }),
+    studio: openStudio?.id ?? null,
+    node: studioNode,
   });
+  const shownStudio = state.studio.state === "read" && state.studio.studio.id === openStudio?.id ? state.studio.studio : null;
+  // Aimed during render rather than in an effect: it is a value this render
+  // already knows, and an effect would leave capture a frame behind the Studio.
+  const continued =
+    openStudio?.editable === true && shownStudio !== null
+      ? { id: shownStudio.id, name: studioName(shownStudio) }
+      : null;
+  if (continued !== null && (continued.id !== captureAim?.id || continued.name !== captureAim.name)) {
+    setCaptureAim(continued);
+  }
   // Helm's dock lists every repository's questions, whatever the pick. Answering is #936, Helm #944.
   const dockAnswering = useDockAnswering(commands);
   // "Discuss with Helm" points it at the card's own repository. The picker never moves for it.
@@ -534,6 +562,14 @@ export function App() {
             onRemoveChip={() => setChip(dismissed)}
             onAsk={(text, context) => void askHelm(text, context)}
             context={helmContext}
+            studio={
+              shownStudio === null
+                ? undefined
+                : {
+                    name: studioName(shownStudio),
+                    ...(studioNode === null ? {} : { node: nodeNamed(shownStudio, studioNode, state.jobs) }),
+                  }
+            }
             onStartFresh={() => void startHelmFresh()}
             onSwitch={(manifestId) => pointHelm(manifestId)}
             onApprove={commands.approve}
@@ -561,7 +597,9 @@ export function App() {
                 ? SURFACE.overview
                 : settingsShowing
                   ? SURFACE.settings
-                  : SURFACE.board
+                  : studying
+                    ? SURFACE.studios
+                    : SURFACE.board
         }
         onSurface={goTo}
       >
@@ -851,6 +889,20 @@ export function App() {
               onCopied={setCopied}
               onCursor={setOverviewCursor}
             />
+          ) : studying ? (
+            <StudiosSurface
+              state={state}
+              live={live}
+              repositories={repositories}
+              manifestId={scoped?.id}
+              all={all}
+              onPick={pick}
+              open={openStudio}
+              onOpenChange={setOpenStudio}
+              selectedNode={studioNode}
+              onSelectNode={setStudioNode}
+              onCopied={setCopied}
+            />
           ) : settingsShowing ? (
             <Boundary region="Settings" {...guarded}>
               <BridgeSettings
@@ -908,6 +960,10 @@ export function App() {
           )}
         </div>
       </Shell>
+
+      {/* Studio capture — #1290. Last, so its layer paints over every surface
+          and every overlay the shell draws under it. */}
+      <CaptureLayer aim={captureAim} onCapture={captureStudioNote} />
 
       {/* Every destructive act confirms, and the confirmation states what
           happens and what survives rather than asking "are you sure". Cancel

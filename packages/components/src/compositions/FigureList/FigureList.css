@@ -1,12 +1,20 @@
-/* Label left, figure right, so figures of different lengths still line up as a
-   column a person reads down. Was `JobHoldsSummary`'s own figure rows.
+/* Label left, figure pushed to the list's right edge, so figures of different
+   lengths line up as a column a person reads down from the edge in. Was
+   `JobHoldsSummary`'s own figure rows.
+
+   **The right edge, not a second column.** Settled by the owner on 2026-09-17
+   against the Fleet panel: the values sit where the Stats panel's counts sit,
+   and they get there the same way — a value track that runs to the edge, with
+   the text aligned to its end. A second mechanism for one alignment is how the
+   two panels would drift apart.
 
    The tracks are declared once on the list and borrowed by each row, so a
    `fit` column is as wide as the longest label rather than each row's own. */
 .armada-figures {
   display: grid;
-  /* The label column Where things are draws, so Pulse and the rows under it
-     read as one list. WhereRow's own column says why it is this wide. */
+  /* The label column Where things are draws, so the labels of Pulse and the
+     rows under it start on one line. WhereRow's own column says why it is this
+     wide. The values no longer start there — they end at the right edge. */
   grid-template-columns: calc(var(--space-12) * 2) minmax(0, 1fr);
   column-gap: var(--space-2);
   row-gap: var(--space-2);
@@ -33,8 +41,19 @@
   color: var(--text-label);
 }
 
+/* The value's box, which runs to the edge whatever it holds. Its lines are
+   what the reader sees; the box only says where they end. */
 .armada-figures__value {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
   margin: 0;
+  min-width: 0;
+  /* The Stats panel's own line, on a track that already runs to the edge. */
+  text-align: right;
+}
+
+.armada-figures__reading {
   min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -45,6 +64,34 @@
   white-space: nowrap;
 }
 
-.armada-figures__row[data-wrong] .armada-figures__value {
+/* Words somebody said, not a reading: sans, and held to two lines. A long
+   Drone line is a turn to read in the log, and a block that grew to fit it
+   would push the pointers under it off the screen. */
+.armada-figures__value[data-words] .armada-figures__reading {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-family: var(--font-sans);
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+/* The line under the value — when it was said. Subtler than the value, and on
+   the same edge, because it qualifies that value rather than standing beside
+   it. */
+.armada-figures__detail {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The hue on the reading alone. A detail is when, and a time is not wrong. */
+.armada-figures__row[data-wrong] .armada-figures__reading {
   color: var(--error);
 }

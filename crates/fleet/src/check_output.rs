@@ -490,7 +490,10 @@ pub fn excerpt(output: &Output) -> ipc::mcp::CheckExcerpt {
 ///
 /// Returns the window, the file's own number for the window's first line
 /// (counted from one), and how many lines the stream held in total.
-fn windowed(
+///
+/// `pub(crate)` for `crate::studio_runs`, which windows a swept run's log to
+/// the Studio's own bound rather than restating the eviction rule.
+pub(crate) fn windowed(
     lines: impl Iterator<Item = String>,
     most_lines: usize,
     most_bytes: usize,

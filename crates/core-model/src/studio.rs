@@ -11,7 +11,20 @@
 //! **A Run or a Job node holds a reference and no status.** Its state is read
 //! off the run or the Job, so neither kind admits a state here at all.
 
+mod edge;
+mod finding;
+mod note;
+mod promotion;
+
 use alloc::string::String;
+
+pub use edge::{EdgeRefused, StudioEdge, ToItself};
+pub use finding::{
+    FrozenFinding, GatheringFinding, NotScoutable, ScoutCheckout, ScoutEnded, ScoutLook,
+    ScoutOutcome, Scouted, StudioFinding,
+};
+pub use note::{CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, StudioCapture};
+pub use promotion::{ContradictionOutcome, NotRewritable, Rewritten};
 
 use crate::envelope::{Timestamp, Ulid};
 use crate::job::{id_newtype, JobId, ManifestId};
@@ -54,6 +67,9 @@ pub struct Studio {
     pub id: StudioId,
     pub manifest_id: ManifestId,
     pub name: Option<StudioName>,
+    /// Who gave it the name it has. `None` on an untitled Studio, and on one
+    /// named before who named it was kept.
+    pub named_by: Option<StudioAuthor>,
     pub created_at: Timestamp,
     /// The last write to the Studio or anything on it.
     pub touched_at: Timestamp,
@@ -161,6 +177,16 @@ spelled! {
 }
 
 spelled! {
+    /// Who put something on a Studio. **Helm's act is kept apart from a
+    /// person's on the record itself**, not only on the stream —
+    /// `docs/concepts/helm.md`, *Audit trail*.
+    StudioAuthor {
+        Person => "person",
+        Helm => "helm",
+    }
+}
+
+spelled! {
     /// Whether a person has accepted an edge. A proposed edge is drawn dashed.
     StudioEdgeStanding {
         Proposed => "proposed",
@@ -220,22 +246,70 @@ impl From<StudioRelation> for StudioEdgeKind {
     }
 }
 
+/// What a Run node keeps of its run once the run's own retention has swept it:
+/// the result, and the log's last lines. `#1289`.
+///
+/// **Only ever present on a run that is gone.** While the run's record is
+/// still on disk the node is a reference and nothing else, and its state is
+/// read off the run — so a node carrying one of these is saying that what is
+/// here is all there is, which is what *partial* means on a Studio.
+///
+/// **Taken before the sweep, never after.** A tail read after the directory
+/// was removed is no tail at all, and the node would point at nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StudioRunKept {
+    /// The entry the Manifest declared, by name.
+    pub name: String,
+    /// The command as it ran.
+    pub command: String,
+    /// `None` where the run was killed before it exited.
+    pub exit_code: Option<i32>,
+    /// What the entry declared a pass to be, so the node keeps its colour.
+    pub expect_exit_code: i64,
+    /// Whether a person stopped it.
+    pub stopped: bool,
+    pub duration_ms: u64,
+    /// The log's last lines, oldest first, bounded by the Studio's own bound
+    /// rather than by whatever the command printed.
+    pub lines: alloc::vec::Vec<String>,
+    /// How many lines the log held in all, whether or not they are here.
+    pub total_lines: u32,
+    /// Whether [`lines`](StudioRunKept::lines) is the whole log rather than
+    /// its tail.
+    pub whole: bool,
+}
+
 /// What a node holds, one variant per kind.
 ///
 /// **The smallest each kind needs to be drawn and read.** A later step adds
 /// what it builds beside these, never in place of them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StudioNodeContent {
-    /// A reference to the run, never its status or its log.
-    Run { run_id: String },
-    /// What a person pointed at and said, fixed at capture.
-    Note { said: String },
+    /// A reference to the run, never its status — and what was kept of it
+    /// once retention swept the run away. `#1289`.
+    Run {
+        run_id: String,
+        kept: Option<StudioRunKept>,
+    },
+    /// What a person pointed at and said, fixed at capture. `capture` is
+    /// where they pointed — absent on a Note added before `#1290`, and on one
+    /// typed rather than pointed.
+    Note {
+        said: String,
+        capture: Option<StudioCapture>,
+    },
     /// Notes a person accepted as one thing.
     Cluster { title: String },
-    /// What was asked of a scout.
-    Finding { asked: String },
-    /// Two sources that disagree.
-    Contradiction { first: String, second: String },
+    /// What a scout was asked, and what it read.
+    Finding(StudioFinding),
+    /// Two sources that disagree, and the answer where a person settled it
+    /// here. `answer` is absent until then, and on the three outcomes that
+    /// record what was decided somewhere else.
+    Contradiction {
+        first: String,
+        second: String,
+        answer: Option<String>,
+    },
     /// A diagram or mockup, as text.
     Sketch { body: String },
     /// A board, document, issue, page or session, kept as its address.
@@ -256,7 +330,7 @@ impl StudioNodeContent {
             StudioNodeContent::Run { .. } => StudioNodeKind::Run,
             StudioNodeContent::Note { .. } => StudioNodeKind::Note,
             StudioNodeContent::Cluster { .. } => StudioNodeKind::Cluster,
-            StudioNodeContent::Finding { .. } => StudioNodeKind::Finding,
+            StudioNodeContent::Finding(_) => StudioNodeKind::Finding,
             StudioNodeContent::Contradiction { .. } => StudioNodeKind::Contradiction,
             StudioNodeContent::Sketch { .. } => StudioNodeKind::Sketch,
             StudioNodeContent::Link { .. } => StudioNodeKind::Link,
@@ -270,11 +344,11 @@ impl StudioNodeContent {
     /// The first field left blank, by name, or `None` where every one is said.
     pub fn blank(&self) -> Option<&'static str> {
         let fields: &[(&'static str, &str)] = match self {
-            StudioNodeContent::Run { run_id } => &[("run_id", run_id)],
-            StudioNodeContent::Note { said } => &[("said", said)],
+            StudioNodeContent::Run { run_id, .. } => &[("run_id", run_id)],
+            StudioNodeContent::Note { said, .. } => &[("said", said)],
             StudioNodeContent::Cluster { title } => &[("title", title)],
-            StudioNodeContent::Finding { asked } => &[("asked", asked)],
-            StudioNodeContent::Contradiction { first, second } => {
+            StudioNodeContent::Finding(finding) => &[("asked", finding.ask())],
+            StudioNodeContent::Contradiction { first, second, .. } => {
                 &[("first", first), ("second", second)]
             }
             StudioNodeContent::Sketch { body } | StudioNodeContent::Outline { body } => {
@@ -290,6 +364,30 @@ impl StudioNodeContent {
             .find(|(_, text)| text.trim().is_empty())
             .map(|(name, _)| *name)
     }
+
+    /// The run this node references, where it is a Run node whose run is still
+    /// the thing to read. `None` on every other kind, **and on a Run that has
+    /// already kept its tail**: what it references is gone.
+    pub fn run_still_read(&self) -> Option<&str> {
+        match self {
+            StudioNodeContent::Run { run_id, kept: None } => Some(run_id),
+            _ => None,
+        }
+    }
+
+    /// This content with what was kept of its run written into it.
+    ///
+    /// **The only method here that makes new content**, and the reason a Note
+    /// stays fixed at capture: it takes a Run node whose run is about to be
+    /// swept and no other, so nothing can reach a node's words through it, and
+    /// a tail already kept is never written over.
+    pub fn keeping(&self, kept: StudioRunKept) -> Option<StudioNodeContent> {
+        let run_id = self.run_still_read()?;
+        Some(StudioNodeContent::Run {
+            run_id: String::from(run_id),
+            kept: Some(kept),
+        })
+    }
 }
 
 /// A node, on one Studio.
@@ -300,6 +398,8 @@ pub struct StudioNode {
     state: Option<StudioNodeState>,
     position: StudioPosition,
     created_at: Timestamp,
+    /// `None` only on a node added before who added it was kept.
+    added_by: Option<StudioAuthor>,
 }
 
 /// A stored state its kind does not hold.
@@ -310,12 +410,13 @@ pub struct StateDoesNotFit {
 }
 
 impl StudioNode {
-    /// A node just added: in its kind's first state, or none.
+    /// A node just added by `by`: in its kind's first state, or none.
     pub fn added(
         id: StudioNodeId,
         content: StudioNodeContent,
         position: StudioPosition,
         created_at: Timestamp,
+        by: StudioAuthor,
     ) -> StudioNode {
         let state = content.kind().states().first().copied();
         StudioNode {
@@ -324,19 +425,26 @@ impl StudioNode {
             state,
             position,
             created_at,
+            added_by: Some(by),
         }
     }
 
-    /// A node read back, refused where its state does not fit its kind.
+    /// A node read back, refused where its state does not fit its kind, or a
+    /// Finding's content does not fit its state.
     pub fn recorded(
         id: StudioNodeId,
         content: StudioNodeContent,
         state: Option<StudioNodeState>,
         position: StudioPosition,
         created_at: Timestamp,
+        added_by: Option<StudioAuthor>,
     ) -> Result<StudioNode, StateDoesNotFit> {
         let kind = content.kind();
-        if !kind.admits(state) {
+        let finding_fits = match &content {
+            StudioNodeContent::Finding(finding) => finding.fits(state),
+            _ => true,
+        };
+        if !kind.admits(state) || !finding_fits {
             return Err(StateDoesNotFit { kind, state });
         }
         Ok(StudioNode {
@@ -345,6 +453,7 @@ impl StudioNode {
             state,
             position,
             created_at,
+            added_by,
         })
     }
 
@@ -374,123 +483,8 @@ impl StudioNode {
     pub fn created_at(&self) -> &Timestamp {
         &self.created_at
     }
-}
-
-/// An edge between two nodes on one Studio.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StudioEdge {
-    id: StudioEdgeId,
-    from: StudioNodeId,
-    to: StudioNodeId,
-    kind: StudioEdgeKind,
-    standing: StudioEdgeStanding,
-    created_at: Timestamp,
-}
-
-/// Both ends of an edge are one node.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ToItself {
-    pub node: StudioNodeId,
-}
-
-/// Why an edge cannot be read back.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EdgeRefused {
-    ToItself(ToItself),
-    /// A `Produced` edge that is not accepted. The Studio draws those, so none
-    /// is ever proposed.
-    ProducedUnaccepted,
-}
-
-impl StudioEdge {
-    /// A relation proposed, by whoever proposed it. Only a person accepts one.
-    pub fn proposed(
-        id: StudioEdgeId,
-        from: StudioNodeId,
-        to: StudioNodeId,
-        relation: StudioRelation,
-        created_at: Timestamp,
-    ) -> Result<StudioEdge, ToItself> {
-        StudioEdge::joining(
-            id,
-            from,
-            to,
-            relation.into(),
-            StudioEdgeStanding::Proposed,
-            created_at,
-        )
-    }
-
-    /// The Studio's own record that `from` made `to`, accepted as drawn.
-    pub fn produced(
-        id: StudioEdgeId,
-        from: StudioNodeId,
-        to: StudioNodeId,
-        created_at: Timestamp,
-    ) -> Result<StudioEdge, ToItself> {
-        StudioEdge::joining(
-            id,
-            from,
-            to,
-            StudioEdgeKind::Produced,
-            StudioEdgeStanding::Accepted,
-            created_at,
-        )
-    }
-
-    /// An edge read back.
-    pub fn recorded(
-        id: StudioEdgeId,
-        from: StudioNodeId,
-        to: StudioNodeId,
-        kind: StudioEdgeKind,
-        standing: StudioEdgeStanding,
-        created_at: Timestamp,
-    ) -> Result<StudioEdge, EdgeRefused> {
-        if kind == StudioEdgeKind::Produced && standing != StudioEdgeStanding::Accepted {
-            return Err(EdgeRefused::ProducedUnaccepted);
-        }
-        StudioEdge::joining(id, from, to, kind, standing, created_at).map_err(EdgeRefused::ToItself)
-    }
-
-    fn joining(
-        id: StudioEdgeId,
-        from: StudioNodeId,
-        to: StudioNodeId,
-        kind: StudioEdgeKind,
-        standing: StudioEdgeStanding,
-        created_at: Timestamp,
-    ) -> Result<StudioEdge, ToItself> {
-        if from == to {
-            return Err(ToItself { node: from });
-        }
-        Ok(StudioEdge {
-            id,
-            from,
-            to,
-            kind,
-            standing,
-            created_at,
-        })
-    }
-
-    pub fn id(&self) -> &StudioEdgeId {
-        &self.id
-    }
-    pub fn from(&self) -> &StudioNodeId {
-        &self.from
-    }
-    pub fn to(&self) -> &StudioNodeId {
-        &self.to
-    }
-    pub fn kind(&self) -> StudioEdgeKind {
-        self.kind
-    }
-    pub fn standing(&self) -> StudioEdgeStanding {
-        self.standing
-    }
-    pub fn created_at(&self) -> &Timestamp {
-        &self.created_at
+    pub fn added_by(&self) -> Option<StudioAuthor> {
+        self.added_by
     }
 }
 

@@ -7,8 +7,8 @@ import { StatsPanel, type StatsPanelProps } from "../StatsPanel/StatsPanel";
 import { TitleBar } from "../TitleBar/TitleBar";
 import { Button } from "../../primitives/Button/Button";
 import { KbdCmd } from "../../primitives/Kbd/Kbd";
-import { Sheet } from "../../primitives/Sheet/Sheet";
 import { ShortcutRevealProvider } from "../../shortcut-reveal";
+import { HelmSheet } from "./HelmSheet";
 
 /**
  * The shell — the left column, panel and dock. Bridge/1088 replaced the rail
@@ -482,6 +482,7 @@ function Dock({
           style={width === undefined ? undefined : { width: `${restingWidth}px` }}
         >
           <div className="armada-shell__dock-head">
+            <span className="armada-shell__dock-chip" aria-hidden><MessageSquare size={16} strokeWidth={2} /></span>
             <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
             <Button variant="secondary" size="sm" ground="card" onClick={() => onOpen(false)}>
               Close
@@ -494,8 +495,7 @@ function Dock({
     );
   }
 
-  // Closed, at width: nothing. The title row's Helm button is the one way
-  // back — #1094.
+  // Closed, at width: nothing. The title row's Helm button is the one way back — #1094.
   if (!folded) return null;
 
   const waiting = questions > 0 ? `, ${questions} ${questions === 1 ? "question" : "questions"} waiting` : "";
@@ -512,16 +512,9 @@ function Dock({
         <MessageSquare size={16} strokeWidth={2} aria-hidden />
         {questions > 0 ? <span className="armada-shell__strip-count">{questions}</span> : null}
       </button>
-      <Sheet
-        open={open && folded}
-        title={DOCK_TITLE}
-        contained
-        closeLabel="Close"
-        closeBinding={binding}
-        onClose={() => onOpen(false)}
-      >
+      <HelmSheet open={open && folded} title={DOCK_TITLE} binding={binding} onClose={() => onOpen(false)}>
         {body}
-      </Sheet>
+      </HelmSheet>
     </>
   );
 }

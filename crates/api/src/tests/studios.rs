@@ -21,6 +21,7 @@ use crate::{door_within, router, Broadcaster, Redirector, Served, DOOR_PATH};
 const A_PERSONS: &[&str] = &[
     "create_studio",
     "delete_studio",
+    "capture_studio_note",
     "move_studio_node",
     "remove_studio_node",
     "decide_studio_edge",
@@ -246,4 +247,249 @@ async fn a_door_session_reads_no_studio_of_another_repository() {
     .await;
     assert!(listed.contains("\"isError\":true"), "{listed}");
     assert!(listed.contains("the one it stands in"), "{listed}");
+}
+
+/// **Helm's other unasked acts say who took them too** (#1288): proposing an
+/// edge and naming a Studio through the door are Helm's, and the same calls from
+/// Bridge are a person's, so Fleet can publish the one as Helm's act.
+#[tokio::test]
+async fn an_edge_helm_proposes_and_a_name_it_gives_are_recorded_as_helms() {
+    let daemon = helm_holding();
+    let app = shared(&daemon);
+    let proposed = from(
+        &app,
+        HELM,
+        DOOR_PATH,
+        &calling(
+            "propose_studio_edge",
+            &format!(
+                r#"{{"studio_id":"{THE_STUDIO}","body":{{"from":"01A","to":"01B","kind":"same_as"}}}}"#
+            ),
+        ),
+    )
+    .await;
+    assert!(proposed.contains("\"isError\":false"), "{proposed}");
+    let named = from(
+        &app,
+        HELM,
+        DOOR_PATH,
+        &calling(
+            "rename_studio",
+            &format!(r#"{{"studio_id":"{THE_STUDIO}","body":{{"name":"Stale counts"}}}}"#),
+        ),
+    )
+    .await;
+    assert!(named.contains("\"isError\":false"), "{named}");
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/studios/{THE_STUDIO}/rename"),
+        r#"{"name":"A person's name for it"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        *daemon.added_by.lock().expect("not poisoned"),
+        vec![Redirector::Helm, Redirector::Helm, Redirector::Person]
+    );
+}
+
+/// **Helm reads the checkout runs it can start, in its own repository** (#1288).
+/// A checkout route answers about the first repository served when none is
+/// named, so the door names the session's; a plain agent is offered none of
+/// them.
+#[tokio::test]
+async fn helm_reads_checkout_runs_in_the_repository_it_stands_in() {
+    let daemon = helm_holding();
+    let app = shared(&daemon);
+    let anyone = from(&app, ANYONE, DOOR_PATH, LISTING).await;
+    let helm = from(&app, HELM, DOOR_PATH, LISTING).await;
+    for read in [
+        "list_checkout_runs",
+        "get_checkout_run_sheet",
+        "get_checkout_run_output",
+    ] {
+        let named = format!("\"name\":\"{read}\"");
+        assert!(helm.contains(&named), "{read} is not offered to Helm");
+        assert!(!anyone.contains(&named), "{read} is offered to an agent");
+    }
+
+    let listed = from(
+        &app,
+        HELM,
+        &door_within("01MF"),
+        &calling("list_checkout_runs", "{}"),
+    )
+    .await;
+    assert!(listed.contains("\"isError\":false"), "{listed}");
+    let (status, _) = call(&app, "GET", "/manifest/runs", "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        *daemon.checkout_runs_named.lock().expect("not poisoned"),
+        vec![Some(ipc::ManifestId::carried("01MF")), None],
+        "the door names the session's repository, and Bridge names none"
+    );
+}
+
+/// `#1292`: **a scout starts on a person's ask and on nothing else.** Asking
+/// and stopping are Bridge's; Helm is offered only the start of a Finding
+/// already proposed, which it calls once somebody asks it to, and a plain
+/// agent is offered neither.
+#[tokio::test]
+async fn a_scout_is_asked_from_bridge_and_started_by_helm_alone_and_stopped_by_neither() {
+    let daemon = helm_holding();
+    let app = shared(&daemon);
+    let helm = from(&app, HELM, DOOR_PATH, LISTING).await;
+    let anyone = from(&app, ANYONE, DOOR_PATH, LISTING).await;
+    for persons in ["ask_scout", "stop_scout"] {
+        let named = format!("\"name\":\"{persons}\"");
+        assert!(!helm.contains(&named), "{persons} offered to Helm");
+        assert!(!anyone.contains(&named), "{persons} offered to an agent");
+    }
+    assert!(helm.contains("\"name\":\"start_scout\""), "{helm}");
+    assert!(!anyone.contains("\"name\":\"start_scout\""), "{anyone}");
+
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/studios/{THE_STUDIO}/ask_scout"),
+        r#"{"asked":"how is routing decided","position":{"x":40,"y":80}}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let asked = studio(&body);
+    let node = asked.nodes.last().expect("a Finding");
+    assert!(
+        matches!(&node.content, ipc::StudioNodeContent::Finding { asked, .. } if asked == "how is routing decided"),
+        "the ask arrives verbatim: {node:?}"
+    );
+    assert_eq!(node.position.y, 80);
+
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/studios/{THE_STUDIO}/stop_scout"),
+        r#"{"node_id":"01NODE0"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "stop_scout is routed");
+}
+
+/// **The capture route carries the whole capture.** What Fleet does with the
+/// staged frame is `fleet`'s; what this holds is that nothing the body says
+/// about where a person pointed is dropped between the wire and the daemon.
+#[tokio::test]
+async fn a_captured_note_reaches_the_daemon_with_everything_it_was_sent() {
+    let app = shared(&helm_holding());
+    let at = format!("/studios/{THE_STUDIO}/capture_note");
+    let body = r#"{"said":"The chip keeps its count","capture":{"component":"FilterChip",
+        "owners":["Board"],"selector":"button.armada-chip","element":{"tag":"button",
+        "text":"Queued 3"},"screen":"Job Board","location":"/","bounds":{"x":312,"y":148,
+        "width":96,"height":28},"window":{"width":1440,"height":900},
+        "styles":{"color":"rgb(232, 232, 237)"},"markup":"<button>Queued 3</button>"},
+        "position":{"x":0,"y":0},"frame":{"staged_path":"/tmp/f.png","width":2880,"height":1800}}"#;
+    let (status, answer) = call(&app, "POST", &at, body).await;
+    assert_eq!(status, StatusCode::OK, "{answer}");
+
+    let node = studio(&answer).nodes.into_iter().next().expect("the Note");
+    let ipc::StudioNodeContent::Note { said, capture } = node.content else {
+        panic!("a Note");
+    };
+    assert_eq!(said, "The chip keeps its count");
+    let capture = capture.expect("where they pointed");
+    assert_eq!(capture.component.as_deref(), Some("FilterChip"));
+    assert_eq!(capture.selector, "button.armada-chip");
+    assert_eq!(capture.markup, "<button>Queued 3</button>");
+    assert_eq!(
+        capture.styles.get("color").map(String::as_str),
+        Some("rgb(232, 232, 237)")
+    );
+    assert!(
+        capture.source.is_none(),
+        "no path was sent and none appears"
+    );
+}
+
+/// **The frame reads back as the file, and a Note without one is not a fault.**
+/// What is on trial here is the route: that the bytes come back as bytes under
+/// the media type the kept name gives them, that a node keeping no picture is
+/// refused on its own terms, and that a node that is not there is refused too.
+/// Where the file lives and what refuses to read it are `fleet`'s.
+#[tokio::test]
+async fn a_notes_frame_reads_back_as_a_png_and_a_note_without_one_says_so() {
+    let app = shared(&helm_holding());
+    let pointed = r#""capture":{"selector":"button.armada-chip","element":{"tag":"button",
+        "text":"Queued 3"},"location":"/","bounds":{"x":312,"y":148,"width":96,"height":28},
+        "window":{"width":1440,"height":900},"markup":"<button>Queued 3</button>"}"#;
+    let with = format!(
+        r#"{{"said":"The chip keeps its count",{pointed},"position":{{"x":0,"y":0}},
+           "frame":{{"staged_path":"/tmp/f.png","width":2880,"height":1800}}}}"#
+    );
+    let without =
+        format!(r#"{{"said":"No picture was taken",{pointed},"position":{{"x":0,"y":0}}}}"#);
+    let capture = format!("/studios/{THE_STUDIO}/capture_note");
+    for body in [&with, &without] {
+        let (status, answer) = call(&app, "POST", &capture, body).await;
+        assert_eq!(status, StatusCode::OK, "{answer}");
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/studios/{THE_STUDIO}/frames/01NODE0"))
+                .body(Body::empty())
+                .expect("a well-formed request"),
+        )
+        .await
+        .expect("an answer");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|said| said.to_str().ok()),
+        Some("image/png"),
+        "read off the name Fleet kept it under",
+    );
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("a body")
+        .to_bytes();
+    assert_eq!(
+        bytes.as_ref(),
+        crate::tests::fake::THE_FRAME,
+        "the file, not JSON"
+    );
+
+    let (status, said) = call(
+        &app,
+        "GET",
+        &format!("/studios/{THE_STUDIO}/frames/01NODE1"),
+        "",
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a Note that kept none"
+    );
+    assert!(said.contains("kept no frame"), "{said}");
+
+    let (status, said) = call(
+        &app,
+        "GET",
+        &format!("/studios/{THE_STUDIO}/frames/01NOSUCH"),
+        "",
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a node that is not there"
+    );
+    assert!(said.contains("no node of this Studio"), "{said}");
 }

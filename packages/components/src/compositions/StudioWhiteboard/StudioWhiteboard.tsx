@@ -16,7 +16,7 @@ import {
   type NodeChange,
   type NodeProps,
 } from "@xyflow/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "../../primitives/Button/Button";
 import { STUDIO_NODE_KIND, StudioNode, studioNodeLabel, type StudioNodeOf } from "../StudioNode/StudioNode";
@@ -61,6 +61,18 @@ export type StudioWhiteboardProps = {
   /** A node was put down somewhere new, by pointer or by arrow key. */
   onNodeMoved?: (id: string, position: { x: number; y: number }) => void;
   onSelectionChange?: (ids: readonly string[]) => void;
+  /**
+   * Nothing moves. A Studio reopens read-only (`docs/concepts/studio.md`), so
+   * no node drags, by pointer or by arrow key, and `onNodeMoved` is never
+   * called. Pan, zoom, fit and selection still work: reading is looking around.
+   */
+  readOnly?: boolean;
+  /**
+   * What the surface draws over the board's top-right corner — the acts on
+   * what is selected, and the relations waiting on a person. The whiteboard
+   * itself decides nothing.
+   */
+  children?: ReactNode;
 };
 
 /** The relation's label, as `studio.md`, Edges, names it. Produced has none. */
@@ -142,6 +154,17 @@ function BoardEdgeView(props: EdgeProps<BoardEdge>) {
   );
 }
 
+/**
+ * Held down, a second node joins the selection rather than replacing it — which is how a person
+ * picks the Notes they are accepting as one Cluster (`#1291`).
+ *
+ * **Named rather than left to React Flow's default**, which reads the platform off the user agent
+ * and so differs between the app and a test of it. **A constant rather than a literal in the
+ * element**: React Flow writes this into its own store on every render it sees a new value, and a
+ * fresh array each time is an update loop it never leaves.
+ */
+const JOINS_THE_SELECTION = ["Meta", "Control"];
+
 const NODE_TYPES = { studio: BoardNodeView };
 const EDGE_TYPES = { studio: BoardEdgeView };
 
@@ -194,7 +217,14 @@ function Controls() {
   );
 }
 
-function Board({ nodes: given, edges: givenEdges, onNodeMoved, onSelectionChange }: StudioWhiteboardProps) {
+function Board({
+  nodes: given,
+  edges: givenEdges,
+  onNodeMoved,
+  onSelectionChange,
+  readOnly = false,
+  children,
+}: StudioWhiteboardProps) {
   // Placement is the whiteboard's to hold between moves; the caller hears each
   // one through `onNodeMoved` and keeps it wherever positions are kept.
   const [kept, setKept] = useState<BoardNode[]>(() => given.map(toBoardNode));
@@ -205,12 +235,13 @@ function Board({ nodes: given, edges: givenEdges, onNodeMoved, onSelectionChange
       setKept((current) => applyNodeChanges(changes, merged(given, current)));
       // `dragging: false` is a node put down: a drag ending, or an arrow key.
       for (const change of changes) {
+        if (readOnly) break;
         if (change.type === "position" && change.dragging === false && change.position) {
           onNodeMoved?.(change.id, change.position);
         }
       }
     },
-    [given, onNodeMoved],
+    [given, onNodeMoved, readOnly],
   );
 
   const edges = useMemo<BoardEdge[]>(() => {
@@ -248,6 +279,8 @@ function Board({ nodes: given, edges: givenEdges, onNodeMoved, onSelectionChange
       onNodesChange={onNodesChange}
       onSelectionChange={onPicked}
       nodesConnectable={false}
+      nodesDraggable={!readOnly}
+      multiSelectionKeyCode={JOINS_THE_SELECTION}
       edgesReconnectable={false}
       deleteKeyCode={null}
       ariaLabelConfig={ARIA}
@@ -255,6 +288,11 @@ function Board({ nodes: given, edges: givenEdges, onNodeMoved, onSelectionChange
       // The attribution is a link out of the app, and no surface may navigate.
       proOptions={{ hideAttribution: true }}
     >
+      {children === undefined ? null : (
+        <Panel position="top-right" className="armada-studio-whiteboard__aside">
+          {children}
+        </Panel>
+      )}
       <Controls />
     </ReactFlow>
   );

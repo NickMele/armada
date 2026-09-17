@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { MessageSquare } from "lucide-react";
 import { expect, fireEvent, fn } from "storybook/test";
 import { Sheet } from "./Sheet";
 
@@ -66,5 +67,31 @@ export const Left: Story = {
     title: "Kit allowlist",
     children:
       "The command tripped the allowlist 5 times and was approved every time. Adding it here stops the prompt.",
+  },
+};
+
+/**
+ * The head's leading slot. Its one caller is Helm's folded dock (#1320), and
+ * what it carries is that dock's own chip — the class below is `TheShell`'s,
+ * not this primitive's, since the slot owns where a mark sits and never what
+ * the mark is.
+ *
+ * `leading` is decoration and adds nothing to the dialog's name: the sheet is
+ * still found by its title alone, which is what the play reads.
+ */
+export const Leading: Story = {
+  args: {
+    open: true,
+    title: "Helm",
+    leading: (
+      <span className="armada-shell__dock-chip" aria-hidden>
+        <MessageSquare size={16} strokeWidth={2} />
+      </span>
+    ),
+    closeLabel: "Close",
+    children: "Questions waiting on you, and Helm, will be here.",
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("dialog", { name: "Helm" })).toBeVisible();
   },
 };

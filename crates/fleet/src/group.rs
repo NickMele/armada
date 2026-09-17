@@ -90,3 +90,20 @@ pub(crate) fn end_the_group(group: NonZeroU32) {
         libc::killpg(group, libc::SIGKILL);
     }
 }
+
+/// `SIGINT` to a whole process group: **asking a scout to stop, not ending
+/// it.** Spike 017 measured the agent CLI ending its turn on an interrupt and
+/// reporting its cost, where `SIGTERM` left no report at all. The caller holds
+/// the uncollected child, for [`end_the_group`]'s reason, and ends the group
+/// that way if the interrupt is not heeded.
+#[allow(unsafe_code)]
+pub(crate) fn interrupt_the_group(group: NonZeroU32) {
+    let Ok(group) = libc::pid_t::try_from(group.get()) else {
+        return;
+    };
+    // SAFETY: as `end_the_group`: two integers, and a group leader the caller
+    // still holds as an uncollected child, so the number is still its own.
+    unsafe {
+        libc::killpg(group, libc::SIGINT);
+    }
+}

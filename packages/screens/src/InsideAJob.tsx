@@ -99,6 +99,8 @@ export type StepPanel = {
   timeline?: StepTimelineAttempt[];
   /** Why there is no timeline, where there is none. */
   timelineAbsent?: string;
+  /** What the Job has changed, as its own panel beside the run. #1187. */
+  produced?: ReactNode;
   /** Which row is open, held by the surface, so a keyboard map can name one. */
   openRow?: string | null;
   onOpenRow?: (rowId: string | null) => void;
@@ -591,6 +593,8 @@ export function InsideAJob({
                   folded={step.timelineFolded}
                 />
               )}
+
+              {step.produced}
 
               {step.after === undefined ? null : (
                 <div className="armada-inside__after">{step.after}</div>

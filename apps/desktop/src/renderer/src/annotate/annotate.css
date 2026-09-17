@@ -11,6 +11,15 @@
   pointer-events: none;
   color: var(--fg-default);
   font-family: var(--font-sans);
+
+  /* The layer's own geometry, declared here and read back by `place.ts`
+   * (`metricsOf`). The card is placed in script because where it fits depends
+   * on how tall it is, and a stylesheet never learns that; declaring the three
+   * values here keeps each one a token written once, rather than a literal in
+   * the fold that drifts from the rules below. */
+  --annotate-gap: var(--space-2);
+  --annotate-pin-size: var(--h-badge);
+  --annotate-pin-inset: var(--space-3);
 }
 
 .armada-annotate__outline {
@@ -42,17 +51,19 @@
   white-space: nowrap;
 }
 
-/* The pin sits on the element's top trailing corner, kept inside the window. */
+/* The pin sits on the element's top trailing corner, kept inside the window.
+ * `pinSpan` in `place.ts` reproduces this arithmetic, so that the card can be
+ * placed around the pin rather than over it. */
 .armada-annotate__pin {
   position: fixed;
-  left: clamp(var(--space-3), calc(var(--annotate-x) + var(--annotate-w)), calc(100vw - var(--space-3)));
-  top: clamp(var(--space-3), var(--annotate-y), calc(100vh - var(--space-3)));
+  left: clamp(var(--annotate-pin-inset), calc(var(--annotate-x) + var(--annotate-w)), calc(100vw - var(--annotate-pin-inset)));
+  top: clamp(var(--annotate-pin-inset), var(--annotate-y), calc(100vh - var(--annotate-pin-inset)));
   transform: translate(-50%, -50%);
-  min-width: var(--h-badge);
-  height: var(--h-badge);
+  min-width: var(--annotate-pin-size);
+  height: var(--annotate-pin-size);
   padding: 0 var(--space-1);
   border: var(--border-width) solid var(--bg-base);
-  border-radius: var(--h-badge);
+  border-radius: var(--annotate-pin-size);
   background: var(--accent);
   color: var(--text-on-accent);
   font-size: var(--text-2xs);
@@ -68,6 +79,9 @@
   color: var(--accent);
 }
 
+/* A done note draws no pin at all unless the bar is asked to show them, and it
+ * carries no number when it does — so it is a grey dot beside the numbered open
+ * ones, and the numbering a person reads never counts finished work. */
 .armada-annotate__pin[data-status="done"] {
   border-color: var(--border-default);
   background: var(--bg-raised);
@@ -79,16 +93,23 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Placed whole by `place.ts`, both axes, against a card it has measured — the
+ * stylesheet no longer clamps one edge and leaves the other to fall off the
+ * window. `--annotate-card-max` is what the window can hold: a card taller than
+ * a short window is capped to it and scrolls inside itself, rather than being
+ * drawn past an edge where its text box cannot be read. */
 .armada-annotate__card {
   position: fixed;
-  left: clamp(var(--space-2), var(--annotate-x), calc(100vw - var(--w-tooltip) - var(--space-2)));
-  top: var(--annotate-y);
+  left: var(--annotate-card-x);
+  top: var(--annotate-card-y);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   width: var(--w-tooltip);
-  margin: var(--space-2) 0;
+  max-height: var(--annotate-card-max);
   padding: var(--space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: var(--border-width) solid var(--border-default);
   border-radius: var(--radius-lg);
   background: var(--bg-overlay);
@@ -97,9 +118,11 @@
   pointer-events: auto;
 }
 
-.armada-annotate__card[data-side="above"] {
-  transform: translateY(-100%);
-  margin-top: calc(var(--space-2) * -1);
+/* A capped card scrolls rather than squashing what is in it: the text box keeps
+ * its rows and the buttons keep their height, which is the whole point of the
+ * cap. Flex would otherwise shrink both to nothing before overflowing. */
+.armada-annotate__card > * {
+  flex: none;
 }
 
 .armada-annotate__meta {

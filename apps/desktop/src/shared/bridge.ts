@@ -43,6 +43,7 @@ import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
 import type { CheckoutRunFollowed, CheckoutRunSheetRead, ManifestDriftRead } from "@armada/protocol";
 import type { DriftsRead, HealthRead } from "@armada/screens/src/overview-reads";
 import type { Outstanding } from "@armada/screens/src/outstanding";
+import type { StudioRead, StudiosRead } from "@armada/screens/src/studio-reads";
 import { spoken } from "@armada/protocol";
 
 
@@ -399,6 +400,13 @@ export type BridgeState = {
    * see `main/helm.ts`.
    */
   helm: HelmThread;
+  /**
+   * One repository's Studios, held while the Studios surface shows, and kept current by
+   * `studio.changed`. `main/studios.ts`. #1287.
+   */
+  studios: StudiosRead;
+  /** The Studio open on that surface, replaced whole by every `studio.changed` about it. */
+  studio: StudioRead;
 };
 
 /**
@@ -450,6 +458,8 @@ export const NOTHING_YET: BridgeState = {
   drifts: { state: "none" },
   questions: [],
   helm: { state: "none" },
+  studios: { state: "none" },
+  studio: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -585,6 +595,21 @@ export const CHANNELS = {
   askHelm: "bridge:ask-helm",
   startHelmFresh: "bridge:start-helm-fresh",
   pointHelm: "bridge:point-helm",
+  // A repository's Studios — #1287. Two reads a surface holds open, and four acts, one per
+  // operation: a Studio is started, a node moved or removed, a proposed relation decided.
+  watchStudios: "bridge:watch-studios",
+  watchStudio: "bridge:watch-studio",
+  createStudio: "bridge:create-studio",
+  moveStudioNode: "bridge:move-studio-node",
+  removeStudioNode: "bridge:remove-studio-node",
+  decideStudioEdge: "bridge:decide-studio-edge",
+  // Studio capture — #1290. One channel: the renderer says where it pointed and
+  // main takes the frame of its own window, so no image ever reaches the renderer.
+  captureStudioNote: "bridge:capture-studio-note",
+  readStudioFrame: "bridge:read-studio-frame",
+  // One rung of promotion — #1291. One channel across six operations: what a
+  // person does on a Studio is one capability, and `act` picks the route.
+  promoteOnStudio: "bridge:promote-on-studio",
   // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
   tap: "bridge:tap",
 } as const;

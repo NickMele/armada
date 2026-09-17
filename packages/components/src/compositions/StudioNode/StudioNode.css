@@ -97,3 +97,44 @@
     animation: none;
   }
 }
+
+/* The picture a Note kept — #1352. A screen's shape, at the card's own width,
+   and drawn as a box before the bytes arrive so a board does not jump as the
+   frames land. `FramesShown` measures a step's frames the same way and for the
+   same reason. */
+.armada-studio-node__frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  min-width: 0;
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  /* Not the card's own glass: what makes a picture readable is seeing where it
+     stops, and a plate the colour of the card behind it has no edge. */
+  background: var(--bg-base);
+  text-align: center;
+}
+
+/* Contained, never cropped. A frame cropped to fill its plate is a frame with
+   the part that mattered outside the box. */
+.armada-studio-node__image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.armada-studio-node__frame[data-empty] {
+  border-style: dashed;
+  border-color: var(--border-subtle);
+}
+
+/* Why there is no picture, in the plate's own space. A node card is narrow, so
+   `anywhere` rather than `break-word`: a long word must not push the card. */
+.armada-studio-node__why {
+  padding: var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  overflow-wrap: anywhere;
+}

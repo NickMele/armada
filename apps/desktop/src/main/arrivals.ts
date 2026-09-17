@@ -25,6 +25,7 @@ import type { ReviewMaterial } from "./review";
 import type { RepositoryReads } from "./repositories";
 import type { Again } from "./screen";
 import type { BridgeStateFleet } from "./socket";
+import type { StudioReads } from "./studios";
 
 /** What the arrival switch reaches on `FleetConnection`, and nothing more. */
 export interface ArrivalHost {
@@ -41,6 +42,8 @@ export interface ArrivalHost {
   overviewAgain(port: number): Promise<void>;
   readonly questions: Questions;
   readonly helm: { reconnected(port: number): void };
+  /** The Studios surface's two reads — `studios.ts`. */
+  readonly studios: Pick<StudioReads, "again" | "changed" | "deleted">;
   readonly material: ReviewMaterial;
   readonly socket: { close(): void; resetUnreachable(): void };
   publish(change: Partial<BridgeState>): void;
@@ -171,6 +174,9 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // And Helm's own socket, on a repository already targeted — a second
     // socket to the same peer, `takeAgain`'s reason repeated one seam over.
     host.helm.reconnected(fleet.port);
+    // And the Studios surface's two reads, where held: a Studio written while the stream was down
+    // or lagging published a `studio.changed` this window never folded.
+    void host.studios.again();
     return;
   }
 
@@ -390,6 +396,19 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     // Carried whole, so an add made in another window or at the CLI lands without a round trip.
     host.publish({ connection });
     return void host.repositories.listed(event, fleet.port);
+  }
+  if (event.kind === "studio.changed") {
+    // Above the tail, `manifest.reread`'s reason: there is no Job to find. The Studio travels whole,
+    // so the open one is replaced and the list's row with it, without a round trip.
+    host.publish({ connection });
+    const { kind: _kind, ...studio } = event;
+    host.studios.changed(studio);
+    return;
+  }
+  if (event.kind === "studio.deleted") {
+    host.publish({ connection });
+    host.studios.deleted({ id: event.id, manifest_id: event.manifest_id });
+    return;
   }
   if (event.kind === "run.finished") {
     host.publish({ connection });

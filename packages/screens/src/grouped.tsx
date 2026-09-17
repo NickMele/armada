@@ -11,8 +11,11 @@
 // lets a run select its own rows without a second pass over the wire.
 import {
   NarrationPlanBar,
+  ToolName,
   WorkGroups,
   WorkNarration,
+  type ChangedFile,
+  type NarrationFile,
   type NarrationSection,
   type TaskMarkState,
   type WorkGroup,
@@ -23,7 +26,17 @@ import type { Calls } from "./calls";
 import type { DetailKeys } from "./detail-keys";
 import { briefly, clock } from "./duration";
 import { Log } from "./Log";
+import { foldersOf, nameUnder } from "./change-summary";
 import { callsSaid, narrationOf, planBarOf, workSaid } from "./narration";
+import {
+  DIFF_LINES,
+  EDIT_SIZES,
+  OUTSIDE_TASK_EDITS,
+  editsIn,
+  filesByTask,
+  unownedOf,
+  type TaskFile,
+} from "./task-files";
 import type { LogRow } from "./story";
 import { runsOf, workingOf, type WorkingRun } from "./working";
 
@@ -92,7 +105,10 @@ export function WorkGrouped({
     const first = chunk.rows[0];
     return {
       id: first === undefined ? "" : first.id,
-      name: chunk.run?.tool ?? "",
+      // The tool's own colour, the same one its rows carry underneath: a
+      // folded run is the rows it hides, and the two reading differently is
+      // the fold changing what a person sees. #1196.
+      name: chunk.run?.tool === undefined ? "" : <ToolName tool={chunk.run.tool} />,
       mono: true,
       meta: `${held} ${held === 1 ? "call" : "calls"} · ${briefly(chunk.run?.ms ?? 0)}`,
       // Folded where the derivation says so, and never over a single call: a
@@ -128,6 +144,8 @@ export function WorkNarrated({
   calls: fetched,
   log,
   most,
+  diff,
+  jobTurns,
 }: {
   rows: LogRow[];
   turns: readonly Turn[];
@@ -141,15 +159,36 @@ export function WorkNarrated({
   log: ReturnType<DetailKeys["inLog"]>;
   /** How many sentences the open section draws, newest last. */
   most?: number;
+  /** The Job's diff, for each task's files and the row no task owns. #1187. */
+  diff?: readonly ChangedFile[];
+  /**
+   * Every turn of the Job, so a task's files include what it wrote on another
+   * run. Absent draws no row for the files no task owns.
+   */
+  jobTurns?: readonly Turn[];
 }) {
   // Armada's instruction is the Instructed row above, and the log sheet keeps it.
   const worked = rows.filter((row) => row.kind !== "instructed");
   const narration = narrationOf(worked, turns, stepId, plan);
+  const edits = editsIn(jobTurns ?? turns, plan?.tasks ?? []);
+  const changed = diff ?? [];
+  const byTask = filesByTask(edits, changed);
+  const folders = foldersOf(changed.map((file) => file.path));
+  const named = (file: TaskFile | ChangedFile): NarrationFile => ({
+    path: file.path,
+    name:
+      folders.get(file.path) === undefined
+        ? (file.path.split("/").at(-1) ?? file.path)
+        : nameUnder(file.path, folders.get(file.path) as string),
+    ...(file.added === undefined ? {} : { added: file.added }),
+    ...(file.deleted === undefined ? {} : { deleted: file.deleted }),
+  });
   const newestId = narration.sections.find((one) => one.newest)?.beats.at(-1)?.id;
   const sections: NarrationSection[] = narration.sections.map((work) => {
     const kept = most === undefined || !work.newest ? work.beats : work.beats.slice(-most);
     const left = work.beats.length - kept.length;
-    const meta = workSaid(work);
+    const files = work.task === undefined ? [] : (byTask.get(work.task.id) ?? []);
+    const meta = [workSaid(work), filesSaid(files.length)].filter((part) => part !== undefined).join(" · ");
     return {
       id: work.task?.id ?? "outside",
       ...(narration.plan === undefined
@@ -160,7 +199,8 @@ export function WorkNarrated({
                 ? { title: OUTSIDE_ANY_TASK }
                 : { task: work.task.id, mark: markOf(work.task.state), title: work.task.title },
           }),
-      ...(meta === undefined ? {} : { meta }),
+      ...(meta === "" ? {} : { meta }),
+      ...(files.length === 0 ? {} : { files: files.map(named), filesSay: EDIT_SIZES }),
       open: work.newest || work.beats.some((beat) => beat.wrong),
       ...(left === 0 ? {} : { earlier: `${left} earlier, in the log` }),
       beats: kept.map((beat) => {
@@ -178,7 +218,25 @@ export function WorkNarrated({
       }),
     };
   });
+  // Only where there is a plan to own files and a whole Job to read edits in.
+  const unowned = narration.plan === undefined || jobTurns === undefined ? [] : unownedOf(edits, changed);
+  if (unowned.length > 0) {
+    sections.push({
+      id: "outside-task-edits",
+      heading: { title: OUTSIDE_TASK_EDITS },
+      meta: filesSaid(unowned.length),
+      beats: [],
+      files: unowned.map(named),
+      filesSay: DIFF_LINES,
+      apart: true,
+    });
+  }
   return <WorkNarration sections={sections} emptyNote={emptyNote} />;
+}
+
+/** `4 files`, or nothing. */
+function filesSaid(count: number): string | undefined {
+  return count === 0 ? undefined : `${count} ${count === 1 ? "file" : "files"}`;
 }
 
 /**

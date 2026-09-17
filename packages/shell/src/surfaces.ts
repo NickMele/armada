@@ -6,7 +6,7 @@
 // disagrees with itself is worse than one that is missing.
 //
 // **The digit is computed from the rail order, never typed.** The contract
-// binds `⌘1–⌘6` to Bridge surfaces *in rail order*, so a digit is a place in
+// binds `⌘1–⌘8` to Bridge surfaces *in rail order*, so a digit is a place in
 // the rail and nothing else. A surface added at the end takes the next digit
 // by arithmetic — Overview is the one exception, joining first instead (#921).
 //
@@ -17,7 +17,7 @@
 // `docs/concepts/bridge.md`, and every digit falls out of it.
 
 import { useEffect, useRef } from "react";
-import { ClipboardList, FileCog, HardDrive, LayoutDashboard, Settings as SettingsIcon } from "lucide-react";
+import { ClipboardList, FileCog, HardDrive, LayoutDashboard, Presentation, Settings as SettingsIcon } from "lucide-react";
 
 import type { PaletteSurface } from "./Palette";
 
@@ -40,8 +40,15 @@ import type { PaletteSurface } from "./Palette";
  * settings sheet had no rail row to lose when #1088 removed it, so this is
  * the first digit the surface has ever taken — the next one, by the same
  * arithmetic as every arrival before Overview's own exception.
+ *
+ * **Studios is the second exception, 17 Sep 2026 (#1287).** It joined third,
+ * straight after the Job Board, on the owner's decision, so Alerts, Doctor,
+ * Manifest, Cleanup and Settings each moved down a digit — Settings from `⌘7`
+ * to `⌘8`. Where a Studio is read is beside the work it becomes, not after the
+ * settings; the rule is still rail order, and only the arrival was the
+ * exception, as Overview's was.
  */
-const RAIL = ["overview", "board", "alerts", "doctor", "manifest", "worktrees", "settings"] as const;
+const RAIL = ["overview", "board", "studios", "alerts", "doctor", "manifest", "worktrees", "settings"] as const;
 
 type SurfaceId = (typeof RAIL)[number];
 
@@ -52,6 +59,7 @@ export const SURFACE = {
   manifest: "manifest",
   worktrees: "worktrees",
   settings: "settings",
+  studios: "studios",
 } as const satisfies Record<string, SurfaceId>;
 
 /** What reaches a surface: its place in the rail, spelled as the contract does. */
@@ -64,7 +72,7 @@ function digitOf(id: SurfaceId): string {
  *
  * **What is not built is not in here.** A row a person presses and gets nothing
  * from is worse than one that is absent, which is the contract's own rule about
- * a registered binding nothing answers. So the digits skip: `⌘3` and `⌘4` are
+ * a registered binding nothing answers. So the digits skip: `⌘4` and `⌘5` are
  * owed to Alerts and Doctor and reach nothing today.
  *
  * `held disk` is an alias because that is the word on the control this screen
@@ -85,6 +93,13 @@ export const SURFACES: readonly PaletteSurface[] = [
     label: "Job Board",
     shortcut: digitOf(SURFACE.board),
     icon: ClipboardList,
+  },
+  {
+    id: SURFACE.studios,
+    label: "Studios",
+    shortcut: digitOf(SURFACE.studios),
+    // No alias, Manifest's reason: the first surface built at this name.
+    icon: Presentation,
   },
   {
     id: SURFACE.manifest,
@@ -120,8 +135,8 @@ export const SURFACES: readonly PaletteSurface[] = [
  * reads and presses to no effect is the thing `dormant` exists to prevent, and
  * it had been true of `⌘1` since the rail shipped.
  *
- * **Only the surfaces that draw.** `SURFACES` is what is built, so `⌘3` and
- * `⌘4` — Alerts and Doctor — reach nothing and are not bound; the digit stays
+ * **Only the surfaces that draw.** `SURFACES` is what is built, so `⌘4` and
+ * `⌘5` — Alerts and Doctor — reach nothing and are not bound; the digit stays
  * theirs, because `digitOf` reads the rail and not this list.
  *
  * **A modified key, so a focused field does not suppress it.** `⌘K` is bound

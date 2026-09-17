@@ -87,8 +87,11 @@ is allowed only as that light, and never where a person reads a state.
    declared rather than inferred. Read the file rather than a list; this
    rule used to enumerate the cases and went stale twice. Anything the
    file does not declare stays neutral. See Below Job level under Tokens.
-   **Outside status and accent, one hue exists: `--helm`**, and it marks
-   Helm's own chrome and nothing else. Depth's light and glass never take a
+   **Outside status and accent, two hue families exist.** `--helm` marks
+   Helm's own chrome and nothing else. The three **tool families** in
+   `tokens/tools.css` say what a Drone's call does, and they are a
+   separate file because they alias no status and must never carry one —
+   see Tool families under Tokens. Depth's light and glass never take a
    status hue.
 4. **Dark is primary.** Design dark first. Light exists but is secondary.
 5. **Icons: lucide-react only**, used sparingly. A dashboard dense with
@@ -124,11 +127,11 @@ vibrating.
 ```
 --bg-base        #0F1419   canvas
 --bg-sunken      #0B0F13   wells, code blocks, log panes
---bg-raised      #161C23   cards, table rows, panels
+--bg-raised      #161C23   table rows, and a flat card (see Depth)
 --bg-overlay     #1D242D   dialogs, popovers, dropdowns
 --bg-hover       #212A34   row and control hover
 --border-subtle  #232B35   table rules, dividers
---border-default #2E3946   card and input edges
+--border-default #2E3946   flat card and input edges
 --border-strong  #3D4A5A   focus rings, active edges
 ```
 
@@ -150,8 +153,12 @@ inner edge and a `--glass-blur` backdrop blur. The gradient, the highlight and
 the blur sit on a layer behind the card's content rather than on the card, so
 a tooltip or menu inside a card is never clipped by it. It
 replaces `--bg-raised` and `--border-subtle` on every panel that sits directly
-on the canvas: the left column's three panels, Overview's cards and Helm's
-dock. A row, a well or an input inside a card stays flat on its Ground token.
+on the canvas: the left column's three panels, Overview's cards, Helm's dock,
+and every `Card` a surface draws on the canvas — Dispatch, Studios, Reports,
+Cleanup and Settings — each at `--radius-lg`. A `Card` inside a sheet, a
+dialog, a well or another card is not on the canvas: it stays flat, at
+`--radius-md`. A row, a well or an input inside a card stays flat on its
+Ground token.
 
 **The canvas** is `--bg-base` under two radial pools of light. `--accent-faint`
 sits in a 760 × 480px ellipse centred on the top leading corner.
@@ -305,6 +312,9 @@ new one. The mapping is declared, so it is read rather than inferred.
 --run-passed       var(--status-completed-success)
 --run-failed       var(--status-completed-failed)
 --run-stopped      var(--status-killed)
+--phase-live-edge  --status-running 45% into --border-default
+--phase-live-bg    --status-running 6% into transparent
+--phase-live-rule  --status-running 25% into --border-subtle
 ```
 
 **Step activity answers where the work is.** `retrying` and
@@ -365,6 +375,16 @@ longer sit fourth on screen. Explicit numbering is what lets both hold:
 the rows a person needs are at the top, and the citation still resolves.
 See How are criterion verdicts encoded without status hue?
 
+**The live phase takes running on its edge, with a faint wash.** One row
+of a step's timeline is the one the Drone is inside, and on a card that
+size a mark alone does not carry it across a desk: `--phase-live-edge`
+lifts the card's own border 45% toward running, `--phase-live-bg` washes
+it at 6% — below a summary tile's 9%, because a phase card is larger
+again and its body is a log — and `--phase-live-rule` carries the same
+lift to the line under its header. All three alias `--status-running`,
+which is what a running phase is one level down. **The mark leaves that
+header**; see Motion.
+
 **Everything else below Job level stays neutral, with one exception.** An
 origin tag and the retry marker carry position, surface, weight and glyph.
 Drift is the exception: `gone` and `current` render in `--notice-caution`,
@@ -389,6 +409,47 @@ contract has no generic alarm glyph.
 --diff-del-fg     #E88A8A
 --diff-context    #93A1B1
 ```
+
+**The diff colours are the patch view's and every other place a count of
+lines appears**: a log row's `+2 −2`, the files under a plan task, and
+Produced's per-file counts and its size bar. What the numbers *are* still
+differs by surface — a task's are the sizes of the Drone's own edits, the
+diff's are the patch — and the label beside them is what says which.
+Colour says added and removed; it never says which kind of number.
+
+### Tool families
+
+What a Drone's call *does*, in three hues, declared in
+`tokens/tools.css`.
+
+```
+--tool-look    #8FA3D9   Read, Grep, Glob
+--tool-change  #D98BB5   Edit, MultiEdit, Write, NotebookEdit
+--tool-run     #C2B48A   Bash
+```
+
+**Its own file, and that is the rule rather than the filing.** Every
+value in `status.css` aliases a Job status, so the mapping is declared
+rather than inferred; these alias nothing, because they answer a
+different question — not where the Job stands, but what the call in front
+of you reaches for. **A tool colour never carries status, and a status
+colour never carries a family.**
+
+**Why it is worth a hue at all.** A Drone's hour is a long stretch of
+looking, a burst of changing, then a run, and in a mono column where
+every tool name is the same colour that shape is invisible — which is the
+reading a person opens the log for.
+
+**They sit near two statuses and are told apart by where they are**,
+which is the risk hard rule 3 guards. `--tool-change` reads near
+`completed_failed`'s red and `--tool-run` near `awaiting_review`'s amber.
+Nothing in a log row is a status: a status is a badge, a mark or a row
+surface, and a family is one word at the head of a mono line, so the two
+never appear in the same slot.
+
+**A tool the roster does not name takes no colour.** Hue is scarce and an
+unclassified tool is not a fourth family — the name draws in the line's
+own foreground. Adding one is a decision about what a family means.
 
 ---
 
@@ -462,9 +523,13 @@ and content left edges align with their header's left edge.
 
 ```
 --radius-sm  3px    badges, small controls
---radius-md  5px    buttons, inputs, cards
---radius-lg  8px    dialogs, panels
+--radius-md  5px    buttons, inputs, a flat card
+--radius-lg  8px    dialogs, panels, a card on the canvas
 ```
+
+**A card's radius follows its surface.** On the canvas it takes the card
+treatment under Depth and `--radius-lg`, the same corner as the panel beside
+it. Flat — inside a sheet, a dialog or another card — it is `--radius-md`.
 
 No full-round pills except avatars.
 
@@ -531,9 +596,15 @@ edge and its ground lifts one step at `--duration-fast`.
 state still reads from colour and label.
 
 **What animates on a loop is what is still working**, because a hue or a
-label can say *which* and only motion says *still*. Two things do: the
-running mark, and a control waiting on Fleet. There was a rule that one
-thing animates per screen; it was retired on 2026-09-14, #1117.
+label can say *which* and only motion says *still*. Three things do: the
+running mark, a control waiting on Fleet, and the live phase's top edge.
+There was a rule that one thing animates per screen; it was retired on
+2026-09-14, #1117.
+
+**One loop per card, and that rule is what the third one bought.** A bar
+travelling and a mark breathing in the same header are two things saying
+one word, and a reader has to decide which of them they were watching. So
+where a card sweeps, every mark inside its header holds still.
 
 **A control waiting on Fleet sweeps a bar along its bottom edge**, from
 the press until Fleet answers or refuses. Its label says what it is
@@ -559,6 +630,22 @@ vanishing to nothing:
 A refusal is told from an acceptance by the line's colour and direction
 before the label is read. The control never moves in any of the four.
 
+**The live phase sweeps a bar along its top edge**, the same line on the
+same clock: `--pending-bar` tall, `--status-running`, one segment
+travelling at `--duration-pulse`, linear rather than `--ease` for the
+control's own reason. It runs while the Drone is in that phase and stops
+when the phase does. Under `prefers-reduced-motion` it holds still at
+full width, and nothing is lost — `--phase-live-edge` and the wash
+already say which phase is live.
+
+**Under the phase name, what the Drone is doing right now.** The call
+still in flight — one with no answer yet, which is the one thing the log
+beneath cannot show, because its `answered` row does not exist. Between
+calls it is the Drone's own last sentence, with no verb: nothing is in
+flight to conjugate, and a verb invented for the gap would claim a call
+nobody is making. The verb takes `--status-running` and nothing else on
+the line does.
+
 **The running mark animates continuously.** A hue says which step is
 current; only motion says it is still working, and that is the reading
 a static rail cannot give — it matters most on the step that has been
@@ -573,6 +660,16 @@ the rail, and the sheet's own live mark pulses beside it. A
 step bar never pulses — its job is where the work got to, which is a static
 fact, and the badge sits in a fixed column on every row so the motion appears
 in one predictable place rather than moving with the workflow's length.
+
+**The live phase's header carries no mark at all.** It is the one place a
+running mark was dropped rather than made to pulse, and the sweep is why:
+a mark says *which*, and on the one card already edged, washed and swept
+in running there is no *which* left to say — what a second mark would add
+is a second loop. **Marks stay wherever one row among many is the live
+one**: the plan's task rows, and the live narration row inside that
+phase's own body. The word the mark owed a screen reader is still said,
+off `enum-verbs.toml` rather than retyped, because hue, wash and motion
+are three channels a reader may have none of.
 
 Opacity and scale only, at `--duration-pulse`. The ring holds still, so
 no row shifts and nothing reflows. Hue says *which* state, unchanged on
@@ -591,7 +688,7 @@ review that will keep sound identical. Armada gives the two their own tone.
 
 | Tone | Plays when | Notes |
 |---|---|---|
-| **Blocked** | A notification tells of a Job that entered Escalated | G4 → D4, falling, 170ms apart |
+| **Blocked** | A notification tells of a Job that has stopped: it entered Escalated, or ran out of retries and awaits repair | G4 → D4, falling, 170ms apart |
 | **Waiting** | A notification tells of any other Job that started waiting on a person | One A4 |
 
 Each note is a sine of 200ms, rising to full in 12ms and decaying
@@ -601,9 +698,11 @@ setting and not Armada's.
 **A tone is the notification's own sound, never a second channel.** It rides
 on the banner, so macOS's permission, Focus and per-app sound settings govern
 it exactly as they govern the banner. Bridge never plays audio itself, and a
-refused notification is a silent one.
+refused notification is a silent one. A packaged Bridge carries both tones in
+its bundle; a development Bridge runs Electron's own, so it installs them into
+`~/Library/Sounds`, which macOS searches for the same names.
 
-**One notification, one tone.** A batch that holds an escalation plays
+**One notification, one tone.** A batch that holds a stopped Job plays
 Blocked, because the most urgent Job in it decides. Nothing else makes a
 sound: a Job that lands, a Check that passes and a press are silent, which
 keeps the loudness order in Behaviour rules intact.
@@ -616,8 +715,13 @@ trackpad answers the act that finger made, and nothing else.
 
 | Pattern | Plays when |
 |---|---|
-| **Alignment** | A control waiting on Fleet reaches *accepted* |
-| **Level change** | A control waiting on Fleet reaches *refused* |
+| **Alignment** | Fleet accepts an act a person pressed |
+| **Level change** | Fleet refuses one |
+
+**The tap follows the answer, not the control.** It plays where Fleet's
+answer arrives, so an act whose control is already gone — an accepted
+Forget leaves no row, and an event can replace a control mid-act — is still
+felt.
 
 **Touch only ever answers the person's own press.** Fleet's events never
 play one, and neither does hover or focus. A haptic is only felt while a
@@ -934,8 +1038,9 @@ is the back-fill by hand that this section existed to prevent.
 
 ```
 ⌘K       command palette
-⌘1–⌘7    Bridge surfaces, in rail order
+⌘1–⌘8    Bridge surfaces, in rail order
 ⌘J       Helm, toggles the dock on every surface
+⌥⌘C      capture a note onto the open Studio
 ⌘\       toggle sidebar
 ⌘[ ⌘]    back / forward
 Esc      close an overlay, or return to the list from a detail route
@@ -1019,8 +1124,8 @@ Three reversals against what stood before, each with a reason:
 **`x` for kill and every safety rule below are unchanged.** Neither was
 in play, and the destructive-key rule is what kept `x` off `k`.
 
-**`⌘1`–`⌘7` follow the rail** — Overview, Job Board, Alerts, Doctor,
-Manifest, Cleanup, Settings — since Active Jobs, Reviews and the Activity
+**`⌘1`–`⌘8` follow the rail** — Overview, Job Board, Studios, Alerts,
+Doctor, Manifest, Cleanup, Settings — since Active Jobs, Reviews and the Activity
 Feed folded into the Board and Cleanup joined at the end of it.
 The digits shift if the rail does; the rule is rail order, not the
 numbers.
@@ -1046,7 +1151,14 @@ the ordinary case, not Overview's exception: it is Fleet's four limits and
 this machine's own settings, on the screen a sheet reached from the status
 bar used to hold before #1088 removed the bar.
 
-**`1`–`5` and `⌘1`–`⌘7` are different acts on one row of keys.** One is
+**Studios joined third, on 2026-09-17 (#1287), taking `⌘3`** — the second
+arrival to move digits other than its own, after Overview's. The owner placed
+it straight after the Job Board, because where a stretch of work is read
+belongs beside the work it becomes rather than after the settings; Alerts,
+Doctor, Manifest, Cleanup and Settings each moved down one, Settings from `⌘7`
+to `⌘8`. The rule is still rail order — only the arrival was the exception.
+
+**`1`–`5` and `⌘1`–`⌘8` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
 that way deliberately rather than by omission.
 
@@ -1514,6 +1626,9 @@ accent, and it is the one beside the empty space.
 frame    a 1px --helm-edge top edge fading to --border-glass, over the card
          treatment, with --helm-faint washed in from the top trailing corner
 chip     --helm-muted fill, --helm icon, beside "Helm"
+folded   the sheet the dock folds to below the breakpoint takes the same frame
+         and chip, over the sheet's --bg-overlay: --helm reads 4.65:1 on its
+         chip there, against the 3:1 a non-text mark takes
 composer --bg-sunken, --border-glass
 Send     --helm-muted fill, --helm text, --helm-edge border
 ```
@@ -1560,7 +1675,8 @@ The left column's third panel — what the status bar used to read.
 state    --dot (6px) + --text-base --fg-default
 rows     pid / port / protocol / up, one row each: label --text-xs
          --text-label on the left, value --font-mono --text-xs --text-body
-         in one aligned column — Pulse's figure rows, FigureList
+         right-aligned to the panel's edge, where Stats puts its counts —
+         Pulse's figure rows, FigureList
 detail   --font-mono --text-2xs --fg-subtle, the sentence a state carries
 doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
          (--status-completed-success / --status-awaiting-review /

@@ -35,6 +35,7 @@ import { DetailSheet, holdOf, NO_SHEET, sheetMoved, type OpenSheet } from "./She
 import { chaptersOf } from "./chapters";
 import { landingsOf, stepTimelineOf, turnsOfAttempt, wroteIn } from "./timeline";
 import { PlanBar } from "./grouped";
+import { keepingProduced, ProducedOf } from "./produced-panel";
 import type { AttemptRead } from "./timeline";
 import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
@@ -522,13 +523,15 @@ function OneJob({
             },
       ...(attempt === undefined ? {} : { attempt }),
       ...(ended === undefined ? {} : { ended }),
+      jobTurns: turns,
     });
   }
 
   // The timeline arranges what the story builds, run by run; it derives
   // nothing either of them holds.
   const bar = whole?.work_plan === undefined ? undefined : <PlanBar plan={whole.work_plan} />;
-  const timeline = open && stepTimelineOf(open, turns, now, storyOf, bar);
+  const produced = keepingProduced(storyOf);
+  const timeline = open && stepTimelineOf(open, turns, now, produced.storyOf, bar);
 
   // The verdict sheet's slot: `Decide`'s place at the gate, and the finished
   // Job's own place, whichever of the three arrangements the render is —
@@ -750,6 +753,7 @@ function OneJob({
               before: atGate ? <>{waiting}{verdictSlot}</> : <>{refusedAside}{waiting}</>,
               timelineAbsent: whyNoSteps(watched, job.id),
               timeline,
+              produced: <ProducedOf chapter={produced.chapter()} />,
               openRow: keys.openChapterId,
               onOpenRow: keys.onOpenChapter,
               timelineFolded: atGate,

@@ -9,17 +9,35 @@
 
        <section className="armada-panel armada-glass">
 
-   Today: the left column's panels (`Panel`), Helm's dock (`TheShell`), and
-   Drift and Verify on the Manifest surface. Next: Overview's summary tiles
-   (#1261), Overview's empty state (#1262) and the dock's Helm frame (#1264).
+   Today: the left column's panels (`Panel`, and Navigation's `Sidebar`),
+   Helm's dock (`TheShell`, its Helm frame laid over the glass), Overview's
+   summary tiles and empty state, and Drift and Verify on the Manifest
+   surface.
    Drift and Verify are named by their own class below only because #1260 did
    not reach their markup; each moves onto `armada-glass` with one className.
 
+   **`Card` is the one that is not written in its markup, and cannot be.**
+   Whether a card is on the canvas is a fact about where it was rendered, not
+   about the card — the same `Card` is Dispatch's panel on the canvas and one
+   of Helm's questions inside the dock. So `.armada-card` is named below with
+   the ancestry that takes the glass off it: inside a Sheet, inside a Dialog,
+   or inside anything already glass, which is a card in a card and a card in
+   the dock at once. A ground no selector here names — a well — says so on the
+   card as `data-flat`, which `Card`'s own `flat` prop writes. #1353.
+
+   **The guard is inside `:where()` so it weighs nothing.** `:not()` otherwise
+   takes its most specific argument, which would put the card's row of every
+   rule below a class above `.armada-glass`'s — and a component's own state
+   would lose to this file. `.armada-studio-node[data-selected]`'s focus edge
+   and a dimmed card's `--border-subtle` are both that, and both still win.
+
    What this class does not carry, so the component keeps it:
 
-   - **Radius.** The contract names it per card (--radius-lg on every card
-     today) and the component already owns its geometry. The glass layer
-     inherits it.
+   - **Radius**, except on `Card`. A panel, a tile and the dock each own their
+     --radius-lg already, and the layer inherits whatever radius its card has.
+     `Card` is the one whose radius turns on the same fact its surface does —
+     --radius-lg on the canvas, --radius-md flat — so it is given below, with
+     the guard that decides the rest.
    - **Layout, padding and overflow.** Any `position` other than `static`
      the component sets wins over this file's `relative`; the layer only
      needs one.
@@ -61,15 +79,23 @@
    A secondary Button inside a card takes `ground="card"` (--bg-sunken), which
    reads as a box on the glass. `ground="sunken"`'s --bg-raised is within a
    few levels of the glass and shows only its border. */
-:where(.armada-glass, .armada-drift-panel:not(.armada-sheet *, .armada-dialog *), .armada-verify-panel:not(.armada-sheet *, .armada-dialog *)) {
+:where(
+  .armada-glass,
+  .armada-card:not(:where([data-flat], .armada-glass *, .armada-sheet *, .armada-dialog *)),
+  .armada-drift-panel:not(.armada-sheet *, .armada-dialog *),
+  .armada-verify-panel:not(.armada-sheet *, .armada-dialog *)
+) {
   position: relative;
 }
 
-/* `background: none` because Drift and Verify keep a flat --bg-raised of their
-   own for where they are not on the canvas — inside a Sheet or a Dialog, where
-   a card is not glass (design-system.md: "every panel that sits directly on
-   the canvas"). */
+/* `background: none` because Drift, Verify and `Card` each keep a flat
+   --bg-raised of their own for where they are not on the canvas — inside a
+   Sheet or a Dialog, where a card is not glass (design-system.md: "every panel
+   that sits directly on the canvas"). The guard is one line of ancestry and
+   the flat rendering stays in `Card.css`, so neither file states the other's
+   colours. */
 .armada-glass,
+.armada-card:not(:where([data-flat], .armada-glass *, .armada-sheet *, .armada-dialog *)),
 .armada-drift-panel:not(.armada-sheet *, .armada-dialog *),
 .armada-verify-panel:not(.armada-sheet *, .armada-dialog *) {
   isolation: isolate;
@@ -78,7 +104,15 @@
   box-shadow: var(--shadow-card);
 }
 
+/* A card on the canvas is --radius-lg, the panels' and the tiles' own corner,
+   so a surface of cards and the left column beside it round the same. A flat
+   card keeps --radius-md (`Card.css`). */
+.armada-card:not(:where([data-flat], .armada-glass *, .armada-sheet *, .armada-dialog *)) {
+  border-radius: var(--radius-lg);
+}
+
 .armada-glass::before,
+.armada-card:not(:where([data-flat], .armada-glass *, .armada-sheet *, .armada-dialog *))::before,
 .armada-drift-panel:not(.armada-sheet *, .armada-dialog *)::before,
 .armada-verify-panel:not(.armada-sheet *, .armada-dialog *)::before {
   content: "";
@@ -99,7 +133,13 @@
    (the app suite's), the mock Setup tests that open a proposal sheet failed
    three full runs in five with presses that never landed, and none in five
    with the blur off. */
-:root:has(.armada-sheet-scrim, .armada-dialog-scrim) :is(.armada-glass, .armada-drift-panel:not(.armada-sheet *, .armada-dialog *), .armada-verify-panel:not(.armada-sheet *, .armada-dialog *))::before {
+:root:has(.armada-sheet-scrim, .armada-dialog-scrim)
+  :is(
+    .armada-glass,
+    .armada-card:not(:where([data-flat], .armada-glass *, .armada-sheet *, .armada-dialog *)),
+    .armada-drift-panel:not(.armada-sheet *, .armada-dialog *),
+    .armada-verify-panel:not(.armada-sheet *, .armada-dialog *)
+  )::before {
   backdrop-filter: none;
 }
 
@@ -107,6 +147,7 @@
    rather than a --z token: it orders this card against the cards beside it,
    and every --z layer in the root must stay above it. */
 .armada-glass:is(:hover, :focus-within),
+.armada-card:not(:where([data-flat], .armada-glass *, .armada-sheet *, .armada-dialog *)):is(:hover, :focus-within),
 .armada-drift-panel:not(.armada-sheet *, .armada-dialog *):is(:hover, :focus-within),
 .armada-verify-panel:not(.armada-sheet *, .armada-dialog *):is(:hover, :focus-within) {
   z-index: 1;

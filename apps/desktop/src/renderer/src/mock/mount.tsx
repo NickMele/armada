@@ -7,6 +7,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Boundary } from "@armada/shell";
+import { HapticsProvider } from "@armada/components";
 
 import "../styles/index.css";
 import type { BridgeApi } from "../../../shared/api";
@@ -32,7 +33,10 @@ export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?
   root.render(
     <StrictMode>
       <Boundary region="the window" usable={false} bridge={chosen.state.bridge}>
-        <App />
+        {/* As `main.tsx` mounts it, so a test can read what a press asked the trackpad to play. */}
+        <HapticsProvider perform={(pattern) => api.tap(pattern)}>
+          <App />
+        </HapticsProvider>
       </Boundary>
     </StrictMode>,
   );

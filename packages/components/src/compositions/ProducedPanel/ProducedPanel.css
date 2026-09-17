@@ -1,0 +1,115 @@
+/* What the Job has changed, as its own panel. The card and header are
+   `Chapter`'s; what is drawn here is the change summary in its well. No hue
+   beyond the diff tokens the file list already carried: the bar's colour is
+   #1196's. */
+.armada-produced {
+  min-width: 0;
+}
+
+.armada-produced__summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-produced__folder {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+.armada-produced__folder-name {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  min-width: 0;
+}
+
+/* Three tracks down the whole folder: the name gives way, the bar and the
+   counts keep their place so a column of sizes reads as one. */
+.armada-produced__files {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(var(--space-12) * 2) max-content;
+  column-gap: var(--space-3);
+  row-gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: 0 0 0 var(--space-4);
+  list-style: none;
+}
+
+.armada-produced__file {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+}
+
+.armada-produced__name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.armada-produced__tag {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+.armada-produced__size {
+  display: flex;
+  height: var(--space-1);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-hover);
+}
+
+/* The bar takes the same two hues as the counts beside it. It was neutral
+   grey when the panel arrived (#1187), which made the one thing on the row
+   readable at a glance — how much of a file's change is new and how much was
+   torn out — the one thing that carried no reading at all. #1196. */
+.armada-produced__size-added {
+  background: var(--diff-add-fg);
+}
+
+.armada-produced__size-deleted {
+  background: var(--diff-del-fg);
+}
+
+.armada-produced__counts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+/* The same diff tokens `ChangedFiles` gave these counts, carried rather than
+   added: a red count and a green count beside each other is the reading. */
+.armada-produced__added {
+  color: var(--diff-add-fg);
+}
+
+.armada-produced__deleted {
+  color: var(--diff-del-fg);
+}
+
+.armada-produced__more,
+.armada-produced__note,
+.armada-produced__empty {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}

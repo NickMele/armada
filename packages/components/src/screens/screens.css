@@ -91,9 +91,9 @@
 }
 
 /* Navigation, Stats and Fleet, stacked — the left column Bridge/1088 built to
-   replace the rail and the status bar. Margined on three sides the way the
-   dock already is, because the panel beside it stays flush by design — "the
-   panel *is* the ground", below.
+   replace the rail and the status bar. Inset on three sides the way the dock
+   already is, because the panel beside it stays flush by design — "the panel
+   *is* the ground", below.
 
    **A shared width, not three siblings fighting over intrinsic sizing.**
    Sidebar carries its own resting width inline (`--sidebar-default`,
@@ -104,14 +104,31 @@
    Sidebar sat at its own inline width, narrower than both. One width, read by
    all three: Sidebar's own default when the column matches it, and its own
    rail width when Sidebar is collapsed — `:has()` is what lets this rule
-   follow a child's own state without a prop crossing the two files. */
+   follow a child's own state without a prop crossing the two files.
+
+   **The inset is padding, not margin, so the cards' shadow is inside the
+   clip.** A scroller clips at its padding box, and `--shadow-card` reaches
+   12px past a card's sides, 24px below it and 1px above. Held in margin,
+   Navigation, Stats and Fleet lost all three and read as cut out (#1319).
+   Each side keeps its old outer line: the left is all padding, the right's
+   padding is handed back by an equal negative margin (so the box reaches into
+   the gap, where the handle is later in the tree and still takes the pointer),
+   and the top is 12px margin over 4px padding, so what scrolls up still clips
+   under the title bar. Only the bottom moves: 24px of padding to the window's
+   edge, so the last card's drop shows at the end of a scroll too.
+
+   `content-box` so every width here — ours, the rail's 48px, and the inline
+   one a drag writes — stays the cards' width, and the padding adds outside
+   it instead of narrowing them. */
 .armada-shell__left {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   flex: none;
   min-height: 0;
-  margin: var(--space-4) 0 var(--space-4) var(--space-4);
+  box-sizing: content-box;
+  margin: calc(var(--space-4) - var(--space-1)) calc(var(--space-4) * -1) 0 0;
+  padding: var(--space-1) var(--space-4) var(--space-6);
   overflow-y: auto;
   width: var(--sidebar-default);
 }
@@ -205,6 +222,15 @@
    whose regions are read against each other says so differently: the Board
    scrolls its rows under a head that stays, and a Job scrolls its run and its
    panel apart. What none of them does any more is move the window's frame. */
+/* **Room under the last card, and only there.** Every card in one of these is
+   glass now (#1353), and a scroller clips at its padding box while a shadow
+   adds nothing to the scrollable area — so the last card's drop was cut at the
+   end of a scroll, which is #1319 again one surface over. --space-6 for the
+   24px drop, the figure that commit landed on after 16px still cut its tail.
+   The sides need none: --shadow-card's drop is spread -16px against a 28px
+   blur, so it reaches nothing sideways, and the 1px contact shadow is the only
+   thing the clip takes. Nothing else moves — a pane's own side and top insets
+   are its screens' to decide, as `.armada-shell__mount` says. */
 .armada-screen__pane {
   display: flex;
   flex-direction: column;
@@ -213,6 +239,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding-bottom: var(--space-6);
 }
 
 /* A screen that hands the scrolling to a child — the Board, whose own actions
@@ -391,9 +418,6 @@
    padding either**: `.armada-screen__mounted` keeps the gap under the title
    bar for every surface, and padding it here too doubled it the same way. */
 .armada-screen__overview {
-  /* So the summary strip can query its own available width — narrower with
-     Helm's dock open, which is what its two-up form answers. */
-  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -1198,4 +1222,70 @@
 
 .armada-inside__unreachable svg {
   color: var(--fg-subtle);
+}
+
+/* The Studios surface, one Studio open (#1287): a head, then the whiteboard
+   filling what is left. The whiteboard is the region that pans, so this pane
+   does not scroll. */
+.armada-studio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
+  /* The containing block for a Note's frame, opened — #1352. The layer belongs
+     to the Studio it was opened from, flush to this edge and this height, so
+     the board stays on screen and under it. */
+  position: relative;
+}
+
+.armada-studio__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.armada-studio__name {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-studio__standing {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-studio__board {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.armada-studio__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-studio__aside p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.armada-studio__proposed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-studio__acts {
+  display: flex;
+  gap: var(--space-2);
 }

@@ -81,6 +81,10 @@ pub struct Host {
     /// worktree. `drafted()` writes under `<attachments_dir>/<job_id>/`, and
     /// `dispatch` reads from there to seed the worktree a Drone actually sees.
     pub attachments_dir: String,
+    /// Where Fleet keeps a Studio's frames, beside the Studio's own records
+    /// rather than in the database — `#1290`. One directory per Studio under
+    /// this, and a Note names the file inside it.
+    pub studio_frames_dir: String,
 }
 
 /// [`Host`] without the repository: what is true of the machine whichever
@@ -94,6 +98,7 @@ pub(crate) struct Local {
     pub(crate) mcp_config: String,
     pub(crate) port: u16,
     pub(crate) attachments_dir: String,
+    pub(crate) studio_frames_dir: String,
 }
 
 /// One repository a Fleet is assembled already serving.
@@ -278,6 +283,9 @@ where
         let helm = crate::helm::Conversations::hosted_by(Arc::new(
             crate::helm::ProcessHost::on_this_machine(&fittings.host),
         ));
+        let scouts = crate::scout::Scouts::hosted_by(Arc::new(
+            crate::scout::ScoutHost::on_this_machine(&fittings.host),
+        ));
         let shipped = Limits {
             concurrency: fittings.concurrency,
             headroom: fittings.headroom,
@@ -311,6 +319,7 @@ where
                 mcp_config: fittings.host.mcp_config,
                 port: fittings.host.port,
                 attachments_dir: fittings.host.attachments_dir,
+                studio_frames_dir: fittings.host.studio_frames_dir,
             },
             port_range: fittings.port_range,
             run_log_retention: fittings.run_log_retention,
@@ -339,6 +348,7 @@ where
             events: fittings.events,
             turns: api::Turns::new(),
             helm,
+            scouts,
             inbox: EvidenceInbox::new(),
             delivered: Mutex::new(BTreeMap::new()),
             slots: Mutex::new(Slots::bounded_by(in_force.concurrency)),
@@ -376,5 +386,16 @@ where
     pub fn hosting_helm_on(mut self, host: Arc<dyn crate::helm::Hosting>) -> Fleet<H, V, W> {
         self.helm = crate::helm::Conversations::hosted_by(host);
         self
+    }
+
+    /// The same Fleet with its scouts started by `host` — a stand-in agent in
+    /// a test.
+    pub fn scouting_on(mut self, host: crate::scout::ScoutHost) -> Fleet<H, V, W> {
+        self.scouts = crate::scout::Scouts::hosted_by(Arc::new(host));
+        self
+    }
+
+    pub(crate) fn scouts(&self) -> &crate::scout::Scouts {
+        &self.scouts
     }
 }

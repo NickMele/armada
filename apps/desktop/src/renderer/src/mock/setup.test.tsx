@@ -9,7 +9,7 @@ import { MANIFEST_ID, repository } from "@armada/screens/src/fixtures/build/base
 import { endShownIn, pressable, scrollerOf } from "./scrolled";
 import { SCRATCH, SHEET_READ, VERIFY_ENDED, settingUp } from "./setup-fleet";
 import type { SettingUp } from "./setup-fleet";
-import { mount, unmountAfterEach } from "./testing";
+import { entered, mount, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -23,11 +23,11 @@ async function setup(options: SettingUp = {}) {
   return list;
 }
 
-/** A workspace's proposal, opened from the picker. */
+/** A workspace's proposal, opened from the picker, in place to be pressed. */
 async function open(list: ReturnType<typeof page.getByRole>, dir: string) {
   await list.getByRole("button", { name: `Open ${dir}` }).click();
   const sheet = page.getByRole("dialog", { name: `Proposal for ${dir}` });
-  await expect.element(sheet).toBeVisible();
+  await entered(sheet);
   return sheet;
 }
 
@@ -52,7 +52,8 @@ test("a line is read for where it came from, corrected, moved, and the sheet clo
   await expect.element(lint.getByText("convention")).toBeVisible();
 
   await lint.getByRole("button", { name: "Edit lint command" }).click();
-  const field = lint.getByLabelText("lint command");
+  // The field alone: "lint command" is also inside the name of the Edit button it replaces.
+  const field = lint.getByRole("textbox", { name: "lint command", exact: true });
   await field.clear();
   await userEvent.type(field, "pnpm eslint . --max-warnings 0{Enter}");
   await expect.element(lint.getByText("edited during setup")).toBeVisible();
@@ -255,7 +256,7 @@ test("a batch taller than the window scrolls under tabs that stay put, and a pro
 
   await userEvent.click(last[0]!);
   const sheet = page.getByRole("dialog", { name: "Proposal for packages/pkg-16" });
-  await expect.element(sheet).toBeVisible();
+  await entered(sheet);
   const own = scrollerOf(sheet.getByRole("list", { name: "Checks" }).element());
   expect(own).not.toBeNull();
   expect(own).not.toBe(picker);

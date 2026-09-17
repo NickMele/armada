@@ -26,7 +26,7 @@
 // swapped the surface for a transcript; the turns are the open step's activity
 // log now, so it tracks which Job is open and nothing presses it.
 
-import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
+import type { EditManifestProposal, StudioPromotion, WriteManifestProposal } from "@armada/protocol";
 import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
@@ -52,8 +52,10 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { HelmContext, JobSummary } from "@armada/protocol";
+import type { StudioCapture } from "@armada/protocol";
 import type { ActAnswer, ActingAct, Answered, ConfirmableAct, DecidingAct, Taken, TakenAct } from "@armada/screens";
 import { takenNotice, takenStands } from "@armada/screens";
+import { patternFor, useHaptics } from "@armada/components";
 import { proposeRequest } from "./dispatch";
 import type { Proposing } from "./dispatch";
 
@@ -70,6 +72,23 @@ import type { Proposing } from "./dispatch";
 export const readDiff = (jobId: string | null): void => void window.armada.readDiff(jobId);
 export const readReports = (want: boolean): void => void window.armada.readReports(want);
 export const readHeld = (want: boolean): void => void window.armada.readHeld(want);
+// The Studios surface — #1287. The two reads are held by effects, so they are stable here too.
+export const watchStudios = (manifestId: string | null): void => void window.armada.watchStudios(manifestId);
+export const watchStudio = (studioId: string | null): void => void window.armada.watchStudio(studioId);
+export const createStudio = (manifestId: string) => window.armada.createStudio(manifestId);
+export const moveStudioNode = (studioId: string, nodeId: string, position: { x: number; y: number }) =>
+  window.armada.moveStudioNode(studioId, nodeId, position);
+export const removeStudioNode = (studioId: string, nodeId: string) => window.armada.removeStudioNode(studioId, nodeId);
+export const decideStudioEdge = (studioId: string, edgeId: string, accepted: boolean) =>
+  window.armada.decideStudioEdge(studioId, edgeId, accepted);
+// Studio capture — #1290. What a person pointed at; the frame is main's to take.
+export const captureStudioNote = (studioId: string, said: string, capture: StudioCapture) =>
+  window.armada.captureStudioNote(studioId, said, capture);
+/** The picture one Note kept — #1352. The bytes become a `blob:` this window owns and revokes. */
+export const readStudioFrame = (studioId: string, nodeId: string) =>
+  window.armada.readStudioFrame(studioId, nodeId);
+export const promoteOnStudio = (studioId: string, promotion: StudioPromotion) =>
+  window.armada.promoteOnStudio(studioId, promotion);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 export const deleteBranchOne = (jobId: string, tip: string) => window.armada.deleteBranch(jobId, tip);
 export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);
@@ -188,6 +207,8 @@ export type Sending = {
  */
 export function useCommands(sending: Sending) {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // The trackpad, for the finger that pressed. Every act on a Job answers through `heard`.
+  const tap = useHaptics();
   // A press a freeze took and holds. Its own state: `outcome` draws refusals, and this is not one.
   const [taken, setTaken] = useState<Taken | null>(null);
   const rowOf = (jobId: string) => sending.jobs.find((job) => job.id === jobId);
@@ -240,6 +261,9 @@ export function useCommands(sending: Sending) {
   /** Publish an act's outcome, and hand its answer to the control that sent it. */
   function heard(jobId: string, act: ActingAct | DecidingAct, answer: Outcome): void {
     setOutcome(answer);
+    // The tap is the answer's, not the control's, so it plays even where the
+    // two acts below leave nothing on screen to draw one. #1326.
+    tap(patternFor(answer.ok ? "accepted" : "refused"));
     // Accepted, a forget leaves no record and a redispatch opens its
     // replacement: neither leaves the pressed control on screen to answer.
     if (answer.ok && (act === "forget_job" || act === "redispatch")) return;

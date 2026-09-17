@@ -29,7 +29,9 @@
 #                 working on the machine, on one shared set. `Helm only` is a
 #                 command Helm may call when a person asks it to in
 #                 conversation; the person's ask is the gate, not a further
-#                 tier. `Drafts only` is the narrower set offered a Helm
+#                 tier. On a query it is a read offered to a Helm session
+#                 alone — the checkout's runs, which only Helm can start.
+#                 `Drafts only` is the narrower set offered a Helm
 #                 session alone for drafting a Job. What stays `No` for Helm
 #                 too is named, not implied — `fleet::helm::reach::RESERVED`
 #   description - what the operation returns or does, in one line
@@ -178,9 +180,24 @@ transport = "HTTP"
 agent_access = "Yes"
 description = "One Studio with every node and edge on it, each node where a person left it"
 notes = """
-A node's `kind` is its content's tag, beside its fields. **A Run or Job node carries a reference and no state**: its state is read off the run or the Job, never copied. A `proposed` edge is drawn dashed until a person accepts it.
+A node's `kind` is its content's tag, beside its fields. **Who put each thing there is on the record**: a node's and an edge's `added_by`, and the Studio's `named_by`, `person` or `helm`, absent only on what was kept before V78 recorded it (#1288). **A Run or Job node carries a reference and no state**: its state is read off the run or the Job, never copied. A `proposed` edge is drawn dashed until a person accepts it.
 
 A Studio in another repository than a door session's is refused as `fleet.studio_in_another_repository`, the way a Job is.
+"""
+
+[operations.get_studio_frame]
+kind = "query"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "The picture one Note kept, as the file itself"
+notes = """
+**`get_frame`'s shape, on a Studio.** A frame has no window — half an image is not an image — so there is no partial reading for an envelope to carry, and base64 would inflate the bytes by a third to say nothing the node did not already say. The response is the file, with a media type read off the name Fleet stored and `nosniff` beside it. The Note's `capture.frame` rides `get_studio` and says there is a picture, what it weighs and how big it is; the bytes are fetched once, by whoever draws one. **No event carries a frame**, for the reason `capture_studio_note` gives: an image in a `studio.changed` would sit on the stream for the life of a Studio.
+
+**One path segment, where a step's frame takes two.** A Studio keeps one frame per node, written as `<node_id>.png` under `<machine>/studios/<studio_id>/`, so the node identifies the file and nothing a caller spells is joined onto a path. **The record is the allowlist**: Fleet reads the name off the node's own `capture.frame` before anything is opened, so a node id no node of this Studio carries reaches no file.
+
+A node that is not on the Studio is `fleet.no_such_studio_node`, one that kept no frame — a Note captured where a frame was refused, or any other kind — is `fleet.studio_frame_not_kept`, and a file that will not open is `fleet.studio_frame_unreadable`. The three are apart because a Note with no picture is an ordinary Note and a Studio directory that went is not.
+
+`agent_access` is `Bridge only`, where `get_frame` is `Yes`. **A frame is a person's screen**, taken of the window they were working in rather than of a harness's own page, and it leaves the machine only if they send it somewhere. Nothing in the Studio milestone asks an agent to look at one, and a capability that reaches one is added when something does. `docs/concepts/studio.md`, *Notes*.
 """
 
 [operations.create_studio]
@@ -191,7 +208,7 @@ description = "Start a Studio in one repository, named or untitled, and answer w
 notes = """
 `?manifest_id=` names the repository. A name is optional, since `docs/concepts/studio.md` has Helm name an untitled Studio; a blank one is no name.
 
-`agent_access` is `Bridge only` for now: a person opens a Studio, and Helm works on one it is in. #1288 decides whether Helm starts one on a person's ask.
+`agent_access` is `Bridge only`: a person opens a Studio, and Helm works on one it is in. #1288 left it there, because `studio.md`'s table of what Helm may do on a Studio names no start of one, asked or not.
 """
 
 [operations.rename_studio]
@@ -200,7 +217,7 @@ transport = "HTTP"
 agent_access = "Helm only"
 description = "Name a Studio, or name it again, and answer with it"
 notes = """
-A blank name is refused as `fleet.studio_name_blank`. `Helm only` because naming an untitled Studio is one of the things `studio.md` lets Helm do unasked.
+A blank name is refused as `fleet.studio_name_blank`. `Helm only` because naming an untitled Studio is one of the things `studio.md` lets Helm do unasked — `fleet::helm::reach::UNASKED`. From Helm it also publishes `studio.helm_acted`.
 """
 
 [operations.delete_studio]
@@ -223,6 +240,27 @@ A node starts in its kind's first state and nothing in the request sets one. `pr
 **From Helm, only a kind that starts `proposed`** — a Finding today — and anything else is refused as `fleet.studio_node_not_helms`: Helm adds proposed nodes, and a Note is what a person pointed at. A blank field is refused as `fleet.studio_node_blank`.
 
 **No act writes a node's content afterwards**, which is what fixes a Note at capture.
+
+From Helm it also publishes `studio.helm_acted`, after `studio.changed`: Helm's act is its own event type.
+
+**A Finding is added as its ask alone.** One carrying a checkout, files read or an ending is refused as `fleet.studio_finding_is_the_scouts`: those are a scout's to record, through `ask_scout` and `start_scout`.
+
+**No act writes a node's content afterwards but a scout's own reading**, which is what fixes a Note at capture.
+"""
+
+[operations.capture_studio_note]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Capture what a person pointed at in Bridge as a Note on a Studio, keeping its frame beside the Studio's records, and answer with the Studio"
+notes = """
+**A person's act and nobody else's**, so `agent_access` is `No`: pointing at something wrong is done with a pointer, and no agent has one. `add_studio_node` already refuses a Note from Helm; this route is not offered to an agent at all.
+
+A route of its own rather than a `note` through `add_studio_node`, because a capture carries a file. The frame crosses as `frame.staged_path` — the path Bridge's main process wrote the PNG to, the way `stage_attachment` stages one — and Fleet copies it into `<machine>/studios/<studio_id>/` before the node is written. The Note then names the file it kept and its size, never its bytes: a base64 image inside the content would sit in every `studio.changed` for the life of the Studio. A frame over 4 MiB is refused as `fleet.studio_frame_too_large`, and one Fleet cannot read as `fleet.studio_frame_unreadable` — refused rather than dropped, for `drafting`'s reason about an attachment a person believed they sent.
+
+**Nothing writes the Note afterwards.** `docs/concepts/studio.md` fixes a Note at capture, and the only route that could rewrite one is a scout's own reading, which takes a Finding. A blank `said` is refused as `fleet.studio_node_blank`.
+
+The development annotation layer (`⌥⌘A`, `.armada/annotations/`) is untouched by this and stays, decided with the owner: it annotates Bridge while Bridge is being built, and its notes become Jobs rather than Notes.
 """
 
 [operations.move_studio_node]
@@ -249,7 +287,7 @@ transport = "HTTP"
 agent_access = "Helm only"
 description = "Propose a Same as, Blocks or Answers edge between two nodes on one Studio, and answer with the Studio"
 notes = """
-**Lands `proposed`, whoever sends it**, and only a person accepts it. `produced` does not decode here: the Studio draws that edge itself. An edge to a node on another Studio is refused as `fleet.no_such_studio_node`, and the same relation twice as `fleet.studio_edge_exists`.
+**Lands `proposed`, whoever sends it**, and only a person accepts it. `produced` does not decode here: the Studio draws that edge itself. An edge to a node on another Studio is refused as `fleet.no_such_studio_node`, and the same relation twice as `fleet.studio_edge_exists`. From Helm it also publishes `studio.helm_acted`.
 """
 
 [operations.decide_studio_edge]
@@ -261,6 +299,132 @@ notes = """
 **Only a person accepts a relation**, whatever Helm's authority setting says, so no agent is offered this. An edge that is not proposed is refused as `fleet.studio_edge_not_proposed`.
 
 A rejected edge is removed rather than kept as rejected; nothing yet stops the same relation being proposed again.
+"""
+
+[operations.group_studio_nodes]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Accept several nodes on a Studio as one Cluster, or read them in order as one Outline, and answer with the Studio"
+notes = """
+The first rung of `docs/concepts/studio.md`'s *Promotion* that joins nodes rather than adding one. The new node is placed where the request says and the Studio draws a `produced` edge from each node in `from`, **in the order they were given** — an Outline is an ordered reading, and edges read back oldest first, so the order a person picked is the order it keeps.
+
+`agent_access` is `Bridge only`: a Cluster is Notes a person accepted as one thing, and accepting is a person's act whatever Helm's authority setting says.
+
+Only a Cluster or an Outline decodes here; any other kind is refused as `fleet.studio_group_not_a_group`, because every other kind has a rung of its own that makes it. A Cluster of anything but Notes is refused as `fleet.studio_cluster_is_of_notes`. A node named twice, or none at all, is `fleet.studio_group_is_of_several`. A blank field is `fleet.studio_node_blank`, as `add_studio_node` has it.
+"""
+
+[operations.defer_on_studio]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Turn something raised on a node into a Deferral, against what it blocks, and answer with the Studio"
+notes = """
+**Only a person defers**, whatever Helm is asked — `docs/concepts/studio.md`, *Helm on a Studio* — so no agent is offered this. The Deferral is added Open, with a `produced` edge from the node it was raised on and, where `blocks` names one, an **accepted** `blocks` edge from the Deferral to what it holds up: the person drawing it is the one who accepts a relation, so there is nobody left to accept it afterwards.
+
+Raised on a Contradiction that is still Reported, it also ends that Contradiction as *Deferral* — one of its four outcomes. A Contradiction already ended is refused as `fleet.studio_contradiction_settled`. `blocks` naming the node the Deferral was raised on is refused as `fleet.studio_edge_to_itself`.
+"""
+
+[operations.write_up_studio_node]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Write a Note, Cluster, Contradiction or Outline up as an Issue draft, and answer with the Studio"
+notes = """
+The draft is a node like any other, added Draft with a `produced` edge from what it was written up from. **Nothing is filed**: `docs/concepts/studio.md` makes an issue on a forge a person's own act, so no operation here reaches a forge and this one does not either.
+
+Any other kind is refused as `fleet.studio_not_writable_up` — a Link is read in, a Finding is asked for, and a draft written up again would be a copy of itself. Written up from a Contradiction that is still Reported, it also ends that Contradiction as *Issue draft*; one already ended is `fleet.studio_contradiction_settled`.
+
+`agent_access` is `Helm only` because writing up is one of the two acts Helm may take on a person's ask. **It never dispatches**: "write it up" alone is a draft and nothing more, and `dispatch_studio_draft` is the separate act. From Helm it also publishes `studio.helm_acted`.
+"""
+
+[operations.edit_studio_draft]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Replace an Issue draft's title and body with what a person left, and answer with the Studio"
+notes = """
+**The one act that rewrites content a person wrote**, and it reaches one kind: a Note is fixed at capture and every other kind is added whole. `docs/concepts/studio.md` calls a draft's title and body editable, and what is dispatched has to be what the person read and changed rather than what was first written up.
+
+`Bridge only`, and deliberately not Helm's even on an ask: Helm rewriting a draft a person edited is the act `studio.md` guards against under "an agent reorganising a person's work". Helm asked to change a draft says what it would write. Any kind but an Issue draft is refused as `fleet.studio_not_a_draft`, and a blank title or body as `fleet.studio_node_blank`.
+"""
+
+[operations.settle_contradiction]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "End a Contradiction as Not a problem, or as Resolved here with the answer kept on the node, and answer with the Studio"
+notes = """
+Two of the four outcomes in `docs/concepts/studio.md`'s table. **The other two are the rungs that make a node** — *Issue draft* is `write_up_studio_node` on the Contradiction and *Deferral* is `defer_on_studio` raised on it, each ending the Contradiction as it goes — so there is one way to make an Issue draft and one way to make a Deferral rather than two.
+
+`resolved_here` carries the answer and keeps it on the node, since a Contradiction settled with nothing written down is one nobody can reread; a blank answer is refused as `fleet.studio_node_blank`. `Bridge only` for both: deciding that two sources do not really disagree is a person's judgement, and it is the one act here that writes a conclusion onto the record.
+
+A node that is not a Contradiction is `fleet.studio_not_a_contradiction`, and one already ended is `fleet.studio_contradiction_settled` — a Contradiction ends once, so the node keeps the outcome that was acted on.
+"""
+
+[operations.dispatch_studio_draft]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Send an Issue draft's text through the Job proposer to the dispatch gate, and answer with the Studio carrying a Job node for each Job"
+notes = """
+**The same call `propose_from_request` makes, with the draft's text as the request.** The gate is unchanged: every Job stands at `awaiting_approval` and is approved where any other proposal is. Nothing summarises, trims or re-fetches the draft on the way — a write-up is made from the nodes feeding it, and a lossy hop would hand a Drone something other than what the person saw.
+
+Each Job the proposal became is added as a Job node with a `produced` edge from the draft, the first at `position` and the rest below it, so the whiteboard shows where the work went without a person moving anything. A Job node holds the Job's id and no status: the Board's row is where its status is read.
+
+**No issue is filed anywhere.** Filing on a forge is optional and a person's own act, so the draft's text reaches the proposer with nothing to point at.
+
+`origin` is **who pressed it** — `manual` for a person's, `helm_drafted` for Helm's — and not the `auto_detected` every other request through the proposer takes. That value renders as *Found by Fleet*, which is what a row says about work Armada noticed by itself; a dispatch from a Studio is somebody sending a draft they wrote up. **No value says "from a Studio"**: the `produced` edge from the draft is where that is recorded, and `job-fields.toml` writes `origin` from `dispatched_by`. A node that is not an Issue draft is refused as `fleet.studio_not_a_draft`; where no workflow resolves, the proposer's own refusal is returned and no node is added.
+
+`agent_access` is `Helm only`, the second of the two acts Helm takes on a person's ask, and only where the ask names sending the work as well as writing it up. From Helm it also publishes `studio.helm_acted`.
+"""
+
+[operations.ask_scout]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Ask a scout how something works in the code: a Finding is added Gathering and the scout starts reading, and the Studio is answered"
+notes = """
+**A person's ask, typed on a Studio.** `asked` is told to the scout verbatim, with the repository's checkout on disk as its directory and read tools alone (`docs/concepts/scout.md`). The Finding records the commit checked out and whether anything uncommitted sat on top of it before the scout reads a line; a checkout git will not read is refused as `fleet.scout_checkout_unreadable`, and nothing starts.
+
+Every file read and every search run is written to the Finding as each is answered, and each write publishes `studio.changed`, so a whiteboard watches it fill. It freezes however it ends, with `ended` saying `answered`, `stopped` or `failed` and the cost where the agent reported one.
+
+**No budget and no place under the concurrency cap**, decided with the owner: the cost is shown when it ends, and `stop_scout` is how a person ends one. `Bridge only` because it is the person's own ask; Helm acting on an ask adds a Proposed Finding and calls `start_scout`.
+"""
+
+[operations.start_scout]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Start a scout on a Proposed Finding already on a Studio, and answer with the Studio"
+notes = """
+**What Helm calls once a person asks it to find something out.** Helm may add a Proposed Finding unasked (`add_studio_node`), and spends nothing by doing so; starting its scout spends, so it is on a person's ask like every other act Helm takes. A person on Bridge starts a proposed one through the same route.
+
+A Finding that is not Proposed is refused as `fleet.scout_not_proposed`, checked again under the lock the start is written under, so two starts of one Finding cannot both run. A node that is not a Finding is `fleet.scout_not_a_finding`. Otherwise as `ask_scout`.
+"""
+
+[operations.stop_scout]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Stop the scout reading for a Finding, and answer with the Studio as it stands"
+notes = """
+**The stop on a Gathering Finding's node.** The scout's process group is interrupted, which the agent CLI answers by ending its turn and reporting its cost — measured in spike 017, where a terminate left no cost at all. A scout still running after ten seconds has its group ended, and its Finding says `stopped` with no cost.
+
+The answer is the Studio before the Finding freezes; the frozen one arrives on `studio.changed`. A node no scout is reading for is refused as `fleet.scout_not_running`. `Bridge only`: the stop is a press on a node, and no ask to Helm reaches it.
+"""
+
+[operations.start_studio_run]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Run one Manifest entry in the checkout from a Studio, and answer with the Studio, the Run node it made and the run underway"
+notes = """
+The Studio names the repository, so nothing here does: a Studio belongs to one and a run started from it runs in that checkout. **A person's act on Bridge, or Helm's on a person's ask** — `Helm only`, and deliberately not one of `fleet::helm::reach::UNASKED`, so Helm starting a run without being asked is a brief failure rather than a door that was left open.
+
+The run starts first and the node is written after it: every refusal `start_checkout_run` makes is made here — a name nothing declares, a server (`start_server` is what a server takes), a run already out in the checkout — and a refused start leaves no node behind. `produced_by` names the node it was started from, and the Studio draws the `produced` edge itself.
+
+**A Run node reads its state off the run and copies no status.** Once `settings.ad-hoc-run-log-retention` sweeps the run, the node keeps what it said — command, exit code, duration and the log's last lines — and that is what `get_studio` answers as `kept`. A Run on a Studio writes no Evidence, as every run outside a Job does not.
 """
 
 [operations.get_call]
@@ -1978,7 +2142,7 @@ Refused while a Drone is working in the tree, while a run is in flight, on a run
 [operations.get_checkout_run_sheet]
 kind = "query"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "What a person can run in the main checkout - its Setup, Checks and Commands - off the Manifest Fleet holds"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning. With no root Manifest the three lists and `servers` are empty, and `verify` is still the checkout's. `workspaces` lists each directory Scan finds holding its own `armada.yml` that loads, with the Commands that file declares, pressed with `StartCheckoutRun.workspace`; it is listed with or without a root Manifest, so a root's own page can run a workspace's Command too. Which directories hold one is found once per repository, by Scan's walk, and found again when its root Manifest is re-read, the served repositories change, or Setup writes a file; each file is read afresh.
@@ -1989,13 +2153,13 @@ notes = """
 
 Under `/manifest` beside `get_manifest_reading`, for that operation's reason — a Fleet serves one repository, and this reads it before any Job exists to read one from instead.
 
-`agent_access` is `No` while the surface is being built. `get_run_sheet` is what an agent working a Job needs, and the main checkout is the tree a Drone is confined out of.
+`agent_access` is `Helm only`, `list_checkout_runs`' reason: it is where a Helm session finds what it may be asked to start. No other agent is offered it — `get_run_sheet` is what an agent working a Job needs, and the main checkout is the tree a Drone is confined out of.
 """
 
 [operations.list_checkout_runs]
 kind = "query"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "The main checkout's earlier runs: name, exit code, when, how long, what changed, and the log"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
@@ -2005,17 +2169,21 @@ A run of a workspace's own entry names it in `workspace`, so two of one name sta
 `list_runs` read off `.armada/runs/main/` rather than `.armada/runs/<job>/`. A Job handle always begins with the Job's own number, so no Job can be called `main` and the two cannot collide.
 
 Kept for the Machine's ad-hoc run log retention, swept when the checkout next starts a run.
+
+`agent_access` is `Helm only`: **Helm reads the runs it can start** (#1288). `start_checkout_run` answers at once and the end is `checkout_run.finished`, which no session receives, so a run Helm started on a person's ask would otherwise be one it could not say the end of. No other agent can start one, so no other agent is offered this.
 """
 
 [operations.get_checkout_run_output]
 kind = "query"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "One checkout run's log, read back as a window that says it is one"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
 
 `get_run_output`'s shape and its allowlist: `:run_id` names a run the checkout recorded or the one in flight, resolved against its own run directories before anything is opened.
+
+`agent_access` is `Helm only`, `list_checkout_runs`' reason: what a run Helm started printed is what it reports back.
 """
 
 [operations.get_checkout_run_diff]
@@ -2034,7 +2202,7 @@ A read: it writes, stages and commits nothing. Refused while the run is still go
 
 `get_diff`'s split, for the same reason — the patch is the expensive half, so it is fetched by the one person who opened it rather than carried on `list_checkout_runs`.
 
-`agent_access` is `No`, on the seven checkout-run operations' terms, and it differs from `get_diff`'s `Yes` on purpose: that route lets an agent check its own change, and no agent can have made this one — `start_checkout_run` is `No`, and the main checkout is the tree a Drone is confined out of.
+`agent_access` is `No`, and it differs from `get_diff`'s `Yes` on purpose: that route lets an agent check its own change, and the main checkout is the tree a Drone is confined out of. `start_checkout_run` is `Helm only`, so a Helm session can have made this one; it reads how the run ended and what it printed through `list_checkout_runs` and `get_checkout_run_output`, and the patch stays the person's to open, for the cost above (#1288).
 """
 
 [operations.observe_checkout_run]
@@ -2111,7 +2279,7 @@ notes = """
 
 **No Evidence, no Check row, nothing reaches Doctor.** A step's exit code is a fact read beside the code it expects.
 
-`agent_access` is `No` on the checkout-run operations' terms: the main checkout is the tree a Drone is confined out of, and a Verify runs every Check in it.
+`agent_access` is `Helm only`, as `start_checkout_run` is: Helm starts one on a person's ask, and no other agent is offered it because the main checkout is the tree a Drone is confined out of and a Verify runs every Check in it.
 """
 
 [operations.save_manifest_file]
@@ -2485,6 +2653,17 @@ agent_access = "Bridge only"
 description = "A Studio after a write to it, whole, with every node and edge"
 notes = """
 Carries `Studio` itself, the answer to `get_studio`, for `repositories.changed`' reason: a whiteboard replaces what it holds rather than folding a change. Published after the write. `manifest_id` is at the top level, so a poll's tally names the repository.
+"""
+
+[operations."studio.helm_acted"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "Helm took one act on a Studio: added a node, proposed an edge or named it"
+notes = """
+**Helm's act, as its own event type** — `docs/concepts/helm.md`, *Audit trail* (#1288). Published after the `studio.changed` the same write publishes, and only where the door placed the call in a Helm session; a person's act on a Studio publishes `studio.changed` alone. So a reader tells the two apart by kind, never by a field on the Studio.
+
+`act` names which, with the id of what was added or the name given. The Studio itself is `studio.changed`'s to carry. **The stream is for a client that is connected**; who acted is also kept on the record, as `added_by` and `named_by` on `get_studio`, so a client that reconnects reads it there. `manifest_id` is at the top level, so a poll's tally names the repository.
 """
 
 [operations."studio.deleted"]

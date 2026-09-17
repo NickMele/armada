@@ -209,9 +209,9 @@ fn blocks(message: MessageLine, by: Speaker) -> Vec<DroneEvent> {
 /// one arm per tool: a tool the list does not name still shows its path or its
 /// command, and a tool that grows an argument does not need an arm here.
 ///
-/// **What is deliberately not read is content.** `Write`'s `content` is not a
-/// field on [`ToolInput`] at all, so the largest argument in the stream has
-/// nowhere to arrive.
+/// **What is deliberately not kept is content.** `Write`'s `content` arrives
+/// as [`LinesIn`], a count taken as it is decoded, so the largest argument in
+/// the stream has nowhere to be held.
 fn detail(input: &ToolInput) -> CallDetail {
     if let Some(file_path) = &input.file_path {
         let path = under_home(file_path);
@@ -288,10 +288,20 @@ fn declared_as(paths: &[String]) -> String {
 ///
 /// The two strings are read for their line counts and **neither is carried** —
 /// what an edit changed a line to is the work, not the row.
+///
+/// **A `Write` is `+N`, the lines it wrote**, and never a `-`: what the file
+/// held before is not in the call, so a Write over an existing file is not
+/// claimed to have removed anything. Like an Edit's, it is the size of what the
+/// call sent and not a diff. #1187.
 fn edited(input: &ToolInput) -> Option<String> {
-    let new = input.new_string.as_deref()?;
-    let old = input.old_string.as_deref().unwrap_or_default();
-    Some(format!("+{} -{}", counted(new), counted(old)))
+    if let Some(new) = input.new_string.as_deref() {
+        let old = input.old_string.as_deref().unwrap_or_default();
+        return Some(format!("+{} -{}", counted(new), counted(old)));
+    }
+    input
+        .content
+        .as_ref()
+        .map(|written| format!("+{}", written.0))
 }
 
 fn counted(text: &str) -> usize {
@@ -305,7 +315,7 @@ fn counted(text: &str) -> usize {
 /// the capture. A row naming a file the Drone read would carry it again on
 /// every call, so the two leading components of a home-shaped path are replaced
 /// rather than sent.
-fn under_home(path: &str) -> String {
+pub(crate) fn under_home(path: &str) -> String {
     let mut parts = path.split('/');
     match (parts.next(), parts.next(), parts.next()) {
         (Some(""), Some("Users") | Some("home"), Some(_)) => {
@@ -500,6 +510,8 @@ struct ToolInput {
     old_string: Option<String>,
     /// Edit. Read for its line count and never carried.
     new_string: Option<String>,
+    /// Write. Counted as it is decoded, and never held.
+    content: Option<LinesIn>,
     /// `declare_scope`. **The one argument in the stream that is recoverable
     /// nowhere else** — no route, no log line and no store field holds what a
     /// step declared, so a drift refusal could not be read against the claim it
@@ -531,6 +543,28 @@ struct ToolInput {
     /// a viewer folds by it; the argument was already on the wire for the
     /// rest, unread until now.
     job_id: Option<String>,
+}
+
+/// How many lines a string argument had, counted by the decoder.
+///
+/// **The string is never a `String` here.** A Write's `content` is a whole
+/// file, and the visitor sees it once, borrowed, and keeps only the number.
+struct LinesIn(usize);
+
+impl<'de> Deserialize<'de> for LinesIn {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<LinesIn, D::Error> {
+        struct Tally;
+        impl serde::de::Visitor<'_> for Tally {
+            type Value = LinesIn;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string")
+            }
+            fn visit_str<E: serde::de::Error>(self, text: &str) -> Result<LinesIn, E> {
+                Ok(LinesIn(counted(text)))
+            }
+        }
+        decoder.deserialize_str(Tally)
+    }
 }
 
 #[derive(Deserialize)]

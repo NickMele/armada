@@ -4,7 +4,11 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { Skeleton } from "../../primitives/Skeleton/Skeleton";
 import { Chapter } from "../Chapter/Chapter";
-import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
+import {
+  StepActivityMark,
+  stepActivitySaid,
+  type StepActivity,
+} from "../StepActivityMark/StepActivityMark";
 
 /**
  * A step as one timeline: the phases in the order they happened, repeated for
@@ -24,6 +28,22 @@ import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepAct
  * once, and a header reading `Attempt 1` above every step on every Job is a
  * word that never varies.
  */
+
+/**
+ * What the Drone is doing, in parts rather than as one node, so the verb takes
+ * the running hue here and no caller reaches for this stylesheet's class.
+ */
+export type StepTimelineNow = {
+  /** `Editing`. Absent between calls, where a sentence is the whole of it. */
+  verb?: ReactNode;
+  /** The path, the command, or the Drone's own sentence. */
+  detail?: ReactNode;
+  /** How long the call has been open — `3s`. */
+  took?: ReactNode;
+  /** Whether `detail` is machine-derived. A path is; a sentence is not. */
+  mono?: boolean;
+};
+
 export type StepTimelineRow = {
   id: string;
   /** `Instructed`, `Working`, `Checks`, `Judge`. */
@@ -32,8 +52,29 @@ export type StepTimelineRow = {
   activity: StepActivity;
   /** What the row says while it is closed — `1756 turns · 43m 37s · 36 files`. */
   meta?: ReactNode;
-  /** The Drone is in this row now: the mark pulses and the row opens by default. */
+  /**
+   * The Drone is in this row now: the phase takes the running treatment and
+   * the row opens by default.
+   *
+   * **The running mark leaves the header here**, and the bar sweeping the
+   * card's top edge carries live-ness instead. A mark says *which* phase, and
+   * on the one card that is already edged, washed and swept in running there
+   * is no which left to say; what it cost was a second loop in a header that
+   * already had one. Marks stay where they still answer something — the task
+   * rows and the live narration row inside this body, where one row among
+   * forty is the live one.
+   */
   live?: boolean;
+  /**
+   * What the Drone is doing right now, under the phase's name — `Editing
+   * crates/fleet/src/settling.rs · 3s`.
+   *
+   * **The call in flight, not the last row of the log.** A person watching a
+   * running Job should not have to read a stream to find out whether anything
+   * is happening, which is the whole of #1196. Drawn only on a live row: on a
+   * phase that has finished there is no now.
+   */
+  now?: StepTimelineNow;
   /**
    * What the row opens to. **Absent draws a row that does not open**, which is
    * a phase with nothing recorded in it rather than a control over an empty box.
@@ -237,10 +278,36 @@ function Row({
   /** Set only on the followed row, so the timeline can scroll it into view. */
   openRef?: MutableRefObject<HTMLDivElement | null>;
 }) {
+  // The running mark leaves the live phase's header — the card's own sweep is
+  // what says it is working — and every other phase keeps the mark it always
+  // had. A live row is a running row: every caller that sets one sets the
+  // other, so the two conditions are one fact read twice.
+  const swept = row.live === true;
   const name = (
-    <span className="armada-steps__mark" {...row.marker}>
-      <StepActivityMark activity={row.activity} label={rowLabel(row)} pulsing={row.live} />
-      {row.name}
+    <span className="armada-steps__mark" data-live={swept || undefined} {...row.marker}>
+      {swept ? (
+        <>
+          {/* The mark's slot, kept empty. A column of four phases reads down
+              one left edge, and the live row's name jumping into the gap is
+              the one row a person is looking for moving. */}
+          <span className="armada-steps__slot" aria-hidden />
+          {/* Hue, the wash and the sweep are the visible channels, and a
+              reader hearing none of them would be told the phase's name and
+              nothing about it. The word is the registry's own, through
+              `stepActivitySaid`, not a second spelling written here. */}
+          <span className="armada-steps__state">{`${rowLabel(row)}, ${stepActivitySaid(row.activity) ?? ""}`}</span>
+        </>
+      ) : (
+        <StepActivityMark activity={row.activity} label={rowLabel(row)} />
+      )}
+      {row.now === undefined ? (
+        row.name
+      ) : (
+        <span className="armada-steps__title">
+          <span className="armada-steps__name">{row.name}</span>
+          <Now now={row.now} />
+        </span>
+      )}
     </span>
   );
   return (
@@ -248,7 +315,7 @@ function Row({
       <Chapter
         name={name}
         {...(row.meta === undefined ? {} : { meta: row.meta })}
-        {...(row.live === true ? { live: true } : {})}
+        {...(swept ? { live: true, tone: "running" as const } : {})}
         {...(row.act === undefined ? {} : { act: row.act })}
         // A phase with nothing recorded draws its header as a label: `Chapter`
         // takes no `onToggle` there, so no control opens an empty box.
@@ -261,6 +328,28 @@ function Row({
         )}
       </Chapter>
     </div>
+  );
+}
+
+/**
+ * What the Drone is doing, on one clipped line under the phase's name.
+ *
+ * **The verb is the only hued part.** The path beside it changes every few
+ * seconds and hue there would make the whole line flicker; the verb is the
+ * word that says the thing is happening, and it takes the same running the
+ * sweep above it carries.
+ */
+function Now({ now }: { now: StepTimelineNow }) {
+  return (
+    <span className="armada-steps__now" data-mono={now.mono || undefined}>
+      {now.verb === undefined ? null : (
+        <span className="armada-steps__now-verb">{now.verb} </span>
+      )}
+      {now.detail}
+      {now.took === undefined ? null : (
+        <span className="armada-steps__now-took"> · {now.took}</span>
+      )}
+    </span>
   );
 }
 

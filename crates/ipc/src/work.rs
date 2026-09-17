@@ -192,11 +192,10 @@ pub struct TouchedFile {
     /// present and `0`, and a surface drawing the two the same way would say a
     /// file nobody measured changed nothing.
     ///
-    /// **[`ChangedFile`] has no counterpart and is not getting one.** The live
-    /// reading is taken every two seconds inside Fleet's 250ms turn, and
-    /// counting is the same walk that renders the patch — 25ms over a hundred
-    /// files, 90ms over four hundred. This is read once, when the Job stops,
-    /// which is the one moment the count is both affordable and final.
+    /// **The final count.** This is read once, when the Job stops. A running
+    /// Job's counts are on [`ChangedFile::lines`], taken far less often than
+    /// its file list because counting is the walk that renders the patch —
+    /// 25ms over a hundred files, 90ms over four hundred. #1187.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lines: Option<LineCount>,
 }

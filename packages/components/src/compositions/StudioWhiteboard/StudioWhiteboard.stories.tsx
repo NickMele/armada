@@ -120,3 +120,36 @@ export const EveryKind: Story = {
     });
   },
 };
+
+/** A Studio reopened read-only: nothing drags, by pointer or by arrow key, and nothing is saved. */
+export const ReadOnly: Story = {
+  args: { nodes, edges, readOnly: true, onNodeMoved: fn(), onSelectionChange: fn() },
+  play: async ({ canvas, args, userEvent, step }) => {
+    const note = canvas.getByRole("group", { name: /^Note: The legend under the step bar/ });
+    await waitFor(() => expect(note).toBeVisible());
+    const link = canvas.getByRole("group", { name: /^Link: / });
+    const apart = () => centre(note).x - centre(link).x;
+
+    await step("a drag moves nothing and reports nothing", async () => {
+      const gap = apart();
+      const before = centre(note);
+      const view = note.ownerDocument.defaultView ?? window;
+      fireEvent.mouseDown(note, { clientX: before.x, clientY: before.y, button: 0, view });
+      for (const [dx, dy] of [[10, 10], [60, 40], [120, 80]] as const) {
+        fireEvent.mouseMove(view, { clientX: before.x + dx, clientY: before.y + dy, view });
+      }
+      fireEvent.mouseUp(view, { clientX: before.x + 120, clientY: before.y + 80, view });
+      await expect(Math.abs(apart() - gap)).toBeLessThan(1);
+      await expect(args.onNodeMoved).not.toHaveBeenCalled();
+    });
+
+    await step("a node still selects, and an arrow key moves nothing", async () => {
+      const job = canvas.getByRole("group", { name: /^Job: / });
+      job.focus();
+      await userEvent.keyboard("{Enter}");
+      await expect(args.onSelectionChange).toHaveBeenLastCalledWith(["job"]);
+      await userEvent.keyboard("{Shift>}{ArrowDown}{/Shift}");
+      await expect(args.onNodeMoved).not.toHaveBeenCalled();
+    });
+  },
+};

@@ -1,5 +1,22 @@
-/* Card — --bg-raised with a --border-default edge, --radius-md, and --pad-card
-   rather than the section gap. No shadow: elevation is surface. */
+/* Card — one of two things, and where it was rendered decides which.
+
+   **On the canvas it is glass**: the gradient, the --border-glass edge, the
+   top highlight, the blur and --shadow-card of the card treatment under Depth
+   (`docs/contracts/design-system.md` → Tokens → Depth). Not a line of that is
+   here. `src/glass.css` is the one recipe and names `.armada-card` itself, so
+   Dispatch, Studios, Reports, Cleanup and Settings read as Overview's panels
+   do without any of them saying so in their markup (#1353).
+
+   **Anywhere else it is this file**: flat --bg-raised with a --border-default
+   edge and no shadow, because it is not sitting on the lit canvas and nothing
+   inside a card takes a shadow. `glass.css` takes the glass off a card inside
+   a Sheet, inside a Dialog, and inside anything already glass — a card in a
+   card, and one of Helm's dock questions. For a ground no selector names, a
+   well, the card carries `data-flat` (`Card`'s `flat` prop) and lands here.
+
+   --pad-card rather than the section gap, both ways. The radius is not: a
+   card on the canvas is --radius-lg and is given it beside the glass, in
+   `glass.css`; --radius-md below is the flat card's. */
 .armada-card {
   display: flex;
   flex-direction: column;
@@ -12,7 +29,11 @@
 }
 
 /* A de-emphasised card steps to --border-subtle and --fg-subtle. Dimming is a
-   token, never an alpha, because opacity muddies every status colour inside. */
+   token, never an alpha, because opacity muddies every status colour inside.
+
+   **It steps on glass too.** A class above the recipe's own weight is what
+   `glass.css` keeps room for, so the dimmed edge below wins over --border-glass
+   rather than being silently dropped on the surfaces that are now glass. */
 .armada-card[data-dimmed] {
   border-color: var(--border-subtle);
   color: var(--fg-subtle);

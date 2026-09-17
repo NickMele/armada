@@ -20,6 +20,8 @@ import type {
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { HelmContext } from "@armada/protocol";
+import type { StudioCapture, StudioPosition, StudioPromotion } from "@armada/protocol";
+import type { StudioAnswer } from "@armada/screens/src/studio-reads";
 import type { AddTask, DropTask } from "@armada/protocol";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
@@ -477,6 +479,30 @@ const api: BridgeApi = {
   // here can offer a directory a person is standing in.
   readHeld: (want: boolean): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readHeld, want),
+
+  // A repository's Studios, and one open — #1287. Two reads a surface holds, four acts, each one
+  // operation with its own ids: nothing here names a route or reaches a node on another Studio.
+  watchStudios: (manifestId: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.watchStudios, manifestId),
+  watchStudio: (studioId: string | null): Promise<void> => ipcRenderer.invoke(CHANNELS.watchStudio, studioId),
+  createStudio: (manifestId: string): Promise<StudioAnswer> =>
+    ipcRenderer.invoke(CHANNELS.createStudio, manifestId),
+  moveStudioNode: (studioId: string, nodeId: string, position: StudioPosition): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.moveStudioNode, studioId, nodeId, position),
+  // The frame is main's: this hands over what was pointed at and nothing else,
+  // so the capability added here is a Note on a Studio and not a screenshot.
+  captureStudioNote: (studioId: string, said: string, capture: StudioCapture): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.captureStudioNote, studioId, said, capture),
+  // Reading one, where the capture above takes one: the bytes come back to be
+  // drawn and nothing about the file's place on disk crosses with them.
+  readStudioFrame: (studioId: string, nodeId: string): Promise<FrameRead> =>
+    ipcRenderer.invoke(CHANNELS.readStudioFrame, studioId, nodeId),
+  removeStudioNode: (studioId: string, nodeId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.removeStudioNode, studioId, nodeId),
+  decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.decideStudioEdge, studioId, edgeId, accepted),
+  promoteOnStudio: (studioId: string, promotion: StudioPromotion): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.promoteOnStudio, studioId, promotion),
 
   // The three decisions on the work, and they are three entries for the reason
   // the two kills are two: one capability taking "which decision" as an

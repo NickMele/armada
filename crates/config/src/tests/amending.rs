@@ -302,26 +302,35 @@ fn line_of(text: &str, line: &str) -> usize {
     found[0]
 }
 
-/// **The owner's rule, on the file it was decided against.** The `storybook`
-/// port is the last port, so removing it takes `ports:` — and the comment
-/// block written directly above that goes with it. The blank lines and the
-/// comments set off by them either side stay, and so does every other byte.
+/// **The owner's rule, on the file it was decided against.** Removing the last
+/// port takes `ports:` — and the comment block written directly above that goes
+/// with it. `mock` joined `storybook` under `ports:` in #1258, so it takes both
+/// removals to empty the section. The blank lines and the comments set off by
+/// them either side stay, and so does every other byte.
 #[test]
 fn removing_an_entry_takes_the_comment_block_directly_above_it_and_nothing_else() {
-    let edited = amended(OWN, &[port("storybook", PortEdit::Remove)]);
+    let edited = amended(
+        OWN,
+        &[
+            port("storybook", PortEdit::Remove),
+            port("mock", PortEdit::Remove),
+        ],
+    );
     let comment = line_of(
         OWN,
         "# Armada places these, so two worktrees never bind the same number.",
     );
     let storybook = line_of(OWN, "  storybook: {}");
+    let last = line_of(OWN, "  mock: {}");
     assert_eq!(
         storybook,
         comment + 2,
         "the comment is attached: no blank between"
     );
+    assert_eq!(last, storybook + 1, "the ports are the section, in order");
     assert_eq!(
         edited,
-        without(OWN, comment - 1, storybook),
+        without(OWN, comment - 1, last),
         "the attached comment, the section, and the blank that spaced it — nothing else"
     );
     assert!(edited.contains(

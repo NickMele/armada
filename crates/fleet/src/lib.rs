@@ -160,6 +160,8 @@ pub mod preparing;
 /// **Not Doctor**, whose grid is ten modules and is not built.
 mod probing;
 pub mod process;
+/// Starting a scout on a Studio, recording what it read, and stopping it.
+mod promoting;
 pub mod proposal;
 pub mod proposals;
 mod proposing;
@@ -210,6 +212,9 @@ pub mod saying;
 pub mod scanning;
 pub mod scope;
 mod scoping;
+/// The read-only agent a person starts from a Studio. `#1292`.
+pub mod scout;
+mod scouting;
 pub mod seeding;
 mod servers;
 pub mod serving;
@@ -229,6 +234,8 @@ pub mod spawning;
 /// What the fleet has spent, and which Jobs a ceiling is holding.
 mod spending;
 mod stuck;
+/// Runs a Studio holds, and what a node keeps of one past retention. `#1289`.
+pub mod studio_runs;
 /// A repository's Studios, through the store and onto the stream. `#1285`.
 mod studios;
 pub mod sub_dispatch;
