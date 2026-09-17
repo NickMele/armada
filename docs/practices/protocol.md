@@ -1159,6 +1159,12 @@ vocabulary down. What was missing was the calls.
 carries the draft's own text with nothing to point at: filing is optional and a
 person's own act.
 
+A Job dispatched from a Studio takes `manual` or `helm_drafted` for its
+`origin`, by who pressed it, rather than the `auto_detected` every other request
+through the proposer takes — **a value already on the wire, so it moves no
+number.** What it changes is what a row says: *Found by Fleet* names work
+Armada noticed by itself, and a draft somebody wrote up and sent is neither.
+
 ## Open questions
 
 Naming these rather than deciding them, per this document's brief:

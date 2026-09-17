@@ -231,6 +231,11 @@ async fn two_notes_are_clustered_written_up_edited_and_dispatched_to_a_job_at_th
 /// **The gate is unchanged.** A Job dispatched from a Studio stands at
 /// `awaiting_approval` like any other, and carries the draft's own text — the
 /// title, then the body — as what its Drone is told.
+///
+/// **And its origin is whoever pressed it.** Every other request through the
+/// proposer is one Fleet read, which a row draws as *Found by Fleet*; a
+/// dispatch from a Studio is a person sending a draft they wrote up, and a row
+/// saying Armada found it would be a sentence nobody could act on.
 #[tokio::test]
 async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_words() {
     let home = TempDir::new();
@@ -286,6 +291,11 @@ async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_wo
         "the dispatch gate is the same gate"
     );
     assert_eq!(job.title, DRAFT_TITLE);
+    assert_eq!(
+        job.origin.as_wire(),
+        "manual",
+        "a person pressed dispatch, so the row says Dispatched by you"
+    );
     let detail = api::Queries::get_job(fleet.as_ref(), job.id.clone())
         .await
         .expect("the Job it drafted");
@@ -293,6 +303,69 @@ async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_wo
     assert!(
         facts.starts_with(DRAFT_TITLE) && facts.contains(FIRST_NOTE),
         "the draft crosses whole — title, then body: {facts}"
+    );
+}
+
+/// **Helm dispatching on a person's ask draws as Helm's.** The same draft, the
+/// same gate, and the one thing that differs is who a row says sent it.
+#[tokio::test]
+async fn a_draft_helm_dispatched_on_an_ask_says_it_was_drafted_in_helm() {
+    let home = TempDir::new();
+    let fleet = std::sync::Arc::new(a_fleet_that_proposes(&home));
+    let studio = a_studio(&fleet).await;
+    let note = added(
+        &fleet,
+        &studio,
+        StudioNodeContent::Note {
+            said: FIRST_NOTE.to_string(),
+            capture: None,
+        },
+    )
+    .await;
+    let written = fleet
+        .write_up_studio_node(
+            studio.id.clone(),
+            WriteUpStudioNode {
+                node_id: note,
+                title: DRAFT_TITLE.to_string(),
+                body: DRAFT_BODY.to_string(),
+                position: at(240, 0),
+            },
+            Redirector::Helm,
+            None,
+        )
+        .await
+        .expect("Helm writing up on an ask");
+    let draft = of_kind(&written, StudioNodeKind::IssueDraft)[0].id.clone();
+
+    std::sync::Arc::clone(&fleet)
+        .dispatch_studio_draft(
+            studio.id.clone(),
+            DispatchStudioDraft {
+                node_id: draft,
+                position: at(480, 0),
+            },
+            Redirector::Helm,
+            None,
+        )
+        .await
+        .expect("Helm dispatching on an ask");
+
+    let listed = api::Queries::list_jobs(fleet.as_ref(), None)
+        .await
+        .expect("the Board reads");
+    let [job] = &listed.jobs[..] else {
+        panic!("one Job, not {}", listed.jobs.len())
+    };
+    assert_eq!(
+        job.origin.as_wire(),
+        "helm_drafted",
+        "Helm sent it, so the row says Drafted in Helm"
+    );
+    assert_eq!(
+        job.status.as_wire(),
+        "awaiting_approval",
+        "and it still takes the person's approval"
     );
 }
 

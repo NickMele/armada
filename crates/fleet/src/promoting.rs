@@ -19,6 +19,7 @@ use api::{Redirector, Refusal};
 use core_model::{
     ContradictionOutcome, NotRewritable, StudioEdge, StudioEdgeId, StudioGraph, StudioNode,
     StudioNodeContent, StudioNodeId, StudioNodeKind, StudioPosition, StudioRelation, ToItself,
+    TopLevelOrigin,
 };
 use ipc::{
     ContradictionSettled, DeferOnStudio, DispatchStudioDraft, EditStudioDraft, GroupStudioNodes,
@@ -55,6 +56,17 @@ const WRITABLE_UP: &[StudioNodeKind] = &[
 /// How far apart two Jobs from one proposal are placed, in canvas units — one
 /// node's height and a gap, so a split reads as a column.
 const JOB_APART: i64 = 200;
+
+/// The origin a Job dispatched from a Studio carries: **who pressed it**.
+/// `crates/core-model/domain/enum-verbs.toml` renders these as *Dispatched by
+/// you* and *Drafted in Helm*, and a Studio takes no value of its own — the
+/// `produced` edge from the Issue draft is where the Studio is recorded.
+fn pressed(by: Redirector) -> TopLevelOrigin {
+    match by {
+        Redirector::Person => TopLevelOrigin::Manual,
+        Redirector::Helm => TopLevelOrigin::HelmDrafted,
+    }
+}
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -424,8 +436,21 @@ where
         let served = self.served_named(Some(&ManifestId::from(&graph.studio.manifest_id)))?;
         // The draft's own text, verbatim, with nothing to point at: filing the
         // issue anywhere is optional and a person's own act.
+        //
+        // **The origin is who pressed it, not the proposer's own.** Every other
+        // request through this path is one Fleet read and `auto_detected` says
+        // so — *Found by Fleet*, the label for work Armada noticed by itself.
+        // A dispatch from a Studio is somebody sending a draft they wrote up,
+        // so the row says *Dispatched by you* or *Drafted in Helm*.
         let made = self
-            .propose_from_with_attachments(&request, None, Vec::new(), &served, by)
+            .propose_from_with_attachments(
+                &request,
+                None,
+                Vec::new(),
+                &served,
+                by,
+                Some(pressed(by)),
+            )
             .await
             .map_err(|why| self.refusal(why))?;
         let at = self.now();

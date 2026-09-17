@@ -171,8 +171,8 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 > **Rule.** An Issue draft carries its title and body whole to the proposer, in that order, and nothing between the two summarises, trims or re-fetches it.
 > Why: a write-up is made from the nodes feeding it, and a lossy hop would hand a [Drone](drone.md) something other than what the person read.
 
-> **Rule.** A dispatch from a Studio takes no origin of its own on the [Job Board](job-board.md). The `Produced` edge from the Issue draft is where a Job's Studio is recorded.
-> Why: `origin` is written from `dispatched_by`, and who dispatched is a person or Helm here as everywhere else.
+> **Rule.** A Job dispatched from a Studio carries the origin of whoever pressed it, and no value of the Studio's own. The `Produced` edge from the Issue draft is where a Job's Studio is recorded.
+> Why: `origin` is written from `dispatched_by`, and who dispatched is a person or Helm here as everywhere else. What it is not is *Found by Fleet*, which names work Armada noticed by itself.
 
 > **Rule.** An Issue draft's title and body are a person's to edit, and nobody else's, whatever is asked.
 > Why: an agent rewriting a draft a person edited is an agent reorganising a person's work, and what is dispatched has to be what they read.

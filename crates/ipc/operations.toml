@@ -374,7 +374,7 @@ Each Job the proposal became is added as a Job node with a `produced` edge from 
 
 **No issue is filed anywhere.** Filing on a forge is optional and a person's own act, so the draft's text reaches the proposer with nothing to point at.
 
-`origin` is whatever `propose_from_request` already writes — `auto_detected` for a person's, `helm_drafted` for Helm's — and no value says "from a Studio": the `produced` edge from the draft is where that is recorded, and `job-fields.toml` writes `origin` from `dispatched_by`. A node that is not an Issue draft is refused as `fleet.studio_not_a_draft`; where no workflow resolves, the proposer's own refusal is returned and no node is added.
+`origin` is **who pressed it** — `manual` for a person's, `helm_drafted` for Helm's — and not the `auto_detected` every other request through the proposer takes. That value renders as *Found by Fleet*, which is what a row says about work Armada noticed by itself; a dispatch from a Studio is somebody sending a draft they wrote up. **No value says "from a Studio"**: the `produced` edge from the draft is where that is recorded, and `job-fields.toml` writes `origin` from `dispatched_by`. A node that is not an Issue draft is refused as `fleet.studio_not_a_draft`; where no workflow resolves, the proposer's own refusal is returned and no node is added.
 
 `agent_access` is `Helm only`, the second of the two acts Helm takes on a person's ask, and only where the ask names sending the work as well as writing it up. From Helm it also publishes `studio.helm_acted`.
 """
