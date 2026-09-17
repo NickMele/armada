@@ -149,10 +149,9 @@
 }
 
 /* The line a person triages on. It is the reason the block is on screen, so it
-   carries the weight the two facts above it do not. */
+   carries the contrast the two facts above it do not. */
 .armada-verdicts__cite-value[data-field="consequence"] {
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
 }
 
 /* Where the brief this verdict answered was written. Mono and subtle, at the

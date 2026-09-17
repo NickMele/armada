@@ -28,7 +28,7 @@ import { Fragment, type ReactNode } from "react";
  * | `` `inline code` `` | mono, in a `--bg-sunken` well |
  * | Fenced blocks | a mono block that wraps rather than clips — the failing render was an expression broken mid-token |
  * | `- ` and `* ` lists | one row per item, no marker glyph |
- * | `**bold**`, `*italic*` | weight and slant, both already tokens |
+ * | `**bold**`, `*italic*` | full contrast against the muted body, and slant |
  * | `# heading` | the line at `--weight-medium` and full contrast — the structure without a second scale |
  * | Links, images, tables, blockquotes, raw HTML | the characters, literally |
  *
@@ -189,7 +189,7 @@ function inline(text: string, key: string): ReactNode[] {
   return out;
 }
 
-/** Weight and slant, which the token set already carries. Nothing else. */
+/** Contrast and slant, which the token set already carries. Nothing else. */
 function emphasised(text: string, key: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g).flatMap((part, i) => {
     if (part === "") return [];

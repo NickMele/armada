@@ -109,7 +109,7 @@
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
 }
 
 .armada-helm-approval-card__actions {

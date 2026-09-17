@@ -62,7 +62,7 @@
 
 .armada-fleet-panel__doctor-outcome {
   margin-left: auto;
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
   text-transform: capitalize;
 }
 

@@ -39,7 +39,7 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
   color: var(--text-body);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -113,14 +113,14 @@
   background: var(--surface-well);
 }
 
-/* What the test found. The line a person reads first, so it carries the weight
-   and the body colour. */
+/* What the test found. The line a person reads first, so it carries the body
+   colour. */
 .armada-held__what {
   margin: 0;
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
   color: var(--text-body);
   text-wrap: pretty;
 }
@@ -137,14 +137,14 @@
 
 /* The two clauses that decide the answer: what survives, and what does not.
 
-   **Weight, never hue.** Status colour maps onto the job state machine and
+   **Contrast, never hue.** Status colour maps onto the job state machine and
    nothing else, and neither of these is a job state — a red sentence here would
    be a second, unregistered status vocabulary. It is the same call
    `ChangedFiles` makes for its drift mark, and the destructive treatment is
    where it belongs: on the confirmation, which the dialog owns. */
 .armada-held__safe,
 .armada-held__lost {
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
   color: var(--text-body);
 }
 

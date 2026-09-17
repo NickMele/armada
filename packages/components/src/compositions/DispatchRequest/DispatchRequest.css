@@ -69,7 +69,7 @@
   color: var(--fg-default);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
 }
 
 .armada-dispatch__wait-for {
@@ -172,7 +172,7 @@
   color: var(--fg-default);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
 }
 
 /* The jobs, in the order they must land in. A well, because they are what

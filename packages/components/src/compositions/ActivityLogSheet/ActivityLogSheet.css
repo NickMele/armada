@@ -109,7 +109,7 @@
 
 .armada-log-sheet__said strong {
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
 }
 
 .armada-log-sheet__body {
