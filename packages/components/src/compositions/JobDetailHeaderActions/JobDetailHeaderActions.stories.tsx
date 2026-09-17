@@ -228,8 +228,13 @@ export const ThePullRequestOnceItLanded: Story = {
  * one control with two labels, which is the thing they are least like; one
  * split button separates them, and each menu label says what survives.
  *
+ * **The face is held, as `Acts.tsx` draws it.** The screen lists its acts
+ * mildest first, so on a running Job with a drone the face is `Kill drone` and
+ * it confirms by holding; `Kill job` is behind the caret and still asks. Under
+ * reduced motion the hold is not offered and the face reads `Kill drone`.
+ *
  * The drone act is drawn only where a drone is assigned, which is why the
- * `Drone` fact and that menu entry appear together.
+ * `Drone` fact and that face appear together.
  */
 export const BothKills: Story = {
   args: {
@@ -247,10 +252,17 @@ export const BothKills: Story = {
         <Button variant="ghost">Watch the turns</Button>
         <SplitButton
           variant="destructive"
-          menuLabel="What else ends this job"
-          items={[{ label: "Kill drone, the job stays open" }]}
+          menuLabel="Everything else this job can do"
+          items={[{ label: "Kill job, it ends here", danger: true, onSelect: fn() }]}
+          onAction={fn()}
+          hold={{
+            label: "Hold to kill drone",
+            description:
+              "Kills the drone once held until it fills. Letting go sooner kills nothing. The job stays open.",
+            onCommit: fn(),
+          }}
         >
-          Kill job
+          Kill drone
         </SplitButton>
       </>
     ),
@@ -259,9 +271,10 @@ export const BothKills: Story = {
 
 /**
  * The same pair with the menu open, which is the only view where the
- * distinction can be read. **The face is the act that ends the Job** — killing
- * the Drone leaves it open with its worktree held, so the milder act is the one
- * behind the caret and never the other way round.
+ * distinction can be read. **The act that ends the Job is behind the caret** —
+ * the screen leads with the milder kill, which leaves the Job open with its
+ * worktree held, and the face holds rather than asks. The caret never starts a
+ * hold.
  */
 export const BothKillsMenuOpen: Story = {
   args: {
@@ -272,10 +285,17 @@ export const BothKillsMenuOpen: Story = {
         <SplitButton
           variant="destructive"
           defaultOpen
-          menuLabel="What else ends this job"
-          items={[{ label: "Kill drone, the job stays open" }]}
+          menuLabel="Everything else this job can do"
+          items={[{ label: "Kill job, it ends here", danger: true, onSelect: fn() }]}
+          onAction={fn()}
+          hold={{
+            label: "Hold to kill drone",
+            description:
+              "Kills the drone once held until it fills. Letting go sooner kills nothing. The job stays open.",
+            onCommit: fn(),
+          }}
         >
-          Kill job
+          Kill drone
         </SplitButton>
       </>
     ),
