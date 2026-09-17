@@ -303,3 +303,5 @@ export * from "./compositions/HeldFlag/HeldFlag";
 export * from "./compositions/DroneMessageBox/DroneMessageBox";
 // A step's work as the Drone told it, under the plan task it served. #1185.
 export * from "./compositions/WorkNarration/WorkNarration";
+// What the Job has changed, as its own panel beside the run. #1187.
+export * from "./compositions/ProducedPanel/ProducedPanel";

@@ -8,13 +8,9 @@
 // whatever the socket last carried, which on a job opened after it ended is
 // nothing at all.
 //
-// **This is where the line counts appear, and why they appear only here.**
-// Counting is the same walk that renders the patch — 25ms over a hundred files,
-// 90ms over four hundred, against under a microsecond for the paths — so Fleet
-// takes it once, at the transition that ends the job. A running job's chapter
-// reads `3 files · all inside the plan` and a finished one reads `3 files · +94
-// −31 · all inside the plan`, and the difference is a measurement rather than a
-// field somebody forgot to send.
+// **A running Job's counts are Fleet's live reading**, taken once the Drone's
+// calls settle and at most every ten seconds, since protocol 14.6 — #1187. A
+// finished Job's are the count taken as it stopped.
 //
 // `files.ts` is the live half and says the same thing from the other side.
 
@@ -121,24 +117,6 @@ export function wroteSoFar(turns: readonly Turn[]): string {
   let files: readonly WireFile[] = [];
   for (const turn of turns) if (turn.saw.event === "produced") files = turn.saw.files;
   return files.map((file) => `${file.change} ${file.path}`).join("\n");
-}
-
-/**
- * Whose work the list is, said under it.
- *
- * **The chapter is the Job's and it is drawn inside one step's row.** Both
- * readings behind it are whole-worktree — the live event and the record Fleet
- * keeps at the stopping instant — and since the story became the step
- * timeline, they are drawn under the phase one Drone worked. A reader takes
- * that for the step's own output, which is the reading the row's own count
- * contradicts. The sheet says the same sentence over the same files.
- */
-export const THE_JOBS_WORK =
-  "Fleet commits once at the end, so this is the job's work and not this step's.";
-
-/** The note under the list: whose work it is, and where it went outside a plan. */
-export function noteUnder(produced: Produced): string {
-  return produced.note === undefined ? THE_JOBS_WORK : `${THE_JOBS_WORK} ${produced.note}`;
 }
 
 /**

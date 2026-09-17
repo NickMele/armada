@@ -1,9 +1,8 @@
 // What a Drone has changed, as the Produced chapter draws it.
 //
 // **Nothing here reads a directory.** The paths arrive as a named event like
-// everything else. Nor is anything counted that Fleet did not send: there are
-// no line counts here, because the patch is the expensive read and it is not on
-// this seam.
+// everything else, with the line counts Fleet took once the Drone settled where
+// it took any. Nothing is counted here.
 //
 // **The change kind is carried, not worded.** The wire's own value goes through
 // untouched and `ChangedFiles` reads the word off `CHANGE_KIND` — the eight
@@ -43,6 +42,7 @@ export function fileRowsOf(files: readonly WireFile[]): ChangedFile[] {
     // Absent and `false` are the same fact here — the wire omits it rather than
     // sending null — so the row is marked only where it is true.
     outsidePlan: file.outside_plan === true || undefined,
+    ...(file.lines === undefined ? {} : { added: file.lines.added, deleted: file.lines.deleted }),
   }));
 }
 

@@ -31,6 +31,7 @@
 import {
   briefSections,
   Button,
+  ChangeSummary,
   ChangedFiles,
   Clamped,
   DroneBrief,
@@ -72,7 +73,8 @@ import { fileRowsOf, readingFor, whyNoFootprint } from "./files";
 import { WorkNarrated } from "./grouped";
 import { Log } from "./Log";
 import { keptOf, type KeptRead, type Opens } from "./phases";
-import { noteUnder, producedIn } from "./produced";
+import { changeSummaryOf, moreSaid } from "./change-summary";
+import { producedIn } from "./produced";
 import type { OpenSheet } from "./Sheets";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP, hideUnread } from "./story";
 
@@ -116,6 +118,7 @@ export function chaptersOf({
   onOpenCheck,
   attempt,
   ended,
+  jobTurns,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
   now: number;
@@ -254,6 +257,8 @@ export function chaptersOf({
    * no control that would open somebody else's.
    */
   ended?: readonly WireFile[];
+  /** Every turn of the Job, for the files each task wrote on any run. #1187. */
+  jobTurns?: readonly Turn[];
 }): StepChapter[] {
   const { rows, unread } = hideUnread(watching === null ? [] : entriesOf(watching.rows, step.step_id));
   // **The turns Fleet sent, and not everything in Armada's voice.** The two
@@ -389,6 +394,8 @@ export function chaptersOf({
             plan={whole?.work_plan}
             live={live}
             most={PREVIEWED}
+            {...(produced === undefined ? {} : { diff: produced.files })}
+            {...(ended !== undefined || jobTurns === undefined ? {} : { jobTurns })}
             emptyNote={transcript ?? NOTHING_YET_ON_THIS_STEP}
             calls={calls}
             log={log("log")}
@@ -434,11 +441,18 @@ export function chaptersOf({
             <p className="text-2xs text-fg-muted">
               {whyNoFootprint(job.assigned_drone !== undefined)}
             </p>
+          ) : ended === undefined ? (
+            // The Job's own panel beside the run, by folder. #1187.
+            <ChangeSummary
+              {...summarised(produced.files)}
+              emptyNote={nothingTouched(documents.length, false)}
+              {...(produced.note === undefined ? {} : { note: produced.note })}
+            />
           ) : (
             <ChangedFiles
               files={produced.files}
-              emptyNote={nothingTouched(documents.length, ended !== undefined)}
-              note={noteUnder(produced)}
+              emptyNote={nothingTouched(documents.length, true)}
+              {...(produced.note === undefined ? {} : { note: produced.note })}
             />
           )}
           {documents.length === 0 ? null : <Documents kept={documents} />}
@@ -615,6 +629,16 @@ function readable(diff: Diff, jobId: string): boolean {
   if (diff.state !== "read" || diff.jobId !== jobId) return true;
   return diff.work !== undefined;
 }
+
+/** The panel's folders, the biggest files first, and the line for the rest. */
+function summarised(files: Parameters<typeof changeSummaryOf>[0]) {
+  const { folders, more } = changeSummaryOf(files, SUMMARISED);
+  const rest = moreSaid(more);
+  return { folders, ...(rest === undefined ? {} : { more: rest }) };
+}
+
+/** How many files the Produced panel draws before `and 6 more files`. */
+const SUMMARISED = 12;
 
 /**
  * How many groups the log's collapsed preview shows.

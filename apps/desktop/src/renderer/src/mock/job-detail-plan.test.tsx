@@ -82,6 +82,21 @@ test("the Working area opens the task being worked, folds the one done, and carr
   await expect.element(calls).toHaveAttribute("aria-expanded", "true");
 });
 
+// #1187: files per task, sized by their edits; the file no task's edits name,
+// sized by the diff; and Produced as the Job's own panel, with no footnote.
+test("each task lists the files it changed, the one no task owns sits apart, and Produced is its own panel", async () => {
+  await opened(withPlan(PLAN_MID_TASK));
+  const byEdits = page.getByRole("list", { name: "Files, sizes of its edits, not the diff" });
+  await expect.element(byEdits.first()).toHaveTextContent("selectors.ts+58\u22124");
+  await expect.element(page.getByText("Changed outside any task's edits")).toBeVisible();
+  await expect.element(page.getByRole("list", { name: "Files, lines in the diff" })).toHaveTextContent("index.ts+21");
+  const folder = page.getByRole("region", { name: "packages/settings/src" });
+  await expect.element(folder).toHaveTextContent(/^packages\/settings\/src\+94\u221231selectors\.ts/);
+  await expect.element(folder).toHaveTextContent("index.tsnew+21");
+  expect(page.getByRole("button", { name: /Open the diff/ }).all()).toHaveLength(1);
+  expect(page.getByText("Fleet commits once at the end", { exact: false }).query()).toBeNull();
+});
+
 test("no plan on the workflow draws no Plan region", async () => {
   await opened(running());
   expect(page.getByText("Plan", { exact: true }).query()).toBeNull();
