@@ -6,8 +6,18 @@
    pulses on the FOCUSED Job, opacity and scale only, so no row shifts; hue
    says WHICH step on every running row. */
 :root {
+  /* A press answers before the finger is up. Under 100ms, so it reads as the
+     control responding rather than as an animation. */
+  --duration-press: 90ms;
   --duration-fast: 120ms;  /* hover, focus */
   --duration-base: 180ms;  /* panel and dropdown transitions */
+  /* A sheet travels further than a menu, from the window's trailing edge, so
+     it takes longer than --duration-base or it reads as a jump. */
+  --duration-sheet: 220ms;
+  /* Travel within a list: a row re-sorting to its new place. Long enough to
+     follow the object, which is the whole reason it moves (Heer & Robertson,
+     InfoVis 2007). */
+  --duration-travel: 300ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --tooltip-delay: 400ms;
   /* How long a tooltip group stays warm after one closes. Inside it the next
@@ -16,10 +26,26 @@
      has been elsewhere for a third of a second is not still reading. */
   --tooltip-grace: 300ms;
   --duration-pulse: 1600ms; /* a loop that says still working */
+  /* The third clock. A transition is for a person watching; a decay is for a
+     person returning. A changed row carries a mark that fades to nothing
+     across this span, so somebody who looked away for a minute still sees
+     what moved. 5s reads as a flash, 120s never clears on a busy Board. */
+  --duration-decay: 45s;
+  /* How long a destructive control must be held before it commits. */
+  --duration-hold: 900ms;
+  /* How long a control that Fleet answered shows the answer before it rests. */
+  --duration-answer: 1600ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --duration-fast: 0ms; --duration-base: 0ms; }
+  :root {
+    --duration-press: 0ms; --duration-fast: 0ms; --duration-base: 0ms;
+    --duration-sheet: 0ms; --duration-travel: 0ms;
+  }
+  /* --duration-decay and --duration-hold are not zeroed. A decay is a colour
+     fading over tens of seconds, not movement, and a hold's time is the
+     safety, so reduced motion gets the confirmation dialog instead of a hold
+     it cannot see filling. */
   /* The pulse stops. The hue still marks the running step, so no reading is lost. */
   [data-step-running] { animation: none; }
 }
