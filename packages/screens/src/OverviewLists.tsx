@@ -188,7 +188,13 @@ export function OverviewLists({
         // The null result is a card of its own on the canvas, not a well inside a panel — a
         // card inside the panel would be a card in a card. `BoardEmpty`'s order: a fault or a
         // fresh install reads first, and both keep the panel below unchanged. #1262.
-        <OverviewEmpty onCompose={onCompose} />
+        //
+        // The wrapper is the empty panel's own frame, kept without the panel: `ActiveJobsList`
+        // drew an empty list as `role="list"` named by its `label`, so assistive tech still finds
+        // "Overview" here. No class, so it draws nothing of its own.
+        <div role="list" aria-label="Overview">
+          <OverviewEmpty onCompose={onCompose} />
+        </div>
       ) : sections.length === 0 ? (
         <ActiveJobsList
           variant="panel"
