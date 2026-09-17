@@ -112,3 +112,70 @@ test.for(STATES)("$what: Escape closes the composer, which is what the control s
   await userEvent.keyboard("{Escape}");
   await backToOverview();
 });
+
+// The guard on the key, his call of 2026-09-17: an untouched composer closes at
+// once — the three tests above — and one carrying anything typed asks first,
+// the way killing a Job does. The control and the key are one act, so both ask.
+
+/** The ask, by its own role and the title it is named by. */
+const ASKED = () => page.getByRole("dialog", { name: "Discard what you typed?" });
+
+/** Every state something can be typed into, and what typing in it leaves behind. */
+const TYPED: { what: string; type: () => Promise<() => string> }[] = [
+  {
+    what: "The request",
+    async type() {
+      await composing();
+      await answered();
+      const field = page.getByLabelText("Request", { exact: true });
+      await userEvent.type(field, "fix the flake in the board test");
+      return () => (field.element() as HTMLTextAreaElement).value;
+    },
+  },
+  {
+    what: "The hand form",
+    async type() {
+      await composing();
+      await answered();
+      await page.getByRole("button", { name: "Enter by hand" }).click();
+      const field = page.getByLabelText("Title", { exact: true });
+      await userEvent.type(field, "Widen the search index");
+      return () => (field.element() as HTMLInputElement).value;
+    },
+  },
+];
+
+test.for(TYPED)("$what: the key asks before it throws anything away, and no is no", async (state) => {
+  const written = await state.type();
+  const before = written();
+
+  await userEvent.keyboard("{Escape}");
+  await expect.element(ASKED()).toBeVisible();
+  // The press over the ask is the ask's to answer and never a second exit: it
+  // cancels, and the composer is still there with what was typed in it.
+  await userEvent.keyboard("{Escape}");
+  await expect.poll(() => ASKED().query()).toBe(null);
+  await expect.element(page.getByRole("button", { name: WAY_OUT })).toBeVisible();
+  expect(written(), `${state.what}: answering no lost what was typed`).toBe(before);
+
+  // Asked again, answered yes: that is the way out.
+  await userEvent.keyboard("{Escape}");
+  await ASKED().getByRole("button", { name: "Discard" }).click();
+  await backToOverview();
+});
+
+test.for(TYPED)("$what: the control asks under the same condition, and yes closes", async (state) => {
+  const written = await state.type();
+  const before = written();
+
+  await page.getByRole("button", { name: WAY_OUT }).click();
+  await expect.element(ASKED()).toBeVisible();
+  await ASKED().getByRole("button", { name: "Cancel" }).click();
+  await expect.poll(() => ASKED().query()).toBe(null);
+  expect(written(), `${state.what}: answering no lost what was typed`).toBe(before);
+
+  // And the same control again, answered yes this time, is the way out.
+  await page.getByRole("button", { name: WAY_OUT }).click();
+  await ASKED().getByRole("button", { name: "Discard" }).click();
+  await backToOverview();
+});
