@@ -319,10 +319,9 @@ export function Row({
       jobId={job.id}
       handle={job.handle}
       fields={facts}
-      // **Every running row, and the row applies the ceiling.** Two Jobs run
-      // at once now, so this alone would breathe twice on one board, and the
-      // running mark pulses on the focused row only, until #1276. The
-      // row knows where the cursor is and this does not, so the rule is its.
+      // **Every running row pulses**, wherever the cursor is (#1276): the pulse
+      // says still working, and a person scanning the Board reads that off each
+      // running row without moving onto it. A stale row claims nothing live.
       pulsing={job.status === "running" && !stale}
       dimmed={stale}
       focused={focused || undefined}

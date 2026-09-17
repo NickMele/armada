@@ -1,7 +1,6 @@
-// **The badge is static here.** The pulse is one per screen, on the most
-// specific mark present, and job detail has a workflow rail — so the rail's
-// current step carries it and this badge does not. Two breathing marks on one
-// screen would be two answers to "what is still working".
+// **The badge is static here.** Job detail has a workflow rail, and the rail's
+// current step names *which* step is working where this badge only names the
+// Job's state — so the rail carries the pulse and this badge does not.
 //
 // **The trail is the title, since #1093** — it replaced a title block that
 // said what the badge already did, and never carries the repository, a fact

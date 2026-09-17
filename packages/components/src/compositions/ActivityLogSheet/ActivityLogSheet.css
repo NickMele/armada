@@ -50,8 +50,8 @@
 }
 
 /* The live mark, on the subtitle. The same dot the run tree's current step
-   takes, and the pulse moves here while the sheet is open: the step behind the
-   layer is not the thing being read. */
+   takes, and it pulses beside that step, which keeps pulsing behind the
+   sheet (#1276). */
 .armada-log-sheet__live {
   display: inline-block;
   width: var(--dot);

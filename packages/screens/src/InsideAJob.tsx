@@ -235,8 +235,8 @@ export type InsideAJobProps = {
    */
   machineAct?: ReactNode;
   /**
-   * The running mark on the current step animates. One per screen: this is the
-   * Job being read, so the tree pulses and the header badge stays static.
+   * The running mark on the current step animates. The tree names which step
+   * is working, so it pulses and the header badge stays static.
    */
   pulsing?: boolean;
   onSelectStep?: (stepId: string) => void;
@@ -347,9 +347,9 @@ export type InsideAJobProps = {
    * reader came back to is still where it was. A window-fixed layer would cover
    * the shell's rail as well, which nothing asked it to.
    *
-   * **The pulse goes with the reading.** With a sheet open the tree's current
-   * step is behind the layer, so `pulsing` is what the caller turns off and the
-   * sheet's own live mark takes it.
+   * **An open sheet does not stop the pulse** (#1276). The tree's current step
+   * is still working behind the layer, and the sheet's own live mark pulses
+   * beside it.
    */
   sheet?: ReactNode;
   onCopied?: (value: string) => void;

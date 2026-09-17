@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { Kbd } from "../../primitives/Kbd/Kbd";
 import { Chapter } from "./Chapter";
@@ -94,8 +95,8 @@ export const WithHeaderMeta: Story = {
  * than a snapshot — a count says how many entries there are and only the dot
  * says they are still arriving.
  *
- * It does not pulse. The pulse is one per screen and it belongs on the step
- * the Drone is working.
+ * The dot pulses, because still arriving is still working (#1276). The play
+ * reads the motion itself, which no rendering of a single frame can show.
  */
 export const Live: Story = {
   args: {
@@ -106,6 +107,12 @@ export const Live: Story = {
     open: false,
     onToggle: () => {},
     bodyId: "chapter-live",
+  },
+  play: async ({ canvasElement }) => {
+    const loops = canvasElement
+      .getAnimations({ subtree: true })
+      .filter((one) => (one as CSSAnimation).animationName === "armada-log-sheet-pulse");
+    await expect(loops).toHaveLength(1);
   },
 };
 
