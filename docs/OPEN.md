@@ -15,12 +15,6 @@ on purpose and makes the gate name what was waiting.
 
 - **[workflowdef-schema-gaps]** Five keys appear in the workflow samples with no row in the field catalogue: `workflow_id`, `version`, `order`, `required`, `manifest_rule_overrides`. The `structure` field's prose also cites an `id` row that does not exist. What decides it: the samples are the working shape and the catalogue is the schema, so either the catalogue is incomplete or the samples carry keys nothing reads. Only one can be true, and the answer decides what a parser accepts.
 
-## docs/capabilities/merge-line.md
-
-- **[merge-line-new-warnings]** Should a `verify-foundations` warning the merged tree has and `main` lacks stop a merge? `scripts/land` reads only new `FAIL` and `missing:` lines as red, because the summary line's counts change with every merge and a warning does not fail `main`. Counting new warnings would stop merges that add a legitimate known gap.
-- **[merge-line-red-keeps-place]** Should a branch that goes red keep its place in line, as a conflict does? Today it rejoins at the back. A red is usually the branch's own fix to make, but it can also be `main` breaking the combination.
-- **[merge-line-no-when-reruns]** Should Checks with no `when:` rerun on every moved `main`? `build`, `test` and `format` declare none, so today any movement reruns all three, including a docs-only merge. Narrowing them needs a `when:` on each in `armada.yml`.
-
 ## docs/concepts/bridge.md
 
 - **[bridge-reconnect-trust]** What does Bridge show while it cannot reach Fleet, and what does it trust on reconnect? Closing Bridge does not stop Fleet, and reopening it reconnects rather than respawning, but the reconnect behavior itself is not yet designed.

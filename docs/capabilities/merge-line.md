@@ -25,7 +25,7 @@ outside Fleet. It is built so each part has a named home in Fleet, listed under
 |---|---|
 | Nothing reruns when `main` has not moved | `main` is an ancestor of the branch head |
 | When it has moved, `main` is merged in first | A throwaway detached worktree at the branch head |
-| A Check reruns when its `when:` matches both sides | `armada covers`, asked once per side |
+| A Check reruns when its `when:` matches either side | `armada covers`, over both sets of paths |
 | `verify-foundations` reruns, read against `main` | Only a failing line `main` lacks is red |
 | The merge goes through GitHub, pinned to the gated commit | `gh pr merge --merge --match-head-commit` |
 | `main` is read again right before merging | `git ls-remote`; a move gates again |
@@ -45,7 +45,7 @@ runner (holds flock) -----------------------------+
   worktree add --detach <head>; git merge <main>                         |
         | conflict only in generated files -> regenerate, commit         |
         | any other conflict -> outcome conflict (keeps its place)       |
-  covers(landed on main) ∩ covers(branch changed) -> armada check each   |
+  covers(landed on main + branch changed) -> armada check each           |
   verify-foundations: new FAIL / missing: lines vs main's own run        |
         | red -> outcome red, nothing pushed                             |
   push merge commit to the branch; wait for GitHub to see it             |
@@ -65,16 +65,29 @@ runner (holds flock) -----------------------------+
 - **A dead runner's entry stays queued.** The next `scripts/land` or `--status` finds the lock free and starts a runner, which retakes the turn.
 - **An entry is keyed by a hash of its branch** and carries the name, because branch names hold `/`.
 - **Every finished turn removes its entry**, whatever the outcome.
-- **A conflict keeps its place.** Resubmitted, the entry reuses the place its conflict outcome recorded.
+- **A conflict and a red keep their place.** Resubmitted, the entry reuses the place the outcome recorded: the wait was already served.
+- **A hung Check holds the turn until somebody kills the runner.** A timeout was ruled out, because a cold build plus the app suite runs past any fixed one and evicting a holder that is still working puts two merges in flight.
 - **State lives under the common git directory**, in `armada-land/`, so every worktree of one clone shares one line.
 
 ## Choosing what reruns
 
 **Which Checks a set of paths hits is one answer, shared with Fleet's gate.** `armada covers` reads paths on stdin and asks each Check's `covers`, which calls `Covers::reach` in `crates/core-model/src/job/covers.rs`. `ResolvedCheck::covers`, which the gate's skip decision asks, calls the same function.
 
-A Check reruns when it covers what landed on `main` since the merge base **and** what the branch changed. A Check with no `when:` covers everything, so `build`, `test` and `format` rerun on every moved `main`.
+**A Check reruns when it covers what landed on `main`, or what the branch changed, or both.** Either side, not both: the pair most likely to break only in combination is a Rust change landing on the base against a branch's TypeScript, where the generated types meet, and asking for both sides skips exactly that. In this repository `build`, `test` and `format` declare no `when:` and already rerun on every moved `main`, so what either-side adds is the scoped front-end Checks.
 
 **File overlap alone would miss cross-file breakage.** A type changed in one crate breaks a caller in another file, and both sides still hit `test`.
+
+**The line gates the combination, and trusts the agent for the branch's own Checks.** With `main` unmoved nothing reruns at all — `work-issue` step 4 is where a branch is measured on its own, and preflight stamps the tree it was measured on.
+
+**How a `verify-foundations` run is read:**
+
+| Read | Why |
+|---|---|
+| Only `FAIL` and `missing:` lines | A warning does not fail `main` either |
+| Line numbers normalised out of the subject | A line inserted above an old failure renumbers it |
+| A non-zero exit naming no failing rule is red | A branch that breaks `xtask` prints one `error[E0433]` and would be gated on nothing |
+| The same on `main`'s own run, which stops the turn | There is nothing to compare against |
+| `main`'s run cached per commit, only once read as a report | A killed run cached empty makes every branch after it red |
 
 ## The merge and the proof
 
@@ -117,11 +130,11 @@ A Check reruns when it covers what landed on `main` since the merge base **and**
 
 **Gates run the `armada` on `PATH`, not one built from the gated tree.** `armada check` only resolves a name in `armada.yml` and spawns its command, so the binary needs only to read the file. A change to how `armada.yml` is read is the one case it gets wrong.
 
-## The guard, not yet built
+## The guard
 
-**A hook refuses `gh pr merge` and a push to `main`, and names `scripts/land`.** Without it an agent that merges by hand bypasses the line, and the first-parent check reports the result as ungated after the fact.
+**`.claude/hooks/guard_merge.py` refuses `gh pr merge` and any `git push` whose destination is `main`**, including `--delete main`, and splits a compound command so `cd x && git push origin main` is caught too. Its refusal names `scripts/land preflight`, `scripts/land`, `scripts/land --status` and this page. `.claude/settings.json` registers it as a `PreToolUse` matcher on Bash.
 
-It belongs beside `.claude/hooks/guard_write.py`, and its settings entry is a `PreToolUse` matcher on Bash. `scripts/land`'s own `gh pr merge` runs in the detached runner rather than through the Bash tool, so the hook does not see it.
+**It cannot see the line's own merge.** That runs in the detached runner, outside the Bash tool. An agent who goes around it lands a combination nothing checked, and the first-parent comparison is what says so afterwards.
 
 ## What it depends on
 
@@ -129,8 +142,3 @@ It belongs beside `.claude/hooks/guard_write.py`, and its settings entry is a `P
 - `concepts/manifest.md` — *Which paths a Check covers* and *Proving what merged*.
 - `practices/running-locally.md` — *Landing a branch*, how to run it and read its outcomes.
 
-## Open questions
-
-- **[merge-line-new-warnings]** Should a `verify-foundations` warning the merged tree has and `main` lacks stop a merge? `scripts/land` reads only new `FAIL` and `missing:` lines as red, because the summary line's counts change with every merge and a warning does not fail `main`. Counting new warnings would stop merges that add a legitimate known gap.
-- **[merge-line-red-keeps-place]** Should a branch that goes red keep its place in line, as a conflict does? Today it rejoins at the back. A red is usually the branch's own fix to make, but it can also be `main` breaking the combination.
-- **[merge-line-no-when-reruns]** Should Checks with no `when:` rerun on every moved `main`? `build`, `test` and `format` declare none, so today any movement reruns all three, including a docs-only merge. Narrowing them needs a `when:` on each in `armada.yml`.
