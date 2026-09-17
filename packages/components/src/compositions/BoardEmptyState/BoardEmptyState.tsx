@@ -20,13 +20,6 @@ import { useCallback } from "react";
  * milestone, so a button offering to would be a control that cannot act. It is
  * machine-derived, so it is mono, and like every machine value it copies on
  * click and carries no `copy` glyph.
- *
- * **Overview's null result is a card, not a well** — `design-system.md`,
- * Overview empty state (#1262). The Board's list is the region, so its empty
- * state is the region's own ground; Overview's middle is a column of cards, so
- * an empty one is a card with the thing to do on it. `card` takes the shared
- * `armada-glass` recipe and `lead` states the fact above the line. Still no
- * glyph.
  */
 export type BoardEmptyStateProps = {
   /** The one line. The whole reading, before anything beneath it. */
@@ -38,7 +31,8 @@ export type BoardEmptyStateProps = {
   lead?: ReactNode;
   /**
    * Draw a glass card on the canvas rather than a well in a list — Overview's
-   * empty middle. The card treatment is `armada-glass`, never restated here.
+   * empty middle, whose column is cards (`design-system.md`, Overview empty
+   * state). The card treatment is `armada-glass`, never restated here.
    */
   card?: boolean;
   /**
