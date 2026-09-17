@@ -45,8 +45,9 @@ runner (holds flock) -----------------------------+
   worktree add --detach <head>; git merge <main>                         |
         | conflict only in generated files -> regenerate, commit         |
         | any other conflict -> outcome conflict (keeps its place)       |
-  covers(landed on main + branch changed) -> armada check each           |
+  seed: cp -c the build directories in                                   |
   verify-foundations: new FAIL / missing: lines vs main's own run        |
+  covers(landed on main + branch changed) -> setup, then armada check each|
         | red -> outcome red, nothing pushed                             |
   push merge commit to the branch; wait for GitHub to see it             |
         v                                                                v
@@ -85,9 +86,29 @@ runner (holds flock) -----------------------------+
 |---|---|
 | Only `FAIL` and `missing:` lines | A warning does not fail `main` either |
 | Line numbers normalised out of the subject | A line inserted above an old failure renumbers it |
+| Findings counted, not collected into a set | A second violation of one rule in one file reads like the first |
 | A non-zero exit naming no failing rule is red | A branch that breaks `xtask` prints one `error[E0433]` and would be gated on nothing |
 | The same on `main`'s own run, which stops the turn | There is nothing to compare against |
 | `main`'s run cached per commit, only once read as a report | A killed run cached empty makes every branch after it red |
+| A `main` that cannot run it stops every turn, saying so | The branch behind it is not the one to fix |
+
+## What a turn prepares, and in which order
+
+**The build directories are cloned into both worktrees, and nothing else runs before `verify-foundations`.** `setup.requires` — `pnpm install` and the browser download — runs only where a Check is about to, after the comparison is read.
+
+```
+merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns -> the Checks
+```
+
+**The two sides of the comparison are then identical by construction**, rather than by two code paths being kept in step. What makes it safe to read `verify-foundations` in a tree with no `node_modules` and no built bundle:
+
+- A missing bundle is a warning rather than a failure, and warnings are outside the comparison. `xtask/src/rules_bundled.rs` says so about itself.
+- The one rule that shells out to `node` runs the codegen script directly, with no installed dependencies. `xtask/src/rules_vocabulary.rs`.
+- Measured: a worktree with neither produced no new failing line against the main checkout's own run.
+
+**What it gives up:** a rule that did read build output would be blind on both sides. The bundle rule already declares a warning for that reason, and a rule that wanted more would have to say so.
+
+**The seed stays on both sides.** It is an APFS clone, and it is what keeps `xtask` from cold-building.
 
 ## The merge and the proof
 

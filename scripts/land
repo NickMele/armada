@@ -479,8 +479,7 @@ def gate(state, entry, head, base, logs):
 
         # Whether or not a Check reruns: verify-foundations always does, and a
         # tree without `target/` reads its own missing build as a new failure.
-        prepare(repo, where, logs)
-        nothing_left(where, "preparing the gate")
+        seed(repo, where, logs)
         since = git(repo, "merge-base", head, base)
         landed = git(repo, "diff", "--name-only", since, base).splitlines()
         changed = git(repo, "diff", "--name-only", since, head).splitlines()
@@ -490,9 +489,20 @@ def gate(state, entry, head, base, logs):
         # call over both sets is that union, in the order the Manifest writes.
         rerun = covers(where, landed + changed)
 
-        failed, log_paths = [], []
+        # **Before setup, and that is what keeps the comparison honest.** The
+        # base worktree needs no install to run this, so running one here would
+        # be the only difference between the two trees.
+        say(state, branch, "gating", "reading verify-foundations against " + BASE)
+        new_lines = foundations_delta(state, where, base, logs)
+        nothing_left(where, "verify-foundations")
+        log_paths = [os.path.join(logs, "foundations.log")]
+
+        failed = []
+        if rerun:
+            setup(where, logs)
+            nothing_left(where, "preparing the gate")
         for name in rerun:
-            say(state, branch, "gating", f"running {name} ({', '.join(rerun)})")
+            say(state, branch, "gating", f"running {name} ({', '.join(rerun)})", logs=log_paths)
             log = os.path.join(logs, f"{name}.log")
             log_paths.append(log)
             if run([ARMADA, "check", name], where, check=False, log=log).returncode != 0:
@@ -501,10 +511,6 @@ def gate(state, entry, head, base, logs):
         # A Check that wrote in the tree measured something the candidate commit
         # does not carry.
         nothing_left(where, "the Checks")
-        say(state, branch, "gating", "reading verify-foundations against " + BASE, logs=log_paths)
-        new_lines = foundations_delta(state, where, base, logs)
-        nothing_left(where, "verify-foundations")
-        log_paths.append(os.path.join(logs, "foundations.log"))
 
         if failed or new_lines:
             raise Stop(
@@ -564,24 +570,45 @@ def merge_in(state, entry, where, base, logs):
 
 
 def nothing_left(where, after):
-    """The gate worktree holds exactly what the candidate commit holds."""
-    left = git(where, "status", "--porcelain")
+    """The gate worktree's tracked files are exactly what the candidate commit
+    holds. **Tracked only**: the seed and the setup Commands write untracked
+    build output into the same tree, which is what they are for."""
+    left = git(where, "status", "--porcelain", "--untracked-files=no")
     if left:
         raise Stop("stopped", f"{after} left files the commit does not carry, so the Checks would "
                               f"measure a tree nothing can merge:\n{left}")
 
 
-def prepare(repo, where, logs, setup=True):
-    """Clone the seed paths copy-on-write and run the setup Commands, as Fleet
-    does for a Job's worktree. A volume that cannot clone starts cold."""
+def seed(repo, where, logs):
+    """Clone the seed paths copy-on-write, as Fleet does for a Job's worktree,
+    so `xtask` is not cold-built. A volume that cannot clone starts cold.
+
+    **Every worktree this runs in gets this and nothing else before
+    `verify-foundations`**, so the two sides of its comparison are prepared the
+    same way by construction rather than by two code paths agreeing."""
     main_tree = git(repo, "worktree", "list", "--porcelain").splitlines()[0].split(" ", 1)[1]
     for path in SEED:
         source, target = os.path.join(main_tree, path), os.path.join(where, path)
         if os.path.exists(source) and not os.path.exists(target):
             run(["cp", "-cR", source, target], where, check=False, log=os.path.join(logs, "setup.log"))
-    for name in SETUP if setup else []:
+
+
+def setup(where, logs):
+    """The Manifest's `setup.requires`, run only where a Check is about to."""
+    for name in SETUP:
         if run([ARMADA, "run", name], where, check=False, log=os.path.join(logs, "setup.log")).returncode != 0:
             raise Stop("stopped", f"`{ARMADA} run {name}` failed preparing the gate; see setup.log")
+
+
+def finding_counts(lines):
+    """How many times each finding was printed, with its line number normalised
+    out. **Counted rather than a set**: a second violation of the same rule in
+    the same file reads identically to the first, and folding it onto the known
+    one is a new failure disappearing."""
+    counted = {}
+    for line in lines:
+        counted[NUMBERED.sub("", line)] = counted.get(NUMBERED.sub("", line), 0) + 1
+    return counted
 
 
 def failing_lines(text):
@@ -602,15 +629,20 @@ def foundations_delta(state, where, base, logs):
     on main is legitimate, so only a new `FAIL` or `missing:` line is red; a new
     warning is not a failure on main either, and the summary line's counts move
     with every change."""
-    repo = os.path.dirname(state)
-    known = {NUMBERED.sub("", line) for line in base_foundations(state, base, logs)}
+    known = finding_counts(base_foundations(state, base, logs))
     done = run(FOUNDATIONS, where, check=False, log=os.path.join(logs, "foundations.log"))
     said = done.stdout + done.stderr
     if not a_report(said, done.returncode):
         raise Stop("red", f"`{shlex.join(FOUNDATIONS)}` exited {done.returncode} with {BASE} merged in "
                           "and named no failing rule, so nothing was gated; see foundations.log",
                    new_lines=failing_lines(said) or said.strip().splitlines()[-3:], logs=[os.path.join(logs, "foundations.log")])
-    return [line for line in failing_lines(said) if NUMBERED.sub("", line) not in known]
+    seen, new = {}, []
+    for line in failing_lines(said):
+        at = NUMBERED.sub("", line)
+        seen[at] = seen.get(at, 0) + 1
+        if seen[at] > known.get(at, 0):
+            new.append(line)
+    return new
 
 
 def base_foundations(state, base, logs):
@@ -627,14 +659,15 @@ def base_foundations(state, base, logs):
     drop_worktree(repo, at)
     git(repo, "worktree", "add", "--quiet", "--detach", at, base)
     try:
-        prepare(repo, at, logs)
+        seed(repo, at, logs)
         done = run(FOUNDATIONS, at, check=False, log=os.path.join(logs, "foundations-base.log"))
         said = done.stdout + done.stderr
     finally:
         drop_worktree(repo, at)
     if not a_report(said, done.returncode):
-        raise Stop("stopped", f"`{shlex.join(FOUNDATIONS)}` exited {done.returncode} on {BASE} itself and "
-                              "named no failing rule, so there is nothing to compare against; see foundations-base.log")
+        raise Stop("stopped", f"{BASE} itself is broken: `{shlex.join(FOUNDATIONS)}` exited {done.returncode} "
+                              f"there and named no failing rule, so nothing can be gated against it and this "
+                              f"branch is not at fault. Fix {BASE} and land that first; see foundations-base.log")
     fresh = f"{cached}.{os.getpid()}.tmp"
     with open(fresh, "w") as out:
         out.write("report\n" + said)

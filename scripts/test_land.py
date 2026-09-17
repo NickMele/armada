@@ -107,6 +107,7 @@ elif args[:1] == ["check"]:
     script = os.path.join("checks", f"{args[1]}.sh")
     sys.exit(subprocess.run(["sh", script]).returncode if os.path.exists(script) else 0)
 elif args[:1] == ["run"]:
+    open(f"{args[1]}.stamp", "w").write("prepared\n")
     sys.exit(0)
 else:
     sys.exit(f"stub armada: {args}")
@@ -154,8 +155,9 @@ class Line(unittest.TestCase):
             ARMADA_LAND_GH=os.path.join(stubs, "gh"),
             ARMADA_LAND_ARMADA=os.path.join(stubs, "armada"),
             ARMADA_LAND_FOUNDATIONS="sh foundations.sh",
-            ARMADA_LAND_SETUP="",
-            ARMADA_LAND_SEED="",
+            ARMADA_LAND_SETUP="marker",
+            ARMADA_LAND_SEED="seeded",
+            LAND_TEST_EVIDENCE=os.path.join(self.root, "evidence.txt"),
             ARMADA_LAND_HEAD_WAIT="10",
             STUB_GH_STATE=self.prs,
             STUB_REMOTE=self.remote,
@@ -168,8 +170,18 @@ class Line(unittest.TestCase):
         self.write(self.repo, {
             "checks.json": json.dumps({"test": None, "ui": ["ui/"]}),
             # Red only in combination: each branch alone passes.
-            "checks/test.sh": "! { [ -f one.txt ] && [ -f two.txt ]; }\n",
-            "foundations.sh": "cat foundations.txt 2>/dev/null; true\n",
+            "checks/test.sh": (
+                'printf "%s seed=%s setup=%s\\n" check '
+                '"$([ -f seeded/mark.txt ] && echo yes || echo no)" '
+                '"$([ -f marker.stamp ] && echo yes || echo no)" >> "$LAND_TEST_EVIDENCE"\n'
+                "! { [ -f one.txt ] && [ -f two.txt ]; }\n"
+            ),
+            "foundations.sh": (
+                'printf "%s seed=%s setup=%s\\n" foundations '
+                '"$([ -f seeded/mark.txt ] && echo yes || echo no)" '
+                '"$([ -f marker.stamp ] && echo yes || echo no)" >> "$LAND_TEST_EVIDENCE"\n'
+                "cat foundations.txt 2>/dev/null; true\n"
+            ),
             "foundations.txt": "FAIL  a rule main already fails\n        missing: its subject\n\nverify-foundations: RED — 1 failing, 0 warning\n",
             "shared.txt": "base\n",
         })
@@ -177,6 +189,9 @@ class Line(unittest.TestCase):
         self.git(self.repo, "commit", "--quiet", "-m", "base")
         self.git(self.repo, "remote", "add", "origin", self.remote)
         self.git(self.repo, "push", "--quiet", "-u", "origin", "main")
+        # A seed path git neither tracks nor ignores, which is what the gate
+        # worktree's own build directory is not.
+        self.write(self.repo, {"seeded/mark.txt": "cloned into every gate worktree\n"})
 
     def tearDown(self):
         for line in (self.state_file("runner.log"),):
@@ -485,7 +500,8 @@ class Line(unittest.TestCase):
         self.land(after)
         done = self.settle(after, "fix/after-base")
         self.assertEqual(done.returncode, 7, done.stdout)
-        self.assertIn("on main itself", done.stdout)
+        self.assertIn("main itself is broken", done.stdout)
+        self.assertIn("not at fault", done.stdout, "the branch behind a broken main is not the one to fix")
 
     def test_a_cached_base_run_that_is_not_a_report_is_taken_again(self):
         mover = self.branch("fix/moves-2", {"moved.txt": "1\n"})
@@ -495,7 +511,7 @@ class Line(unittest.TestCase):
         self.assertEqual(self.settle(mover, "fix/moves-2").returncode, 0)
         os.makedirs(self.state_file("foundations"), exist_ok=True)
         with open(self.state_file("foundations", self.main_head() + ".txt"), "w") as out:
-            out.write("")  # what a killed runner used to leave behind
+            out.write("error: the runner was killed half-way through\n")  # never a report
         self.land(where, "preflight")
         self.land(where)
         done = self.settle(where, "fix/after-empty-cache")
@@ -650,6 +666,56 @@ class Line(unittest.TestCase):
         self.land(two)
         self.assertEqual(self.outcome("fix/two")["place"], place)
         self.assertEqual(self.settle(two, "fix/two").returncode, 0)
+
+    def test_both_sides_of_the_comparison_are_prepared_the_same_way(self):
+        mover = self.branch("fix/moves-8", {"moved.txt": "1\n"})
+        where = self.branch("fix/prepared", {"x.txt": "1\n"})
+        self.land(mover, "preflight")
+        self.land(mover)
+        self.assertEqual(self.settle(mover, "fix/moves-8").returncode, 0)
+        self.land(where, "preflight")
+        self.land(where)
+        self.assertEqual(self.settle(where, "fix/prepared").returncode, 0)
+
+        ran = [line.split() for line in open(self.env["LAND_TEST_EVIDENCE"]).read().splitlines()]
+        foundations = [line for line in ran if line[0] == "foundations"]
+        checks = [line for line in ran if line[0] == "check"]
+        self.assertEqual(len(foundations), 2, "the base's own run and the merged tree's")
+        for line in foundations:
+            self.assertEqual(line[1:], ["seed=yes", "setup=no"],
+                             "both sides are seeded, and neither is installed into")
+        self.assertTrue(checks and all(line[1:] == ["seed=yes", "setup=yes"] for line in checks),
+                        "a Check runs after setup")
+
+    def test_a_check_that_writes_a_tracked_file_stops_the_turn(self):
+        mover = self.branch("fix/moves-9", {"moved.txt": "1\n"})
+        where = self.branch("fix/writes-in-the-gate", {"checks/test.sh": "echo written-by-a-check >> shared.txt\n"})
+        self.land(mover, "preflight")
+        self.land(mover)
+        self.assertEqual(self.settle(mover, "fix/moves-9").returncode, 0)
+        self.land(where, "preflight")
+        self.land(where)
+        done = self.settle(where, "fix/writes-in-the-gate")
+        self.assertEqual(done.returncode, 7, done.stdout)
+        self.assertIn("the Checks left files", done.stdout)
+        self.assertNotIn("checks", self.main_files() - {"checks"} or set())
+
+    def test_a_second_instance_of_a_known_finding_is_new(self):
+        known = "FAIL  no vendor literal outside adapters\n        missing: crates/a.rs:10 — `openai`\n"
+        self.write(self.repo, {"foundations.txt": known})
+        self.git(self.repo, "add", "-A")
+        self.git(self.repo, "commit", "--quiet", "-m", "one violation on main")
+        self.git(self.repo, "push", "--quiet", "origin", "main")
+        mover = self.branch("fix/moves-10", {"moved.txt": "1\n"})
+        second = self.branch("fix/one-more", {"foundations.txt": known + "        missing: crates/a.rs:80 — `openai`\n"})
+        self.land(mover, "preflight")
+        self.land(mover)
+        self.assertEqual(self.settle(mover, "fix/moves-10").returncode, 0)
+        self.land(second, "preflight")
+        self.land(second)
+        done = self.settle(second, "fix/one-more")
+        self.assertEqual(done.returncode, 4, done.stdout)
+        self.assertIn("crates/a.rs:80", done.stdout)
 
     def test_a_dirty_tree_or_a_missing_stamp_is_refused(self):
         where = self.branch("fix/dirty", {"x.txt": "1\n"})

@@ -516,8 +516,13 @@ the hook and needs nothing built.
 `main`, `gh` signed in, and an `armada` on `PATH` that has the `covers` verb.
 Until a build carrying it is installed, point `ARMADA_LAND_ARMADA` at that
 binary by its **absolute** path — the gate runs in a worktree of its own, so a
-relative one is refused. Reruns build in a fresh worktree seeded from the main
-checkout's `target/`, so they take minutes, not seconds.
+relative one is refused.
+
+**A gated turn takes minutes.** It cuts a worktree at the merge, clones the
+build directories into it, runs `verify-foundations` there and again in a
+worktree at `main` itself, then installs and runs each Check that either side
+hits. What landed is measured from the merge base, so an old branch meets nearly
+every Check on the way in.
 
 **`scripts/land` returns at once**, and a runner in the background does the work.
 Poll `--status`, which answers from disk in well under a second, until it stops
