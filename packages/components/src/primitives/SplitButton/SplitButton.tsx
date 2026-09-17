@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import type { ButtonAnswer } from "../Button/Button";
+import { useHold } from "../HoldButton/useHold";
 
 /**
  * The likely action, with the rest one click away — a button and a dropdown
@@ -80,7 +81,28 @@ export type SplitButtonProps = {
   answer?: ButtonAnswer;
   /** The face's label while `pending` holds. Falls back to `children`. */
   pendingLabel?: string;
+  /**
+   * Called on a press of the face. **Where `hold` is set, only where the hold is
+   * not offered** — under reduced motion, or where `--duration-hold` cannot be
+   * read — so it is the act that asks rather than the one that sends.
+   */
   onAction?: () => void;
+  /**
+   * The face confirms in place: it fills while held and calls `onCommit` once
+   * held for `--duration-hold`, as `HoldButton` does and through the same
+   * `useHold`. The design system contract, "A hold confirms in place".
+   *
+   * **The face only.** The caret stays a menu trigger and never starts a hold,
+   * and every entry behind it keeps its own `onSelect`. `children` is the label
+   * where the hold is not offered and a press calls `onAction` instead.
+   */
+  hold?: {
+    /** The face's label while the hold is offered, naming the hold: `Hold to kill drone`. */
+    label: string;
+    /** What holding does, read to a person who cannot see the fill. */
+    description: string;
+    onCommit: () => void;
+  };
   /** Names the menu for a reader who cannot see the caret. Also the caret's own name where `items` is empty. */
   menuLabel?: string;
 };
@@ -98,9 +120,20 @@ export function SplitButton({
   answer,
   pendingLabel,
   onAction,
+  hold,
   menuLabel = "More actions",
 }: SplitButtonProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const describedBy = useId();
+  // Called on every render so the hook order never changes; inert where there is
+  // no hold to offer.
+  const held = useHold<HTMLButtonElement>({
+    inert: hold === undefined || disabled || pending,
+    onCommit: () => hold?.onCommit(),
+    onAsk: () => onAction?.(),
+  });
+  // Pending wins: the act is already out, so the face is its bar and nothing to hold.
+  const holding = hold !== undefined && held.offered && !pending;
   // Nothing behind the caret yet — the title row's Dispatch has no menu, and
   // both segments call the same handler. A menu with nothing in it is a floating
   // empty box, not an absence, so the caret has to stop opening one rather than
@@ -126,10 +159,31 @@ export function SplitButton({
           disabled={pending ? undefined : disabled}
           aria-disabled={pending || undefined}
           aria-busy={pending || undefined}
-          onClick={pending ? undefined : onAction}
+          {...(holding
+            ? {
+                ...held.handlers,
+                ref: held.ref,
+                "data-hold": "",
+                "aria-describedby": describedBy,
+              }
+            : { onClick: pending ? undefined : onAction })}
         >
-          {icon}
-          {pending ? (pendingLabel ?? children) : children}
+          {holding ? (
+            <>
+              <span className="armada-hold__fill" data-phase={held.phase} aria-hidden="true" />
+              {icon}
+              <span className="armada-hold__label">{hold.label}</span>
+              {/* Hidden and still read: a description follows its reference into hidden content. */}
+              <span id={describedBy} hidden>
+                {hold.description}
+              </span>
+            </>
+          ) : (
+            <>
+              {icon}
+              {pending ? (pendingLabel ?? children) : children}
+            </>
+          )}
         </button>
         <button
           type="button"

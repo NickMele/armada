@@ -83,7 +83,7 @@ test("a different act leaves the face disabled and unmarked", async () => {
   // `redirect` is `StepActs.tsx`'s own act — never one this header opens —
   // so nothing here reads it as this control's own press.
   acting(job(), "redirect");
-  const face = page.getByRole("button", { name: "Kill drone" });
+  const face = page.getByRole("button", { name: "Hold to kill drone" });
   await expect.element(face).toBeDisabled();
   await expect.element(face).not.toHaveAttribute("aria-busy");
 });
