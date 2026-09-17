@@ -1,14 +1,13 @@
-/* A rounded panel in the left column. Same recipe as DriftPanel and
-   VerifyPanel: bordered on every side, radius-lg, held off its neighbours by
-   the column's own gap rather than by margin here. */
+/* A rounded panel in the left column, held off its neighbours by the column's
+   own gap rather than by margin here. Its surface — gradient, edge and shadow —
+   is `armada-glass` (`src/glass.css`), which Panel puts beside this class; the
+   radius stays here because the component owns its geometry. #1260. */
 .armada-panel {
   display: flex;
   flex-direction: column;
   flex: none;
   min-width: 0;
-  border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--bg-raised);
   overflow: hidden;
 }
 

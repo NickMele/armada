@@ -133,12 +133,15 @@ vibrating.
 --border-glass      rgb(255 255 255 / 0.07) card edge
 --border-highlight  rgb(255 255 255 / 0.05) 1px light along a card's top inner edge
 --accent-faint      --accent at 10%        the canvas's pool of light
---shadow-card       highlight + 1px contact + 28px soft drop
+--shadow-card       1px contact + 28px soft drop
 --glass-blur        12px                   backdrop blur under a card
 ```
 
 **A card** is a vertical gradient from `--bg-glass` to `--bg-glass-end`, with
-`--border-glass`, `--shadow-card` and a `--glass-blur` backdrop blur. It
+`--border-glass`, `--shadow-card`, a `--border-highlight` line along its top
+inner edge and a `--glass-blur` backdrop blur. The gradient, the highlight and
+the blur sit on a layer behind the card's content rather than on the card, so
+a tooltip or menu inside a card is never clipped by it. It
 replaces `--bg-raised` and `--border-subtle` on every panel that sits directly
 on the canvas: the left column's three panels, Overview's cards and Helm's
 dock. A row, a well or an input inside a card stays flat on its Ground token.
@@ -153,9 +156,13 @@ measured under the accent pool. `--fg-subtle` reads 4.74:1 there, and every
 status badge clears 4.5:1 on its own 12% tint, `not_started` included at
 4.55:1. A lighter top, `rgb(30 41 55)`, dropped `--fg-subtle` to 4.37:1.
 
-**Blur is the one cost worth watching.** The window stays open all day on a
-second monitor. The glass is 86% opaque so that where blur is dropped for
-cost, the card paints nearly the same colour without it.
+**No blur while a scrim covers the card.** Behind an open Sheet or Dialog the
+blur cannot be seen, and redrawing it every frame under the scrim made presses
+on the sheet go missing: three full runs of the app's tests in six, and none in
+five once it was off. The glass is 86% opaque, so the card paints the same
+without it. A Drift or Verify panel inside a Sheet or Dialog is not on the
+canvas, so it takes no glass at all and stays on `--bg-raised` and
+`--border-subtle`.
 
 ### Foreground
 

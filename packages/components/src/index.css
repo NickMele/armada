@@ -272,6 +272,10 @@
 /* Kill on job detail, confirmed by holding it. */
 @import "./primitives/HoldButton/HoldButton.css";
 
+/* The card treatment under Depth, shared by every card on the canvas. Above the
+   rule below, per HeldFlag's note. #1260. */
+@import "./glass.css";
+
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */
 .armada-helm-dock {

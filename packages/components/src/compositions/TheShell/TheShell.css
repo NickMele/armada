@@ -1,6 +1,36 @@
 /* Helm's dock, the edge strip it folds to, and the left column's own handle.
    The frame around them is screens.css's. */
 
+/* The canvas under Depth: --bg-base under two faint pools of light, so a quiet
+   day reads as depth rather than a flat grey (design-system.md, Tokens → Depth).
+   --accent-faint on the top leading corner always; --helm-faint on the bottom
+   trailing corner, behind the dock, only while the dock is open beside the
+   work. Light carries no information — never a status hue, and nothing reads
+   a state from it.
+
+   **Painted on the shell, over screens.css's flat `--bg-base`**, which this
+   sheet follows in index.css. The shell is the window, and the pool behind the
+   dock is the shell's own state to read. `body` carries the accent pool too
+   (`@armada/tokens/base.css`) for anything drawn outside the shell; the two
+   geometries are the same numbers and change together.
+
+   The sizes are `radial-gradient`'s own ellipse radii, as the contract writes
+   them: 760 × 480px and 640 × 520px. No token carries either, so each is
+   composed from the spacing scale — 48·16 − 8, 48·10; 48·13 + 16, 48·11 − 8.
+   The title row is opaque --bg-sunken, so the accent pool reads from below it. */
+.armada-shell {
+  background:
+    radial-gradient(calc(var(--space-12) * 16 - var(--space-2)) calc(var(--space-12) * 10) at 0 0, var(--accent-faint), transparent),
+    var(--bg-base);
+}
+
+.armada-shell:has(.armada-shell__dock) {
+  background:
+    radial-gradient(calc(var(--space-12) * 13 + var(--space-4)) calc(var(--space-12) * 11 - var(--space-2)) at 100% 100%, var(--helm-faint), transparent),
+    radial-gradient(calc(var(--space-12) * 16 - var(--space-2)) calc(var(--space-12) * 10) at 0 0, var(--accent-faint), transparent),
+    var(--bg-base);
+}
+
 /* Positioned, so a folded dock's sheet covers the work and leaves the rail and the bar in view. */
 .armada-shell__work {
   position: relative;
@@ -26,7 +56,10 @@
    own ground and a hairline on one edge, which read as part of the window's
    frame rather than as a region of its own — the drawing draws it bordered on
    every side, rounded, and held off the content by a gap, the same recipe
-   `DriftPanel` and `VerifyPanel` draw a standalone panel with. */
+   `DriftPanel` and `VerifyPanel` draw a standalone panel with.
+
+   Its surface is the card treatment, `armada-glass` (`src/glass.css`), beside
+   this class on the aside. Helm's own indigo edge and wash are #1264's. */
 .armada-shell__dock {
   flex: none;
   display: flex;
@@ -34,9 +67,7 @@
   width: var(--w-dock);
   min-height: 0;
   margin: var(--space-4);
-  border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--bg-raised);
   overflow: hidden;
 }
 
