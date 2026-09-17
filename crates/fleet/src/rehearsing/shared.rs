@@ -113,15 +113,15 @@ where
             });
         };
         let (root, handle) = (place.checkout.records_root(), place.handle.clone());
-        records::swept(
-            root,
-            &handle,
-            &self.now(),
-            self.run_log_retention(),
-            |reference| {
-                let _ = adapters::snapshot::forget(&tree.path, reference);
-            },
-        );
+        // Retention comes for a run before this one starts, and a Studio may
+        // be holding one of them: what each says is kept on its Run node here,
+        // while the log is still on disk to read. `crate::studio_runs`.
+        let due = records::due(root, &handle, &self.now(), self.run_log_retention());
+        let going: Vec<ipc::CheckoutRunRecord> = due.iter().map(Record::of_checkout).collect();
+        let held_back = self.kept_what_studios_hold(root, &handle, &going).await;
+        records::sweep(root, &handle, &due, &held_back, |reference| {
+            let _ = adapters::snapshot::forget(&tree.path, reference);
+        });
         let dir =
             records::made(root, &handle, &underway.id).map_err(|why| Unrehearsable::NotKept {
                 why: why.to_string(),

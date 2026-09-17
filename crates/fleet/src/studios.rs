@@ -20,8 +20,9 @@ use std::sync::Arc;
 
 use ipc::{
     AddStudioNode, AskScout, CreateStudio, DecideStudioEdge, HelmStudioAct, ManifestId,
-    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StopScout,
-    StudioDeleted, StudioHelmActed, StudioList, StudioSummary, WireError,
+    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StartStudioRun,
+    StopScout, StudioDeleted, StudioHelmActed, StudioList, StudioRunStarted, StudioSummary,
+    WireError,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -49,6 +50,8 @@ pub(crate) const NODE_BLANK: &str = "fleet.studio_node_blank";
 const NODE_NOT_HELMS: &str = "fleet.studio_node_not_helms";
 /// A Finding added claiming what only a scout records. A 422.
 const FINDING_IS_THE_SCOUTS: &str = "fleet.studio_finding_is_the_scouts";
+/// A Run node added rather than started. A 422.
+const NODE_IS_A_RUN: &str = "fleet.studio_node_is_a_run";
 /// A rename to nothing. A 422.
 const NAME_BLANK: &str = "fleet.studio_name_blank";
 /// Who is kept as having acted: the transport's word, never the body's.
@@ -283,6 +286,19 @@ where
         within: Option<ManifestId>,
     ) -> Result<ipc::Studio, Refusal> {
         let content = add.content.to_domain();
+        // **A Run node is made by starting a run, and by nothing else.** What
+        // one keeps of a swept run is read off the run's own record, so a Run
+        // node reachable here would be a way to write a result that no run
+        // ever had.
+        if content.kind() == core_model::StudioNodeKind::Run {
+            return Err(self.studio_unacceptable(
+                NODE_IS_A_RUN,
+                String::from(
+                    "a Run node is made by starting a run from the Studio, with \
+                     start_studio_run, so that what it references is a run that ran",
+                ),
+            ));
+        }
         if let Some(field) = content.blank() {
             return Err(self.studio_unacceptable(
                 NODE_BLANK,
@@ -442,5 +458,18 @@ where
         within: Option<ManifestId>,
     ) -> Result<ipc::Studio, Refusal> {
         self.scout_stopped(studio_id, stop, within).await
+    }
+
+    /// **The `Arc` is handed on**, for `Commands::start_checkout_run`'s
+    /// reason: the run outlives this request. `crate::studio_runs` has the
+    /// order the two writes happen in and why.
+    async fn start_studio_run(
+        self: std::sync::Arc<Self>,
+        studio_id: ipc::StudioId,
+        run: StartStudioRun,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<StudioRunStarted, Refusal> {
+        Fleet::started_studio_run(self, studio_id, run, by, within).await
     }
 }

@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use ipc::{
     AddStudioNode, AskScout, CreateStudio, DecideStudioEdge, ManifestId, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StopScout, Studio,
-    StudioDeleted, StudioId, StudioList,
+    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StartStudioRun, StopScout,
+    Studio, StudioDeleted, StudioId, StudioList, StudioRunStarted,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -131,4 +131,26 @@ pub trait Studios: Send + Sync + 'static {
         stop: StopScout,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `start_studio_run` — run one Manifest entry in the checkout of the
+    /// repository this Studio belongs to, and put a Run node on it. `#1289`.
+    ///
+    /// **By `Arc`, for `Commands::start_checkout_run`'s reason**: it is that
+    /// run, started in the working tree as it is on disk, and the task that
+    /// runs it outlives the request.
+    ///
+    /// **The Studio names the repository**, so this call takes none: a Studio
+    /// belongs to one, and a run started from it runs there.
+    ///
+    /// `by` says whose act to record the node as, the way
+    /// [`add_studio_node`](Studios::add_studio_node) does. Every refusal
+    /// `start_checkout_run` makes is made here first, and no node is written
+    /// for a run that was refused.
+    fn start_studio_run(
+        self: std::sync::Arc<Self>,
+        studio_id: StudioId,
+        run: StartStudioRun,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<StudioRunStarted, Refusal>> + Send;
 }

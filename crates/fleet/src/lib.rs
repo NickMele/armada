@@ -233,6 +233,8 @@ pub mod spawning;
 /// What the fleet has spent, and which Jobs a ceiling is holding.
 mod spending;
 mod stuck;
+/// Runs a Studio holds, and what a node keeps of one past retention. `#1289`.
+mod studio_runs;
 /// A repository's Studios, through the store and onto the stream. `#1285`.
 mod studios;
 pub mod sub_dispatch;
