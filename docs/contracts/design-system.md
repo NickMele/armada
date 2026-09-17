@@ -1567,7 +1567,8 @@ The left column's third panel — what the status bar used to read.
 state    --dot (6px) + --text-base --fg-default
 rows     pid / port / protocol / up, one row each: label --text-xs
          --text-label on the left, value --font-mono --text-xs --text-body
-         in one aligned column — Pulse's figure rows, FigureList
+         right-aligned to the panel's edge, where Stats puts its counts —
+         Pulse's figure rows, FigureList
 detail   --font-mono --text-2xs --fg-subtle, the sentence a state carries
 doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
          (--status-completed-success / --status-awaiting-review /
