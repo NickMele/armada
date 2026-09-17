@@ -64,8 +64,9 @@ use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
 use crate::studios::{
     add_studio_node, ask_scout, capture_studio_note, create_studio, decide_studio_edge,
-    delete_studio, get_studio, list_studios, move_studio_node, propose_studio_edge,
-    remove_studio_node, rename_studio, start_scout, start_studio_run, stop_scout,
+    delete_studio, get_studio, get_studio_frame, list_studios, move_studio_node,
+    propose_studio_edge, remove_studio_node, rename_studio, start_scout, start_studio_run,
+    stop_scout,
 };
 
 /// The inventory this router is compared against, row by row.
@@ -285,6 +286,10 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/studios", get(list_studios::<D>))
         .route("/studios/create", post(create_studio::<D>))
         .route("/studios/:studio_id", get(get_studio::<D>))
+        .route(
+            "/studios/:studio_id/frames/:node_id",
+            get(get_studio_frame::<D>),
+        )
         .route("/studios/:studio_id/rename", post(rename_studio::<D>))
         .route("/studios/:studio_id/delete", post(delete_studio::<D>))
         .route("/studios/:studio_id/add_node", post(add_studio_node::<D>))

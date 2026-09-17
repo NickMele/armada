@@ -56,8 +56,10 @@ const NODE_IS_A_RUN: &str = "fleet.studio_node_is_a_run";
 const NAME_BLANK: &str = "fleet.studio_name_blank";
 /// A frame over [`MOST_A_FRAME_MAY_WEIGH`]. A 422.
 const FRAME_TOO_LARGE: &str = "fleet.studio_frame_too_large";
-/// A staged frame Fleet could not read or could not keep. A 422.
+/// A frame Fleet could not read — staging one, or reading one back. A 422.
 const FRAME_UNREADABLE: &str = "fleet.studio_frame_unreadable";
+/// A frame asked for on a node that keeps none. A 422.
+const NO_FRAME_KEPT: &str = "fleet.studio_frame_not_kept";
 
 /// The most one frame may weigh. A window at twice its CSS pixels is under a
 /// megabyte and a half of PNG; four leaves room for a large display without
@@ -250,6 +252,66 @@ where
         let store = self.store().lock().await;
         self.studio_held(&store, &studio_id.to_domain(), within.as_ref())
             .map(|graph| ipc::Studio::of(&graph))
+    }
+
+    /// **The record is the allowlist**, which is what makes a caller-supplied
+    /// id safe to open a file with — `get_frame`'s rule, one surface over. A
+    /// node names itself; the file name is read off what that node kept, so an
+    /// id no node of this Studio carries reaches no file at all, whatever it
+    /// spells, and nothing here joins a caller's text onto a path.
+    ///
+    /// A node that keeps no frame and one whose file will not open answer
+    /// apart: the first is a Note that was captured without one, which is an
+    /// ordinary Note, and the second is a Studio directory that went.
+    async fn get_studio_frame(
+        &self,
+        studio_id: ipc::StudioId,
+        node_id: ipc::StudioNodeId,
+        within: Option<ManifestId>,
+    ) -> Result<(String, Vec<u8>), Refusal> {
+        let id = studio_id.to_domain();
+        let wanted = node_id.to_domain();
+        let filename = {
+            let store = self.store().lock().await;
+            let graph = self.studio_held(&store, &id, within.as_ref())?;
+            let node = graph
+                .nodes
+                .iter()
+                .find(|node| node.id() == &wanted)
+                .ok_or_else(|| {
+                    self.studio_unacceptable(
+                        NO_SUCH_NODE,
+                        format!("no node of this Studio is `{}`", wanted.as_str()),
+                    )
+                })?;
+            let kept = match node.content() {
+                StudioNodeContent::Note {
+                    capture: Some(capture),
+                    ..
+                } => capture.frame.as_ref(),
+                _ => None,
+            };
+            kept.ok_or_else(|| {
+                self.studio_unacceptable(
+                    NO_FRAME_KEPT,
+                    format!("node `{}` kept no frame", wanted.as_str()),
+                )
+            })?
+            .filename
+            .clone()
+        };
+        let path = self.studio_frames(&id).join(&filename);
+        std::fs::read(&path)
+            .map(|bytes| (filename, bytes))
+            .map_err(|cause| {
+                self.studio_unacceptable(
+                    FRAME_UNREADABLE,
+                    format!(
+                        "the frame kept for node `{}` was not read: {cause}",
+                        wanted.as_str()
+                    ),
+                )
+            })
     }
 
     async fn create_studio(

@@ -107,6 +107,14 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/studios/:studio_id",
     },
+    // The picture one Note kept, answered as the file. One segment and not two,
+    // unlike a step's frame: a Studio keeps one frame per node under the node's
+    // own id, so the node names the file and the record supplies its name.
+    Route {
+        operation: "get_studio_frame",
+        method: "GET",
+        path: "/studios/:studio_id/frames/:node_id",
+    },
     Route {
         operation: "rename_studio",
         method: "POST",

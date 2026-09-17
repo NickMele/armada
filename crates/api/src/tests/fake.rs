@@ -23,7 +23,7 @@ mod studios;
 mod tools;
 
 pub use conversing::SERVED_MANIFEST;
-pub use studios::{the_studio, THE_STUDIO};
+pub use studios::{the_studio, THE_FRAME, THE_STUDIO};
 
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
