@@ -339,7 +339,6 @@
 
 .armada-run-page__server > .armada-run-page__server-status {
   flex: none;
-  font-weight: var(--weight-medium);
 }
 
 .armada-run-page__server-address {

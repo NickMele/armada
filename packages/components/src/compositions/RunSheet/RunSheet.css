@@ -312,7 +312,6 @@
 
 .armada-run-sheet__server > .armada-run-sheet__server-status {
   flex: none;
-  font-weight: var(--weight-medium);
 }
 
 .armada-run-sheet__server-address {
