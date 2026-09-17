@@ -63,3 +63,30 @@ export const Neutral: Story = {
     ),
   },
 };
+
+/**
+ * `actionOn="title"` — the action on the title's own line at the trailing
+ * edge, rather than centred on the block. For an alert that asks a question
+ * and carries the body to answer it, the centred slot lands the control level
+ * with a field label and belonging to nothing, which is the owner's note of
+ * 2026-09-17 on the composer's repository ask. The head is drawn with the same
+ * rule a card header uses, so a way out reads the same wherever it sits.
+ */
+export const ActionOnTitle: Story = {
+  args: {
+    tone: "neutral",
+    title: "Pick the repository this Job is for",
+    actionOn: "title",
+    children: (
+      <span>
+        A Job belongs to one repository. The Board stays on All; the new Job is listed under the
+        repository you pick.
+      </span>
+    ),
+    action: (
+      <button type="button" className="armada-alert__button">
+        Close
+      </button>
+    ),
+  },
+};

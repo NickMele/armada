@@ -8,9 +8,11 @@
 // Helm's dock already draw theirs that way; this is the same control, so the
 // assertions below read the word and the key a person reads, never a class.
 //
-// The ask has no card header to sit in — it is an alert — so there the control
-// takes the alert's own trailing-edge slot. Which is why the place is asserted
-// against the state's own frame rather than against one shape for all three.
+// The ask is an alert rather than a card, so its head is the alert's title row
+// rather than a `CardHeader`. That is a difference in markup and not in what a
+// person sees, which is why the place is asserted against each state's own
+// frame and title — past the title, at the trailing edge, level with the
+// title's first line — rather than against one shape for all three.
 
 import { expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
@@ -31,6 +33,16 @@ const ASK = "Pick the repository this Job is for";
  * the padding is what this allows.
  */
 const INSET = 16;
+
+/**
+ * How far the control's own vertical centre may sit off the middle of the
+ * title's first line. Level is the whole ask — the owner's note of 2026-09-17
+ * on the ask's control, which the alert's centred slot had put two lines
+ * below its title: "it just kind of sits in the middle". A head row centres
+ * the two against each other, so the only slack wanted here is the rounding
+ * a line box and a control of different heights leave behind.
+ */
+const LEVEL = 2;
 
 /** The composer, opened the way a person opens it: the title row's Dispatch. */
 async function composing(): Promise<void> {
@@ -102,6 +114,13 @@ test.for(STATES)("$what carries the way out on its own head, and it closes the c
   expect(box.top, `${state.what}: the way out sits above what it closes rather than on it`).toBeGreaterThanOrEqual(
     head.top,
   );
+  // On the title's line, not somewhere down the body. A title that wrapped
+  // would report its whole block, so the first line box is what is read.
+  const line = title.getClientRects()[0] ?? named;
+  expect(
+    Math.abs((box.top + box.bottom) / 2 - (line.top + line.bottom) / 2),
+    `${state.what}: the way out is not level with its title's first line`,
+  ).toBeLessThanOrEqual(LEVEL);
 
   await control.click();
   await backToOverview();
