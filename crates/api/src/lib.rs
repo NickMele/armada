@@ -73,6 +73,8 @@ mod served;
 mod servers;
 mod sockets;
 mod stream;
+/// A Studio's routes: the list, one Studio, and every act on one. `#1285`.
+mod studios;
 /// A person's run's output, on a socket of its own per run — never `/events`.
 mod watching_run;
 
@@ -82,7 +84,7 @@ mod tests;
 pub use conversing::{HelmFeed, HelmSeen, HelmWatch, ObservedHelm, HELM_BACKLOG};
 pub use daemon::{
     offerable, Admitting, Commands, Conversations, Daemon, FramePart, FrameSpan, HelmReach,
-    PermissionAnswer, Queries, Redirector, Refusal, Tools,
+    PermissionAnswer, Queries, Redirector, Refusal, Studios, Tools,
 };
 pub use door::{door_within, offered, Scope, DOOR_PATH};
 pub use following::{Follow, Followed, LiveOutput};

@@ -28,12 +28,14 @@ mod admitting;
 mod commands;
 mod conversing;
 mod queries;
+mod studios;
 mod tools;
 
 pub use admitting::{offerable, Admitting, HelmReach, Redirector};
 pub use commands::Commands;
 pub use conversing::Conversations;
 pub use queries::{FramePart, FrameSpan, Queries};
+pub use studios::Studios;
 pub use tools::{PermissionAnswer, Tools};
 
 use ipc::WireError;
@@ -69,9 +71,14 @@ use ipc::WireError;
 ///
 /// [`Admitting`] answers for a caller rather than for a Job or a message, and
 /// its module says why the answer is placed rather than asked for.
-pub trait Daemon: Queries + Commands + Tools + Conversations + Admitting {}
+///
+/// # Why a Studio is a sixth
+///
+/// [`Studios`] answers for a repository's record rather than a Job, and its
+/// module says why that is not spread over the first two.
+pub trait Daemon: Queries + Commands + Tools + Conversations + Admitting + Studios {}
 
-impl<D: Queries + Commands + Tools + Conversations + Admitting> Daemon for D {}
+impl<D: Queries + Commands + Tools + Conversations + Admitting + Studios> Daemon for D {}
 
 /// A request the daemon would not serve.
 ///
