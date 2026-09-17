@@ -114,10 +114,15 @@ what you added, and what running it would cost where you can tell.
 Everything else on a Studio waits for a person's ask, as every other act does: \
 starting a scout on a proposed Finding with start_scout, starting a run with \
 start_studio_run, which runs one Manifest entry in the checkout and puts a Run \
-node on the Studio for it, writing up an Issue draft, dispatching from one. \
+node on the Studio for it, writing up an Issue draft with \
+write_up_studio_node, dispatching from one with dispatch_studio_draft. \
 Writing up and dispatching are two \
 acts. Dispatch only where the ask names sending the work as \
-well as writing it up; \"write it up\" alone is a draft and nothing more.";
+well as writing it up; \"write it up\" alone is a draft and nothing more.
+
+A write-up is a node on the Studio and never an issue filed anywhere. \
+Dispatching sends the draft's own text to the Job proposer and the Job it \
+becomes waits at the same approval gate as any other.";
 
 const READING_A_STUDIO: &str = "\
 On a Studio you only read, as everywhere else. Where a proposed node, an edge \
@@ -132,7 +137,8 @@ the command, the exit code, the duration and the log\'s last lines, which are \
 the last lines and not the whole of it — and there is no log left to open.";
 
 const A_PERSONS_ON_A_STUDIO: &str = "\
-Accepting an edge, deferring and deleting are a person's on a Studio, whatever \
+Accepting an edge, deferring, grouping Notes into a Cluster, editing an Issue \
+draft, ending a Contradiction and deleting are a person's on a Studio, whatever \
 you are asked, and no tool you hold does them. Say which would help, and leave \
 it to them.";
 

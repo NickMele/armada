@@ -15,6 +15,7 @@ import {
   decideStudioEdge,
   moveStudioNode,
   readStudioFrame,
+  promoteOnStudio,
   removeStudioNode,
   watchStudio,
   watchStudios,
@@ -95,6 +96,7 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
         onRemoveNode={(nodeId) => removeStudioNode(openId ?? "", nodeId)}
         onDecideEdge={(edgeId, accepted) => decideStudioEdge(openId ?? "", edgeId, accepted)}
         onReadFrame={readStudioFrame}
+        onPromote={(promotion) => promoteOnStudio(openId ?? "", promotion)}
       />
     </Boundary>
   );

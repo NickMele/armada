@@ -4,8 +4,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import tokens from "@armada/tokens/tokens.json";
+import { STUDIO_PROMOTIONS } from "@armada/protocol";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, PickedView, Summons } from "../shared/bridge";
+import type { StudioPromotion } from "@armada/protocol";
 import type { Draft, HelmContext, StagedAttachment } from "@armada/protocol";
 import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
@@ -858,6 +860,13 @@ void app.whenReady().then(() => {
   // is not two whole numbers, is not put on a route: the call answers nothing, as a typo would.
   const text = (value: unknown): value is string => typeof value === "string" && value !== "";
   const unsent = { ok: false, why: "not_connected" } as const;
+  // #1291: one channel across six operations, so the tag is what is checked —
+  // it picks the route. The body is Fleet's to decode and refuse, as every
+  // other act's body already is.
+  const promoted = (value: unknown): value is StudioPromotion =>
+    typeof value === "object" &&
+    value !== null &&
+    (STUDIO_PROMOTIONS as readonly string[]).includes((value as { act?: unknown }).act as string);
   ipcMain.handle(CHANNELS.watchStudios, (_event, manifestId: unknown) =>
     text(manifestId) || manifestId === null ? connection?.studios.watchList(manifestId) : undefined,
   );
@@ -893,6 +902,12 @@ void app.whenReady().then(() => {
       ? ((await connection?.studios.frameOf(studioId, nodeId)) ?? { ok: false, outcome: unsent })
       : undefined,
   );
+  ipcMain.handle(CHANNELS.promoteOnStudio, async (_event, studioId: unknown, promotion: unknown) => {
+    // The tag is checked here because it picks the route; the body Fleet
+    // decodes and refuses on its own, as every other act's body is.
+    if (!text(studioId) || !promoted(promotion)) return undefined;
+    return (await connection?.studios.promote(studioId, promotion)) ?? unsent;
+  });
   ipcMain.handle(CHANNELS.decideStudioEdge, async (_event, studioId: unknown, edgeId: unknown, accepted: unknown) =>
     text(studioId) && text(edgeId) && typeof accepted === "boolean"
       ? ((await connection?.studios.decideEdge(studioId, edgeId, accepted)) ?? unsent)

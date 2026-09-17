@@ -57,9 +57,16 @@ pub(super) fn written(content: &StudioNodeContent) -> String {
         },
         StudioNodeContent::Cluster { title } => json!({ "title": title }),
         StudioNodeContent::Finding(finding) => finding_written(finding),
-        StudioNodeContent::Contradiction { first, second } => {
-            json!({ "first": first, "second": second })
-        }
+        StudioNodeContent::Contradiction {
+            first,
+            second,
+            answer,
+        } => match answer {
+            // Absent until a person settles it here, which is the shape every
+            // row written before `#1291` already has.
+            None => json!({ "first": first, "second": second }),
+            Some(answer) => json!({ "first": first, "second": second, "answer": answer }),
+        },
         StudioNodeContent::Sketch { body } | StudioNodeContent::Outline { body } => {
             json!({ "body": body })
         }
@@ -109,6 +116,10 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
         StudioNodeKind::Contradiction => StudioNodeContent::Contradiction {
             first: text("first")?,
             second: text("second")?,
+            answer: object
+                .get("answer")
+                .and_then(Value::as_str)
+                .map(str::to_string),
         },
         StudioNodeKind::Sketch => StudioNodeContent::Sketch {
             body: text("body")?,

@@ -13,9 +13,11 @@ use std::future::Future;
 use std::sync::Arc;
 
 use ipc::{
-    AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, ManifestId,
-    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StartStudioRun,
-    StopScout, Studio, StudioDeleted, StudioId, StudioList, StudioNodeId, StudioRunStarted,
+    AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
+    DispatchStudioDraft, EditStudioDraft, GroupStudioNodes, ManifestId, MoveStudioNode,
+    ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction, StartScout,
+    StartStudioRun, StopScout, Studio, StudioDeleted, StudioId, StudioList, StudioNodeId,
+    StudioRunStarted, WriteUpStudioNode,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -176,4 +178,61 @@ pub trait Studios: Send + Sync + 'static {
         by: Redirector,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<StudioRunStarted, Refusal>> + Send;
+    /// `group_studio_nodes` — several nodes accepted as one Cluster or read in
+    /// order as one Outline, with a `produced` edge from each. `#1291`.
+    fn group_studio_nodes(
+        &self,
+        studio_id: StudioId,
+        group: GroupStudioNodes,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `defer_on_studio` — a Deferral against what it blocks. **A person's
+    /// act**, so no `by`: nothing offers this to an agent.
+    fn defer_on_studio(
+        &self,
+        studio_id: StudioId,
+        deferring: DeferOnStudio,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `write_up_studio_node` — an Issue draft, and never a filed issue. `by`
+    /// says whose act to publish it as, as on
+    /// [`add_studio_node`](Studios::add_studio_node).
+    fn write_up_studio_node(
+        &self,
+        studio_id: StudioId,
+        writing: WriteUpStudioNode,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `edit_studio_draft` — the title and body a person left on a draft.
+    fn edit_studio_draft(
+        &self,
+        studio_id: StudioId,
+        edit: EditStudioDraft,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `settle_contradiction` — Not a problem, or Resolved here with the
+    /// answer. [`Refusal::IllegalMove`] where it has already ended.
+    fn settle_contradiction(
+        &self,
+        studio_id: StudioId,
+        settling: SettleContradiction,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `dispatch_studio_draft` — the draft's text through the Job proposer,
+    /// answered with the Studio once every Job it became is a node on it.
+    /// **Reads the daemon by its `Arc`**, as the scout's asks do: the proposal
+    /// is a model call made while the caller waits.
+    fn dispatch_studio_draft(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        dispatching: DispatchStudioDraft,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 }

@@ -30,6 +30,7 @@ fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent
         K::Contradiction => C::Contradiction {
             first: text(),
             second: text(),
+            answer: None,
         },
         K::Sketch => C::Sketch { body: text() },
         K::Link => C::Link { address: text() },

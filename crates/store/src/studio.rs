@@ -20,8 +20,9 @@ mod scouting;
 mod sweeping;
 
 use core_model::{
-    ManifestId, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding,
-    StudioGraph, StudioId, StudioName, StudioNode, StudioNodeId, StudioPosition, Timestamp,
+    ManifestId, Rewritten, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind,
+    StudioEdgeStanding, StudioGraph, StudioId, StudioName, StudioNode, StudioNodeId,
+    StudioPosition, Timestamp,
 };
 use rusqlite::{OptionalExtension, Transaction};
 
@@ -261,6 +262,24 @@ impl Store {
         produced_by: Option<(&StudioNodeId, StudioEdgeId)>,
         at: &Timestamp,
     ) -> Result<(), StudioError> {
+        let made_it: Vec<_> = produced_by.into_iter().collect();
+        self.add_studio_node_produced_by(studio_id, node, &made_it, at)
+    }
+
+    /// Add a node made by **several** nodes already on this Studio, with one
+    /// `Produced` edge from each, in the order given. `#1291`: a Cluster is
+    /// the Notes a person accepted as one thing, and an Outline is an ordered
+    /// reading of what feeds it, so one maker is not enough for either.
+    ///
+    /// **The edges are built here**, so no caller can point one anywhere but
+    /// at the node being added.
+    pub fn add_studio_node_produced_by(
+        &mut self,
+        studio_id: &StudioId,
+        node: &StudioNode,
+        produced_by: &[(&StudioNodeId, StudioEdgeId)],
+        at: &Timestamp,
+    ) -> Result<(), StudioError> {
         let tx = self.writing()?;
         touched(&tx, studio_id, at)?;
         tx.execute(
@@ -280,13 +299,19 @@ impl Store {
             ),
         )
         .map_err(database("adding a node to a Studio"))?;
-        if let Some((from, id)) = produced_by {
+        for (from, id) in produced_by {
             let by = node.added_by().unwrap_or(StudioAuthor::Person);
-            let edge = StudioEdge::produced(id, from.clone(), node.id().clone(), at.clone(), by)
-                // Only reachable by naming the node being added as its own maker.
-                .map_err(|_| StudioError::NoSuchNode {
-                    node_id: from.as_str().to_string(),
-                })?;
+            let edge = StudioEdge::produced(
+                id.clone(),
+                (*from).clone(),
+                node.id().clone(),
+                at.clone(),
+                by,
+            )
+            // Only reachable by naming the node being added as its own maker.
+            .map_err(|_| StudioError::NoSuchNode {
+                node_id: from.as_str().to_string(),
+            })?;
             edge_kept(&tx, studio_id, &edge)?;
         }
         tx.commit().map_err(database("adding a node to a Studio"))
@@ -385,6 +410,42 @@ impl Store {
         tx.execute(statement, [edge_id.as_str()])
             .map_err(database("deciding an edge"))?;
         tx.commit().map_err(database("deciding an edge"))
+    }
+
+    /// Keep a node as a promotion left it: an Issue draft a person edited, or
+    /// a Contradiction they ended. **Takes [`Rewritten`], which only
+    /// `core_model`'s own two transitions make**, the way `keep_scouted` takes
+    /// [`Scouted`](core_model::Scouted) — so no call here can hand a Note new
+    /// words. The row is matched on its kind as well as its id.
+    pub fn keep_rewritten(
+        &mut self,
+        studio_id: &StudioId,
+        rewritten: &Rewritten,
+        at: &Timestamp,
+    ) -> Result<(), StudioError> {
+        let node = rewritten.node();
+        let tx = self.writing()?;
+        touched(&tx, studio_id, at)?;
+        let kept = tx
+            .execute(
+                "UPDATE studio_nodes SET state = ?3, content = ?4 \
+                 WHERE studio_id = ?1 AND id = ?2 AND kind = ?5",
+                (
+                    studio_id.as_str(),
+                    node.id().as_str(),
+                    node.state().map(|state| state.as_wire()),
+                    content::written(node.content()),
+                    node.kind().as_wire(),
+                ),
+            )
+            .map_err(database("keeping what a promotion wrote"))?;
+        if kept == 0 {
+            return Err(StudioError::NoSuchNode {
+                node_id: node.id().as_str().to_string(),
+            });
+        }
+        tx.commit()
+            .map_err(database("keeping what a promotion wrote"))
     }
 
     fn writing(&mut self) -> Result<Transaction<'_>, StudioError> {

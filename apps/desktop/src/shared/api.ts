@@ -52,7 +52,7 @@ import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
-import type { StudioCapture, StudioPosition } from "@armada/protocol";
+import type { StudioCapture, StudioPosition, StudioPromotion } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import type {
   ManifestProposalsRead,
@@ -764,6 +764,12 @@ export type BridgeApi = {
    * so nothing about this reaches outside the app.
    */
   readStudioFrame: (studioId: string, nodeId: string) => Promise<FrameRead>;
+  /**
+   * Group, defer, write up, edit a draft, end a Contradiction or dispatch —
+   * #1291. **One capability rather than six**: what `act` names is the route
+   * main posts to, and every one answers with the Studio whole.
+   */
+  promoteOnStudio: (studioId: string, promotion: StudioPromotion) => Promise<Outcome>;
   /**
    * Take the work. **The counterpart to `approveDispatch`, at the other end of
    * the Job.** On the workflow's last step Fleet commits and delivers before

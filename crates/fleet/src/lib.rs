@@ -160,6 +160,8 @@ pub mod preparing;
 /// **Not Doctor**, whose grid is ten modules and is not built.
 mod probing;
 pub mod process;
+/// Starting a scout on a Studio, recording what it read, and stopping it.
+mod promoting;
 pub mod proposal;
 pub mod proposals;
 mod proposing;
@@ -212,7 +214,6 @@ pub mod scope;
 mod scoping;
 /// The read-only agent a person starts from a Studio. `#1292`.
 pub mod scout;
-/// Starting a scout on a Studio, recording what it read, and stopping it.
 mod scouting;
 pub mod seeding;
 mod servers;

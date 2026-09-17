@@ -156,6 +156,36 @@ pub const SERVED: &[Route] = &[
         path: "/studios/:studio_id/decide_edge",
     },
     Route {
+        operation: "group_studio_nodes",
+        method: "POST",
+        path: "/studios/:studio_id/group_nodes",
+    },
+    Route {
+        operation: "defer_on_studio",
+        method: "POST",
+        path: "/studios/:studio_id/defer",
+    },
+    Route {
+        operation: "write_up_studio_node",
+        method: "POST",
+        path: "/studios/:studio_id/write_up",
+    },
+    Route {
+        operation: "edit_studio_draft",
+        method: "POST",
+        path: "/studios/:studio_id/edit_draft",
+    },
+    Route {
+        operation: "settle_contradiction",
+        method: "POST",
+        path: "/studios/:studio_id/settle",
+    },
+    Route {
+        operation: "dispatch_studio_draft",
+        method: "POST",
+        path: "/studios/:studio_id/dispatch_draft",
+    },
+    Route {
         operation: "ask_scout",
         method: "POST",
         path: "/studios/:studio_id/ask_scout",

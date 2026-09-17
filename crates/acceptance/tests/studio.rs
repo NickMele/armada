@@ -14,8 +14,6 @@
 //! |---|---|
 //! | 4. A scout's Finding lists the sources it read beyond the checkout — an issue, a page, a session, a Helm thread | #1293. **The checkout half is asserted below** |
 //! | 5. An issue from the repository's forge is read in, and a Contradiction appears | #1293 |
-//! | 6. Two Notes are clustered, written up as an Issue draft, and dispatched, and a Job node stands at the gate | #1291. **The dispatch's far half is asserted below**: an Issue draft's text alone reaches the Job proposer, and the Job it proposes is told all of it |
-//! | Helm starts a Run node, writes up an Issue draft, and dispatches from one, each only on a person's ask | #1289 and #1291. **Helm's rule for them is asserted below**, with what it proposes unasked and the runs it reads |
 //!
 //! | Not proved here | Why not |
 //! |---|---|
@@ -38,13 +36,106 @@ use ipc::door::{DRAFTING, HELM_ONLY, REACHABLE};
 use ipc::{HelmStudioAct, StudioNodeContent};
 
 use bench::studio::{
-    a_capture_sent, a_failed_run, a_long_log, a_studio_with_a_captured_note,
-    a_studio_with_a_frozen_finding, a_studio_with_a_run_started_from_a_note,
-    a_studio_with_two_notes, an_issue_draft, held, helms_manifest, one_job_under, received_event,
-    received_request, received_studio, ASKED, COMMIT, COMPONENT, COST, DRAFT_TITLE, FIRST_NOTE,
-    FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP, OWNERS, READ, REPOSITORY, SCREEN, SECOND_NOTE,
-    SELECTOR, STYLES, THE_COMMAND, THE_FAILURE, THE_RUN,
+    a_capture_sent, a_failed_run, a_long_log, a_studio_promoted_to_a_job,
+    a_studio_with_a_captured_note, a_studio_with_a_frozen_finding,
+    a_studio_with_a_run_started_from_a_note, a_studio_with_two_notes, an_issue_draft, held,
+    helms_manifest, one_job_under, received_event, received_request, received_studio, ASKED,
+    COMMIT, COMPONENT, COST, DRAFT_TITLE, FIRST_NOTE, FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP,
+    OWNERS, READ, REPOSITORY, SCREEN, SECOND_NOTE, SELECTOR, STYLES, THE_COMMAND, THE_FAILURE,
+    THE_RUN,
 };
+
+/// Step 6's near half: **two Notes are clustered, the Cluster is written up as
+/// an Issue draft, and the Job it was dispatched to stands on the Studio,
+/// linked back to both Notes through `Produced` edges.**
+/// `docs/concepts/studio.md`, *Promotion*.
+///
+/// **The failure this is against is work that arrives with no way back.** A
+/// Job on the Board says nothing about what was worked out to reach it, so
+/// what is held here is the chain: every rung draws the edge that says where
+/// its node came from, and walking those edges from the Job reaches the words
+/// a person captured. A rung that added a node and no edge would render the
+/// same and record nothing.
+#[test]
+fn two_notes_clustered_and_written_up_reach_a_job_node_that_walks_back_to_both() {
+    let studio = received_studio(&a_studio_promoted_to_a_job());
+    let kind = |node: &ipc::StudioNode| match &node.content {
+        StudioNodeContent::Note { .. } => "note",
+        StudioNodeContent::Cluster { .. } => "cluster",
+        StudioNodeContent::IssueDraft { .. } => "issue_draft",
+        StudioNodeContent::Job { .. } => "job",
+        other => panic!("nothing else was promoted onto it: {other:?}"),
+    };
+    let kinds: Vec<_> = studio.nodes.iter().map(kind).collect();
+    assert_eq!(
+        kinds,
+        ["note", "note", "cluster", "issue_draft", "job"],
+        "each rung's node, oldest first"
+    );
+
+    // Every edge a rung drew is the Studio's own, accepted as drawn: a person
+    // accepting a relation is a different act, and none of these waits on one.
+    let produced: Vec<_> = studio
+        .edges
+        .iter()
+        .filter(|edge| edge.kind.as_wire() == "produced")
+        .collect();
+    assert!(
+        produced
+            .iter()
+            .all(|edge| edge.standing.as_wire() == "accepted"),
+        "the Studio draws a Produced edge and nobody accepts one"
+    );
+
+    // Walk back from the Job: the draft, the Cluster, then both Notes.
+    let made = |to: &ipc::StudioNodeId| -> Vec<ipc::StudioNodeId> {
+        produced
+            .iter()
+            .filter(|edge| &edge.to == to)
+            .map(|edge| edge.from.clone())
+            .collect()
+    };
+    let job = studio.nodes.last().expect("the Job node");
+    let [draft] = &made(&job.id)[..] else {
+        panic!("one Issue draft made the Job");
+    };
+    let [cluster] = &made(draft)[..] else {
+        panic!("one Cluster was written up as the draft");
+    };
+    let said: Vec<_> = made(cluster)
+        .iter()
+        .map(
+            |note| match &studio.nodes.iter().find(|one| &one.id == note) {
+                Some(ipc::StudioNode {
+                    content: StudioNodeContent::Note { said, .. },
+                    ..
+                }) => said.clone(),
+                other => panic!("a Cluster is of Notes: {other:?}"),
+            },
+        )
+        .collect();
+    assert_eq!(
+        said,
+        [FIRST_NOTE, SECOND_NOTE],
+        "the Job walks back to both Notes' own words, in the order they were clustered"
+    );
+
+    // A Job node holds a reference and no status: its state is the Board's.
+    assert!(
+        job.state.is_none(),
+        "a Job node's status is read off the Job, never copied here"
+    );
+    let StudioNodeContent::IssueDraft { title, body } = &studio.nodes[3].content else {
+        panic!("the draft");
+    };
+    assert_eq!(title, DRAFT_TITLE);
+    for note in [FIRST_NOTE, SECOND_NOTE] {
+        assert!(
+            body.contains(note),
+            "the draft was written up from the Notes, and says so: {note}"
+        );
+    }
+}
 
 /// Step 6's far half: **an Issue draft is dispatched from its text, through the
 /// Job proposer, and the Job it becomes is told the whole of it.**
@@ -235,11 +326,33 @@ fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
         [
             "add_studio_node",
             "capture_studio_note",
+            "group_studio_nodes",
             "move_studio_node",
-            "remove_studio_node"
+            "remove_studio_node",
+            "write_up_studio_node",
         ],
-        "a node is added, captured, moved or removed, and never written again"
+        "a node is added, captured, grouped into a new one, moved, removed or written up into a \
+         new one — and not one of these writes over a node already there"
     );
+
+    // **The two routes that do write a node's content name the kind they may
+    // reach, and a Note is neither** (`#1291`). What holds them to it is
+    // `core_model`'s own transitions: `StudioNode::edited` takes an Issue
+    // draft and `StudioNode::settled` a Contradiction, and the store's rewrite
+    // takes what only those two make. `fleet::tests::promoting` drives both
+    // against a Note and reads back `fleet.studio_not_a_draft` and
+    // `fleet.studio_not_a_contradiction`.
+    for rewrites in ["edit_studio_draft", "settle_contradiction"] {
+        let route = api::SERVED
+            .iter()
+            .find(|route| route.operation == rewrites)
+            .unwrap_or_else(|| panic!("`{rewrites}` is served"));
+        assert!(
+            !on_a_node(&route),
+            "`{rewrites}` writes a node's content, so it is not one of the routes above — and \
+             the list above stays the set that only ever adds, moves or removes"
+        );
+    }
 }
 
 /// **Accepting a relation, removing a node and deleting a Studio are a
@@ -263,6 +376,13 @@ fn no_agent_is_offered_a_persons_act_on_a_studio() {
         "stop_scout",
         // #1290: capture is a person pointing at Bridge, and no agent points.
         "capture_studio_note",
+        // #1291: grouping is accepting, deferring is a person's only, editing
+        // a draft is what a person read and changed, and ending a
+        // Contradiction is their judgement.
+        "group_studio_nodes",
+        "defer_on_studio",
+        "edit_studio_draft",
+        "settle_contradiction",
     ] {
         assert!(!offered(persons), "`{persons}` reaches an agent");
     }
@@ -312,21 +432,30 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
     let (_, on_an_ask) = studio
         .split_once("waits for a person's ask")
         .expect("the asked acts are named");
-    for asked in ["start_scout", "start_studio_run"] {
+    for asked in [
+        "start_scout",
+        "start_studio_run",
+        "write_up_studio_node",
+        "dispatch_studio_draft",
+    ] {
         assert!(
             on_an_ask.contains(asked),
             "`{asked}` waits for a person's ask: {studio}"
         );
     }
-    assert!(
-        HELM_ONLY
-            .iter()
-            .any(|row| row.operation == "start_studio_run" && row.kind == "command")
-            && !REACHABLE
+    for helms in [
+        "start_studio_run",
+        "write_up_studio_node",
+        "dispatch_studio_draft",
+    ] {
+        assert!(
+            HELM_ONLY
                 .iter()
-                .any(|row| row.operation == "start_studio_run"),
-        "`start_studio_run` is offered to Helm alone"
-    );
+                .any(|row| row.operation == helms && row.kind == "command")
+                && !REACHABLE.iter().any(|row| row.operation == helms),
+            "`{helms}` is offered to Helm alone"
+        );
+    }
     for read in ["list_checkout_runs", "get_checkout_run_output"] {
         assert!(HELM_ONLY
             .iter()
@@ -350,6 +479,27 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
         (None, Some(REPOSITORY.to_string())),
         "a poll's tally names the repository"
     );
+
+    // #1291: **every** act Helm takes on a Studio is its own event, not only
+    // the unasked ones — a write-up and a dispatch it was asked for included.
+    for asked in [
+        HelmStudioAct::WroteUp {
+            from: ipc::StudioNodeId::carried("01CLUSTER"),
+            node_id: ipc::StudioNodeId::carried("01DRAFT"),
+        },
+        HelmStudioAct::Dispatched {
+            from: ipc::StudioNodeId::carried("01DRAFT"),
+            node_ids: vec![ipc::StudioNodeId::carried("01JOBNODE")],
+        },
+    ] {
+        let acted = ipc::Event::StudioHelmActed(ipc::StudioHelmActed {
+            studio_id: ipc::StudioId::carried("01STUDIO"),
+            manifest_id: ipc::ManifestId::carried(REPOSITORY),
+            act: asked,
+            at: ipc::Instant::carried("2026-09-17T09:00:00.000Z"),
+        });
+        assert_eq!(received_event(&acted), acted, "nothing lost on the wire");
+    }
 }
 
 /// Step 4, the checkout's half: **a scout's Finding arrives Frozen, listing

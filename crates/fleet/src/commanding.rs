@@ -93,6 +93,8 @@ where
                 request.attachments,
                 &self.served_named(manifest_id.as_ref())?,
                 by,
+                // The proposer's own origin: this path is a request Fleet read.
+                None,
             )
             .await
             .map_err(|why| self.refusal(why))?;

@@ -793,6 +793,7 @@ async fn a_single_job_request_carries_its_attachment() {
             vec![attachment],
             &fleet.first(),
             api::Redirector::Person,
+            None,
         )
         .await
         .expect("a request that fits one workflow");
@@ -831,6 +832,7 @@ async fn a_split_request_carries_its_attachment_onto_the_head_job_alone() {
             vec![attachment],
             &fleet.first(),
             api::Redirector::Person,
+            None,
         )
         .await
         .expect("a plan");

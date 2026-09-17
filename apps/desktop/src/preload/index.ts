@@ -20,7 +20,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { HelmContext } from "@armada/protocol";
-import type { StudioCapture, StudioPosition } from "@armada/protocol";
+import type { StudioCapture, StudioPosition, StudioPromotion } from "@armada/protocol";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
 import type { AddTask, DropTask } from "@armada/protocol";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
@@ -501,6 +501,8 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.removeStudioNode, studioId, nodeId),
   decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.decideStudioEdge, studioId, edgeId, accepted),
+  promoteOnStudio: (studioId: string, promotion: StudioPromotion): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.promoteOnStudio, studioId, promotion),
 
   // The three decisions on the work, and they are three entries for the reason
   // the two kills are two: one capability taking "which decision" as an

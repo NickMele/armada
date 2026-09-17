@@ -26,7 +26,7 @@
 // swapped the surface for a transcript; the turns are the open step's activity
 // log now, so it tracks which Job is open and nothing presses it.
 
-import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
+import type { EditManifestProposal, StudioPromotion, WriteManifestProposal } from "@armada/protocol";
 import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
@@ -87,6 +87,8 @@ export const captureStudioNote = (studioId: string, said: string, capture: Studi
 /** The picture one Note kept — #1352. The bytes become a `blob:` this window owns and revokes. */
 export const readStudioFrame = (studioId: string, nodeId: string) =>
   window.armada.readStudioFrame(studioId, nodeId);
+export const promoteOnStudio = (studioId: string, promotion: StudioPromotion) =>
+  window.armada.promoteOnStudio(studioId, promotion);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 export const deleteBranchOne = (jobId: string, tip: string) => window.armada.deleteBranch(jobId, tip);
 export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);

@@ -64,9 +64,10 @@ use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
 use crate::studios::{
     add_studio_node, ask_scout, capture_studio_note, create_studio, decide_studio_edge,
-    delete_studio, get_studio, get_studio_frame, list_studios, move_studio_node,
-    propose_studio_edge, remove_studio_node, rename_studio, start_scout, start_studio_run,
-    stop_scout,
+    defer_on_studio, delete_studio, dispatch_studio_draft, edit_studio_draft, get_studio,
+    get_studio_frame, group_studio_nodes, list_studios, move_studio_node, propose_studio_edge,
+    remove_studio_node, rename_studio, settle_contradiction, start_scout, start_studio_run,
+    stop_scout, write_up_studio_node,
 };
 
 /// The inventory this router is compared against, row by row.
@@ -309,6 +310,27 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route(
             "/studios/:studio_id/decide_edge",
             post(decide_studio_edge::<D>),
+        )
+        .route(
+            "/studios/:studio_id/group_nodes",
+            post(group_studio_nodes::<D>),
+        )
+        .route("/studios/:studio_id/defer", post(defer_on_studio::<D>))
+        .route(
+            "/studios/:studio_id/write_up",
+            post(write_up_studio_node::<D>),
+        )
+        .route(
+            "/studios/:studio_id/edit_draft",
+            post(edit_studio_draft::<D>),
+        )
+        .route(
+            "/studios/:studio_id/settle",
+            post(settle_contradiction::<D>),
+        )
+        .route(
+            "/studios/:studio_id/dispatch_draft",
+            post(dispatch_studio_draft::<D>),
         )
         .route("/studios/:studio_id/ask_scout", post(ask_scout::<D>))
         .route("/studios/:studio_id/start_scout", post(start_scout::<D>))

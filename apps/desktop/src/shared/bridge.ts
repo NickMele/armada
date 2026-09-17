@@ -607,6 +607,9 @@ export const CHANNELS = {
   // main takes the frame of its own window, so no image ever reaches the renderer.
   captureStudioNote: "bridge:capture-studio-note",
   readStudioFrame: "bridge:read-studio-frame",
+  // One rung of promotion — #1291. One channel across six operations: what a
+  // person does on a Studio is one capability, and `act` picks the route.
+  promoteOnStudio: "bridge:promote-on-studio",
   // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
   tap: "bridge:tap",
 } as const;

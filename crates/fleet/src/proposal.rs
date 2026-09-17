@@ -267,6 +267,7 @@ where
             Vec::new(),
             &served,
             api::Redirector::Person,
+            None,
         )
         .await
     }
@@ -288,6 +289,7 @@ where
         attachments: Vec<ipc::AttachmentRef>,
         served: &crate::repositories::Served,
         by: api::Redirector,
+        dispatched_as: Option<core_model::TopLevelOrigin>,
     ) -> Result<Vec<Job>, Adrift> {
         let request = request.trim();
         if request.is_empty() {
@@ -361,7 +363,7 @@ where
             };
             let minted = self
                 .proposed_job(
-                    self.as_proposal(served, job, waits_on, carried),
+                    self.as_proposal(served, job, waits_on, carried, dispatched_as),
                     stated,
                     Some(minted_by.clone()),
                     actor,
@@ -413,6 +415,7 @@ where
         job: &ProposedJob,
         dependencies: Vec<ipc::DependencyEdge>,
         attachments: Vec<ipc::AttachmentRef>,
+        dispatched_as: Option<core_model::TopLevelOrigin>,
     ) -> ipc::ProposeJob {
         ipc::ProposeJob {
             title: job.title.clone(),
@@ -421,7 +424,14 @@ where
             // The system determined the workflow, which is what this value
             // names. `manual` stays the hand-entered path, so which of the two
             // happened is answerable from the record rather than inferred.
-            origin: ipc::TopLevelOrigin::from(core_model::TopLevelOrigin::AutoDetected),
+            //
+            // **A caller that already knows who dispatched says so** — `#1291`:
+            // a dispatch from a Studio is a person or Helm pressing it on text
+            // they wrote up, and *Found by Fleet* is what a row would say about
+            // work Armada noticed on its own.
+            origin: ipc::TopLevelOrigin::from(
+                dispatched_as.unwrap_or(core_model::TopLevelOrigin::AutoDetected),
+            ),
             urgency: ipc::Urgency::from(core_model::Urgency::Normal),
             // **Undetermined, and that is a value.** Absent is scope not yet
             // worked out; empty would claim the Job writes nothing. The scope

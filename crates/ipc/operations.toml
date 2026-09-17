@@ -301,6 +301,84 @@ notes = """
 A rejected edge is removed rather than kept as rejected; nothing yet stops the same relation being proposed again.
 """
 
+[operations.group_studio_nodes]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Accept several nodes on a Studio as one Cluster, or read them in order as one Outline, and answer with the Studio"
+notes = """
+The first rung of `docs/concepts/studio.md`'s *Promotion* that joins nodes rather than adding one. The new node is placed where the request says and the Studio draws a `produced` edge from each node in `from`, **in the order they were given** — an Outline is an ordered reading, and edges read back oldest first, so the order a person picked is the order it keeps.
+
+`agent_access` is `Bridge only`: a Cluster is Notes a person accepted as one thing, and accepting is a person's act whatever Helm's authority setting says.
+
+Only a Cluster or an Outline decodes here; any other kind is refused as `fleet.studio_group_not_a_group`, because every other kind has a rung of its own that makes it. A Cluster of anything but Notes is refused as `fleet.studio_cluster_is_of_notes`. A node named twice, or none at all, is `fleet.studio_group_is_of_several`. A blank field is `fleet.studio_node_blank`, as `add_studio_node` has it.
+"""
+
+[operations.defer_on_studio]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Turn something raised on a node into a Deferral, against what it blocks, and answer with the Studio"
+notes = """
+**Only a person defers**, whatever Helm is asked — `docs/concepts/studio.md`, *Helm on a Studio* — so no agent is offered this. The Deferral is added Open, with a `produced` edge from the node it was raised on and, where `blocks` names one, an **accepted** `blocks` edge from the Deferral to what it holds up: the person drawing it is the one who accepts a relation, so there is nobody left to accept it afterwards.
+
+Raised on a Contradiction that is still Reported, it also ends that Contradiction as *Deferral* — one of its four outcomes. A Contradiction already ended is refused as `fleet.studio_contradiction_settled`. `blocks` naming the node the Deferral was raised on is refused as `fleet.studio_edge_to_itself`.
+"""
+
+[operations.write_up_studio_node]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Write a Note, Cluster, Contradiction or Outline up as an Issue draft, and answer with the Studio"
+notes = """
+The draft is a node like any other, added Draft with a `produced` edge from what it was written up from. **Nothing is filed**: `docs/concepts/studio.md` makes an issue on a forge a person's own act, so no operation here reaches a forge and this one does not either.
+
+Any other kind is refused as `fleet.studio_not_writable_up` — a Link is read in, a Finding is asked for, and a draft written up again would be a copy of itself. Written up from a Contradiction that is still Reported, it also ends that Contradiction as *Issue draft*; one already ended is `fleet.studio_contradiction_settled`.
+
+`agent_access` is `Helm only` because writing up is one of the two acts Helm may take on a person's ask. **It never dispatches**: "write it up" alone is a draft and nothing more, and `dispatch_studio_draft` is the separate act. From Helm it also publishes `studio.helm_acted`.
+"""
+
+[operations.edit_studio_draft]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Replace an Issue draft's title and body with what a person left, and answer with the Studio"
+notes = """
+**The one act that rewrites content a person wrote**, and it reaches one kind: a Note is fixed at capture and every other kind is added whole. `docs/concepts/studio.md` calls a draft's title and body editable, and what is dispatched has to be what the person read and changed rather than what was first written up.
+
+`Bridge only`, and deliberately not Helm's even on an ask: Helm rewriting a draft a person edited is the act `studio.md` guards against under "an agent reorganising a person's work". Helm asked to change a draft says what it would write. Any kind but an Issue draft is refused as `fleet.studio_not_a_draft`, and a blank title or body as `fleet.studio_node_blank`.
+"""
+
+[operations.settle_contradiction]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "End a Contradiction as Not a problem, or as Resolved here with the answer kept on the node, and answer with the Studio"
+notes = """
+Two of the four outcomes in `docs/concepts/studio.md`'s table. **The other two are the rungs that make a node** — *Issue draft* is `write_up_studio_node` on the Contradiction and *Deferral* is `defer_on_studio` raised on it, each ending the Contradiction as it goes — so there is one way to make an Issue draft and one way to make a Deferral rather than two.
+
+`resolved_here` carries the answer and keeps it on the node, since a Contradiction settled with nothing written down is one nobody can reread; a blank answer is refused as `fleet.studio_node_blank`. `Bridge only` for both: deciding that two sources do not really disagree is a person's judgement, and it is the one act here that writes a conclusion onto the record.
+
+A node that is not a Contradiction is `fleet.studio_not_a_contradiction`, and one already ended is `fleet.studio_contradiction_settled` — a Contradiction ends once, so the node keeps the outcome that was acted on.
+"""
+
+[operations.dispatch_studio_draft]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Send an Issue draft's text through the Job proposer to the dispatch gate, and answer with the Studio carrying a Job node for each Job"
+notes = """
+**The same call `propose_from_request` makes, with the draft's text as the request.** The gate is unchanged: every Job stands at `awaiting_approval` and is approved where any other proposal is. Nothing summarises, trims or re-fetches the draft on the way — a write-up is made from the nodes feeding it, and a lossy hop would hand a Drone something other than what the person saw.
+
+Each Job the proposal became is added as a Job node with a `produced` edge from the draft, the first at `position` and the rest below it, so the whiteboard shows where the work went without a person moving anything. A Job node holds the Job's id and no status: the Board's row is where its status is read.
+
+**No issue is filed anywhere.** Filing on a forge is optional and a person's own act, so the draft's text reaches the proposer with nothing to point at.
+
+`origin` is **who pressed it** — `manual` for a person's, `helm_drafted` for Helm's — and not the `auto_detected` every other request through the proposer takes. That value renders as *Found by Fleet*, which is what a row says about work Armada noticed by itself; a dispatch from a Studio is somebody sending a draft they wrote up. **No value says "from a Studio"**: the `produced` edge from the draft is where that is recorded, and `job-fields.toml` writes `origin` from `dispatched_by`. A node that is not an Issue draft is refused as `fleet.studio_not_a_draft`; where no workflow resolves, the proposer's own refusal is returned and no node is added.
+
+`agent_access` is `Helm only`, the second of the two acts Helm takes on a person's ask, and only where the ask names sending the work as well as writing it up. From Helm it also publishes `studio.helm_acted`.
+"""
+
 [operations.ask_scout]
 kind = "command"
 transport = "HTTP"
