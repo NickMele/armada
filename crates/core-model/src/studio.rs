@@ -11,7 +11,16 @@
 //! **A Run or a Job node holds a reference and no status.** Its state is read
 //! off the run or the Job, so neither kind admits a state here at all.
 
+mod edge;
+mod finding;
+
 use alloc::string::String;
+
+pub use edge::{EdgeRefused, StudioEdge, ToItself};
+pub use finding::{
+    FrozenFinding, GatheringFinding, NotScoutable, ScoutCheckout, ScoutEnded, ScoutLook,
+    ScoutOutcome, Scouted, StudioFinding,
+};
 
 use crate::envelope::{Timestamp, Ulid};
 use crate::job::{id_newtype, JobId, ManifestId};
@@ -245,8 +254,8 @@ pub enum StudioNodeContent {
     Note { said: String },
     /// Notes a person accepted as one thing.
     Cluster { title: String },
-    /// What was asked of a scout.
-    Finding { asked: String },
+    /// What a scout was asked, and what it read.
+    Finding(StudioFinding),
     /// Two sources that disagree.
     Contradiction { first: String, second: String },
     /// A diagram or mockup, as text.
@@ -269,7 +278,7 @@ impl StudioNodeContent {
             StudioNodeContent::Run { .. } => StudioNodeKind::Run,
             StudioNodeContent::Note { .. } => StudioNodeKind::Note,
             StudioNodeContent::Cluster { .. } => StudioNodeKind::Cluster,
-            StudioNodeContent::Finding { .. } => StudioNodeKind::Finding,
+            StudioNodeContent::Finding(_) => StudioNodeKind::Finding,
             StudioNodeContent::Contradiction { .. } => StudioNodeKind::Contradiction,
             StudioNodeContent::Sketch { .. } => StudioNodeKind::Sketch,
             StudioNodeContent::Link { .. } => StudioNodeKind::Link,
@@ -286,7 +295,7 @@ impl StudioNodeContent {
             StudioNodeContent::Run { run_id } => &[("run_id", run_id)],
             StudioNodeContent::Note { said } => &[("said", said)],
             StudioNodeContent::Cluster { title } => &[("title", title)],
-            StudioNodeContent::Finding { asked } => &[("asked", asked)],
+            StudioNodeContent::Finding(finding) => &[("asked", finding.ask())],
             StudioNodeContent::Contradiction { first, second } => {
                 &[("first", first), ("second", second)]
             }
@@ -344,7 +353,8 @@ impl StudioNode {
         }
     }
 
-    /// A node read back, refused where its state does not fit its kind.
+    /// A node read back, refused where its state does not fit its kind, or a
+    /// Finding's content does not fit its state.
     pub fn recorded(
         id: StudioNodeId,
         content: StudioNodeContent,
@@ -354,7 +364,11 @@ impl StudioNode {
         added_by: Option<StudioAuthor>,
     ) -> Result<StudioNode, StateDoesNotFit> {
         let kind = content.kind();
-        if !kind.admits(state) {
+        let finding_fits = match &content {
+            StudioNodeContent::Finding(finding) => finding.fits(state),
+            _ => true,
+        };
+        if !kind.admits(state) || !finding_fits {
             return Err(StateDoesNotFit { kind, state });
         }
         Ok(StudioNode {
@@ -389,135 +403,6 @@ impl StudioNode {
     }
     pub fn position(&self) -> StudioPosition {
         self.position
-    }
-    pub fn created_at(&self) -> &Timestamp {
-        &self.created_at
-    }
-    pub fn added_by(&self) -> Option<StudioAuthor> {
-        self.added_by
-    }
-}
-
-/// An edge between two nodes on one Studio.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StudioEdge {
-    id: StudioEdgeId,
-    from: StudioNodeId,
-    to: StudioNodeId,
-    kind: StudioEdgeKind,
-    standing: StudioEdgeStanding,
-    created_at: Timestamp,
-    /// `None` only on an edge kept before who added it was.
-    added_by: Option<StudioAuthor>,
-}
-
-/// Both ends of an edge are one node.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ToItself {
-    pub node: StudioNodeId,
-}
-
-/// Why an edge cannot be read back.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EdgeRefused {
-    ToItself(ToItself),
-    /// A `Produced` edge that is not accepted. The Studio draws those, so none
-    /// is ever proposed.
-    ProducedUnaccepted,
-}
-
-impl StudioEdge {
-    /// A relation proposed by `by`. Only a person accepts one.
-    pub fn proposed(
-        id: StudioEdgeId,
-        from: StudioNodeId,
-        to: StudioNodeId,
-        relation: StudioRelation,
-        created_at: Timestamp,
-        by: StudioAuthor,
-    ) -> Result<StudioEdge, ToItself> {
-        StudioEdge::joining(
-            id,
-            (from, to),
-            relation.into(),
-            StudioEdgeStanding::Proposed,
-            created_at,
-            Some(by),
-        )
-    }
-
-    /// The Studio's own record that `from` made `to`, accepted as drawn, and
-    /// added by whoever added `to`.
-    pub fn produced(
-        id: StudioEdgeId,
-        from: StudioNodeId,
-        to: StudioNodeId,
-        created_at: Timestamp,
-        by: StudioAuthor,
-    ) -> Result<StudioEdge, ToItself> {
-        StudioEdge::joining(
-            id,
-            (from, to),
-            StudioEdgeKind::Produced,
-            StudioEdgeStanding::Accepted,
-            created_at,
-            Some(by),
-        )
-    }
-
-    /// An edge read back.
-    pub fn recorded(
-        id: StudioEdgeId,
-        from: StudioNodeId,
-        to: StudioNodeId,
-        kind: StudioEdgeKind,
-        standing: StudioEdgeStanding,
-        created_at: Timestamp,
-        added_by: Option<StudioAuthor>,
-    ) -> Result<StudioEdge, EdgeRefused> {
-        if kind == StudioEdgeKind::Produced && standing != StudioEdgeStanding::Accepted {
-            return Err(EdgeRefused::ProducedUnaccepted);
-        }
-        StudioEdge::joining(id, (from, to), kind, standing, created_at, added_by)
-            .map_err(EdgeRefused::ToItself)
-    }
-
-    fn joining(
-        id: StudioEdgeId,
-        (from, to): (StudioNodeId, StudioNodeId),
-        kind: StudioEdgeKind,
-        standing: StudioEdgeStanding,
-        created_at: Timestamp,
-        added_by: Option<StudioAuthor>,
-    ) -> Result<StudioEdge, ToItself> {
-        if from == to {
-            return Err(ToItself { node: from });
-        }
-        Ok(StudioEdge {
-            id,
-            from,
-            to,
-            kind,
-            standing,
-            created_at,
-            added_by,
-        })
-    }
-
-    pub fn id(&self) -> &StudioEdgeId {
-        &self.id
-    }
-    pub fn from(&self) -> &StudioNodeId {
-        &self.from
-    }
-    pub fn to(&self) -> &StudioNodeId {
-        &self.to
-    }
-    pub fn kind(&self) -> StudioEdgeKind {
-        self.kind
-    }
-    pub fn standing(&self) -> StudioEdgeStanding {
-        self.standing
     }
     pub fn created_at(&self) -> &Timestamp {
         &self.created_at

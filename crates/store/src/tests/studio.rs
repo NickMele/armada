@@ -3,8 +3,9 @@
 //! back refused by name rather than dropped.
 
 use core_model::{
-    ManifestId, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding,
-    StudioId, StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioPosition,
+    ManifestId, ScoutCheckout, ScoutEnded, ScoutLook, ScoutOutcome, Studio, StudioAuthor,
+    StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioFinding, StudioId,
+    StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
     StudioRelation, Timestamp, Ulid,
 };
 
@@ -152,9 +153,7 @@ fn a_proposed_edge_is_accepted_or_rejected_and_nothing_else_is() {
     let note = a_note(&mut store, &studio, "01NOTE", "The chip keeps its count", 0);
     let finding = StudioNode::added(
         node_id("01FINDING"),
-        StudioNodeContent::Finding {
-            asked: "what reads the count".to_string(),
-        },
+        StudioNodeContent::Finding(StudioFinding::asked("what reads the count")),
         StudioPosition { x: 0, y: 200 },
         at(1),
         StudioAuthor::Helm,
@@ -295,4 +294,65 @@ fn a_node_whose_content_does_not_read_back_is_refused_by_name() {
         ),
         "{refused}"
     );
+}
+
+/// `#1292`: **a Finding is the one node rewritten, and only as its scout
+/// moves it.** Gathering, it is listed as one a restart has to settle; Frozen,
+/// it reads back after a reopen with every file, its checkout and its cost.
+#[test]
+fn a_scouts_finding_is_kept_as_it_gathers_and_reads_back_frozen_after_a_reopen() {
+    let dir = TempDir::new();
+    let studio = {
+        let mut store = open(&dir);
+        let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+        let proposed = StudioNode::added(
+            node_id("01FINDING"),
+            StudioNodeContent::Finding(StudioFinding::asked("how is routing decided")),
+            StudioPosition { x: 0, y: 0 },
+            at(1),
+        );
+        store
+            .add_studio_node(&studio, &proposed, None, &at(1))
+            .expect("added");
+        let mut gathering = proposed
+            .scouting(ScoutCheckout {
+                commit: "4bdb169c".to_string(),
+                uncommitted: true,
+            })
+            .expect("proposed");
+        gathering.looked(ScoutLook::File("crates/fleet/src/routing.rs".to_string()));
+        store
+            .keep_scouted(&studio, &gathering, &at(2))
+            .expect("kept");
+        let listed = store.gathering_findings().expect("read");
+        assert_eq!(listed, vec![(studio.clone(), gathering.clone())]);
+
+        let frozen = gathering.frozen(
+            Some("By weight.".to_string()),
+            ScoutEnded {
+                outcome: ScoutOutcome::Failed {
+                    why: "the agent exited 1".to_string(),
+                },
+                cost_micros: Some(420),
+            },
+        );
+        store.keep_scouted(&studio, &frozen, &at(3)).expect("kept");
+        assert!(store.gathering_findings().expect("read").is_empty());
+        studio
+    };
+
+    let store = open(&dir);
+    let graph = store.studio(&studio).expect("reads back");
+    let node = &graph.nodes[0];
+    assert_eq!(node.state(), Some(StudioNodeState::Frozen));
+    let StudioNodeContent::Finding(finding) = node.content() else {
+        panic!("a Finding");
+    };
+    assert_eq!(finding.read(), ["crates/fleet/src/routing.rs".to_string()]);
+    assert_eq!(finding.checkout().map(|at| at.uncommitted), Some(true));
+    assert_eq!(finding.learned(), Some("By weight."));
+    let ended = finding.ended().expect("ended");
+    assert_eq!(ended.cost_micros, Some(420));
+    assert!(matches!(&ended.outcome, ScoutOutcome::Failed { why } if why == "the agent exited 1"));
+    assert_eq!(graph.studio.touched_at, at(3));
 }

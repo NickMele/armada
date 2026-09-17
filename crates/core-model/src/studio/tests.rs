@@ -9,6 +9,9 @@ use crate::studio::{
     StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind, StudioNodeState,
     StudioPosition, StudioRelation, ToItself,
 };
+use crate::studio::{
+    NotScoutable, ScoutCheckout, ScoutEnded, ScoutLook, ScoutOutcome, StudioFinding,
+};
 
 fn node_id(id: &str) -> StudioNodeId {
     StudioNodeId::carried(Ulid::carried(id))
@@ -77,9 +80,7 @@ fn a_state_is_held_only_by_a_kind_that_has_it() {
 fn a_node_starts_in_its_kinds_first_state_and_moving_it_changes_nothing_else() {
     let finding = StudioNode::added(
         node_id("01FINDING"),
-        StudioNodeContent::Finding {
-            asked: String::from("what reads the count"),
-        },
+        StudioNodeContent::Finding(StudioFinding::asked("what reads the count")),
         StudioPosition { x: 10, y: -4 },
         at(),
         StudioAuthor::Helm,
@@ -132,4 +133,102 @@ fn a_blank_name_is_no_name_and_a_blank_field_is_named() {
         body: String::from(" "),
     };
     assert_eq!(draft.blank(), Some("body"));
+}
+
+fn a_proposed_finding() -> StudioNode {
+    StudioNode::added(
+        node_id("01FINDING"),
+        StudioNodeContent::Finding(StudioFinding::asked("how is routing decided")),
+        StudioPosition { x: 0, y: 0 },
+        at(),
+    )
+}
+
+fn checked_out() -> ScoutCheckout {
+    ScoutCheckout {
+        commit: String::from("4bdb169c"),
+        uncommitted: true,
+    }
+}
+
+/// **A Finding moves Proposed, Gathering, Frozen, and only its scout moves
+/// it.** Each step keeps what the one before recorded, and a file read twice
+/// is listed once.
+#[test]
+fn a_finding_is_started_gathers_what_it_read_and_freezes_with_how_it_ended() {
+    let proposed = a_proposed_finding();
+    let mut gathering = proposed
+        .scouting(checked_out())
+        .expect("a proposed Finding");
+    assert_eq!(gathering.node().state(), Some(StudioNodeState::Gathering));
+    assert!(gathering.looked(ScoutLook::File(String::from("crates/fleet/src/routing.rs"))));
+    assert!(!gathering.looked(ScoutLook::File(String::from("crates/fleet/src/routing.rs"))));
+    assert!(gathering.looked(ScoutLook::Search(String::from("route in crates"))));
+
+    let frozen = gathering.frozen(
+        Some(String::from("By weight.")),
+        ScoutEnded {
+            outcome: ScoutOutcome::Answered,
+            cost_micros: Some(18_020),
+        },
+    );
+    let node = frozen.node();
+    assert_eq!(node.state(), Some(StudioNodeState::Frozen));
+    let StudioNodeContent::Finding(finding) = node.content() else {
+        panic!("still a Finding");
+    };
+    assert_eq!(finding.ask(), "how is routing decided");
+    assert_eq!(
+        finding.read(),
+        [String::from("crates/fleet/src/routing.rs")]
+    );
+    assert_eq!(finding.searched(), [String::from("route in crates")]);
+    assert_eq!(finding.checkout(), Some(&checked_out()));
+    assert_eq!(finding.learned(), Some("By weight."));
+    assert_eq!(node.id(), proposed.id());
+    assert_eq!(node.position(), proposed.position());
+}
+
+#[test]
+fn only_a_proposed_finding_is_started() {
+    let note = StudioNode::added(
+        node_id("01NOTE"),
+        StudioNodeContent::Note {
+            said: String::from("the count is stale"),
+        },
+        StudioPosition { x: 0, y: 0 },
+        at(),
+    );
+    assert_eq!(note.scouting(checked_out()), Err(NotScoutable::NotAFinding));
+    let started = a_proposed_finding()
+        .scouting(checked_out())
+        .expect("a proposed Finding");
+    assert_eq!(
+        started.node().scouting(checked_out()),
+        Err(NotScoutable::NotProposed(StudioNodeState::Gathering))
+    );
+}
+
+/// **A Finding's content says which state it is in**, so a row claiming a
+/// Frozen Finding that never recorded its checkout does not read back.
+#[test]
+fn a_finding_whose_content_does_not_fit_its_state_is_refused() {
+    let claimed = StudioFinding::recorded(
+        String::from("how is routing decided"),
+        None,
+        alloc::vec![String::from("src/lib.rs")],
+        alloc::vec::Vec::new(),
+        None,
+        None,
+    );
+    for state in [StudioNodeState::Proposed, StudioNodeState::Frozen] {
+        let read = StudioNode::recorded(
+            node_id("01FINDING"),
+            StudioNodeContent::Finding(claimed.clone()),
+            Some(state),
+            StudioPosition { x: 0, y: 0 },
+            at(),
+        );
+        assert!(read.is_err(), "{state:?}");
+    }
 }
