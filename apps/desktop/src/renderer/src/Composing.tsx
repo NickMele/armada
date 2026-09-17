@@ -145,8 +145,11 @@ export function Composing({
           next="A Job belongs to one repository. The Board stays on All; the new Job is listed under the repository you pick."
           onPick={setAnswered}
           onlySetUp
-          // The ask is an alert and has no card header, so the way out takes
-          // the one trailing-edge slot an alert has for a control.
+          // The ask is an alert rather than a card, and the alert's own slot
+          // centres what it holds — which put this control level with the
+          // Repository label, two lines under the title. `actionOn="title"`
+          // draws it on the title's line instead, the way the two card
+          // states below draw the same control.
           action={<WayOut ground="sunken" onClose={leave} />}
         />
       </div>

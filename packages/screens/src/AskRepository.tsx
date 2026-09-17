@@ -37,14 +37,15 @@ export function AskRepository({
    */
   onlySetUp?: boolean;
   /**
-   * The one control the ask carries at its trailing edge — the composer's own
-   * way out, which has no card header to sit in here. Absent draws none.
+   * The one control the ask carries — the composer's own way out. It sits at
+   * the trailing edge of the title's line, which is where the two card states
+   * of the same composer draw theirs. Absent draws none.
    */
   action?: ReactNode;
 }) {
   const loose = repositories.filter((one) => one.manifest === undefined);
   return (
-    <Alert tone="neutral" title={title} action={action}>
+    <Alert tone="neutral" title={title} action={action} actionOn="title">
       <p>{next}</p>
       <Select
         label="Repository"
