@@ -205,8 +205,9 @@ checks:
       - "pnpm-workspace.yaml"
 
   components_test:
-    # Every story, `screens`' included, in a real browser through
-    # `@storybook/addon-vitest`; a `play` function has its assertions run.
+    # Every component story in a real browser through `@storybook/addon-vitest`;
+    # a `play` function has its assertions run. Whole screens are tested
+    # through `App` on the mock Fleet instead, in `desktop_test`.
     run: pnpm -C packages/components test
     runs_at: gate
     # See desktop_test's one_test above. The Storybook interaction tests'
@@ -317,23 +318,21 @@ commands:
 # Armada places these, so two worktrees never bind the same number.
 ports:
   storybook: {}
+  mock: {}
 
 # How this repository shows what a change looks like. A step whose
 # `evidence.captured` is true runs this, and Fleet keeps what lands in `frames`.
 #
-# **Storybook, and not Bridge.** What is photographed is the recorded-Job
-# stories — a Job a Fleet really ran, replayed through the fold main folds with
-# — so a frame is the app's own reading of real wire data rather than a drawing
-# of one. Driving the Electron app would take the owner's screen for the length
-# of every Job, and `.claude/skills/armada-local/SKILL.md` says what that costs.
-#
-# **`serve` restates `storybook_dev` above rather than naming it.** There is no
-# key here that points at a Command, and the duplication is the honest shape:
-# the two are the same server for the same reason, and both resolve the one
-# `${port.storybook}` claimed above.
+# **Bridge on the mock Fleet, in a browser, and not the Electron app.** What is
+# photographed is `App` itself on a scenario replaying a recorded Job — a Job a
+# Fleet really ran, through the fold main folds with — so a frame is the app's
+# own reading of real wire data rather than a drawing of one. Driving the
+# Electron app would take the owner's screen for the length of every Job, and
+# `.claude/skills/armada-local/SKILL.md` says what that costs. Storybook drew
+# these as stories until #1225 took screens out of it.
 evidence:
-  serve: pnpm -C packages/components exec storybook dev -p ${port.storybook} --no-open --ci
-  ready: curl -sf http://localhost:${port.storybook}
+  serve: pnpm -C apps/desktop exec vite --config vite.mock.config.ts --port ${port.mock} --strictPort
+  ready: curl -sf http://localhost:${port.mock}
   # `{}` is where the spec a Drone named goes. The spec itself is not
   # substituted, so `ARMADA_PORT_STORYBOOK` is its only channel to the port.
   run: pnpm -C packages/components exec playwright test {}

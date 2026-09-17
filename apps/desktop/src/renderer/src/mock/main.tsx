@@ -8,7 +8,10 @@ import { mountApp } from "./mount";
 import { Picker } from "./Picker";
 import { SCENARIOS, scenarioNamed } from "./scenario";
 
-const asked = new URLSearchParams(window.location.search).get("scenario");
+const query = new URLSearchParams(window.location.search);
+const asked = query.get("scenario");
+// `?frame` draws the app alone, for Evidence to photograph: no picker over it.
+const framing = query.has("frame");
 const scenario = (asked === null ? undefined : scenarioNamed(asked)) ?? SCENARIOS[0]!;
 if (asked !== null && asked !== scenario.name) {
   console.warn(`no mock scenario named ${asked}; showing ${scenario.name}`);
@@ -18,12 +21,14 @@ const root = document.getElementById("root");
 const picker = document.getElementById("picker");
 if (root !== null && picker !== null) {
   mountApp(scenario, root);
-  createRoot(picker).render(
-    <StrictMode>
-      <Picker current={scenario.name} />
-    </StrictMode>,
-  );
+  if (!framing) {
+    createRoot(picker).render(
+      <StrictMode>
+        <Picker current={scenario.name} />
+      </StrictMode>,
+    );
+  }
 }
 
-// The annotation layer (#1226), saving through this dev server's `annotationsServer`.
-void import("../annotate/mount").then(({ mount }) => mount());
+// The annotation layer (#1226), saving through this dev server's `annotationsServer`. Not in a frame.
+if (!framing) void import("../annotate/mount").then(({ mount }) => mount());

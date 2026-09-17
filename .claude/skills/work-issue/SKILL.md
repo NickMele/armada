@@ -84,7 +84,7 @@ owner's machine was unusable.
 | A crate under `crates/` | `cargo nextest run -p <crate>` for it and each crate that depends on it (`cargo tree -i <crate> -e normal --depth 1`) |
 | Any Rust | `cargo fmt --all --check`, and `cargo build --workspace --all-targets 2>&1 \| grep -c '^warning'` once — **the same count as `main`**, whatever the exit code |
 | What a milestone's claim reads | `cargo test -p acceptance` |
-| `apps/` or `packages/` | `armada check typecheck`, and `pnpm exec vitest run <files>` for the tests and stories you touched. **Every story, `screens`' included, runs from `-C packages/components`**; `packages/screens` has only its `.test.ts` and `.test.tsx` projects, and a story filter there finds no files. `bridge_build` and `storybook` only where their `when:` matches |
+| `apps/` or `packages/` | `armada check typecheck`, and `pnpm exec vitest run <files>` for the tests and stories you touched. **Every story runs from `-C packages/components`**, and a screen's tests through `App` run from `-C apps/desktop` (`src/renderer/src/mock/*.test.tsx`); `packages/screens` has only its `.test.ts` and `.test.tsx` projects. `bridge_build` and `storybook` only where their `when:` matches |
 | `docs/`, or `crates/ipc/operations.toml` | `cargo xtask verify-docs` |
 | Anything | `cargo xtask verify-foundations` once, before the PR — **no worse than the baseline you took off `main`.** Read what each line names; never chase a colour |
 
@@ -180,6 +180,14 @@ woken only by a message, never by its background build finishing. Confirmed
 `cargo build` still running, and sat idle with nothing committed until it was
 watched and woken by hand each time. Put *"run heavy commands in the foreground
 and wait; never end your turn while a run is in the background"* in the brief.
+
+**An agent that stalls takes its uncommitted work with it.** Confirmed 17 Sep
+2026: two `bridge-engineer` agents in a row, each briefed to move the Board's
+Storybook tests onto App, ended on *"no progress for 600s"*. Neither had
+committed, and the worktree was gone afterwards, so nothing survived. The same
+work then landed in one pass in the main session. Put *"commit and push after
+each piece that passes"* in the brief. After a second stall on the same brief, do
+the work inline rather than dispatching a third.
 
 ## Give the worktree back
 

@@ -18,7 +18,9 @@ function currentScreen(doc: Document): string | null {
   if (current === null) return null;
   const label = current.getAttribute("aria-label");
   if (label !== null) return label;
-  // The rail item carries its binding as a `kbd`, which is not the screen's name.
+  // Beside the label the item draws a count and a binding, and neither is the screen's name.
+  const named = current.querySelector(".armada-sidebar__label");
+  if (named !== null) return shortText(named.textContent) || null;
   const copy = current.cloneNode(true) as Element;
   copy.querySelectorAll("kbd").forEach((kbd) => kbd.remove());
   return shortText(copy.textContent) || null;
