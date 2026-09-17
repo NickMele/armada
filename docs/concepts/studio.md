@@ -158,8 +158,9 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 | Capture | A person using an app | Note | The person |
 | Ask | Any node | Finding | A scout, on a person's ask |
 | Cluster | Notes | Cluster | A person accepts |
+| Outline | The nodes feeding it | Outline | A person orders |
 | Defer | Anything raised on a node | Deferral | A person, only |
-| Write up | Note, Cluster or Contradiction | Issue draft | A person, or Helm on their ask |
+| Write up | Note, Cluster, Contradiction or Outline | Issue draft | A person, or Helm on their ask |
 | Dispatch | Issue draft | Job | The dispatch gate |
 
 > **Rule.** Nothing promotes itself. A Note never written up is a finished outcome.
@@ -167,14 +168,31 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 > **Rule.** A Job dispatches from an Issue draft's text, through the [Job proposer](job-proposer.md). Filing the issue on GitHub is optional and a person's own act.
 > Why: nothing reaches outside Armada on a Studio's behalf. See [Scout](scout.md).
 
+> **Rule.** An Issue draft carries its title and body whole to the proposer, in that order, and nothing between the two summarises, trims or re-fetches it.
+> Why: a write-up is made from the nodes feeding it, and a lossy hop would hand a [Drone](drone.md) something other than what the person read.
+
+> **Rule.** A dispatch from a Studio takes no origin of its own on the [Job Board](job-board.md). The `Produced` edge from the Issue draft is where a Job's Studio is recorded.
+> Why: `origin` is written from `dispatched_by`, and who dispatched is a person or Helm here as everywhere else.
+
+> **Rule.** An Issue draft's title and body are a person's to edit, and nobody else's, whatever is asked.
+> Why: an agent rewriting a draft a person edited is an agent reorganising a person's work, and what is dispatched has to be what they read.
+
+> **Rule.** The order of an Outline is the order a person put its nodes in, kept as the order of its `Produced` edges.
+
 A Contradiction ends in one of four ways, and a person picks which.
 
-| Outcome | When |
-|---|---|
-| Issue draft | One side is stale, and a file needs fixing |
-| Deferral | It is a real decision, and the person defers it |
-| Not a problem | Both statements hold, in different contexts |
-| Resolved here | The person settles it, and the node records the answer |
+| Outcome | When | How |
+|---|---|---|
+| Issue draft | One side is stale, and a file needs fixing | Writing it up, which ends it as it goes |
+| Deferral | It is a real decision, and the person defers it | Deferring on it, which ends it as it goes |
+| Not a problem | Both statements hold, in different contexts | Settling it |
+| Resolved here | The person settles it, and the node records the answer | Settling it, with the answer |
+
+> **Rule.** A Contradiction ends once, and the outcome kept is the one that was acted on.
+> Why: two of the four leave a node behind, and re-ending one would leave that node pointing at a Contradiction that no longer says where it came from.
+
+> **Rule.** Two of the four outcomes are the rungs that make a node, and the other two are their own act.
+> Why: one way to make an Issue draft and one way to make a Deferral. A second route to either would be a second place the `Produced` edge is drawn.
 
 ## Helm on a Studio
 
@@ -187,7 +205,7 @@ A Contradiction ends in one of four ways, and a person picks which.
 > **Rule.** One ask may cover writing up and dispatching when it names both. "Write it up" alone never dispatches.
 > Why: Helm approves a dispatch on a person's ask and never as a silent follow-on to drafting. See [Helm](helm.md), Action authority.
 
-> **Rule.** Accepting an edge, deferring, and deleting a node are a person's acts, whatever is asked.
+> **Rule.** Accepting an edge, deferring, grouping, editing an Issue draft, ending a Contradiction and deleting a node are a person's acts, whatever is asked.
 
 > **Rule.** Every act Helm takes on a Studio is published as `studio.helm_acted`, apart from a person's, and the Studio keeps who added each node and edge and who named it.
 > Why: Helm's acts are their own event type, and a stream a client missed is not a log. See [Helm](helm.md), Audit trail.
