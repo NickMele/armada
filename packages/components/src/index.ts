@@ -80,9 +80,6 @@ export * from "./compositions/WorkflowRail/WorkflowRail";
 export * from "./screens/detail";
 export * from "./screens/absent";
 
-// Drafts are not exported. `drafts/` holds designs drawn before the screen they
-// show is built, and nothing outside Storybook renders one.
-
 // The shell. Rail, panel and status bar — the frame every screen mounts
 // inside. A screen like them, and lifted for the same reason: Bridge needs the
 // frame as a component, and the story renders it from the drawing's fixture.

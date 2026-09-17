@@ -84,8 +84,7 @@ pub fn every_story_names_its_own_path(root: &Path) -> Report {
 /// and it drifts from the app the day either changes. The list did: its story
 /// typed each row's fields by hand, and the head's controls, the tab counts and
 /// the sentence Bridge drew over them were in none of it. A screen the app
-/// renders is drawn from wire data under `packages/screens/src/stories`; a
-/// design not built yet is a draft under `drafts/`, and goes when it lands.
+/// renders is drawn from wire data under `packages/screens/src/stories`.
 pub fn every_screen_is_one_the_app_renders(root: &Path) -> Report {
     let mut report = Report::new("every Screens entry is one the app renders");
     let screens = root.join(ROOT).join("screens");
@@ -117,8 +116,7 @@ pub fn every_screen_is_one_the_app_renders(root: &Path) -> Report {
         }
         report.fail(format!(
             "{ROOT}/screens/{component}/ — a Screens entry nothing in the app renders. \
-             Draw the app's own screen from wire data under {SCREENS}/screens/, \
-             or move this to {ROOT}/drafts/ while the design is unbuilt. {SKILL}"
+             Draw the app's own screen from wire data under {SCREENS}/screens/. {SKILL}"
         ));
     }
     report

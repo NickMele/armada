@@ -50,7 +50,7 @@ becomes `JobRowStacked`, with `title: "Compositions/Job row (stacked)"`. The
 exact name lives in the title so nothing is lost, and a name maps to a path with
 no lookup table.
 
-## Screens, and drafts
+## Screens
 
 **A `Screens` entry is a screen the app renders.** One assembled from wire data
 lives under `packages/screens/src/stories/screens/<Name>/`, drawn by the app's
@@ -59,10 +59,8 @@ own component from data in the shape Fleet sends: `Screens/Job detail` and
 A screen in the component library is one the app mounts, like `The shell`. The
 gate fails a `Screens` entry nothing in the app renders.
 
-**A design not built yet is a draft.** It lives under
-`packages/components/src/drafts/<Name>/`, titled `Drafts/<Name>`, with its
-props typed by hand, and it is deleted once the screen it drew is built and
-has a `Screens` entry of its own. Drafts are not exported.
+**A design not built yet is not committed as a story.** Storybook shows what the
+app draws; a design drawn ahead of its screen stays off `main`.
 
 ## Stories
 
