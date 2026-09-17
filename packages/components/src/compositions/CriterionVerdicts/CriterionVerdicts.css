@@ -64,15 +64,14 @@
   color: var(--verdict-not-met);
 }
 
-/* The frozen position. Mono and tabular so a column of them lines up, and
-   never dropped — a citation names the number, not the row's place on screen. */
+/* The frozen position. Mono, and never dropped — a citation names the number,
+   not the row's place on screen. */
 .armada-verdicts__ordinal {
   flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  font-variant-numeric: tabular-nums;
 }
 
 /* The requester's own words. Sans, because a criterion is a sentence somebody
@@ -150,10 +149,9 @@
 }
 
 /* The line a person triages on. It is the reason the block is on screen, so it
-   carries the weight the two facts above it do not. */
+   carries the contrast the two facts above it do not. */
 .armada-verdicts__cite-value[data-field="consequence"] {
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
 }
 
 /* Where the brief this verdict answered was written. Mono and subtle, at the

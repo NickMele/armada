@@ -91,10 +91,9 @@
   color: var(--accent);
 }
 
-/* Lines added and lines removed. Mono and tabular, so the digits line up down
-   the column, and the two diff hues — the one place below Job level the design
-   system does hand a colour to a value, because a red count and a green count
-   beside each other is the whole reading. Never wraps: a count is two short
+/* Lines added and lines removed. Mono, and the two diff hues — the one place
+   below Job level the design system does hand a colour to a value, because a
+   red count and a green count beside each other is the whole reading. Never wraps: a count is two short
    tokens and the path beside it is the `minmax(0, 1fr)` that gives way. */
 .armada-files__counts {
   display: flex;
@@ -102,7 +101,6 @@
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

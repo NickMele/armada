@@ -13,6 +13,9 @@ body {
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   font-weight: var(--weight-body);
+  /* Every figure, sans or mono, lines up in a column. Components do not
+     restate it. */
+  font-variant-numeric: lining-nums tabular-nums;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

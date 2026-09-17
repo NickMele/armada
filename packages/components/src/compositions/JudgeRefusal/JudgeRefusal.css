@@ -117,11 +117,10 @@
 }
 
 /* The line a person triages on, and the reason the block is on screen. It
-   carries the weight the two facts above it do not — the same treatment
+   carries the contrast the two facts above it do not — the same treatment
    `CriterionVerdicts` gives the same field. */
 .armada-judge-refusal__value[data-field="consequence"] {
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
 }
 
 .armada-judge-refusal__quote-lead {

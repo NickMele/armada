@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
+import { ANNOTATE_FLAG, ANNOTATION_CHANNELS } from "../shared/annotations";
+import type { Annotation, AnnotationsDevApi } from "../shared/annotations";
 import { frameStreamUrl } from "../shared/streaming";
 import type { BridgeState, Summons } from "../shared/bridge";
 import type { BridgeApi, CommandExplainedRead } from "../shared/api";
@@ -566,3 +568,14 @@ const api: BridgeApi = {
 };
 
 contextBridge.exposeInMainWorld("armada", api);
+
+// The dev-only annotation layer, #1226 — never on `armada`, which is Fleet's seam.
+// Main passes the flag only when the app is not packaged.
+if (process.argv.includes(ANNOTATE_FLAG)) {
+  const annotations: AnnotationsDevApi = {
+    list: (): Promise<Annotation[]> => ipcRenderer.invoke(ANNOTATION_CHANNELS.list),
+    save: (note: Annotation): Promise<void> => ipcRenderer.invoke(ANNOTATION_CHANNELS.save, note),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke(ANNOTATION_CHANNELS.remove, id),
+  };
+  contextBridge.exposeInMainWorld("armadaDev", annotations);
+}

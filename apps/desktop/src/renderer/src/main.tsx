@@ -38,6 +38,11 @@ function Root() {
   );
 }
 
+// Dev only, #1226: the annotation layer, when main exposed its save path or a vite dev server serves this page.
+if (window.armadaDev !== undefined || import.meta.env.DEV) {
+  void import("./annotate/mount").then(({ mount }) => mount());
+}
+
 const root = document.getElementById("root");
 if (root !== null) {
   createRoot(root).render(

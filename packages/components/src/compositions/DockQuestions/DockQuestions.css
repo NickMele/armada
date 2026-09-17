@@ -39,7 +39,7 @@
 .armada-dock-question__title {
   margin: 0;
   min-width: 0;
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
   text-wrap: pretty;
 }
 

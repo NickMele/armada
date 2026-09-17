@@ -82,8 +82,10 @@ test("a poll that changes no order moves nothing", async () => {
 
 test("under reduced motion a re-sort moves nothing", async () => {
   const matchMedia = window.matchMedia.bind(window);
+  // A real list that always matches, not `{ matches: true }`: the hold on a
+  // row's Kill subscribes to changes, and a bare object has no addEventListener.
   vi.spyOn(window, "matchMedia").mockImplementation((query) =>
-    query === "(prefers-reduced-motion: reduce)" ? ({ matches: true } as MediaQueryList) : matchMedia(query),
+    matchMedia(query === "(prefers-reduced-motion: reduce)" ? "all" : query),
   );
   mount(board([older, newer]));
   await expect.poll(drawn).toEqual(["a", "b"]);

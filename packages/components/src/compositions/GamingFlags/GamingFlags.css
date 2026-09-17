@@ -164,7 +164,6 @@
 .armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__pattern {
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
-  font-weight: var(--weight-medium);
 }
 
 /* The verb read in full. Nothing clips here — this is the finding a person is
@@ -253,7 +252,7 @@
 }
 
 .armada-gaming-flags__cleared-of {
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
   color: var(--fg-default);
 }
 

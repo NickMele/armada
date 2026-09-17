@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Plus } from "lucide-react";
 import { expect, fn } from "storybook/test";
 import { SplitButton, type SplitButtonProps } from "./SplitButton";
+import { holdDurationOf } from "../HoldButton/useHold";
 
 const meta: Meta<typeof SplitButton> = {
   title: "Primitives/Split button",
@@ -345,5 +346,94 @@ export const TonalNoMenu: Story = {
 
     await userEvent.click(canvas.getByRole("button", { name: "Dispatch" }));
     await expect(args.onAction).toHaveBeenCalledTimes(2);
+  },
+};
+
+const killActions = [{ label: "Kill job, it ends here", danger: true }];
+
+const holdArgs = {
+  items: killActions,
+  menuLabel: "Everything else this job can do",
+  onAction: fn(),
+  hold: {
+    label: "Hold to kill drone",
+    description: "Kills the drone once held until it fills. Letting go sooner kills nothing. The job stays open.",
+    onCommit: fn(),
+  },
+  children: "Kill drone",
+} as Story["args"];
+
+/**
+ * A face that confirms in place — `Kill drone` on a running Job's header. The
+ * face fills while held and commits once held for `--duration-hold`; a click is
+ * a press let go at once, so it kills nothing and asks nothing. **The caret is
+ * still only a menu trigger**: pressing and holding it starts no hold.
+ */
+export const HoldFace: Story = {
+  args: holdArgs,
+  render: (args) => (
+    <Row>
+      <SplitButton {...args} />
+    </Row>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    const face = canvas.getByRole("button", { name: "Hold to kill drone" });
+    await expect(face).toHaveAccessibleDescription(args.hold?.description ?? "");
+    const hold = holdDurationOf(face) ?? 0;
+    await expect(hold).toBeGreaterThan(0);
+
+    await userEvent.click(face);
+    const caret = canvas.getByRole("button", { name: "Everything else this job can do" });
+    // Pressed and held past the hold's length: a caret that armed would commit here.
+    caret.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, isPrimary: true }));
+    await new Promise((resolve) => setTimeout(resolve, hold + 100));
+    caret.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, isPrimary: true }));
+    await userEvent.click(caret);
+    await expect(args.hold?.onCommit).not.toHaveBeenCalled();
+    await expect(args.onAction).not.toHaveBeenCalled();
+    await expect(canvas.getByRole("menu")).toBeVisible();
+  },
+};
+
+/** Held halfway, seeded so the fill does not depend on when the screenshot lands. No line opens under it. */
+export const HoldFaceArming: Story = {
+  args: holdArgs,
+  render: (args) => (
+    <div data-preview-held="" data-preview-press="action">
+      <Row>
+        <SplitButton {...args} />
+      </Row>
+    </div>
+  ),
+};
+
+/**
+ * Under `prefers-reduced-motion` the hold is not offered: the face reads as the
+ * act and a press calls `onAction`, which is the dialog, because the fill is
+ * the only thing that says how long is left.
+ */
+export const HoldFaceReducedMotion: Story = {
+  args: holdArgs,
+  beforeEach: () => {
+    const real = window.matchMedia;
+    window.matchMedia = (query: string) => {
+      if (!query.includes("prefers-reduced-motion")) return real.call(window, query);
+      // A preference that never changes, so nothing is ever dispatched to a listener.
+      const reduced = new EventTarget() as MediaQueryList;
+      return Object.assign(reduced, { matches: true, media: query, onchange: null });
+    };
+    return () => {
+      window.matchMedia = real;
+    };
+  },
+  render: (args) => (
+    <Row>
+      <SplitButton {...args} />
+    </Row>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Kill drone" }));
+    await expect(args.onAction).toHaveBeenCalledTimes(1);
+    await expect(args.hold?.onCommit).not.toHaveBeenCalled();
   },
 };

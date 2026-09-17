@@ -54,7 +54,7 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
   color: var(--fg-default);
 }
 

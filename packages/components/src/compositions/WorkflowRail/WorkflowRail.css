@@ -93,11 +93,11 @@
   color: var(--fg-default);
 }
 
-/* The row that ended the Job carries weight as well as a surface. */
+/* The row that ended the Job reads at full contrast, and its surface is what
+   sets it apart from the running one. */
 .armada-rail__row[data-activity="failed"] .armada-rail__name,
 .armada-rail__row[data-activity="stopped"] .armada-rail__name {
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
 }
 
 /* Where a workflow supplies no label, the step_id renders instead — mono,
@@ -153,7 +153,7 @@
    Beside the verdict rather than in place of it: what the Judge said is still
    on the row, and this says only that it did not stand.
 
-   Weight, not hue. The verdict next to it already carries the one --step-failed
+   Full contrast, not hue. The verdict next to it already carries the one --step-failed
    this row is allowed, and a second red would read as one louder failure rather
    than as two facts — the same argument the review decision's terminal sentence
    makes for --fg-default against the muted ones around it. */
@@ -163,7 +163,7 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
   white-space: nowrap;
 }
 
@@ -176,7 +176,6 @@
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 /* --- Gate rows ------------------------------------------------------------ */

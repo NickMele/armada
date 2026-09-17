@@ -46,3 +46,14 @@
 .armada-button[data-hold][data-pending] .armada-hold__fill {
   display: none;
 }
+
+/* The fill is the press, so the line does not also open. `Button`'s press line
+ * opens from the centre at --duration-press and reads as "sent"; a hold that has
+ * only just begun has sent nothing, and two motions on one press say two
+ * different things. The line still answers — pending and Fleet's answer are
+ * animations, and nothing here touches them. `SplitButton.css` makes the same
+ * choice for a face that holds. */
+.armada-button[data-hold]:active:not(:disabled):not([data-pending])::after,
+.armada-button[data-hold][data-preview-press]::after {
+  transform: scaleX(0);
+}
