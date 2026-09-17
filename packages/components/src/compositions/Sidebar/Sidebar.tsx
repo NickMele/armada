@@ -60,8 +60,9 @@ export type SidebarProps = {
   /** 48px icon rail. Auto below the breakpoint, and toggled by ⌘\ above it. */
   collapsed?: boolean;
   /**
-   * A resting width inside the 160–320px drag range, as a CSS length. Ignored
-   * when collapsed. Width and collapsed state survive app restart, which is
+   * A CSS length: a resting width inside the 160–320px drag range, or `100%`
+   * where a column already holds the width, which is what the shell passes.
+   * Ignored when collapsed. Width and collapsed state survive app restart, which is
    * the surface's to persist rather than this component's.
    */
   width?: string;
