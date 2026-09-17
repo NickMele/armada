@@ -149,14 +149,23 @@ button.armada-chapter__head:focus-visible {
 
 /* Streaming. The running dot, at the size the error treatment's dot already
    uses — a count says how many there are and only this says they are still
-   arriving. It does not pulse: the step the Drone is working carries the
-   pulse, on the rail beside this chapter. */
+   arriving. Still arriving is still working, so it pulses (#1276): the
+   activity log sheet's keyframes, the same dot at the same size, opacity and
+   scale only, so the meta beside it never shifts. */
 .armada-chapter__live {
   flex: none;
   width: var(--dot);
   height: var(--dot);
   border-radius: 50%;
   background: var(--status-running);
+  animation: armada-log-sheet-pulse var(--duration-pulse) var(--ease) infinite;
+}
+
+/* The pulse stops. The running hue still says the chapter is live. */
+@media (prefers-reduced-motion: reduce) {
+  .armada-chapter__live {
+    animation: none;
+  }
 }
 
 /* The chapter that asks rather than reports. Amber on the header alone, and a
