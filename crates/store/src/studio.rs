@@ -16,6 +16,7 @@
 
 mod content;
 mod reading;
+mod reading_in;
 mod scouting;
 mod sweeping;
 
@@ -282,23 +283,7 @@ impl Store {
     ) -> Result<(), StudioError> {
         let tx = self.writing()?;
         touched(&tx, studio_id, at)?;
-        tx.execute(
-            "INSERT INTO studio_nodes \
-             (id, studio_id, kind, state, content, x, y, created_at, added_by) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            (
-                node.id().as_str(),
-                studio_id.as_str(),
-                node.kind().as_wire(),
-                node.state().map(|state| state.as_wire()),
-                content::written(node.content()),
-                node.position().x,
-                node.position().y,
-                node.created_at().as_str(),
-                node.added_by().map(|by| by.as_wire()),
-            ),
-        )
-        .map_err(database("adding a node to a Studio"))?;
+        node_kept(&tx, studio_id, node)?;
         for (from, id) in produced_by {
             let by = node.added_by().unwrap_or(StudioAuthor::Person);
             let edge = StudioEdge::produced(
@@ -472,6 +457,33 @@ fn touched(tx: &Transaction<'_>, studio_id: &StudioId, at: &Timestamp) -> Result
 }
 
 /// Write one edge, naming which end is missing or that it already exists.
+/// One node, inserted. **Every write that adds one goes through here**, so a
+/// column added to the table is added in one place.
+fn node_kept(
+    tx: &Transaction<'_>,
+    studio_id: &StudioId,
+    node: &StudioNode,
+) -> Result<(), StudioError> {
+    tx.execute(
+        "INSERT INTO studio_nodes \
+         (id, studio_id, kind, state, content, x, y, created_at, added_by) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        (
+            node.id().as_str(),
+            studio_id.as_str(),
+            node.kind().as_wire(),
+            node.state().map(|state| state.as_wire()),
+            content::written(node.content()),
+            node.position().x,
+            node.position().y,
+            node.created_at().as_str(),
+            node.added_by().map(|by| by.as_wire()),
+        ),
+    )
+    .map(|_| ())
+    .map_err(database("adding a node to a Studio"))
+}
+
 fn edge_kept(
     tx: &Transaction<'_>,
     studio_id: &StudioId,

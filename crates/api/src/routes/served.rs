@@ -205,6 +205,13 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/studios/:studio_id/stop_scout",
     },
+    // A Link read in, `#1293`. `read_in` rather than `read_in_link`: the node
+    // the body names is the Link.
+    Route {
+        operation: "read_in_link",
+        method: "POST",
+        path: "/studios/:studio_id/read_in",
+    },
     // A run started from a Studio, `#1289`. `start_run` rather than
     // `start_studio_run`: the segment before it says which Studio.
     Route {

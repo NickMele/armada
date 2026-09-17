@@ -655,6 +655,18 @@ where
         self.scout_stopped(studio_id, stop, within).await
     }
 
+    /// **The `Arc` is handed on**, as `ask_scout`'s is: the scout outlives
+    /// this request. `crate::reading_in` has what is fetched and by what.
+    async fn read_in_link(
+        self: Arc<Self>,
+        studio_id: ipc::StudioId,
+        read_in: ipc::ReadInLink,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.link_read_in(studio_id, read_in, by, within).await
+    }
+
     /// **The `Arc` is handed on**, for `Commands::start_checkout_run`'s
     /// reason: the run outlives this request. `crate::studio_runs` has the
     /// order the two writes happen in and why.

@@ -8,5 +8,5 @@
 mod brief;
 mod hosting;
 
-pub(crate) use brief::told;
+pub(crate) use brief::{told, told_a_read_in};
 pub use hosting::{ScoutHost, Scouts};

@@ -429,6 +429,25 @@ notes = """
 The answer is the Studio before the Finding freezes; the frozen one arrives on `studio.changed`. A node no scout is reading for is refused as `fleet.scout_not_running`. `Bridge only`: the stop is a press on a node, and no ask to Helm reaches it.
 """
 
+[operations.read_in_link]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Read a Link on a Studio in — the source fetched by Fleet, what comes back hung off the Link, and the Studio answered"
+notes = """
+**A person's act on Bridge, or Helm's on a person's ask.** The Link survives and keeps its address whatever comes back; every node this makes carries a `produced` edge from it.
+
+**Fleet fetches, and the scout is handed text.** A scout's launch denies every tool that could reach a source and comes up with no MCP server (`docs/concepts/scout.md`, spike 017), so the fetch runs in Fleet's own process — the forge's CLI for an issue, a pull request or a milestone, an HTTP read for a page, the transcript file for a session, and Fleet's own read of `<records_root>/helm/` for a thread, which `observe_helm` refuses every agent. **Reading a source in widens nothing a scout may do.**
+
+**The fetch is before the write.** A source that will not fetch is refused as `fleet.studio_source_unreadable` and no node is added; a Link to a board, a wiki or anything else no scout reads is `fleet.studio_link_stays_a_link`; a node that is not a Link is `fleet.studio_not_a_link`.
+
+**An issue, a pull request, a page, a session or a thread** adds a Finding Gathering and a scout reads the text on its one turn, `docs/contracts/agent-prompt.md` section 5c. What it asked for — Notes, Clusters, Contradictions and proposed relations — is written when the Finding freezes, each `produced` by the Link, and arrives on `studio.changed`. An answer that is not the shape leaves the Finding and no node beside it. A source is bounded before it is handed over and the Finding's `sources` says how much was cut.
+
+**A milestone is read in by Fleet alone**, with no scout and no Finding: one Link node per issue, carrying its address and a line naming its number, title and state. Bounded at 50; the milestone's own Link then says how many of how many were read in. A model asked to echo a list back would be cost spent on a transcription.
+
+`agent_access` is `Helm only`, so Helm reads one in on a person's ask and no other agent reaches it. From Helm it also publishes `studio.helm_acted`.
+"""
+
 [operations.start_studio_run]
 kind = "command"
 transport = "HTTP"

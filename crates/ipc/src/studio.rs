@@ -291,6 +291,11 @@ pub enum HelmStudioAct {
         from: StudioNodeId,
         node_id: StudioNodeId,
     },
+    /// A Link read in, and every node it produced. `#1293`.
+    ReadIn {
+        from: StudioNodeId,
+        node_ids: Vec<StudioNodeId>,
+    },
     /// An Issue draft dispatched, and every Job node the proposal put on the
     /// Studio. **A list**, because one request can be several Jobs. `#1291`.
     Dispatched {

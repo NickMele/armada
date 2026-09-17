@@ -310,6 +310,31 @@ pub(crate) async fn start_scout<D: Studios>(
     answered(&served, StatusCode::OK, started)
 }
 
+/// A Link read in. **Reads the daemon by its `Arc`**, as a scout's ask does:
+/// the scout Fleet starts outlives this request. `#1293`.
+pub(crate) async fn read_in_link<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    helm: Option<Extension<HelmCalled>>,
+    bytes: Bytes,
+) -> Response {
+    let read_in = match body(&served, "a Link to read in", &bytes) {
+        Ok(read_in) => read_in,
+        Err(response) => return response,
+    };
+    let read = served
+        .shared()
+        .read_in_link(
+            StudioId::carried(studio_id),
+            read_in,
+            acting(helm),
+            within(scope),
+        )
+        .await;
+    answered(&served, StatusCode::OK, read)
+}
+
 pub(crate) async fn stop_scout<D: Studios>(
     State(served): State<Served<D>>,
     Path(studio_id): Path<String>,
