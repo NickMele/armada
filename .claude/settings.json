@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(git push)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(scripts/land --status:*)",
+      "Bash(scripts/land preflight)"
     ]
   },
   "hooks": {
@@ -13,6 +15,15 @@
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_write.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_merge.py\""
           }
         ]
       }
