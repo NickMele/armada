@@ -190,9 +190,9 @@ export function OverviewLists({
         // fresh install reads first, and both keep the panel below unchanged. #1262.
         //
         // The wrapper is the empty panel's own frame, kept without the panel: `ActiveJobsList`
-        // drew an empty list as `role="list"` named by its `label`, so assistive tech still finds
-        // "Overview" here. No class, so it draws nothing of its own.
-        <div role="list" aria-label="Overview">
+        // named its empty frame by `label`; a region keeps that name without a list of no items, so
+        // assistive tech still finds "Overview" here. No class, so it draws nothing of its own.
+        <div role="region" aria-label="Overview">
           <OverviewEmpty onCompose={onCompose} />
         </div>
       ) : sections.length === 0 ? (
