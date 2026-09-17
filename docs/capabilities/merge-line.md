@@ -58,6 +58,10 @@ runner (holds flock) -----------------------------+
   git push origin --delete <branch>; print worktree cleanup commands
 ```
 
+## What the first run found
+
+The line's first real turn on this repository merged `main` in, ran the gate and every Check either side hit, and went red on `test` — on two `config` tests that were already failing on `main`, which is what sent this page's *asking `main` too* rule into the design. Nothing landed. A branch merging on its own green reading would have carried that state forward as its own.
+
 ## The line and the turn
 
 - **The turn is an `fcntl.flock` on `runner.lock`.** The kernel releases it when the holder dies, so there is no timeout and no eviction.
@@ -85,6 +89,8 @@ runner (holds flock) -----------------------------+
 
 **So the line gates the combination, and trusts the agent for the branch's own Checks.** `work-issue` step 4 is where a branch is measured on its own, and preflight stamps the tree it was measured on.
 
+**A Check that failed is asked of `main` too, before the branch is blamed.** Only the Checks that failed, only on a turn that had one, and the answer is cached per base commit — so a green turn pays nothing for this and a red one pays for what it already knows is broken. A Check red on both sides is reported as `main`'s, naming it and sending the reader at `main`; a Check red only with `main` merged in stays the branch's. A turn holding one of each says both.
+
 **How a `verify-foundations` run is read:**
 
 | Read | Why |
@@ -94,6 +100,7 @@ runner (holds flock) -----------------------------+
 | Findings counted, not collected into a set | A second violation of one rule in one file reads like the first |
 | A non-zero exit naming no failing rule is red | A branch that breaks `xtask` prints one `error[E0433]` and would be gated on nothing |
 | A Check whose command is not installed stops the turn | A missing tool is not the branch breaking `main` |
+| A Check red on `main` too stops the turn as `main`'s | "Fix your branch" and "fix `main`" send a reader to different places |
 | The same on `main`'s own run, which stops the turn | There is nothing to compare against |
 | `main`'s run cached per commit, only once read as a report | A killed run cached empty makes every branch after it red |
 | One report carries the gate and the Checks together | An agent reads everything wrong once, not twice |
@@ -135,6 +142,7 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 | `armada covers` | `ResolvedCheck::covers`, already shared | 2 |
 | Merging `main` in | `crates/adapters/src/merging_in.rs` | 3 |
 | The gate worktree under `.armada/gates/` | `.armada/worktrees/<handle>`, cut by `Vcs` | 8 |
+| Asking whether `main` fails it too | *A test broken on main* | 9 |
 | Rerunning the Checks | A gate run over the merged worktree | 4 |
 | The merge | `crates/adapters/src/landing.rs` | 5 |
 | First parent against the gated base | Proving what merged | 6 |
@@ -148,6 +156,7 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 6. `docs/concepts/manifest.md`, *Proving what merged*. The first-parent comparison belongs beside `after_merge`.
 7. An outcome becomes a Job event and a log line.
 8. Same directory, same reason: a Job's Checks run inside the repository because that is where this project's tooling works.
+9. `docs/concepts/fleet.md`. Fleet runs one named test against a checkout of `main` on a Drone's word; the line asks the same question of a whole Check, without being asked.
 
 ## What does not port
 

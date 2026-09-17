@@ -167,7 +167,7 @@ def common_dir(cwd):
 
 def state_dir(cwd):
     at = os.path.join(common_dir(cwd), "armada-land")
-    for sub in ("queue", "outcomes", "stamps", "logs", "foundations"):
+    for sub in ("queue", "outcomes", "stamps", "logs", "foundations", "checks"):
         os.makedirs(os.path.join(at, sub), exist_ok=True)
     return at
 
@@ -403,7 +403,7 @@ def status(cwd, branch):
         print(f"{branch}: nothing known")
         return EXIT["unknown"]
     print(f"{branch}: {held['state']} — {held['detail']}")
-    for name in ("failed", "new_lines", "conflicts", "logs", "cleanup"):
+    for name in ("failed", "already", "new_lines", "conflicts", "logs", "cleanup"):
         for item in held.get(name) or []:
             print(f"  {item}")
     return EXIT[held["state"]]
@@ -459,7 +459,8 @@ def take_turn(state, entry):
     shutil.rmtree(logs, ignore_errors=True)
     os.makedirs(logs)
     held = read_json(outcome_path(state, branch)) or {}
-    say(state, branch, "gating", "reading the pull request", logs=[], failed=[], new_lines=[], conflicts=[])
+    say(state, branch, "gating", "reading the pull request",
+        logs=[], failed=[], already=[], new_lines=[], conflicts=[])
 
     for _ in range(ROUNDS):
         view = gh_view(repo, pr, "state,baseRefName,headRefOid,mergeCommit")
@@ -561,6 +562,14 @@ def gate(state, entry, head, base, logs, moved):
         # does not carry.
         nothing_left(where, "the Checks")
 
+        already = []
+        if failed:
+            say(state, branch, "gating", f"{', '.join(failed)} failed; asking whether {BASE} fails them too",
+                logs=log_paths)
+            already = checks_on_the_base(state, base, failed, logs)
+            failed = [name for name in failed if name not in already]
+            log_paths += [os.path.join(logs, f"{name}-on-{BASE}.log") for name in already]
+
         if uninstalled:
             # Before the red, because a verdict reached without a Check that
             # never ran is not a verdict.
@@ -573,6 +582,14 @@ def gate(state, entry, head, base, logs, moved):
                 failed=failed, new_lines=new_lines, logs=log_paths,
             )
 
+        # **A Check that fails on `main` too is not this branch's.** Said in the
+        # same shape as a gate that cannot run there: name it, and send the
+        # reader at `main` rather than at their own diff.
+        theirs = (
+            f"{', '.join(already)} already fails on {BASE} itself, so that much is not this "
+            f"branch's — fix {BASE} and land that first"
+            if already else None
+        )
         if failed or new_lines or crashed:
             # One report, whatever went wrong: a gate that could not run must
             # not hide the Checks that failed beside it.
@@ -583,9 +600,13 @@ def gate(state, entry, head, base, logs, moved):
                     ([f"{', '.join(failed)} failed"] if failed else [])
                     + ([crashed] if crashed else [])
                     + ([f"{len(new_lines)} verify-foundations line(s) {BASE} does not have"] if new_lines else [])
+                    + ([theirs] if theirs else [])
                 ) + ". Nothing was pushed or merged.",
-                failed=failed, new_lines=new_lines, logs=log_paths,
+                failed=failed, already=already, new_lines=new_lines, logs=log_paths,
             )
+        if already:
+            raise Stop("stopped", f"{theirs}. Nothing was pushed or merged",
+                       already=already, logs=log_paths)
 
         if not moved:
             return candidate
@@ -764,6 +785,33 @@ def read_text(path):
             return held.read()
     except OSError:
         return None
+
+
+def checks_on_the_base(state, base, names, logs):
+    """Which of `names` already fail on `base` itself.
+
+    **Only ever asked about a Check that just failed**, so the cost lands on a
+    failing turn and on nothing else, and the answer is kept per commit beside
+    the foundations reading. The worktree is prepared exactly as the gate's is —
+    seeded and installed into — because these are the same commands."""
+    repo = os.path.dirname(state)
+    cached = os.path.join(state, "checks", f"{base}.json")
+    known = read_json(cached) or {}
+    unknown = [name for name in names if name not in known]
+    if unknown:
+        at = os.path.join(gates_root(repo), f"base-{base[:12]}")
+        drop_worktree(repo, at)
+        git(repo, "worktree", "add", "--quiet", "--detach", at, base)
+        try:
+            seed(repo, at, logs)
+            setup(at, logs)
+            for name in unknown:
+                log = os.path.join(logs, f"{name}-on-{BASE}.log")
+                known[name] = run([ARMADA, "check", name], at, check=False, log=log).returncode == 0
+        finally:
+            drop_worktree(repo, at)
+        write_json(cached, known)
+    return [name for name in names if known.get(name) is False]
 
 
 def wait_for_head(repo, pr, candidate):

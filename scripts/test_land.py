@@ -301,6 +301,7 @@ class Line(unittest.TestCase):
         second = self.settle(two, "fix/two")
         self.assertEqual(second.returncode, 4, second.stdout)
         self.assertIn("test failed", second.stdout)
+        self.assertNotIn("already fails", second.stdout, "this one is the branch's own")
         self.assertIn("test.log", self.logged("fix/two"))
 
         on_main = self.main_files()
@@ -690,6 +691,42 @@ class Line(unittest.TestCase):
         self.land(where)
         self.assertEqual(self.settle(where, "fix/after-a-death").returncode, 0)
         self.assertFalse(os.path.exists(left), "the next turn takes back what a dead runner left")
+
+    def test_a_check_already_red_on_main_is_not_the_branchs_fault(self):
+        # It reaches main on an unmoved turn, where no Check runs — which is how
+        # the pair of config tests reached main in this repository.
+        broken = self.branch("fix/breaks-test-on-main", {"checks/test.sh": "exit 1\n"})
+        after = self.branch("fix/behind-a-red-main", {"after.txt": "1\n"})
+        self.land(broken, "preflight")
+        self.land(broken)
+        self.assertEqual(self.settle(broken, "fix/breaks-test-on-main").returncode, 0)
+
+        self.land(after, "preflight")
+        self.land(after)
+        done = self.settle(after, "fix/behind-a-red-main")
+        self.assertEqual(done.returncode, 7, done.stdout)
+        self.assertIn("already fails on main", done.stdout)
+        self.assertIn("not this branch's", done.stdout)
+        self.assertNotIn("after.txt", self.main_files(), "nothing merges either way")
+
+    def test_one_turn_says_the_branchs_red_and_mains_together(self):
+        self.write(self.repo, {"checks/ui.sh": "! { [ -f ui/a ] && [ -f ui/b ]; }\n"})
+        self.git(self.repo, "add", "-A")
+        self.git(self.repo, "commit", "--quiet", "-m", "a scoped Check")
+        self.git(self.repo, "push", "--quiet", "origin", "main")
+        broken = self.branch("fix/red-main", {"checks/test.sh": "exit 1\n", "ui/a": "1\n"})
+        mine = self.branch("fix/red-mine", {"ui/b": "1\n"})
+        self.land(broken, "preflight")
+        self.land(broken)
+        self.assertEqual(self.settle(broken, "fix/red-main").returncode, 0)
+
+        self.land(mine, "preflight")
+        self.land(mine)
+        done = self.settle(mine, "fix/red-mine")
+        self.assertEqual(done.returncode, 4, done.stdout)
+        self.assertIn("ui failed", done.stdout)
+        self.assertIn("test already fails on main", done.stdout)
+        self.assertNotIn("ui/b", self.main_files())
 
     def test_a_relative_binary_is_refused_rather_than_traced(self):
         where = self.branch("fix/relative", {"x.txt": "1\n"})

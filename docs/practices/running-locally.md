@@ -551,8 +551,14 @@ saying the branch is in line.
 | 7 | Stopped | Read the reason; nothing was merged unless it says so. A Check naming a command this machine does not have lands here, not in red |
 | 8 | Nothing known | This branch has never been queued from this clone |
 
-**A red names only what the merged tree added.** A Check that failed, or a
-`verify-foundations` failing line `main`'s own run does not print. Red already on
+**A Check that failed is rerun against `main` before you are blamed for it.**
+One that fails there too is reported as `main`'s, by name, and the turn stops
+rather than reddening — fix `main` and land that first. That rerun happens only
+on a turn that went red, and only for the Checks that failed.
+
+**A red names only what the merged tree added.** A Check that failed on the
+branch and not on `main`, or a `verify-foundations` failing line `main`'s own run
+does not print. Red already on
 `main` does not stop a merge, and a line that only moved down the file is not a
 new one. A red and a conflict both keep their place, so a branch that comes back
 is served where it was.
