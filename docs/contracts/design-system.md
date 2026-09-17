@@ -1558,12 +1558,20 @@ The left column's third panel — what the status bar used to read.
 
 ```
 state    --dot (6px) + --text-base --fg-default
-detail   --font-mono --text-2xs --fg-subtle
-meta     --font-mono --text-2xs --fg-subtle
+rows     pid / port / protocol / up, one row each: label --text-xs
+         --text-label on the left, value --font-mono --text-xs --text-body
+         in one aligned column — Pulse's figure rows, FigureList
+detail   --font-mono --text-2xs --fg-subtle, the sentence a state carries
 doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
          (--status-completed-success / --status-awaiting-review /
          --status-escalated) and the modules checked, in --fg-muted
 ```
+
+**The rows were settled on 2026-09-17**, replacing two `·`-joined mono lines,
+at the cost of two lines in a column that was already tall. **A state draws
+only the rows it has a value for**, never a label beside a blank: a Fleet
+being connected to or not answering has pid and port, and protocol and up
+arrive with the connection.
 
 **Fleet's state is one of three, and the panel's dot names which** — the
 same three the status bar used to carry, on the same grounds Doctor's pass,
@@ -1575,18 +1583,18 @@ carries no icons" is unaffected; see [Iconography](iconography.md).
 
 ```
 running       --status-completed-success dot
-              "Fleet running" · mono: pid, port
+              "Fleet running" · rows: pid, port, protocol, up
 not running   --status-escalated dot
               "Fleet is not running" · mono: what the runtime file says —
               no file at its path, a pid held by nothing, or a pid held by
               something else — plus what to do, since Bridge cannot start it
 unreachable   --status-awaiting-review dot
-              "Fleet unreachable" · mono: pid alive on its port, no answer
-              for N, plus how stale the last read is
+              "Fleet unreachable" · rows: pid, port · mono: alive, no
+              answer for N, plus how stale the last read is
 ```
 
-**Drone count moved to Stats.** This panel's own mono line carries pid and
-port only; the running count is Overview's own arithmetic, read once and
+**Drone count moved to Stats.** This panel's rows carry pid, port, protocol
+and up only; the running count is Overview's own arithmetic, read once and
 shared by both panels.
 
 The two failure states differ on the runtime file, which is the fact
@@ -1597,8 +1605,8 @@ wedged. Two different things to do about it, so two sentences rather
 than one timeout message.
 
 **A version gap rides the running state, not a fourth dot.** Where Fleet is
-newer than this Bridge — additive only, so nothing drawn is wrong — the
-detail line grows a clause naming both versions, as advice on a healthy
+newer than this Bridge — additive only, so nothing drawn is wrong — a
+detail line under the rows names both versions, as advice on a healthy
 connection rather than a failure notice. See `../practices/protocol.md`,
 What Bridge does with the version it reads.
 
@@ -2238,7 +2246,8 @@ value and no merge, so no Manifest is party to it.
 **Stats and Fleet**, present in the left column on every surface. Stats
 reads Awaiting approval, Needs review and Escalated — amber past zero for
 the first two, red for the third — plus Jobs, Drones and Manifest drift.
-Fleet reads "Fleet running" when idle, and a mono `pid · port` beside it;
+Fleet reads "Fleet running" when idle, and pid, port, protocol and up as
+rows under it;
 neither panel carries spend or quota, which left the shell chrome
 entirely with the status bar Bridge/1088 replaced.
 
