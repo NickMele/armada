@@ -265,25 +265,6 @@ checks:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
 
-  # `format`, not `fmt`: that name is a Command below and both registries
-  # refuse a collision — the Command writes, this reads. No `clippy` beside it;
-  # `[clippy-as-a-check]` in docs/OPEN.md is why.
-  #
-  # **No `requires: [fmt]`, on purpose, and it once had one.** #387 gave it
-  # that, for a Job that burned its whole retry budget failing `format` at a
-  # different unformatted line each attempt while the Command that fixes it
-  # sat right below in this file. It read as a fix: every gate evaluation ran
-  # `fmt` and then read what `fmt` had just written, so `format` passed every
-  # time it ran and unformatted Rust merged unnoticed —
-  # `xtask/src/rules_stories.rs` on `main`, until this line was found. A Check
-  # that writes what it then reads is not a check, whoever runs it: `armada check
-  # format` and a person's own run inside a Job read the same Manifest and are
-  # owed the same answer the gate gives, by this file's own rule at `declared`
-  # in `crates/armada` — so this could not be fixed for a Drone alone without
-  # the two disagreeing. A failure here says `armada run fmt`. A Drone already
-  # holds that Command as a Bash grant on every step, `fmt` being
-  # non-destructive — Spike 011 — so nothing here is protecting a retry
-  # budget it cannot also protect by running the fix itself.
   # The two Python suites that hold the local merge line together. They are two
   # Checks rather than one because a `run` gets no shell, so nothing here can
   # chain two commands — and because the two are read by different changes: one
@@ -314,6 +295,25 @@ checks:
     when:
       - ".claude/hooks/**"
 
+  # `format`, not `fmt`: that name is a Command below and both registries
+  # refuse a collision — the Command writes, this reads. No `clippy` beside it;
+  # `[clippy-as-a-check]` in docs/OPEN.md is why.
+  #
+  # **No `requires: [fmt]`, on purpose, and it once had one.** #387 gave it
+  # that, for a Job that burned its whole retry budget failing `format` at a
+  # different unformatted line each attempt while the Command that fixes it
+  # sat right below in this file. It read as a fix: every gate evaluation ran
+  # `fmt` and then read what `fmt` had just written, so `format` passed every
+  # time it ran and unformatted Rust merged unnoticed —
+  # `xtask/src/rules_stories.rs` on `main`, until this line was found. A Check
+  # that writes what it then reads is not a check, whoever runs it: `armada check
+  # format` and a person's own run inside a Job read the same Manifest and are
+  # owed the same answer the gate gives, by this file's own rule at `declared`
+  # in `crates/armada` — so this could not be fixed for a Drone alone without
+  # the two disagreeing. A failure here says `armada run fmt`. A Drone already
+  # holds that Command as a Bash grant on every step, `fmt` being
+  # non-destructive — Spike 011 — so nothing here is protecting a retry
+  # budget it cannot also protect by running the fix itself.
   format:
     run: cargo fmt --all --check
     # The other shape of narrowing: the changed paths, verbatim, with no

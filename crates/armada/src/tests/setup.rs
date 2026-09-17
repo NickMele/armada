@@ -77,7 +77,9 @@ fn this_repositorys_own_setup_loads_and_resolves() {
             "components_test".to_string(),
             "desktop_test".to_string(),
             "format".to_string(),
+            "hooks_test".to_string(),
             "screens_test".to_string(),
+            "scripts_test".to_string(),
             "storybook".to_string(),
             "test".to_string(),
             "typecheck".to_string(),
@@ -87,7 +89,8 @@ fn this_repositorys_own_setup_loads_and_resolves() {
          unit test (#1130), the Bridge (#200: every Check used to compile \
          Rust), `format` (PR #199 merged unformatted files), and the Bridge's \
          tests one per package, so the story tests can stay out of a Drone's \
-         run (#849). There is no `clippy` — `[clippy-as-a-check]` in \
+         run (#849), and the merge line's own two Python suites, which no \
+         other Check reads. There is no `clippy` — `[clippy-as-a-check]` in \
          `docs/OPEN.md` says why"
     );
     assert_eq!(bug(&setup).name(), "bug");
@@ -159,6 +162,9 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("desktop_test", "pnpm -C apps/desktop test"),
             ("screens_test", "pnpm -C packages/screens test"),
             ("components_test", "pnpm -C packages/components test"),
+            // The local merge line's own two suites, which nothing else runs.
+            ("scripts_test", "python3 scripts/test_land.py"),
+            ("hooks_test", "python3 .claude/hooks/test_guard_merge.py"),
             // **Last, where `armada.yml` put it, not for any claim this test
             // makes about scheduling.** `#387` once gave this `requires:
             // [fmt]`, so a gate evaluation reformatted the tree before
@@ -251,6 +257,8 @@ fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
             "desktop_test",
             "screens_test",
             "components_test",
+            "scripts_test",
+            "hooks_test",
             "format",
         ],
         "the order `armada.yml` declares them in, which is the order they answer \
