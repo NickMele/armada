@@ -48,19 +48,32 @@
   font-weight: var(--weight-medium);
 }
 
-/* The title's box is three lines whatever the title says — not up to three.
-   A card whose box changes with its words is what raised
-   `ResizeObserver loop completed with undelivered notifications.` off the
-   whiteboard: React Flow measures every node with a `ResizeObserver` and
-   writes what it measured into a store its own components read through
-   `useSyncExternalStore`, which commits in the microtask between two of the
-   observer's callbacks — inside the observer's own delivery loop. While the
-   cards keep resizing that loop never settles. A height rather than a clamp
-   alone costs two lines of glass under a one-line title and buys a board
-   whose nodes do not move when Helm writes to it. */
+/* What the card says takes three lines whatever it says — not up to three. A
+   card whose box changes with its words is what raised Chromium's
+   `ResizeObserver` loop notice off React Flow's per-node observer; see
+   `docs/spikes/019-what-raises-the-resize-loop-notice-on-a-studio.md`.
+
+   **The height is on this box and never on the clamp itself**: a height on a
+   `-webkit-box` is what Chromium clamps to, so `-webkit-line-clamp: 1` under
+   one stops clamping and a Link's address goes back to the three lines #1378
+   took off it. */
+.armada-studio-node__said {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: calc(var(--leading-sm) * 3);
+  overflow: hidden;
+}
+
+/* A Link draws its address under the line a person wrote, so its box holds
+   that row too — and holds it whether the line is there or not, so a Link
+   named by a read-in (#1293) does not grow as the name lands. */
+.armada-studio-node[data-kind="link"] .armada-studio-node__said {
+  height: calc(var(--leading-sm) * 3 + var(--leading-2xs) + var(--space-2));
+}
+
 .armada-studio-node__title {
   margin: 0;
-  height: calc(var(--leading-sm) * 3);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   font-weight: var(--weight-medium);
@@ -91,15 +104,9 @@
 /* A title that is itself an address — a Link nobody wrote a line on — is one
    line and not three. The clamp above already ends it in an ellipsis; what
    this changes is how many lines a URL is allowed to take, which is what the
-   card got wrong before #1378.
-
-   **The box still takes the address row's place**, because that row is the one
-   this card does not draw: a Link named by a read-in (#1293) would otherwise
-   grow by a line the moment the name landed, and a Link card is one height
-   whether anybody wrote a line beside it or not. */
+   card got wrong before #1378. */
 .armada-studio-node__title[data-clipped] {
   -webkit-line-clamp: 1;
-  height: calc(var(--leading-sm) * 3 + var(--leading-2xs) + var(--space-2));
 }
 
 .armada-studio-node__facts {

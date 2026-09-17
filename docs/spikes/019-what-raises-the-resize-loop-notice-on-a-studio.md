@@ -25,7 +25,7 @@ has finished.
 
 ## What moved the box, measured
 
-`StudioNode` drew its title under `-webkit-line-clamp: 3` with no height, so the card
+`StudioNode` drew its title under `-webkit-line-clamp: 3` with no reserved box, so the card
 was one, two or three lines tall according to what the title said. A chip row was a text
 line box with an `inline-block` chip on its baseline, and what the strut's descent
 rounded to moved by a pixel between frames.
@@ -41,6 +41,12 @@ over 150 passes on ten cards:
 
 **A pixel of oscillation was already under the threshold**, so the title is what drove
 it; the chip row is pinned with it because a fuse left in is a fuse.
+
+**The height goes on a box around the title, never on the clamp.** A `height` or a
+`min-height` on the `-webkit-box` itself is what Chromium clamps to, so
+`-webkit-line-clamp: 1` under one stops clamping: a Link whose title is its address
+measured 22 px on `main`, and 92 px — three lines of URL, the defect `#1378` was raised
+on — with the height moved onto the same element. Around it, both hold.
 
 ## What was ruled out, on the app rather than on a harness
 

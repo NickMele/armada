@@ -243,18 +243,22 @@ export function StudioNode(props: StudioNodeProps) {
           </span>
         )}
       </div>
-      <p
-        className="armada-studio-node__title"
-        data-clipped={untitled || undefined}
-        title={untitled ? title : undefined}
-      >
-        {title}
-      </p>
-      {address === null || untitled ? null : (
-        <p className="armada-studio-node__address" title={address}>
-          {address}
+      {/* One box for what the card says, sized by the kind rather than by the
+          words — see `StudioNode.css`. */}
+      <div className="armada-studio-node__said">
+        <p
+          className="armada-studio-node__title"
+          data-clipped={untitled || undefined}
+          title={untitled ? title : undefined}
+        >
+          {title}
         </p>
-      )}
+        {address === null || untitled ? null : (
+          <p className="armada-studio-node__address" title={address}>
+            {address}
+          </p>
+        )}
+      </div>
       {props.kind !== "note" || props.frame === undefined ? null : <Frame frame={props.frame} />}
       {facts.length === 0 ? null : (
         <ul className="armada-studio-node__facts">
