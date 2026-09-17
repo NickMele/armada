@@ -61,6 +61,30 @@
   overflow: hidden;
 }
 
+/* A Link's address, under the line a person wrote beside it — #1378. Mono and
+   neutral, because it is a value and not prose, and clipped to one line with
+   the whole of it in the title: FactChip's rule, without the chip's surface,
+   since this is the card's own second line rather than one value among a row
+   of them. */
+.armada-studio-node__address {
+  margin: 0;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A title that is itself an address — a Link nobody wrote a line on — is one
+   line and not three. The clamp above already ends it in an ellipsis; what
+   this changes is how many lines a URL is allowed to take, which is what the
+   card got wrong before #1378. */
+.armada-studio-node__title[data-clipped] {
+  -webkit-line-clamp: 1;
+}
+
 .armada-studio-node__facts {
   display: flex;
   flex-wrap: wrap;

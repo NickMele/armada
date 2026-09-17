@@ -165,6 +165,8 @@ async fn a_person_adds_only_what_a_person_makes() {
         },
         StudioNodeContent::Link {
             address: "docs/contracts/design-system.md".to_string(),
+            said: None,
+            named: None,
         },
         StudioNodeContent::Sketch {
             body: "legend on its own row".to_string(),
@@ -257,6 +259,8 @@ async fn every_write_is_published_and_a_produced_edge_is_not_decided() {
     let asked = AddStudioNode {
         content: StudioNodeContent::Link {
             address: "https://example.invalid/counts".to_string(),
+            said: None,
+            named: None,
         },
         position: StudioPosition { x: 0, y: 160 },
         produced_by: Some(note.nodes[0].id.clone()),
@@ -532,4 +536,108 @@ async fn a_notes_frame_is_read_back_by_its_node_and_a_note_without_one_is_not_a_
         .await
         .expect_err("a frame the record names and the disk does not hold");
     assert_eq!(code(&refused), "fleet.studio_frame_unreadable");
+}
+
+/// **A Link keeps a line of a person's own beside its address, and the line is
+/// theirs to change** — `#1378`. The address is read off the node and never
+/// off the request, a blank line clears it, and a kind that is not a Link is
+/// refused by name.
+#[tokio::test]
+async fn a_links_line_is_written_edited_and_cleared_and_its_address_never_moves() {
+    const ADDRESS: &str = "https://example.invalid/armada/issues/1378";
+    let home = TempDir::new();
+    let fleet = a_fleet(&home);
+    let studio = a_studio(&fleet).await;
+    let pasted = fleet
+        .add_studio_node(
+            studio.id.clone(),
+            AddStudioNode {
+                content: StudioNodeContent::Link {
+                    address: ADDRESS.to_string(),
+                    said: Some("  why the card says nothing  ".to_string()),
+                    named: None,
+                },
+                position: StudioPosition { x: 0, y: 0 },
+                produced_by: None,
+            },
+            Redirector::Person,
+            None,
+        )
+        .await
+        .expect("a Link a person pasted");
+    let link = pasted.nodes[0].id.clone();
+    assert_eq!(
+        said_on(&pasted, &link),
+        (ADDRESS, Some("why the card says nothing")),
+        "the line is kept trimmed, beside the address"
+    );
+
+    let edited = fleet
+        .edit_studio_link(
+            studio.id.clone(),
+            ipc::EditStudioLink {
+                node_id: link.clone(),
+                said: "the owner's own report of this defect".to_string(),
+            },
+            None,
+        )
+        .await
+        .expect("a line a person changed");
+    assert_eq!(
+        said_on(&edited, &link),
+        (ADDRESS, Some("the owner's own report of this defect")),
+        "the line changes and the address does not"
+    );
+
+    let cleared = fleet
+        .edit_studio_link(
+            studio.id.clone(),
+            ipc::EditStudioLink {
+                node_id: link.clone(),
+                said: "   ".to_string(),
+            },
+            None,
+        )
+        .await
+        .expect("a line taken back");
+    assert_eq!(
+        said_on(&cleared, &link),
+        (ADDRESS, None),
+        "a blank line leaves the Link as its address alone"
+    );
+
+    let note = fleet
+        .add_studio_node(
+            studio.id.clone(),
+            a_note("the legend is unreadable", 340),
+            Redirector::Person,
+            None,
+        )
+        .await
+        .expect("a Note");
+    let refused = fleet
+        .edit_studio_link(
+            studio.id,
+            ipc::EditStudioLink {
+                node_id: note.nodes[1].id.clone(),
+                said: "not a Link".to_string(),
+            },
+            None,
+        )
+        .await
+        .expect_err("a Note is fixed at capture");
+    assert_eq!(code(&refused), "fleet.studio_not_a_link");
+}
+
+/// A Link's address and its line, for an assertion that reads both at once.
+fn said_on<'a>(studio: &'a Studio, node_id: &ipc::StudioNodeId) -> (&'a str, Option<&'a str>) {
+    let node = studio
+        .nodes
+        .iter()
+        .find(|node| &node.id == node_id)
+        .expect("the node");
+    let StudioNodeContent::Link { address, said, .. } = &node.content else {
+        panic!("a Link");
+    };
+    (address, said.as_deref())
 }

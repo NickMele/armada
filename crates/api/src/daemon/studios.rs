@@ -14,10 +14,10 @@ use std::sync::Arc;
 
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
-    DispatchStudioDraft, EditStudioDraft, GroupStudioNodes, ManifestId, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction, StartScout,
-    StartStudioRun, StopScout, Studio, StudioDeleted, StudioId, StudioList, StudioNodeId,
-    StudioRunStarted, WriteUpStudioNode,
+    DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, ManifestId,
+    MoveStudioNode, ProposeStudioEdge, ReadInLink, RemoveStudioNode, RenameStudio,
+    SettleContradiction, StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioId,
+    StudioList, StudioNodeId, StudioRunStarted, WriteUpStudioNode,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -148,6 +148,23 @@ pub trait Studios: Send + Sync + 'static {
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 
+    /// `read_in_link` — a Link read in. `#1293`.
+    ///
+    /// **Fleet fetches the source and hands a scout the text**, so a fetch that
+    /// fails is [`Refusal::Unacceptable`] with no node written. A Link to
+    /// anything no scout reads stays a Link, refused the same way. `by` says
+    /// whose act to record what it made as.
+    ///
+    /// **By `Arc`, as a scout's ask is**: what the scout reads arrives on
+    /// `studio.changed` long after this answers.
+    fn read_in_link(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        read_in: ReadInLink,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
     /// `stop_scout` — the stop on a Gathering Finding. Answered with the Studio
     /// as it stands; the Finding freezes on the stream once the scout ends.
     fn stop_scout(
@@ -212,6 +229,14 @@ pub trait Studios: Send + Sync + 'static {
         &self,
         studio_id: StudioId,
         edit: EditStudioDraft,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `edit_studio_link` — the line a person keeps beside a Link's address.
+    fn edit_studio_link(
+        &self,
+        studio_id: StudioId,
+        edit: EditStudioLink,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 

@@ -22,7 +22,7 @@ type Story = StoryObj<typeof StudioWhiteboard>;
 
 /** One stretch of work: a board and a failing run read in, noted, asked about, written up and dispatched. */
 const nodes: StudioWhiteboardNode[] = [
-  { id: "link", position: { x: 0, y: 0 }, node: { kind: "link", title: "Studio proposal board", facts: ["miro.com/app/board/uXjVK"] } },
+  { id: "link", position: { x: 0, y: 0 }, node: { kind: "link", title: "Studio proposal board", address: "https://miro.com/app/board/uXjVK" } },
   { id: "run", position: { x: 0, y: 260 }, node: { kind: "run", state: "running", title: "pnpm test", facts: ["test", "1m 12s"] } },
   { id: "note-legend", position: { x: 340, y: 0 }, node: { kind: "note", title: "The legend under the step bar is unreadable", facts: ["Board"] } },
   { id: "note-width", position: { x: 340, y: 260 }, node: { kind: "note", title: "The legend wraps at 720 wide", facts: ["Board"] } },

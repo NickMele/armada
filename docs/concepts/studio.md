@@ -58,7 +58,7 @@ flowchart LR
 | Finding | What a scout learned, and everything it read | Proposed, Gathering, Frozen | None |
 | Contradiction | Two sources that disagree, and its outcome | Reported, then its outcome | None |
 | Sketch | A diagram or mockup, as structured content | Frozen | None |
-| Link | A board, document, issue, page or session, kept as its address | None | None |
+| Link | A board, document, issue, page or session, kept as its address, a line of the person's own, and what the source calls itself where a read-in learned one | None | None |
 | Deferral | Something a person put off, against what it blocks | Open, Answered | None |
 | Outline | An ordered reading of the nodes feeding it | Draft, Frozen | None |
 | Issue draft | An issue's title and body, never filed by Armada | Draft | None |
@@ -94,6 +94,15 @@ flowchart LR
 
 > **Rule.** A Note typed by hand is fixed the moment it is made, as a captured one is.
 > Why: nothing writes a node's content afterwards, and the rule that makes a Note a record does not depend on how it arrived.
+
+> **Rule.** A Link keeps a line of the person's own beside its address, taken when they paste it and theirs to change afterwards. The node draws that line, with the address under it.
+> Why: a Studio holding several Links reads as a list of URLs otherwise, saying nothing about why any of them was kept.
+
+> **Rule.** A Link never stops being its address. Whatever is typed beside it is additional, and a Link with no line is drawn by its address.
+> Why: the address is what a scout reads in. See #1378.
+
+> **Rule.** Pasting an address offers what to do with it — read it in, or keep the link — and says what reading it in would produce. Where reading in is not built, the offer says so rather than drawing the choice dead.
+> Why: a node that appears and offers nothing is the surface saying the person's paste did not matter.
 
 > **Rule.** A node lands where the person is looking, not at the origin.
 > Why: a Studio is laid out by hand, and a node placed off-screen is a node a person has to go and find.
@@ -163,7 +172,7 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 | Rung | From | To | Who acts |
 |---|---|---|---|
 | Run | Any node, or nothing | Run | A person, or Helm on their ask |
-| Read in | A Link | Notes, Clusters, Contradictions, proposed edges | A scout, on a person's ask |
+| Read in | A Link | Notes, Clusters, Contradictions, proposed edges — or a Link per issue, from a milestone | A scout, on a person's ask. A milestone, Fleet alone |
 | Capture | A person using an app | Note | The person |
 | Ask | Any node | Finding | A scout, on a person's ask |
 | Cluster | Notes | Cluster | A person accepts |
@@ -171,6 +180,21 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 | Defer | Anything raised on a node | Deferral | A person, only |
 | Write up | Note, Cluster, Contradiction or Outline | Issue draft | A person, or Helm on their ask |
 | Dispatch | Issue draft | Job | The dispatch gate |
+
+> **Rule.** A Link read in keeps its address, and everything that came back hangs off it by `Produced` edges.
+> Why: the address is what a Job is dispatched from, and a Link rewritten by what was read in it would be a record of the reading rather than of the source.
+
+> **Rule.** A milestone reads in as one Link per issue, each carrying that issue's own address, and makes no Issue draft.
+> Why: an Issue draft is Armada's own unfiled text. An issue already on the forge is a Link, and dispatching from it is the address's job.
+
+> **Rule.** A milestone read-in is bounded, and the milestone's own Link says how many of how many were read in.
+> Why: a Studio is laid out by hand, and a hundred nodes landing at once is a board nobody can arrange — but a bound nothing says is a board claiming to be a milestone.
+
+> **Rule.** A milestone takes no scout and leaves no Finding.
+> Why: nothing was learned; a list was copied. A model asked to echo one back is cost spent on a transcription, and a Finding that cost nothing and read nothing says nothing.
+
+> **Rule.** A read-in whose answer is not the shape asked for makes no node, and its Finding still says what the scout said.
+> Why: a Studio is read by agents as much as by a person, and a Note carrying an apology is a record of nothing.
 
 > **Rule.** Nothing promotes itself. A Note never written up is a finished outcome.
 

@@ -7,9 +7,9 @@ use std::sync::Arc;
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, ContradictionSettled,
     CreateStudio, DecideStudioEdge, DeferOnStudio, DispatchStudioDraft, EditStudioDraft,
-    GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode,
-    RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout, Studio,
-    StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
+    EditStudioLink, GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge,
+    RemoveStudioNode, RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout,
+    Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
     StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
     StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
@@ -358,6 +358,31 @@ impl Studios for FakeDaemon {
         })
     }
 
+    /// A Finding added Gathering off the Link. **Nothing is fetched in the
+    /// fake**: the route and who it records the act as is what is proved here.
+    async fn read_in_link(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        read_in: ipc::ReadInLink,
+        _by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            studio.nodes.push(StudioNode {
+                id: StudioNodeId::carried(format!("01NODE{}", studio.nodes.len())),
+                content: StudioNodeContent::finding_asked(&format!(
+                    "Read in {}",
+                    read_in.node_id.as_str()
+                )),
+                state: StudioNodeState::from_wire("gathering"),
+                position: read_in.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(studio.clone())
+        })
+    }
+
     async fn start_scout(
         self: Arc<Self>,
         studio_id: StudioId,
@@ -504,6 +529,30 @@ impl Studios for FakeDaemon {
                     title: edit.title.clone(),
                     body: edit.body.clone(),
                 };
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    async fn edit_studio_link(
+        &self,
+        studio_id: StudioId,
+        edit: EditStudioLink,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            for node in studio
+                .nodes
+                .iter_mut()
+                .filter(|node| node.id == edit.node_id)
+            {
+                if let StudioNodeContent::Link { address, named, .. } = &node.content {
+                    node.content = StudioNodeContent::Link {
+                        address: address.clone(),
+                        said: Some(edit.said.clone()),
+                        named: named.clone(),
+                    };
+                }
             }
             Ok(studio.clone())
         })

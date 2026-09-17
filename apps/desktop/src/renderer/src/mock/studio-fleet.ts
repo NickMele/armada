@@ -124,6 +124,10 @@ function legend(): Studio {
       { id: "legend-width", kind: "note", said: "It wraps at 720 wide", position: { x: 0, y: 300 }, created_at: at },
       { id: "legend-finding", kind: "finding", asked: "Where do the legend's colours come from?", state: "frozen", position: { x: 340, y: 0 }, created_at: at },
       { id: "legend-draft", kind: "issue_draft", title: "The Board's legend is illegible", body: "…", state: "draft", position: { x: 680, y: 110 }, created_at: at },
+      // Two Links to read in — #1293. One issue, and one milestone, which fills
+      // the board with a node per issue and runs no scout.
+      { id: "legend-issue", kind: "link", address: "https://example.invalid/o/r/issues/1293", position: { x: 0, y: 600 }, created_at: at },
+      { id: "legend-milestone", kind: "link", address: "https://example.invalid/o/r/milestone/17", position: { x: 0, y: 1400 }, created_at: at },
     ],
     edges: [
       { id: "legend-e1", from: "legend-note", to: "legend-finding", kind: "produced", standing: "accepted", created_at: at },
@@ -329,6 +333,9 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
  */
 const place = (column: number, row: number) => ({ x: column * 340, y: row * 300 });
 
+/** Long enough that a card cannot hold it whole: it clips, and it does not overflow — #1378. */
+const LONG_ADDRESS = "https://example.invalid/armada/issues/1378#issuecomment-2847190034-and-then-some";
+
 const MADE = "2026-09-15T11:00:00Z";
 const TOUCHED = "2026-09-17T08:40:00Z";
 
@@ -339,7 +346,8 @@ const TOUCHED = "2026-09-17T08:40:00Z";
  */
 export function everyKind(jobId: string): Studio {
   const nodes: StudioNode[] = [
-    { id: "every-link", kind: "link", address: "docs/contracts/design-system.md#the-board", position: place(0, 0), created_at: MADE },
+    { id: "every-link", kind: "link", address: LONG_ADDRESS, said: "where the legend was drawn", position: place(0, 0), created_at: MADE },
+    { id: "every-link-bare", kind: "link", address: LONG_ADDRESS, position: place(-1, 0), created_at: MADE },
     // The one Note here that kept a picture — #1352. The rest draw no plate.
     { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", capture: pointedAt("every-note"), position: place(1, 0), created_at: MADE },
     { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
@@ -420,7 +428,7 @@ export function untitled(): Studio {
     created_at: at,
     touched_at: at,
     nodes: [
-      { id: "untitled-link", kind: "link", address: "docs/concepts/studio.md#notes", position: place(0, 0), created_at: at },
+      { id: "untitled-link", kind: "link", address: "https://example.invalid/armada/docs/concepts/studio.md#notes", said: "what a Note is, and what fixes it", position: place(0, 0), created_at: at },
       { id: "untitled-note", kind: "note", said: "Capture on another repository's web app waits on a security review", position: place(0, 1), created_at: at },
     ],
     edges: [{ id: "untitled-produced", from: "untitled-link", to: "untitled-note", kind: "produced", standing: "accepted", created_at: at }],
@@ -475,6 +483,12 @@ function promoted(studio: Studio, promotion: StudioPromotion): Studio {
           node.id === promotion.node_id && node.kind === "issue_draft" ? { ...node, title: promotion.title, body: promotion.body } : node,
         ),
       };
+    case "edit_link": {
+      // The address is read off the node and never off the request, and a blank line clears it.
+      const said = promotion.said.trim() === "" ? undefined : promotion.said.trim();
+      const line = (node: StudioNode) => (node.id === promotion.node_id && node.kind === "link" ? { ...node, said } : node);
+      return { ...studio, nodes: studio.nodes.map(line) };
+    }
     case "settle":
       return {
         ...studio,
@@ -486,5 +500,69 @@ function promoted(studio: Studio, promotion: StudioPromotion): Studio {
       };
     case "dispatch":
       return made(studio, { kind: "job", job_id: mint("01JOB") }, [promotion.node_id], promotion.position);
+    case "read_in":
+      return readIn(studio, promotion.node_id, promotion.position);
   }
+}
+
+/**
+ * A Link read in — #1293. **What Fleet fetched is decided here by the address**,
+ * since a mock has no network: a milestone fills in as one Link per issue with
+ * no scout, and every other source leaves a frozen Finding beside the Notes and
+ * the Contradiction its scout asked for.
+ */
+function readIn(studio: Studio, nodeId: string, position: { x: number; y: number }): Studio {
+  const link = studio.nodes.find((node) => node.id === nodeId);
+  if (link === undefined || link.kind !== "link") return studio;
+  const down = (n: number) => ({ x: position.x, y: position.y + n * 180 });
+  if (link.address.includes("/milestone/")) {
+    const issues = [
+      { address: "https://example.invalid/o/r/issues/1293", named: "#1293 An issue cannot be read into a Studio — open" },
+      { address: "https://example.invalid/o/r/issues/1291", named: "#1291 Promotion: cluster, defer, write up — closed" },
+      { address: "https://example.invalid/o/r/issues/1275", named: "#1275 Kit manages connections — open" },
+    ];
+    const filled = issues.reduce((so_far, issue) => made(so_far, { kind: "link", ...issue }, [nodeId], down(issues.indexOf(issue))), studio);
+    return {
+      ...filled,
+      nodes: filled.nodes.map((node) =>
+        node.id === nodeId && node.kind === "link" ? { ...node, named: "Studio — 3 of 3 issues read in" } : node,
+      ),
+    };
+  }
+  const finding: StudioNodeContent = {
+    kind: "finding",
+    asked: `Read in ${link.address}`,
+    checkout: { commit: "4bdb169c2f", uncommitted: false },
+    sources: [{ address: link.address, kind: "issue", cut: 0 }],
+    read: ["docs/concepts/studio.md"],
+    searched: ["Workspace in docs"],
+    learned: "Two claims, and one of them disagrees with the checkout.",
+    ended: { outcome: "answered", cost_micros: 3_100 },
+  };
+  const frozen = made(studio, finding, [nodeId], down(0));
+  const marked = {
+    ...frozen,
+    nodes: frozen.nodes.map((node) => (node.kind === "finding" && node.state === undefined ? { ...node, state: "frozen" } : node)),
+  };
+  const noted = made(marked, { kind: "note", said: "The issue wants Links read in as a second, refusable step" }, [nodeId], { x: position.x + 340, y: position.y });
+  const twice = made(noted, { kind: "note", said: "It names the forge, web pages, sessions and Helm threads as the first sources" }, [nodeId], { x: position.x + 340, y: position.y + 180 });
+  const contradicted = made(
+    twice,
+    {
+      kind: "contradiction",
+      first: "The issue says Connections have no home yet",
+      second: "docs/concepts/kit.md already gives them one",
+    },
+    [nodeId],
+    { x: position.x + 340, y: position.y + 360 },
+  );
+  const note = twice.nodes[twice.nodes.length - 1]!;
+  const contradiction = contradicted.nodes[contradicted.nodes.length - 1]!;
+  return {
+    ...contradicted,
+    edges: [
+      ...contradicted.edges,
+      { id: mint("edge-"), from: note.id, to: contradiction.id, kind: "blocks", standing: "proposed", created_at: tick() },
+    ],
+  };
 }

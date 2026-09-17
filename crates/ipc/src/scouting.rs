@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::enums::ScoutSourceKind;
 use crate::ids::StudioNodeId;
 use crate::studio::{StudioNodeContent, StudioPosition};
 
@@ -18,6 +19,28 @@ pub struct ScoutCheckout {
     pub commit: String,
     /// Whether anything uncommitted sat on top of it, untracked files included.
     pub uncommitted: bool,
+}
+
+/// A source Fleet fetched and handed a scout beyond the checkout. `#1293`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScoutSource {
+    /// The Link's address, as the person pasted it.
+    pub address: String,
+    pub kind: ScoutSourceKind,
+    /// Characters dropped from the end, where the source did not fit. `0`
+    /// where the whole of it was handed over.
+    pub cut: u64,
+}
+
+/// `read_in_link`: a Link on the Studio, read in.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadInLink {
+    /// The Link node whose address is read. It survives, and what comes back
+    /// hangs off it by `produced` edges.
+    pub node_id: StudioNodeId,
+    /// Where the first node it makes is placed. The rest are laid out from
+    /// there, because a Studio is laid out by hand and a stack is not a layout.
+    pub position: StudioPosition,
 }
 
 /// How a scout ended, and what it cost.
@@ -72,6 +95,16 @@ impl ScoutCheckout {
     }
 }
 
+impl ScoutSource {
+    pub fn to_domain(self) -> core_model::ScoutSource {
+        core_model::ScoutSource {
+            address: self.address,
+            kind: self.kind.domain(),
+            cut: self.cut,
+        }
+    }
+}
+
 impl ScoutEnded {
     pub fn to_domain(self) -> core_model::ScoutEnded {
         core_model::ScoutEnded {
@@ -100,6 +133,15 @@ pub(crate) fn finding_on_the_wire(finding: &core_model::StudioFinding) -> Studio
             commit: checkout.commit.clone(),
             uncommitted: checkout.uncommitted,
         }),
+        sources: finding
+            .sources()
+            .iter()
+            .map(|source| ScoutSource {
+                address: source.address.clone(),
+                kind: source.kind.into(),
+                cut: source.cut,
+            })
+            .collect(),
         read: finding.read().to_vec(),
         searched: finding.searched().to_vec(),
         learned: finding.learned().map(str::to_string),

@@ -17,7 +17,7 @@ pub use brief::{brief, Brief, Voice};
 pub use conversation::{ConversationKey, Conversations};
 pub use hosting::{Carried, Carry, Carrying, Heard, Hosting, ProcessHost};
 pub use reach::{may, Authority};
-pub use thread::THREAD;
+pub use thread::{what_was_said, THREAD};
 
 #[cfg(test)]
 mod tests;

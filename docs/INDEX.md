@@ -176,6 +176,9 @@ approximations.
 - [`spikes/017-what-confines-a-scout-and-what-a-stop-leaves.md`](spikes/017-what-confines-a-scout-and-what-a-stop-leaves.md)
   — whether `--tools` and `--restricted` hold a read-only agent to one checkout,
   and what `SIGINT` and `SIGTERM` each leave of a run's cost.
+- [`spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md`](spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md)
+  — what a session resolves once `--strict-mcp-config` comes off, what each
+  permission mode lets it call, and what a refusal leaves in the stream.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 

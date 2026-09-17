@@ -63,6 +63,14 @@ import { useStudioPromotion } from "./StudioPromotion";
  */
 const PAST_THE_BOUND = "Select this Note to draw it.";
 
+/**
+ * Why *Read it in* is refused on the paste offer — #1378. **The choice is
+ * drawn and says it is not built**, rather than left off: a person deciding
+ * what to do with an address is owed both halves of the offer. It goes when
+ * #1293 lands and this screen calls its operation instead.
+ */
+const READING_IN_UNBUILT = "Reading an address in is not built yet. Keep the link, and read it in when it is.";
+
 /** Two selections that name the same nodes in the same order. */
 const same = (held: readonly string[], ids: readonly string[]): boolean =>
   held.length === ids.length && held.every((id, at) => id === ids[at]);
@@ -513,6 +521,7 @@ function AddNode(props: {
       adding={props.adding}
       onAdding={props.onAdding}
       onAdd={(node) => props.onAdd(node, place())}
+      readIn={READING_IN_UNBUILT}
       saving={props.saving}
       disabled={props.disabled}
     />

@@ -15,6 +15,9 @@ import { foldStudio } from "./studio-reads";
 
 const AT = "2026-09-17T10:00:00Z";
 
+/** An address of the length the owner pasted, which the card clips. */
+const LONG_ADDRESS = "https://example.invalid/armada/issues/1378#issuecomment-2847190034-and-more";
+
 const STUDIO: Studio = {
   id: "s1",
   manifest_id: "armada",
@@ -26,6 +29,8 @@ const STUDIO: Studio = {
     { id: "n3", kind: "job", job_id: "j1", position: { x: 600, y: 0 }, created_at: AT },
     { id: "n4", kind: "run", run_id: "r1", position: { x: 0, y: 300 }, created_at: AT },
     { id: "n5", kind: "outline", body: "\nLegend, then width\nand more", position: { x: 300, y: 300 }, created_at: AT },
+    { id: "n6", kind: "link", address: LONG_ADDRESS, said: "the owner's own report", position: { x: 600, y: 300 }, created_at: AT },
+    { id: "n7", kind: "link", address: LONG_ADDRESS, position: { x: 900, y: 300 }, created_at: AT },
   ],
   edges: [
     { id: "e1", from: "n1", to: "n2", kind: "produced", standing: "accepted", created_at: AT },
@@ -65,8 +70,23 @@ test("a node draws where a person left it, titled from what it holds", () => {
   const nodes = whiteboardNodes(STUDIO, [JOB]);
   expect(nodes.map((one) => one.position)).toEqual(STUDIO.nodes.map((one) => one.position));
   expect(nodes[0]!.node).toEqual({ kind: "note", title: "The legend is unreadable" });
-  expect(nodes[1]!.node).toEqual({ kind: "finding", state: "gathering", title: "Where do its colours come from?" });
+  // A scout asked about the code was handed no source, so the card says nothing about one.
+  expect(nodes[1]!.node).toEqual({
+    kind: "finding",
+    state: "gathering",
+    title: "Where do its colours come from?",
+    facts: [],
+  });
   expect(nodes[4]!.node).toMatchObject({ kind: "outline", state: "draft", title: "Legend, then width" });
+});
+
+test("a Link is titled by the person's line, and by its address where nobody wrote one", () => {
+  const nodes = whiteboardNodes(STUDIO, []);
+  expect(nodes[5]!.node).toEqual({ kind: "link", address: LONG_ADDRESS, title: "the owner's own report" });
+  // A Link never stops being its address: with no line, the address is the
+  // title, and the card says it once rather than twice — #1378.
+  expect(nodes[6]!.node).toEqual({ kind: "link", address: LONG_ADDRESS, title: LONG_ADDRESS });
+  expect(nodeNamed(STUDIO, "n6", [])).toBe("Link the owner's own report");
 });
 
 test("a Job node takes its state off the Board, and says none where the Board has no such Job", () => {
@@ -176,4 +196,83 @@ test("a board past the bound draws the first frames, and the selected Note where
   expect(withLast.size).toBe(MOST_FRAMES_DRAWN + 1);
   // A selection that is not a Note with a frame changes nothing.
   expect(framesDrawn(studio, "nothing-of-the-sort").size).toBe(MOST_FRAMES_DRAWN);
+});
+
+test("a Link read in is titled by what the source calls itself, with a person's own line first", () => {
+  const read = whiteboardNodes(
+    {
+      ...STUDIO,
+      nodes: [
+        { id: "a", kind: "link", address: "https://x/issues/1293", position: { x: 0, y: 0 }, created_at: AT },
+        {
+          id: "b",
+          kind: "link",
+          address: "https://x/issues/1291",
+          named: "#1291 Promotion — closed",
+          position: { x: 0, y: 200 },
+          created_at: AT,
+        },
+      ],
+    },
+    [],
+  );
+  // A Link nobody has read in is its address, because that is all it has.
+  expect(read[0]!.node).toEqual({
+    kind: "link",
+    address: "https://x/issues/1293",
+    title: "https://x/issues/1293",
+  });
+  // One that was read in reads as what it is, and keeps the address a Job
+  // comes from, drawn under the title by the card.
+  expect(read[1]!.node).toEqual({
+    kind: "link",
+    address: "https://x/issues/1291",
+    title: "#1291 Promotion — closed",
+  });
+  // **A person's own line wins over what a read-in learned**, because it is
+  // theirs — #1378 beside #1293.
+  const both = whiteboardNodes(
+    {
+      ...STUDIO,
+      nodes: [
+        {
+          id: "c",
+          kind: "link",
+          address: "https://x/issues/1291",
+          said: "why I kept it",
+          named: "#1291 Promotion — closed",
+          position: { x: 0, y: 0 },
+          created_at: AT,
+        },
+      ],
+    },
+    [],
+  );
+  expect(both[0]!.node).toMatchObject({ title: "why I kept it" });
+});
+
+test("a Finding says what it was handed beyond the checkout, and what was cut", () => {
+  const read = whiteboardNodes(
+    {
+      ...STUDIO,
+      nodes: [
+        {
+          id: "a",
+          kind: "finding",
+          asked: "Read in armada:thread",
+          state: "frozen",
+          sources: [
+            { address: "armada:thread", kind: "thread", cut: 0 },
+            { address: "https://x/page", kind: "page", cut: 12_400 },
+          ],
+          position: { x: 0, y: 0 },
+          created_at: AT,
+        },
+      ],
+    },
+    [],
+  );
+  expect(read[0]!.node).toMatchObject({
+    facts: ["Read this repository's Helm thread", "Read a page, 12,400 characters cut"],
+  });
 });

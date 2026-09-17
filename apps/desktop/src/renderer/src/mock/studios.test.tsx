@@ -145,7 +145,7 @@ test("a Studio named by hand, with a note typed and a link pasted, survives a re
 
   await userEvent.keyboard("V");
   await userEvent.fill(page.getByLabelText("Link", { exact: true }), "docs/contracts/design-system.md");
-  await page.getByRole("button", { name: "Add link" }).click();
+  await page.getByRole("button", { name: "Keep the link" }).click();
   await expect.element(node(/^Link: docs\/contracts\/design-system\.md/)).toBeVisible();
 
   // Both are a person's, and neither landed at the origin: a node goes where
@@ -347,4 +347,110 @@ test("a Contradiction is ended as Resolved here, with the answer kept on the nod
   // Ended once: nothing offers a second outcome on it.
   await pick(/^Contradiction: The chip reads the Board/);
   expect(acts().getByRole("button", { name: "Not a problem", exact: true }).query()).toBeNull();
+});
+
+/** The address the owner pasted, long enough that a card cannot hold it whole. */
+const PASTED = "https://example.invalid/armada/issues/1378#issuecomment-2847190034-and-then-some";
+
+/**
+ * #1378's own definition of done: a person pastes an address, is asked what to do with it, types a
+ * line saying why they kept it, and reads that line on the card with the address under it.
+ *
+ * **The reopen is half of it.** The line is a field on the Link's content rather than a second
+ * node, so what proves it is not lost is the same close-and-reopen `#1287` uses — and editing it
+ * afterwards has to reach the record too, not just the card.
+ */
+test("a pasted address is asked about, takes a line of its own, and keeps it across a reopen", async () => {
+  const fleet = studying([]);
+  const first = open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "New Studio" }).click();
+  await expect.element(page.getByRole("heading", { name: "Untitled Studio" })).toBeVisible();
+
+  await userEvent.keyboard("V");
+  // Nothing is offered until there is an address to offer it about.
+  expect(page.getByLabelText("Your line", { exact: true }).query()).toBeNull();
+  await userEvent.fill(page.getByLabelText("Link", { exact: true }), PASTED);
+
+  const offer = page.getByRole("group", { name: "What to do with this address" });
+  await expect.element(offer).toBeVisible();
+  // Reading in is #1293's, and this build says so rather than drawing the choice dead.
+  await expect.element(offer.getByText("not built yet", { exact: false })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Read it in" })).toBeDisabled();
+
+  await userEvent.fill(page.getByLabelText("Your line", { exact: true }), "the owner's own report");
+  await page.getByRole("button", { name: "Keep the link" }).click();
+  await expect.element(node(/^Link: the owner's own report/)).toBeVisible();
+  // The card reads the line and the address is still under it, whole in its title.
+  await expect.element(page.getByTitle(PASTED)).toBeVisible();
+
+  close();
+  open(fleet.scenario, first.api);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "Untitled Studio", exact: true }).click();
+  await expect.element(node(/^Link: the owner's own report/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await pick(/^Link: the owner's own report/);
+  await page.getByRole("button", { name: "Edit line" }).click();
+  await entered(page.getByRole("dialog"));
+  await userEvent.fill(page.getByLabelText("Your line", { exact: true }), "why the card said nothing");
+  await asked("Save line").click();
+  await expect.element(node(/^Link: why the card said nothing/)).toBeVisible();
+  await expect.poll(() => fleet.studios()[0]!.nodes[0]).toMatchObject({
+    kind: "link",
+    address: PASTED,
+    said: "why the card said nothing",
+  });
+});
+
+test("an issue is read in and a milestone fills the board, with each Link left standing", async () => {
+  const fleet = studying();
+  open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
+  // Reopened read-only, so nothing acts on it until a person continues it.
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect.element(node(/^Link: https:\/\/example\.invalid\/o\/r\/issues\/1293/)).toBeVisible();
+
+  // One issue: a Finding beside the Notes and the Contradiction its scout asked for.
+  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/issues\/1293/);
+  await acts().getByRole("button", { name: "Read in" }).click();
+  await asked("Read in").click();
+  await expect.element(node(/^Finding: Read in https:\/\/example\.invalid\/o\/r\/issues\/1293, frozen/)).toBeVisible();
+  await expect.element(node(/^Note: The issue wants Links read in/)).toBeVisible();
+  await expect.element(node(/^Contradiction: The issue says Connections have no home yet/)).toBeVisible();
+
+  const studio = () => fleet.studios()[0]!;
+  // The Link keeps its address whatever came back, and everything hangs off it.
+  expect(studio().nodes.find((one) => one.id === "legend-issue")).toMatchObject({
+    kind: "link",
+    address: "https://example.invalid/o/r/issues/1293",
+  });
+  expect(studio().edges.filter((edge) => edge.from === "legend-issue" && edge.kind === "produced")).toHaveLength(4);
+  // A relation the scout asked for waits on a person.
+  expect(studio().edges.filter((edge) => edge.standing === "proposed" && edge.kind === "blocks")).toHaveLength(1);
+
+  // A milestone: one Link per issue, each naming the filed issue's address, and
+  // the milestone's own Link saying how many of how many were read in.
+  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/milestone\/17/);
+  await acts().getByRole("button", { name: "Read in" }).click();
+  await asked("Read in").click();
+  await expect.element(node(/^Link: Studio — 3 of 3 issues read in/)).toBeVisible();
+  await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
+  await expect.element(node(/^Link: #1275 Kit manages connections — open/)).toBeVisible();
+
+  const issues = studio()
+    .edges.filter((edge) => edge.from === "legend-milestone" && edge.kind === "produced")
+    .map((edge) => studio().nodes.find((one) => one.id === edge.to));
+  expect(issues.map((one) => (one?.kind === "link" ? one.address : null))).toEqual([
+    "https://example.invalid/o/r/issues/1293",
+    "https://example.invalid/o/r/issues/1291",
+    "https://example.invalid/o/r/issues/1275",
+  ]);
+  // Its own address survives being named.
+  expect(studio().nodes.find((one) => one.id === "legend-milestone")).toMatchObject({
+    address: "https://example.invalid/o/r/milestone/17",
+    named: "Studio — 3 of 3 issues read in",
+  });
 });

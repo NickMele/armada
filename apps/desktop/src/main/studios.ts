@@ -41,8 +41,10 @@ const PROMOTION_ROUTE: Readonly<Record<StudioPromotion["act"], string>> = {
   defer: "/defer",
   write_up: "/write_up",
   edit_draft: "/edit_draft",
+  edit_link: "/edit_link",
   settle: "/settle",
   dispatch: "/dispatch_draft",
+  read_in: "/read_in",
 };
 
 export class StudioReads {
@@ -179,9 +181,9 @@ export class StudioReads {
   }
 
   /**
-   * One rung of promotion — #1291. **`act` picks the route and is not sent**: Fleet's six
-   * operations each take their own body, and the tag is how one capability on the bridge reaches
-   * all six. Every one answers with the Studio whole, so all six fold the one way.
+   * One rung of promotion — #1291. **`act` picks the route and is not sent**: each of Fleet's
+   * operations takes its own body, and the tag is how one capability on the bridge reaches them
+   * all. Every one answers with the Studio whole, so they all fold the one way.
    */
   async promote(studioId: string, promotion: StudioPromotion): Promise<Outcome> {
     const { act, ...body } = promotion;

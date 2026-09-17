@@ -17,7 +17,7 @@ use crate::enums::{
 };
 use crate::ids::{Instant, JobId, ManifestId, StudioEdgeId, StudioId, StudioNodeId};
 use crate::rehearsal::CheckoutRunUnderway;
-use crate::scouting::{ScoutCheckout, ScoutEnded};
+use crate::scouting::{ScoutCheckout, ScoutEnded, ScoutSource};
 
 /// Every Studio one repository keeps, the last touched first — `list_studios`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +107,10 @@ pub enum StudioNodeContent {
         /// it. Absent until the scout starts.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         checkout: Option<ScoutCheckout>,
+        /// Every source Fleet fetched and handed it beyond the checkout, in
+        /// the order handed. Empty on a scout asked about the code. `#1293`.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        sources: Vec<ScoutSource>,
         /// Every file read, relative to the checkout, in the order first read —
         /// a file a search returned lines of included.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -136,6 +140,18 @@ pub enum StudioNodeContent {
     },
     Link {
         address: String,
+        /// The line a person wrote beside the address, saying why they kept
+        /// it — `#1378`. **Additional, never a replacement**: a Link never
+        /// stops being its address. Absent on one pasted with nothing typed,
+        /// and on every Link kept before the field existed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        said: Option<String>,
+        /// What the source calls itself, where a read-in learned it — an
+        /// issue's number, title and state on one line. **Beside the address
+        /// and never in place of it**, and never over `said`, which is a
+        /// person's own. `#1293`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        named: Option<String>,
     },
     Deferral {
         what: String,
@@ -275,6 +291,11 @@ pub enum HelmStudioAct {
         from: StudioNodeId,
         node_id: StudioNodeId,
     },
+    /// A Link read in, and every node it produced. `#1293`.
+    ReadIn {
+        from: StudioNodeId,
+        node_ids: Vec<StudioNodeId>,
+    },
     /// An Issue draft dispatched, and every Job node the proposal put on the
     /// Studio. **A list**, because one request can be several Jobs. `#1291`.
     Dispatched {
@@ -380,6 +401,19 @@ pub struct EditStudioDraft {
     pub node_id: StudioNodeId,
     pub title: String,
     pub body: String,
+}
+
+/// `edit_studio_link`: the line a person keeps beside a Link's address, as
+/// they left it — `#1378`.
+///
+/// **The address is not on this request.** A Link never stops being its
+/// address, so nothing on this seam can rewrite one; what is editable is the
+/// line beside it. A blank `said` clears the line, which is how somebody takes
+/// back what they typed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditStudioLink {
+    pub node_id: StudioNodeId,
+    pub said: String,
 }
 
 /// `settle_contradiction`: the two outcomes that write nothing else down.
@@ -537,7 +571,15 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
                 answer,
             },
             C::Sketch { body } => StudioNodeContent::Sketch { body },
-            C::Link { address } => StudioNodeContent::Link { address },
+            C::Link {
+                address,
+                said,
+                named,
+            } => StudioNodeContent::Link {
+                address,
+                said,
+                named,
+            },
             C::Deferral { what } => StudioNodeContent::Deferral { what },
             C::Outline { body } => StudioNodeContent::Outline { body },
             C::IssueDraft { title, body } => StudioNodeContent::IssueDraft { title, body },
@@ -566,6 +608,7 @@ impl StudioNodeContent {
             StudioNodeContent::Finding {
                 asked,
                 checkout,
+                sources,
                 read,
                 searched,
                 learned,
@@ -573,6 +616,7 @@ impl StudioNodeContent {
             } => C::Finding(core_model::StudioFinding::recorded(
                 asked,
                 checkout.map(ScoutCheckout::to_domain),
+                sources.into_iter().map(ScoutSource::to_domain).collect(),
                 read,
                 searched,
                 learned,
@@ -588,7 +632,11 @@ impl StudioNodeContent {
                 answer,
             },
             StudioNodeContent::Sketch { body } => C::Sketch { body },
-            StudioNodeContent::Link { address } => C::Link { address },
+            // The line is trimmed here, and a blank one is no line at all.
+            // **`named` does not decode into a write**: what a source calls
+            // itself is a read-in's to record, so a request naming one is
+            // dropped the way a Run's `kept` is.
+            StudioNodeContent::Link { address, said, .. } => C::link(address, said),
             StudioNodeContent::Deferral { what } => C::Deferral { what },
             StudioNodeContent::Outline { body } => C::Outline { body },
             StudioNodeContent::IssueDraft { title, body } => C::IssueDraft { title, body },

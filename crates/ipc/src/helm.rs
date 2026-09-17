@@ -196,3 +196,24 @@ pub enum HelmSilence {
     /// A person started fresh. The thread this connection showed is gone.
     StartedFresh,
 }
+
+/// `helm.changed_checkout`: Helm wrote a file in a repository's own checkout.
+///
+/// **Helm's act as its own event type** — `docs/concepts/helm.md`, *Audit
+/// trail*, the rule `studio.helm_acted` already follows one subject over. A
+/// person who finds a file changed and did not change it reads this to see that
+/// Helm did.
+///
+/// **A write, not a run.** `tool` is one of the built-ins that edits a file, so
+/// the path is known. A shell line Helm ran may also have written something and
+/// nothing in the session's stream says whether it did, so a `Bash` call is on
+/// the conversation's thread like every other call and produces none of these.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HelmChangedCheckout {
+    pub manifest_id: ManifestId,
+    /// The tool that wrote it, as the session's own stream named it.
+    pub tool: String,
+    /// What it wrote, relative to the checkout where it is inside it.
+    pub path: String,
+    pub at: Instant,
+}
