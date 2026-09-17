@@ -58,6 +58,8 @@ mod landing;
 mod mcp;
 mod merging_in;
 mod pull_request_diff;
+/// What a Link's address names, and the call that fetches it. `#1293`.
+mod reading_in;
 mod reclaim;
 mod rerunning;
 /// A scout's process: one ask, read tools only, inside one checkout.
@@ -82,6 +84,10 @@ pub use harness::{
 };
 pub use issue_lookup::IssueLookup;
 pub use mcp::{only_the_evidence_server, publish_the_agents_door, Published, REPOSITORY_CONFIG};
+pub use reading_in::{
+    bounded, fetching, milestone_read, source_of, text_of_a_page, text_of_a_session, AnIssue,
+    Fetch, MilestoneRead, Source, StaysALink, FETCH_SECONDS, FORGE_HOST, MOST_ISSUES, SESSIONS,
+};
 pub use reclaim::{
     delete_branch, reclaim, standing, BranchGone, BranchRefused, BranchStanding, Reclaimed,
     RepoUnreadable, Standing, UnmergedWork, WorktreeGone, WorktreeStanding,

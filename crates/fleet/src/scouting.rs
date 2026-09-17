@@ -86,7 +86,10 @@ where
             store.add_studio_node(id, gathering.node(), produced_by, &at)
         })
         .await?;
-        Arc::clone(&self).scouting(id, gathering, root).await;
+        let told = crate::scout::told(&root, &ask.asked);
+        Arc::clone(&self)
+            .scouting(id, gathering, root, told, None)
+            .await;
         self.studio_now(&studio_id, within).await
     }
 
@@ -119,7 +122,14 @@ where
             gathering
         };
         self.studio_published(&id).await;
-        Arc::clone(&self).scouting(id, gathering, root).await;
+        let asked = match gathering.node().content() {
+            StudioNodeContent::Finding(finding) => finding.ask().to_string(),
+            _ => unreachable!("a GatheringFinding holds a Finding"),
+        };
+        let told = crate::scout::told(&root, &asked);
+        Arc::clone(&self)
+            .scouting(id, gathering, root, told, None)
+            .await;
         self.studio_now(&studio_id, within).await
     }
 
@@ -170,24 +180,28 @@ where
 
     /// Start the scout and hand its reading to a task of its own. **Listed
     /// before it starts**, so a stop pressed at once reaches it.
-    async fn scouting(
+    ///
+    /// `told` is the whole of its one turn — section 5b asked about the code,
+    /// section 5c reading a source in. `read_in` names the Link whose read-in
+    /// this is, and is what makes the freeze mint nodes off it. `#1293`.
+    pub(crate) async fn scouting(
         self: Arc<Self>,
         studio: StudioId,
         gathering: GatheringFinding,
         root: String,
+        told: String,
+        read_in: Option<StudioNodeId>,
     ) {
         let node = gathering.node().id().as_str().to_string();
-        let asked = match gathering.node().content() {
-            StudioNodeContent::Finding(finding) => finding.ask().to_string(),
-            _ => unreachable!("a GatheringFinding holds a Finding"),
-        };
         let host = self.scouts().host();
         let running = self.scouts().listed(&node);
-        let started = match host.start(&root, &crate::scout::told(&root, &asked)).await {
+        let started = match host.start(&root, &told).await {
             Ok(started) => started,
             Err(why) => {
                 self.scouts().ended(&node);
-                let _ = self.freeze(&studio, gathering, None, failed(&why)).await;
+                let _ = self
+                    .freeze(&studio, gathering, None, failed(&why), read_in)
+                    .await;
                 return;
             }
         };
@@ -212,7 +226,9 @@ where
             }
             self.scouts().ended(&node);
             if !gone {
-                let _ = self.freeze(&studio, gathering, learned, ended).await;
+                let _ = self
+                    .freeze(&studio, gathering, learned, ended, read_in)
+                    .await;
             }
         });
     }
@@ -240,14 +256,25 @@ where
         gathering: GatheringFinding,
         learned: Option<String>,
         ended: ScoutEnded,
+        read_in: Option<StudioNodeId>,
     ) -> Result<(), StudioError> {
         let frozen: FrozenFinding = gathering.frozen(learned, ended);
         self.kept(studio, &frozen).await?;
+        // **After the Finding is kept, never instead of it.** What a read-in
+        // produced is the scout's answer read back; the Finding is the record
+        // that it ran, and one without the other is half a read-in.
+        if let Some(link) = read_in {
+            self.what_came_back(studio, &link, &frozen).await;
+        }
         self.studio_published(studio).await;
         Ok(())
     }
 
-    async fn kept(&self, studio: &StudioId, scouted: &impl Scouted) -> Result<(), StudioError> {
+    pub(crate) async fn kept(
+        &self,
+        studio: &StudioId,
+        scouted: &impl Scouted,
+    ) -> Result<(), StudioError> {
         self.store()
             .lock()
             .await
@@ -255,7 +282,7 @@ where
     }
 
     /// The Studio whole on the stream, as every other write to one is.
-    async fn studio_published(&self, studio: &StudioId) {
+    pub(crate) async fn studio_published(&self, studio: &StudioId) {
         let read = self.store().lock().await.studio(studio);
         if let Ok(graph) = read {
             self.events()
@@ -263,7 +290,7 @@ where
         }
     }
 
-    async fn studio_now(
+    pub(crate) async fn studio_now(
         &self,
         studio_id: &ipc::StudioId,
         within: Option<ManifestId>,
@@ -276,7 +303,7 @@ where
     /// The checkout of the repository the Studio belongs to, refused where a
     /// door session's repository does not own the Studio or Fleet does not
     /// serve the repository.
-    async fn checkout_of(
+    pub(crate) async fn checkout_of(
         &self,
         studio: &StudioId,
         within: Option<&ManifestId>,
@@ -290,7 +317,7 @@ where
         Ok(served.root().to_string())
     }
 
-    async fn checkout_read(&self, root: &str) -> Result<ScoutCheckout, Refusal> {
+    pub(crate) async fn checkout_read(&self, root: &str) -> Result<ScoutCheckout, Refusal> {
         let owned = root.to_string();
         let read = tokio::task::spawn_blocking(move || adapters::checkout_as_it_stands(&owned))
             .await
@@ -349,7 +376,7 @@ where
         }
     }
 
-    fn no_such_node(&self, node_id: &StudioNodeId) -> Refusal {
+    pub(crate) fn no_such_node(&self, node_id: &StudioNodeId) -> Refusal {
         Refusal::Unacceptable(WireError::raised(
             NO_SUCH_NODE,
             format!("no node on this Studio is `{}`", node_id.as_str()),
@@ -358,7 +385,7 @@ where
     }
 }
 
-fn failed(why: &str) -> ScoutEnded {
+pub(crate) fn failed(why: &str) -> ScoutEnded {
     ScoutEnded {
         outcome: ScoutOutcome::Failed {
             why: why.to_string(),

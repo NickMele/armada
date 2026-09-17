@@ -403,3 +403,54 @@ test("a pasted address is asked about, takes a line of its own, and keeps it acr
     said: "why the card said nothing",
   });
 });
+
+test("an issue is read in and a milestone fills the board, with each Link left standing", async () => {
+  const fleet = studying();
+  open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
+  // Reopened read-only, so nothing acts on it until a person continues it.
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect.element(node(/^Link: https:\/\/example\.invalid\/o\/r\/issues\/1293/)).toBeVisible();
+
+  // One issue: a Finding beside the Notes and the Contradiction its scout asked for.
+  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/issues\/1293/);
+  await acts().getByRole("button", { name: "Read in" }).click();
+  await asked("Read in").click();
+  await expect.element(node(/^Finding: Read in https:\/\/example\.invalid\/o\/r\/issues\/1293, frozen/)).toBeVisible();
+  await expect.element(node(/^Note: The issue wants Links read in/)).toBeVisible();
+  await expect.element(node(/^Contradiction: The issue says Connections have no home yet/)).toBeVisible();
+
+  const studio = () => fleet.studios()[0]!;
+  // The Link keeps its address whatever came back, and everything hangs off it.
+  expect(studio().nodes.find((one) => one.id === "legend-issue")).toMatchObject({
+    kind: "link",
+    address: "https://example.invalid/o/r/issues/1293",
+  });
+  expect(studio().edges.filter((edge) => edge.from === "legend-issue" && edge.kind === "produced")).toHaveLength(4);
+  // A relation the scout asked for waits on a person.
+  expect(studio().edges.filter((edge) => edge.standing === "proposed" && edge.kind === "blocks")).toHaveLength(1);
+
+  // A milestone: one Link per issue, each naming the filed issue's address, and
+  // the milestone's own Link saying how many of how many were read in.
+  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/milestone\/17/);
+  await acts().getByRole("button", { name: "Read in" }).click();
+  await asked("Read in").click();
+  await expect.element(node(/^Link: Studio — 3 of 3 issues read in/)).toBeVisible();
+  await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
+  await expect.element(node(/^Link: #1275 Kit manages connections — open/)).toBeVisible();
+
+  const issues = studio()
+    .edges.filter((edge) => edge.from === "legend-milestone" && edge.kind === "produced")
+    .map((edge) => studio().nodes.find((one) => one.id === edge.to));
+  expect(issues.map((one) => (one?.kind === "link" ? one.address : null))).toEqual([
+    "https://example.invalid/o/r/issues/1293",
+    "https://example.invalid/o/r/issues/1291",
+    "https://example.invalid/o/r/issues/1275",
+  ]);
+  // Its own address survives being named.
+  expect(studio().nodes.find((one) => one.id === "legend-milestone")).toMatchObject({
+    address: "https://example.invalid/o/r/milestone/17",
+    named: "Studio — 3 of 3 issues read in",
+  });
+});

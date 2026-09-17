@@ -17,9 +17,10 @@ use std::collections::BTreeMap;
 
 use config::ResolvedWorkflow;
 use core_model::{
-    ManifestId, ScoutCheckout, ScoutEnded, ScoutLook, ScoutOutcome, Studio, StudioAuthor,
-    StudioEdge, StudioEdgeId, StudioFinding, StudioGraph, StudioId, StudioName, StudioNode,
-    StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation, Timestamp, Ulid, WorkflowId,
+    ManifestId, ScoutCheckout, ScoutEnded, ScoutLook, ScoutOutcome, ScoutSource, ScoutSourceKind,
+    Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioFinding, StudioGraph, StudioId,
+    StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation,
+    Timestamp, Ulid, WorkflowId,
 };
 use ipc::JobRequest;
 
@@ -211,6 +212,152 @@ pub fn a_studio_with_a_frozen_finding() -> StudioGraph {
     .expect("a Note and a Finding");
     graph.nodes.push(frozen.node().clone());
     graph.edges.push(produced);
+    graph
+}
+
+/// The four sources a person pasted in and read, one Link each, in the order
+/// `docs/concepts/scout.md` lists them. `#1293`.
+pub const SOURCES: [(&str, &str, ScoutSourceKind); 4] = [
+    (
+        "01LINKISSUE",
+        "https://example.invalid/o/r/issues/1293",
+        ScoutSourceKind::Issue,
+    ),
+    (
+        "01LINKPAGE",
+        "https://react.dev/reference/react/useId",
+        ScoutSourceKind::Page,
+    ),
+    (
+        "01LINKSESSION",
+        "armada:session/b1c9d559",
+        ScoutSourceKind::Session,
+    ),
+    ("01LINKTHREAD", "armada:thread", ScoutSourceKind::Thread),
+];
+
+/// What a page did not fit into what its scout was handed.
+pub const CUT: u64 = 12_400;
+
+/// The Note the issue's read-in produced.
+pub const READ_IN_NOTE: &str = "The issue makes reading in a second, refusable step";
+
+/// The two sides of the Contradiction it found: the source's, then the
+/// repository's. **Both are text**, because one side is outside the checkout
+/// and has no node to point at.
+pub const SIDES: (&str, &str) = (
+    "The issue says Connections have no home yet",
+    "docs/concepts/kit.md already gives them one",
+);
+
+/// A Studio where each of the four sources was read in: the Link standing with
+/// its address, the Finding saying what it was handed, and — off the issue —
+/// the Note and the Contradiction its scout asked for. `#1293`.
+pub fn a_studio_with_sources_read_in() -> StudioGraph {
+    let mut graph = a_studio_with_two_notes();
+    let mut minted = 0;
+    let mut produced = |graph: &mut StudioGraph, from: &StudioNodeId, node: StudioNode| {
+        minted += 1;
+        let edge = StudioEdge::produced(
+            StudioEdgeId::carried(Ulid::carried(format!("01EDGEREADIN{minted:02}"))),
+            from.clone(),
+            node.id().clone(),
+            at(6),
+            StudioAuthor::Person,
+        )
+        .expect("a Link and what it produced");
+        graph.nodes.push(node);
+        graph.edges.push(edge);
+    };
+    let mut issue_link: Option<StudioNodeId> = None;
+    for (n, (id, address, kind)) in SOURCES.iter().enumerate() {
+        let link = StudioNode::added(
+            StudioNodeId::carried(Ulid::carried(*id)),
+            StudioNodeContent::Link {
+                address: address.to_string(),
+                said: None,
+                named: None,
+            },
+            StudioPosition {
+                x: (n as i64) * 340,
+                y: 480,
+            },
+            at(5),
+            StudioAuthor::Person,
+        );
+        let finding = StudioNode::added(
+            StudioNodeId::carried(Ulid::carried(format!("01FINDINGREADIN{n}"))),
+            StudioNodeContent::Finding(StudioFinding::asked(&format!("Read in {address}"))),
+            StudioPosition {
+                x: (n as i64) * 340,
+                y: 660,
+            },
+            at(6),
+            StudioAuthor::Person,
+        )
+        .reading_in(
+            ScoutCheckout {
+                commit: COMMIT.to_string(),
+                uncommitted: false,
+            },
+            vec![ScoutSource {
+                address: address.to_string(),
+                kind: *kind,
+                cut: match kind {
+                    ScoutSourceKind::Page => CUT,
+                    _ => 0,
+                },
+            }],
+        )
+        .expect("a Finding just added is Proposed")
+        .frozen(
+            Some(format!("What {address} says.")),
+            ScoutEnded {
+                outcome: ScoutOutcome::Answered,
+                cost_micros: Some(COST),
+            },
+        );
+        let link_id = link.id().clone();
+        graph.nodes.push(link);
+        produced(&mut graph, &link_id, finding.node().clone());
+        if n == 0 {
+            issue_link = Some(link_id);
+        }
+    }
+    let from = issue_link.expect("the issue's Link");
+    let note = StudioNode::added(
+        StudioNodeId::carried(Ulid::carried("01NOTEREADIN")),
+        StudioNodeContent::Note {
+            said: READ_IN_NOTE.to_string(),
+            capture: None,
+        },
+        StudioPosition { x: 0, y: 840 },
+        at(7),
+        StudioAuthor::Person,
+    );
+    let contradiction = StudioNode::added(
+        StudioNodeId::carried(Ulid::carried("01CONTRAREADIN")),
+        StudioNodeContent::Contradiction {
+            first: SIDES.0.to_string(),
+            second: SIDES.1.to_string(),
+            answer: None,
+        },
+        StudioPosition { x: 0, y: 1020 },
+        at(7),
+        StudioAuthor::Person,
+    );
+    let blocks = StudioEdge::proposed(
+        StudioEdgeId::carried(Ulid::carried("01EDGEREADINREL")),
+        note.id().clone(),
+        contradiction.id().clone(),
+        StudioRelation::Blocks,
+        at(7),
+        StudioAuthor::Person,
+    )
+    .expect("a Note and a Contradiction");
+    produced(&mut graph, &from, note);
+    produced(&mut graph, &from, contradiction);
+    graph.edges.push(blocks);
     graph
 }
 

@@ -166,6 +166,7 @@ async fn a_person_adds_only_what_a_person_makes() {
         StudioNodeContent::Link {
             address: "docs/contracts/design-system.md".to_string(),
             said: None,
+            named: None,
         },
         StudioNodeContent::Sketch {
             body: "legend on its own row".to_string(),
@@ -259,6 +260,7 @@ async fn every_write_is_published_and_a_produced_edge_is_not_decided() {
         content: StudioNodeContent::Link {
             address: "https://example.invalid/counts".to_string(),
             said: None,
+            named: None,
         },
         position: StudioPosition { x: 0, y: 160 },
         produced_by: Some(note.nodes[0].id.clone()),
@@ -553,6 +555,7 @@ async fn a_links_line_is_written_edited_and_cleared_and_its_address_never_moves(
                 content: StudioNodeContent::Link {
                     address: ADDRESS.to_string(),
                     said: Some("  why the card says nothing  ".to_string()),
+                    named: None,
                 },
                 position: StudioPosition { x: 0, y: 0 },
                 produced_by: None,
@@ -633,7 +636,7 @@ fn said_on<'a>(studio: &'a Studio, node_id: &ipc::StudioNodeId) -> (&'a str, Opt
         .iter()
         .find(|node| &node.id == node_id)
         .expect("the node");
-    let StudioNodeContent::Link { address, said } = &node.content else {
+    let StudioNodeContent::Link { address, said, .. } = &node.content else {
         panic!("a Link");
     };
     (address, said.as_deref())

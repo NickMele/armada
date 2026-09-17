@@ -24,6 +24,7 @@ mod judge;
 mod keeping_current;
 mod landing;
 mod mcp;
+mod reading_in;
 mod reclaim;
 pub mod repo;
 mod rerunning;

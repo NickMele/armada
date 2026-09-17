@@ -28,6 +28,8 @@ export type StudioActs = {
   dispatch: boolean;
   /** One Contradiction that has not ended yet. */
   settle: boolean;
+  /** One Link. Fleet decides whether its address is a source; this only offers. */
+  readIn: boolean;
 };
 
 const NOTHING: StudioActs = {
@@ -39,6 +41,7 @@ const NOTHING: StudioActs = {
   editLink: false,
   dispatch: false,
   settle: false,
+  readIn: false,
 };
 
 /** The selected nodes, in the order the whiteboard reports them, skipping any the Studio has lost. */
@@ -70,6 +73,10 @@ export function actsOn(studio: Studio, selected: readonly string[]): StudioActs 
     editLink: one.kind === "link",
     dispatch: one.kind === "issue_draft",
     settle: one.kind === "contradiction" && !ended,
+    // **Offered on every Link**, because which addresses are sources is
+    // `crates/adapters`' to know and a rule copied here would drift from it.
+    // A Link to a board comes back refused, which is the answer.
+    readIn: one.kind === "link",
   };
 }
 

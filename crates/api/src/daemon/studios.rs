@@ -15,9 +15,9 @@ use std::sync::Arc;
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, ManifestId,
-    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction,
-    StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioId, StudioList,
-    StudioNodeId, StudioRunStarted, WriteUpStudioNode,
+    MoveStudioNode, ProposeStudioEdge, ReadInLink, RemoveStudioNode, RenameStudio,
+    SettleContradiction, StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioId,
+    StudioList, StudioNodeId, StudioRunStarted, WriteUpStudioNode,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -145,6 +145,23 @@ pub trait Studios: Send + Sync + 'static {
         self: Arc<Self>,
         studio_id: StudioId,
         start: StartScout,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `read_in_link` — a Link read in. `#1293`.
+    ///
+    /// **Fleet fetches the source and hands a scout the text**, so a fetch that
+    /// fails is [`Refusal::Unacceptable`] with no node written. A Link to
+    /// anything no scout reads stays a Link, refused the same way. `by` says
+    /// whose act to record what it made as.
+    ///
+    /// **By `Arc`, as a scout's ask is**: what the scout reads arrives on
+    /// `studio.changed` long after this answers.
+    fn read_in_link(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        read_in: ReadInLink,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 

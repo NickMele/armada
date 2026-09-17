@@ -563,6 +563,7 @@ async fn each_rung_refuses_the_kinds_it_is_not_for() {
         StudioNodeContent::Link {
             address: "https://example.invalid/board".to_string(),
             said: None,
+            named: None,
         },
     )
     .await;
