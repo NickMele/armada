@@ -48,6 +48,7 @@ function acting(summary: JobSummary, actingAct?: Parameters<typeof Acts>[0]["act
       approving={false}
       stale={false}
       onAct={() => {}}
+      onActHeld={() => {}}
       onApprove={() => {}}
       onReport={async () => ({ ok: true })}
       reporting={false}
@@ -99,7 +100,7 @@ test("a lone act draws a plain button, busy for its own press", async () => {
 
 test("a lone act's button is unmarked and enabled with nothing out", async () => {
   acting(job({ assigned_drone: undefined }));
-  const button = page.getByRole("button", { name: "Kill job" });
+  const button = page.getByRole("button", { name: "Hold to kill job" });
   await expect.element(button).not.toHaveAttribute("aria-busy");
   await expect.element(button).toBeEnabled();
 });

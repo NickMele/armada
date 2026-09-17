@@ -40,7 +40,7 @@ import type {
   WorkflowSummary,
 } from "@armada/protocol";
 
-import type { ConfirmableAct } from "./Acts";
+import type { ConfirmableAct, HeldAct } from "./Acts";
 import type { ShowAgainCall } from "./again";
 import type { ExplainCommand, ReadCall } from "./calls";
 import type { FrameSrc, ReadFrame } from "./frames";
@@ -78,6 +78,11 @@ export type JobDetailProps = {
   actingAct?: ActingAct | undefined;
   /** Ask for a confirmation. Nothing destructive is one press from here. */
   onAct: (act: ConfirmableAct, jobId: string) => void;
+  /**
+   * Kill, straight through. **The hold on the header's own kill was the
+   * confirmation**, so this sends where `onAct` asks.
+   */
+  onActHeld: (act: HeldAct, jobId: string) => void;
   /** Send a redirect straight through — its own dialog is the confirmation. */
   onRedirect: (jobId: string, instruction: string) => void;
   /**

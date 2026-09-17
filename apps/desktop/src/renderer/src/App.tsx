@@ -647,6 +647,8 @@ export function App() {
                   remarks: state.remarks,
                 }}
                 onAct={(what, jobId) => setConfirming({ act: what, jobId })}
+                // Held on the header, so already confirmed: it sends what the dialog's own confirm sends.
+                onActHeld={(what, jobId) => void commands.act(what, jobId)}
                 onRedirect={(jobId, instruction) => void commands.redirect(jobId, instruction)}
                 onAnswer={(jobId, questionId, chose) =>
                   void commands.answer(jobId, questionId, chose)

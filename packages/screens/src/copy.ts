@@ -19,6 +19,7 @@ import type {
   WhenRefused,
   WorktreeReclaimed,
 } from "@armada/protocol";
+import type { HeldAct } from "./Acts";
 import type { ConfirmableAct, JobAct } from "./JobDetail";
 import { NOTHING_SERVED, servesNothing } from "./locate-reads";
 
@@ -451,4 +452,19 @@ export const MENU_LABEL: Record<JobAct, string> = {
   rerun_checks: "Run Checks again, on the work already here",
   reclaim_worktree: "Reclaim worktree, the job stays on the board",
   forget_job: "Delete record, there is no undo",
+};
+
+/**
+ * A kill that confirms by being held, on job detail's own control. The verb is
+ * the act's, so `Hold to kill job` still produces "Killed".
+ */
+export const HOLD_LABEL: Record<HeldAct, string> = {
+  kill_drone: "Hold to kill drone",
+  kill_job: "Hold to kill job",
+};
+
+/** What holding does, for a person who cannot see the fill. */
+export const HOLD_SAID: Record<HeldAct, string> = {
+  kill_drone: "Kills the drone once held until it fills. Letting go sooner kills nothing. The job stays open.",
+  kill_job: "Kills the job once held until it fills. Letting go sooner kills nothing.",
 };

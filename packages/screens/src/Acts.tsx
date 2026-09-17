@@ -10,13 +10,13 @@
 // hold one act and what it asks a person for before it sends. What stays here
 // is which of them a state offers. The words on every button are `copy.ts`'s.
 
-import { Button, SplitButton } from "@armada/components";
+import { Button, HoldButton, SplitButton } from "@armada/components";
 import type { SplitButtonItem } from "@armada/components";
 
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { Outcome } from "@armada/protocol";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "@armada/protocol";
-import { ACT_LABEL, MENU_LABEL, RAISE_CAP_LABEL, RAISE_TURN_CAP_LABEL, REPORT_LABEL } from "./copy";
+import { ACT_LABEL, HOLD_LABEL, HOLD_SAID, MENU_LABEL, RAISE_CAP_LABEL, RAISE_TURN_CAP_LABEL, REPORT_LABEL } from "./copy";
 import type { ActingAct } from "./pending";
 import { RaiseCapControl } from "./RaiseCap";
 import { RaiseTurnCapControl } from "./RaiseTurnCap";
@@ -71,6 +71,16 @@ export type ConfirmableAct = Exclude<
   JobAct,
   "redirect" | "override_verdict" | "rerun_gate" | "rerun_checks"
 >;
+
+/**
+ * The acts that confirm by being held where the header draws them as a control
+ * of their own. Everywhere else, the menu and `x` included, they still ask.
+ */
+export type HeldAct = Extract<ConfirmableAct, "kill_drone" | "kill_job">;
+
+function isHeldAct(act: ConfirmableAct): act is HeldAct {
+  return act === "kill_drone" || act === "kill_job";
+}
 
 /**
  * What can be done to this Job from here.
@@ -174,6 +184,7 @@ export function Acts({
   approving,
   stale,
   onAct,
+  onActHeld,
   onApprove,
   onReport,
   reporting,
@@ -201,6 +212,8 @@ export function Acts({
   approving: boolean;
   stale: boolean;
   onAct: (act: ConfirmableAct, jobId: string) => void;
+  /** A kill held for `--duration-hold`. **Sends, with no dialog**: the hold was the confirmation. */
+  onActHeld: (act: HeldAct, jobId: string) => void;
   onApprove: (jobId: string) => void;
   /**
    * Say this job failed in error. **Not one of the acts** — it moves nothing,
@@ -272,8 +285,9 @@ export function Acts({
   // Every act this header offers, in the order one would lead. **One control
   // carries them all**: the first is its face and the rest are its menu, so the
   // header never shows two buttons side by side. The face can be an act that
-  // ends something, because every act here asks for a confirmation before it
-  // does anything, and a stray Enter lands on that dialog's Cancel.
+  // ends something, because every act here confirms before it does anything: a
+  // kill drawn alone is held, and every other face opens a dialog whose Cancel
+  // a stray Enter lands on.
   //
   // Approving leads where a Job waits for it, redispatch leads a stopped Job
   // that can be redispatched, and the report leads one that cannot. After those,
@@ -287,6 +301,7 @@ export function Acts({
     label: MENU_LABEL[name],
     danger: true,
     actName: name,
+    ...(isHeldAct(name) ? { held: name } : {}),
     onSelect: () => onAct(name, job.id),
   });
   const entries: Entry[] = [
@@ -320,6 +335,8 @@ export function Acts({
       : []),
   ];
   const [lead, ...behind] = entries;
+  // A kill alone on the header is held; a kill on a split button's face asks.
+  const held = behind.length === 0 ? lead?.held : undefined;
   // The accent says a person is waited on and nothing else does. A terminal
   // Job's control is quiet, because there is nobody it is waiting for.
   const variant = job.status === "awaiting_approval" || life?.whoIsActing === "Person" ? "primary" : "secondary";
@@ -377,7 +394,20 @@ export function Acts({
       ) : null}
       {/* A split button with nothing in its menu is a button: a caret over an
           empty menu is a control that does not answer. */}
-      {lead === undefined ? null : behind.length === 0 ? (
+      {/* A kill drawn alone is held rather than asked. As a split button's
+          face it still asks, because that face is `SplitButton`'s own button. */}
+      {lead === undefined ? null : held !== undefined ? (
+        <HoldButton
+          pending={pendingHere(lead.actName)}
+          disabled={busy}
+          askLabel={pendingHere(lead.actName) && pendingAct !== undefined ? ACTING_LABEL[pendingAct] : lead.face}
+          description={HOLD_SAID[held]}
+          onAsk={() => onAct(held, job.id)}
+          onCommit={() => onActHeld(held, job.id)}
+        >
+          {pendingHere(lead.actName) && pendingAct !== undefined ? ACTING_LABEL[pendingAct] : HOLD_LABEL[held]}
+        </HoldButton>
+      ) : behind.length === 0 ? (
         <Button
           variant={variant}
           pending={pendingHere(lead.actName)}
@@ -389,7 +419,7 @@ export function Acts({
       ) : (
         <SplitButton
           variant={variant}
-          items={behind.map(({ face: _face, actName: _actName, ...item }) => item)}
+          items={behind.map(({ face: _face, actName: _actName, held: _held, ...item }) => item)}
           disabled={busy}
           pending={pendingAct !== undefined}
           pendingLabel={pendingAct === undefined ? undefined : ACTING_LABEL[pendingAct]}
@@ -482,9 +512,10 @@ export function heldForTurns(job: JobSummary): boolean {
  * **Absent on Approve and Report**, which are not `ActingAct`s this header
  * waits on the same way: Approve already draws its own "Approving" face and
  * Report opens its own dialog that is not one of the seven `ACTING_LABEL`
- * names below. #1117.
+ * names below. #1117. `held` is set on the two kills, which confirm by a
+ * hold where one is drawn alone.
  */
-type Entry = SplitButtonItem & { face: string; actName?: ActingAct };
+type Entry = SplitButtonItem & { face: string; actName?: ActingAct; held?: HeldAct };
 
 /** The approval act, which is the screen's own and not a `JobAct`. */
 const APPROVE_LABEL = "Approve dispatch";

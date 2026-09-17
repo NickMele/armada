@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 import { Check, CircleDot, OctagonAlert, UserCheck, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
+import { HoldButton } from "../../primitives/HoldButton/HoldButton";
 import { JobSettingsButton } from "../JobSettings/JobSettings";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { JobDetailHeaderActions } from "./JobDetailHeaderActions";
@@ -34,8 +35,8 @@ type Story = StoryObj<typeof JobDetailHeaderActions>;
  * mark, so it carries the loop and the badge does not.
  *
  * The branch copies on click. A Job with no assigned Drone has one act, so the
- * split button is a button — and nothing to approve or merge while a Job works,
- * so no primary.
+ * split button is a button, held rather than asked because it is a kill alone.
+ * Nothing to approve or merge while a Job works, so no primary.
  */
 export const ARunningJob: Story = {
   args: {
@@ -61,7 +62,14 @@ export const ARunningJob: Story = {
     actions: (
       <>
         <Button variant="ghost">Watch the turns</Button>
-        <Button variant="destructive">Kill job</Button>
+        <HoldButton
+          askLabel="Kill job"
+          description="Kills the job once held until it fills. Letting go sooner kills nothing."
+          onAsk={fn()}
+          onCommit={fn()}
+        >
+          Hold to kill job
+        </HoldButton>
       </>
     ),
   },
@@ -83,7 +91,14 @@ export const ARunningJobWithSettings: Story = {
     actions: (
       <>
         <JobSettingsButton changed={2} onOpen={fn()} />
-        <Button variant="destructive">Kill job</Button>
+        <HoldButton
+          askLabel="Kill job"
+          description="Kills the job once held until it fills. Letting go sooner kills nothing."
+          onAsk={fn()}
+          onCommit={fn()}
+        >
+          Hold to kill job
+        </HoldButton>
       </>
     ),
   },

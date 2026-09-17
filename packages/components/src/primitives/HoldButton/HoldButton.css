@@ -1,0 +1,48 @@
+/* Hold button — `Button`'s destructive variant with a fill that grows while it
+ * is held. The outline, focus and pending renderings are `Button.css`'s; this
+ * file draws the fill and nothing else.
+ *
+ * The fill is `--status-completed-failed`, the destructive variant's own hue,
+ * so the control fills with the colour it is outlined in. Linear across
+ * `--duration-hold`: the fill is a clock, and an eased clock misstates how
+ * long is left. Emptying is fast and eased, because letting go is not a
+ * countdown. */
+
+.armada-button[data-hold] {
+  position: relative;
+  overflow: hidden;
+}
+
+.armada-hold__fill {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--status-completed-failed) 28%, transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+  pointer-events: none;
+}
+
+.armada-hold__fill[data-phase="arming"] {
+  transform: scaleX(1);
+  transition: transform var(--duration-hold) linear;
+}
+
+.armada-hold__fill[data-phase="releasing"] {
+  transform: scaleX(0);
+  transition: transform var(--duration-fast) var(--ease);
+}
+
+/* Above the fill, which is positioned and would otherwise paint over it. */
+.armada-hold__label {
+  position: relative;
+}
+
+/* A hold caught halfway, for a screenshot that does not depend on timing. */
+.armada-button[data-hold][data-preview-held] .armada-hold__fill {
+  transform: scaleX(0.5);
+}
+
+/* A pending control shows its own bar; a fill left behind would be a second. */
+.armada-button[data-hold][data-pending] .armada-hold__fill {
+  display: none;
+}

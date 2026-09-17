@@ -11,6 +11,7 @@ export * from "./primitives/Checkbox/Checkbox";
 export * from "./primitives/CommandPalette/CommandPalette";
 export * from "./primitives/Dialog/Dialog";
 export * from "./primitives/DropdownMenu/DropdownMenu";
+export * from "./primitives/HoldButton/HoldButton";
 export * from "./primitives/Input/Input";
 export * from "./primitives/Kbd/Kbd";
 export * from "./primitives/MentionPopover/MentionPopover";

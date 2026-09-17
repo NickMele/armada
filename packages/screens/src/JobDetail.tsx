@@ -61,7 +61,7 @@ import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
 import { briefOf, whyNoBrief, workOf, workRehearsalOf } from "./work";
 
-export type { ConfirmableAct, JobAct } from "./Acts";
+export type { ConfirmableAct, HeldAct, JobAct } from "./Acts";
 export type { FoldedReads } from "./mine";
 export { renderFor } from "./render";
 export type { Render } from "./render";
@@ -127,6 +127,7 @@ function OneJob({
   onExamine,
   recorded,
   onAct,
+  onActHeld,
   onRaiseCap,
   onRaiseTurnCap,
   onRedirect,
@@ -594,6 +595,7 @@ function OneJob({
     reporting,
     onReporting: setReporting,
     onAct,
+    onActHeld,
     onApprove,
     onReport,
     onRaiseCap,

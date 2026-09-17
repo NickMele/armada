@@ -19,7 +19,7 @@
 
 import { JOB_LIFECYCLE, JOB_STATUS, type JobDetailHeading } from "@armada/components";
 import type { FileReport, JobDetail as JobWhole, JobSummary, Outcome } from "@armada/protocol";
-import { Acts, type ConfirmableAct } from "./Acts";
+import { Acts, type ConfirmableAct, type HeldAct } from "./Acts";
 import { factsOf } from "./facts";
 import type { ActingAct } from "./pending";
 import { settingsButtonOf } from "./settings";
@@ -44,6 +44,8 @@ export type Heading = {
   reporting: boolean;
   onReporting: (reporting: boolean) => void;
   onAct: (act: ConfirmableAct, jobId: string) => void;
+  /** A kill held for `--duration-hold`. It sends, with no dialog. */
+  onActHeld: (act: HeldAct, jobId: string) => void;
   onApprove: (jobId: string) => void;
   onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
   /** Give this job a higher cost ceiling, in millionths of a dollar. */
@@ -83,6 +85,7 @@ export function headingOf({
   reporting,
   onReporting,
   onAct,
+  onActHeld,
   onApprove,
   onReport,
   onRaiseCap,
@@ -137,6 +140,7 @@ export function headingOf({
           approving={approving}
           stale={stale}
           onAct={onAct}
+          onActHeld={onActHeld}
           onApprove={onApprove}
           onReport={onReport}
           reporting={reporting}
