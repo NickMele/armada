@@ -22,8 +22,6 @@
   min-width: var(--sidebar-rail);
   max-width: var(--sidebar-max);
   padding: var(--space-2);
-  background: var(--bg-raised);
-  border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-lg);
 }
 

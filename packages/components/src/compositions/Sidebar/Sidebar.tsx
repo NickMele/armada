@@ -136,7 +136,7 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <nav
-      className="armada-sidebar"
+      className="armada-sidebar armada-glass"
       data-collapsed={collapsed || undefined}
       style={{ width: collapsed ? "var(--sidebar-rail)" : (width ?? "var(--sidebar-default)") }}
     >
