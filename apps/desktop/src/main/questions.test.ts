@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { JobDetail, JobSummary, JudgeQuestion, QuestionInFlight } from "@armada/protocol";
 import { NOTHING_YET, type BridgeState } from "../shared/bridge";
+import { questionsJob } from "@armada/screens/src/outstanding";
 import { Questions } from "./questions";
 
 function job(over: Partial<JobSummary> = {}): JobSummary {
@@ -131,7 +132,7 @@ describe("questions waiting on a person", () => {
     ]);
     await questions.readAll(port);
     expect(asked.sort()).toEqual(["/jobs/a", "/jobs/b"]);
-    expect(state().questions.map((question) => [question.job_id, question.kind]).sort()).toEqual([
+    expect(state().questions.map((question) => [questionsJob(question), question.kind]).sort()).toEqual([
       ["a", "drone"],
       ["b", "judge"],
     ]);

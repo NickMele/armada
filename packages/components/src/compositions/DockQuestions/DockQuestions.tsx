@@ -34,8 +34,8 @@ export type DockQuestion = {
   id: string;
   /** The picker's own label for the repository. */
   repository: string;
-  /** The Job's number, `12`. */
-  job: string;
+  /** The Job's number, `12`. **Absent is a question with no job** — a helm call, which waits inside one tool call and queues nothing. */
+  job?: string;
   /** What the Job is called. */
   title?: string;
   /** The line over what was asked, naming the kind. */
@@ -90,7 +90,7 @@ function QuestionCard({
   refusal,
   onDiscuss,
 }: DockQuestion) {
-  const where = `${repository}, job ${job}`;
+  const where = job === undefined ? `${repository}, helm` : `${repository}, job ${job}`;
   // Which of this card's own answers was pressed — `answering` alone says
   // Fleet has not answered, not which control sent it. Cleared once
   // `answering` drops, so a fresh question always starts unpressed. #1117.
@@ -107,7 +107,7 @@ function QuestionCard({
     <Card className="armada-dock-question" flat role="article" aria-label={`${label} — ${where}`}>
       <div className="armada-dock-question__where">
         <span className="armada-dock-question__place mono">
-          {repository} · job {job}
+          {repository} · {job === undefined ? "helm" : `job ${job}`}
         </span>
         {waiting === undefined ? null : (
           <span className="armada-dock-question__waiting mono">{waiting}</span>

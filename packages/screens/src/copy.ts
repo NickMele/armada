@@ -14,6 +14,7 @@ import type { DialogTone } from "@armada/components";
 
 import type {
   CommandAnswer,
+  HelmCallAnswer,
   Outcome,
   WhenBlocked,
   WhenRefused,
@@ -373,6 +374,48 @@ export const COMMAND_ANSWER: Record<CommandAnswer, { label: string; means: strin
     means: "The drone is told no, and the command does not run.",
   },
 };
+
+/**
+ * What each answer to a held **helm** call commits to. #1389.
+ *
+ * Its own record beside `COMMAND_ANSWER`, because the two sets are different
+ * sets: there is no job to allow for, and `allow_and_remember` writes a rule
+ * into the person's own settings rather than into fleet's table.
+ */
+export const HELM_CALL_ANSWER: Record<HelmCallAnswer, { label: string; means: string }> = {
+  allow_once: {
+    label: "Allow once",
+    means: "Helm runs it now. Nothing is written down, and the same call asks again next time.",
+  },
+  allow_and_remember: {
+    label: "Allow and remember",
+    means:
+      "Helm runs it now, and the rule goes into this repository's own .claude/settings.local.json " +
+      "— so your terminal stops asking too.",
+  },
+  refuse: {
+    label: "Refuse",
+    means: "Helm is told no, and says what it could not do.",
+  },
+};
+
+/** What a person may answer about one helm call, worded, in fleet's own order. */
+export function helmOfferedOf(offers: readonly HelmCallAnswer[]): OfferedHelmAnswer[] {
+  const known: Partial<Record<string, { label: string; means: string }>> = HELM_CALL_ANSWER;
+  // An answer from a fleet ahead of this build is left out, `offeredOf`'s rule.
+  return offers.flatMap((offer) => {
+    const said = known[offer];
+    return said === undefined ? [] : [{ offer, ...said }];
+  });
+}
+
+/** One helm answer, worded. No rule picker: fleet already derived the one rule. */
+export type OfferedHelmAnswer = { offer: HelmCallAnswer; label: string; means: string };
+
+/** An answer a helm card handed back, as the wire's word — or nothing, for one this build never drew. */
+export function helmAnswerNamed(name: string): HelmCallAnswer | undefined {
+  return (Object.keys(HELM_CALL_ANSWER) as HelmCallAnswer[]).find((answer) => answer === name);
+}
 
 /** One answer, worded, and the Always-allow rule reading it carries. */
 export type OfferedAnswer = {

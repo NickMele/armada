@@ -18,6 +18,7 @@ import type { CheckoutRunRecord, RunRecord } from "./rehearsal";
 import type { ServerState } from "./servers";
 import type { RepositoryList } from "./setup";
 import type { Studio, StudioDeleted, StudioHelmActed } from "./studio";
+import type { HelmAskingToRun, HelmCallAnswered } from "./helm-calls";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { CommandInFlight } from "./commanding";
@@ -79,7 +80,9 @@ export type Event =
   /** A Studio a person deleted. Since 14.6. */
   | ({ kind: "studio.deleted" } & StudioDeleted)
   /** Helm took one act on a Studio, beside its `studio.changed`. Since 14.7. */
-  | ({ kind: "studio.helm_acted" } & StudioHelmActed);
+  | ({ kind: "studio.helm_acted" } & StudioHelmActed)
+  | ({ kind: "helm.asking_to_run" } & HelmAskingToRun)
+  | ({ kind: "helm.call_answered" } & HelmCallAnswered);
 
 /**
  * A Job exists that did not before, carrying the row whole.

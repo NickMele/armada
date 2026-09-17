@@ -2,7 +2,7 @@
 // already sends to; this is the wiring, apart from `App.tsx` for the reason `commands.ts` is.
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { CommandAnswer, JudgeAnswer, Outcome } from "@armada/protocol";
+import type { CommandAnswer, HelmCallAnswer, JudgeAnswer, Outcome } from "@armada/protocol";
 import type { DockActs, Outstanding } from "@armada/screens";
 import { outstandingId, refusalWords } from "@armada/screens";
 
@@ -33,10 +33,13 @@ export function useDockAnswering(commands: ReturnType<typeof useCommands>): Dock
   return useMemo(
     () => ({
       onAnswer,
-      answering: (question: Outstanding) => commands.acting === question.job_id,
+      answering: (question: Outstanding) =>
+        question.kind === "helm"
+          ? commands.answeringHelm === question.call.call
+          : commands.acting === question.job_id,
       refusalFor: (question: Outstanding) => refusals[outstandingId(question)],
     }),
-    [onAnswer, refusals, commands.acting],
+    [onAnswer, refusals, commands.acting, commands.answeringHelm],
   );
 }
 
@@ -52,5 +55,7 @@ function sent(
       return commands.answerCommand(question.job_id, question.waiting.call, answer as CommandAnswer);
     case "judge":
       return commands.answerJudge(question.job_id, question.question.asked_at, answer as JudgeAnswer);
+    case "helm":
+      return commands.answerHelmCall(question.call.call, answer as HelmCallAnswer);
   }
 }

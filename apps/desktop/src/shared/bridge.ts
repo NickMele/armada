@@ -483,6 +483,9 @@ export const CHANNELS = {
   redirectDrone: "bridge:redirect-drone",
   answerQuestion: "bridge:answer-question",
   answerCommand: "bridge:answer-command",
+  // One call helm was held on, answered in the dock. No job id: it names the
+  // call fleet minted, and nothing on the board moves. #1389.
+  answerHelmCall: "bridge:answer-helm-call",
   // What a command does, read for the person deciding about it. A read: it
   // moves nothing, and the three answers are live while it is out.
   explainCommand: "bridge:explain-command",
