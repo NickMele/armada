@@ -178,6 +178,9 @@ export * from "./actions";
 // beneath it reads `useShortcutReveal()` rather than taking a prop for it.
 export * from "./shortcut-reveal";
 
+// The trackpad's answer to a press, a no-op until Bridge's renderer provides one.
+export * from "./haptics";
+
 // The token specimens: what a value looks like, read off the running sheet.
 export * from "./foundations/Tokens/Tokens";
 

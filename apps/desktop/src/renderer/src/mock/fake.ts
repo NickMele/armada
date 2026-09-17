@@ -228,6 +228,8 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     askHelm: async () => OK,
     startHelmFresh: async () => OK,
     pointHelm: async () => undefined,
+    // The mock provides no haptics, so nothing calls this; answered for the type.
+    tap: () => undefined,
   };
   return { ...api, ...scenario.behaves?.({ state: () => state, publish }) };
 }

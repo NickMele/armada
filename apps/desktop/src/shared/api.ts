@@ -37,6 +37,7 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { BridgeState, Summons } from "./bridge";
+import type { Pattern } from "./haptics";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
 import type { HelmContext } from "@armada/protocol";
@@ -863,4 +864,11 @@ export type BridgeApi = {
    * once made — this is only ever the tie-break for All.
    */
   pointHelm: (manifestId: string) => Promise<void>;
+
+  /**
+   * Play a trackpad pattern for a press Fleet has just answered. Returns
+   * nothing and waits for nothing; main plays one of the two patterns and
+   * ignores anything else. Touch, in `docs/contracts/design-system.md`.
+   */
+  tap: (pattern: Pattern) => void;
 };

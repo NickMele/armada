@@ -6,6 +6,7 @@ import type { Annotation, AnnotationsDevApi, Box } from "../shared/annotations";
 import { frameStreamUrl } from "../shared/streaming";
 import type { BridgeState, Summons } from "../shared/bridge";
 import type { BridgeApi, CommandExplainedRead } from "../shared/api";
+import type { Pattern } from "../shared/haptics";
 import type {
   CallRead,
   CheckOutputRead,
@@ -565,6 +566,8 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.askHelm, text, context),
   startHelmFresh: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.startHelmFresh),
   pointHelm: (manifestId: string): Promise<void> => ipcRenderer.invoke(CHANNELS.pointHelm, manifestId),
+
+  tap: (pattern: Pattern): void => ipcRenderer.send(CHANNELS.tap, pattern),
 };
 
 contextBridge.exposeInMainWorld("armada", api);
