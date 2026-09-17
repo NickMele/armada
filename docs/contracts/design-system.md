@@ -155,9 +155,10 @@ a tooltip or menu inside a card is never clipped by it. It
 replaces `--bg-raised` and `--border-subtle` on every panel that sits directly
 on the canvas: the left column's three panels, Overview's cards, Helm's dock,
 and every `Card` a surface draws on the canvas — Dispatch, Studios, Reports,
-Cleanup and Settings. A `Card` inside a sheet, a dialog, a well or another
-card is not on the canvas and stays flat. A row, a well or an input inside a
-card stays flat on its Ground token.
+Cleanup and Settings — each at `--radius-lg`. A `Card` inside a sheet, a
+dialog, a well or another card is not on the canvas: it stays flat, at
+`--radius-md`. A row, a well or an input inside a card stays flat on its
+Ground token.
 
 **The canvas** is `--bg-base` under two radial pools of light. `--accent-faint`
 sits in a 760 × 480px ellipse centred on the top leading corner.
@@ -522,9 +523,13 @@ and content left edges align with their header's left edge.
 
 ```
 --radius-sm  3px    badges, small controls
---radius-md  5px    buttons, inputs, cards
---radius-lg  8px    dialogs, panels
+--radius-md  5px    buttons, inputs, a flat card
+--radius-lg  8px    dialogs, panels, a card on the canvas
 ```
+
+**A card's radius follows its surface.** On the canvas it takes the card
+treatment under Depth and `--radius-lg`, the same corner as the panel beside
+it. Flat — inside a sheet, a dialog or another card — it is `--radius-md`.
 
 No full-round pills except avatars.
 

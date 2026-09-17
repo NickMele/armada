@@ -33,9 +33,11 @@
 
    What this class does not carry, so the component keeps it:
 
-   - **Radius.** The contract names it per card — --radius-lg on a panel and a
-     tile, --radius-md on `Card` — and the component already owns its
-     geometry. The glass layer inherits it.
+   - **Radius**, except on `Card`. A panel, a tile and the dock each own their
+     --radius-lg already, and the layer inherits whatever radius its card has.
+     `Card` is the one whose radius turns on the same fact its surface does —
+     --radius-lg on the canvas, --radius-md flat — so it is given below, with
+     the guard that decides the rest.
    - **Layout, padding and overflow.** Any `position` other than `static`
      the component sets wins over this file's `relative`; the layer only
      needs one.
@@ -100,6 +102,13 @@
   border: var(--border-width) solid var(--border-glass);
   background: none;
   box-shadow: var(--shadow-card);
+}
+
+/* A card on the canvas is --radius-lg, the panels' and the tiles' own corner,
+   so a surface of cards and the left column beside it round the same. A flat
+   card keeps --radius-md (`Card.css`). */
+.armada-card:not(:where([data-flat], .armada-glass *, .armada-sheet *, .armada-dialog *)) {
+  border-radius: var(--radius-lg);
 }
 
 .armada-glass::before,
