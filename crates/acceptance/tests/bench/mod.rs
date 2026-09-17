@@ -41,6 +41,9 @@ pub mod reach;
 /// Recovery's own apparatus: the two moves a person makes on a Job, and a
 /// detail assembled against a standing the caller names. See its own header.
 pub mod recovery;
+/// Studio's own apparatus: an Issue draft's text, and the round trip a
+/// dispatch request makes. No Studio type yet. See its own header.
+pub mod studio;
 /// Trust's own apparatus: a workflow whose delivering step asks for a review,
 /// and the review a Drone hands in over a diff this file wrote. See its own header.
 pub mod trust;
