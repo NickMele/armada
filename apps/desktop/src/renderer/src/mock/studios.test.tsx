@@ -234,7 +234,7 @@ test("a Note draws the frame it kept, opens it full size, and a Note without one
   // The `studios` scenario has this repository picked already, and keeps the legend Studio.
   open(studying().scenario);
   await page.getByRole("button", { name: "Studios", exact: true }).first().click();
-  await page.getByRole("button", { name: "The Board's legend" }).click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
 
   const kept = node(/^Note: The legend under the step bar is unreadable/);
   await expect.element(kept).toBeVisible();
