@@ -1,7 +1,16 @@
 import { expect, test } from "vitest";
 import type { JobSummary, Studio, StudioRunKept, StudioSummary } from "@armada/protocol";
 
-import { nodeNamed, proposedRelations, studioName, UNTITLED_STUDIO, whiteboardEdges, whiteboardNodes } from "./studio";
+import {
+  framesDrawn,
+  MOST_FRAMES_DRAWN,
+  nodeNamed,
+  proposedRelations,
+  studioName,
+  UNTITLED_STUDIO,
+  whiteboardEdges,
+  whiteboardNodes,
+} from "./studio";
 import { foldStudio } from "./studio-reads";
 
 const AT = "2026-09-17T10:00:00Z";
@@ -117,4 +126,54 @@ test("a Studio Fleet wrote replaces its row, and the list stays last touched fir
   ]);
   expect(foldStudio([newer, older], touched)[0]).toEqual(touched);
   expect(foldStudio([], newer)).toEqual([newer]);
+});
+
+/** A Note that kept a picture, and one that did not. `#1352`. */
+const noted = (id: string, kept: boolean): Studio["nodes"][number] => ({
+  id,
+  kind: "note",
+  said: `said ${id}`,
+  ...(kept
+    ? {
+        capture: {
+          selector: "button",
+          element: { tag: "button", text: "Queued 3" },
+          location: "/",
+          bounds: { x: 0, y: 0, width: 10, height: 10 },
+          window: { width: 1440, height: 900 },
+          markup: "<button/>",
+          frame: { filename: `${id}.png`, byte_size: 41_000, width: 1440, height: 900 },
+        },
+      }
+    : {}),
+  position: { x: 0, y: 0 },
+  created_at: AT,
+});
+
+const many = (count: number): Studio => ({
+  ...STUDIO,
+  nodes: Array.from({ length: count }, (_, at) => noted(`n${at}`, true)),
+  edges: [],
+});
+
+test("only a Note that kept a frame draws a plate, and the caller resolves what is on it", () => {
+  const studio: Studio = { ...STUDIO, nodes: [noted("with", true), noted("without", false)], edges: [] };
+  const drawn = framesDrawn(studio, null);
+  const nodes = whiteboardNodes(studio, [], (nodeId) => (drawn.has(nodeId) ? { src: `blob:${nodeId}` } : {}));
+  expect(nodes[0]!.node).toMatchObject({ kind: "note", frame: { src: "blob:with" } });
+  // A Note that kept none carries no `frame` at all, which is what draws no box.
+  expect(nodes[1]!.node).not.toHaveProperty("frame");
+});
+
+test("a board past the bound draws the first frames, and the selected Note wherever it sits", () => {
+  const studio = many(MOST_FRAMES_DRAWN + 4);
+  expect(framesDrawn(studio, null).size).toBe(MOST_FRAMES_DRAWN);
+  const last = studio.nodes.at(-1)!.id;
+  expect(framesDrawn(studio, null).has(last)).toBe(false);
+  // Selecting it is what asks for it, and nothing else is dropped to make room.
+  const withLast = framesDrawn(studio, last);
+  expect(withLast.has(last)).toBe(true);
+  expect(withLast.size).toBe(MOST_FRAMES_DRAWN + 1);
+  // A selection that is not a Note with a frame changes nothing.
+  expect(framesDrawn(studio, "nothing-of-the-sort").size).toBe(MOST_FRAMES_DRAWN);
 });

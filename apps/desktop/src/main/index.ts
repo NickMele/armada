@@ -885,6 +885,14 @@ void app.whenReady().then(() => {
     const frame = await stagedFrame(event as Electron.IpcMainInvokeEvent).catch(() => null);
     return (await connection?.studios.captureNote(studioId, said, capture, frame)) ?? unsent;
   });
+  // The other half of the capture: the bytes of the picture one Note kept, read
+  // by main and handed over for a `blob:`. **No new scheme and no CSP change** —
+  // `img-src 'self' blob:` already draws one — and no path crosses either way.
+  ipcMain.handle(CHANNELS.readStudioFrame, async (_event, studioId: unknown, nodeId: unknown) =>
+    text(studioId) && text(nodeId)
+      ? ((await connection?.studios.frameOf(studioId, nodeId)) ?? { ok: false, outcome: unsent })
+      : undefined,
+  );
   ipcMain.handle(CHANNELS.decideStudioEdge, async (_event, studioId: unknown, edgeId: unknown, accepted: unknown) =>
     text(studioId) && text(edgeId) && typeof accepted === "boolean"
       ? ((await connection?.studios.decideEdge(studioId, edgeId, accepted)) ?? unsent)

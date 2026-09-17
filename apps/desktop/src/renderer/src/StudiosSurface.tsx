@@ -10,7 +10,15 @@ import { AskRepository, Studios, type OpenStudio } from "@armada/screens";
 import { Boundary } from "@armada/shell";
 
 import type { BridgeState } from "../../shared/bridge";
-import { createStudio, decideStudioEdge, moveStudioNode, removeStudioNode, watchStudio, watchStudios } from "./commands";
+import {
+  createStudio,
+  decideStudioEdge,
+  moveStudioNode,
+  readStudioFrame,
+  removeStudioNode,
+  watchStudio,
+  watchStudios,
+} from "./commands";
 
 export type StudiosSurfaceProps = {
   state: BridgeState;
@@ -86,6 +94,7 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
         onMoveNode={(nodeId, position) => moveStudioNode(openId ?? "", nodeId, position)}
         onRemoveNode={(nodeId) => removeStudioNode(openId ?? "", nodeId)}
         onDecideEdge={(edgeId, accepted) => decideStudioEdge(openId ?? "", edgeId, accepted)}
+        onReadFrame={readStudioFrame}
       />
     </Boundary>
   );

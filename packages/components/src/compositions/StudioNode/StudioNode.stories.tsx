@@ -17,6 +17,21 @@ export default meta;
 
 type Story = StoryObj<typeof StudioNode>;
 
+/**
+ * A stand-in screenshot, at a screen's shape. **A named colour, and it is not a
+ * design value**: what is inside a frame is a photograph of a window, and no
+ * token of this design system applies to one — `FramesShown` says the same.
+ */
+function shot(fill: string, said: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400">` +
+    `<rect width="640" height="400" fill="${fill}"/>` +
+    `<text x="24" y="48" fill="gainsboro" font-family="monospace" font-size="22">` +
+    `${said}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 function Row({ children }: { children: ReactNode }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", alignItems: "flex-start" }}>
@@ -59,6 +74,39 @@ export const Note: Story = {
     await expect(canvas.getByText("Note")).toBeVisible();
     // A kind with no state draws no badge and no state word.
     await expect(canvas.queryByText(/proposed|draft|open|frozen/)).toBeNull();
+  },
+};
+
+/**
+ * The picture a Note kept — #1352 — small on the card, still being read, and
+ * missing for a reason. **A Note that kept none draws no plate at all**: a
+ * board of dashed boxes would say every Note was meant to have one.
+ */
+export const NoteFrames: Story = {
+  render: () => (
+    <Row>
+      <StudioNode
+        kind="note"
+        title="The legend under the step bar is unreadable at this width"
+        frame={{ src: shot("darkslategray", "Job Board") }}
+      />
+      <StudioNode kind="note" title="It wraps at 720 wide" frame={{}} />
+      <StudioNode
+        kind="note"
+        title="Queued and preparing read the same at a glance"
+        frame={{ why: "This frame is on the Note and no longer on disk." }}
+      />
+      <StudioNode kind="note" title="No picture was taken for this one" />
+    </Row>
+  ),
+  play: async ({ canvas }) => {
+    // The picture is named by what it is, not by a description of what it shows.
+    await expect(canvas.getByRole("img", { name: /captured from/ })).toBeVisible();
+    // A read in flight says so; a settled absence says why instead.
+    await expect(canvas.getByText("reading…")).toBeVisible();
+    await expect(canvas.getByText(/no longer on disk/)).toBeVisible();
+    // Four Notes, one picture: a Note that kept none draws nothing at all.
+    await expect(canvas.getAllByRole("img")).toHaveLength(1);
   },
 };
 

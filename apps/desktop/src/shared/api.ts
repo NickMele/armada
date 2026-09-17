@@ -755,6 +755,16 @@ export type BridgeApi = {
    */
   captureStudioNote: (studioId: string, said: string, capture: StudioCapture) => Promise<Outcome>;
   /**
+   * The picture one Note kept, as the bytes it is — #1352.
+   *
+   * **Answered to the caller rather than published**, for `readFrame`'s
+   * reasons: a frame never changes, and one on `BridgeState` would keep every
+   * Note's picture alive for as long as its Studio is open. The renderer makes
+   * a `blob:` of what comes back and revokes it; the CSP already draws one,
+   * so nothing about this reaches outside the app.
+   */
+  readStudioFrame: (studioId: string, nodeId: string) => Promise<FrameRead>;
+  /**
    * Take the work. **The counterpart to `approveDispatch`, at the other end of
    * the Job.** On the workflow's last step Fleet commits and delivers before
    * recording the Job done. Legal only at `awaiting_review`, like the two below.

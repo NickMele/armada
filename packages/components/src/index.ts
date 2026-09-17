@@ -318,3 +318,5 @@ export * from "./compositions/FigureList/FigureList";
 export * from "./compositions/ProducedPanel/ProducedPanel";
 // A tool's name, in the colour of what the call does. #1196.
 export * from "./compositions/ToolName/ToolName";
+// A Note's frame, opened over the Studios surface. #1352.
+export * from "./compositions/StudioFrameSheet/StudioFrameSheet";

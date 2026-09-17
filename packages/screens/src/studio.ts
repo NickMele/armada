@@ -1,7 +1,7 @@
 // A Studio as the whiteboard draws it, off the wire — #1287. No React: every rule here is a function
 // of the Studio Fleet sent and the Board this window holds, so it is tested as one.
 
-import type { StudioWhiteboardEdge, StudioWhiteboardNode } from "@armada/components";
+import type { StudioNodeFrame, StudioWhiteboardEdge, StudioWhiteboardNode } from "@armada/components";
 import type { JobSummary, Studio, StudioNode, StudioRunKept, StudioSummary } from "@armada/protocol";
 import { STUDIO_EDGE_LABEL, STUDIO_NODE_KIND } from "@armada/components";
 
@@ -37,8 +37,37 @@ function firstLine(body: string): string {
   return body.split("\n").find((line) => line.trim() !== "")?.trim() ?? body;
 }
 
+/**
+ * How many of a Studio's frames are drawn at once — #1352.
+ *
+ * **A bound, because a frame is a file and a Studio is kept until it is
+ * deleted.** Every Note on a board fetching its own picture is what freezes a
+ * window, which is the v1 failure Bridge exists against; the selected Note is
+ * always among them, so a frame past the bound is one press away.
+ */
+export const MOST_FRAMES_DRAWN = 24;
+
+/** Whether this node kept a picture, which is what decides that a plate is drawn at all. */
+function keptAFrame(node: StudioNode): boolean {
+  return node.kind === "note" && node.capture?.frame !== undefined;
+}
+
+/** The Notes whose frames this window asks for: the first `MOST_FRAMES_DRAWN`, and the selected one. */
+export function framesDrawn(studio: Studio, selected: string | null): ReadonlySet<string> {
+  const kept = studio.nodes.filter(keptAFrame).map((node) => node.id);
+  const drawn = new Set(kept.slice(0, MOST_FRAMES_DRAWN));
+  if (selected !== null && kept.includes(selected)) drawn.add(selected);
+  return drawn;
+}
+
+/** What a node's frame is, as the window holds it. A node that kept none takes none. */
+export type FrameOf = (nodeId: string) => StudioNodeFrame;
+
+/** For a caller whose subject is not the pictures — every Note reads as one still being fetched. */
+export const NO_FRAME_HELD: FrameOf = () => ({});
+
 /** The node as a card: its kind, its state where it has one, a title, and facts. */
-function cardOf(node: StudioNode, jobs: readonly JobSummary[]): StudioWhiteboardNode["node"] {
+function cardOf(node: StudioNode, jobs: readonly JobSummary[], frameOf: FrameOf): StudioWhiteboardNode["node"] {
   switch (node.kind) {
     case "run":
       // What was run, the way the run sheet names it — the Check's name, its command and its
@@ -56,7 +85,11 @@ function cardOf(node: StudioNode, jobs: readonly JobSummary[]): StudioWhiteboard
         : { kind: "job", state: job.status, title: job.title, facts: [job.handle] };
     }
     case "note":
-      return { kind: "note", title: node.said };
+      // **The plate is drawn only where the Note kept a picture.** One that was
+      // typed, or captured where no frame could be taken, is an ordinary Note.
+      return keptAFrame(node)
+        ? { kind: "note", title: node.said, frame: frameOf(node.id) }
+        : { kind: "note", title: node.said };
     case "cluster":
       return { kind: "cluster", title: node.title };
     case "finding":
@@ -86,8 +119,16 @@ function stateOf<State extends string>(node: StudioNode, first: State): State {
 }
 
 /** Every node, where a person left it. */
-export function whiteboardNodes(studio: Studio, jobs: readonly JobSummary[]): StudioWhiteboardNode[] {
-  return studio.nodes.map((node) => ({ id: node.id, position: node.position, node: cardOf(node, jobs) }));
+export function whiteboardNodes(
+  studio: Studio,
+  jobs: readonly JobSummary[],
+  frameOf: FrameOf = NO_FRAME_HELD,
+): StudioWhiteboardNode[] {
+  return studio.nodes.map((node) => ({
+    id: node.id,
+    position: node.position,
+    node: cardOf(node, jobs, frameOf),
+  }));
 }
 
 const RELATIONS = ["same_as", "blocks", "answers"] as const;
@@ -111,7 +152,7 @@ export function whiteboardEdges(studio: Studio): StudioWhiteboardEdge[] {
 export function nodeNamed(studio: Studio, nodeId: string, jobs: readonly JobSummary[]): string {
   const node = studio.nodes.find((one) => one.id === nodeId);
   if (node === undefined) return nodeId;
-  const card = cardOf(node, jobs);
+  const card = cardOf(node, jobs, NO_FRAME_HELD);
   return `${STUDIO_NODE_KIND[card.kind]} ${card.title}`;
 }
 

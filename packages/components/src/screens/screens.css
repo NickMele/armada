@@ -1233,6 +1233,10 @@
   gap: var(--space-3);
   flex: 1;
   min-height: 0;
+  /* The containing block for a Note's frame, opened — #1352. The layer belongs
+     to the Studio it was opened from, flush to this edge and this height, so
+     the board stays on screen and under it. */
+  position: relative;
 }
 
 .armada-studio__head {

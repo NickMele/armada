@@ -161,3 +161,39 @@ test("a scenario keeping no Studios draws the empty state, not a read failure", 
   await expect.element(page.getByText("No Studios yet.", { exact: false })).toBeVisible();
   expect(page.getByText(FAILED).query()).toBeNull();
 });
+
+/**
+ * #1352's own: the picture a Note kept is drawn on the node, and opened full
+ * size beside it. What this holds is the whole path — Fleet's bytes, over the
+ * preload, into a `blob:` this window made and an `img` drew — since every
+ * piece of it is fine on its own and the frame was invisible all the same.
+ */
+test("a Note draws the frame it kept, opens it full size, and a Note without one draws no plate", async () => {
+  // The `studios` scenario has this repository picked already, and keeps the legend Studio.
+  open(studying().scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "The Board's legend" }).click();
+
+  const kept = node(/^Note: The legend under the step bar is unreadable/);
+  await expect.element(kept).toBeVisible();
+  // One picture on the board: the second Note kept none, and draws no box at all.
+  const drawn = kept.getByRole("img", { name: /captured from/ });
+  await expect.element(drawn).toBeVisible();
+  await expect.poll(() => drawn.element().getAttribute("src")).toMatch(/^blob:/);
+  expect(node(/^Note: It wraps at 720 wide/).getByRole("img").query()).toBeNull();
+
+  // Opened from the node's own acts, and read-only is no reason not to look.
+  kept.element().focus();
+  await userEvent.keyboard("{Enter}");
+  await page.getByRole("button", { name: "Open frame" }).click();
+  const sheet = page.getByRole("dialog", { name: "Note" });
+  await expect.element(sheet).toBeVisible();
+  await expect.element(sheet.getByText("The legend under the step bar is unreadable")).toBeVisible();
+  await expect.element(sheet.getByRole("img", { name: /captured from/ })).toBeVisible();
+
+  // A Note that kept none is offered nothing to open.
+  await userEvent.keyboard("{Escape}");
+  node(/^Note: It wraps at 720 wide/).element().focus();
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => page.getByRole("button", { name: "Open frame" }).query()).toBeNull();
+});

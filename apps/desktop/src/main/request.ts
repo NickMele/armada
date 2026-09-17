@@ -450,7 +450,28 @@ export async function frameOf(port: number, jobId: string, kept: string): Promis
     .split("/")
     .map((part) => encodeURIComponent(part))
     .join("/");
-  const asked = { method: "GET" as const, path: `/jobs/${jobId}/frames/${path}` };
+  return await fileAt(port, `/jobs/${jobId}/frames/${path}`);
+}
+
+/**
+ * The picture one Note kept, read the same way — #1352.
+ *
+ * **One segment, because a Studio keeps one frame per node.** The node's id is
+ * the whole of what identifies it, and Fleet reads the file's name off the
+ * node's own record, so nothing composed here reaches a path.
+ */
+export async function studioFrameOf(
+  port: number,
+  studioId: string,
+  nodeId: string,
+): Promise<FrameRead> {
+  const at = `/studios/${encodeURIComponent(studioId)}/frames/${encodeURIComponent(nodeId)}`;
+  return await fileAt(port, at);
+}
+
+/** The file at one path, as [`frameOf`] describes: bytes and a media type, or a refusal. */
+async function fileAt(port: number, path: string): Promise<FrameRead> {
+  const asked = { method: "GET" as const, path };
   try {
     const answer = await fetch(`http://${HOST}:${port}${asked.path}`, {
       method: "GET",
