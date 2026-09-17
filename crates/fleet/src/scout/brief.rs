@@ -41,3 +41,28 @@ pub(crate) fn told(root: &str, asked: &str) -> String {
     ]
     .join("\n\n")
 }
+
+#[cfg(test)]
+mod tests {
+    /// **The contract's drafted wording, whole**: section 5b, with its two
+    /// slots filled.
+    #[test]
+    fn a_scout_is_told_the_contracts_brief_with_the_ask_last_and_verbatim() {
+        let told = super::told("/repos/armada", "how is routing decided?\nAnd why?");
+        let contract = include_str!("../../../../docs/contracts/agent-prompt.md");
+        let section = contract
+            .split("# 5b. The scout brief")
+            .nth(1)
+            .expect("section 5b");
+        let drafted = section
+            .split("```\n")
+            .nth(1)
+            .expect("the drafted block")
+            .trim_end()
+            .replace("{root}", "/repos/armada")
+            .replace("{asked}", "how is routing decided?\nAnd why?");
+        let unwrapped = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert_eq!(unwrapped(&told), unwrapped(&drafted));
+        assert!(told.ends_with("THE ASK\n\nhow is routing decided?\nAnd why?"));
+    }
+}

@@ -1,5 +1,6 @@
 // A Studio on the wire: the list, one Studio with its graph, and the acts a
-// client asks of one. `crates/ipc/src/studio.rs`. Since 14.6, #1285.
+// client asks of one. `crates/ipc/src/studio.rs`. Since 14.6, #1285; a scout's
+// Finding and its three acts since 14.7, #1292, `crates/ipc/src/scouting.rs`.
 //
 // Hand-written, `protocol.ts`'s rules. **One exception to leaving a closed set
 // as `string`**: a node's `kind` is the tag its fields hang off, so the content
@@ -41,7 +42,8 @@ export type StudioNodeContent =
   /** What a person pointed at and said, fixed at capture. */
   | { kind: "note"; said: string }
   | { kind: "cluster"; title: string }
-  | { kind: "finding"; asked: string }
+  /** What a scout was asked, and from its start what it read. Since 14.7. */
+  | ({ kind: "finding" } & StudioFinding)
   | { kind: "contradiction"; first: string; second: string }
   | { kind: "sketch"; body: string }
   | { kind: "link"; address: string }
@@ -137,3 +139,51 @@ export type ProposeStudioEdge = {
 
 /** `POST /studios/:studio_id/decide_edge`. A rejected edge is removed. */
 export type DecideStudioEdge = { edge_id: string; accepted: boolean };
+
+/**
+ * A Finding. `asked` alone while Proposed; `checkout` from the scout's start;
+ * `ended` once it stops, however it stopped. Since 14.7.
+ */
+export type StudioFinding = {
+  asked: string;
+  /** The commit read, and whether anything uncommitted sat on top of it. */
+  checkout?: ScoutCheckout;
+  /** Every file read, relative to the checkout, in the order first read. */
+  read?: string[];
+  /** Every search run, as its pattern and where it looked. */
+  searched?: string[];
+  /** What the scout said last. */
+  learned?: string;
+  ended?: ScoutEnded;
+};
+
+export type ScoutCheckout = { commit: string; uncommitted: boolean };
+
+/**
+ * How a scout ended. `cost_micros` is millionths of a dollar, **absent where
+ * the agent reported none** — never nought in its place.
+ */
+export type ScoutEnded = (
+  | { outcome: "answered" }
+  | { outcome: "stopped" }
+  | { outcome: "failed"; why: string }
+) & { cost_micros?: number };
+
+/**
+ * `POST /studios/:studio_id/ask_scout`. A person's ask: a Finding is added
+ * Gathering and its scout starts. Bridge only.
+ */
+export type AskScout = {
+  asked: string;
+  position: StudioPosition;
+  produced_by?: string;
+};
+
+/** `POST /studios/:studio_id/start_scout`. Starts a Proposed Finding. */
+export type StartScout = { node_id: string };
+
+/**
+ * `POST /studios/:studio_id/stop_scout`. Answers the Studio before the Finding
+ * freezes; the frozen one arrives on `studio.changed`.
+ */
+export type StopScout = { node_id: string };
