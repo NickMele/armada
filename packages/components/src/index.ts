@@ -75,6 +75,8 @@ export * from "./compositions/TransitionHistory/TransitionHistory";
 export * from "./compositions/UnifiedDiff/UnifiedDiff";
 export * from "./compositions/WorkflowDiagram/WorkflowDiagram";
 export * from "./compositions/WorkflowRail/WorkflowRail";
+export * from "./compositions/ActivityInstrument/ActivityInstrument";
+export * from "./compositions/FootprintInstrument/FootprintInstrument";
 
 // What every job detail render shares. The five screens that took it are gone:
 // job detail is one arrangement, and the five were the defect.
