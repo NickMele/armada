@@ -99,8 +99,12 @@ function QuestionCard({
     if (answering !== true) setPressedId(null);
   }, [answering]);
   const stillWaiting = useStillWaiting(answering === true);
+  // `flat` because the questions zone is a well on the dock's own glass, and a
+  // well is the one ground the card treatment's ancestry cannot see (#1353).
+  // Inside the dock the rule reaches this card anyway; saying it here is what
+  // makes it draw the same off the dock, in its own story.
   return (
-    <Card className="armada-dock-question" role="article" aria-label={`${label} — ${where}`}>
+    <Card className="armada-dock-question" flat role="article" aria-label={`${label} — ${where}`}>
       <div className="armada-dock-question__where">
         <span className="armada-dock-question__place mono">
           {repository} · job {job}

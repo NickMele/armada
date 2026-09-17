@@ -1,6 +1,7 @@
-/* Job composer — the card's own geometry comes from Card: --bg-raised, a
-   --border-default edge, --radius-md, --pad-card and a --space-3 column gap.
-   Only what the card does not answer is spelled here. */
+/* Job composer — the card's own surface comes from Card: the card treatment
+   under Depth where this sits on the canvas, at --radius-md, --pad-card and a
+   --space-3 column gap (#1353). Only what the card does not answer is spelled
+   here. */
 
 /* The root exists to shrink: the composer is laid out by whatever holds it,
    and a flex or grid child with no floor refuses to narrow past its content. */

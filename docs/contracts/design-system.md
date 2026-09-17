@@ -153,8 +153,11 @@ inner edge and a `--glass-blur` backdrop blur. The gradient, the highlight and
 the blur sit on a layer behind the card's content rather than on the card, so
 a tooltip or menu inside a card is never clipped by it. It
 replaces `--bg-raised` and `--border-subtle` on every panel that sits directly
-on the canvas: the left column's three panels, Overview's cards and Helm's
-dock. A row, a well or an input inside a card stays flat on its Ground token.
+on the canvas: the left column's three panels, Overview's cards, Helm's dock,
+and every `Card` a surface draws on the canvas — Dispatch, Studios, Reports,
+Cleanup and Settings. A `Card` inside a sheet, a dialog, a well or another
+card is not on the canvas and stays flat. A row, a well or an input inside a
+card stays flat on its Ground token.
 
 **The canvas** is `--bg-base` under two radial pools of light. `--accent-faint`
 sits in a 760 × 480px ellipse centred on the top leading corner.

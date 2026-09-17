@@ -1,8 +1,9 @@
 /* Dispatch request — one field, one press, and what the request became.
  *
- * The card's own geometry comes from Card: --bg-raised, a --border-default
- * edge, --radius-md and --pad-card. Only what the card does not answer is
- * spelled here.
+ * The card's own surface comes from Card: on this surface it sits directly on
+ * the canvas, so it is the card treatment under Depth — the gradient, the
+ * edge, the shadow — at --radius-md and --pad-card (#1353). Only what the card
+ * does not answer is spelled here.
  *
  * **Nothing here animates.** The wait moves because the numbers in it change,
  * which is a fact arriving rather than a decoration — and the one continuous
