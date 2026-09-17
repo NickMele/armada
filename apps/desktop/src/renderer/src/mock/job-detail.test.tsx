@@ -18,7 +18,7 @@ import {
   withBreakages,
   withRow,
 } from "./job-detail-fixtures";
-import { PLAN_PARTWAY, withPlan } from "./job-plan-fixtures";
+import { PLAN_PARTWAY, withPlan } from "@armada/screens/src/fixtures/plans";
 import type { FleetHandle } from "./scenario";
 import { onJob } from "./scenario";
 import { mount, unmountAfterEach } from "./testing";
