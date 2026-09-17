@@ -901,6 +901,11 @@ export function App() {
               manifestId={scoped?.id}
               all={all}
               onPick={pick}
+              // Nothing set up anywhere: the Manifest surface is where a
+              // repository is picked, and `pick` opens Setup on one with no
+              // Manifest — so this hands over to that route rather than
+              // cutting a second one from here.
+              onSetUp={() => goTo(SURFACE.manifest)}
               open={openStudio}
               onOpenChange={setOpenStudio}
               selectedNode={studioNode}
