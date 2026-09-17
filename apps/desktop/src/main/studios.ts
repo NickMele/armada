@@ -11,6 +11,7 @@
 
 import type {
   CaptureStudioNote,
+  FrameRead,
   Outcome,
   StagedFrame,
   Studio,
@@ -21,7 +22,7 @@ import type {
 } from "@armada/protocol";
 import { foldStudio } from "@armada/screens/src/studio-reads";
 import type { StudioAnswer, StudioRead, StudiosRead } from "@armada/screens/src/studio-reads";
-import { ask } from "./request";
+import { ask, studioFrameOf } from "./request";
 
 type Publish = (change: { studios?: StudiosRead; studio?: StudioRead }) => void;
 
@@ -111,6 +112,22 @@ export class StudioReads {
       ...(frame === null ? {} : { frame }),
     };
     return this.acted(await this.act(member(studioId, "/capture_note"), body));
+  }
+
+  /**
+   * The picture one Note kept — #1352.
+   *
+   * **Answered to the caller, never published.** A frame is hundreds of
+   * kilobytes and a Studio is kept until a person deletes it, so holding one in
+   * the state every window reads would keep every Note's picture alive for as
+   * long as the Studio is open. The bytes stop in main on their way to a
+   * `blob:` the renderer makes itself: the CSP's `img-src 'self' blob:` is what
+   * draws them, and no scheme was added to it.
+   */
+  async frameOf(studioId: string, nodeId: string): Promise<FrameRead> {
+    const port = this.port();
+    if (port === null) return { ok: false, outcome: NOT_CONNECTED };
+    return await studioFrameOf(port, studioId, nodeId);
   }
 
   /** A row below the lowest node on the Studio, or the origin on an empty one. */

@@ -373,3 +373,74 @@ async fn a_frame_that_cannot_be_kept_refuses_the_capture_rather_than_dropping_it
         .expect("the Studio");
     assert!(held.nodes.is_empty(), "nothing refused was written");
 }
+
+/// **What was kept is read back, and the node's own id is the only key.**
+/// `#1352`: 14.11 wrote a frame and left every client without a way to see it.
+///
+/// The three refusals are apart on purpose. A Note captured where no frame
+/// could be taken is an ordinary Note and says so; a Studio whose directory
+/// went is a file that will not open; a node that is not on the Studio is
+/// neither. **Nothing a caller spells reaches a path**: the file name is read
+/// off the node's own record, so an id spelling a path traverses nothing.
+#[tokio::test]
+async fn a_notes_frame_is_read_back_by_its_node_and_a_note_without_one_is_not_a_fault() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home);
+    let studio = a_studio(&fleet).await;
+    let staged = home.path().join("staged.png");
+    std::fs::write(&staged, [7u8; 512]).expect("a frame to stage");
+
+    let captured = fleet
+        .capture_studio_note(
+            studio.id.clone(),
+            a_capture("The chip keeps its count", Some(&staged)),
+            None,
+        )
+        .await
+        .expect("a person's capture");
+    let with = captured.nodes.first().expect("the Note").id.clone();
+    let captured = fleet
+        .capture_studio_note(
+            studio.id.clone(),
+            a_capture("No picture was taken", None),
+            None,
+        )
+        .await
+        .expect("a person's capture");
+    let without = captured.nodes.last().expect("the second Note").id.clone();
+
+    let (name, bytes) = fleet
+        .get_studio_frame(studio.id.clone(), with.clone(), None)
+        .await
+        .expect("the frame that was kept");
+    assert_eq!(name, format!("{}.png", with.as_str()), "the kept name");
+    assert_eq!(bytes, [7u8; 512], "the file itself");
+
+    let refused = fleet
+        .get_studio_frame(studio.id.clone(), without, None)
+        .await
+        .expect_err("a Note that kept no frame");
+    assert_eq!(code(&refused), "fleet.studio_frame_not_kept");
+
+    let refused = fleet
+        .get_studio_frame(
+            studio.id.clone(),
+            ipc::StudioNodeId::carried("01NOSUCHNODE"),
+            None,
+        )
+        .await
+        .expect_err("a node that is not on this Studio");
+    assert_eq!(code(&refused), "fleet.no_such_studio_node");
+
+    // The Studio's directory, swept off the disk under a record that still
+    // names the file: what a client is told is that this one cannot be read.
+    std::fs::remove_dir_all(
+        std::path::Path::new(&fleet.host().studio_frames_dir).join(studio.id.as_str()),
+    )
+    .expect("the Studio's own directory");
+    let refused = fleet
+        .get_studio_frame(studio.id.clone(), with, None)
+        .await
+        .expect_err("a frame the record names and the disk does not hold");
+    assert_eq!(code(&refused), "fleet.studio_frame_unreadable");
+}

@@ -65,6 +65,35 @@ pub(crate) async fn get_studio<D: Studios>(
     answered(&served, StatusCode::OK, studio)
 }
 
+/// The picture one Note kept, answered as the file itself.
+///
+/// **`get_frame`'s shape on a Studio**, and for its reason: a frame has no
+/// window, so there is no partial reading for an envelope to describe and
+/// base64 would inflate the bytes by a third to say nothing the node did not
+/// already carry. The media type is read off the name Fleet stored, with
+/// `nosniff` beside it — `answers::file` holds both.
+///
+/// One path segment, not two: a Studio keeps one frame per node, under the
+/// node's own id, so the node names the file and the record supplies its name.
+pub(crate) async fn get_studio_frame<D: Studios>(
+    State(served): State<Served<D>>,
+    Path((studio_id, node_id)): Path<(String, String)>,
+    scope: Scope,
+) -> Response {
+    let kept = served
+        .daemon()
+        .get_studio_frame(
+            StudioId::carried(studio_id),
+            ipc::StudioNodeId::carried(node_id),
+            within(scope),
+        )
+        .await;
+    match kept {
+        Ok((name, bytes)) => crate::answers::file(&name, bytes),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// 201: the Studio exists now.
 pub(crate) async fn create_studio<D: Studios>(
     State(served): State<Served<D>>,

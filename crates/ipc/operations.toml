@@ -185,6 +185,21 @@ A node's `kind` is its content's tag, beside its fields. **Who put each thing th
 A Studio in another repository than a door session's is refused as `fleet.studio_in_another_repository`, the way a Job is.
 """
 
+[operations.get_studio_frame]
+kind = "query"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "The picture one Note kept, as the file itself"
+notes = """
+**`get_frame`'s shape, on a Studio.** A frame has no window — half an image is not an image — so there is no partial reading for an envelope to carry, and base64 would inflate the bytes by a third to say nothing the node did not already say. The response is the file, with a media type read off the name Fleet stored and `nosniff` beside it. The Note's `capture.frame` rides `get_studio` and says there is a picture, what it weighs and how big it is; the bytes are fetched once, by whoever draws one. **No event carries a frame**, for the reason `capture_studio_note` gives: an image in a `studio.changed` would sit on the stream for the life of a Studio.
+
+**One path segment, where a step's frame takes two.** A Studio keeps one frame per node, written as `<node_id>.png` under `<machine>/studios/<studio_id>/`, so the node identifies the file and nothing a caller spells is joined onto a path. **The record is the allowlist**: Fleet reads the name off the node's own `capture.frame` before anything is opened, so a node id no node of this Studio carries reaches no file.
+
+A node that is not on the Studio is `fleet.no_such_studio_node`, one that kept no frame — a Note captured where a frame was refused, or any other kind — is `fleet.studio_frame_not_kept`, and a file that will not open is `fleet.studio_frame_unreadable`. The three are apart because a Note with no picture is an ordinary Note and a Studio directory that went is not.
+
+`agent_access` is `Bridge only`, where `get_frame` is `Yes`. **A frame is a person's screen**, taken of the window they were working in rather than of a harness's own page, and it leaves the machine only if they send it somewhere. Nothing in the Studio milestone asks an agent to look at one, and a capability that reaches one is added when something does. `docs/concepts/studio.md`, *Notes*.
+"""
+
 [operations.create_studio]
 kind = "command"
 transport = "HTTP"

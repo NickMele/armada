@@ -606,6 +606,7 @@ export const CHANNELS = {
   // Studio capture — #1290. One channel: the renderer says where it pointed and
   // main takes the frame of its own window, so no image ever reaches the renderer.
   captureStudioNote: "bridge:capture-studio-note",
+  readStudioFrame: "bridge:read-studio-frame",
   // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
   tap: "bridge:tap",
 } as const;

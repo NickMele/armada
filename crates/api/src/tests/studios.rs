@@ -409,3 +409,87 @@ async fn a_captured_note_reaches_the_daemon_with_everything_it_was_sent() {
         "no path was sent and none appears"
     );
 }
+
+/// **The frame reads back as the file, and a Note without one is not a fault.**
+/// What is on trial here is the route: that the bytes come back as bytes under
+/// the media type the kept name gives them, that a node keeping no picture is
+/// refused on its own terms, and that a node that is not there is refused too.
+/// Where the file lives and what refuses to read it are `fleet`'s.
+#[tokio::test]
+async fn a_notes_frame_reads_back_as_a_png_and_a_note_without_one_says_so() {
+    let app = shared(&helm_holding());
+    let pointed = r#""capture":{"selector":"button.armada-chip","element":{"tag":"button",
+        "text":"Queued 3"},"location":"/","bounds":{"x":312,"y":148,"width":96,"height":28},
+        "window":{"width":1440,"height":900},"markup":"<button>Queued 3</button>"}"#;
+    let with = format!(
+        r#"{{"said":"The chip keeps its count",{pointed},"position":{{"x":0,"y":0}},
+           "frame":{{"staged_path":"/tmp/f.png","width":2880,"height":1800}}}}"#
+    );
+    let without =
+        format!(r#"{{"said":"No picture was taken",{pointed},"position":{{"x":0,"y":0}}}}"#);
+    let capture = format!("/studios/{THE_STUDIO}/capture_note");
+    for body in [&with, &without] {
+        let (status, answer) = call(&app, "POST", &capture, body).await;
+        assert_eq!(status, StatusCode::OK, "{answer}");
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/studios/{THE_STUDIO}/frames/01NODE0"))
+                .body(Body::empty())
+                .expect("a well-formed request"),
+        )
+        .await
+        .expect("an answer");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|said| said.to_str().ok()),
+        Some("image/png"),
+        "read off the name Fleet kept it under",
+    );
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("a body")
+        .to_bytes();
+    assert_eq!(
+        bytes.as_ref(),
+        crate::tests::fake::THE_FRAME,
+        "the file, not JSON"
+    );
+
+    let (status, said) = call(
+        &app,
+        "GET",
+        &format!("/studios/{THE_STUDIO}/frames/01NODE1"),
+        "",
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a Note that kept none"
+    );
+    assert!(said.contains("kept no frame"), "{said}");
+
+    let (status, said) = call(
+        &app,
+        "GET",
+        &format!("/studios/{THE_STUDIO}/frames/01NOSUCH"),
+        "",
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a node that is not there"
+    );
+    assert!(said.contains("no node of this Studio"), "{said}");
+}

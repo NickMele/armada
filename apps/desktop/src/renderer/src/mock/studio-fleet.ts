@@ -11,7 +11,7 @@ import { repository } from "@armada/screens/src/fixtures/build/base";
 import { foldStudio } from "@armada/screens/src/studio-reads";
 
 import type { BridgeApi } from "../../../shared/api";
-import { onBoard } from "./moment";
+import { onBoard, unanswered } from "./moment";
 import type { FleetHandle, Scenario } from "./moment";
 
 const OK = { ok: true } as const;
@@ -27,6 +27,7 @@ export type StudioRoutes = Pick<
   | "watchStudio"
   | "createStudio"
   | "captureStudioNote"
+  | "readStudioFrame"
   | "moveStudioNode"
   | "removeStudioNode"
   | "decideStudioEdge"
@@ -53,6 +54,42 @@ const tick = () => new Date((clock += 1000)).toISOString();
 
 const at = "2026-09-16T15:30:00Z";
 
+/**
+ * The picture a Note kept, as a mock Fleet answers it — #1352.
+ *
+ * **Drawn here rather than kept as a file.** A mock Fleet has no disk and no
+ * window to photograph, and what a scenario has to answer is bytes an `img` can
+ * draw; a PNG committed beside this would be a binary nobody can read a diff of.
+ * A window's bands, not its words: the colours and the boxes are a photograph's
+ * and no token of the design system applies to one.
+ */
+async function aFrame(): Promise<Uint8Array> {
+  const canvas = new OffscreenCanvas(1440, 900);
+  const ink = canvas.getContext("2d")!;
+  ink.fillStyle = "darkslategray";
+  ink.fillRect(0, 0, 1440, 900);
+  ink.fillStyle = "slategray";
+  ink.fillRect(0, 0, 1440, 72);
+  ink.fillStyle = "gainsboro";
+  ink.fillRect(64, 160, 420, 560);
+  ink.fillRect(548, 160, 828, 260);
+  const png = await canvas.convertToBlob({ type: "image/png" });
+  return new Uint8Array(await png.arrayBuffer());
+}
+
+/** What a Note's `capture` carries where the mock kept a frame for it. */
+function pointedAt(nodeId: string): StudioCapture {
+  return {
+    selector: "button.armada-chip",
+    element: { tag: "button", text: "Queued 3" },
+    location: "/",
+    bounds: { x: 312, y: 148, width: 96, height: 28 },
+    window: { width: 1440, height: 900 },
+    markup: '<button class="armada-chip">Queued 3</button>',
+    frame: { filename: `${nodeId}.png`, byte_size: 41_000, width: 1440, height: 900 },
+  };
+}
+
 /** A Studio already kept, so the list and the whiteboard have something to draw on the mock page. */
 function legend(): Studio {
   return {
@@ -62,8 +99,9 @@ function legend(): Studio {
     created_at: at,
     touched_at: at,
     nodes: [
-      { id: "legend-note", kind: "note", said: "The legend under the step bar is unreadable", position: { x: 0, y: 0 }, created_at: at },
-      { id: "legend-width", kind: "note", said: "It wraps at 720 wide", position: { x: 0, y: 220 }, created_at: at },
+      // One Note with the picture it kept and one without: both are Notes, and only one draws a plate.
+      { id: "legend-note", kind: "note", said: "The legend under the step bar is unreadable", capture: pointedAt("legend-note"), position: { x: 0, y: 0 }, created_at: at },
+      { id: "legend-width", kind: "note", said: "It wraps at 720 wide", position: { x: 0, y: 300 }, created_at: at },
       { id: "legend-finding", kind: "finding", asked: "Where do the legend's colours come from?", state: "frozen", position: { x: 340, y: 0 }, created_at: at },
       { id: "legend-draft", kind: "issue_draft", title: "The Board's legend is illegible", body: "…", state: "draft", position: { x: 680, y: 110 }, created_at: at },
     ],
@@ -141,6 +179,16 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
         });
         return answer.ok ? OK : answer.outcome;
       },
+      // The bytes of one Note's picture. A node that kept none is refused the
+      // way Fleet refuses it, so the surface draws its sentence rather than an
+      // image that never arrives.
+      readStudioFrame: async (studioId, nodeId) => {
+        const node = store.get(studioId)?.nodes.find((one) => one.id === nodeId);
+        if (node?.kind !== "note" || node.capture?.frame === undefined) {
+          return { ok: false, outcome: unanswered(`/studios/${studioId}/frames/${nodeId}`) };
+        }
+        return { ok: true, bytes: await aFrame(), type: "image/png" };
+      },
       moveStudioNode: async (studioId, nodeId, position) => {
         const answer = write(studioId, (studio) => ({
           ...studio,
@@ -207,8 +255,10 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
  * The grid `everyKind()` is laid out on, wide enough for a node card and a gap. **Taller than it
  * is wide, and its top-right corner left empty**: the whiteboard fits the graph to the window and
  * draws the Proposed panel over that corner, so a node placed there is read through glass.
+ *
+ * The row pitch clears a Note carrying its frame, which is the tallest card there is — #1352.
  */
-const place = (column: number, row: number) => ({ x: column * 340, y: row * 220 });
+const place = (column: number, row: number) => ({ x: column * 340, y: row * 300 });
 
 const MADE = "2026-09-15T11:00:00Z";
 const TOUCHED = "2026-09-17T08:40:00Z";
@@ -221,7 +271,8 @@ const TOUCHED = "2026-09-17T08:40:00Z";
 export function everyKind(jobId: string): Studio {
   const nodes: StudioNode[] = [
     { id: "every-link", kind: "link", address: "docs/contracts/design-system.md#the-board", position: place(0, 0), created_at: MADE },
-    { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", position: place(1, 0), created_at: MADE },
+    // The one Note here that kept a picture — #1352. The rest draw no plate.
+    { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", capture: pointedAt("every-note"), position: place(1, 0), created_at: MADE },
     { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
     { id: "every-note-states", kind: "note", said: "Queued and preparing read the same at a glance", position: place(1, 1), created_at: MADE },
     { id: "every-cluster", kind: "cluster", title: "The legend cannot be read", position: place(0, 2), created_at: MADE },

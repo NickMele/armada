@@ -84,6 +84,9 @@ export const decideStudioEdge = (studioId: string, edgeId: string, accepted: boo
 // Studio capture — #1290. What a person pointed at; the frame is main's to take.
 export const captureStudioNote = (studioId: string, said: string, capture: StudioCapture) =>
   window.armada.captureStudioNote(studioId, said, capture);
+/** The picture one Note kept — #1352. The bytes become a `blob:` this window owns and revokes. */
+export const readStudioFrame = (studioId: string, nodeId: string) =>
+  window.armada.readStudioFrame(studioId, nodeId);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 export const deleteBranchOne = (jobId: string, tip: string) => window.armada.deleteBranch(jobId, tip);
 export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);

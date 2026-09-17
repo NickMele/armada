@@ -493,6 +493,10 @@ const api: BridgeApi = {
   // so the capability added here is a Note on a Studio and not a screenshot.
   captureStudioNote: (studioId: string, said: string, capture: StudioCapture): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.captureStudioNote, studioId, said, capture),
+  // Reading one, where the capture above takes one: the bytes come back to be
+  // drawn and nothing about the file's place on disk crosses with them.
+  readStudioFrame: (studioId: string, nodeId: string): Promise<FrameRead> =>
+    ipcRenderer.invoke(CHANNELS.readStudioFrame, studioId, nodeId),
   removeStudioNode: (studioId: string, nodeId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.removeStudioNode, studioId, nodeId),
   decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean): Promise<Outcome> =>

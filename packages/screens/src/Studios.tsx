@@ -6,7 +6,7 @@
 // relation, and deleting a node, which confirms because its edges go with it. What is drawn is
 // what Fleet wrote — every act answers with the Studio whole, and main folds it into `studio`.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Button,
@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
   Dialog,
+  StudioFrameSheet,
   StudioWhiteboard,
   Table,
   TableBody,
@@ -27,8 +28,19 @@ import type { JobSummary, Outcome, StudioSummary } from "@armada/protocol";
 
 import { said } from "./copy";
 import { absoluteOf } from "./duration";
-import { nodeNamed, proposedRelations, studioName, whiteboardEdges, whiteboardNodes } from "./studio";
+import { framesDrawn, nodeNamed, proposedRelations, studioName, whiteboardEdges, whiteboardNodes } from "./studio";
+import { useStudioFrames, type ReadStudioFrame } from "./studio-frames";
 import type { StudioAnswer, StudioRead, StudiosRead } from "./studio-reads";
+
+/** No frames at all, for the frame before the Studio is read. */
+const NONE: ReadonlySet<string> = new Set();
+
+/**
+ * What a Note past `MOST_FRAMES_DRAWN` says on its plate. **One press away**:
+ * selecting the Note is what asks for it, and the sentence names that press
+ * rather than reporting a limit nobody set.
+ */
+const PAST_THE_BOUND = "Select this Note to draw it.";
 
 /** Which Studio is open, and whether Continue has been pressed on it. */
 export type OpenStudio = { id: string; editable: boolean };
@@ -55,6 +67,8 @@ export type StudiosProps = {
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => Promise<Outcome>;
   onRemoveNode: (nodeId: string) => Promise<Outcome>;
   onDecideEdge: (edgeId: string, accepted: boolean) => Promise<Outcome>;
+  /** The picture one Note kept, as bytes. The screen mints the `blob:` and revokes it — #1352. */
+  onReadFrame: ReadStudioFrame;
 };
 
 export function Studios(props: StudiosProps) {
@@ -169,8 +183,18 @@ function Board(props: StudiosProps & { open: OpenStudio }) {
   const [refused, setRefused] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
+  /** The Note whose frame is open, full size. */
+  const [opened, setOpened] = useState<string | null>(null);
+  // The pictures the Notes kept, and the `blob:` each one becomes — #1352.
+  const frames = useStudioFrames(props.onReadFrame, open.id);
+  const drawn = read.state === "read" ? framesDrawn(read.studio, selectedNode) : NONE;
+  // `want` sends nothing twice, so asking again on every render asks once.
+  useEffect(() => void frames.want([...drawn]), [drawn, frames]);
   if (read.state !== "read") return null;
   const studio = read.studio;
+  const frameOf = (nodeId: string) =>
+    drawn.has(nodeId) ? (frames.of(nodeId) ?? {}) : { why: PAST_THE_BOUND };
+  const openedNote = studio.nodes.find((node) => node.id === opened && node.kind === "note");
   const editable = open.editable && live;
   const proposed = proposedRelations(studio, jobs);
   const selected = selectedNode === null ? undefined : studio.nodes.find((node) => node.id === selectedNode);
@@ -211,7 +235,7 @@ function Board(props: StudiosProps & { open: OpenStudio }) {
       <div className="armada-studio__board">
         <StudioWhiteboard
           key={studio.id}
-          nodes={whiteboardNodes(studio, jobs)}
+          nodes={whiteboardNodes(studio, jobs, frameOf)}
           edges={whiteboardEdges(studio)}
           readOnly={!editable}
           onNodeMoved={(nodeId, position) => {
@@ -230,6 +254,14 @@ function Board(props: StudiosProps & { open: OpenStudio }) {
             <Card aria-label="Selected node">
               <CardContent className="armada-studio__aside">
                 <p>{nodeNamed(studio, selected.id, jobs)}</p>
+                {/* Opening the picture is reading, so it is offered read-only
+                    too — and it is an act on the node, where the acts on a node
+                    already are, rather than a press on a card the board drags. */}
+                {selected.kind === "note" && selected.capture?.frame !== undefined ? (
+                  <Button size="sm" onClick={() => setOpened(selected.id)}>
+                    Open frame
+                  </Button>
+                ) : null}
                 {editable ? (
                   <Button variant="destructive" size="sm" onClick={() => setRemoving(selected.id)}>
                     Delete node
@@ -279,6 +311,14 @@ function Board(props: StudiosProps & { open: OpenStudio }) {
           )}
         </StudioWhiteboard>
       </div>
+      {openedNote === undefined || openedNote.kind !== "note" ? null : (
+        <StudioFrameSheet
+          open
+          said={openedNote.said}
+          frame={frameOf(openedNote.id)}
+          onClose={() => setOpened(null)}
+        />
+      )}
       <Dialog
         open={removing !== null}
         title="Delete this node"

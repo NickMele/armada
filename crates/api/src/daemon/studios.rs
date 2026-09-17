@@ -15,7 +15,7 @@ use std::sync::Arc;
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, ManifestId,
     MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StartStudioRun,
-    StopScout, Studio, StudioDeleted, StudioId, StudioList, StudioRunStarted,
+    StopScout, Studio, StudioDeleted, StudioId, StudioList, StudioNodeId, StudioRunStarted,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -33,6 +33,19 @@ pub trait Studios: Send + Sync + 'static {
         studio_id: StudioId,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `get_studio_frame` — the picture one Note kept, as the file itself:
+    /// the name Fleet stored it under, and its bytes.
+    ///
+    /// **The node names it and the record holds the file name**, so nothing a
+    /// caller spells reaches a path. A node that keeps none and a file that
+    /// will not open are both [`Refusal::Unacceptable`], told apart by code.
+    fn get_studio_frame(
+        &self,
+        studio_id: StudioId,
+        node_id: StudioNodeId,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<(String, Vec<u8>), Refusal>> + Send;
 
     /// `create_studio`, in the repository `manifest_id` names.
     fn create_studio(

@@ -1,0 +1,18 @@
+/* A Note's frame, opened. The picture takes the sheet's width and keeps its own
+   shape: a photograph of a window scaled to a panel is what the card already
+   drew, and stretching one to fill the body would be a screen nobody had. */
+.armada-studio-frame__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+}
+
+.armada-studio-frame__why {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}

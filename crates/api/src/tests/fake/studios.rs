@@ -25,6 +25,11 @@ const AT: &str = "2026-09-17T09:00:00.000Z";
 /// The run a Studio's own start answers with.
 pub const THE_RUN: &str = "01STUDIORUN";
 
+/// What a frame's bytes are here. A PNG's own first eight bytes and nothing
+/// after them: the route answers what it was given, and a whole image would
+/// only make the fixture longer.
+pub const THE_FRAME: &[u8] = &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+
 pub fn the_studio() -> Studio {
     Studio {
         id: StudioId::carried(THE_STUDIO),
@@ -94,6 +99,43 @@ impl Studios for FakeDaemon {
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
         self.changing(&studio_id, within, |studio| Ok(studio.clone()))
+    }
+
+    /// The bytes are [`THE_FRAME`], whatever the node kept: what this proves is
+    /// that the route answers the file rather than JSON, and that a node with
+    /// no picture is refused apart from a node that is not there.
+    async fn get_studio_frame(
+        &self,
+        studio_id: StudioId,
+        node_id: StudioNodeId,
+        within: Option<ManifestId>,
+    ) -> Result<(String, Vec<u8>), Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            let node = studio
+                .nodes
+                .iter()
+                .find(|node| node.id == node_id)
+                .ok_or_else(|| {
+                    Refusal::Unacceptable(refused(
+                        "fake.no_such_studio_node",
+                        format!("no node of this Studio is `{}`", node_id.as_str()),
+                    ))
+                })?;
+            let kept = match &node.content {
+                StudioNodeContent::Note {
+                    capture: Some(capture),
+                    ..
+                } => capture.frame.as_ref(),
+                _ => None,
+            };
+            let frame = kept.ok_or_else(|| {
+                Refusal::Unacceptable(refused(
+                    "fake.studio_frame_not_kept",
+                    format!("node `{}` kept no frame", node_id.as_str()),
+                ))
+            })?;
+            Ok((frame.filename.clone(), THE_FRAME.to_vec()))
+        })
     }
 
     async fn create_studio(
@@ -185,11 +227,21 @@ impl Studios for FakeDaemon {
     ) -> Result<Studio, Refusal> {
         self.changing(&studio_id, within, |studio| {
             let id = StudioNodeId::carried(format!("01NODE{}", studio.nodes.len()));
+            // What Fleet does with the staged PNG, in the one way a client can
+            // see: the Note names the file kept for it, never where it was
+            // staged. `get_studio_frame` reads that name back.
+            let mut pointed = capture.capture.clone();
+            pointed.frame = capture.frame.as_ref().map(|staged| ipc::CaptureFrame {
+                filename: format!("{}.png", id.as_str()),
+                byte_size: THE_FRAME.len() as u64,
+                width: staged.width,
+                height: staged.height,
+            });
             studio.nodes.push(StudioNode {
                 id,
                 content: StudioNodeContent::Note {
                     said: capture.said.clone(),
-                    capture: Some(capture.capture.clone()),
+                    capture: Some(pointed),
                 },
                 state: None,
                 position: capture.position,
