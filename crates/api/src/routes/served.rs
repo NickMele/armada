@@ -1008,6 +1008,18 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // A Helm session held inside a call the person's own settings do not cover,
+    // and what became of it. `#1389`.
+    Route {
+        operation: "helm.asking_to_run",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "helm.call_answered",
+        method: "GET",
+        path: "/events",
+    },
     // Helm writing a file in the repository's own checkout, which it does on a
     // person's ask and in no worktree. `#1373`.
     Route {

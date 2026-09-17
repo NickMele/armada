@@ -92,8 +92,9 @@ pub enum HelmCallAnswer {
     /// again next time.
     AllowOnce,
     /// Run it, and write [`HelmCallInFlight::rule`] into the repository's own
-    /// `.claude/settings.local.json` so the CLI allows it without asking — in
-    /// Helm and in the person's terminal alike.
+    /// personal agent settings — `adapters::PERSONAL_SETTINGS`, which is the
+    /// one place that path is spelled — so the CLI allows it without asking,
+    /// in Helm and in the person's terminal alike.
     ///
     /// **The only thing in Armada that writes a person's settings**, and it
     /// does so on this answer and no other.

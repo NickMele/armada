@@ -15,9 +15,9 @@
  * What a person may answer about one helm call. Since protocol 14.18.
  *
  * `allow_once` runs it and writes nothing. `allow_and_remember` runs it and
- * writes `rule` into the repository's own `.claude/settings.local.json`, so the
- * agent CLI allows it without asking again — in helm and in their terminal
- * alike. `refuse` tells the session no.
+ * writes `rule` into the repository's own personal agent settings, so the agent
+ * CLI allows it without asking again — in helm and in their terminal alike.
+ * `refuse` tells the session no.
  *
  * **Offered, never assumed.** `offers` carries the subset fleet will take, and
  * an answer outside it is a 409.

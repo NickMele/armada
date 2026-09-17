@@ -32,9 +32,9 @@ fn fleet(home: &TempDir) -> Arc<Hosted> {
 }
 
 /// One ask, **read the way the route reads it**: the CLI's own bytes, decoded.
-/// `fleet` holds no JSON of its own — the gate keeps `serde_json::from_*` to
-/// `store` and `ipc` — so a fixture here is a body rather than a literal, which
-/// is what the door would have handed over anyway.
+/// `fleet` reads no JSON of its own — the gate scopes that to `store` and `ipc`
+/// — so a fixture here is a body rather than a literal, which is what the door
+/// would have handed over anyway.
 fn asking(body: &str) -> AskingToRun {
     ipc::decode("a permission question", body.as_bytes()).expect("the fixture decodes")
 }

@@ -390,7 +390,7 @@ export const HELM_CALL_ANSWER: Record<HelmCallAnswer, { label: string; means: st
   allow_and_remember: {
     label: "Allow and remember",
     means:
-      "Helm runs it now, and the rule goes into this repository's own .claude/settings.local.json " +
+      "Helm runs it now, and the rule goes into this repository's own personal agent settings " +
       "— so your terminal stops asking too.",
   },
   refuse: {

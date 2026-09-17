@@ -235,7 +235,7 @@ export type BridgeApi = {
   ) => Promise<Outcome>;
   /**
    * Answer one held helm call: allow it once, allow it and write the rule into
-   * this repository's own `.claude/settings.local.json`, or refuse it. #1389.
+   * this repository's own personal agent settings, or refuse it. #1389.
    *
    * **The session is waiting inside its own tool call while this is out**, so
    * an answer that lands is what it runs on. A 409 where nothing is waiting

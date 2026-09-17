@@ -80,7 +80,7 @@ Helm may call any command it is offered once you ask it to, in this conversation
 
 **Helm asks before it edits, now.** Under `acceptEdits` a write to the checkout was silent, because nothing could be asked; under your own settings it is a call like any other. What the ask is worth is the *Action authority* paragraph above: the file still changes with no branch, no review and no undo once you allow it.
 
-**A card in the dock carries the tool, the one-line argument and the rule that would have to allow it.** Three answers: allow once, which writes nothing; allow and remember, which writes that one rule into this repository's own `.claude/settings.local.json` — yours, not committed, and the only settings file Armada ever writes; or refuse, with your words carried to the session. Nobody answering is a refusal at five minutes and never an allow: silence is not consent. See [Kit](kit.md) (#1275) for where the rules should eventually come from.
+**A card in the dock carries the tool, the one-line argument and the rule that would have to allow it.** Three answers: allow once, which writes nothing; allow and remember, which writes that one rule into this repository's own `settings.local.json`, under `.claude/` — yours, not committed, and the only settings file Armada ever writes; or refuse, with your words carried to the session. Nobody answering is a refusal at five minutes and never an allow: silence is not consent. See [Kit](kit.md) (#1275) for where the rules should eventually come from.
 
 | Rung | Action | Helm directly? |
 | --- | --- | --- |
