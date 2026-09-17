@@ -1,12 +1,32 @@
 // The annotation layer, #1226. Dev only: `main.tsx` loads this chunk only when a
 // save path exists, and a packaged build has none.
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Button, KbdChord, Textarea } from "@armada/components";
 
 import { byCreation, type Annotation, type Box } from "../../../shared/annotations";
 import { capture, locate } from "./capture";
 import { componentsOf, fiberOf } from "./fiber";
+import {
+  metricsOf,
+  placeCard,
+  samePlacementInput,
+  sizeOf,
+  NO_CARD,
+  NO_METRICS,
+  type CardSize,
+  type Metrics,
+  type Viewport,
+} from "./place";
 import { sendToFleet, unsendable } from "./send";
 import type { Sink } from "./sink";
 import "./annotate.css";
@@ -37,13 +57,6 @@ const place = (box: Box): CSSProperties =>
     "--annotate-h": `${box.height}px`,
   }) as CSSProperties;
 
-/** A card sits under its element when there is room, and over it when there is not. */
-function cardPlace(box: Box): { style: CSSProperties; side: "below" | "above" } {
-  const below = box.y + box.height < window.innerHeight * 0.6;
-  const y = below ? box.y + box.height : box.y;
-  return { style: place({ ...box, y }), side: below ? "below" : "above" };
-}
-
 function inLayer(target: EventTarget | null): boolean {
   const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
   return element?.closest("[data-armada-annotate]") != null;
@@ -69,6 +82,7 @@ export function Layer({ sink }: { sink: Sink }) {
   const cannotSend = unsendable(sink);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const barRef = useRef<HTMLDivElement | null>(null);
 
   const fail = useCallback((what: string, cause: unknown) => {
     setError(`${what} failed through ${sink.via}: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -136,6 +150,13 @@ export function Layer({ sink }: { sink: Sink }) {
       }
       if (hovered !== null) next["hovered"] = hovered.isConnected ? boxOf(hovered) : null;
       if (draft !== null) next["draft"] = draft.element.isConnected ? boxOf(draft.element) : draft.note.box;
+      // The window is a frame the card is placed against, so a resize that moves
+      // no element still has to re-place it. Read here rather than on a listener
+      // of its own: this loop already decides when the layer redraws. The bar
+      // goes with it: it is pinned over everything, and its height changes with
+      // what it has to say, so the card is placed above whatever it measures.
+      next["window"] = { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+      next["bar"] = barRef.current === null ? null : boxOf(barRef.current);
       const key = JSON.stringify(next);
       if (key !== last) {
         last = key;
@@ -229,6 +250,9 @@ export function Layer({ sink }: { sink: Sink }) {
 
   if (!on) return null;
 
+  const measured = frames["window"];
+  const size = { width: measured?.width ?? window.innerWidth, height: measured?.height ?? window.innerHeight };
+  const view: Viewport = { ...size, floor: frames["bar"]?.y ?? size.height };
   const openNote = notes.find((n) => n.id === opened) ?? null;
   const openBox = openNote === null ? null : frames[openNote.id] ?? null;
   const hoveredBox = draft === null ? frames["hovered"] ?? null : null;
@@ -273,7 +297,7 @@ export function Layer({ sink }: { sink: Sink }) {
       {draft !== null && draftBox !== null && (
         <>
           <div className="armada-annotate__outline" data-held="" style={place(draftBox)} />
-          <div className="armada-annotate__card" role="dialog" aria-label="New note" {...cardProps(draftBox)}>
+          <Card box={draftBox} view={view} label="New note">
             <p className="armada-annotate__meta">{chain(draft.note)}</p>
             <Textarea
               label="Note"
@@ -289,12 +313,12 @@ export function Layer({ sink }: { sink: Sink }) {
                 Save note
               </Button>
             </div>
-          </div>
+          </Card>
         </>
       )}
 
       {openNote !== null && openBox !== null && (
-        <div className="armada-annotate__card" role="dialog" aria-label="Note" {...cardProps(openBox)}>
+        <Card box={openBox} view={view} label="Note">
           <p className="armada-annotate__meta">{chain(openNote)}</p>
           <p className="armada-annotate__text">{openNote.text}</p>
           {openNote.sent !== undefined && (
@@ -327,10 +351,10 @@ export function Layer({ sink }: { sink: Sink }) {
               </Button>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="armada-annotate__bar" role="status">
+      <div ref={barRef} className="armada-annotate__bar" role="status">
         <span>Annotating</span>
         <span>
           {open} open, {notes.length - open} done
@@ -348,9 +372,63 @@ export function Layer({ sink }: { sink: Sink }) {
   );
 }
 
-function cardProps(box: Box): { style: CSSProperties; "data-side": "below" | "above" } {
-  const { style, side } = cardPlace(box);
-  return { style, "data-side": side };
+/**
+ * The note card, put where all of it is on screen.
+ *
+ * **It measures itself, because nothing else can.** Where the card fits depends
+ * on how tall it is, and the stylesheet never learns that — which is why `left`
+ * was clamped into the window and `top` was not, and why picking an element as
+ * tall as the window drew the card off the top of it. The measurement is taken
+ * in a layout effect, so the first frame a person sees is already placed, and
+ * kept current by a `ResizeObserver` for as long as the card is up.
+ */
+function Card({
+  box,
+  view,
+  label,
+  children,
+}: {
+  box: Box;
+  view: Viewport;
+  label: string;
+  children: ReactNode;
+}) {
+  const node = useRef<HTMLDivElement | null>(null);
+  const [self, setSelf] = useState<{ size: CardSize; metrics: Metrics } | null>(null);
+
+  useLayoutEffect(() => {
+    const element = node.current;
+    if (element === null) return undefined;
+    const read = (): void =>
+      setSelf((was) => {
+        const next = { size: sizeOf(element), metrics: metricsOf(element) };
+        return was !== null && samePlacementInput(was, next) ? was : next;
+      });
+    read();
+    const observer = new ResizeObserver(read);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const at = placeCard(box, self?.size ?? NO_CARD, view, self?.metrics ?? NO_METRICS);
+  return (
+    <div
+      ref={node}
+      className="armada-annotate__card"
+      role="dialog"
+      aria-label={label}
+      data-side={at.side}
+      style={
+        {
+          "--annotate-card-x": `${at.x}px`,
+          "--annotate-card-y": `${at.y}px`,
+          "--annotate-card-max": `${at.maxHeight}px`,
+        } as CSSProperties
+      }
+    >
+      {children}
+    </div>
+  );
 }
 
 /** `JobRowStacked ← ActiveJobsList ← Board`, then the selector, for the person checking what was picked. */
