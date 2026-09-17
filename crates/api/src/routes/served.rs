@@ -984,6 +984,13 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // Helm writing a file in the repository's own checkout, which it does on a
+    // person's ask and in no worktree. `#1373`.
+    Route {
+        operation: "helm.changed_checkout",
+        method: "GET",
+        path: "/events",
+    },
     // A person's run ending. It names a Job and moves nothing on it; what the
     // run prints is `observe_run`'s, never this stream's.
     Route {
