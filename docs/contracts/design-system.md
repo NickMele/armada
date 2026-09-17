@@ -560,6 +560,55 @@ focus rather than status. Under `prefers-reduced-motion` the pulse stops and
 
 ---
 
+## Sound
+
+**A sound says which kind of wait, to a person who is not looking.** macOS
+gives every notification the same chime, so work that has stopped and a
+review that will keep sound identical. Armada gives the two their own tone.
+
+| Tone | Plays when | Notes |
+|---|---|---|
+| **Blocked** | A notification tells of a Job that entered Escalated | G4 → D4, falling, 170ms apart |
+| **Waiting** | A notification tells of any other Job that started waiting on a person | One A4 |
+
+Each note is a sine of 200ms, rising to full in 12ms and decaying
+exponentially. Both tones sit at one level, because loudness is macOS's
+setting and not Armada's.
+
+**A tone is the notification's own sound, never a second channel.** It rides
+on the banner, so macOS's permission, Focus and per-app sound settings govern
+it exactly as they govern the banner. Bridge never plays audio itself, and a
+refused notification is a silent one.
+
+**One notification, one tone.** A batch that holds an escalation plays
+Blocked, because the most urgent Job in it decides. Nothing else makes a
+sound: a Job that lands, a Check that passes and a press are silent, which
+keeps the loudness order in Behaviour rules intact.
+
+## Touch
+
+**A press that lands can be felt, so the eyes can already be elsewhere.** A
+person holds Kill and looks at the next row before Fleet has answered. The
+trackpad answers the act that finger made, and nothing else.
+
+| Pattern | Plays when |
+|---|---|
+| **Alignment** | A control waiting on Fleet reaches *accepted* |
+| **Level change** | A control waiting on Fleet reaches *refused* |
+
+**Touch only ever answers the person's own press.** Fleet's events never
+play one, and neither does hover or focus. A haptic is only felt while a
+finger rests on the trackpad, so anything else would be a signal that
+mostly fires into nothing.
+
+**Nothing may carry information by touch alone.** The press bar's colour and
+direction already say accepted or refused, and a mouse, or macOS's haptic
+feedback turned off, loses nothing. Electron cannot reach the trackpad, so
+the pattern is performed from outside the renderer, behind one seam that
+names the two patterns and not how they are played.
+
+---
+
 ## Window and layout model
 
 One responsive prototype covers all widths — not separate comps per
@@ -1437,6 +1486,38 @@ chip     --helm-muted fill, --helm icon, beside "Helm"
 composer --bg-sunken, --border-glass
 Send     --helm-muted fill, --helm text, --helm-edge border
 ```
+
+### Instruments
+
+**A mark that draws a measurement is an instrument, not an icon or an
+illustration.** Twelve minutes of a Drone doing nothing is a flat line no
+figure can show, and a footprint's shape says where the work went before a
+path is read. The ban on decorative iconography stands; an instrument is
+exempt only while every mark in it is a value from the wire.
+
+| Instrument | Where | Draws |
+|---|---|---|
+| **Activity** | A running Job | Tool calls per 30s window over the last twelve minutes, one bar per window |
+| **Footprint** | A finished Job's footprint | Each file as a column, width by lines changed, split into added over deleted |
+
+```
+activity bar      --fg-muted; an empty window --border-subtle at 1.5px, never absent
+activity axis     1px --border-default along the base
+footprint added   --diff-add-fg at 55%
+footprint deleted --diff-del-fg at 45%
+outside the plan  1.5px --border-strong outline, and the words beside the key
+labels, key       --font-mono --text-2xs --fg-subtle
+```
+
+**An instrument takes no status hue.** Activity is below Job level and
+drift stays neutral there, so neither reaches for `--status-running` or
+amber. A file with no line count is left out of the footprint and counted in
+its key, because a guessed width is a wrong measurement.
+
+**An instrument carries its own reading in words.** Each has a label naming
+what it measures and an accessible description stating what it shows, such as
+*no tool calls for the last 12 minutes*. It never animates in, and a new
+reading replaces the drawing rather than moving it.
 
 ### Fleet panel
 

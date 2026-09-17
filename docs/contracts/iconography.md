@@ -565,7 +565,9 @@ no table has not been decided, whatever it looks like in a mockup.
 2. If an icon is needed it comes from **lucide-react**, at **12 or 16px**,
    **strokeWidth 2**, inheriting text colour. No second library, no emoji,
    no illustration, no custom SVG. **One exception exists, and only one** —
-   see Brand mark below.
+   see Brand mark below. A chart drawing a measurement is not an icon and
+   is not governed here; see Instruments in the
+   [Design System](design-system.md).
 3. Choose on **outline, not detail**. At 12px only the silhouette survives.
    If the meaning lives inside the shape, the icon is wrong.
 4. The outline must differ from every other icon **sharing its hue**.
