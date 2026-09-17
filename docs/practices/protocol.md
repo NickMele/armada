@@ -966,6 +966,15 @@ is no road left for it to hit, and nobody presses anything now.
 
 **On the step that sends the work back, not the step it is sent to** — `pass`'s own rule, and the same edge. `WorkflowStep` carries both fields together: a target with no cap could not stop, and a cap on a step routing nowhere answers a question a preview never asks.
 
+## Protocol 14.4: an abandoned step's restart names a new trigger
+
+`#1034`. `EscalationTrigger` gains `drone_gone`, the step-level trigger a
+person's restart writes over a step whose Drone left before anybody acted —
+`drone_killed`'s and `run_ended`'s third sibling. **Minor, on `queued_reason`'s
+precedent**: `escalation_reason` carries no `wire_enum!` in `crates/ipc`, so
+Bridge reads it as an opaque string through the generated vocabulary rather
+than matching on it, and a new value is additive while nothing branches on it.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

@@ -166,6 +166,11 @@ where
                 self.drone_left(job.id(), &step).await?;
             }
             let job = self.load(job.id()).await?;
+            // A Job already `escalated` — `stalled` over a Drone this Fleet
+            // has just found gone — reads `Aftermath::AlreadyStopped` below
+            // and takes neither arm: the pointer is cleared above and the
+            // step stays `running`. `#1034`: a person's restart is what stops
+            // it, under `drone_gone`, once `Stuck::of` offers one.
             if let Aftermath::JobMoves(target) =
                 aftermath(job.status(), &Ending::Vanished, self.left(job.id()))
             {

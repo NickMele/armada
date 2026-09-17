@@ -526,6 +526,15 @@ impl Stopped {
                  submitted anything, and was stopped there. Nothing it did was checked, \
                  and anything it did after saying so was not kept."
             }
+            // **Not `DroneKilled`'s line either.** Nobody ended this process —
+            // it left on its own, or was lost to a Fleet restart — before the
+            // person who is now restarting it acted. The restart is what
+            // stopped it, and this sentence says so rather than naming an
+            // ending that did not happen.
+            EscalationTrigger::DroneGone => {
+                "An earlier attempt at this part was still running when its Drone was found \
+                 gone, and this restart is what stopped it there. Nothing it did was checked."
+            }
             // **Not `BlockedByPolicy`'s line**, which says a tool or a
             // command was denied and sends the next attempt looking for a
             // setting to work around. Nothing was denied here: the earlier

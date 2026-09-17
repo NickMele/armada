@@ -181,6 +181,20 @@ where
         self.stopped_step_under(job, why, Actor::Human).await
     }
 
+    /// Stop the step whose Drone was already gone when a person pressed
+    /// restart. `#1034`.
+    ///
+    /// **Human, and there is no Drone to end.** It left on its own, or was
+    /// lost to a Fleet restart, before anybody acted — `drone_killed` would
+    /// claim a person killed a process that had already gone, which is
+    /// exactly the misnaming [`stopped_by_hand`](Fleet::stopped_by_hand)'s own
+    /// doc warns against one trigger over.
+    pub(crate) async fn stopped_abandoned(&self, job: &Job) -> Result<Job, Adrift> {
+        let why = StepLevelTrigger::of(EscalationTrigger::DroneGone)
+            .expect("`drone_gone` is step-level in the registry");
+        self.stopped_step_under(job, why, Actor::Human).await
+    }
+
     /// Take away a Drone whose own run has ended, and stop the step it was on.
     ///
     /// **The only act on this ladder Fleet asks for**, and `DroneEvent::Ended`

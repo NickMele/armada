@@ -704,15 +704,28 @@ impl fmt::Display for Advancing {
 /// `running` on a Job holding no Drone, `Job::stopped_on` found nothing, and
 /// `fleet::resume` had neither act to offer. `#313`.
 ///
-/// `EscalationTrigger::DroneKilled` is the capability, and all three conditions
-/// are load-bearing exactly as the override's are. Drop the trigger and this
-/// admits the gate stopping a step beneath a parked Job; drop `from` and it
-/// admits stopping a step nobody was working; drop the status and it says
-/// nothing [`ADVANCING_STATUSES`] does not already say.
+/// `EscalationTrigger::DroneKilled` and `EscalationTrigger::DroneGone` are the
+/// capability, and all three conditions are load-bearing exactly as the
+/// override's are. Drop the trigger and this admits the gate stopping a step
+/// beneath a parked Job; drop `from` and it admits stopping a step nobody was
+/// working; drop the status and it says nothing [`ADVANCING_STATUSES`] does
+/// not already say.
+///
+/// **`DroneGone` is the same exception one Drone later.** `#1034`: a Drone
+/// that was there when the Job escalated `stalled` can still leave — on its
+/// own, or across a Fleet restart — before a person acts, and `DroneKilled`
+/// would misname that person's later restart as the act that ended it.
 fn taken_from_a_person(status: JobStatus, from: StepState, to: &StepTarget) -> bool {
     status == JobStatus::Escalated
         && from == StepState::Running
-        && matches!(to, StepTarget::Stopped(why) if why.trigger() == EscalationTrigger::DroneKilled)
+        && matches!(
+            to,
+            StepTarget::Stopped(why)
+                if matches!(
+                    why.trigger(),
+                    EscalationTrigger::DroneKilled | EscalationTrigger::DroneGone
+                )
+        )
 }
 
 /// Whether the machine admits this move, and why not if it does not.
