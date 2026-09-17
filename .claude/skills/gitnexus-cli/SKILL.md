@@ -5,7 +5,7 @@ description: "Use when the user needs to run GitNexus CLI commands like analyze/
 
 # GitNexus CLI Commands
 
-Commands below use `node .gitnexus/run.cjs <command>` — the project-local runner `gitnexus analyze` drops next to the index. It auto-selects an available runner at call time (global `gitnexus`, else `pnpm dlx`, else `bunx`, else `npx`), so no package-manager assumption and no global install is required — including on a bun-only machine, which has no npm, npx or pnpm at all.
+Commands below use `node .gitnexus/run.cjs <command>` — the project-local runner `pnpm gitnexus:index` drops next to the index. It auto-selects an available runner at call time (global `gitnexus`, else `pnpm dlx`, else `bunx`, else `npx`), so no package-manager assumption and no global install is required — including on a bun-only machine, which has no npm, npx or pnpm at all.
 
 > **Not analyzed yet, or `node .gitnexus/run.cjs` reports `Cannot find module`** (the gitignored runner is absent — e.g. a fresh clone or `git clean`)? (Re)generate it with `pnpm gitnexus:index` from the project root. In this repository any `analyze` without `--skip-agents-md --skip-skills` appends a block to `AGENTS.md` that fails the `CLAUDE.md` gate and overwrites these skills; `docs/practices/code-graph.md`.
 

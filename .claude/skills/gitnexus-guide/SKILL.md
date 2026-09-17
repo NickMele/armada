@@ -83,7 +83,7 @@ Notes: `offset` ≥ `total` returns an empty page (with `total` still reported).
 
 ### Taint findings (`explain`)
 
-`explain` returns taint findings recorded by `gitnexus analyze --pdg` — intra-procedural `TAINTED` edges plus cross-function `TAINT_PATH` hops where the interprocedural taint phase found a function-level source→sink chain. Each finding includes a sink category (command-injection, code-injection, path-traversal, sql-injection, xss), source/sink lines, and the ordered hop path with the variable carried on each hop.
+`explain` returns taint findings recorded by `pnpm gitnexus:index --pdg` — intra-procedural `TAINTED` edges plus cross-function `TAINT_PATH` hops where the interprocedural taint phase found a function-level source→sink chain. Each finding includes a sink category (command-injection, code-injection, path-traversal, sql-injection, xss), source/sink lines, and the ordered hop path with the variable carried on each hop.
 
 - `explain {}` — enumerate all findings for the repo (bounded by `limit`, deterministic order)
 - `explain { target: "src/vuln.ts" }` — findings in a file (suffix path match accepted)
@@ -93,7 +93,7 @@ A repo indexed without `--pdg` returns a clear "no taint layer" note. Caveats: c
 
 ### Control & data dependence (`pdg_query`)
 
-`pdg_query` reads the control/data-dependence layers `gitnexus analyze --pdg` records (CDG + REACHING_DEF, basic-block granular) — the control/data analog of `explain`. It is **always anchored** (a `target` file path or symbol, resolved like `context`) and has two modes:
+`pdg_query` reads the control/data-dependence layers `pnpm gitnexus:index --pdg` records (CDG + REACHING_DEF, basic-block granular) — the control/data analog of `explain`. It is **always anchored** (a `target` file path or symbol, resolved like `context`) and has two modes:
 
 - `pdg_query { mode: "controls", target: "..." }` — CDG: "under what condition does X run?". Each edge is a controlling predicate block → dependent block with the branch sense (`'T'`/`'F'`) in `reason`; an edge into an early `return`/`throw` is flagged `guard: true` (guard-clause discovery — the sense depends on the predicate, so don't filter guards by a fixed label).
 - `pdg_query { mode: "flows", target: "...", variable?: "..." }` — REACHING_DEF def→use edges within the function; pass `variable` to trace one binding.

@@ -73,4 +73,5 @@ without `--skip-skills` to refresh the committed skills, and read their diff.
 **A refresh reverts every stale-index line to a bare `analyze`.** The committed
 skills point at `pnpm gitnexus:index` instead, and the upstream copy does not.
 Put those lines back before committing, or the next agent that finds a stale
-index rewrites `AGENTS.md`.
+index rewrites `AGENTS.md`. `verify-foundations` refuses a skill that still
+names one, with the line and the replacement.
