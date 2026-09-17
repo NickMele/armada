@@ -23,7 +23,8 @@ outside Fleet. It is built so each part has a named home in Fleet, listed under
 
 | Rule | Held by |
 |---|---|
-| Nothing reruns when `main` has not moved | `main` is an ancestor of the branch head |
+| `verify-foundations` runs on every turn | A throwaway worktree at the commit being merged |
+| No Check reruns when `main` has not moved | `main` is an ancestor of the branch head |
 | When it has moved, `main` is merged in first | A throwaway detached worktree at the branch head |
 | A Check reruns when its `when:` matches either side | `armada covers`, over both sets of paths |
 | `verify-foundations` reruns, read against `main` | Only a failing line `main` lacks is red |
@@ -40,17 +41,15 @@ scripts/land              stamp matches -> queue entry -> runner started if none
                                                   |
 runner (holds flock) -----------------------------+
   read PR and remote head
-  main an ancestor of head? -- yes --------------------------------------+
-        | no                                                             |
-  worktree add --detach <head>; git merge <main>                         |
-        | conflict only in generated files -> regenerate, commit         |
-        | any other conflict -> outcome conflict (keeps its place)       |
-  seed: cp -c the build directories in                                   |
-  verify-foundations: new FAIL / missing: lines vs main's own run        |
-  covers(landed on main + branch changed) -> setup, then armada check each|
-        | red -> outcome red, nothing pushed                             |
-  push merge commit to the branch; wait for GitHub to see it             |
-        v                                                                v
+  worktree add --detach <head>
+  main moved? -- yes -> git merge <main>
+        |            | conflict only in generated files -> regenerate, commit
+        |            | any other conflict -> outcome conflict (keeps its place)
+  seed: cp -c the build directories in
+  verify-foundations: new FAIL / missing: lines vs main's own run
+  main moved? -- yes -> covers(landed + changed) -> setup -> armada check each
+        | red -> outcome red, nothing pushed
+        | main moved -> push the merge commit to the branch, wait for GitHub
   ls-remote main == gated base?  -- no -> gate again (bounded rounds)
         | yes
   gh pr merge <pr> --merge --match-head-commit <sha>
@@ -74,11 +73,15 @@ runner (holds flock) -----------------------------+
 
 **Which Checks a set of paths hits is one answer, shared with Fleet's gate.** `armada covers` reads paths on stdin and asks each Check's `covers`, which calls `Covers::reach` in `crates/core-model/src/job/covers.rs`. `ResolvedCheck::covers`, which the gate's skip decision asks, calls the same function.
 
-**A Check reruns when it covers what landed on `main`, or what the branch changed, or both.** Either side, not both: the pair most likely to break only in combination is a Rust change landing on the base against a branch's TypeScript, where the generated types meet, and asking for both sides skips exactly that. In this repository `build`, `test` and `format` declare no `when:` and already rerun on every moved `main`, so what either-side adds is the scoped front-end Checks.
+**A Check reruns when it covers what landed on `main`, or what the branch changed, or both.** Either side, not both: the pair most likely to break only in combination is a Rust change landing on the base against a branch's TypeScript, where the generated types meet, and asking for both sides skips exactly that.
+
+**Every Check in this repository declares `when:`, including `build`, `test` and `format`.** They name what their commands read rather than what they are about — the workspace, the lockfile, `.cargo/`, `protocol-version.toml`, the shipped workflow definitions, `armada.yml` itself, and for `test` the Bridge tree that `xtask`'s own tests read. A change to the documents alone now hits no Check at all.
 
 **File overlap alone would miss cross-file breakage.** A type changed in one crate breaks a caller in another file, and both sides still hit `test`.
 
-**The line gates the combination, and trusts the agent for the branch's own Checks.** With `main` unmoved nothing reruns at all — `work-issue` step 4 is where a branch is measured on its own, and preflight stamps the tree it was measured on.
+**The gate runs every turn and the Checks only on a moved one.** `verify-foundations` reads the tree, takes seconds, and an unmoved turn is the one way a branch can break it for everybody behind it — with the line the only route to the fix. A Check reads the combination, takes minutes, and there is no combination to read until the base has moved.
+
+**So the line gates the combination, and trusts the agent for the branch's own Checks.** `work-issue` step 4 is where a branch is measured on its own, and preflight stamps the tree it was measured on.
 
 **How a `verify-foundations` run is read:**
 
@@ -90,6 +93,7 @@ runner (holds flock) -----------------------------+
 | A non-zero exit naming no failing rule is red | A branch that breaks `xtask` prints one `error[E0433]` and would be gated on nothing |
 | The same on `main`'s own run, which stops the turn | There is nothing to compare against |
 | `main`'s run cached per commit, only once read as a report | A killed run cached empty makes every branch after it red |
+| One report carries the gate and the Checks together | An agent reads everything wrong once, not twice |
 | A `main` that cannot run it stops every turn, saying so | The branch behind it is not the one to fix |
 
 ## What a turn prepares, and in which order
@@ -108,7 +112,9 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 
 **What it gives up:** a rule that did read build output would be blind on both sides. The bundle rule already declares a warning for that reason, and a rule that wanted more would have to say so.
 
-**The seed stays on both sides.** It is an APFS clone, and it is what keeps `xtask` from cold-building.
+**The seed stays on both sides, and a clone that fails stops the turn.** It is an APFS clone and it is what keeps `xtask` from cold-building — but a clone that worked in one tree and not the other would prepare the two sides differently, silently, which is the failure this order exists to remove.
+
+**`main`'s own run is cached by its commit, and a commit does not carry the machine.** A cached result was taken whenever it was taken, with whatever was installed then, so a machine that changed underneath is compared against a reading from before it did. Deleting `armada-land/foundations/` is how that is thrown away.
 
 ## The merge and the proof
 

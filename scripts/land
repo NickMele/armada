@@ -19,12 +19,13 @@
 # launchd label because Fleet must be *restarted*; a runner only has to finish,
 # and a second one started by `--status` picks up whatever a dead one left.
 #
-# **When `main` has moved**, `main` is merged into the branch in a throwaway
-# detached worktree, and every Check whose `when:` matches what landed or what
-# the branch changed runs there — `armada covers` chooses, so this never reads
-# YAML — plus `verify-foundations`, where only a failing line `main`'s own run
-# lacks is red. When `main` has not moved, nothing reruns: the branch's own
-# Checks are the agent's, and this gates the combination.
+# **`verify-foundations` runs on every turn**, in a throwaway detached worktree,
+# and only a failing line `main`'s own run lacks is red. **The Checks rerun only
+# when `main` has moved**: `main` is merged in first, and every Check whose
+# `when:` matches what landed or what the branch changed runs there — `armada
+# covers` chooses, so this never reads YAML. The gate costs seconds and reads
+# the tree; a Check costs minutes and reads the combination, which is only a
+# question once the base has moved.
 #
 # **The merge is `gh pr merge --merge --match-head-commit`**, never a rebase, a
 # squash or a push to `main`. `main` is read again right before it, and the
@@ -442,12 +443,9 @@ def take_turn(state, entry):
         git(repo, "fetch", "--quiet", REMOTE, BASE, f"refs/heads/{branch}")
         base = remote_head(repo, BASE)
 
-        if run(["git", "merge-base", "--is-ancestor", base, head], repo, check=False).returncode == 0:
-            candidate = head
-            say(state, branch, "gating", f"{BASE} has not moved since this branch's Checks; nothing reruns")
-        else:
-            candidate = gate(state, entry, head, base, logs)
-            held = read_json(outcome_path(state, branch)) or {}
+        moved = run(["git", "merge-base", "--is-ancestor", base, head], repo, check=False).returncode != 0
+        candidate = gate(state, entry, head, base, logs, moved)
+        held = read_json(outcome_path(state, branch)) or {}
 
         say(state, branch, "merging", f"merging #{pr} at {candidate[:10]} onto {base[:10]}",
             gated_base=base, candidate=candidate)
@@ -463,37 +461,49 @@ def take_turn(state, entry):
     raise Stop("stopped", f"{BASE} moved during each of {ROUNDS} gates; land again when it is quieter")
 
 
-def gate(state, entry, head, base, logs):
-    """Merge `base` into `head` in a throwaway worktree, rerun what the
-    combination hits, and push the merge onto the branch. Returns its commit."""
+def gate(state, entry, head, base, logs, moved):
+    """Read the tree in a throwaway worktree, and where `base` has moved, merge
+    it in first, rerun what the combination hits and push the merge onto the
+    branch. Returns the commit that will be merged.
+
+    **`verify-foundations` runs on every turn and the Checks only on a moved
+    one.** The gate reads the tree rather than the combination, and an unmoved
+    turn is the one way a branch can break it for everybody behind it — the line
+    being the only route to the fix. A Check costs minutes and the gate costs
+    seconds, which is where the two part."""
     repo = os.path.dirname(state)
     branch = entry["branch"]
     where = os.path.join(state, "gates", key(branch))
     drop_worktree(repo, where)
     git(repo, "worktree", "add", "--quiet", "--detach", where, head)
     try:
-        say(state, branch, "gating", f"merging {BASE} ({base[:10]}) in")
-        merge_in(state, entry, where, base, logs)
-        nothing_left(where, "the merge")
+        if moved:
+            say(state, branch, "gating", f"merging {BASE} ({base[:10]}) in")
+            merge_in(state, entry, where, base, logs)
+            nothing_left(where, "the merge")
+        else:
+            say(state, branch, "gating", f"{BASE} has not moved; reading the gate, and no Check")
         candidate = git(where, "rev-parse", "HEAD")
 
         # Whether or not a Check reruns: verify-foundations always does, and a
         # tree without `target/` reads its own missing build as a new failure.
         seed(repo, where, logs)
-        since = git(repo, "merge-base", head, base)
-        landed = git(repo, "diff", "--name-only", since, base).splitlines()
-        changed = git(repo, "diff", "--name-only", since, head).splitlines()
-        # **Either side, not both.** A Check only one side hits is exactly the
-        # seam that breaks in combination — a Rust change landing on the base
-        # against a branch's TypeScript, where the generated types meet. One
-        # call over both sets is that union, in the order the Manifest writes.
-        rerun = covers(where, landed + changed)
+        rerun = []
+        if moved:
+            since = git(repo, "merge-base", head, base)
+            landed = git(repo, "diff", "--name-only", since, base).splitlines()
+            changed = git(repo, "diff", "--name-only", since, head).splitlines()
+            # **Either side, not both.** A Check only one side hits is exactly
+            # the seam that breaks in combination — a Rust change landing on the
+            # base against a branch's TypeScript, where the generated types
+            # meet. One call over both sets is that union, in the Manifest's order.
+            rerun = covers(where, landed + changed)
 
         # **Before setup, and that is what keeps the comparison honest.** The
         # base worktree needs no install to run this, so running one here would
         # be the only difference between the two trees.
         say(state, branch, "gating", "reading verify-foundations against " + BASE)
-        new_lines = foundations_delta(state, where, base, logs)
+        new_lines, crashed = foundations_delta(state, where, base, logs)
         nothing_left(where, "verify-foundations")
         log_paths = [os.path.join(logs, "foundations.log")]
 
@@ -512,15 +522,22 @@ def gate(state, entry, head, base, logs):
         # does not carry.
         nothing_left(where, "the Checks")
 
-        if failed or new_lines:
+        if failed or new_lines or crashed:
+            # One report, whatever went wrong: a gate that could not run must
+            # not hide the Checks that failed beside it.
+            against = f"with {BASE} merged in" if moved else f"against {BASE}"
             raise Stop(
                 "red",
-                f"red with {BASE} merged in: " + ", ".join(
+                f"red {against}: " + ", ".join(
                     ([f"{', '.join(failed)} failed"] if failed else [])
+                    + ([crashed] if crashed else [])
                     + ([f"{len(new_lines)} verify-foundations line(s) {BASE} does not have"] if new_lines else [])
                 ) + ". Nothing was pushed or merged.",
                 failed=failed, new_lines=new_lines, logs=log_paths,
             )
+
+        if not moved:
+            return candidate
 
         pushed = run(["git", "push", "--quiet", REMOTE, f"{candidate}:refs/heads/{branch}"], where, check=False)
         if pushed.returncode != 0:
@@ -590,7 +607,12 @@ def seed(repo, where, logs):
     for path in SEED:
         source, target = os.path.join(main_tree, path), os.path.join(where, path)
         if os.path.exists(source) and not os.path.exists(target):
-            run(["cp", "-cR", source, target], where, check=False, log=os.path.join(logs, "setup.log"))
+            # **Said, never swallowed.** A clone that works in one worktree and
+            # not the other prepares the two sides of the comparison differently.
+            if run(["cp", "-cR", source, target], where, check=False,
+                   log=os.path.join(logs, "setup.log")).returncode != 0:
+                raise Stop("stopped", f"`{path}` could not be cloned into {where}, so this tree would be "
+                                      "prepared differently from the one it is compared against; see setup.log")
 
 
 def setup(where, logs):
@@ -625,24 +647,26 @@ def a_report(text, code):
 
 
 def foundations_delta(state, where, base, logs):
-    """Failing lines the merged tree prints that `base`'s own run does not. Red
-    on main is legitimate, so only a new `FAIL` or `missing:` line is red; a new
-    warning is not a failure on main either, and the summary line's counts move
-    with every change."""
+    """The failing lines this tree prints that `base`'s own run does not, and a
+    sentence where it could not be read at all.
+
+    Red on `main` is legitimate, so only a new `FAIL` or `missing:` line is red;
+    a new warning is not a failure on `main` either, and the summary line's
+    counts move with every change. **Answered rather than raised**, so one
+    report carries this beside whatever the Checks found."""
     known = finding_counts(base_foundations(state, base, logs))
     done = run(FOUNDATIONS, where, check=False, log=os.path.join(logs, "foundations.log"))
     said = done.stdout + done.stderr
     if not a_report(said, done.returncode):
-        raise Stop("red", f"`{shlex.join(FOUNDATIONS)}` exited {done.returncode} with {BASE} merged in "
-                          "and named no failing rule, so nothing was gated; see foundations.log",
-                   new_lines=failing_lines(said) or said.strip().splitlines()[-3:], logs=[os.path.join(logs, "foundations.log")])
+        return (said.strip().splitlines()[-3:],
+                f"`{shlex.join(FOUNDATIONS)}` exited {done.returncode} naming no failing rule, so nothing was gated")
     seen, new = {}, []
     for line in failing_lines(said):
         at = NUMBERED.sub("", line)
         seen[at] = seen.get(at, 0) + 1
         if seen[at] > known.get(at, 0):
             new.append(line)
-    return new
+    return new, None
 
 
 def base_foundations(state, base, logs):

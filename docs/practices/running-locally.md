@@ -500,11 +500,22 @@ scripts/land --status [<branch>]    # poll, in short foreground calls
 ```
 
 **It merges your branch's pull request to `main`, in turn with every other
-branch landing from this clone.** Where `main` moved since your branch was cut or
-caught up, it merges `main` in and reruns every Check whose `when:` matches what
-landed on `main` or what your branch changed, before merging. Where `main` has
-not moved, nothing reruns and your own step 4 run is what the branch stands on.
-The design is [Merge line](../capabilities/merge-line.md).
+branch landing from this clone.** Every turn runs `cargo xtask verify-foundations`
+against the commit being merged and reads it as a delta against `main`'s own run.
+Where `main` moved since your branch was cut or caught up, it also merges `main`
+in and reruns every Check whose `when:` matches what landed on `main` or what
+your branch changed. The design is
+[Merge line](../capabilities/merge-line.md).
+
+| `main` has | What the turn runs |
+|---|---|
+| Not moved | The gate, and no Check — seconds |
+| Moved | The gate, and every Check either side hits — minutes |
+
+**The split is what each one reads.** The gate reads the tree, and a branch that
+breaks it takes the line down for everybody behind it, so it runs whatever `main`
+did. A Check reads the combination, and there is no combination until the base
+has moved — your own step 4 run is what the branch stands on until then.
 
 **When you run it:** from the branch's own worktree, after your Checks passed and
 the owner said merge. `gh pr merge` and a push to `main` are refused by
@@ -518,11 +529,11 @@ Until a build carrying it is installed, point `ARMADA_LAND_ARMADA` at that
 binary by its **absolute** path — the gate runs in a worktree of its own, so a
 relative one is refused.
 
-**A gated turn takes minutes.** It cuts a worktree at the merge, clones the
-build directories into it, runs `verify-foundations` there and again in a
-worktree at `main` itself, then installs and runs each Check that either side
-hits. What landed is measured from the merge base, so an old branch meets nearly
-every Check on the way in.
+**A gated turn takes minutes.** It cuts a worktree at the commit being merged,
+clones the build directories into it, runs `verify-foundations` there and again
+in a worktree at `main` itself, then installs and runs each Check that either
+side hits. What landed is measured from the merge base, so an old branch meets
+nearly every Check on the way in.
 
 **`scripts/land` returns at once**, and a runner in the background does the work.
 Poll `--status`, which answers from disk in well under a second, until it stops

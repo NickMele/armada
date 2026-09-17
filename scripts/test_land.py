@@ -296,7 +296,7 @@ class Line(unittest.TestCase):
 
         first = self.settle(one, "fix/one")
         self.assertEqual(first.returncode, 0, first.stdout)
-        self.assertEqual(self.logged("fix/one"), [], "main had not moved, so nothing reran")
+        self.assertNotIn("test.log", self.logged("fix/one"), "main had not moved, so no Check reran")
         second = self.settle(two, "fix/two")
         self.assertEqual(second.returncode, 4, second.stdout)
         self.assertIn("test failed", second.stdout)
@@ -310,14 +310,16 @@ class Line(unittest.TestCase):
         self.assertEqual(load(self.prs)["2"]["state"], "OPEN")
         self.assertEqual(os.listdir(self.state_file("queue")), [], "every exit leaves the line")
 
-    def test_main_unmoved_reruns_nothing(self):
+    def test_main_unmoved_runs_the_gate_and_no_check(self):
         where = self.branch("fix/alone", {"checks/test.sh": "exit 1\n"})
         self.land(where, "preflight")
         self.land(where)
         done = self.settle(where, "fix/alone")
         self.assertEqual(done.returncode, 0, done.stdout)
         self.assertIn("merged as", done.stdout)
-        self.assertEqual(self.logged("fix/alone"), [], "a failing Check never ran, because main had not moved")
+        logged = self.logged("fix/alone")
+        self.assertNotIn("test.log", logged, "a failing Check never ran, because main had not moved")
+        self.assertIn("foundations.log", logged, "the gate reads the tree on every turn")
         merge = self.outcome("fix/alone")["merge_commit"]
         self.git(self.repo, "fetch", "--quiet", "origin")
         self.assertEqual(len(self.git(self.repo, "rev-list", "--parents", "-n", "1", merge).split()), 3, "a merge commit, not a rebase")
@@ -487,15 +489,29 @@ class Line(unittest.TestCase):
         self.land(broken)
         done = self.settle(broken, "fix/breaks-the-gate")
         self.assertEqual(done.returncode, 4, done.stdout)
-        self.assertIn("named no failing rule", done.stdout)
+        self.assertIn("naming no failing rule", done.stdout)
+        self.assertIn("test.log", self.logged("fix/breaks-the-gate"),
+                      "a gate that could not run does not hide the Checks beside it")
         self.assertNotIn("moved.txt", self.main_files() - {"moved.txt"} or set())
 
+    def test_a_branch_that_breaks_the_gate_is_refused_on_an_unmoved_turn(self):
+        where = self.branch("fix/breaks-the-gate-alone", {"foundations.sh": "exit 101\n"})
+        self.land(where, "preflight")
+        self.land(where)
+        done = self.settle(where, "fix/breaks-the-gate-alone")
+        self.assertEqual(done.returncode, 4, done.stdout)
+        self.assertNotIn("foundations.sh", self.main_files() - {"foundations.sh"} or set())
+        self.assertNotIn("test.log", self.logged("fix/breaks-the-gate-alone"), "and still no Check ran")
+
     def test_a_base_whose_own_gate_cannot_run_stops_rather_than_reds(self):
-        mover = self.branch("fix/breaks-base", {"foundations.sh": "exit 101\n"})
+        # Broken on main by a hand merge, which is what the guard hook refuses.
+        hand = os.path.join(self.root, "hand-merge")
+        sh("git", "clone", "--quiet", self.remote, hand, env=self.env)
+        self.write(hand, {"foundations.sh": "exit 101\n"})
+        self.git(hand, "add", "-A")
+        self.git(hand, "commit", "--quiet", "-m", "break the gate on main")
+        self.git(hand, "push", "--quiet", "origin", "HEAD:main")
         after = self.branch("fix/after-base", {"after.txt": "1\n"})
-        self.land(mover, "preflight")
-        self.land(mover)
-        self.assertEqual(self.settle(mover, "fix/breaks-base").returncode, 0, "main had not moved, so nothing ran")
         self.land(after, "preflight")
         self.land(after)
         done = self.settle(after, "fix/after-base")
@@ -680,7 +696,7 @@ class Line(unittest.TestCase):
         ran = [line.split() for line in open(self.env["LAND_TEST_EVIDENCE"]).read().splitlines()]
         foundations = [line for line in ran if line[0] == "foundations"]
         checks = [line for line in ran if line[0] == "check"]
-        self.assertEqual(len(foundations), 2, "the base's own run and the merged tree's")
+        self.assertGreaterEqual(len(foundations), 2, "each turn reads the base's own run and its own tree's")
         for line in foundations:
             self.assertEqual(line[1:], ["seed=yes", "setup=no"],
                              "both sides are seeded, and neither is installed into")
