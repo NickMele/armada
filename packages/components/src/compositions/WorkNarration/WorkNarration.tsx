@@ -28,6 +28,23 @@ export type NarrationBeat = {
   body?: ReactNode;
 };
 
+/**
+ * One file a section changed, under its heading. #1187.
+ *
+ * **What its numbers are is the caller's to say**, in the section's
+ * `filesSay`: under a task they are the sizes of the Drone's own edits, and
+ * under the row no task owns they are the diff's lines. The two are drawn
+ * alike and must never be read alike.
+ */
+export type NarrationFile = {
+  /** Stable, and the whole path a hover shows. */
+  path: string;
+  /** What the row reads — `daemon/fittings.rs`. */
+  name: string;
+  added?: number;
+  deleted?: number;
+};
+
 export type NarrationSection = {
   id: string;
   /** The task it is. Absent draws the sentences bare, with no heading. */
@@ -44,6 +61,12 @@ export type NarrationSection = {
   beats: NarrationBeat[];
   /** A line above the sentences, for the ones left out — `12 earlier, in the log`. */
   earlier?: string;
+  /** The files it changed, under the heading and drawn whether or not it is open. */
+  files?: NarrationFile[];
+  /** What the files' numbers are — `sizes of its edits`. Required wherever `files` is. */
+  filesSay?: string;
+  /** Set apart from the tasks above it: the files no task's edits account for. */
+  apart?: boolean;
 };
 
 export type WorkNarrationProps = {
@@ -98,19 +121,24 @@ function Section({ section }: { section: NarrationSection }) {
       )}
     </>
   );
+  const files =
+    section.files === undefined || section.files.length === 0 ? null : (
+      <Files files={section.files} say={section.filesSay} />
+    );
   // A task nobody has worked on this step is a line with nothing to open.
   if (section.beats.length === 0) {
     return (
-      <div className="armada-narration__section">
+      <div className="armada-narration__section" data-apart={section.apart || undefined}>
         <p className="armada-narration__head">
           <span className="armada-narration__fold" aria-hidden />
           {title}
         </p>
+        {files}
       </div>
     );
   }
   return (
-    <div className="armada-narration__section">
+    <div className="armada-narration__section" data-apart={section.apart || undefined}>
       <button
         type="button"
         className="armada-narration__head"
@@ -120,6 +148,7 @@ function Section({ section }: { section: NarrationSection }) {
         <Chevron open={open} />
         {title}
       </button>
+      {files}
       {/* Hidden rather than unmounted, so a row opened inside survives a fold. */}
       <div className="armada-narration__beats" hidden={!open}>
         {beats}
@@ -157,6 +186,32 @@ function Beat({ beat }: { beat: NarrationBeat }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * A section's files on one wrapping line, each with `+6 −1`, and what those
+ * numbers are said after them. **A zero is not drawn**, for `ChangedFiles`'s
+ * reason: `−0` reads as a value that failed to arrive.
+ */
+function Files({ files, say }: { files: NarrationFile[]; say?: string }) {
+  return (
+    <div className="armada-narration__files">
+      <ul aria-label={say === undefined ? "Files" : `Files, ${say}`}>
+        {files.map((file) => (
+          <li key={file.path} title={file.path}>
+            <span className="mono">{file.name}</span>
+            {file.added === undefined || file.added === 0 ? null : (
+              <span className="mono">{`+${file.added}`}</span>
+            )}
+            {file.deleted === undefined || file.deleted === 0 ? null : (
+              <span className="mono">{`\u2212${file.deleted}`}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {say === undefined ? null : <span className="armada-narration__files-say">{say}</span>}
     </div>
   );
 }

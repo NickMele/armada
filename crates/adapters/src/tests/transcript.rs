@@ -351,6 +351,27 @@ fn a_call_carries_what_it_did() {
     );
 }
 
+/// **A Write says how many lines it wrote, and carries none of them.** It is
+/// the size of the call, like an Edit's, and has no `-` because what the file
+/// held before is not in the call. #1187.
+#[test]
+fn a_write_carries_the_lines_it_wrote_and_not_the_file() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"Write",
+              "input":{"file_path":"/tmp/repo/src/pending.rs",
+                       "content":"pub struct Pending;\n\nimpl Pending {}\n"}}]}}"#,
+    );
+    let DroneEvent::Called { detail, .. } = &read[0] else {
+        panic!("{read:?}")
+    };
+    assert_eq!(detail.shown(), "/tmp/repo/src/pending.rs +3");
+    assert!(
+        !detail.shown().contains("Pending"),
+        "the content is not carried"
+    );
+}
+
 /// A `Write` argument is a whole file. The bound is the type's and not this
 /// decoder's, so what is asserted here is that a row says it was cut rather
 /// than leaving a reader to guess from a trailing character.
@@ -420,8 +441,9 @@ fn a_call_whose_arguments_have_no_name_here_is_still_a_call() {
 }
 
 /// The captures are the specification, and the largest argument in the stream
-/// is a `Write`'s file body. It has no field on `ToolInput`, so no row can
-/// carry one — asserted against the real capture rather than a written fixture.
+/// is a `Write`'s file body. It is counted as it is decoded, so a row carries
+/// its line count and never the body — asserted against the real capture rather
+/// than a written fixture.
 #[test]
 fn a_real_write_call_carries_its_path_and_not_its_content() {
     let written = all_of("004-transcript-during-tool-call.ndjson")
@@ -432,7 +454,7 @@ fn a_real_write_call_carries_its_path_and_not_its_content() {
         })
         .next()
         .expect("the capture writes a file");
-    assert!(written.shown().ends_with("POKED2.txt"), "{written:?}");
+    assert!(written.shown().contains("POKED2.txt +"), "{written:?}");
     assert!(!written.shown().contains("POKED\""), "{written:?}");
 }
 

@@ -23,10 +23,20 @@
 //!
 //! What [`Publishing`] then decides is whether the reading is worth sending,
 //! and [`Fleet::kept_footprint`] is the one reading that is written down.
+//!
+//! # The counts, taken once the Drone settles
+//!
+//! Counting is the walk that renders the patch, so a due reading counts only
+//! where [`Publishing::counts_owed`] says so — ten seconds since the last
+//! count, no call since the reading before, and something moved — and lists
+//! otherwise, carrying the last count for each file still listed. #1187.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
-use adapter_traits::{AgentHarness, Change, Changed, Delivery, Vcs, WorkProduct};
+use adapter_traits::{
+    AgentHarness, Change, Changed, ChangedFile, Counted, Delivery, Vcs, WorkProduct,
+};
 use core_model::{
     Actor, Component, DeclaredPaths, Envelope, FieldValue, Job, JobId, Level, Timestamp,
 };
@@ -46,6 +56,15 @@ use crate::working::Working;
 /// not the last success, so a repository that will not open does not turn into
 /// a read every 250ms for as long as the step lasts.
 pub(crate) const FOOTPRINT_INTERVAL: Duration = Duration::from_secs(2);
+
+/// The shortest time between two counted readings of one Drone's worktree.
+///
+/// **Ten seconds, five readings of the list.** Counting costs the patch —
+/// 1.3ms over 6 files, 25ms over a hundred, 90ms over four hundred, measured in
+/// `WorkProduct::counted_files` — and it is taken inside the slot's lock, so a
+/// Drone's tool call can wait behind it. At most one in forty turns pays it,
+/// and only where [`Publishing::counts_owed`] says the Drone has settled.
+pub(crate) const COUNTED_INTERVAL: Duration = Duration::from_secs(10);
 
 /// What the slot remembers between readings of the live footprint.
 ///
@@ -74,6 +93,19 @@ pub(crate) struct Publishing {
     published: Option<Vec<ipc::ChangedFile>>,
     /// How many clients were listening at the last look.
     watchers: usize,
+    /// The Drone's calls this step, as the last reading attempt read them. What
+    /// says whether it has settled.
+    calls_then: Option<u32>,
+    /// When the last count was **attempted**, for the reason `read_at` is.
+    counted_at: Option<Timestamp>,
+    /// The Drone's calls this step when the last count was taken.
+    calls_counted: Option<u32>,
+    /// A list reading since the last count found a different list.
+    listed_since: bool,
+    /// The paths and kinds the last count found, and what each gained and lost.
+    counts: BTreeMap<String, (ipc::ChangeKind, ipc::LineCount)>,
+    /// The paths and kinds the last count found, whether or not each had lines.
+    counted_list: Vec<(String, ipc::ChangeKind)>,
 }
 
 impl Publishing {
@@ -99,10 +131,88 @@ impl Publishing {
         }
     }
 
+    /// Whether this reading should count lines rather than list paths.
+    ///
+    /// Asked on a reading that is already due, with the Drone's calls this
+    /// step. See this module's table. A first reading always counts: nothing
+    /// has been counted for a list to have moved from.
+    pub(crate) fn counts_owed(&self, now: &Timestamp, calls: u32) -> bool {
+        let Some(last) = &self.counted_at else {
+            return true;
+        };
+        let spaced = elapsed(last, now) >= COUNTED_INTERVAL;
+        let settled = self.calls_then.is_none_or(|then| then == calls);
+        let moved = self.listed_since || self.calls_counted != Some(calls);
+        spaced && settled && moved
+    }
+
     /// A reading is being taken. Recorded before it happens, so one that fails
     /// costs the same interval as one that succeeds.
-    fn reading(&mut self, now: &Timestamp) {
+    pub(crate) fn reading(&mut self, now: &Timestamp, calls: u32) {
         self.read_at = Some(now.clone());
+        self.calls_then = Some(calls);
+    }
+
+    /// A count is being taken. Recorded before it happens, for `reading`'s
+    /// reason.
+    pub(crate) fn counting(&mut self, now: &Timestamp, calls: u32) {
+        self.counted_at = Some(now.clone());
+        self.calls_counted = Some(calls);
+        self.listed_since = false;
+    }
+
+    /// What a count found, kept for the readings until the next.
+    pub(crate) fn counted(&mut self, counted: &Counted) {
+        self.counted_list = counted
+            .files()
+            .iter()
+            .map(|file| (file.path().to_string(), kind(file.change())))
+            .collect();
+        self.counts = counted
+            .files()
+            .iter()
+            .filter_map(|file| {
+                let lines = file.lines()?;
+                Some((
+                    file.path().to_string(),
+                    (
+                        kind(file.change()),
+                        ipc::LineCount {
+                            added: lines.added(),
+                            deleted: lines.deleted(),
+                        },
+                    ),
+                ))
+            })
+            .collect();
+    }
+
+    /// What a list reading found. **A list that differs from the last count's
+    /// is owed a count**, once the Drone settles and the interval allows.
+    pub(crate) fn listed(&mut self, changed: &Changed) {
+        let now: Vec<(String, ipc::ChangeKind)> = changed
+            .files()
+            .iter()
+            .map(|file| (file.path().to_string(), kind(file.change())))
+            .collect();
+        if now != self.counted_list {
+            self.listed_since = true;
+        }
+    }
+
+    /// The reading's rows, each with the last count for its path and kind.
+    pub(crate) fn with_counts(&self, files: Vec<ipc::ChangedFile>) -> Vec<ipc::ChangedFile> {
+        files
+            .into_iter()
+            .map(|file| ipc::ChangedFile {
+                lines: self
+                    .counts
+                    .get(&file.path)
+                    .filter(|(change, _)| *change == file.change)
+                    .map(|(_, lines)| *lines),
+                ..file
+            })
+            .collect()
     }
 
     /// Whether this list is worth sending, **and take it as sent**.
@@ -141,12 +251,25 @@ where
         if !at_work.publishing().due(&now) {
             return None;
         }
-        at_work.publishing().reading(&now);
+        let calls = at_work.calls_this_step();
+        let owed = at_work.publishing().counts_owed(&now, calls);
+        at_work.publishing().reading(&now, calls);
         let (job, step, worktree) = at_work.standing();
         let (_, _, drone) = at_work.drone();
-        let changed = self.work().changed_files(&worktree).ok()?;
+        let changed = if owed {
+            at_work.publishing().counting(&now, calls);
+            let counted = self.work().counted_files(&worktree).ok()?;
+            at_work.publishing().counted(&counted);
+            listed_of(&counted)
+        } else {
+            let changed = self.work().changed_files(&worktree).ok()?;
+            at_work.publishing().listed(&changed);
+            changed
+        };
         let plan = at_work.declared().cloned();
-        let files = seen(&changed, plan.as_ref());
+        let files = at_work
+            .publishing()
+            .with_counts(seen(&changed, plan.as_ref()));
         if at_work.publishing().publishes(&files) {
             self.publish(ipc::Event::JobFilesChanged(ipc::JobFilesChanged {
                 job_id: (&job).into(),
@@ -192,10 +315,8 @@ where
             Ok(None) => return,
             Err(why) => return self.noted_unfootprinted(job.id(), &why.to_string()),
         };
-        // The one counted reading in the process, and what lets a finished
-        // Job say `+94 −31` where a running one says only how many files.
-        // `WorkProduct::counted_files` measures what it costs: the patch that
-        // would render the diff, which is affordable once and not on a turn.
+        // The final count, and the one that is kept. A running Job's counts
+        // are the live reading's, taken when the Drone settles.
         let changed = match self.work().counted_files(&worktree) {
             Ok(changed) => changed,
             Err(cause) => return self.noted_unfootprinted(job.id(), &cause.to_string()),
@@ -253,8 +374,20 @@ pub(crate) fn seen(changed: &Changed, plan: Option<&DeclaredPaths>) -> Vec<ipc::
             // not decided again here. Without a plan there is nothing to be
             // outside of, and `plan_declared` is what says so.
             outside_plan: plan.is_some_and(|plan| !plan.covers(file.path())),
+            lines: None,
         })
         .collect()
+}
+
+/// A count as the list it also is, for the drift check that reads a list.
+fn listed_of(counted: &Counted) -> Changed {
+    Changed::of(
+        counted
+            .files()
+            .iter()
+            .map(|file| ChangedFile::new(file.path().to_string(), file.change()))
+            .collect(),
+    )
 }
 
 /// The record, as the wire carries it, with each file attributed to the plans

@@ -101,6 +101,74 @@ export const APlanMidTask: Story = {
   },
 };
 
+/**
+ * A running Job, #1187's first story: three tasks' files under their lines,
+ * sized by their edits, and the one file no task's edits account for set apart
+ * and sized by the diff. **The two kinds of number say what they are.**
+ */
+export const FilesByTask: Story = {
+  name: "Files by task, and one no task owns",
+  args: {
+    emptyNote: "Nothing yet",
+    sections: [
+      {
+        id: "T1",
+        heading: { task: "T1", mark: "done", title: "Give arriving evidence its own durable row" },
+        meta: "31 calls · 5m 02s · 2 files",
+        files: [
+          { path: "crates/store/src/pending_evidence.rs", name: "pending_evidence.rs", added: 82 },
+          { path: "crates/store/src/migrations.rs", name: "migrations.rs", added: 12 },
+        ],
+        filesSay: "sizes of its edits, not the diff",
+        beats: [{ id: "f1", at: "08:17:02", said: "Start with the table.", meta: "31 calls · Write, Edit", body: row("Write  crates/store/src/pending_evidence.rs +82") }],
+      },
+      {
+        id: "T2",
+        heading: { task: "T2", mark: "done", title: "Update every place that empties the inbox" },
+        meta: "14 calls · 3m 10s · 2 files",
+        files: [
+          { path: "crates/fleet/src/dispatch.rs", name: "dispatch.rs", added: 5, deleted: 5 },
+          { path: "crates/fleet/src/ending.rs", name: "ending.rs", added: 3, deleted: 3 },
+        ],
+        filesSay: "sizes of its edits, not the diff",
+        beats: [{ id: "f2", at: "08:22:40", said: "Now the call sites.", meta: "14 calls · Grep, Edit", body: row("Edit  crates/fleet/src/dispatch.rs +5 -5") }],
+      },
+      {
+        id: "T3",
+        heading: { task: "T3", mark: "working", title: "Reload saved evidence when Fleet starts" },
+        meta: "4 calls · 1m 02s · 2 files",
+        open: true,
+        files: [
+          { path: "crates/fleet/src/evidence.rs", name: "evidence.rs", added: 4 },
+          { path: "crates/fleet/src/daemon/fittings.rs", name: "daemon/fittings.rs", added: 8, deleted: 1 },
+        ],
+        filesSay: "sizes of its edits, not the diff",
+        beats: [reloaded, wired],
+      },
+      {
+        id: "T4",
+        heading: { task: "T4", mark: "open", title: "Rule on reloaded evidence without a live Drone" },
+        beats: [],
+      },
+      {
+        id: "outside-task-edits",
+        heading: { title: "Changed outside any task's edits" },
+        meta: "1 file",
+        files: [{ path: "crates/store/src/lib.rs", name: "lib.rs", added: 2 }],
+        filesSay: "lines in the diff",
+        apart: true,
+        beats: [],
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("list", { name: "Files, lines in the diff" })).toHaveTextContent("lib.rs+2");
+    // A folded task still says what it changed, and what its numbers are.
+    await expect(canvas.getAllByRole("list", { name: "Files, sizes of its edits, not the diff" })).toHaveLength(3);
+    await expect(canvas.getByText("Changed outside any task's edits")).toBeVisible();
+  },
+};
+
 /** No plan on the workflow: the sentences, with no headings and no bar. */
 export const NoPlan: Story = {
   name: "A step with no plan",

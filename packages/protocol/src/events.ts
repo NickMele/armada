@@ -10,6 +10,7 @@
 // a field moves, and every closed set is left as `string`.
 
 import type { JudgeInFlight, Settled } from "./detail";
+import type { LineCount } from "./footprint";
 import type { JobForgotten, JobList, JobSummary, Reason } from "./protocol";
 import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
@@ -408,6 +409,13 @@ export type ChangedFile = {
    * where the step declared no plan, which is what `plan_declared` is for.
    */
   outside_plan?: boolean;
+  /**
+   * What the file gained and lost, as of Fleet's last counted reading. Since
+   * protocol 14.10, and only on `job.files_changed`. **Absent is not zero**: a
+   * file nothing counted, or one that arrived after the last count, which
+   * Fleet takes once the Drone's calls settle and at most every ten seconds.
+   */
+  lines?: LineCount;
 };
 
 // `manifest.reread` carries `ManifestReading` itself rather than a payload

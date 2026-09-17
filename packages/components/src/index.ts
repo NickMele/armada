@@ -313,3 +313,5 @@ export * from "./compositions/StudioNode/StudioNode";
 export * from "./compositions/StudioWhiteboard/StudioWhiteboard";
 // A label and its figure in one aligned column — Pulse and the Fleet panel.
 export * from "./compositions/FigureList/FigureList";
+// What the Job has changed, as its own panel beside the run. #1187.
+export * from "./compositions/ProducedPanel/ProducedPanel";

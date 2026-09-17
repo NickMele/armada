@@ -489,7 +489,7 @@ export function stepTimelineOf(
   now: number,
   /** The step's story over one of its runs. `ended` is a run that is over. */
   story: (read: AttemptRead, ended: boolean) => readonly StepChapter[],
-  /** The plan bar, leading every Working row's meta where the Job has a plan. #1185. */
+  /** The plan bar, beside every Working row's act where the Job has a plan. #1185. */
   plan?: ReactNode,
 ): StepTimelineAttempt[] {
   return timelineOf(step, turns, now).map((attempt) => {
@@ -502,7 +502,8 @@ export function stepTimelineOf(
       ...(saidOf(attempt) === undefined ? {} : { said: saidOf(attempt) }),
       current: attempt.current,
       rows: attempt.rows.map((row) => {
-        const drawn = bodyOf(row.phase, mine);
+        // The current run's Produced is the Job's own panel, not this row's. #1187.
+        const drawn = bodyOf(row.phase, mine, attempt.current);
         // **The count is said only where the row does not draw the list.** What
         // this attempt wrote is its own boundary reading; the Produced chapter
         // under it lists files of its own, so a row that draws the chapter and
@@ -518,13 +519,13 @@ export function stepTimelineOf(
           marker: namesChapter(`${attempt.id}-${row.id}`),
           name: row.name,
           activity: row.mark,
-          ...(row.phase === "working" && plan !== undefined
-            ? { meta: <>{plan}{meta === undefined ? null : ` · ${meta}`}</> }
-            : meta === undefined
-              ? {}
-              : { meta }),
+          ...(meta === undefined ? {} : { meta }),
           ...(row.live === true ? { live: true } : {}),
           ...drawn.row,
+          // The plan bar sits beside `Open the log`, as drawn. #1185, #1187.
+          ...(row.phase === "working" && plan !== undefined
+            ? { act: <>{plan}{drawn.row.act}</> }
+            : {}),
         };
       }),
     };
@@ -536,7 +537,8 @@ const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
   instructed: ["instructions"],
   // What the Drone did and what came out of it are one reading — the owner's
   // call, 11 Sep 2026 — so the log, what it showed and what it wrote all sit
-  // under the phase that produced them.
+  // under the phase that produced them. On the current run, Produced is the
+  // Job's own panel instead: the owner's call, 15 Sep 2026, #1187.
   working: ["log", "shown", "produced"],
   checks: ["checks"],
   judge: ["verdicts"],
@@ -553,13 +555,16 @@ const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
 function bodyOf(
   phase: TimelinePhase,
   held: Map<string, StepChapter>,
+  current: boolean,
 ): { row: { body?: ReactNode; act?: ReactNode; bounded?: boolean }; showsWhatItWrote?: boolean } {
-  const mine = CHAPTERS[phase].flatMap((id) => {
+  const owned = CHAPTERS[phase].flatMap((id) => {
     const chapter = held.get(id);
     return chapter === undefined ? [] : [chapter];
   });
-  if (mine.length === 0) return { row: {} };
-  const showsWhatItWrote = mine.some((chapter) => chapter.id === "produced");
+  // Drawn on the page either way: in the row on an earlier run, in the panel on this one.
+  const showsWhatItWrote = owned.some((chapter) => chapter.id === "produced");
+  const mine = current ? owned.filter((chapter) => chapter.id !== "produced") : owned;
+  if (mine.length === 0) return { row: {}, ...(showsWhatItWrote ? { showsWhatItWrote } : {}) };
   // **Every act the phase's chapters carry, not the first.** Working owns the
   // log, what was shown and what was produced, and each has somewhere of its
   // own to go — keeping only the first took `Open the diff` off the panel

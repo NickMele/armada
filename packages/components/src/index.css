@@ -289,6 +289,8 @@
 
 /* A label and its figure in one aligned column — Pulse and the Fleet panel. */
 @import "./compositions/FigureList/FigureList.css";
+/* What the Job has changed, as its own panel beside the run. #1187. */
+@import "./compositions/ProducedPanel/ProducedPanel.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */

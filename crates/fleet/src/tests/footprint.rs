@@ -129,6 +129,11 @@ async fn drained(watching: &mut Subscription) -> Vec<ipc::JobFilesChanged> {
     seen
 }
 
+/// Every live reading of the worktree, listed or counted.
+fn readings(fleet: &Fixture) -> usize {
+    fleet.work().listed().len() + fleet.work().counted().len()
+}
+
 /// A worktree in which one file was written, one edited and one removed.
 pub(super) fn three_kinds() -> FakeWorkProduct {
     FakeWorkProduct::changing(&[
@@ -252,10 +257,7 @@ async fn an_idle_fleet_reads_no_worktree() {
         fleet.turn().await.expect("a turn");
     }
 
-    assert!(
-        fleet.work().listed().is_empty(),
-        "an empty slot has no worktree to read"
-    );
+    assert_eq!(readings(&fleet), 0, "an empty slot has no worktree to read");
 }
 
 /// **A Fleet nobody has open pays nothing.** This event has exactly one
@@ -273,8 +275,9 @@ async fn a_drone_nobody_is_watching_is_not_read() {
         fleet.turn().await.expect("a turn");
     }
 
-    assert!(
-        fleet.work().listed().is_empty(),
+    assert_eq!(
+        readings(&fleet),
+        0,
         "nobody is subscribed, so there is nothing to publish to"
     );
 }
@@ -291,15 +294,11 @@ async fn a_second_turn_inside_the_interval_takes_no_reading() {
 
     fleet.turn().await.expect("the first turn");
     fleet.turn().await.expect("a turn inside the interval");
-    assert_eq!(fleet.work().listed().len(), 1, "one reading, not two");
+    assert_eq!(readings(&fleet), 1, "one reading, not two");
 
     clock.advance(10);
     fleet.turn().await.expect("a turn past the interval");
-    assert_eq!(
-        fleet.work().listed().len(),
-        2,
-        "and the interval releases it"
-    );
+    assert_eq!(readings(&fleet), 2, "and the interval releases it");
 }
 
 /// **A footprint that has not moved is not sent again.** The event channel is
@@ -318,7 +317,7 @@ async fn an_unchanged_footprint_publishes_once() {
         fleet.turn().await.expect("a turn");
     }
 
-    assert_eq!(fleet.work().listed().len(), 4, "read on every one of them");
+    assert_eq!(readings(&fleet), 4, "read on every one of them");
     assert_eq!(
         drained(&mut watching).await.len(),
         1,
@@ -482,12 +481,10 @@ fn three_counted() -> FakeWorkProduct {
 }
 
 /// **The cost claim, asserted rather than inherited.** Counting is the walk
-/// that renders the patch — 25ms over a hundred files — so it is paid once, at
-/// the transition that ends the Job, however long anybody watched. The live
-/// readings in the same run are what give the number something to be one
-/// against.
+/// that renders the patch, so a Drone whose list does not move and who makes
+/// no call is counted once, however long anybody watches. #1187.
 #[tokio::test]
-async fn the_lines_are_counted_once_when_the_job_stops_and_never_on_a_turn() {
+async fn a_drone_that_moves_nothing_is_counted_once_however_long_it_is_watched() {
     let home = TempDir::new();
     let clock = Held::at_nine();
     let fleet = a_fleet_reading(&home, three_counted(), Arc::clone(&clock), None);
@@ -498,23 +495,105 @@ async fn the_lines_are_counted_once_when_the_job_stops_and_never_on_a_turn() {
         clock.advance(10);
         fleet.turn().await.expect("a turn");
     }
-    assert_eq!(fleet.work().listed().len(), 4, "four live readings");
-    assert!(
-        fleet.work().counted().is_empty(),
-        "and not one of them counted a line"
-    );
+    assert_eq!(fleet.work().counted().len(), 1, "the first reading counts");
+    assert_eq!(fleet.work().listed().len(), 3, "and the rest only list");
 
     fleet.kill_job(&job).await.expect("a terminal status");
 
     assert_eq!(
         fleet.work().counted().len(),
-        1,
-        "once per Job, on the transition that ended it"
+        2,
+        "and the transition that ends the Job counts once more, for the record"
     );
+}
+
+/// **A list that moves is counted again, and not before the interval.** The
+/// file arrives on the next reading with no count, which is absent rather than
+/// zero, and the count follows once ten seconds have passed since the last.
+#[tokio::test]
+async fn a_file_that_arrives_is_counted_once_the_interval_allows() {
+    let home = TempDir::new();
+    let clock = Held::at_nine();
+    let fleet = a_fleet_reading(&home, three_counted(), Arc::clone(&clock), None);
+    let mut watching = fleet.events().subscribe();
+    started(&fleet, &home).await;
+    fleet.turn().await.expect("the first, counted, reading");
+
+    fleet
+        .work()
+        .holding()
+        .wrote_counting(&[("src/lexer.rs", Change::Added, Some((12, 0)))]);
+    clock.advance(2);
+    fleet
+        .turn()
+        .await
+        .expect("a reading inside the count's interval");
+    let arrived = drained(&mut watching).await;
+    let last = arrived.last().expect("the list moved, so it was published");
+    let lexer = last
+        .files
+        .iter()
+        .find(|file| file.path == "src/lexer.rs")
+        .expect("the new file is listed");
+    assert_eq!(lexer.lines, None, "listed before anything counted it");
+    assert_eq!(fleet.work().counted().len(), 1);
+
+    clock.advance(8);
+    fleet
+        .turn()
+        .await
+        .expect("a reading ten seconds after the count");
+    assert_eq!(fleet.work().counted().len(), 2, "the moved list is counted");
+    let counted = drained(&mut watching).await;
+    let lexer = counted
+        .last()
+        .expect("the count moved the reading")
+        .files
+        .iter()
+        .find(|file| file.path == "src/lexer.rs")
+        .expect("still listed")
+        .lines;
     assert_eq!(
-        fleet.work().listed().len(),
-        4,
-        "and the terminal reading is not a live one"
+        lexer,
+        Some(ipc::LineCount {
+            added: 12,
+            deleted: 0
+        })
+    );
+}
+
+/// **Settled means no call between two readings.** A Drone still making calls
+/// is not counted mid-run, one that stopped is, and one that made no call since
+/// the last count and wrote nothing new is not counted at all.
+#[test]
+fn a_count_waits_for_the_drone_to_settle() {
+    let at = |second: u64| {
+        Timestamp::from_rfc3339(format!(
+            "2026-08-26T09:{:02}:{:02}.000Z",
+            second / 60,
+            second % 60
+        ))
+    };
+    let mut publishing = crate::footprint::Publishing::default();
+    assert!(publishing.counts_owed(&at(0), 0), "nothing counted yet");
+    publishing.reading(&at(0), 0);
+    publishing.counting(&at(0), 0);
+
+    publishing.reading(&at(10), 3);
+    assert!(
+        !publishing.counts_owed(&at(12), 5),
+        "two calls since the last reading: still working"
+    );
+    publishing.reading(&at(12), 5);
+    assert!(
+        publishing.counts_owed(&at(14), 5),
+        "no call since the last reading, and calls since the count"
+    );
+    publishing.counting(&at(14), 5);
+    publishing.reading(&at(14), 5);
+    assert!(
+        !publishing.counts_owed(&at(30), 5),
+        "settled, but nothing moved since that count"
     );
 }
 
@@ -561,12 +640,12 @@ async fn a_finished_jobs_record_says_what_each_file_gained_and_lost() {
     );
 }
 
-/// **The live seam is unchanged, and that is a property rather than an
-/// omission.** A watcher gets paths and change kinds; the counts are on the
-/// record and nowhere else, because the reading that carries them costs the
-/// patch.
+/// **A running Job's reading carries its counts.** The first reading a
+/// watcher is owed counts, so a Bridge that opens a running Job reads `+61 −4`
+/// beside the file rather than waiting for it to end — and the file nothing
+/// could count carries none. #1187.
 #[tokio::test]
-async fn the_live_event_carries_no_counts() {
+async fn the_live_event_carries_the_counts() {
     let home = TempDir::new();
     let clock = Held::at_nine();
     let fleet = a_fleet_reading(&home, three_counted(), Arc::clone(&clock), None);
@@ -576,10 +655,17 @@ async fn the_live_event_carries_no_counts() {
     fleet.turn().await.expect("a turn");
     let published = drained(&mut watching).await;
 
-    assert_eq!(published[0].files.len(), 3);
-    assert!(
-        fleet.work().counted().is_empty(),
-        "the event was assembled without ever asking what a line cost"
+    assert_eq!(
+        published[0]
+            .files
+            .iter()
+            .map(|file| (file.path.as_str(), file.lines.map(|lines| lines.added)))
+            .collect::<Vec<(&str, Option<u32>)>>(),
+        vec![
+            ("src/parse.rs", Some(61)),
+            ("src/tokens.rs", Some(33)),
+            ("assets/logo.png", None),
+        ]
     );
 }
 
