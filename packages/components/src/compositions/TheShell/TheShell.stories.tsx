@@ -45,12 +45,12 @@ const shell: ComponentProps<typeof TheShell> = {
   children: <div className="armada-screen__mount">The list mounts here — 1d</div>,
   stats: {
     rows: [
-      { id: "approval", label: "Awaiting approval", value: 1, tone: "warn" },
-      { id: "review", label: "Needs review", value: 0 },
-      { id: "escalated", label: "Escalated", value: 0 },
-      { id: "jobs", label: "Jobs", value: 6 },
-      { id: "drones", label: "Drones", value: "1 of 2" },
-      { id: "manifest", label: "Manifest", value: "Current" },
+      { id: "approval", label: "Awaiting approval", value: 1, tone: "warn", hue: "status-awaiting-review", idle: false },
+      { id: "review", label: "Needs review", value: 0, hue: "status-awaiting-review", idle: true },
+      { id: "escalated", label: "Escalated", value: 0, hue: "status-escalated", idle: true },
+      { id: "jobs", label: "Jobs", value: 6, hue: "status-not-started", idle: false },
+      { id: "drones", label: "Drones", value: "1 of 2", hue: "stat-drones", idle: false },
+      { id: "manifest", label: "Manifest", value: "Current", hue: "stat-manifest-current", idle: true },
     ],
     open: true,
     onOpenChange: () => {},

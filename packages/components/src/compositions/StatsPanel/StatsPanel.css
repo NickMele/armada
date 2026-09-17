@@ -10,7 +10,26 @@
 }
 
 .armada-stats-panel__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--fg-muted);
+}
+
+/* The row's own hue, full past zero. **Dimming is a token, not an alpha**: an
+   idle dot mixes its hue into the ground at --dot-idle, the lowest mix that
+   keeps every dot at 3:1 against --bg-glass. Opacity would instead let
+   whatever sits behind the glass show through the mark. */
+.armada-stats-panel__dot {
+  width: var(--dot);
+  height: var(--dot);
+  flex: none;
+  border-radius: 50%;
+  background: var(--armada-stat-hue);
+}
+
+.armada-stats-panel__dot[data-idle] {
+  background: color-mix(in srgb, var(--armada-stat-hue) var(--dot-idle), var(--bg-glass));
 }
 
 .armada-stats-panel__value {
