@@ -1,14 +1,15 @@
-//! A Helm conversation, as the headless CLI is started for one message. `#939`.
+//! A Helm conversation, as the headless CLI is started for one message. `#939`,
+//! `#1373`.
 //!
 //! **One process per message, and it exits once it has answered.** The message
-//! goes in on stdin and the input is closed behind it; the next message resumes
-//! the session by id with `--resume`, which spike 016 measured recovering every
-//! earlier turn after the process exited. Nothing idles between messages.
+//! goes in on stdin and the input is closed behind it; the next resumes the
+//! session by id, which spike 016 measured.
 //!
-//! **Not a Drone, so none of a Drone's grants.** A conversation runs in a
-//! repository's own checkout rather than a worktree, so it is given the agent's
-//! door and nothing else: no shell, no tool that writes, and every call outside
-//! the door refused without asking, since nobody is at a terminal to ask.
+//! **A person's session, not a Drone's.** It opens in the repository's checkout
+//! and comes up holding what that person's own Claude configuration resolves
+//! there, with Armada's door beside it. Spike 018 measured what each withheld
+//! flag was worth. A Drone's `--strict-mcp-config` is untouched: it comes off a
+//! one-inhabitant enum in [`crate::harness`], so no Drone renders without it.
 
 use std::error::Error;
 use std::fmt;
@@ -20,11 +21,31 @@ use adapter_traits::{
 
 use crate::harness::HeadlessAgent;
 
-/// The built-in tools that would change the checkout a conversation runs in.
+/// The permission mode a conversation runs under: **a write to the checkout is
+/// taken as already asked for, and nothing else is.**
 ///
-/// **Denied, not merely left off the allowlist**: an operator's own settings
-/// can allow them, measured for a Drone, and deny beats allow.
-const WRITING_TOOLS: &[&str] = &["Bash", "Edit", "Write", "NotebookEdit"];
+/// The first half is the owner's decision of 17 Sep 2026, which named editing
+/// the checkout by name — `docs/concepts/helm.md`, *Action authority*. The
+/// second half is not a narrower reading of it; it is the half `#1373` says is
+/// unbuilt. A shell line or another server's tool is put to a person in a
+/// terminal, and the dock has nowhere to put it, so it is refused and said
+/// rather than run unasked. Spike 018 measured each mode.
+const AS_ASKED: &str = "acceptEdits";
+
+/// The built-in tools that change the checkout a conversation runs in.
+///
+/// **A list to recognise a write by, not to refuse one.** Helm edits the
+/// checkout when asked, so `fleet::helm` reads this to publish an event rather
+/// than to stop the call.
+pub const CHANGES_THE_CHECKOUT: &[&str] = &["Edit", "Write", "NotebookEdit"];
+
+/// Whether a tool call changed the checkout the conversation is open in.
+///
+/// **`Bash` is not among them and cannot be**: a shell line may write a file or
+/// read one, and nothing in the stream says which.
+pub fn wrote_the_checkout(tool: &str) -> bool {
+    CHANGES_THE_CHECKOUT.contains(&tool)
+}
 
 /// Every tool the agent's door serves, as the CLI allows a whole server.
 pub fn door_tools() -> String {
@@ -44,7 +65,8 @@ pub struct Conversing {
 impl Conversing {
     /// A new session in `directory`, a repository's root. **The root is what
     /// scopes the door**: `armada mcp` walks up from its own working directory
-    /// to the Manifest it answers inside.
+    /// to the Manifest it answers inside. It scopes the rest too — a
+    /// repository's own settings, skills and servers all hang off it.
     pub fn in_repository(
         directory: &str,
         model: Model,
@@ -91,6 +113,10 @@ impl Conversing {
 
 impl HeadlessAgent {
     /// One message's process. The message is not on it — see this module.
+    ///
+    /// **What is absent is the point**: no `--strict-mcp-config`, no `--tools`,
+    /// no `--allowedTools`, no `--disallowedTools`. Each withholds something a
+    /// person has in a terminal, and spike 018 measured what.
     pub fn render_conversation(
         &self,
         conversing: &Conversing,
@@ -104,17 +130,13 @@ impl HeadlessAgent {
             "--verbose".into(),
             "--model".into(),
             conversing.model.as_str().into(),
-            // Nobody is at a terminal, and Armada's permission tool answers for
-            // a Job. A call outside the allowlist is refused on the spot.
             "--permission-mode".into(),
-            "dontAsk".into(),
-            "--strict-mcp-config".into(),
+            AS_ASKED.into(),
+            // Added to what the person's configuration resolves, rather than in
+            // place of it. The file still names one server and nothing can add
+            // a second — `crate::mcp`'s guarantee, strict flag or no.
             "--mcp-config".into(),
             conversing.door.path().into(),
-            "--allowedTools".into(),
-            door_tools(),
-            "--disallowedTools".into(),
-            WRITING_TOOLS.join(","),
         ];
         if let Some(session) = &conversing.resuming {
             args.push("--resume".into());
