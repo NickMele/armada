@@ -454,17 +454,11 @@ export async function frameOf(port: number, jobId: string, kept: string): Promis
 }
 
 /**
- * The picture one Note kept, read the same way — #1352.
- *
- * **One segment, because a Studio keeps one frame per node.** The node's id is
- * the whole of what identifies it, and Fleet reads the file's name off the
+ * The picture one Note kept, read the same way — #1352. **One segment, because
+ * a Studio keeps one frame per node**, and Fleet reads the file's name off the
  * node's own record, so nothing composed here reaches a path.
  */
-export async function studioFrameOf(
-  port: number,
-  studioId: string,
-  nodeId: string,
-): Promise<FrameRead> {
+export async function studioFrameOf(port: number, studioId: string, nodeId: string): Promise<FrameRead> {
   const at = `/studios/${encodeURIComponent(studioId)}/frames/${encodeURIComponent(nodeId)}`;
   return await fileAt(port, at);
 }

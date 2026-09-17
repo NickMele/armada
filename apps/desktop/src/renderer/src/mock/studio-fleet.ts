@@ -60,16 +60,19 @@ const at = "2026-09-16T15:30:00Z";
  * **Drawn here rather than kept as a file.** A mock Fleet has no disk and no
  * window to photograph, and what a scenario has to answer is bytes an `img` can
  * draw; a PNG committed beside this would be a binary nobody can read a diff of.
- * The colours are a photograph's, not this design system's.
+ * A window's bands, not its words: the colours and the boxes are a photograph's
+ * and no token of the design system applies to one.
  */
-async function aFrame(said: string): Promise<Uint8Array> {
+async function aFrame(): Promise<Uint8Array> {
   const canvas = new OffscreenCanvas(1440, 900);
   const ink = canvas.getContext("2d")!;
   ink.fillStyle = "darkslategray";
   ink.fillRect(0, 0, 1440, 900);
+  ink.fillStyle = "slategray";
+  ink.fillRect(0, 0, 1440, 72);
   ink.fillStyle = "gainsboro";
-  ink.font = "42px monospace";
-  ink.fillText(said, 48, 96);
+  ink.fillRect(64, 160, 420, 560);
+  ink.fillRect(548, 160, 828, 260);
   const png = await canvas.convertToBlob({ type: "image/png" });
   return new Uint8Array(await png.arrayBuffer());
 }
@@ -98,7 +101,7 @@ function legend(): Studio {
     nodes: [
       // One Note with the picture it kept and one without: both are Notes, and only one draws a plate.
       { id: "legend-note", kind: "note", said: "The legend under the step bar is unreadable", capture: pointedAt("legend-note"), position: { x: 0, y: 0 }, created_at: at },
-      { id: "legend-width", kind: "note", said: "It wraps at 720 wide", position: { x: 0, y: 220 }, created_at: at },
+      { id: "legend-width", kind: "note", said: "It wraps at 720 wide", position: { x: 0, y: 300 }, created_at: at },
       { id: "legend-finding", kind: "finding", asked: "Where do the legend's colours come from?", state: "frozen", position: { x: 340, y: 0 }, created_at: at },
       { id: "legend-draft", kind: "issue_draft", title: "The Board's legend is illegible", body: "…", state: "draft", position: { x: 680, y: 110 }, created_at: at },
     ],
@@ -184,7 +187,7 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
         if (node?.kind !== "note" || node.capture?.frame === undefined) {
           return { ok: false, outcome: unanswered(`/studios/${studioId}/frames/${nodeId}`) };
         }
-        return { ok: true, bytes: await aFrame(node.said), type: "image/png" };
+        return { ok: true, bytes: await aFrame(), type: "image/png" };
       },
       moveStudioNode: async (studioId, nodeId, position) => {
         const answer = write(studioId, (studio) => ({
@@ -252,8 +255,10 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
  * The grid `everyKind()` is laid out on, wide enough for a node card and a gap. **Taller than it
  * is wide, and its top-right corner left empty**: the whiteboard fits the graph to the window and
  * draws the Proposed panel over that corner, so a node placed there is read through glass.
+ *
+ * The row pitch clears a Note carrying its frame, which is the tallest card there is — #1352.
  */
-const place = (column: number, row: number) => ({ x: column * 340, y: row * 220 });
+const place = (column: number, row: number) => ({ x: column * 340, y: row * 300 });
 
 const MADE = "2026-09-15T11:00:00Z";
 const TOUCHED = "2026-09-17T08:40:00Z";

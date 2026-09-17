@@ -129,6 +129,9 @@ flowchart LR
 > **Rule.** A Note's frame is a file beside the Studio's records, and the Note names it. A frame over 4 MiB is refused.
 > Why: an image in the content column is read back on every graph read and rides every `studio.changed`, for the life of a Studio nothing expires.
 
+> **Rule.** A Note draws its frame on the Studio, small, and full size when it is opened. A Note that kept none draws no picture and says nothing about it; one whose frame cannot be read says so where the picture would be.
+> Why: the frame is the field that says *this is what I was looking at*, and a missing picture is a Note without one rather than a failure. See `../practices/bridge.md`, Security posture, for how the bytes reach the window.
+
 > **Rule.** A source file path is kept only where the build gives one, and absent otherwise.
 > Why: React 19 fibers carry no `_debugSource`, and a guessed path sends a reader to the wrong file.
 
