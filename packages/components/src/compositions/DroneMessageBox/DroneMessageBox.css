@@ -4,18 +4,34 @@
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+  /* Space above, so the box reads as the thing you do next rather than the
+     last line of the log — the owner's note of 17 Sep 2026. It sits on the
+     composition rather than on either caller, because both mounts (the
+     chapter and the Activity log sheet) asked for the same gap. */
+  margin-block-start: var(--space-4);
 }
 
-.armada-drone-message-box__row {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-2);
+/* The field, with Send inside it. The wrapper carries no frame of its own:
+   `.armada-textarea-field` fills it and the frame is the Textarea's, so the
+   focus ring, the edge and the well are all still the primitive's. */
+.armada-drone-message-box__field {
+  position: relative;
   min-width: 0;
 }
 
-.armada-drone-message-box__row > .armada-textarea-field {
-  flex: 1;
-  min-width: 0;
+/* The room Send occupies, reserved as the field's own bottom padding rather
+   than left to overlap: a typed line stops above the button instead of
+   running under it. --h-control-sm is Send's height at `sm`; --space-4 is the
+   --space-2 inset below it plus the --space-2 gap above it, which is the
+   padding the Textarea already rests at. */
+.armada-drone-message-box__field .armada-textarea {
+  padding-block-end: calc(var(--h-control-sm) + var(--space-4));
+}
+
+.armada-drone-message-box__field > .armada-button {
+  position: absolute;
+  inset-block-end: var(--space-2);
+  inset-inline-end: var(--space-2);
 }
 
 /* The disabled reason and the waiting sentence share one line under the
