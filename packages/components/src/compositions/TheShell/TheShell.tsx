@@ -154,6 +154,9 @@ export function TheShell({
               surfaces={surfaces}
               activeId={activeId}
               collapsed={collapsed}
+              // The column holds the width. Left to its own 200px default, the
+              // nav stayed put while Stats and Fleet followed a drag.
+              width="100%"
               onSelect={onSelect}
             />
             <StatsPanel {...stats} narrow={collapsed} />
