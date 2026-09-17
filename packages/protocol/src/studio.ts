@@ -53,7 +53,13 @@ export type StudioNodeContent =
   /** `answer` only where a person ended it as Resolved here. Since 14.11. */
   | { kind: "contradiction"; first: string; second: string; answer?: string }
   | { kind: "sketch"; body: string }
-  | { kind: "link"; address: string }
+  /**
+   * A board, document, issue, page or session, kept as its address, and the
+   * line a person wrote beside it saying why they kept it. **`said` is
+   * additional, never a replacement** — a Link never stops being its address,
+   * and it is absent on one pasted with nothing typed. Since 14.15, #1378.
+   */
+  | { kind: "link"; address: string; said?: string }
   | { kind: "deferral"; what: string }
   | { kind: "outline"; body: string }
   | { kind: "issue_draft"; title: string; body: string }
@@ -172,7 +178,8 @@ export type AddStudioNode = StudioNodeContent & {
 export type StudioNodeByHand =
   /** Typed here rather than pointed at, so it carries no `capture`: that is `capture_studio_note`'s. */
   | { kind: "note"; said: string }
-  | { kind: "link"; address: string }
+  /** `said` is the line taken at paste time, absent where none was typed. Since 14.15, #1378. */
+  | { kind: "link"; address: string; said?: string }
   | { kind: "sketch"; body: string };
 
 /**
@@ -345,10 +352,23 @@ export type StudioPromotion =
     }
   /** `POST /studios/:studio_id/edit_draft`. Only a person. */
   | { act: "edit_draft"; node_id: string; title: string; body: string }
+  /**
+   * `POST /studios/:studio_id/edit_link`. The line beside a Link's address and never the
+   * address itself. A blank `said` clears the line. Since 14.15, #1378.
+   */
+  | { act: "edit_link"; node_id: string; said: string }
   /** `POST /studios/:studio_id/settle`. The two outcomes that make no node. */
   | ({ act: "settle"; node_id: string } & StudioSettlement)
   /** `POST /studios/:studio_id/dispatch_draft`. The ordinary dispatch gate. */
   | { act: "dispatch"; node_id: string; position: StudioPosition };
 
 /** Every act `StudioPromotion` spells, so main can refuse one it does not know. */
-export const STUDIO_PROMOTIONS = ["group", "defer", "write_up", "edit_draft", "settle", "dispatch"] as const;
+export const STUDIO_PROMOTIONS = [
+  "group",
+  "defer",
+  "write_up",
+  "edit_draft",
+  "edit_link",
+  "settle",
+  "dispatch",
+] as const;

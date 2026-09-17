@@ -145,7 +145,7 @@ test("a Studio named by hand, with a note typed and a link pasted, survives a re
 
   await userEvent.keyboard("V");
   await userEvent.fill(page.getByLabelText("Link", { exact: true }), "docs/contracts/design-system.md");
-  await page.getByRole("button", { name: "Add link" }).click();
+  await page.getByRole("button", { name: "Keep the link" }).click();
   await expect.element(node(/^Link: docs\/contracts\/design-system\.md/)).toBeVisible();
 
   // Both are a person's, and neither landed at the origin: a node goes where
@@ -347,4 +347,59 @@ test("a Contradiction is ended as Resolved here, with the answer kept on the nod
   // Ended once: nothing offers a second outcome on it.
   await pick(/^Contradiction: The chip reads the Board/);
   expect(acts().getByRole("button", { name: "Not a problem", exact: true }).query()).toBeNull();
+});
+
+/** The address the owner pasted, long enough that a card cannot hold it whole. */
+const PASTED = "https://github.com/NickMele/armada/issues/1378#issuecomment-2847190034-and-then-some";
+
+/**
+ * #1378's own definition of done: a person pastes an address, is asked what to do with it, types a
+ * line saying why they kept it, and reads that line on the card with the address under it.
+ *
+ * **The reopen is half of it.** The line is a field on the Link's content rather than a second
+ * node, so what proves it is not lost is the same close-and-reopen `#1287` uses — and editing it
+ * afterwards has to reach the record too, not just the card.
+ */
+test("a pasted address is asked about, takes a line of its own, and keeps it across a reopen", async () => {
+  const fleet = studying([]);
+  const first = open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "New Studio" }).click();
+  await expect.element(page.getByRole("heading", { name: "Untitled Studio" })).toBeVisible();
+
+  await userEvent.keyboard("V");
+  // Nothing is offered until there is an address to offer it about.
+  expect(page.getByLabelText("Your line", { exact: true }).query()).toBeNull();
+  await userEvent.fill(page.getByLabelText("Link", { exact: true }), PASTED);
+
+  const offer = page.getByRole("group", { name: "What to do with this address" });
+  await expect.element(offer).toBeVisible();
+  // Reading in is #1293's, and this build says so rather than drawing the choice dead.
+  await expect.element(offer.getByText("not built yet", { exact: false })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Read it in" })).toBeDisabled();
+
+  await userEvent.fill(page.getByLabelText("Your line", { exact: true }), "the owner's own report");
+  await page.getByRole("button", { name: "Keep the link" }).click();
+  await expect.element(node(/^Link: the owner's own report/)).toBeVisible();
+  // The card reads the line and the address is still under it, whole in its title.
+  await expect.element(page.getByTitle(PASTED)).toBeVisible();
+
+  close();
+  open(fleet.scenario, first.api);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "Untitled Studio", exact: true }).click();
+  await expect.element(node(/^Link: the owner's own report/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await pick(/^Link: the owner's own report/);
+  await page.getByRole("button", { name: "Edit line" }).click();
+  await entered(page.getByRole("dialog"));
+  await userEvent.fill(page.getByLabelText("Your line", { exact: true }), "why the card said nothing");
+  await asked("Save line").click();
+  await expect.element(node(/^Link: why the card said nothing/)).toBeVisible();
+  await expect.poll(() => fleet.studios()[0]!.nodes[0]).toMatchObject({
+    kind: "link",
+    address: PASTED,
+    said: "why the card said nothing",
+  });
 });

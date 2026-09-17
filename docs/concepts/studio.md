@@ -58,7 +58,7 @@ flowchart LR
 | Finding | What a scout learned, and everything it read | Proposed, Gathering, Frozen | None |
 | Contradiction | Two sources that disagree, and its outcome | Reported, then its outcome | None |
 | Sketch | A diagram or mockup, as structured content | Frozen | None |
-| Link | A board, document, issue, page or session, kept as its address | None | None |
+| Link | A board, document, issue, page or session, kept as its address, and a line of the person's own | None | None |
 | Deferral | Something a person put off, against what it blocks | Open, Answered | None |
 | Outline | An ordered reading of the nodes feeding it | Draft, Frozen | None |
 | Issue draft | An issue's title and body, never filed by Armada | Draft | None |
@@ -94,6 +94,15 @@ flowchart LR
 
 > **Rule.** A Note typed by hand is fixed the moment it is made, as a captured one is.
 > Why: nothing writes a node's content afterwards, and the rule that makes a Note a record does not depend on how it arrived.
+
+> **Rule.** A Link keeps a line of the person's own beside its address, taken when they paste it and theirs to change afterwards. The node draws that line, with the address under it.
+> Why: a Studio holding several Links reads as a list of URLs otherwise, saying nothing about why any of them was kept.
+
+> **Rule.** A Link never stops being its address. Whatever is typed beside it is additional, and a Link with no line is drawn by its address.
+> Why: the address is what a scout reads in. See #1378.
+
+> **Rule.** Pasting an address offers what to do with it — read it in, or keep the link — and says what reading it in would produce. Where reading in is not built, the offer says so rather than drawing the choice dead.
+> Why: a node that appears and offers nothing is the surface saying the person's paste did not matter.
 
 > **Rule.** A node lands where the person is looking, not at the origin.
 > Why: a Studio is laid out by hand, and a node placed off-screen is a node a person has to go and find.

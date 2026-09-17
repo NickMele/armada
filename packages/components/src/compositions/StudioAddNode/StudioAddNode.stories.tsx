@@ -3,6 +3,9 @@ import { expect, fn, userEvent, within } from "storybook/test";
 
 import { StudioAddNode } from "./StudioAddNode";
 
+/** What `Studios.tsx` passes while #1293 is unbuilt: the choice, refused. */
+const NOT_BUILT = "Reading an address in is not built yet. Keep the link, and read it in when it is.";
+
 const meta: Meta<typeof StudioAddNode> = {
   title: "Compositions/Studio add node",
   component: StudioAddNode,
@@ -10,6 +13,7 @@ const meta: Meta<typeof StudioAddNode> = {
     adding: null,
     onAdding: fn(),
     onAdd: fn(),
+    readIn: NOT_BUILT,
   },
 };
 export default meta;
@@ -43,6 +47,52 @@ export const Note: Story = {
 /** A Link pasted. One line, mono, because an address is machine-derived. */
 export const Link: Story = {
   args: { adding: "link" },
+};
+
+/**
+ * **Pasting an address asks what to do with it** — #1378. The offer appears
+ * once there is an address, takes the person's own line beside it, and draws
+ * *Read it in* refused with the reason where this build has no read-in.
+ */
+export const Pasted: Story = {
+  args: { adding: "link" },
+  play: async ({ canvasElement, args }) => {
+    const board = within(canvasElement);
+    await expect(board.queryByLabelText("Your line")).toBeNull();
+
+    await userEvent.type(board.getByLabelText("Link"), "https://github.com/NickMele/armada/issues/1378");
+    await expect(board.getByText(NOT_BUILT)).toBeVisible();
+    await expect(board.getByRole("button", { name: "Read it in" })).toBeDisabled();
+
+    await userEvent.type(board.getByLabelText("Your line"), "the owner's own report of this defect{Enter}");
+    await expect(args.onAdd).toHaveBeenCalledWith({
+      kind: "link",
+      address: "https://github.com/NickMele/armada/issues/1378",
+      said: "the owner's own report of this defect",
+    });
+  },
+};
+
+/**
+ * **Reading in, where the build has it.** The offer is the same shape; what
+ * changes is that the choice is a press rather than a sentence saying why not.
+ */
+export const PastedWithReadIn: Story = {
+  args: { adding: "link", readIn: fn() },
+  play: async ({ canvasElement, args }) => {
+    const board = within(canvasElement);
+    await userEvent.type(board.getByLabelText("Link"), "https://github.com/NickMele/armada/issues/1293");
+    const read = board.getByRole("button", { name: "Read it in" });
+    await expect(read).toBeEnabled();
+    await userEvent.click(read);
+    await expect(args.readIn).toHaveBeenCalledWith({
+      kind: "link",
+      address: "https://github.com/NickMele/armada/issues/1293",
+    });
+    // The Link is kept whatever is done with it: reading in adds nodes beside
+    // it and never instead of it.
+    await expect(args.onAdd).not.toHaveBeenCalled();
+  },
 };
 
 /** A Sketch placed — structured content and never pixels, which the field says. */

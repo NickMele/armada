@@ -22,6 +22,8 @@ export type StudioActs = {
   defer: boolean;
   /** One Issue draft: its title and body are a person's to change. */
   edit: boolean;
+  /** One Link: the line beside its address is a person's to change. #1378. */
+  editLink: boolean;
   /** One Issue draft: its text goes through the Job proposer. */
   dispatch: boolean;
   /** One Contradiction that has not ended yet. */
@@ -34,6 +36,7 @@ const NOTHING: StudioActs = {
   writeUp: false,
   defer: false,
   edit: false,
+  editLink: false,
   dispatch: false,
   settle: false,
 };
@@ -64,6 +67,7 @@ export function actsOn(studio: Studio, selected: readonly string[]): StudioActs 
     writeUp: (WRITABLE_UP as readonly string[]).includes(one.kind) && !ended,
     defer: !ended,
     edit: one.kind === "issue_draft",
+    editLink: one.kind === "link",
     dispatch: one.kind === "issue_draft",
     settle: one.kind === "contradiction" && !ended,
   };

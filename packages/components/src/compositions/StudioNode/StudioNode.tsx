@@ -64,7 +64,12 @@ export type StudioNodeOf =
   | { kind: "finding"; state: StudioFindingState }
   | { kind: "contradiction"; state: StudioContradictionState }
   | { kind: "sketch"; state: "frozen" }
-  | { kind: "link" }
+  /**
+   * A Link keeps its address, whatever is typed beside it — `#1378`. The
+   * card's title is the person's own line, and this is drawn under it; where
+   * they typed none the title *is* the address, and it is not said twice.
+   */
+  | { kind: "link"; address: string }
   | { kind: "deferral"; state: StudioDeferralState }
   | { kind: "outline"; state: StudioOutlineState }
   | { kind: "issue_draft"; state: "draft" }
@@ -208,6 +213,11 @@ export function StudioNode(props: StudioNodeProps) {
   const { title, facts = [], selected = false } = props;
   const reading = studioNodeReading(props);
   const { status } = reading;
+  // **Clipped to the card, with the whole of it in the title** — `FactChip`'s
+  // rule for a value longer than its column, and the defect `#1378` was raised
+  // on: an address wrapped over three lines is what the node was before.
+  const address = props.kind === "link" ? props.address : null;
+  const untitled = address !== null && address === title;
   return (
     <Card
       // A card on the canvas is glass. `docs/contracts/design-system.md`, Depth.
@@ -233,7 +243,18 @@ export function StudioNode(props: StudioNodeProps) {
           </span>
         )}
       </div>
-      <p className="armada-studio-node__title">{title}</p>
+      <p
+        className="armada-studio-node__title"
+        data-clipped={untitled || undefined}
+        title={untitled ? title : undefined}
+      >
+        {title}
+      </p>
+      {address === null || untitled ? null : (
+        <p className="armada-studio-node__address" title={address}>
+          {address}
+        </p>
+      )}
       {props.kind !== "note" || props.frame === undefined ? null : <Frame frame={props.frame} />}
       {facts.length === 0 ? null : (
         <ul className="armada-studio-node__facts">
