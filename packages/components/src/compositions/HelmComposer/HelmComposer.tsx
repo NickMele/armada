@@ -94,21 +94,25 @@ export function HelmComposer({
           </Button>
         )}
       </div>
-      <Textarea
-        aria-label="Ask Helm"
-        rows={2}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        placeholder="Ask Helm about this repository"
-        // Reopening the dock remounts this field — #1094 — and that is the
-        // only time this fires: nothing else in the tree changes its key.
-        autoFocus
-      />
-      <div className="armada-helm-composer__actions">
-        {location === undefined ? null : (
-          <span className="armada-helm-composer__location">{location}</span>
-        )}
+      {/* Send sits inside the field's own frame, at its trailing foot — the
+          same treatment as the drone message box, decided together on
+          17 Sep 2026. The dock is narrow, so Send sits closer to the text
+          here than it does there; the room it takes is still reserved as the
+          field's bottom padding, so a typed line never runs under it. */}
+      <div className="armada-helm-composer__field">
+        <Textarea
+          aria-label="Ask Helm"
+          // Three rows, as the drone message box takes: an ask is a sentence
+          // or two, and in a dock this narrow one of them wraps.
+          rows={3}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          placeholder="Ask Helm about this repository"
+          // Reopening the dock remounts this field — #1094 — and that is the
+          // only time this fires: nothing else in the tree changes its key.
+          autoFocus
+        />
         {/* Tinted Helm, not the accent: Send is not the view's one Primary
             (design-system.md, Component → token mapping → Helm dock). The
             tint is HelmComposer.css's, over a secondary. */}
@@ -116,6 +120,11 @@ export function HelmComposer({
           Send
         </Button>
       </div>
+      {/* Where the person is stays under the field, not inside it: it is a
+          sentence to read, and the dock has no width to put it beside Send. */}
+      {location === undefined ? null : (
+        <span className="armada-helm-composer__location">{location}</span>
+      )}
     </form>
   );
 }

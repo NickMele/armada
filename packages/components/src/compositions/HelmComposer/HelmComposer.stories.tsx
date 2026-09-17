@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
@@ -10,18 +10,28 @@ const repositories: HelmRepositoryOption[] = [
   { id: "01M2SHOP", label: "shop-01" },
 ];
 
+/** The dock's own width and glass — every story draws inside it, so a story that
+ *  types is measured at the width the composer really has. */
+function InTheDock({ children }: { children: ReactNode }): ReactElement {
+  return (
+    <div
+      className="armada-glass"
+      style={{ width: "var(--w-dock)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)" }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** The composer under Helm's thread, drawn at the dock's own width, on the dock's own glass. */
 const meta: Meta<typeof HelmComposer> = {
   title: "Compositions/Helm composer",
   component: HelmComposer,
   args: { value: "", onChange: fn(), onSend: fn(), location: "Job Board" },
   render: (args) => (
-    <div
-      className="armada-glass"
-      style={{ width: "var(--w-dock)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)" }}
-    >
+    <InTheDock>
       <HelmComposer {...args} />
-    </div>
+    </InTheDock>
   ),
 };
 export default meta;
@@ -57,7 +67,16 @@ export const StartFreshRefusedWhileReplying: Story = {
 };
 
 /** Nothing is servable yet — no repository has a Manifest for Helm to answer for. */
-export const NothingToAskYet: Story = { args: { disabled: true } };
+export const NothingToAskYet: Story = {
+  args: { disabled: true },
+  play: async ({ args, canvas }) => {
+    await expect(canvas.getByRole("textbox")).toBeDisabled();
+    const send = canvas.getByRole("button", { name: "Send" });
+    await expect(send).toBeDisabled();
+    await userEvent.click(send, { pointerEventsCheck: 0 });
+    await expect(args.onSend).not.toHaveBeenCalled();
+  },
+};
 
 /** A Job's detail is open: the chip names it, above the message box. #1075. */
 export const ChipOnAJob: Story = {
@@ -122,25 +141,77 @@ export const FooterNamesAJobsDetail: Story = {
   },
 };
 
-function Typed(): ReactElement {
+function Typed({ onSend = fn() }: { onSend?: () => void }): ReactElement {
   const [value, setValue] = useState("");
   return (
-    <HelmComposer
-      current={repositories[0]!.id}
-      repositories={[repositories[0]!]}
-      value={value}
-      onChange={setValue}
-      onSend={fn()}
-    />
+    <InTheDock>
+      <HelmComposer
+        current={repositories[0]!.id}
+        repositories={[repositories[0]!]}
+        location="Job Board"
+        value={value}
+        onChange={setValue}
+        onSend={onSend}
+      />
+    </InTheDock>
   );
 }
 
-/** Blank never sends — the button stays off until there is something to say. */
-export const BlankDoesNotSend: Story = {
+/**
+ * Where Send is drawn and where a typed line may go — neither of which a
+ * rendering can state. The field's text band is its content box: everything
+ * inside the border and the padding, which is exactly the room a line of
+ * typing can occupy.
+ */
+function drawn(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement);
+  const field = canvas.getByRole("textbox");
+  const frame = field.getBoundingClientRect();
+  const send = canvas.getByRole("button", { name: "Send" }).getBoundingClientRect();
+  const style = getComputedStyle(field);
+  const row = Number.parseFloat(style.lineHeight);
+  const top = frame.top + Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.paddingTop);
+  const bottom =
+    frame.bottom - Number.parseFloat(style.borderBottomWidth) - Number.parseFloat(style.paddingBottom);
+  return { frame, send, row, text: { top, bottom, height: bottom - top } };
+}
+
+/**
+ * Send is inside the field here too, and the dock's narrow width is the stated
+ * cost of one treatment: the button's box is within the field's on all four
+ * edges, the band a typed line may occupy ends above it rather than under it,
+ * and the field is more than one row tall before anything is asked.
+ */
+export const SendSitsInsideTheField: Story = {
   render: () => <Typed />,
   play: async ({ canvasElement }) => {
+    const rest = drawn(canvasElement);
+    await expect(rest.text.height).toBeGreaterThan(rest.row * 1.5);
+
+    await userEvent.type(
+      within(canvasElement).getByRole("textbox"),
+      "Why did job 12 stall?{Enter}It was running an hour ago",
+    );
+    const { frame, send, text } = drawn(canvasElement);
+    await expect(send.left).toBeGreaterThanOrEqual(frame.left);
+    await expect(send.right).toBeLessThanOrEqual(frame.right);
+    await expect(send.top).toBeGreaterThanOrEqual(frame.top);
+    await expect(send.bottom).toBeLessThanOrEqual(frame.bottom);
+    await expect(text.bottom).toBeLessThanOrEqual(send.top);
+  },
+};
+
+/** Blank never sends — the button stays off until there is something to say. */
+export const BlankDoesNotSend: Story = {
+  render: (args) => <Typed onSend={args.onSend} />,
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
+    const send = canvas.getByRole("button", { name: "Send" });
+    await expect(send).toBeDisabled();
+    await userEvent.type(canvas.getByRole("textbox"), "   ");
+    await expect(send).toBeDisabled();
+    await userEvent.click(send, { pointerEventsCheck: 0 });
+    await expect(args.onSend).not.toHaveBeenCalled();
     await userEvent.type(canvas.getByRole("textbox"), "Why did job 12 stall?");
     await expect(canvas.getByRole("button", { name: "Send" })).toBeEnabled();
   },

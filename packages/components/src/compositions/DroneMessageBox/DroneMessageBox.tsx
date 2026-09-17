@@ -67,16 +67,31 @@ export function DroneMessageBox({
               {waiting}
             </p>
           )}
-      <div className="armada-drone-message-box__row">
+      {/* Send sits inside the field's own frame, at its trailing foot, over
+          the well rather than beside it — the owner's note of 17 Sep 2026.
+          The room it occupies is reserved as the field's bottom padding
+          (DroneMessageBox.css), so a typed line never runs underneath it. */}
+      <div className="armada-drone-message-box__field">
         <Textarea
           aria-label="Message the drone"
-          rows={1}
+          // Three rows, because a note to a drone is a sentence or two and one
+          // row made every one of them scroll while being written.
+          rows={3}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
           placeholder={placeholder}
         />
-        <Button type="submit" variant="secondary" size="sm" disabled={disabled || blank}>
+        {/* `sunken`: Send now rests on the field's own --bg-sunken well, and a
+            secondary is filled one surface step from its ground (Button) — on
+            `card` it would be the same fill as the field it sits in. */}
+        <Button
+          type="submit"
+          variant="secondary"
+          ground="sunken"
+          size="sm"
+          disabled={disabled || blank}
+        >
           Send
         </Button>
       </div>
