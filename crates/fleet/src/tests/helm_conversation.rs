@@ -20,6 +20,7 @@ use adapters::HeadlessAgent;
 use api::{Conversations, HelmSeen, HelmWatch, Refusal};
 use ipc::{
     AskHelm, Freshness, HelmContext, HelmMessage, HelmScreen, HelmSilence, HelmText, JobId, Saw,
+    StudioId, StudioNodeId,
 };
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
@@ -255,6 +256,8 @@ async fn the_context_reaches_the_session_and_not_the_thread() {
         picked: None,
         chip: Some(JobId::carried("01JOB0000000000000000000A")),
         cursor: None,
+        studio: None,
+        node: None,
     };
     Arc::clone(&fleet)
         .ask_helm(
@@ -278,6 +281,43 @@ async fn the_context_reaches_the_session_and_not_the_thread() {
     assert!(
         matches!(&first[0], HelmMessage::Asked(asked) if asked.text == "what is this stuck on?"),
         "the thread keeps only what was typed: {first:?}"
+    );
+}
+
+/// `#1287`: a person on a Studio is placed there — the screen, the Studio and
+/// the node they selected — so Helm reads that Studio rather than guessing one.
+#[tokio::test]
+async fn a_studio_and_its_selected_node_reach_the_session() {
+    let home = TempDir::new();
+    let fleet = hosted(&home);
+    let mut live = fleet.observe_helm(None).await.expect("a conversation").live;
+
+    let context = HelmContext {
+        screen: HelmScreen::Studio,
+        picked: None,
+        chip: None,
+        cursor: None,
+        studio: Some(StudioId::carried("01STUDIO00000000000000000A")),
+        node: Some(StudioNodeId::carried("01NODE0000000000000000000B")),
+    };
+    Arc::clone(&fleet)
+        .ask_helm(
+            AskHelm {
+                text: HelmText::said("what does this note connect to?").expect("not blank"),
+                context: Some(context),
+            },
+            None,
+        )
+        .await
+        .expect("the message is taken");
+    reply(&mut live).await;
+
+    let turns = std::fs::read_to_string(state(&home).join("turns.log")).expect("turns");
+    let turn = turns.lines().next().expect("one turn logged");
+    assert!(turn.contains("The person is on Studios"), "{turn}");
+    assert!(
+        turn.contains("Studio 01STUDIO00000000000000000A is open, with node 01NODE0000000000000000000B selected"),
+        "{turn}"
     );
 }
 

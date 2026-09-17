@@ -13,7 +13,7 @@ import type {
 import type { HelmContext, JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
 import { helmRowsOf, type HelmApprovalAsk, type HelmFoldedRow } from "@armada/screens/src/helm-thread";
 import type { BridgeState } from "../../shared/bridge";
-import { locationOf } from "./helm-context";
+import { locationOf, type StudioNamed } from "./helm-context";
 
 export type HelmDockProps = {
   helm: BridgeState["helm"];
@@ -28,6 +28,8 @@ export type HelmDockProps = {
   onAsk: (text: string, context: HelmContext) => void;
   /** Where the person is, assembled by `App.tsx`. Sent with every ask, unchanged here. #1075. */
   context: HelmContext;
+  /** The open Studio and its selected node, by name, for the footer. #1287. */
+  studio?: StudioNamed;
   onStartFresh: () => void;
   onSwitch: (manifestId: string) => void;
   /** Approve, answered: the card waits on this, and a refusal puts it back to ready. #1117. */
@@ -50,6 +52,7 @@ export function HelmDock({
   onRemoveChip,
   onAsk,
   context,
+  studio,
   onStartFresh,
   onSwitch,
   onApprove,
@@ -93,7 +96,7 @@ export function HelmDock({
         repositories={options}
         chip={chip}
         onRemoveChip={onRemoveChip}
-        location={locationOf(context, jobs)}
+        location={locationOf(context, jobs, studio)}
         // Drawn whenever there is somewhere else to point Helm — a specific
         // pick does not hide it, because Discuss or the switch itself is
         // what points Helm away from the picked repository without moving

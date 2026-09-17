@@ -380,6 +380,14 @@
   status = "Specified"
   notes = "The universal deliberate-stop glyph. Pairs against unplug to encode deliberate against accidental."
 
+[icons.presentation]
+  means = "Studios — a whiteboard on its stand, which is what a Studio is drawn as"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  reserved = "The Studios surface only. Never a node, a slide, a report or a preview."
+  notes = "Added 2026-09-17 with the Studios surface (#1287), accepted by the owner with the surface's place in the rail. The only Navigation glyph that is a board on legs, which keeps it clear of clipboard-list (an upright board with a clip and no stand), layout-dashboard (a grid of panes), hard-drive (a horizontal vessel) and the outline-with-something-inside family. Refused before it was proposed: waypoints is Graph's view toggle, and workflow and network would each name something Armada already has — a workflow, and the fleet."
+
 [icons.refresh-cw]
   means = "Two arrows chasing each other round a closed loop"
   group = "Escalation reason"

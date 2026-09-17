@@ -40,6 +40,7 @@ import { ReportsReader } from "./reports";
 import { ReviewMaterial } from "./review";
 import { startingIdentity } from "./runtime-file";
 import { FleetSocket, type BridgeStateFleet } from "./socket";
+import { StudioReads } from "./studios";
 
 /** Time is injected, never read: a connection that calls the clock cannot be replayed. */
 export type Clock = () => number;
@@ -142,6 +143,11 @@ export class FleetConnection {
    * which of a set to give back, and no Job id asks that.
    */
   private readonly held = new HeldReader((held) => this.publish({ held }));
+  /** A repository's Studios and the one open, where the Studios surface asked — `studios.ts`. */
+  readonly studios: StudioReads = new StudioReads(
+    (change) => this.publish(change),
+    () => this.connected()?.port ?? null,
+  );
   /**
    * Every act on a Job — see `command.ts`. Reached through this rather than
    * re-exported one method at a time: a delegator carries no reasoning, and
@@ -253,6 +259,7 @@ export class FleetConnection {
       overviewAgain: (at) => this.overviewAgainForEveryWindow(at),
       questions: this.questions,
       helm: this.helm,
+      studios: this.studios,
       material: this.material,
       socket: this.socket,
       publish: (change) => this.publish(change),
@@ -338,6 +345,9 @@ export class FleetConnection {
       // somebody reclaims one. A refresh is the cheapest of the three to be
       // sure about.
       await this.held.again(fleet.port);
+      // A Studio moves when a person or Helm writes to it, and each write is on the stream — so
+      // this is for a window that reloaded, not for a gap.
+      await this.studios.again();
     }
     return this.current;
   }
@@ -361,6 +371,7 @@ export class FleetConnection {
     this.material.close();
     this.reports.close();
     this.held.close();
+    this.studios.close();
     for (const facades of this.windowFacades.values()) facades.overview.close();
     this.helm.close();
   }

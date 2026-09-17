@@ -1012,7 +1012,16 @@ message either side parses changed.
 
 **`cost_micros` is absent, never nought, where no cost was reported**: a scout whose group had to be ended rather than interrupted reports none, spike 017. `outcome` is a serde tag rather than a `wire_enum!`, for the node's own `kind`'s reason: it is the field the rest hang off. A Finding added through `add_studio_node` carrying any of the new fields is refused as `fleet.studio_finding_is_the_scouts`.
 
-## Protocol 14.9: counts on the live file list
+## Protocol 14.9: Helm is told which Studio a person has open
+
+`#1287`. `HelmScreen` gains `studio`, the Studios surface, and `HelmContext` gains `studio` and
+`node`, both optional and left out where empty: the Studio open on that surface, and the node
+selected on its whiteboard, only beside its Studio. Fleet's line to the session names both by id,
+so Helm can read the Studio with `get_studio` rather than guess one. **Minor, though Fleet matches
+on the screen**: Bridge sends `studio` only to a Fleet at 14.9 or later, because a Fleet behind
+Bridge is refused before an ask is ever sent.
+
+## Protocol 14.10: counts on the live file list
 
 `#1187`. `ChangedFile.lines`, additive and left out where absent: what a file
 gained and lost, on `job.files_changed` only. Counting is the walk that renders

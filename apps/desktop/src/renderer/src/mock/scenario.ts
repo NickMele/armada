@@ -47,6 +47,7 @@ import { connected } from "./moment";
 import type { Scenario } from "./moment";
 import { DRIFT_GONE, GH_ISSUE_VIEW, manifesting } from "./manifest-fleet";
 import { SCRATCH, SHEET_READ, settingUp } from "./setup-fleet";
+import { studying } from "./studio-fleet";
 
 export { connected, onBoard, unanswered } from "./moment";
 export type { FleetHandle, Scenario } from "./moment";
@@ -241,6 +242,7 @@ export const SCENARIOS: readonly Scenario[] = [
   recordedBoard(),
   settingUp({ repositories: [repository(), SCRATCH], sheet: SHEET_READ }),
   manifesting({ alwaysAllowed: [GH_ISSUE_VIEW], drift: DRIFT_GONE }),
+  studying().scenario,
   ...BUILT.map(([name, fixture]) => holding(`job/${name}`, fixture.name, [fixture], fixture.job.id)),
   ...RECORDED.map(([slug, fixture]) => holding(`recorded/${slug}`, fixture.name, [fixture], fixture.job.id)),
 ];

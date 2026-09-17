@@ -74,3 +74,13 @@
   display: flex;
   gap: var(--space-2);
 }
+
+/* What the surface draws over the board: the acts on a selection, and the
+   relations waiting on a person. A node's width, so it reads as one more card
+   on the canvas rather than a sheet over it. */
+.armada-studio-whiteboard__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--w-studio-node);
+}

@@ -3,8 +3,8 @@
 
 use crate::{
     decode, encode, AskHelm, Freshness, HelmAsked, HelmClosed, HelmContext, HelmFresh, HelmMessage,
-    HelmScreen, HelmSilence, HelmText, Instant, JobId, ManifestId, Saw, Shown, TranscriptRow,
-    Voice,
+    HelmScreen, HelmSilence, HelmText, Instant, JobId, ManifestId, Saw, Shown, StudioId,
+    StudioNodeId, TranscriptRow, Voice,
 };
 
 #[test]
@@ -32,6 +32,8 @@ fn an_asks_context_round_trips() {
             picked: Some(ManifestId::carried("armada")),
             chip: Some(JobId::carried("01JOB0000000000000000000A")),
             cursor: None,
+            studio: None,
+            node: None,
         }),
     };
     let json = encode(&asked).expect("plain data");
@@ -44,6 +46,41 @@ fn an_asks_context_round_trips() {
         decode::<AskHelm>("a message to Helm", json.as_bytes()).expect("round-trips"),
         asked
     );
+}
+
+/// `#1287`: a Studio, and the node selected on it, ride on the ask; a context
+/// from a Bridge built before 14.7 names neither and still decodes.
+#[test]
+fn a_studios_context_round_trips_and_an_older_one_still_decodes() {
+    let asked = AskHelm {
+        text: HelmText::said("what does this connect to?").expect("not blank"),
+        context: Some(HelmContext {
+            screen: HelmScreen::Studio,
+            picked: Some(ManifestId::carried("armada")),
+            chip: None,
+            cursor: None,
+            studio: Some(StudioId::carried("01STUDIO00000000000000000A")),
+            node: Some(StudioNodeId::carried("01NODE0000000000000000000B")),
+        }),
+    };
+    let json = encode(&asked).expect("plain data");
+    assert!(json.contains(r#""screen":"studio""#), "{json}");
+    assert!(
+        json.contains(r#""node":"01NODE0000000000000000000B""#),
+        "{json}"
+    );
+    assert_eq!(
+        decode::<AskHelm>("a message to Helm", json.as_bytes()).expect("round-trips"),
+        asked
+    );
+
+    let older = decode::<AskHelm>(
+        "a message to Helm",
+        br#"{"text":"hi","context":{"screen":"board"}}"#,
+    )
+    .expect("an older context");
+    let context = older.context.expect("a context");
+    assert_eq!((context.studio, context.node), (None, None));
 }
 
 #[test]

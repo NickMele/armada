@@ -181,3 +181,16 @@ export const JobInAStatusWithNoVerb: Story = {
     await expect(canvas.getByTitle("No verb in the registry for paused_for_lunch")).toBeVisible();
   },
 };
+
+/**
+ * A Run and a Job not read yet. A Studio holds a reference and never the state, so until the run
+ * or the Job is read the card says no state rather than a guessed one, and nothing pulses.
+ */
+export const RunAndJobNotRead: Story = {
+  render: () => (
+    <Row>
+      <StudioNode kind="run" title="01RUN00000000000000000000A" />
+      <StudioNode kind="job" title="01JOB00000000000000000000B" />
+    </Row>
+  ),
+};

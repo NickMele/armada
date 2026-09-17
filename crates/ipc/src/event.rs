@@ -514,7 +514,7 @@ pub enum ChangeKind {
 /// file is the patch, which is deliberately not on this seam: a stream carrying
 /// diffs at Drone speed is the thing the event channel's bound exists to keep
 /// off it. How many lines it gained and lost is two numbers, and since protocol
-/// 14.9 the live reading carries them. #1187.
+/// 14.10 the live reading carries them. #1187.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangedFile {
     /// Repository-relative, exactly as git spells it.

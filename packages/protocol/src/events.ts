@@ -411,7 +411,7 @@ export type ChangedFile = {
   outside_plan?: boolean;
   /**
    * What the file gained and lost, as of Fleet's last counted reading. Since
-   * protocol 14.9, and only on `job.files_changed`. **Absent is not zero**: a
+   * protocol 14.10, and only on `job.files_changed`. **Absent is not zero**: a
    * file nothing counted, or one that arrived after the last count, which
    * Fleet takes once the Drone's calls settle and at most every ten seconds.
    */

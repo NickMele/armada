@@ -47,7 +47,7 @@ export type PaletteJob = { id: string; label: string };
  * A destination in Bridge, with the digit that reaches it where it has one.
  *
  * **The digit is optional and that is a gap, named rather than filled.** The
- * contract binds `⌘1–⌘7` to *Bridge surfaces in rail order*, and Helm is on
+ * contract binds `⌘1–⌘8` to *Bridge surfaces in rail order*, and Helm is on
  * `⌘J`, which toggles the dock rather than taking a digit. So a digit is a
  * position in the rail and nothing else. A destination that is not in the rail
  * has no position, and inventing one for it would take a digit the rail owes

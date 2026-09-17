@@ -95,7 +95,7 @@ export const ACTIONS: readonly Action[] = [
     verb: "Bridge surfaces",
     icon: null,
     iconAbsent: "by design",
-    shortcut: "⌘1–⌘7",
+    shortcut: "⌘1–⌘8",
     scope: "anywhere",
     destructive: false,
     confirms: false,
