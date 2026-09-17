@@ -3,17 +3,9 @@
 //! Job, and come back later to see how I got there.** The apparatus is
 //! [`bench::studio`].
 //!
-//! **Most of it is not carried yet, and a green run here says so rather than
-//! hiding it.** The record exists; what a person does with it mostly does not,
-//! so the rest of the claim is the table below, in the order a person meets it.
-//! The change that builds a row adds its assertion to this file, made against a
-//! value that has been through [`ipc::encode`] and back as `board.rs`'s are,
-//! and takes the row out.
-//!
-//! | Step of the claim | Carried by |
-//! |---|---|
-//! | 4. A scout's Finding lists the sources it read beyond the checkout — an issue, a page, a session, a Helm thread | #1293. **The checkout half is asserted below** |
-//! | 5. An issue from the repository's forge is read in, and a Contradiction appears | #1293 |
+//! **Every step of the claim is carried.** A change that would add one adds its
+//! assertion to this file, made against a value that has been through
+//! [`ipc::encode`] and back as `board.rs`'s are.
 //!
 //! | Not proved here | Why not |
 //! |---|---|
@@ -38,11 +30,11 @@ use ipc::{HelmStudioAct, StudioNodeContent};
 use bench::studio::{
     a_capture_sent, a_failed_run, a_long_log, a_studio_promoted_to_a_job,
     a_studio_with_a_captured_note, a_studio_with_a_frozen_finding,
-    a_studio_with_a_run_started_from_a_note, a_studio_with_two_notes, an_issue_draft, held,
-    helms_manifest, one_job_under, received_event, received_request, received_studio, ASKED,
-    COMMIT, COMPONENT, COST, DRAFT_TITLE, FIRST_NOTE, FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP,
-    OWNERS, READ, REPOSITORY, SCREEN, SECOND_NOTE, SELECTOR, STYLES, THE_COMMAND, THE_FAILURE,
-    THE_RUN,
+    a_studio_with_a_run_started_from_a_note, a_studio_with_sources_read_in,
+    a_studio_with_two_notes, an_issue_draft, held, helms_manifest, one_job_under, received_event,
+    received_request, received_studio, ASKED, COMMIT, COMPONENT, COST, CUT, DRAFT_TITLE,
+    FIRST_NOTE, FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP, OWNERS, READ, READ_IN_NOTE, REPOSITORY,
+    SCREEN, SECOND_NOTE, SELECTOR, SIDES, SOURCES, STYLES, THE_COMMAND, THE_FAILURE, THE_RUN,
 };
 
 /// Step 6's near half: **two Notes are clustered, the Cluster is written up as
@@ -643,4 +635,125 @@ fn a_run_node_reads_its_state_off_the_run_and_keeps_its_tail_and_result_once_it_
         swept.nodes[1].state.is_none(),
         "a swept run is still read off what the node kept, never off a status"
     );
+}
+
+/// Steps 4 and 5 of the claim: **a source outside the checkout is read in, the
+/// Link stays standing with its address, the Finding says what it was handed
+/// and what was cut, and a Contradiction appears with both sides on it.**
+/// `docs/concepts/studio.md`, *Promotion*; `docs/concepts/scout.md`.
+///
+/// **The failure this is against is a decision that has to be retyped.** What a
+/// person already worked out lives in an issue, a page, a session or a Helm
+/// thread, and a Studio that could only hold an address would make them read it
+/// again and write it out by hand. So what is held here is that each of the
+/// four first sources comes back as nodes, and that every one of them walks
+/// back to the Link it came from — a read-in that made nodes and drew no edge
+/// would render the same and record nothing about where any of it came from.
+///
+/// **A Contradiction's two sides are text**, quoted from each, because one side
+/// is outside the repository and has no node to point at. Nothing can mint one
+/// today but this, which is what makes `#1291`'s four outcomes reachable.
+#[test]
+fn four_sources_read_in_leave_their_links_standing_with_what_came_back_hung_off_them() {
+    let studio = received_studio(&a_studio_with_sources_read_in());
+    let node = |id: &str| {
+        studio
+            .nodes
+            .iter()
+            .find(|node| node.id.as_str() == id)
+            .unwrap_or_else(|| panic!("`{id}` is on the Studio"))
+    };
+
+    // Step 4: each of the four first sources, and the Finding that says which
+    // it was handed. The checkout is recorded beside it, so a Finding says
+    // both what state of the code it read and what came from outside it.
+    for (n, (link, address, kind)) in SOURCES.iter().enumerate() {
+        let StudioNodeContent::Link {
+            address: kept,
+            named,
+        } = &node(link).content
+        else {
+            panic!("`{link}` is a Link");
+        };
+        assert_eq!(kept, address, "a Link keeps its address whatever came back");
+        assert_eq!(*named, None, "nothing a scout read renames it");
+
+        let StudioNodeContent::Finding {
+            sources,
+            checkout,
+            ended,
+            ..
+        } = &node(&format!("01FINDINGREADIN{n}")).content
+        else {
+            panic!("a Finding for `{address}`");
+        };
+        let [source] = &sources[..] else {
+            panic!("one source per read-in");
+        };
+        assert_eq!(source.address, *address);
+        assert_eq!(source.kind.as_wire(), kind.as_wire());
+        assert_eq!(
+            source.cut,
+            match kind.as_wire() {
+                // A page did not fit, and the Finding says how much went
+                // rather than claiming the whole of it was read.
+                "page" => CUT,
+                _ => 0,
+            }
+        );
+        assert_eq!(
+            checkout
+                .as_ref()
+                .expect("the commit it read the code at")
+                .commit,
+            COMMIT
+        );
+        assert!(ended.is_some(), "a read-in freezes however it ends");
+    }
+
+    // Step 5: what came back off the issue — a Note and a Contradiction, each
+    // carrying both sides, and a relation nobody has accepted.
+    assert!(matches!(
+        &node("01NOTEREADIN").content,
+        StudioNodeContent::Note { said, .. } if said == READ_IN_NOTE
+    ));
+    let StudioNodeContent::Contradiction {
+        first,
+        second,
+        answer,
+    } = &node("01CONTRAREADIN").content
+    else {
+        panic!("a Contradiction");
+    };
+    assert_eq!((first.as_str(), second.as_str()), SIDES);
+    assert_eq!(*answer, None, "nobody has settled it");
+    assert_eq!(
+        node("01CONTRAREADIN").state.map(|state| state.as_wire()),
+        Some("reported"),
+        "Reported until a person picks one of the four outcomes"
+    );
+
+    // Everything the issue's read-in made walks back to its Link.
+    let off_the_issue: Vec<_> = studio
+        .edges
+        .iter()
+        .filter(|edge| edge.kind.as_wire() == "produced" && edge.from.as_str() == SOURCES[0].0)
+        .map(|edge| edge.to.as_str().to_string())
+        .collect();
+    assert_eq!(
+        off_the_issue,
+        ["01FINDINGREADIN0", "01NOTEREADIN", "01CONTRAREADIN"],
+        "the Finding, the Note and the Contradiction, oldest first"
+    );
+
+    // A relation a scout asked for waits on a person, drawn dashed until then.
+    let proposed: Vec<_> = studio
+        .edges
+        .iter()
+        .filter(|edge| {
+            edge.standing.as_wire() == "proposed" && edge.from.as_str() == "01NOTEREADIN"
+        })
+        .collect();
+    assert_eq!(proposed.len(), 1);
+    assert_eq!(proposed[0].kind.as_wire(), "blocks");
 }
