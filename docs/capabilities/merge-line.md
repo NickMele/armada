@@ -72,8 +72,9 @@ The line's first real turn on this repository merged `main` in, ran the gate and
 - **A conflict and a red keep their place.** Resubmitted, the entry reuses the place the outcome recorded: the wait was already served.
 - **A hung Check holds the turn until somebody kills the runner.** A timeout was ruled out, because a cold build plus the app suite runs past any fixed one and evicting a holder that is still working puts two merges in flight.
 - **State lives under the common git directory**, in `armada-land/`, so every worktree of one clone shares one line.
-- **The worktrees the Checks run in live under `.armada/gates/`**, inside the repository, beside the ones Fleet cuts for a Job. A checkout outside the repository directory is not somewhere this project's tooling runs: Vite refuses to serve a `node_modules` outside its allow list and `tsc` cannot name a type through one, so three Bridge Checks failed there for reasons that had nothing to do with the branch. `gates/` rather than `worktrees/` keeps them out of what `armada clean` accounts for, and `.armada/*` is already ignored.
-- **A gate worktree left by a killed runner is taken back by the next turn.** Holding the lock means nothing else is gating, so whatever is still under `.armada/gates/` belongs to a runner that died.
+- **Two worktrees, under `.armada/land/`, kept and reused.** `candidate/` is where a branch is gated, `base/` where `main`'s own runs happen. Inside the repository, because a checkout outside it is not somewhere this project's tooling runs: Vite refuses to serve a `node_modules` outside its allow list and `tsc` cannot name a type through one, and three Bridge Checks failed there for reasons that had nothing to do with the branch. `land/` is neither `worktrees/` nor `bases/`, so nothing here is taken for a Job's checkout, and `.armada/*` is already ignored.
+- **Each turn resets its worktree and cleans it, keeping the build directories.** `git reset --hard`, then `git clean -xdff` with `target/` and `node_modules/` excepted — so nothing of the turn before survives but what makes the next one fast. **The lock is what makes reuse safe**: one turn at a time means there is never a second reader of either worktree.
+- **A worktree that is missing, unregistered or no longer a worktree is remade**, and a killed runner's half-merged tree is the same case — `reset --hard` clears the merge with everything else.
 
 ## Choosing what reruns
 
@@ -122,6 +123,19 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 
 **What it gives up:** a rule that did read build output would be blind on both sides. The bundle rule already declares a warning for that reason, and a rule that wanted more would have to say so.
 
+**A cold turn and a warm one, measured on this repository** — a worktree reset, the seed, `setup.requires`, then `typecheck` and `build`:
+
+| | Cold, worktree just created | Warm, reused |
+|---|---|---|
+| Reset and clean | 0.6s | 0.1s |
+| Seed, `cp -c target` | 13.2s | none needed |
+| `setup.requires` | 2.4s | 0.7s |
+| `typecheck` | 12.4s | 12.6s |
+| `build` | 20.3s | 0.1s |
+| **Total** | **48.9s** | **13.4s** |
+
+**What reuse buys is the build, not the checkout.** `build` is the whole difference: cargo finds its own output where it left it, and `tsc` caches nothing either way, so a turn whose Checks are all TypeScript saves little. The saving grows with what the Checks compile.
+
 **The seed stays on both sides, and a clone that fails stops the turn.** It is an APFS clone and it is what keeps `xtask` from cold-building — but a clone that worked in one tree and not the other would prepare the two sides differently, silently, which is the failure this order exists to remove.
 
 **`main`'s own run is cached by its commit, and a commit does not carry the machine.** A cached result was taken whenever it was taken, with whatever was installed then, so a machine that changed underneath is compared against a reading from before it did. Deleting `armada-land/foundations/` is how that is thrown away.
@@ -141,7 +155,7 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 | The line and the turn | The sweep, and the places line | 1 |
 | `armada covers` | `ResolvedCheck::covers`, already shared | 2 |
 | Merging `main` in | `crates/adapters/src/merging_in.rs` | 3 |
-| The gate worktree under `.armada/gates/` | `.armada/worktrees/<handle>`, cut by `Vcs` | 8 |
+| The two worktrees under `.armada/land/` | `.armada/worktrees/<handle>` and `.armada/bases/<sha>` | 8 |
 | Asking whether `main` fails it too | *A test broken on main* | 9 |
 | Rerunning the Checks | A gate run over the merged worktree | 4 |
 | The merge | `crates/adapters/src/landing.rs` | 5 |
@@ -155,7 +169,7 @@ merge main in -> seed (cp -c) -> verify-foundations -> setup, if a Check reruns 
 5. It merges with `--merge` today. `--match-head-commit` and the base reread are what it lacks.
 6. `docs/concepts/manifest.md`, *Proving what merged*. The first-parent comparison belongs beside `after_merge`.
 7. An outcome becomes a Job event and a log line.
-8. Same directory, same reason: a Job's Checks run inside the repository because that is where this project's tooling works.
+8. Same directory, same reason: a Job's Checks run inside the repository because that is where this project's tooling works. **Fleet's own lifecycle already answers the reuse half** — a base checkout belongs to a commit and every Job on that commit shares it, and `setup.seed` warms it when the base moves. What it does not do is drop the one it has superseded: two were found holding 16 GB after two merges, and `armada clean` is the only thing that takes them back.
 9. `docs/concepts/fleet.md`. Fleet runs one named test against a checkout of `main` on a Drone's word; the line asks the same question of a whole Check, without being asked.
 
 ## What does not port

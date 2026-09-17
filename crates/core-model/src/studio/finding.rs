@@ -13,7 +13,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::{StudioNode, StudioNodeContent, StudioNodeState};
+use super::{ScoutSourceKind, StudioNode, StudioNodeContent, StudioNodeState};
 
 /// Which state of the repository a scout read: the commit checked out, and
 /// whether anything was changed on top of it that is not committed.
@@ -43,6 +43,27 @@ pub struct ScoutEnded {
     pub cost_micros: Option<u64>,
 }
 
+/// A source a scout was handed beyond the checkout. `#1293`.
+///
+/// **Fetched by Fleet and handed over as text**, never reached by the scout
+/// itself: its launch denies every tool that could fetch one and
+/// `--strict-mcp-config` leaves it no server, which is the confinement spike
+/// 017 measured and the reason a scout is safe to run on a person's checkout.
+///
+/// **`cut` is what did not fit.** A page or a session is bounded before it is
+/// handed over, and a Finding that does not say so would claim the scout read
+/// a source whole when it read the front of one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScoutSource {
+    /// The Link's address, as the person pasted it. **Never rewritten**: the
+    /// Link keeps its address whatever comes back.
+    pub address: String,
+    pub kind: ScoutSourceKind,
+    /// Characters dropped from the end. `0` where the whole of it was handed
+    /// over.
+    pub cut: u64,
+}
+
 /// One thing a scout looked at: a file it read whole, or a search it ran.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScoutLook {
@@ -57,6 +78,9 @@ pub enum ScoutLook {
 pub struct StudioFinding {
     asked: String,
     checkout: Option<ScoutCheckout>,
+    /// What it was handed beyond the checkout. Empty on a scout asked about
+    /// the code alone, which is every Finding before `#1293`.
+    sources: Vec<ScoutSource>,
     read: Vec<String>,
     searched: Vec<String>,
     learned: Option<String>,
@@ -69,6 +93,7 @@ impl StudioFinding {
         StudioFinding {
             asked: String::from(text),
             checkout: None,
+            sources: Vec::new(),
             read: Vec::new(),
             searched: Vec::new(),
             learned: None,
@@ -81,6 +106,7 @@ impl StudioFinding {
     pub fn recorded(
         asked: String,
         checkout: Option<ScoutCheckout>,
+        sources: Vec<ScoutSource>,
         read: Vec<String>,
         searched: Vec<String>,
         learned: Option<String>,
@@ -89,6 +115,7 @@ impl StudioFinding {
         StudioFinding {
             asked,
             checkout,
+            sources,
             read,
             searched,
             learned,
@@ -103,6 +130,11 @@ impl StudioFinding {
 
     pub fn checkout(&self) -> Option<&ScoutCheckout> {
         self.checkout.as_ref()
+    }
+
+    /// Every source it was handed beyond the checkout, in the order handed.
+    pub fn sources(&self) -> &[ScoutSource] {
+        &self.sources
     }
 
     /// Every file read, in the order first read.
@@ -127,6 +159,9 @@ impl StudioFinding {
     /// Whether this content is what a Finding at `state` holds.
     pub fn fits(&self, state: Option<StudioNodeState>) -> bool {
         let untouched = self.read.is_empty() && self.searched.is_empty() && self.learned.is_none();
+        // A source is handed over as the scout starts, so a Proposed Finding
+        // has none the way it has no checkout.
+        let untouched = untouched && self.sources.is_empty();
         match state {
             Some(StudioNodeState::Proposed) => {
                 self.checkout.is_none() && self.ended.is_none() && untouched
@@ -180,6 +215,24 @@ impl StudioNode {
                 ..self.clone()
             },
         })
+    }
+}
+
+impl StudioNode {
+    /// Start a Proposed Finding that is reading sources in as well as the
+    /// checkout: what it was handed recorded before it reads a line. `#1293`.
+    ///
+    /// **Recorded at the start and never after**, because Fleet fetched them:
+    /// what a Finding says it was given is what was handed over, not something
+    /// read off the scout's own account of its turn.
+    pub fn reading_in(
+        &self,
+        checkout: ScoutCheckout,
+        sources: Vec<ScoutSource>,
+    ) -> Result<GatheringFinding, NotScoutable> {
+        let mut gathering = self.scouting(checkout)?;
+        gathering.finding().sources = sources;
+        Ok(gathering)
     }
 }
 

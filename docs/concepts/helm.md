@@ -44,7 +44,11 @@ Anything genuinely cross-Manifest stays a Bridge job.
 
 ## Tools
 
-**Helm reaches Fleet through the Fleet MCP**, the HTTP request-response surface Bridge also uses. Not a hand-picked toolset. What Helm is told at session start — its toolset, the selected Manifest, its resolved authority and Voice — is specified on `../contracts/agent-prompt.md`, section 2.
+**Helm holds what you hold in a terminal, and the Fleet MCP besides.** A session opens in the repository's own checkout and resolves what your Claude configuration resolves there — your MCP servers, your plugins, your skills, your agent files, and the ordinary built-in tools that read, search, edit, run a command and fetch. Nothing is withheld by a list Armada wrote. What Helm is told at session start — the selected Manifest, its resolved authority and Voice — is specified on `../contracts/agent-prompt.md`, section 2.
+
+**Kit is what should resolve that set, and Kit is not built (#1275).** Until it is, the set is whatever Claude Code itself resolves for this repository on this machine: your user-scoped configuration and the repository's own. Kit takes it over, and a Manifest tier arrives with it.
+
+**A Drone's confinement is not Helm's, and widening one must never widen the other.** `--strict-mcp-config` exists because a Drone came up holding every server an operator had connected — `../scope.md`. A Drone is unattended; Helm is a person talking, in their own checkout, to a session they are watching. The two launches are rendered separately and a test holds them apart.
 
 Helm's advantage is not more access than you have. It is reasoning over results and chaining calls you would otherwise make one at a time — "why is Job 12 failing", "what needs my attention, one by one", "what is open that we could dispatch".
 
@@ -68,6 +72,10 @@ What Helm may *do* rather than read is a separate limit — see Action authority
 
 Helm may call any command it is offered once you ask it to, in this conversation — the ask is the human gate itself, not a step before one. `undo_run` is the sole exception, a person's regardless of what is asked. This replaced a narrower rule keyed to the Intervention Ladder — what you do about a problem, ordered by how much you take over — which is now a description of the acts rather than a boundary on Helm.
 
+**Helm edits your checkout when you ask it to, with no worktree and no gate between the ask and the file.** A deliberate exception to "work happens in a Job", taken with the owner on 17 Sep 2026 because a terminal session does it and the app should. There is no Judge on the change, no branch, and no approval — the ask was the approval. Every write is `helm.changed_checkout`, below.
+
+**What a shell line or another server's tool needs is a question nobody can answer yet.** In a terminal you are asked before one runs; the dock has nowhere to put that question, so a call your own configuration does not already allow is refused and said rather than run — `../spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md` measured both. So Helm's reach past reading and editing is exactly your own allow rules, which is [Kit](kit.md)'s to own (#1275). **A person answering a call mid-conversation is unbuilt**, and it is what closes the gap between this and a terminal.
+
 | Rung | Action | Helm directly? |
 | --- | --- | --- |
 | 1 | Redirect — structured instruction sent to a Drone | **Yes**, on your ask |
@@ -84,6 +92,8 @@ Rung 3 carries no MCP operation for Helm to reach for, ladder or no. A Job Helm 
 ## Audit trail
 
 **Every Helm-initiated action is logged as its own distinct event type**, never conflated with your manual actions or with Drone self-reports. Manual actions are already distinguished from Drone evidence, per the Debug/Pilot design. Three-way separation: Drone evidence, human manual action, Helm-initiated action.
+
+**A Helm write to your checkout is `helm.changed_checkout`**, naming the repository, the tool and the path, published as the session's stream says it happened. A person who finds a file changed and did not change it reads this to see that Helm did. It names writes Armada can name: a shell line Helm ran may have written something too and nothing says whether it did, so those calls are on the conversation's own thread and produce no event.
 
 **On a Studio, Helm's act is `studio.helm_acted`**, published beside the `studio.changed` every write publishes, naming the Studio, the act and what it added. A person's act on a Studio publishes `studio.changed` alone, so the two are told apart by kind rather than by a field someone has to remember to read. **The record keeps it too**: each node and edge carries `added_by` and a Studio its `named_by`, a person or Helm, so a client that was not connected when Helm acted reads who did what off `get_studio`.
 

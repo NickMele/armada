@@ -160,12 +160,48 @@ export const Sketch: Story = {
   },
 };
 
-/** Kept as its address, which is a fact rather than a place this node navigates to. */
+/** An address of the length the owner actually pasted, and then some. */
+const LONG_ADDRESS =
+  "https://example.invalid/armada/issues/1378#issuecomment-2847190034-a-pasted-link-does-nothing";
+
+const SHORT_ADDRESS = "https://example.invalid/armada/issues/1378";
+
+/**
+ * The line a person wrote over the address they kept — #1378. Kept as its
+ * address, which is a fact rather than a place this node navigates to.
+ */
 export const Link: Story = {
-  args: { kind: "link", title: "Studio proposal board", facts: ["miro.com/app/board/uXjVK"] },
+  args: {
+    kind: "link",
+    address: "https://miro.com/app/board/uXjVK",
+    title: "The board the Studio proposal came off",
+  },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText("miro.com/app/board/uXjVK")).toBeVisible();
+    await expect(canvas.getByText("The board the Studio proposal came off")).toBeVisible();
+    await expect(canvas.getByText("https://miro.com/app/board/uXjVK")).toBeVisible();
     await expect(canvas.queryByRole("link")).toBeNull();
+  },
+};
+
+/**
+ * A Link nobody wrote a line on, and one whose address is far wider than the
+ * card. **Neither overflows** — #1378, where a pasted address ran past the
+ * node's own width. The `play` reads what a person can see rather than a
+ * measurement; the screenshot is what catches the overflow, so the assertion
+ * here is that the whole address is still reachable on the title.
+ */
+export const LinkWithNoLine: Story = {
+  render: () => (
+    <Row>
+      <StudioNode kind="link" address={SHORT_ADDRESS} title={SHORT_ADDRESS} />
+      <StudioNode kind="link" address={LONG_ADDRESS} title={LONG_ADDRESS} />
+      <StudioNode kind="link" address={LONG_ADDRESS} title="Where the review comments on the retry land" />
+    </Row>
+  ),
+  play: async ({ canvas }) => {
+    const clipped = canvas.getAllByTitle(LONG_ADDRESS);
+    await expect(clipped.length).toBe(2);
+    await expect(canvas.getByText("Where the review comments on the retry land")).toBeVisible();
   },
 };
 

@@ -2,7 +2,14 @@
 // of the Studio Fleet sent and the Board this window holds, so it is tested as one.
 
 import type { StudioNodeFrame, StudioWhiteboardEdge, StudioWhiteboardNode } from "@armada/components";
-import type { JobSummary, Studio, StudioNode, StudioRunKept, StudioSummary } from "@armada/protocol";
+import type {
+  JobSummary,
+  ScoutSource,
+  Studio,
+  StudioNode,
+  StudioRunKept,
+  StudioSummary,
+} from "@armada/protocol";
 import { STUDIO_EDGE_LABEL, STUDIO_NODE_KIND } from "@armada/components";
 
 import { runOutcomeOf } from "./rehearsal";
@@ -31,6 +38,22 @@ function runFacts(kept: StudioRunKept): string[] {
     ? [kept.command, took]
     : [kept.command, `exit ${kept.exit_code} (expects ${kept.expect_exit_code})`, took];
 }
+
+/** What a scout was handed, as one chip: what it was read as, and what was cut. */
+function sourceRead(source: ScoutSource): string {
+  const read = SOURCE_READ[source.kind] ?? source.kind;
+  return source.cut === 0 ? read : `${read}, ${source.cut.toLocaleString()} characters cut`;
+}
+
+/** What each source kind is called where it is read. `docs/concepts/scout.md`. */
+const SOURCE_READ: Readonly<Record<string, string>> = {
+  issue: "Read an issue",
+  pull_request: "Read a pull request",
+  milestone: "Read a milestone",
+  page: "Read a page",
+  session: "Read a session",
+  thread: "Read this repository's Helm thread",
+};
 
 /** The first line of a body, for a node whose title is prose. */
 function firstLine(body: string): string {
@@ -93,7 +116,14 @@ function cardOf(node: StudioNode, jobs: readonly JobSummary[], frameOf: FrameOf)
     case "cluster":
       return { kind: "cluster", title: node.title };
     case "finding":
-      return { kind: "finding", state: stateOf(node, "proposed"), title: node.asked };
+      // What it was handed beyond the checkout, and what did not fit. A scout
+      // asked about the code alone has none and says nothing about sources.
+      return {
+        kind: "finding",
+        state: stateOf(node, "proposed"),
+        title: node.asked,
+        facts: (node.sources ?? []).map(sourceRead),
+      };
     case "contradiction":
       // The answer is a fact beside the two statements, not in place of either: `Resolved here`
       // records what was decided, and the disagreement it settles stays readable under it.
@@ -106,7 +136,11 @@ function cardOf(node: StudioNode, jobs: readonly JobSummary[], frameOf: FrameOf)
     case "sketch":
       return { kind: "sketch", state: "frozen", title: firstLine(node.body) };
     case "link":
-      return { kind: "link", title: node.address };
+      // **The title is the person's own line first, then what a read-in
+      // learned the source calls itself, then the address** — #1378, #1293.
+      // A person's line wins because it is theirs, and the address is drawn
+      // under whichever it was, so nothing is said twice.
+      return { kind: "link", address: node.address, title: node.said ?? node.named ?? node.address };
     case "deferral":
       return { kind: "deferral", state: stateOf(node, "open"), title: node.what };
     case "outline":

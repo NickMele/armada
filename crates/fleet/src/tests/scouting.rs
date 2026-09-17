@@ -200,6 +200,7 @@ async fn an_ask_gathers_then_freezes_with_every_file_read_and_the_commit() {
         searched,
         learned,
         ended,
+        ..
     } = node.content
     else {
         panic!("a Finding: {:?}", node.content);
@@ -338,6 +339,7 @@ async fn a_proposed_finding_starts_once_and_a_claimed_one_is_never_added() {
     let claimed = StudioNodeContent::Finding {
         asked: "what reads the weights".to_string(),
         checkout: None,
+        sources: Vec::new(),
         read: vec!["src/weights.rs".to_string()],
         searched: Vec::new(),
         learned: None,

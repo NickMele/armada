@@ -353,6 +353,17 @@ notes = """
 `Bridge only`, and deliberately not Helm's even on an ask: Helm rewriting a draft a person edited is the act `studio.md` guards against under "an agent reorganising a person's work". Helm asked to change a draft says what it would write. Any kind but an Issue draft is refused as `fleet.studio_not_a_draft`, and a blank title or body as `fleet.studio_node_blank`.
 """
 
+[operations.edit_studio_link]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Replace the line a person keeps beside a Link's address with what they left, and answer with the Studio"
+notes = """
+**The address is not on this request.** `docs/concepts/studio.md` keeps a Link as its address, and `#1378` adds a line of a person's own beside it saying why it was kept — so what the node draws is that line over the address, and what is editable is the line. Nothing on this seam rewrites an address: a Link that pointed somewhere else would be a different Link.
+
+A blank `said` clears the line, which is how somebody takes back what they typed; it is not refused, because a Link with no line is what pasting an address alone already makes. `Bridge only`, for the reason `edit_studio_draft` is: a person's own words are not Helm's to rewrite. Any kind but a Link is refused as `fleet.studio_not_a_link`.
+"""
+
 [operations.settle_contradiction]
 kind = "command"
 transport = "HTTP"
@@ -416,6 +427,25 @@ notes = """
 **The stop on a Gathering Finding's node.** The scout's process group is interrupted, which the agent CLI answers by ending its turn and reporting its cost — measured in spike 017, where a terminate left no cost at all. A scout still running after ten seconds has its group ended, and its Finding says `stopped` with no cost.
 
 The answer is the Studio before the Finding freezes; the frozen one arrives on `studio.changed`. A node no scout is reading for is refused as `fleet.scout_not_running`. `Bridge only`: the stop is a press on a node, and no ask to Helm reaches it.
+"""
+
+[operations.read_in_link]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Read a Link on a Studio in — the source fetched by Fleet, what comes back hung off the Link, and the Studio answered"
+notes = """
+**A person's act on Bridge, or Helm's on a person's ask.** The Link survives and keeps its address whatever comes back; every node this makes carries a `produced` edge from it.
+
+**Fleet fetches, and the scout is handed text.** A scout's launch denies every tool that could reach a source and comes up with no MCP server (`docs/concepts/scout.md`, spike 017), so the fetch runs in Fleet's own process — the forge's CLI for an issue, a pull request or a milestone, an HTTP read for a page, the transcript file for a session, and Fleet's own read of `<records_root>/helm/` for a thread, which `observe_helm` refuses every agent. **Reading a source in widens nothing a scout may do.**
+
+**The fetch is before the write.** A source that will not fetch is refused as `fleet.studio_source_unreadable` and no node is added; a Link to a board, a wiki or anything else no scout reads is `fleet.studio_link_stays_a_link`; a node that is not a Link is `fleet.studio_not_a_link`.
+
+**An issue, a pull request, a page, a session or a thread** adds a Finding Gathering and a scout reads the text on its one turn, `docs/contracts/agent-prompt.md` section 5c. What it asked for — Notes, Clusters, Contradictions and proposed relations — is written when the Finding freezes, each `produced` by the Link, and arrives on `studio.changed`. An answer that is not the shape leaves the Finding and no node beside it. A source is bounded before it is handed over and the Finding's `sources` says how much was cut.
+
+**A milestone is read in by Fleet alone**, with no scout and no Finding: one Link node per issue, carrying its address and a line naming its number, title and state. Bounded at 50; the milestone's own Link then says how many of how many were read in. A model asked to echo a list back would be cost spent on a transcription.
+
+`agent_access` is `Helm only`, so Helm reads one in on a person's ask and no other agent reaches it. From Helm it also publishes `studio.helm_acted`.
 """
 
 [operations.start_studio_run]
@@ -2668,6 +2698,21 @@ notes = """
 **Helm's act, as its own event type** — `docs/concepts/helm.md`, *Audit trail* (#1288). Published after the `studio.changed` the same write publishes, and only where the door placed the call in a Helm session; a person's act on a Studio publishes `studio.changed` alone. So a reader tells the two apart by kind, never by a field on the Studio.
 
 `act` names which, with the id of what was added or the name given. The Studio itself is `studio.changed`'s to carry. **The stream is for a client that is connected**; who acted is also kept on the record, as `added_by` and `named_by` on `get_studio`, so a client that reconnects reads it there. `manifest_id` is at the top level, so a poll's tally names the repository.
+"""
+
+[operations."helm.changed_checkout"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "Helm wrote a file in a repository's own checkout"
+notes = """
+**Helm's act, as its own event type** — `docs/concepts/helm.md`, *Audit trail*, the rule `studio.helm_acted` already follows one subject over. Helm edits the checkout directly when a person asks it to, with no worktree and no Job around the change (`#1373`), so the file moves under whatever else is open on it. This is what lets a person who finds a file changed and did not change it see that Helm did.
+
+Published as the session's stream says the write happened, so it arrives while the reply is still being written rather than after it. It names the tool and the path and never the contents: what was written is a `Called` row on the conversation's own socket, which `observe_helm` already carries, and this stream is for a client that is not watching the dock.
+
+**A write, not a run.** The tool is one of the built-ins that edits a file, so the path is known. A shell line Helm ran may have written something too and nothing in the stream says whether it did — so a `Bash` call produces none of these, and a person reading this stream is reading writes Armada could name rather than every change Helm caused.
+
+`manifest_id` is at the top level, so a poll's tally names the repository.
 """
 
 [operations."studio.deleted"]

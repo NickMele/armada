@@ -21,7 +21,7 @@ use alloc::string::String;
 pub use edge::{EdgeRefused, StudioEdge, ToItself};
 pub use finding::{
     FrozenFinding, GatheringFinding, NotScoutable, ScoutCheckout, ScoutEnded, ScoutLook,
-    ScoutOutcome, Scouted, StudioFinding,
+    ScoutOutcome, ScoutSource, Scouted, StudioFinding,
 };
 pub use note::{CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, StudioCapture};
 pub use promotion::{ContradictionOutcome, NotRewritable, Rewritten};
@@ -187,6 +187,31 @@ spelled! {
 }
 
 spelled! {
+    /// What a source a scout was handed was read as. `#1293`,
+    /// `docs/concepts/scout.md`, *What it may read*.
+    ///
+    /// **Named for what it is, never for whose it is.** Which host serves an
+    /// issue, which agent wrote a session and which daemon keeps a thread are
+    /// `adapters`' to know; a Studio records that a scout read an issue.
+    ScoutSourceKind {
+        /// An issue on the repository's forge.
+        Issue => "issue",
+        /// A pull request on the repository's forge.
+        PullRequest => "pull_request",
+        /// A milestone on the forge, read in as its issues. Fleet's own read,
+        /// with no scout: a list echoed back by a model is cost spent on a
+        /// transcription.
+        Milestone => "milestone",
+        /// A page on the web, as its headings and text.
+        Page => "page",
+        /// An agent session started in this repository or one of its worktrees.
+        Session => "session",
+        /// This repository's own Helm thread.
+        Thread => "thread",
+    }
+}
+
+spelled! {
     /// Whether a person has accepted an edge. A proposed edge is drawn dashed.
     StudioEdgeStanding {
         Proposed => "proposed",
@@ -327,8 +352,22 @@ pub enum StudioNodeContent {
     },
     /// A diagram or mockup, as text.
     Sketch { body: String },
-    /// A board, document, issue, page or session, kept as its address.
-    Link { address: String },
+    /// A board, document, issue, page or session, kept as its address, the
+    /// line a person wrote beside it, and what the source calls itself.
+    ///
+    /// **Three fields, and the address is never one of the other two.** A Link
+    /// never stops being its address (`#1378`), and `#1379` dispatches a Job
+    /// from the address alone.
+    ///
+    /// `said` is a person's own line. `named` is what a read-in learned the
+    /// source calls itself — an issue's number, title and state (`#1293`).
+    /// **They are not one field**: a read-in writing over a person's line
+    /// would be an agent reorganising a person's work.
+    Link {
+        address: String,
+        said: Option<String>,
+        named: Option<String>,
+    },
     /// Something a person put off.
     Deferral { what: String },
     /// An ordered reading of the nodes feeding it.
@@ -340,6 +379,34 @@ pub enum StudioNodeContent {
 }
 
 impl StudioNodeContent {
+    /// A Link, with the person's line normalised: trimmed, and absent where
+    /// nothing but whitespace was typed.
+    ///
+    /// **One place decides what a blank line is**, so a Link pasted with an
+    /// empty field and one whose line was cleared afterwards are the same
+    /// record rather than two shapes a reader has to tell apart.
+    pub fn link(address: String, said: Option<String>) -> StudioNodeContent {
+        let said = said
+            .map(|line| String::from(line.trim()))
+            .filter(|line| !line.is_empty());
+        StudioNodeContent::Link {
+            address,
+            said,
+            named: None,
+        }
+    }
+
+    /// A Link a read-in made, carrying the issue's own address and the line
+    /// naming it. **No `said`**: a person has not written one on a node that
+    /// did not exist a moment ago. `#1293`.
+    pub fn link_named(address: String, named: String) -> StudioNodeContent {
+        StudioNodeContent::Link {
+            address,
+            said: None,
+            named: Some(named),
+        }
+    }
+
     pub fn kind(&self) -> StudioNodeKind {
         match self {
             StudioNodeContent::Run { .. } => StudioNodeKind::Run,
@@ -369,7 +436,9 @@ impl StudioNodeContent {
             StudioNodeContent::Sketch { body } | StudioNodeContent::Outline { body } => {
                 &[("body", body)]
             }
-            StudioNodeContent::Link { address } => &[("address", address)],
+            // Neither `said` nor `named` is here: a Link with no line and no
+            // name is a Link, and both are normalised to absent, never blank.
+            StudioNodeContent::Link { address, .. } => &[("address", address)],
             StudioNodeContent::Deferral { what } => &[("what", what)],
             StudioNodeContent::IssueDraft { title, body } => &[("title", title), ("body", body)],
             StudioNodeContent::Job { job_id } => &[("job_id", job_id.as_str())],

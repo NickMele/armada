@@ -176,6 +176,11 @@ pub const SERVED: &[Route] = &[
         path: "/studios/:studio_id/edit_draft",
     },
     Route {
+        operation: "edit_studio_link",
+        method: "POST",
+        path: "/studios/:studio_id/edit_link",
+    },
+    Route {
         operation: "settle_contradiction",
         method: "POST",
         path: "/studios/:studio_id/settle",
@@ -199,6 +204,13 @@ pub const SERVED: &[Route] = &[
         operation: "stop_scout",
         method: "POST",
         path: "/studios/:studio_id/stop_scout",
+    },
+    // A Link read in, `#1293`. `read_in` rather than `read_in_link`: the node
+    // the body names is the Link.
+    Route {
+        operation: "read_in_link",
+        method: "POST",
+        path: "/studios/:studio_id/read_in",
     },
     // A run started from a Studio, `#1289`. `start_run` rather than
     // `start_studio_run`: the segment before it says which Studio.
@@ -976,6 +988,13 @@ pub const SERVED: &[Route] = &[
     // Helm's act on a Studio, beside the `studio.changed` it made. `#1288`.
     Route {
         operation: "studio.helm_acted",
+        method: "GET",
+        path: "/events",
+    },
+    // Helm writing a file in the repository's own checkout, which it does on a
+    // person's ask and in no worktree. `#1373`.
+    Route {
+        operation: "helm.changed_checkout",
         method: "GET",
         path: "/events",
     },
