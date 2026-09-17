@@ -1,3 +1,5 @@
+import { FigureList } from "../FigureList/FigureList";
+
 /**
  * The Job's pulse: the last thing anyone did on it, and what it holds on this
  * machine, with the full reading one press away.
@@ -95,17 +97,17 @@ export function JobHoldsSummary({ latest, latestNote, figures, note, age }: JobH
       {figures === null ? (
         <p className="armada-holds-summary__note">{note ?? NOTHING_READ_YET}</p>
       ) : (
-        <dl className="armada-holds-summary__figures">
-          <Figure
-            label="Processes"
-            value={figures.processes === 0 ? "None" : String(figures.processes)}
-            wrong={figures.processes === 0 && figures.nothingRunningIsWrong}
-          />
-          <Figure label="Worktree" value={figures.worktree} wrong={figures.worktreeIsWrong} />
-          {figures.size === undefined ? null : (
-            <Figure label="Size on disk" value={figures.size} />
-          )}
-        </dl>
+        <FigureList
+          figures={[
+            {
+              label: "Processes",
+              value: figures.processes === 0 ? "None" : String(figures.processes),
+              wrong: figures.processes === 0 && figures.nothingRunningIsWrong,
+            },
+            { label: "Worktree", value: figures.worktree, wrong: figures.worktreeIsWrong },
+            ...(figures.size === undefined ? [] : [{ label: "Size on disk", value: figures.size }]),
+          ]}
+        />
       )}
       {/* The instant qualifies every figure above it, which is why it is here
           and not a caption: a process can exit between the reading and this
@@ -116,16 +118,6 @@ export function JobHoldsSummary({ latest, latestNote, figures, note, age }: JobH
         </div>
       )}
     </section>
-  );
-}
-
-/** A label and its figure, on one row: the label's column, then the figure in mono. */
-function Figure({ label, value, wrong }: { label: string; value: string; wrong?: boolean }) {
-  return (
-    <div className="armada-holds-summary__figure" data-wrong={wrong || undefined}>
-      <dt className="armada-holds-summary__label">{label}</dt>
-      <dd className="armada-holds-summary__value">{value}</dd>
-    </div>
   );
 }
 

@@ -39,8 +39,6 @@ export function elapsed(ms: number): string {
 }
 
 export function statementOf(connection: Connection, now: number, readAt: number | null): Statement {
-  const staleness = readAt === null ? "nothing read yet" : `last read ${elapsed(now - readAt)} ago`;
-
   switch (connection.state) {
     case "reading":
       return {
@@ -76,9 +74,7 @@ export function statementOf(connection: Connection, now: number, readAt: number 
     case "unreachable":
       return {
         headline: "Fleet unreachable",
-        detail:
-          `pid ${connection.fleet.pid} alive on port ${connection.fleet.port}, ` +
-          `no answer for ${elapsed(now - connection.sinceMs)} · ${staleness}`,
+        detail: `pid ${connection.fleet.pid} alive on port ${connection.fleet.port}, ${silenceOf(connection, now, readAt)}`,
         // Restarting Fleet is the wrong fix here, so the sentence does not say to.
         next: "Fleet is up and not answering. What is shown below is not live.",
       };
@@ -113,7 +109,7 @@ export function statementOf(connection: Connection, now: number, readAt: number 
         detail:
           `pid ${connection.fleet.pid} · port ${connection.fleet.port}` +
           (connection.skew === "fleet_ahead"
-            ? ` · Fleet ${spoken(connection.fleet.protocolVersion)}, Bridge ${spoken(PROTOCOL_VERSION)}`
+            ? ` · ${versionsOf(connection)}`
             : ""),
         // **The one `next` on a healthy connection, and it is not a fault.** A
         // minor bump is additive only, so everything drawn here is current and
@@ -128,6 +124,26 @@ export function statementOf(connection: Connection, now: number, readAt: number 
             : null,
       };
   }
+}
+
+/**
+ * How long an unreachable Fleet has been silent, and how old what is shown is —
+ * `no answer for 20s · last read 4s ago`. The Fleet panel draws pid and port as
+ * rows of their own and this as the sentence under them, so the panel and the
+ * failure notice say it in one spelling.
+ */
+export function silenceOf(
+  connection: Extract<Connection, { state: "unreachable" }>,
+  now: number,
+  readAt: number | null,
+): string {
+  const staleness = readAt === null ? "nothing read yet" : `last read ${elapsed(now - readAt)} ago`;
+  return `no answer for ${elapsed(now - connection.sinceMs)} · ${staleness}`;
+}
+
+/** Both protocol versions, Fleet's first — `Fleet 13.50, Bridge 13.49`. */
+export function versionsOf(connection: Extract<Connection, { state: "connected" }>): string {
+  return `Fleet ${spoken(connection.fleet.protocolVersion)}, Bridge ${spoken(PROTOCOL_VERSION)}`;
 }
 
 /** The three ways a runtime file says Fleet is not running. */
