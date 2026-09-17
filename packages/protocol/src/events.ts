@@ -16,7 +16,7 @@ import type { ProposalInFlight } from "./proposing";
 import type { CheckoutRunRecord, RunRecord } from "./rehearsal";
 import type { ServerState } from "./servers";
 import type { RepositoryList } from "./setup";
-import type { Studio, StudioDeleted } from "./studio";
+import type { Studio, StudioDeleted, StudioHelmActed } from "./studio";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { CommandInFlight } from "./commanding";
@@ -76,7 +76,9 @@ export type Event =
   /** A Studio after a write to it, whole. Since 14.6. */
   | ({ kind: "studio.changed" } & Studio)
   /** A Studio a person deleted. Since 14.6. */
-  | ({ kind: "studio.deleted" } & StudioDeleted);
+  | ({ kind: "studio.deleted" } & StudioDeleted)
+  /** Helm took one act on a Studio, beside its `studio.changed`. Since 14.7. */
+  | ({ kind: "studio.helm_acted" } & StudioHelmActed);
 
 /**
  * A Job exists that did not before, carrying the row whole.

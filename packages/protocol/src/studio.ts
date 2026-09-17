@@ -81,6 +81,23 @@ export type StudioDeleted = {
   manifest_id: string;
 };
 
+/**
+ * `studio.helm_acted`'s body: one act Helm took on a Studio, published after
+ * the write's `studio.changed`. A person's act publishes `studio.changed`
+ * alone, so the two are told apart by kind. Since 14.7, #1288.
+ */
+export type StudioHelmActed = HelmStudioAct & {
+  studio_id: string;
+  manifest_id: string;
+  at: string;
+};
+
+/** Which of Helm's unasked acts, with the id of what it added or the name given. */
+export type HelmStudioAct =
+  | { act: "added_node"; node_id: string }
+  | { act: "proposed_edge"; edge_id: string }
+  | { act: "named"; name: string };
+
 /** `POST /studios/create?manifest_id=`. A blank or absent name is untitled. */
 export type CreateStudio = { name?: string };
 
