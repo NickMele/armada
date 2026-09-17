@@ -97,6 +97,12 @@ export type DispatchJobProps = {
    * abandoned leaves the proposer running inside Fleet and spending.
    */
   onStop: () => void;
+  /**
+   * The way out of the composer, drawn on the head of the card that asks for
+   * the request. The caller draws it once and hands the same control to every
+   * state it opens; absent draws none.
+   */
+  close?: ReactNode;
   /** Nothing may be dispatched while the connection is not live. */
   disabled: boolean;
   /** Why the controls are off, where they are. */
@@ -114,6 +120,7 @@ export function DispatchJob({
   approving,
   statusOf,
   byHand,
+  close,
   watching,
   onStop,
   disabled,
@@ -201,6 +208,7 @@ export function DispatchJob({
       }
       onDispatch={() => void dispatch()}
       onEnterByHand={() => setHand(true)}
+      close={close}
       onReset={reset}
       onOpen={onOpen}
       onApprove={onApprove}

@@ -37,7 +37,7 @@
 // two moments.
 
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, ClipboardEvent } from "react";
+import type { ChangeEvent, ClipboardEvent, ReactNode } from "react";
 import {
   AttachmentChip,
   Button,
@@ -99,11 +99,17 @@ export type ComposerProps = {
   models: ModelChoices | null;
   /** Nothing may be proposed while the connection is not live. */
   disabled: boolean;
+  /**
+   * The way out of the composer, on this card's own header — the caller's, so
+   * every state it opens carries the same control. Absent draws none.
+   */
+  close?: ReactNode;
   onPropose: (draft: Draft) => void;
 };
 
 export function Composer({
   workflows,
+  close,
   leftOut = [],
   manifest,
   models,
@@ -210,6 +216,7 @@ export function Composer({
     <Card>
       <CardHeader>
         <CardTitle>Propose a job</CardTitle>
+        {close}
       </CardHeader>
       <CardContent>
         <div>

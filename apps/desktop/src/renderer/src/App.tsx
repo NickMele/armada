@@ -401,6 +401,20 @@ export function App() {
     return () => window.removeEventListener("keydown", pressed);
   }, [openJob]);
 
+  // Escape leaves the composer, which is what the control on its head now says
+  // it does — one act, by hand or by key. The same guard the detail's own
+  // Escape takes: a press a layer above already answered is not a second exit,
+  // and the `@` mention popup over the field is one of them.
+  useEffect(() => {
+    if (!composing) return;
+    const pressed = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      setComposing(false);
+    };
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
+  }, [composing]);
+
   // The row is back in the document only after the list re-renders, so the
   // focus move is an effect rather than part of the click that closed it.
   useEffect(() => {
