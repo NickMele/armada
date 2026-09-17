@@ -127,7 +127,7 @@ function legend(): Studio {
       // Two Links to read in — #1293. One issue, and one milestone, which fills
       // the board with a node per issue and runs no scout.
       { id: "legend-issue", kind: "link", address: "https://example.invalid/o/r/issues/1293", position: { x: 0, y: 600 }, created_at: at },
-      { id: "legend-milestone", kind: "link", address: "https://example.invalid/o/r/milestone/17", position: { x: 340, y: 600 }, created_at: at },
+      { id: "legend-milestone", kind: "link", address: "https://example.invalid/o/r/milestone/17", position: { x: 0, y: 1400 }, created_at: at },
     ],
     edges: [
       { id: "legend-e1", from: "legend-note", to: "legend-finding", kind: "produced", standing: "accepted", created_at: at },
