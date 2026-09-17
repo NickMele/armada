@@ -63,8 +63,9 @@ use crate::served::Served;
 use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
 use crate::studios::{
-    add_studio_node, create_studio, decide_studio_edge, delete_studio, get_studio, list_studios,
-    move_studio_node, propose_studio_edge, remove_studio_node, rename_studio,
+    add_studio_node, ask_scout, create_studio, decide_studio_edge, delete_studio, get_studio,
+    list_studios, move_studio_node, propose_studio_edge, remove_studio_node, rename_studio,
+    start_scout, stop_scout,
 };
 
 /// The inventory this router is compared against, row by row.
@@ -300,6 +301,9 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             "/studios/:studio_id/decide_edge",
             post(decide_studio_edge::<D>),
         )
+        .route("/studios/:studio_id/ask_scout", post(ask_scout::<D>))
+        .route("/studios/:studio_id/start_scout", post(start_scout::<D>))
+        .route("/studios/:studio_id/stop_scout", post(stop_scout::<D>))
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in
         // `SERVED`: it is the Fleet/Drone seam rather than the Fleet/Bridge

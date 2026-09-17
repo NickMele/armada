@@ -5,14 +5,16 @@
 //! A Job node's reference is text for the same reason: a forgotten Job leaves
 //! the node that pointed at it standing.
 //!
-//! **No write offers new content.** A node is added, moved or removed, and a
-//! Note is fixed at capture because nothing here could change one.
+//! **No write offers new content, but a scout's.** A node is added, moved or
+//! removed, and a Note is fixed at capture because nothing here could change
+//! one; a Finding is rewritten only as `scouting` allows.
 //!
 //! **Every write touches its Studio**, in the same transaction, so the list a
 //! person reads orders by the last thing that happened on each.
 
 mod content;
 mod reading;
+mod scouting;
 
 use core_model::{
     ManifestId, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding,

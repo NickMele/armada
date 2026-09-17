@@ -151,6 +151,7 @@ mod reviewing;
 mod reviewing_brief;
 mod runtime;
 mod scope;
+mod scouting;
 mod second_opinion;
 pub(crate) mod seeding;
 mod sending_back;

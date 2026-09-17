@@ -134,6 +134,9 @@ pub struct Fleet<H, V, W> {
     /// Every Helm conversation, one per repository, and the host that carries
     /// their messages. See [`crate::helm`].
     helm: crate::helm::Conversations,
+    /// Every scout running, and the host that starts one. Outside `slots`:
+    /// a scout takes no place under the concurrency cap. See [`crate::scout`].
+    scouts: crate::scout::Scouts,
     inbox: EvidenceInbox,
     /// What each finished Job's delivery came to, waiting for the turn that
     /// reports it. **Drained, not read** — a second turn must not report a

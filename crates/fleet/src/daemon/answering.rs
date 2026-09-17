@@ -73,6 +73,8 @@ where
         // behind is re-probed before this process trusts it. See
         // `crate::ports::Fleet::reconciled_main_checkout_ports`.
         self.reconciled_main_checkout_ports().await;
+        // A scout does not outlive the Fleet reading it. `crate::scouting`.
+        self.scouts_left_gathering().await;
         let (loaded, unreadable) = self.every_job().await?;
         // Before anything else reads a path: every Job's name, and the rename
         // of what an older Fleet wrote under a ULID. See

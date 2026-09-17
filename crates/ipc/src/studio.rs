@@ -15,6 +15,7 @@ use crate::enums::{
     StudioAuthor, StudioEdgeKind, StudioEdgeStanding, StudioNodeState, StudioRelation,
 };
 use crate::ids::{Instant, JobId, ManifestId, StudioEdgeId, StudioId, StudioNodeId};
+use crate::scouting::{ScoutCheckout, ScoutEnded};
 
 /// Every Studio one repository keeps, the last touched first — `list_studios`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,17 +81,59 @@ pub struct StudioNode {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StudioNodeContent {
-    Run { run_id: String },
-    Note { said: String },
-    Cluster { title: String },
-    Finding { asked: String },
-    Contradiction { first: String, second: String },
-    Sketch { body: String },
-    Link { address: String },
-    Deferral { what: String },
-    Outline { body: String },
-    IssueDraft { title: String, body: String },
-    Job { job_id: JobId },
+    Run {
+        run_id: String,
+    },
+    Note {
+        said: String,
+    },
+    Cluster {
+        title: String,
+    },
+    /// What a scout was asked, and from its start what it read. `#1292`.
+    Finding {
+        asked: String,
+        /// The commit read, and whether anything uncommitted was on top of
+        /// it. Absent until the scout starts.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        checkout: Option<ScoutCheckout>,
+        /// Every file read, relative to the checkout, in the order first read —
+        /// a file a search returned lines of included.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        read: Vec<String>,
+        /// Every search run, as its pattern and where it looked.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        searched: Vec<String>,
+        /// What the scout said last.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        learned: Option<String>,
+        /// How it ended, and what it cost. Absent until it ends.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ended: Option<ScoutEnded>,
+    },
+    Contradiction {
+        first: String,
+        second: String,
+    },
+    Sketch {
+        body: String,
+    },
+    Link {
+        address: String,
+    },
+    Deferral {
+        what: String,
+    },
+    Outline {
+        body: String,
+    },
+    IssueDraft {
+        title: String,
+        body: String,
+    },
+    Job {
+        job_id: JobId,
+    },
 }
 
 /// Where a person left a node, in whole canvas units.
@@ -284,7 +327,7 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
             C::Run { run_id } => StudioNodeContent::Run { run_id },
             C::Note { said } => StudioNodeContent::Note { said },
             C::Cluster { title } => StudioNodeContent::Cluster { title },
-            C::Finding { asked } => StudioNodeContent::Finding { asked },
+            C::Finding(finding) => crate::scouting::finding_on_the_wire(&finding),
             C::Contradiction { first, second } => {
                 StudioNodeContent::Contradiction { first, second }
             }
@@ -308,7 +351,21 @@ impl StudioNodeContent {
             StudioNodeContent::Run { run_id } => C::Run { run_id },
             StudioNodeContent::Note { said } => C::Note { said },
             StudioNodeContent::Cluster { title } => C::Cluster { title },
-            StudioNodeContent::Finding { asked } => C::Finding { asked },
+            StudioNodeContent::Finding {
+                asked,
+                checkout,
+                read,
+                searched,
+                learned,
+                ended,
+            } => C::Finding(core_model::StudioFinding::recorded(
+                asked,
+                checkout.map(ScoutCheckout::to_domain),
+                read,
+                searched,
+                learned,
+                ended.map(ScoutEnded::to_domain),
+            )),
             StudioNodeContent::Contradiction { first, second } => {
                 C::Contradiction { first, second }
             }

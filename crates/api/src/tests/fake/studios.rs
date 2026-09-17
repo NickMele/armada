@@ -2,11 +2,14 @@
 //! place. **It proves the routes and the door carry what they are handed**;
 //! the record and its refusals are `store`'s and `fleet`'s, tested there.
 
+use std::sync::Arc;
+
 use ipc::{
-    AddStudioNode, CreateStudio, DecideStudioEdge, Instant, ManifestId, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, Studio, StudioDeleted, StudioEdge,
-    StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId, StudioList, StudioNode,
-    StudioNodeContent, StudioNodeId, StudioSummary, WireError,
+    AddStudioNode, AskScout, CreateStudio, DecideStudioEdge, Instant, ManifestId, MoveStudioNode,
+    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StopScout, Studio,
+    StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
+    StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioSummary,
+    WireError,
 };
 
 use super::FakeDaemon;
@@ -250,5 +253,54 @@ impl Studios for FakeDaemon {
             }
             Ok(studio.clone())
         })
+    }
+
+    /// A Finding added Gathering. **No scout runs in the fake**: the route
+    /// carrying the ask is what is proved here.
+    async fn ask_scout(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        ask: AskScout,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            studio.nodes.push(StudioNode {
+                id: StudioNodeId::carried(format!("01NODE{}", studio.nodes.len())),
+                content: StudioNodeContent::finding_asked(&ask.asked),
+                state: StudioNodeState::from_wire("gathering"),
+                position: ask.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(studio.clone())
+        })
+    }
+
+    async fn start_scout(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        start: StartScout,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| {
+            for node in studio
+                .nodes
+                .iter_mut()
+                .filter(|node| node.id == start.node_id)
+            {
+                node.state = StudioNodeState::from_wire("gathering");
+            }
+            Ok(studio.clone())
+        })
+    }
+
+    /// Nothing is running to stop, so this answers the Studio as it stands.
+    async fn stop_scout(
+        &self,
+        studio_id: StudioId,
+        _stop: StopScout,
+        within: Option<ManifestId>,
+    ) -> Result<Studio, Refusal> {
+        self.changing(&studio_id, within, |studio| Ok(studio.clone()))
     }
 }

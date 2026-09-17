@@ -14,12 +14,14 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Redirector, Refusal, Studios};
 use core_model::{
     Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName, StudioNode,
-    StudioNodeId, ToItself,
+    StudioNodeContent, StudioNodeId, StudioNodeState, ToItself,
 };
+use std::sync::Arc;
+
 use ipc::{
-    AddStudioNode, CreateStudio, DecideStudioEdge, HelmStudioAct, ManifestId, MoveStudioNode,
-    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StudioDeleted, StudioHelmActed, StudioList,
-    StudioSummary, WireError,
+    AddStudioNode, AskScout, CreateStudio, DecideStudioEdge, HelmStudioAct, ManifestId,
+    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StopScout,
+    StudioDeleted, StudioHelmActed, StudioList, StudioSummary, WireError,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -32,7 +34,7 @@ const NO_SUCH_STUDIO: &str = "fleet.no_such_studio";
 /// `fleet.job_in_another_repository` is.
 const STUDIO_ELSEWHERE: &str = "fleet.studio_in_another_repository";
 /// A node named that is not on this Studio. A 422.
-const NO_SUCH_NODE: &str = "fleet.no_such_studio_node";
+pub(crate) const NO_SUCH_NODE: &str = "fleet.no_such_studio_node";
 /// An edge named that is not on this Studio. A 422.
 const NO_SUCH_EDGE: &str = "fleet.no_such_studio_edge";
 /// The same relation between the same two nodes again. A 409.
@@ -42,9 +44,11 @@ const EDGE_NOT_PROPOSED: &str = "fleet.studio_edge_not_proposed";
 /// A proposed edge from a node to itself. A 422.
 const EDGE_TO_ITSELF: &str = "fleet.studio_edge_to_itself";
 /// A node added with a field left blank, naming which. A 422.
-const NODE_BLANK: &str = "fleet.studio_node_blank";
+pub(crate) const NODE_BLANK: &str = "fleet.studio_node_blank";
 /// A node Helm added of a kind that does not start proposed. A 422.
 const NODE_NOT_HELMS: &str = "fleet.studio_node_not_helms";
+/// A Finding added claiming what only a scout records. A 422.
+const FINDING_IS_THE_SCOUTS: &str = "fleet.studio_finding_is_the_scouts";
 /// A rename to nothing. A 422.
 const NAME_BLANK: &str = "fleet.studio_name_blank";
 /// Who is kept as having acted: the transport's word, never the body's.
@@ -69,7 +73,7 @@ where
     W::Error: std::error::Error + Send + Sync + 'static,
 {
     /// A store refusal, as the wire says it.
-    fn studio_refusal(&self, why: StudioError) -> Refusal {
+    pub(crate) fn studio_refusal(&self, why: StudioError) -> Refusal {
         let said = why.to_string();
         let raised = |code| WireError::raised(code, said.clone(), self.run_id());
         match why {
@@ -85,13 +89,13 @@ where
         }
     }
 
-    fn studio_unacceptable(&self, code: &str, said: String) -> Refusal {
+    pub(crate) fn studio_unacceptable(&self, code: &str, said: String) -> Refusal {
         Refusal::Unacceptable(WireError::raised(code, said, self.run_id()))
     }
 
     /// The Studio `studio_id` names, refused where a door session's repository
     /// does not own it.
-    fn studio_held(
+    pub(crate) fn studio_held(
         &self,
         store: &Store,
         studio_id: &StudioId,
@@ -119,7 +123,7 @@ where
 
     /// Check the scope, make one write, then read the Studio back and publish
     /// it whole.
-    async fn written(
+    pub(crate) async fn written(
         &self,
         studio_id: &ipc::StudioId,
         within: Option<ManifestId>,
@@ -288,6 +292,16 @@ where
                 ),
             ));
         }
+        if let StudioNodeContent::Finding(finding) = &content {
+            if !finding.fits(Some(StudioNodeState::Proposed)) {
+                return Err(self.studio_unacceptable(
+                    FINDING_IS_THE_SCOUTS,
+                    "a Finding is added as its ask alone: what it read, its checkout and how it \
+                     ended are its scout's to record"
+                        .into(),
+                ));
+            }
+        }
         if by == Redirector::Helm && !content.kind().starts_proposed() {
             return Err(self.studio_unacceptable(
                 NODE_NOT_HELMS,
@@ -401,5 +415,32 @@ where
             store.decide_studio_edge(id, &edge, decision.accepted, &at)
         })
         .await
+    }
+
+    async fn ask_scout(
+        self: Arc<Self>,
+        studio_id: ipc::StudioId,
+        ask: AskScout,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.scout_asked(studio_id, ask, within).await
+    }
+
+    async fn start_scout(
+        self: Arc<Self>,
+        studio_id: ipc::StudioId,
+        start: StartScout,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.scout_started(studio_id, start, within).await
+    }
+
+    async fn stop_scout(
+        &self,
+        studio_id: ipc::StudioId,
+        stop: StopScout,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        self.scout_stopped(studio_id, stop, within).await
     }
 }

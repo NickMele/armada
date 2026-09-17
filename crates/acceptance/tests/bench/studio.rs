@@ -14,9 +14,9 @@ use std::collections::BTreeMap;
 
 use config::ResolvedWorkflow;
 use core_model::{
-    ManifestId, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName,
-    StudioNode, StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation, Timestamp, Ulid,
-    WorkflowId,
+    ManifestId, ScoutCheckout, ScoutEnded, ScoutLook, ScoutOutcome, Studio, StudioAuthor,
+    StudioEdge, StudioEdgeId, StudioFinding, StudioGraph, StudioId, StudioName, StudioNode,
+    StudioNodeContent, StudioNodeId, StudioPosition, StudioRelation, Timestamp, Ulid, WorkflowId,
 };
 use ipc::JobRequest;
 
@@ -142,4 +142,61 @@ pub fn helms_manifest() -> config::Manifest {
 pub fn received_event(event: &ipc::Event) -> ipc::Event {
     let body = ipc::encode(event).expect("an event that serialises");
     ipc::decode("an event", body.as_bytes()).expect("an event that reads back")
+}
+
+/// What a person asked a scout, on the bench's Studio.
+pub const ASKED: &str = "How is a Job's count on the Board decided?";
+
+/// The files the bench's scout read, in the order it read them.
+pub const READ: [&str; 2] = [
+    "packages/screens/src/Board.tsx",
+    "crates/fleet/src/listing.rs",
+];
+
+/// The commit the bench's scout read, with a change on top not yet committed.
+pub const COMMIT: &str = "4bdb169c0e1d2f3a4b5c6d7e8f9a0b1c2d3e4f5a";
+
+/// What the scout cost, in millionths of a dollar.
+pub const COST: u64 = 18_020;
+
+/// The bench's Studio with a Finding on it, made by the first Note, which its
+/// scout started, read [`READ`] into and froze as answered — **through the
+/// transitions a scout's Fleet makes**, and nothing that sets a state by hand.
+pub fn a_studio_with_a_frozen_finding() -> StudioGraph {
+    let mut graph = a_studio_with_two_notes();
+    let proposed = StudioNode::added(
+        StudioNodeId::carried(Ulid::carried("01FINDING")),
+        StudioNodeContent::Finding(StudioFinding::asked(ASKED)),
+        StudioPosition { x: 0, y: 240 },
+        at(4),
+        StudioAuthor::Person,
+    );
+    let mut gathering = proposed
+        .scouting(ScoutCheckout {
+            commit: COMMIT.to_string(),
+            uncommitted: true,
+        })
+        .expect("a Finding just added is Proposed");
+    for file in READ {
+        gathering.looked(ScoutLook::File(file.to_string()));
+    }
+    gathering.looked(ScoutLook::Search("count in packages/screens".to_string()));
+    let frozen = gathering.frozen(
+        Some("The Board counts what `list_job_board` answers.".to_string()),
+        ScoutEnded {
+            outcome: ScoutOutcome::Answered,
+            cost_micros: Some(COST),
+        },
+    );
+    let produced = StudioEdge::produced(
+        StudioEdgeId::carried(Ulid::carried("01EDGEASKED")),
+        graph.nodes[0].id().clone(),
+        frozen.node().id().clone(),
+        at(4),
+        StudioAuthor::Person,
+    )
+    .expect("a Note and a Finding");
+    graph.nodes.push(frozen.node().clone());
+    graph.edges.push(produced);
+    graph
 }
