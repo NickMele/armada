@@ -127,11 +127,11 @@ vibrating.
 ```
 --bg-base        #0F1419   canvas
 --bg-sunken      #0B0F13   wells, code blocks, log panes
---bg-raised      #161C23   cards, table rows, panels
+--bg-raised      #161C23   table rows, and a flat card (see Depth)
 --bg-overlay     #1D242D   dialogs, popovers, dropdowns
 --bg-hover       #212A34   row and control hover
 --border-subtle  #232B35   table rules, dividers
---border-default #2E3946   card and input edges
+--border-default #2E3946   flat card and input edges
 --border-strong  #3D4A5A   focus rings, active edges
 ```
 
