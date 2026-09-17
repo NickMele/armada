@@ -23,3 +23,6 @@ only its steps does not need one.
   milestone's work, its children entering already approved as part of their
   parent, with a question to a person as an event on a Job rather than a
   conversation.
+- [`merge-line.md`](merge-line.md) — merges take turns onto `main`, and a branch
+  whose base moved is merged with it and reruns the Checks the combination hits
+  before it lands; `scripts/land` is the local stand-in, mapped onto Fleet.

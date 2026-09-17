@@ -114,6 +114,8 @@ approximations.
   worth keeping, each bound by its frontmatter to the issue that tracks it,
   indexed in its own `INDEX.md`. The roadmap itself is GitHub issues; these hold
   the reasoning an issue body buries when it closes.
+  - [`capabilities/merge-line.md`](capabilities/merge-line.md) — merges taking
+    turns onto `main`, `scripts/land`, and where each part goes in Fleet.
 
 ## Journeys
 
