@@ -87,8 +87,11 @@ is allowed only as that light, and never where a person reads a state.
    declared rather than inferred. Read the file rather than a list; this
    rule used to enumerate the cases and went stale twice. Anything the
    file does not declare stays neutral. See Below Job level under Tokens.
-   **Outside status and accent, one hue exists: `--helm`**, and it marks
-   Helm's own chrome and nothing else. Depth's light and glass never take a
+   **Outside status and accent, two hue families exist.** `--helm` marks
+   Helm's own chrome and nothing else. The three **tool families** in
+   `tokens/tools.css` say what a Drone's call does, and they are a
+   separate file because they alias no status and must never carry one —
+   see Tool families under Tokens. Depth's light and glass never take a
    status hue.
 4. **Dark is primary.** Design dark first. Light exists but is secondary.
 5. **Icons: lucide-react only**, used sparingly. A dashboard dense with
@@ -305,6 +308,9 @@ new one. The mapping is declared, so it is read rather than inferred.
 --run-passed       var(--status-completed-success)
 --run-failed       var(--status-completed-failed)
 --run-stopped      var(--status-killed)
+--phase-live-edge  --status-running 45% into --border-default
+--phase-live-bg    --status-running 6% into transparent
+--phase-live-rule  --status-running 25% into --border-subtle
 ```
 
 **Step activity answers where the work is.** `retrying` and
@@ -365,6 +371,16 @@ longer sit fourth on screen. Explicit numbering is what lets both hold:
 the rows a person needs are at the top, and the citation still resolves.
 See How are criterion verdicts encoded without status hue?
 
+**The live phase takes running on its edge, with a faint wash.** One row
+of a step's timeline is the one the Drone is inside, and on a card that
+size a mark alone does not carry it across a desk: `--phase-live-edge`
+lifts the card's own border 45% toward running, `--phase-live-bg` washes
+it at 6% — below a summary tile's 9%, because a phase card is larger
+again and its body is a log — and `--phase-live-rule` carries the same
+lift to the line under its header. All three alias `--status-running`,
+which is what a running phase is one level down. **The mark leaves that
+header**; see Motion.
+
 **Everything else below Job level stays neutral, with one exception.** An
 origin tag and the retry marker carry position, surface, weight and glyph.
 Drift is the exception: `gone` and `current` render in `--notice-caution`,
@@ -389,6 +405,47 @@ contract has no generic alarm glyph.
 --diff-del-fg     #E88A8A
 --diff-context    #93A1B1
 ```
+
+**The diff colours are the patch view's and every other place a count of
+lines appears**: a log row's `+2 −2`, the files under a plan task, and
+Produced's per-file counts and its size bar. What the numbers *are* still
+differs by surface — a task's are the sizes of the Drone's own edits, the
+diff's are the patch — and the label beside them is what says which.
+Colour says added and removed; it never says which kind of number.
+
+### Tool families
+
+What a Drone's call *does*, in three hues, declared in
+`tokens/tools.css`.
+
+```
+--tool-look    #8FA3D9   Read, Grep, Glob
+--tool-change  #D98BB5   Edit, MultiEdit, Write, NotebookEdit
+--tool-run     #C2B48A   Bash
+```
+
+**Its own file, and that is the rule rather than the filing.** Every
+value in `status.css` aliases a Job status, so the mapping is declared
+rather than inferred; these alias nothing, because they answer a
+different question — not where the Job stands, but what the call in front
+of you reaches for. **A tool colour never carries status, and a status
+colour never carries a family.**
+
+**Why it is worth a hue at all.** A Drone's hour is a long stretch of
+looking, a burst of changing, then a run, and in a mono column where
+every tool name is the same colour that shape is invisible — which is the
+reading a person opens the log for.
+
+**They sit near two statuses and are told apart by where they are**,
+which is the risk hard rule 3 guards. `--tool-change` reads near
+`completed_failed`'s red and `--tool-run` near `awaiting_review`'s amber.
+Nothing in a log row is a status: a status is a badge, a mark or a row
+surface, and a family is one word at the head of a mono line, so the two
+never appear in the same slot.
+
+**A tool the roster does not name takes no colour.** Hue is scarce and an
+unclassified tool is not a fourth family — the name draws in the line's
+own foreground. Adding one is a decision about what a family means.
 
 ---
 
@@ -531,9 +588,15 @@ edge and its ground lifts one step at `--duration-fast`.
 state still reads from colour and label.
 
 **What animates on a loop is what is still working**, because a hue or a
-label can say *which* and only motion says *still*. Two things do: the
-running mark, and a control waiting on Fleet. There was a rule that one
-thing animates per screen; it was retired on 2026-09-14, #1117.
+label can say *which* and only motion says *still*. Three things do: the
+running mark, a control waiting on Fleet, and the live phase's top edge.
+There was a rule that one thing animates per screen; it was retired on
+2026-09-14, #1117.
+
+**One loop per card, and that rule is what the third one bought.** A bar
+travelling and a mark breathing in the same header are two things saying
+one word, and a reader has to decide which of them they were watching. So
+where a card sweeps, every mark inside its header holds still.
 
 **A control waiting on Fleet sweeps a bar along its bottom edge**, from
 the press until Fleet answers or refuses. Its label says what it is
@@ -559,6 +622,22 @@ vanishing to nothing:
 A refusal is told from an acceptance by the line's colour and direction
 before the label is read. The control never moves in any of the four.
 
+**The live phase sweeps a bar along its top edge**, the same line on the
+same clock: `--pending-bar` tall, `--status-running`, one segment
+travelling at `--duration-pulse`, linear rather than `--ease` for the
+control's own reason. It runs while the Drone is in that phase and stops
+when the phase does. Under `prefers-reduced-motion` it holds still at
+full width, and nothing is lost — `--phase-live-edge` and the wash
+already say which phase is live.
+
+**Under the phase name, what the Drone is doing right now.** The call
+still in flight — one with no answer yet, which is the one thing the log
+beneath cannot show, because its `answered` row does not exist. Between
+calls it is the Drone's own last sentence, with no verb: nothing is in
+flight to conjugate, and a verb invented for the gap would claim a call
+nobody is making. The verb takes `--status-running` and nothing else on
+the line does.
+
 **The running mark animates continuously.** A hue says which step is
 current; only motion says it is still working, and that is the reading
 a static rail cannot give — it matters most on the step that has been
@@ -573,6 +652,16 @@ the rail, and the sheet's own live mark pulses beside it. A
 step bar never pulses — its job is where the work got to, which is a static
 fact, and the badge sits in a fixed column on every row so the motion appears
 in one predictable place rather than moving with the workflow's length.
+
+**The live phase's header carries no mark at all.** It is the one place a
+running mark was dropped rather than made to pulse, and the sweep is why:
+a mark says *which*, and on the one card already edged, washed and swept
+in running there is no *which* left to say — what a second mark would add
+is a second loop. **Marks stay wherever one row among many is the live
+one**: the plan's task rows, and the live narration row inside that
+phase's own body. The word the mark owed a screen reader is still said,
+off `enum-verbs.toml` rather than retyped, because hue, wash and motion
+are three channels a reader may have none of.
 
 Opacity and scale only, at `--duration-pulse`. The ring holds still, so
 no row shifts and nothing reflows. Hue says *which* state, unchanged on

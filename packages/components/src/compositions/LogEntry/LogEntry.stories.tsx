@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { ToolName } from "../ToolName/ToolName";
 import { LogEntry, PayloadLine } from "./LogEntry";
 
 const meta: Meta<typeof LogEntry> = {
@@ -54,6 +55,32 @@ export const Drone: Story = {
     mono: true,
     onToggle: () => {},
     payloadId: "entry-drone",
+  },
+};
+
+/**
+ * The same call, with what it changed and how long it took. **Three hues on
+ * one mono line**: the tool's family, the lines added, the lines removed. The
+ * path between them stays neutral, because a line where everything is coloured
+ * says nothing. A zero is not drawn — `−0` reads as a value that failed to
+ * arrive. #1196.
+ */
+export const AnEditWithItsSizes: Story = {
+  name: "An edit with its sizes",
+  args: {
+    at: "14:26:31",
+    actor: "drone",
+    message: (
+      <>
+        <ToolName tool="Edit" />
+        {"  packages/settings/src/selectors.ts"}
+      </>
+    ),
+    mono: true,
+    sized: { added: 8, deleted: 5 },
+    took: "71ms",
+    onToggle: () => {},
+    payloadId: "entry-sized",
   },
 };
 

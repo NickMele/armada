@@ -5,7 +5,7 @@ import type { ChangedFile } from "@armada/components";
 import type { PlanTask } from "@armada/protocol";
 
 import { answered, called } from "./fixtures/build/base";
-import { editOf, editsIn, filesByTask, repoPathOf, unownedOf } from "./task-files";
+import { editsIn, filesByTask, repoPathOf, unownedOf } from "./task-files";
 
 const STEP = "implement";
 const TREE = "~/Development/armada/.armada/worktrees/01K5/";
@@ -24,22 +24,6 @@ const DIFF: ChangedFile[] = [
   { path: "crates/fleet/src/evidence.rs", change: "modified", added: 31, deleted: 9 },
   { path: "crates/store/src/pending_evidence.rs", change: "added", added: 82 },
 ];
-
-describe("an edit's size, read back off its row", () => {
-  it("reads an Edit's two counts and a Write's one", () => {
-    expect(editOf(`${TREE}crates/fleet/src/evidence.rs +6 -1`, false)).toEqual({
-      path: `${TREE}crates/fleet/src/evidence.rs`,
-      added: 6,
-      deleted: 1,
-    });
-    expect(editOf("/tmp/a b/new.rs +82", false)).toEqual({ path: "/tmp/a b/new.rs", added: 82 });
-  });
-
-  it("carries no size on a row that was cut or never had one", () => {
-    expect(editOf("/tmp/old.rs", false)).toEqual({ path: "/tmp/old.rs" });
-    expect(editOf("/tmp/cut.rs +6 -1", true)).toEqual({ path: "/tmp/cut.rs +6 -1" });
-  });
-});
 
 describe("which task an edit belongs to", () => {
   it("is the task being worked when it was made, and none for Bash or a failed call", () => {

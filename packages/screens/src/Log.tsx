@@ -19,7 +19,7 @@
 // and the payload id this file already gave every row — both declared here,
 // both read through the helpers, and neither of them a component's internals.
 
-import { Button, LogEntry, PayloadLine } from "@armada/components";
+import { Button, LogEntry, PayloadLine, ToolName } from "@armada/components";
 import { useState } from "react";
 import type { ReactNode } from "react";
 
@@ -102,8 +102,15 @@ export function Log({
           key={row.id}
           at={row.at}
           actor={row.actor}
-          message={row.message}
+          message={messageOf(row)}
           mono={row.mono}
+          {...(row.called === undefined
+            ? {}
+            : {
+                sized: { ...(row.called.added === undefined ? {} : { added: row.called.added }),
+                  ...(row.called.deleted === undefined ? {} : { deleted: row.called.deleted }) },
+                ...(row.called.took === undefined ? {} : { took: row.called.took }),
+              })}
           working={row.working}
           open={open === row.id}
           payloadId={payloadId(row.id)}
@@ -117,6 +124,27 @@ export function Log({
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * The line a row shows closed.
+ *
+ * **The tool's name is the only thing this composes**, because its family's
+ * hue is `ToolName`'s own. The sizes and the figure go to `LogEntry` as
+ * values: their hues are the row's stylesheet's, and a screen spelling those
+ * classes would own a name it cannot see change. #1196.
+ *
+ * A row that is not a call draws its own string, which is every other row.
+ */
+function messageOf(row: LogRow): ReactNode {
+  const call = row.called;
+  if (call === undefined) return row.message;
+  return (
+    <>
+      <ToolName tool={call.tool} />
+      {`  ${call.detail}`}
+    </>
   );
 }
 

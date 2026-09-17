@@ -316,3 +316,5 @@ export * from "./compositions/StudioWhiteboard/StudioWhiteboard";
 export * from "./compositions/FigureList/FigureList";
 // What the Job has changed, as its own panel beside the run. #1187.
 export * from "./compositions/ProducedPanel/ProducedPanel";
+// A tool's name, in the colour of what the call does. #1196.
+export * from "./compositions/ToolName/ToolName";

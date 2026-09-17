@@ -31,7 +31,14 @@ import type { BlockKind, Observed, Turn, Turns } from "@armada/protocol";
 
 import { answered, called } from "./fixtures/build/base";
 import { leading } from "./reading";
-import { NOTHING_YET_ON_THIS_STEP, entriesOf, hideUnread, inside, whyNotWatching } from "./story";
+import {
+  NOTHING_YET_ON_THIS_STEP,
+  editOf,
+  entriesOf,
+  hideUnread,
+  inside,
+  whyNotWatching,
+} from "./story";
 
 const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
 
@@ -376,5 +383,55 @@ describe("a call and its answer are one row", () => {
       STEP,
     );
     expect(rows.map((row) => row.message)).toEqual(["Read  crates/a.rs · 10s", "Bash  ls · 2s"]);
+  });
+});
+
+// Moved here with `editOf` itself when a call row started splitting the size
+// off the path to hue the two apart. #1196.
+describe("an edit's size, read back off its row", () => {
+  const TREE = "~/Development/armada/.armada/worktrees/01K5/";
+
+  it("reads an Edit's two counts and a Write's one", () => {
+    expect(editOf(`${TREE}crates/fleet/src/evidence.rs +6 -1`, false)).toEqual({
+      path: `${TREE}crates/fleet/src/evidence.rs`,
+      added: 6,
+      deleted: 1,
+    });
+    expect(editOf("/tmp/a b/new.rs +82", false)).toEqual({ path: "/tmp/a b/new.rs", added: 82 });
+  });
+
+  it("carries no size on a row that was cut or never had one", () => {
+    expect(editOf("/tmp/old.rs", false)).toEqual({ path: "/tmp/old.rs" });
+    expect(editOf("/tmp/cut.rs +6 -1", true)).toEqual({ path: "/tmp/cut.rs +6 -1" });
+  });
+});
+
+describe("what a call row is made of", () => {
+  const STEP = "implement";
+  const AT = "2026-09-15T08:27:40Z";
+
+  it("splits the tool, the path and the sizes, and joins them into the same line", () => {
+    const [row] = entriesOf(
+      [
+        called(STEP, AT, "c1", "Edit", "crates/fleet/src/settling.rs +2 -2"),
+        answered(STEP, "2026-09-15T08:27:41Z", "c1"),
+      ],
+      STEP,
+    );
+    expect(row?.called).toEqual({
+      tool: "Edit",
+      detail: "crates/fleet/src/settling.rs",
+      added: 2,
+      deleted: 2,
+      took: "1s",
+    });
+    // The string is unchanged by the parts existing: everything that reads a
+    // row without drawing colour still reads this.
+    expect(row?.message).toBe("Edit  crates/fleet/src/settling.rs +2 -2 \u00b7 1s");
+  });
+
+  it("leaves a command whole, because a command ending in a size is a command", () => {
+    const [row] = entriesOf([called(STEP, AT, "c1", "Bash", "ls --oneline +2 -2")], STEP);
+    expect(row?.called).toEqual({ tool: "Bash", detail: "ls --oneline +2 -2" });
   });
 });

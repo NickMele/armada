@@ -11,6 +11,7 @@
 // lets a run select its own rows without a second pass over the wire.
 import {
   NarrationPlanBar,
+  ToolName,
   WorkGroups,
   WorkNarration,
   type ChangedFile,
@@ -104,7 +105,10 @@ export function WorkGrouped({
     const first = chunk.rows[0];
     return {
       id: first === undefined ? "" : first.id,
-      name: chunk.run?.tool ?? "",
+      // The tool's own colour, the same one its rows carry underneath: a
+      // folded run is the rows it hides, and the two reading differently is
+      // the fold changing what a person sees. #1196.
+      name: chunk.run?.tool === undefined ? "" : <ToolName tool={chunk.run.tool} />,
       mono: true,
       meta: `${held} ${held === 1 ? "call" : "calls"} · ${briefly(chunk.run?.ms ?? 0)}`,
       // Folded where the derivation says so, and never over a single call: a

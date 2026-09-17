@@ -182,6 +182,19 @@ span.armada-narration__fold {
   white-space: nowrap;
 }
 
+/* The same diff tokens the patch view and Produced already give these
+   counts. What the numbers ARE still differs by section — a task's are the
+   sizes of its own edits, the row no task owns carries the diff's lines — and
+   `filesSay` beside them is what says which. Colour says added and removed;
+   it does not say which kind of number. #1196. */
+.armada-narration__added {
+  color: var(--diff-add-fg);
+}
+
+.armada-narration__deleted {
+  color: var(--diff-del-fg);
+}
+
 .armada-narration__files-say {
   color: var(--fg-subtle);
 }

@@ -47,12 +47,58 @@ export const Working: Story = {
             name: "Working",
             activity: "running",
             live: true,
+            now: { verb: "Editing", detail: "crates/fleet/src/settling.rs", took: "3s", mono: true },
             meta: "351 calls · 43m 37s · 36 files",
             body: body("The activity log."),
             act: <Button variant="ghost" size="sm">Open the log</Button>,
           },
           { id: "c", name: "Checks", activity: "not_started", meta: "not reached" },
           { id: "d", name: "Judge", activity: "not_started", meta: "2 criteria, not asked" },
+        ],
+      },
+    ],
+  },
+  /**
+   * **The live phase has no mark, and it still says where it stands.** The
+   * running mark left this header when the sweep arrived — two loops in one
+   * card compete — and the edge, the wash and the bar are all colour and
+   * motion, which a reader may have neither of. The word is what is left, and
+   * it is the registry's own through `stepActivitySaid`.
+   *
+   * Checked against a component with the state span removed: the row read
+   * `Working` alone and the phase's state was gone from the document.
+   */
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Working, running")).toBeInTheDocument();
+  },
+};
+
+/**
+ * What the header says between calls. **The Drone's own sentence, with no
+ * verb** — nothing is in flight, so there is nothing to conjugate, and a verb
+ * invented for the gap would claim a call that is not being made.
+ */
+export const BetweenCalls: Story = {
+  name: "Between calls",
+  args: {
+    label: "Where this step is",
+    attempts: [
+      {
+        id: "1",
+        name: "Attempt 1",
+        current: true,
+        rows: [
+          { id: "a", name: "Instructed", activity: "advanced", meta: "06:26:54", body: body("The brief.") },
+          {
+            id: "b",
+            name: "Working",
+            activity: "running",
+            live: true,
+            now: { detail: "Now I will check what settling does with a held slot." },
+            meta: "351 calls · 43m 37s",
+            body: body("The activity log."),
+          },
+          { id: "c", name: "Checks", activity: "not_started", meta: "not reached" },
         ],
       },
     ],
@@ -113,10 +159,17 @@ function liveAttempt(live: "working" | "checks"): StepTimelineAttempt {
  */
 function PhaseGoesLiveDrawn() {
   const [live, setLive] = useState<"working" | "checks">("working");
+  // Both ways, because the play below presses it on load: a one-way press
+  // leaves anyone opening the story looking at the move's far side, with a
+  // button that does nothing.
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setLive("checks")}>
-        Move the step on
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setLive(live === "working" ? "checks" : "working")}
+      >
+        {live === "working" ? "Move the step on" : "Back to Working"}
       </Button>
       <StepTimeline label="Where this step is" attempts={[liveAttempt(live)]} />
     </>

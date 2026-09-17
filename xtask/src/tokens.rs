@@ -41,6 +41,7 @@ const SOURCES: &[(&str, Source)] = &[
     ("fonts.css", Source::Tokens),
     ("colors.css", Source::Tokens),
     ("status.css", Source::Tokens),
+    ("tools.css", Source::Tokens),
     ("typography.css", Source::Tokens),
     ("spacing.css", Source::Tokens),
     ("motion.css", Source::Tokens),
@@ -192,6 +193,11 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--diff-", Slot::NsFull("color")),
     ("--status-", Slot::NsFull("color")),
     ("--step-", Slot::NsFull("color")),
+    // The live phase's edge and wash, aliased in status.css below Job level.
+    ("--phase-", Slot::NsFull("color")),
+    // What a call DOES, from tools.css. Its own family and never a status —
+    // see that file for why it is not declared beside the eight above.
+    ("--tool-", Slot::NsFull("color")),
     ("--verdict-", Slot::NsFull("color")),
     ("--run-", Slot::NsFull("color")),
     ("--surface-", Slot::NsFull("color")),
