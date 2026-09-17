@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import type { ButtonAnswer } from "../Button/Button";
 import { useHold } from "../HoldButton/useHold";
-import { useAnswerTap } from "../../haptics";
 
 /**
  * The likely action, with the rest one click away — a button and a dropdown
@@ -133,8 +132,6 @@ export function SplitButton({
     onCommit: () => hold?.onCommit(),
     onAsk: () => onAction?.(),
   });
-  // The face draws its own answer rather than a Button's, so it taps for itself.
-  useAnswerTap(pending, answer);
   // Pending wins: the act is already out, so the face is its bar and nothing to hold.
   const holding = hold !== undefined && held.offered && !pending;
   // Nothing behind the caret yet — the title row's Dispatch has no menu, and

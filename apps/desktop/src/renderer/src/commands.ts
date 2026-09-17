@@ -54,6 +54,7 @@ import type {
 import type { HelmContext, JobSummary } from "@armada/protocol";
 import type { ActAnswer, ActingAct, Answered, ConfirmableAct, DecidingAct, Taken, TakenAct } from "@armada/screens";
 import { takenNotice, takenStands } from "@armada/screens";
+import { patternFor, useHaptics } from "@armada/components";
 import { proposeRequest } from "./dispatch";
 import type { Proposing } from "./dispatch";
 
@@ -188,6 +189,8 @@ export type Sending = {
  */
 export function useCommands(sending: Sending) {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // The trackpad, for the finger that pressed. Every act on a Job answers through `heard`.
+  const tap = useHaptics();
   // A press a freeze took and holds. Its own state: `outcome` draws refusals, and this is not one.
   const [taken, setTaken] = useState<Taken | null>(null);
   const rowOf = (jobId: string) => sending.jobs.find((job) => job.id === jobId);
@@ -240,6 +243,9 @@ export function useCommands(sending: Sending) {
   /** Publish an act's outcome, and hand its answer to the control that sent it. */
   function heard(jobId: string, act: ActingAct | DecidingAct, answer: Outcome): void {
     setOutcome(answer);
+    // The tap is the answer's, not the control's, so it plays even where the
+    // two acts below leave nothing on screen to draw one. #1326.
+    tap(patternFor(answer.ok ? "accepted" : "refused"));
     // Accepted, a forget leaves no record and a redispatch opens its
     // replacement: neither leaves the pressed control on screen to answer.
     if (answer.ok && (act === "forget_job" || act === "redispatch")) return;

@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { RotateCw } from "lucide-react";
 import { useState } from "react";
 import { expect, fn, waitFor } from "storybook/test";
-import { HapticsProvider, type PerformHaptic } from "../../haptics";
 import { Button, type ButtonAnswer, type ButtonProps, type ButtonVariant } from "./Button";
 
 const meta: Meta<typeof Button> = {
@@ -322,40 +321,6 @@ export const Answering: Story = {
     await expect(refused).not.toHaveAttribute("aria-disabled");
     await userEvent.click(refused);
     await expect(args.onClick).toHaveBeenCalledTimes(2);
-  },
-};
-
-/** What the trackpad was asked to play, in order. */
-const performed = fn<PerformHaptic>();
-
-/**
- * The trackpad answers the press that waited, once each: Alignment for the
- * accepted one, Level change for the refused. A control that only draws an
- * answer, never having waited, plays nothing. Storybook has no trackpad, so the
- * provider here records instead.
- */
-export const Touch: Story = {
-  render: () => (
-    <HapticsProvider perform={performed}>
-      <Card>
-        <Sending variant="primary" label="Approve" waiting="Approving…" answer="accepted" />
-        <Sending variant="secondary" label="Request changes" waiting="Requesting changes…" answer="refused" />
-        <Button variant="secondary" answer="accepted">
-          Drawn, not pressed
-        </Button>
-      </Card>
-    </HapticsProvider>
-  ),
-  play: async ({ canvas, userEvent }) => {
-    performed.mockClear();
-    await userEvent.click(canvas.getByRole("button", { name: "Approve" }));
-    await expect(performed).not.toHaveBeenCalled();
-    await waitFor(() => expect(performed).toHaveBeenCalledTimes(1), { timeout: 3000 });
-    await expect(performed).toHaveBeenLastCalledWith("alignment");
-
-    await userEvent.click(canvas.getByRole("button", { name: "Request changes" }));
-    await waitFor(() => expect(performed).toHaveBeenCalledTimes(2), { timeout: 3000 });
-    await expect(performed).toHaveBeenLastCalledWith("level_change");
   },
 };
 
