@@ -59,7 +59,14 @@
    `DriftPanel` and `VerifyPanel` draw a standalone panel with.
 
    Its surface is the card treatment, `armada-glass` (`src/glass.css`), beside
-   this class on the aside. Helm's own indigo edge and wash are #1264's. */
+   this class on the aside. Over it, Helm's frame (design-system.md, Component
+   → token mapping → Helm dock): the indigo top edge on the head below, and the
+   wash on `::after`.
+
+   **`overflow: clip` with a one-border margin, not `hidden`.** The top edge
+   is drawn over the card's own border, and `hidden` clips every descendant
+   to the padding box, inside it. Nothing here needs the aside to scroll:
+   `__dock-body` is the scroller. */
 .armada-shell__dock {
   flex: none;
   display: flex;
@@ -68,7 +75,23 @@
   min-height: 0;
   margin: var(--space-4);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: clip;
+  overflow-clip-margin: var(--border-width);
+}
+
+/* --helm-faint washed in from the top trailing corner. On `::after` at
+   `z-index: -1`, which paints over the glass (`::before`) and under the
+   content; the card's own background would paint under the glass and vanish.
+   The ellipse is the dock's full width across and 384px down (48·8) — no
+   token carries a wash's reach, so it is composed from the spacing scale. */
+.armada-shell__dock::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(100% calc(var(--space-12) * 8) at 100% 0, var(--helm-faint), transparent);
+  pointer-events: none;
 }
 
 /* The handle supplies its own margin in the gap it now occupies — #1094's
@@ -127,6 +150,61 @@
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+/* The frame's 1px --helm-edge top edge, fading to --border-glass down the
+   sides. Positioned against the card, one border out from its padding box,
+   so it lies over the card's own --border-glass edge. It fades to
+   `transparent` and that edge is what it fades into; fading to
+   --border-glass would double the edge where the fade ends. The fade runs
+   --space-12, about the head's own height.
+
+   A ring rather than a line: the mask keeps the border box and cuts out the
+   padding box, so the edge follows the card's top corners. The mask reads
+   alpha only, so any opaque token draws it. `::before` of the head, not the
+   card: the card's `::before` is the glass and its `::after` the wash. At
+   `z-index: -1` it joins the card's stacking context after the glass. */
+.armada-shell__dock-head::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--border-width) * -1);
+  left: calc(var(--border-width) * -1);
+  right: calc(var(--border-width) * -1);
+  z-index: -1;
+  height: var(--space-12);
+  box-sizing: border-box;
+  border: var(--border-width) solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(var(--helm-edge), transparent) border-box;
+  mask:
+    linear-gradient(var(--fg-default), var(--fg-default)) padding-box,
+    linear-gradient(var(--fg-default), var(--fg-default)) border-box;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* The chip and "Helm", together at the head's leading edge. */
+.armada-shell__dock-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* 28px at --radius-md with the glyph at 16px, the geometry iconography.md
+   gives a rail chip — in Helm's --helm-muted and --helm rather than the
+   rail's accent. 28px is 24 + 4 off the spacing scale. */
+.armada-shell__dock-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-6) + var(--space-1));
+  height: calc(var(--space-6) + var(--space-1));
+  border-radius: var(--radius-md);
+  background: var(--helm-muted);
+  color: var(--helm);
 }
 
 .armada-shell__dock-title {

@@ -10,13 +10,16 @@ const repositories: HelmRepositoryOption[] = [
   { id: "01M2SHOP", label: "shop-01" },
 ];
 
-/** The composer under Helm's thread, drawn at the dock's own width. */
+/** The composer under Helm's thread, drawn at the dock's own width, on the dock's own glass. */
 const meta: Meta<typeof HelmComposer> = {
   title: "Compositions/Helm composer",
   component: HelmComposer,
   args: { value: "", onChange: fn(), onSend: fn(), location: "Job Board" },
   render: (args) => (
-    <div style={{ width: "var(--w-dock)", background: "var(--bg-sunken)", padding: "var(--space-4)" }}>
+    <div
+      className="armada-glass"
+      style={{ width: "var(--w-dock)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)" }}
+    >
       <HelmComposer {...args} />
     </div>
   ),

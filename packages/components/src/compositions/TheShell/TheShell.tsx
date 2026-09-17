@@ -482,7 +482,13 @@ function Dock({
           style={width === undefined ? undefined : { width: `${restingWidth}px` }}
         >
           <div className="armada-shell__dock-head">
-            <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
+            <div className="armada-shell__dock-name">
+              {/* The registry's Helm glyph — never a wheel or a compass. */}
+              <span className="armada-shell__dock-chip" aria-hidden>
+                <MessageSquare size={16} strokeWidth={2} />
+              </span>
+              <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
+            </div>
             <Button variant="secondary" size="sm" ground="card" onClick={() => onOpen(false)}>
               Close
               {binding === undefined ? null : <KbdCmd shortcut={binding} />}
