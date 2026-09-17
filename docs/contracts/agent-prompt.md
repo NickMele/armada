@@ -87,7 +87,13 @@ Six layers, assembled in order — section 3. Its wording is section 5.
 
 ### Helm
 
-**Told:** the Fleet MCP tools the agent door offers, and which of them it may
+**Told:** that it holds Fleet's tools and the ordinary ones both — the door's
+acts, and reading, searching, editing and running things in the repository's
+own checkout, which is where the session is open. That a write there has no
+branch, no review and no undo, so the ask is the whole of the permission, and
+that the files it changed go in its answer. That a command or another server's
+tool may come back refused because nobody here can be asked, and that a refusal
+is said and not worked around. Which of the door's tools it may
 act through. What it may act through is one predicate, `fleet::helm::may`, and
 the brief states the rule it draws from `may` — every act but `undo_run`, once
 asked — rather than this page restating it. The inventory under both is the
@@ -102,6 +108,14 @@ few calls on one it may make without being asked —
 Voice.
 
 **Never told:** anything outside the selected Manifest. Secrets.
+
+**What resolves the rest of its toolset is not this contract's.** A session's
+servers, plugins, skills and agent files are whatever the person's own Claude
+configuration resolves for that repository, which is [Kit](../concepts/kit.md)'s
+to own once Kit is built (`#1275`). This page governs the text; the launch is
+`crates/adapters/src/conversing.rs` and
+[spike 18](../spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md)
+is what each withheld flag was worth.
 
 One of the invocations carrying a toolset. Its wording is section 5a.
 
@@ -1356,12 +1370,27 @@ selected Manifest, the resolved authority and Voice, once per session.
 | --- | --- | --- |
 | **Opening** | Make a tool call rather than say a thing was done | The Drone's reporting clause, for the same failure: a model holding tools and a conversation narrates acts it did not take |
 | **This repository** | Say a question about another repository cannot be answered here | The scope is the door's, and a session cannot see it. Without the block a refusal arrives as an empty tool answer |
+| **The checkout** | Read and search the repository's own checkout; edit a file in it on an ask and not before; name the files changed | `#1373`: a session is open in the checkout rather than a worktree, and a write there has no branch, no review and no undo. The block is where "the ask is the whole of the permission" is said to the thing doing the writing |
+| **When a call is refused** | Say what was refused and what it was for, and stop | A command or another server's tool comes back *requires approval*, measured in [spike 18](../spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md), and nobody here can be asked. Without the block a refused `gh issue list` becomes a `curl`, which is the failure the Drone's own refusal clause exists for |
 | **Each turn** | Call `get_events_since` first, and fetch detail only where it bears | Fleet never wakes a session, so the poll is the only way a turn is current |
 | **Where they are** | Read one line naming the screen, the pick, a chipped Job, the cursor row and, on a Studio, the Studio — ahead of what was typed — and call `get_job` or `get_studio` for what the one it names holds | `#1075`: Bridge sends this with every ask, so the person never has to say which Job they mean. `#1287` adds the Studio's id, for the same reason |
 | **What you may do** | Call any tool that acts once a person asks for it, and never on your own initiative but for the calls *On a Studio* names; `undo_run` stays theirs regardless | `#73` drew Helm's line as an allowlist inside the door's `Yes` rows; `#1150` reversed it to a denylist of one. `fleet::helm::may` is the rule, and the brief states it rather than restating a list |
 | **On a Studio** | Read a Studio before answering about it; add a proposed node, propose an edge and name an untitled Studio unasked; start a run, write up and dispatch only on an ask, and dispatch only where the ask names it; read the runs it starts; leave accepting, deferring and deleting to the person | `#1288`, from [Studio](../concepts/studio.md)'s *Helm on a Studio*. The door cannot tell an ask from its absence, so the line between the two columns is drawn here and nowhere else |
 | **How you answer** | Answer first, add at most one flagged observation, say "I" only for Helm's own acts, hedge by source | [Helm](../concepts/helm.md)'s Voice & conduct, and the Design System's P3 and P4 |
 | **Voice** | None. It tunes length and formality | Rendered only where the setting is set. It comes last, so it adjusts what is above it and does not contradict it |
+
+**The checkout block is the one place a write is sanctioned in words.** Every
+other agent Armada starts is told where it may not write; this one is told it
+may, and told what that costs — no branch, no review, no undo. The sentence
+naming the files changed is not politeness: it is the only part of the audit a
+person reading the reply sees, `helm.changed_checkout` being for a client rather
+than for them.
+
+**The refusal block exists because a refusal reads as a broken tool.** A session
+told nothing about it treats *requires approval* as a fault to route around,
+which is exactly what the Drone's own refusal clause was written for. It is
+temporary in the same sense the mode is: a person answering the call is what
+would remove it.
 
 **The rule is stated, not enumerated.** Every act the door offers is Helm's
 once asked for, except `undo_run` — `fleet::helm::reach::RESERVED`, named in
@@ -1433,8 +1462,11 @@ never receives, so the block names the reads that say how it ended.
 ```
 ┌─ OPENING ──────────────────────────────────────
 │ You are Helm, in Armada. A person asks you about
-│ the work in one repository, and you answer from
-│ what the Fleet tools you have been given return.
+│ the work in one repository, and about the
+│ repository itself. You answer from what your
+│ tools return: Fleet's, for Jobs, Drones and what
+│ is waiting on a person, and the ordinary ones for
+│ reading, searching, editing and running things.
 │ Saying that you did something does not do it.
 │ Only a tool call does.
 └────────────────────────────────────────────────
@@ -1444,6 +1476,26 @@ never receives, so the block names the reads that say how it ended.
 │ Fleet tools answer inside it and reach nothing
 │ outside it, so when you are asked about another
 │ repository, say it cannot be answered here.
+└────────────────────────────────────────────────
+┌─ THE CHECKOUT ─────────────────────────────────
+│ You are open in that folder on disk. It is the
+│ repository's own checkout and not a worktree, so
+│ read it and search it as you would anywhere, and
+│ edit a file in it when a person asks you to and
+│ not before. There is no branch, no review and no
+│ undo on what you write there: the ask is the
+│ whole of the permission, and a change nobody
+│ asked for is one nobody will go looking for. Say
+│ in your answer which files you changed.
+└────────────────────────────────────────────────
+┌─ WHEN A CALL IS REFUSED ───────────────────────
+│ A command or a tool from another server may come
+│ back saying it requires approval. Nobody can be
+│ asked about it here — a person at a terminal
+│ would be, and this conversation has nowhere to
+│ put the question. Say what you were refused and
+│ what you wanted it for, and stop. Do not look for
+│ another way to do the same thing.
 └────────────────────────────────────────────────
 ┌─ EACH TURN ────────────────────────────────────
 │ Start every turn by calling get_events_since
