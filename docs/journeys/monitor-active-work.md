@@ -80,7 +80,7 @@ sheet.
 
 ### The panel
 
-**The story is Drone instructions, then Activity log, then Produced.** Each is a card with its own header.
+**The story is Drone instructions, then Activity log.** Each is a card with its own header. **Produced is the Job's own panel beside the run**, not a chapter inside the step: one card carrying both the work and what the work changed was doing two jobs, and the second shortcut in its header was the tell. Working keeps "Open the log"; Produced carries "Open the diff". #1187.
 
 **Opening one chapter collapses the others to their header line.** Why: the order stays readable while one part of it is long.
 
@@ -90,15 +90,17 @@ sheet.
 
 **The run sheet follows the same rules.** It opens from the worktree row or `r`, and [Run and edit a Manifest](run-and-edit-a-manifest.md) owns what it holds.
 
-**This supersedes the inline expander for those two chapters, which is built.** `StepStory` opens all three in place today, and `packages/screens/src/JobDetail.tsx` holds the open chapter for the step. Drone instructions keeps that treatment and the collapse rule above; the other two leave the panel. `#286` builds the sheets.
+**This supersedes the inline expander for those chapters, which is built.** `StepStory` opens them in place today, and `packages/screens/src/JobDetail.tsx` holds the open chapter for the step. Drone instructions keeps that treatment and the collapse rule above; the activity log leaves the panel, and so does the diff, from Produced's own panel. `#286` builds the sheets.
 
 **The Job's brief sits above the step, on the panel's raised surface.** Why: every step is read against it.
 
-### Produced states line counts on a Job that has stopped, and not on one that is running
+### Produced counts lines while a Job runs, on a reading that waits for the Drone to settle
 
-A running Job's chapter reads `3 files · all inside the plan`. A finished one reads `3 files · +94 −31 · all inside the plan`. The difference is a measurement, not a field somebody left out.
+A running Job's panel reads `3 files · +94 −31 · all inside the plan`, and so does a finished one. **What is scarce is the count, not the number's place on the screen**: a file that arrived since the last count shows no numbers until the next one rather than a zero.
 
-**The drawing shows a running Job carrying counts, and is wrong on that point.** Counting a file is the same xdiff that renders its patch, and every route to it costs the same — the call that skips the per-file work answers totals only. Measured against this repository, release build:
+**A count waits for three things**, all of them on a reading Fleet is already taking: ten seconds since the last count, no Drone call since the reading before it, and a file list or a call that moved since. A reading between two counts carries the last count for each file still listed. That is at most one count every forty Fleet loop cycles, and it runs while the Job's lock is held, so a Drone call can wait behind it. #1187.
+
+**The counting itself is what the drawing understated.** Counting a file is the same xdiff that renders its patch, and every route to it costs the same — the call that skips the per-file work answers totals only. Measured against this repository, release build:
 
 | Footprint | The file list | The counts |
 |---|---|---|
@@ -106,9 +108,9 @@ A running Job's chapter reads `3 files · all inside the plan`. A finished one r
 | 104 files, 7.7k lines | 0.25µs | 25ms |
 | 414 files, 59k lines | 1.0µs | 90ms |
 
-The live reading is taken every two seconds while somebody is watching, inside a Fleet turn of 250ms, so a large footprint would spend a third of that turn on a number nobody can read moving that fast. `crates/fleet/src/footprint.rs` takes it once instead, on the transition that ends the Job, and writes it down — which is also the only reading that survives `armada clean` giving the worktree back.
+The live reading is taken every two seconds while somebody is watching, inside a Fleet turn of 250ms, so counting on every reading would spend a third of that turn on a number nobody can read moving that fast. `crates/fleet/src/footprint.rs` counts on a due reading instead, under the three conditions above, and takes the count that survives `armada clean` giving the worktree back on the transition that ends the Job.
 
-**A file with no counts is one nothing could count**, not one that changed nothing. A binary file has no patch to count and a file moved without being edited is a real zero, so the pair is absent rather than zeroed and the chapter draws no churn where it is missing.
+**A file with no counts is one nothing could count**, not one that changed nothing. A binary file has no patch to count and a file moved without being edited is a real zero, so the pair is absent rather than zeroed and the panel draws no churn where it is missing.
 
 ### The phase strip
 
