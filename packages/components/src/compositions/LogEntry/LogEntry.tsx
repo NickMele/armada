@@ -57,6 +57,19 @@ export type LogEntryProps = {
   /** Whether `message` is machine-derived. Sans names work, mono names machinery. */
   mono?: boolean;
   /**
+   * The lines a call's edit added and removed, drawn after the message in the
+   * diff colours. A zero is not drawn: `−0` reads as a value that failed to
+   * arrive.
+   *
+   * **Here rather than inside `message`**, because the hue is this
+   * stylesheet's — the same two tokens the payload's `passed` and `failed`
+   * lines already take — and a caller composing the node would be spelling a
+   * class it does not own. #1196.
+   */
+  sized?: { added?: number; deleted?: number };
+  /** How long a call was open — `46ms`. The quietest thing on the line. */
+  took?: ReactNode;
+  /**
    * Whether the Drone is still producing this line — the thinking marker. The
    * running dot before the message, and nothing else: a spinner in a stream
    * where a row arrives every second is motion nobody can read.
@@ -86,6 +99,8 @@ export function LogEntry({
   actor,
   message,
   mono,
+  sized,
+  took,
   working,
   open = false,
   onToggle,
@@ -100,7 +115,17 @@ export function LogEntry({
       <span className="armada-entry__who">{who}</span>
       <span className="armada-entry__msg" data-mono={mono || undefined}>
         {working ? <span className="armada-entry__working" aria-hidden /> : null}
-        {message}
+        {/* The line is what gives up characters at a narrow width. The counts
+            and the figure after it are short and are what the row was scanned
+            for, so they hold. */}
+        <span className="armada-entry__line">{message}</span>
+        {sized?.added === undefined || sized.added === 0 ? null : (
+          <span className="armada-entry__added">{`+${sized.added}`}</span>
+        )}
+        {sized?.deleted === undefined || sized.deleted === 0 ? null : (
+          <span className="armada-entry__deleted">{`−${sized.deleted}`}</span>
+        )}
+        {took === undefined ? null : <span className="armada-entry__took">· {took}</span>}
       </span>
       {open ? (
         <ChevronDown size={GLYPH} strokeWidth={STROKE} className="armada-entry__mark" aria-hidden />

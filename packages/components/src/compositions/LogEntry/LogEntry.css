@@ -97,6 +97,34 @@ button.armada-entry:focus-visible {
   color: var(--fg-default);
 }
 
+.armada-entry__line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What a call's edit added and removed, in the diff tokens — the same pair the
+   payload's `passed` and `failed` lines take, and the same pair Produced and
+   the patch view give a count of lines. They never shrink: the path before
+   them is what gives up characters. #1196. */
+.armada-entry__added {
+  flex: none;
+  color: var(--diff-add-fg);
+}
+
+.armada-entry__deleted {
+  flex: none;
+  color: var(--diff-del-fg);
+}
+
+/* How long the call was open. Read last and read least, so it is the quietest
+   thing on the line. */
+.armada-entry__took {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
 /* Still producing this line. The running dot and nothing else — a spinner in a
    stream where a row arrives every second is motion nobody can read. */
 .armada-entry__working {

@@ -104,6 +104,13 @@ export function Log({
           actor={row.actor}
           message={messageOf(row)}
           mono={row.mono}
+          {...(row.called === undefined
+            ? {}
+            : {
+                sized: { ...(row.called.added === undefined ? {} : { added: row.called.added }),
+                  ...(row.called.deleted === undefined ? {} : { deleted: row.called.deleted }) },
+                ...(row.called.took === undefined ? {} : { took: row.called.took }),
+              })}
           working={row.working}
           open={open === row.id}
           payloadId={payloadId(row.id)}
@@ -123,14 +130,12 @@ export function Log({
 /**
  * The line a row shows closed.
  *
- * **Three hues on one mono line, and every one of them is already declared.**
- * The tool's name takes its family's colour, and the lines it added and removed
- * take the diff colours the patch view has always used. The rest of the row —
- * the path, the command, the figure — is unchanged, because a line where
- * everything is coloured says nothing.
+ * **The tool's name is the only thing this composes**, because its family's
+ * hue is `ToolName`'s own. The sizes and the figure go to `LogEntry` as
+ * values: their hues are the row's stylesheet's, and a screen spelling those
+ * classes would own a name it cannot see change. #1196.
  *
- * A row with no parts draws its own string, which is every row that is not a
- * call. #1196.
+ * A row that is not a call draws its own string, which is every other row.
  */
 function messageOf(row: LogRow): ReactNode {
   const call = row.called;
@@ -138,25 +143,7 @@ function messageOf(row: LogRow): ReactNode {
   return (
     <>
       <ToolName tool={call.tool} />
-      {"  "}
-      {call.detail}
-      {/* A zero is not drawn, for `ChangedFiles`'s reason: `−0` reads as a
-          value that failed to arrive. */}
-      {call.added === undefined || call.added === 0 ? null : (
-        <>
-          {" "}
-          <span className="text-diff-add-fg">{`+${call.added}`}</span>
-        </>
-      )}
-      {call.deleted === undefined || call.deleted === 0 ? null : (
-        <>
-          {" "}
-          <span className="text-diff-del-fg">{`−${call.deleted}`}</span>
-        </>
-      )}
-      {call.took === undefined ? null : (
-        <span className="text-fg-subtle">{` · ${call.took}`}</span>
-      )}
+      {`  ${call.detail}`}
     </>
   );
 }

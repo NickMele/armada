@@ -285,11 +285,17 @@ function Row({
   const name = (
     <span className="armada-steps__mark" data-live={swept || undefined} {...row.marker}>
       {swept ? (
-        // Hue, the wash and the sweep are the visible channels, and a reader
-        // hearing none of them would be told the phase's name and nothing
-        // about it. The word is the registry's own, through
-        // `stepActivitySaid`, not a second spelling written here.
-        <span className="armada-steps__state">{`${rowLabel(row)}, ${stepActivitySaid(row.activity) ?? ""}`}</span>
+        <>
+          {/* The mark's slot, kept empty. A column of four phases reads down
+              one left edge, and the live row's name jumping into the gap is
+              the one row a person is looking for moving. */}
+          <span className="armada-steps__slot" aria-hidden />
+          {/* Hue, the wash and the sweep are the visible channels, and a
+              reader hearing none of them would be told the phase's name and
+              nothing about it. The word is the registry's own, through
+              `stepActivitySaid`, not a second spelling written here. */}
+          <span className="armada-steps__state">{`${rowLabel(row)}, ${stepActivitySaid(row.activity) ?? ""}`}</span>
+        </>
       ) : (
         <StepActivityMark activity={row.activity} label={rowLabel(row)} />
       )}

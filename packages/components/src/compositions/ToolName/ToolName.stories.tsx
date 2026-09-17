@@ -33,8 +33,22 @@ const CALLS: [string, string][] = [
 
 export const LogRows: StoryObj = {
   name: "Log rows",
+  // Inline, because Storybook loads the tokens and this package's stylesheets
+  // and deliberately not Tailwind's utilities — `.storybook/preview.tsx`.
   render: () => (
-    <div className="flex flex-col gap-1 bg-bg-sunken p-3 font-mono text-2xs text-fg-default">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-1)",
+        padding: "var(--space-3)",
+        background: "var(--bg-sunken)",
+        fontFamily: "var(--font-mono)",
+        fontSize: "var(--text-2xs)",
+        lineHeight: "var(--leading-xs)",
+        color: "var(--fg-default)",
+      }}
+    >
       {CALLS.map(([tool, detail], at) => (
         <span key={at}>
           <ToolName tool={tool} /> {detail}

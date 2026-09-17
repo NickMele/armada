@@ -86,10 +86,12 @@
   min-width: 0;
 }
 
-/* The live phase has no mark, so the gap that held it goes too — otherwise the
-   name starts one slot in from the three phases above it. */
-.armada-steps__mark[data-live] {
-  gap: 0;
+/* The live phase's mark left, and its slot did not: four phase names read down
+   one left edge, and the row a person is looking for is the wrong one to move.
+   The same 16px `StepActivityMark` holds. */
+.armada-steps__slot {
+  width: var(--space-4);
+  flex: none;
 }
 
 /* The phase's name over what the Drone is doing under it. A column, because
