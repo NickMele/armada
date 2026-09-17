@@ -104,6 +104,27 @@ function connected(
   };
 }
 
+/**
+ * A connected Fleet holding exactly these rows, for a test that needs a Board
+ * no named scenario draws — two repositories, one picked, a field changed.
+ * `picked` is the rail's pick by root, as main holds it; absent is All.
+ */
+export function onBoard(
+  jobs: JobSummary[],
+  {
+    workflows = [workflow()],
+    repositories = [repository()],
+    picked = null,
+  }: { workflows?: WorkflowSummary[]; repositories?: RepositorySummary[]; picked?: string | null } = {},
+): Scenario {
+  return {
+    name: "board",
+    says: "A Board a test asked for",
+    state: { ...connected(jobs, workflows, repositories), repository: picked },
+    reads: {},
+  };
+}
+
 /** One of each, by manifest and id — two fixtures on one workflow list it once. */
 function distinct<T>(items: T[], key: (item: T) => string): T[] {
   return [...new Map(items.map((item) => [key(item), item])).values()];
