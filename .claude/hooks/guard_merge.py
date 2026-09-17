@@ -85,6 +85,21 @@ def lands_on_base(words: list[str]) -> bool:
     return False
 
 
+def inner(words: list[str]) -> list[list[str]]:
+    """The commands inside a `sh -c '…'`, which are commands like any other.
+
+    A shell started by hand is the obvious way past a guard that reads the
+    command it is given, and it costs one line to follow it in.
+    """
+    if not words or not words[0].rsplit("/", 1)[-1] in ("sh", "bash", "zsh"):
+        return []
+    try:
+        script = words[words.index("-c") + 1]
+    except (ValueError, IndexError):
+        return []
+    return segments(script)
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -95,18 +110,30 @@ def main() -> None:
     if not command:
         sys.exit(0)
 
-    for words in segments(command):
-        # `git -C <path> push …`, `gh pr merge …`: the verb is the first word
-        # that is not the program or one of its own options.
+    commands = segments(command)
+    for words in list(commands):
+        commands.extend(inner(words))
+
+    for words in commands:
+        # `NAME=value git push …` runs git with an environment, and the
+        # assignments sit where the program name would be.
+        while words and "=" in words[0].split("/")[0] and not words[0].startswith("-"):
+            words = words[1:]
         bare = [w for w in words if not w.startswith("-")]
         if len(bare) >= 2 and bare[0].endswith("git"):
             # `-C <path>` puts a path where a verb would be, so the verb is
             # whichever of the first few words git actually knows.
             if "push" in bare[1:4] and lands_on_base(words):
                 answer(f"This pushes `{BASE}`.\n{SAY}")
-        if len(bare) >= 3 and bare[0].endswith("gh"):
-            if bare[1] == "pr" and bare[2] == "merge":
+        # `gh -R owner/repo pr merge` puts the repository between the two, so
+        # the pair is looked for wherever it sits rather than at fixed places.
+        if bare and bare[0].endswith("gh"):
+            pairs = zip(bare, bare[1:])
+            if any(verb == "pr" and act == "merge" for verb, act in pairs):
                 answer(f"This merges a pull request by hand.\n{SAY}")
+            # The same write as a request: `gh api -X PUT repos/…/pulls/1/merge`.
+            if any(w.endswith("/merge") and "/pulls/" in w for w in bare):
+                answer(f"This merges a pull request through the forge's API.\n{SAY}")
 
     sys.exit(0)
 

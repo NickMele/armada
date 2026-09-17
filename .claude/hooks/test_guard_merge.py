@@ -53,6 +53,19 @@ class Refuses(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(decide(command), "deny")
 
+    def test_the_shapes_that_used_to_walk_past_it(self) -> None:
+        # Each of these was allowed until an adversarial review typed it.
+        for command in (
+            "GIT_AUTHOR_NAME=x git push origin main",
+            "gh -R NickMele/armada pr merge 1327 --merge",
+            "GH_TOKEN=x gh pr merge 1327 --merge",
+            'sh -c "git push origin main"',
+            'bash -c "gh pr merge 1327 --merge"',
+            "gh api -X PUT repos/NickMele/armada/pulls/1327/merge",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(decide(command), "deny")
+
     def test_the_refusal_says_what_to_run_instead(self) -> None:
         run = subprocess.run(
             [sys.executable, str(HOOK)],
