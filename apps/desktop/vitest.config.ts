@@ -3,17 +3,13 @@
 //
 // **The fourth runner, and the first that reaches `src/main`.** The other three
 // are `packages/screens`, twice — its modules in node and its screens in a
-// browser — and `packages/components`' stories. `typecheck` compiles main
-// without running it and `bridge_build` bundles it.
+// browser — and `packages/components`' stories.
 //
 // **`node`, and nothing from Electron.** A test that needed `app` or a
-// `BrowserWindow` would be a test of the shell rather than of the state.
+// `BrowserWindow` would be a test of the shell rather than of the state. The
+// renderer's node project is for folds like `where-open.ts`', which need no window.
 //
-// **The second project reaches `src/renderer`, on the same terms.**
-// `where-open.ts`'s `fold` needs a window no more than anything in `src/main`
-// does.
-//
-// **The third mounts `App` in Chromium on the mock Fleet**, `src/renderer/src/mock/`.
+// **The browser project mounts `App` on the mock Fleet**, `src/renderer/src/mock/`.
 // `.test.tsx` is the browser here, as it is in `packages/screens`.
 import tailwindcss from "@tailwindcss/vite";
 import { playwright } from "@vitest/browser-playwright";

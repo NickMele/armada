@@ -13,7 +13,35 @@ import type {
   WorkflowSummary,
 } from "@armada/protocol";
 import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
-import * as build from "@armada/screens/src/fixtures/build/index";
+import {
+  running,
+  runningWaitingOnACommand,
+  review,
+  escalatedGateFailure,
+  escalatedEvidenceSuspect,
+  reviewAtDelivery,
+  queued,
+  awaitingApproval,
+  awaitingRepair,
+  awaitingAttestation,
+  piloted,
+  escalatedBlockedByPolicy,
+  escalatedInterrupted,
+  escalatedSilent,
+  escalatedLoopCap,
+  escalatedNoReport,
+  completedSuccess,
+  completedFailed,
+  rejected,
+  killed,
+  superseded,
+  preparing,
+  reading,
+  unreadable,
+  retryingCheckFailure,
+  runningAtGate,
+  gateChecksStreaming,
+} from "@armada/screens/src/fixtures/build/index";
 import { repository, workflow } from "@armada/screens/src/fixtures/build/base";
 import { recorded, RECORDED_SLUGS } from "@armada/screens/src/fixtures/recorded";
 import realBoard from "@armada/screens/src/fixtures/boards/real-board.json";
@@ -144,10 +172,42 @@ function asRow(fixture: JobFixture, at: number, slug: string): JobFixture {
   };
 }
 
-/** Every builder `fixtures/build/index.ts` exports, by its export name. */
-const BUILT: [string, JobFixture][] = Object.entries(build)
-  .filter((entry): entry is [string, () => JobFixture] => typeof entry[1] === "function")
-  .map(([name, make]) => [name, make()]);
+/**
+ * Every builder `fixtures/build/index.ts` exports, by its export name. **Named
+ * one by one**, because the vocabulary gate refuses a wholesale import;
+ * `scenario.test.ts` fails where this and `FIXTURES` disagree.
+ */
+export const BUILDERS: Record<string, () => JobFixture> = {
+  running,
+  runningWaitingOnACommand,
+  review,
+  escalatedGateFailure,
+  escalatedEvidenceSuspect,
+  reviewAtDelivery,
+  queued,
+  awaitingApproval,
+  awaitingRepair,
+  awaitingAttestation,
+  piloted,
+  escalatedBlockedByPolicy,
+  escalatedInterrupted,
+  escalatedSilent,
+  escalatedLoopCap,
+  escalatedNoReport,
+  completedSuccess,
+  completedFailed,
+  rejected,
+  killed,
+  superseded,
+  preparing,
+  reading,
+  unreadable,
+  retryingCheckFailure,
+  runningAtGate,
+  gateChecksStreaming,
+};
+
+const BUILT: [string, JobFixture][] = Object.entries(BUILDERS).map(([name, make]) => [name, make()]);
 
 /** Every recording, by its directory. */
 const RECORDED: [string, JobFixture][] = RECORDED_SLUGS.map((slug) => [slug, recorded(slug)]);
@@ -191,9 +251,8 @@ function recordedBoard(): Scenario {
 /**
  * Every scenario, by name. **The first is where the mock opens.**
  *
- * A builder added to `fixtures/build/index.ts`, or a recording added under
- * `fixtures/recorded/`, is a scenario here and a row on `every-state` with no
- * edit to this file.
+ * A recording added under `fixtures/recorded/` is a scenario and an `every-state`
+ * row with no edit here; a builder needs its line in `BUILDERS`.
  */
 export const SCENARIOS: readonly Scenario[] = [
   holding(

@@ -263,9 +263,11 @@ back to the first scenario and says so in the browser console.
 | `job/<builder>` | One Job, already open, for each builder `packages/screens/src/fixtures/build/index.ts` exports |
 | `recorded/<slug>` | One recorded Job, already open, for each recording under `packages/screens/src/fixtures/recorded/` |
 
-**Every Job is a Storybook fixture, never data made up for the mock.** A builder
-or a recording added to `packages/screens` is a scenario and an `every-state`
-row with no other edit. The scenarios are `apps/desktop/src/renderer/src/mock/scenario.ts`.
+**Every Job is a Storybook fixture, never data made up for the mock.** A
+recording added to `packages/screens` is a scenario and an `every-state` row with
+no other edit. A builder needs its name added to `BUILDERS` in
+`apps/desktop/src/renderer/src/mock/scenario.ts`, and the test beside it fails
+until it is.
 
 ### What the fake answers
 
