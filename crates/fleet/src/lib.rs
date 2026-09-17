@@ -210,6 +210,10 @@ pub mod saying;
 pub mod scanning;
 pub mod scope;
 mod scoping;
+/// The read-only agent a person starts from a Studio. `#1292`.
+pub mod scout;
+/// Starting a scout on a Studio, recording what it read, and stopping it.
+mod scouting;
 pub mod seeding;
 mod servers;
 pub mod serving;

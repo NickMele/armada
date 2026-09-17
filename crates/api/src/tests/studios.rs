@@ -329,3 +329,47 @@ async fn helm_reads_checkout_runs_in_the_repository_it_stands_in() {
         "the door names the session's repository, and Bridge names none"
     );
 }
+
+/// `#1292`: **a scout starts on a person's ask and on nothing else.** Asking
+/// and stopping are Bridge's; Helm is offered only the start of a Finding
+/// already proposed, which it calls once somebody asks it to, and a plain
+/// agent is offered neither.
+#[tokio::test]
+async fn a_scout_is_asked_from_bridge_and_started_by_helm_alone_and_stopped_by_neither() {
+    let daemon = helm_holding();
+    let app = shared(&daemon);
+    let helm = from(&app, HELM, DOOR_PATH, LISTING).await;
+    let anyone = from(&app, ANYONE, DOOR_PATH, LISTING).await;
+    for persons in ["ask_scout", "stop_scout"] {
+        let named = format!("\"name\":\"{persons}\"");
+        assert!(!helm.contains(&named), "{persons} offered to Helm");
+        assert!(!anyone.contains(&named), "{persons} offered to an agent");
+    }
+    assert!(helm.contains("\"name\":\"start_scout\""), "{helm}");
+    assert!(!anyone.contains("\"name\":\"start_scout\""), "{anyone}");
+
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/studios/{THE_STUDIO}/ask_scout"),
+        r#"{"asked":"how is routing decided","position":{"x":40,"y":80}}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let asked = studio(&body);
+    let node = asked.nodes.last().expect("a Finding");
+    assert!(
+        matches!(&node.content, ipc::StudioNodeContent::Finding { asked, .. } if asked == "how is routing decided"),
+        "the ask arrives verbatim: {node:?}"
+    );
+    assert_eq!(node.position.y, 80);
+
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/studios/{THE_STUDIO}/stop_scout"),
+        r#"{"node_id":"01NODE0"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "stop_scout is routed");
+}

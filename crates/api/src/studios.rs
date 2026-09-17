@@ -225,3 +225,56 @@ pub(crate) async fn decide_studio_edge<D: Studios>(
         .await;
     answered(&served, StatusCode::OK, decided)
 }
+
+/// A person's ask, started. **Reads the daemon by its `Arc`**, since the
+/// scout is read on a task of its own.
+pub(crate) async fn ask_scout<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let ask = match body(&served, "an ask for a scout", &bytes) {
+        Ok(ask) => ask,
+        Err(response) => return response,
+    };
+    let asked = served
+        .shared()
+        .ask_scout(StudioId::carried(studio_id), ask, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, asked)
+}
+
+pub(crate) async fn start_scout<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let start = match body(&served, "a Finding to start", &bytes) {
+        Ok(start) => start,
+        Err(response) => return response,
+    };
+    let started = served
+        .shared()
+        .start_scout(StudioId::carried(studio_id), start, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, started)
+}
+
+pub(crate) async fn stop_scout<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let stop = match body(&served, "a scout to stop", &bytes) {
+        Ok(stop) => stop,
+        Err(response) => return response,
+    };
+    let stopped = served
+        .daemon()
+        .stop_scout(StudioId::carried(studio_id), stop, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, stopped)
+}

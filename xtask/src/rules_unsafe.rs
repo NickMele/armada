@@ -45,10 +45,10 @@ const UNSAFE_SITES: &[(&str, &str)] = &[
     ),
     (
         "crates/fleet/src/group.rs",
-        "the pair that ends a Drone and the tools it started — a group signal, because a kill \
-         at the pid alone leaves them running on the Drone's own pipe, and the reading that \
-         says the Drone is gone without collecting it, because collecting frees the pid the \
-         group is named by",
+        "the group signals that end a Drone and the tools it started, or interrupt a scout — \
+         a group signal, because a kill at the pid alone leaves them running on the process's \
+         own pipe — and the reading that says the Drone is gone without collecting it, \
+         because collecting frees the pid the group is named by",
     ),
     (
         "crates/checks-runner/src/run.rs",

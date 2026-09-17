@@ -142,6 +142,21 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/studios/:studio_id/decide_edge",
     },
+    Route {
+        operation: "ask_scout",
+        method: "POST",
+        path: "/studios/:studio_id/ask_scout",
+    },
+    Route {
+        operation: "start_scout",
+        method: "POST",
+        path: "/studios/:studio_id/start_scout",
+    },
+    Route {
+        operation: "stop_scout",
+        method: "POST",
+        path: "/studios/:studio_id/stop_scout",
+    },
     // Fleet's reading of its own Manifest, and singular where `/manifests` is
     // plural on purpose: that route lists what Fleet holds, and this one is the
     // single `armada.yml` Fleet is running on and watching. Not under `/jobs`
