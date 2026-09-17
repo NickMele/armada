@@ -170,6 +170,12 @@ A Contradiction ends in one of four ways, and a person picks which.
 
 > **Rule.** Accepting an edge, deferring, and deleting a node are a person's acts, whatever is asked.
 
+> **Rule.** Every act Helm takes on a Studio is published as `studio.helm_acted`, apart from a person's.
+> Why: Helm's acts are their own event type. See [Helm](helm.md), Audit trail.
+
+> **Rule.** Helm reads the runs it can start in the checkout.
+> Why: a run answers at once and ends on an event a Helm session never receives, so a run Helm could start and not read back would be an act it could not report on.
+
 ## The vocabulary is a table until code reads it
 
 > **Rule.** Node kinds, edge kinds and promotions live on this page until code reads them, then move to a data file beside `crates/core-model/domain/` with a check over it.
