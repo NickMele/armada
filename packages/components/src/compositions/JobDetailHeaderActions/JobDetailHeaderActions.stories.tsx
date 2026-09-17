@@ -232,6 +232,8 @@ export const ThePullRequestOnceItLanded: Story = {
  * mildest first, so on a running Job with a drone the face is `Kill drone` and
  * it confirms by holding; `Kill job` is behind the caret and still asks. Under
  * reduced motion the hold is not offered and the face reads `Kill drone`.
+ * Secondary, because a running Job waits on its drone rather than a person,
+ * and nothing beside it: the screen draws no other act in this state.
  *
  * The drone act is drawn only where a drone is assigned, which is why the
  * `Drone` fact and that face appear together.
@@ -249,9 +251,8 @@ export const BothKills: Story = {
     ],
     actions: (
       <>
-        <Button variant="ghost">Watch the turns</Button>
         <SplitButton
-          variant="destructive"
+          variant="secondary"
           menuLabel="Everything else this job can do"
           items={[{ label: "Kill job, it ends here", danger: true, onSelect: fn() }]}
           onAction={fn()}
@@ -281,9 +282,8 @@ export const BothKillsMenuOpen: Story = {
     ...BothKills.args,
     actions: (
       <>
-        <Button variant="ghost">Watch the turns</Button>
         <SplitButton
-          variant="destructive"
+          variant="secondary"
           defaultOpen
           menuLabel="Everything else this job can do"
           items={[{ label: "Kill job, it ends here", danger: true, onSelect: fn() }]}
