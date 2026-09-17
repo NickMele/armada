@@ -31,9 +31,11 @@ test("no repository set up: Studios says so and offers Setup, rather than a pick
   await openStudios();
 
   await expect
-    .element(page.getByText("No repository has a Manifest yet, so none of them keeps Studios."))
+    .element(page.getByText("No repository is set up yet, so none of them keeps Studios."))
     .toBeVisible();
-  await expect.element(page.getByText("Set one up, and this surface opens on its Studios.")).toBeVisible();
+  await expect
+    .element(page.getByText("A Studio is kept against a repository's Manifest. Set one up, and its Studios open here."))
+    .toBeVisible();
   // Not an empty question: no select at all, and no ask that would have held one.
   expect(picker().query()).toBeNull();
   expect(page.getByText("Pick a repository to open its Studios").query()).toBeNull();
@@ -52,6 +54,5 @@ test("every-state has repositories with Manifests, so Studios keeps its picker",
 
   await expect.element(page.getByText("Pick a repository to open its Studios")).toBeVisible();
   await expect.element(picker()).toBeVisible();
-  // The whole sentence: Helm's dock opens on one of its own that starts the same way.
-  expect(page.getByText("No repository has a Manifest yet, so none of them keeps Studios.").query()).toBeNull();
+  expect(page.getByText("No repository is set up yet, so none of them keeps Studios.").query()).toBeNull();
 });

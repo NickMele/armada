@@ -74,14 +74,17 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
       return (
         <BoardEmptyState
           quiet
-          lead="No repository has a Manifest yet, so none of them keeps Studios."
+          // **Not "No repository has a Manifest yet"**, though that is the same fact: Helm's dock
+          // opens a sentence beginning those six words on the same screen, and two lines a hand's
+          // width apart reading alike is a surface a person has to disentangle.
+          lead="No repository is set up yet, so none of them keeps Studios."
           action={
             <Button variant="primary" onClick={props.onSetUp}>
               Set up a repository
             </Button>
           }
         >
-          Set one up, and this surface opens on its Studios.
+          A Studio is kept against a repository's Manifest. Set one up, and its Studios open here.
         </BoardEmptyState>
       );
     }
