@@ -463,3 +463,41 @@ scope = "detail"
 destructive = false
 confirms = false
 notes = "The phase strip's stages are controls: opening one says what that stage is, what it is waiting on and where it stands, so the explanation sits where the question is asked. `g` for the gate the strip draws. No glyph, and this one may never take a generic one — every stage already carries its own mark on its chip, so a silhouette standing for any stage would be a mark competing with the four beneath it. The obvious candidates are refused anyway: the circle-* family is the Judge's, and a question mark inside a circle is that family's outline whatever it is named."
+
+# ----------------------------------------------------- on an open Studio
+
+[actions.add_note]
+kind = "Action"
+tier = "Contextual"
+verb = "Add a note"
+icon = ""
+icon_absent = "undecided"
+shortcut = "N"
+scope = "open studio"
+destructive = false
+confirms = false
+notes = "The first of the three kinds a person puts on a Studio by hand (#1364), and the one the owner went looking for and did not find. `N` for a node, as the design drew it, shifted because plain `n` is Dispatch and its scope is `anywhere` — an unshifted `n` on a Studio would open the composer under a person reaching for a note. The shifted set is where a second act on a spoken-for letter goes; `X`, `B` and `T` are the precedent. Scoped `open studio`, which is a place and not a Job: none of these three acts on anything focused, they act on the board. No glyph: `plus` is reserved to the title row's Dispatch segment and `presentation` to the Studios surface, and a silhouette for *a note as opposed to a link* is a decision for packages/icons/icons.toml rather than one to take here."
+
+[actions.add_link]
+kind = "Action"
+tier = "Contextual"
+verb = "Add a link"
+icon = ""
+icon_absent = "undecided"
+shortcut = "V"
+scope = "open studio"
+destructive = false
+confirms = false
+notes = "A board, document, issue, page or session, kept as its address — `docs/concepts/studio.md`, Nodes. `V` as the design drew it, which reads as the paste key it sits beside, and shifted because `v` is Observe. A Link is not read in by adding it: reading one in is a scout's act (#1293) and this only puts the address on the board. No glyph — `link` belongs to the Queued reason group, where it means something upstream is unfinished, and reusing it here would give one silhouette two meanings."
+
+[actions.add_sketch]
+kind = "Action"
+tier = "Contextual"
+verb = "Add a sketch"
+icon = ""
+icon_absent = "undecided"
+shortcut = "S"
+scope = "open studio"
+destructive = false
+confirms = false
+notes = "The third kind, and the one the design did not draw: it drew `R` for a run, which `start_studio_run` owns and #1345 builds. `S` for sketch, shifted because `s` is Restart step. **A Sketch is structured content and never pixels** — `studio.md`'s own rule that an agent can read a record and cannot read a drawing — so what a person places is the diagram written out, and the node draws its first line. No glyph, for `add_note`'s reason."

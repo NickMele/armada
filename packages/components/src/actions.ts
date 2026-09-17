@@ -56,14 +56,16 @@ export const ALIASES: Readonly<Record<string, readonly string[] | undefined>> = 
 };
 
 /**
- * The two contexts the palette is drawn in.
+ * The contexts the palette is drawn in.
  *
  * **Not the same thing as a scope.** A scope says where a binding is offered
  * and the registry decides how many there are; a context is where a person is
- * standing, and there are two. `dispatch card` and `piloted job` are conditions
- * inside the detail rather than places of their own.
+ * standing. `dispatch card` and `piloted job` are conditions inside the detail
+ * rather than places of their own, and `open studio` is a place: the acts
+ * scoped to it act on the board rather than on anything focused, so a Studio
+ * open on its whiteboard is neither the board nor a job read whole.
  */
-export type ActionContext = "board" | "detail";
+export type ActionContext = "board" | "detail" | "studio";
 
 /**
  * Which contexts each scope is offered in.
@@ -76,13 +78,14 @@ export type ActionContext = "board" | "detail";
  * registry exists to prevent, one layer down.
  */
 const CONTEXTS_FOR: Readonly<Record<ActionScope, readonly ActionContext[]>> = {
-  anywhere: ["board", "detail"],
+  anywhere: ["board", "detail", "studio"],
   list: ["board"],
   "list and detail": ["board", "detail"],
   "job board": ["board"],
   detail: ["detail"],
   "dispatch card": ["detail"],
   "piloted job": ["detail"],
+  "open studio": ["studio"],
 };
 
 /**
