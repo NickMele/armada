@@ -81,9 +81,13 @@ test("every section draws, and a status the registry does not know is named bene
   expect(page.getByRole("heading", { name: "Done" }).query()).toBeNull();
 });
 
-test("no jobs: the Board's own null reading, and every summary count reads zero", async () => {
+test("no jobs: a card with Dispatch on it, and every summary count reads zero", async () => {
   mount(onOverview([]));
-  await expect.element(page.getByText("No jobs. Propose one above.")).toBeVisible();
+  // Still named "Overview" to assistive tech, with the card inside it. #1262.
+  const empty = page.getByRole("region", { name: "Overview" });
+  await expect.element(empty.getByText("No jobs.", { exact: true })).toBeVisible();
+  await expect.element(empty.getByText("Propose one.", { exact: true })).toBeVisible();
+  await expect.element(empty.getByRole("button", { name: "Dispatch", exact: true })).toBeVisible();
   await expect.element(page.getByRole("button", { name: "0 Needs you" })).toBeVisible();
 });
 
