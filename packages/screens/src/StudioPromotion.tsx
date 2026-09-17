@@ -14,7 +14,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Button, Dialog, Input, Select, Textarea } from "@armada/components";
-import type { Outcome, Studio, StudioNode, StudioPromotion } from "@armada/protocol";
+import type { Outcome, Studio, StudioLinkForge, StudioNode, StudioPromotion } from "@armada/protocol";
 
 import { nodeNamed } from "./studio";
 import { actsOn, aWriteUp, dispatchedAs, placedBeside, selectedNodes } from "./studio-promotion";
@@ -189,12 +189,24 @@ function Act({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 /**
+ * What a Link's address names, in the words the dialog uses. **Read off
+ * `forge`, which is Fleet's reading of the address** — nothing here reads one.
+ */
+const FORGE_NAMES: Readonly<Record<StudioLinkForge, string>> = {
+  issue: "issue",
+  pull_request: "pull request",
+  milestone: "milestone",
+};
+
+/**
  * What the dialog is called. **Dispatch names what it was pressed on**, because
- * a draft sends words a person wrote and a Link sends an issue that already
- * exists, and those are two different things to be about to do — #1379.
+ * a draft sends words a person wrote and a Link sends something already on the
+ * forge, and those are different things to be about to do — #1379.
  */
 function asked(filling: Filling, one: StudioNode | undefined): string {
-  if (filling === "dispatch" && one?.kind === "link") return "Dispatch the issue this Link names";
+  if (filling === "dispatch" && one?.kind === "link" && one.forge !== undefined) {
+    return `Dispatch the ${FORGE_NAMES[one.forge]} this Link names`;
+  }
   return ASKED[filling];
 }
 
@@ -351,10 +363,12 @@ function Filling(props: FillingProps) {
       return (
         <>
           <p>
-            {one?.kind === "link"
-              ? // Nothing is filed here: the issue is already on the forge, and what goes to the
-                // proposer is its address — #1379.
-                "This address goes to the Job proposer, and it reads the issue. Nothing is filed: it already exists."
+            {one?.kind === "link" && one.forge !== undefined
+              ? // Nothing is filed here: what the Link names is already on the forge, and what
+                // goes to the proposer is its address. **Which workflow is the proposer's** —
+                // an issue, a pull request and a milestone are three different asks, and the
+                // sentence says so rather than naming a workflow nobody chose — #1379.
+                `This address goes to the Job proposer, and it reads the ${FORGE_NAMES[one.forge]}. Nothing is filed: it already exists. Which workflow the work runs under is the proposer's answer.`
               : "This text goes to the Job proposer, whole."}{" "}
             Every Job it becomes waits at the dispatch gate, and appears here as a Job node.
           </p>

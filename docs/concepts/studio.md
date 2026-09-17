@@ -185,7 +185,7 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 | Outline | The nodes feeding it | Outline | A person orders |
 | Defer | Anything raised on a node | Deferral | A person, only |
 | Write up | Note, Cluster, Contradiction or Outline | Issue draft | A person, or Helm on their ask |
-| Dispatch | Issue draft, or a Link naming an issue | Job | The dispatch gate |
+| Dispatch | Issue draft, or a Link naming an issue, a pull request or a milestone | Job | The dispatch gate |
 
 > **Rule.** A Link read in keeps its address, and everything that came back hangs off it by `Produced` edges.
 > Why: the address is what a Job is dispatched from, and a Link rewritten by what was read in it would be a record of the reading rather than of the source.
@@ -207,8 +207,14 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 > **Rule.** A Job dispatches from an Issue draft's text, through the [Job proposer](job-proposer.md). Filing the issue on GitHub is optional and a person's own act.
 > Why: nothing reaches outside Armada on a Studio's behalf. See [Scout](scout.md).
 
-> **Rule.** A Link whose address names an issue on the repository's forge dispatches that address, through the same gate, and nothing is filed because the issue already exists.
-> Why: an Issue draft is Armada's own unfiled text and a Link is an issue somebody has, and the proposer takes a ticket link as a request. A milestone is read in rather than dispatched, and a Link naming anything else is offered no Dispatch at all.
+> **Rule.** A Link whose address names an issue, a pull request or a milestone on the repository's forge dispatches that address, through the same gate, and nothing is filed because what it names already exists.
+> Why: an Issue draft is Armada's own unfiled text and a Link is something somebody already has, and the proposer takes a ticket link as a request. A Link naming anything else — a board, a page, a session — is offered no Dispatch, because there is nothing filed to dispatch against.
+
+> **Rule.** The address is the whole request and nothing beside it names a workflow.
+> Why: an issue is a change to make, a pull request is work already written that wants a judgement, and a milestone is a wave to split — three asks, and which workflow each runs under is the [Job proposer](job-proposer.md)'s own decision off the request and each definition's `for_requests` line. A surface that picked one would be deciding what that page makes the proposer's.
+
+> **Rule.** A milestone both reads in and dispatches, and the two are not rivals.
+> Why: reading one in puts its issues on the board to work through one at a time; dispatching one asks for the whole wave at once. A person picks which they meant.
 
 > **Rule.** What an address names is read off it by Fleet and said on the wire, and no surface works it out.
 > Why: which host is the forge is `crates/adapters`' to know, and a second reading of an address would be a second answer the day the first changes. See `../practices/protocol.md`, Protocol 14.17.

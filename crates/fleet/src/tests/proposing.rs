@@ -448,6 +448,85 @@ fn the_call_is_told_the_request_and_every_workflow_with_its_steps() {
     );
 }
 
+/// **What the proposer is handed for each of the three addresses a Studio
+/// dispatches**, against the definitions this repository actually ships rather
+/// than a fixture — `#1379`.
+///
+/// **It measures the request and the catalogue, and nothing past them.** Which
+/// workflow is chosen is a model's answer and this test spawns none; what it
+/// holds is that the address crosses as the whole request, unchanged, and that
+/// the list beside it carries a line written in the words somebody asking for
+/// that kind of work would use. That line is the whole of what `#424` found
+/// missing when a milestone asked for by link was declined with `epic` on the
+/// list.
+#[test]
+fn the_three_addresses_a_studio_dispatches_reach_the_proposer_whole_beside_a_line_each_can_match() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let manifest = config::Manifest::parse(
+        std::path::Path::new("fixture-armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\n",
+    )
+    .expect("the fixture manifest parses");
+    let roster = config::Roster::of(adapters::HeadlessAgent::models());
+    let mut catalogue = Vec::new();
+    let mut found: Vec<std::path::PathBuf> = std::fs::read_dir(root.join(".armada/workflows"))
+        .expect("the shipped definitions are there")
+        .map(|entry| entry.expect("a directory entry").path())
+        .collect();
+    found.sort();
+    for path in found {
+        let text = std::fs::read_to_string(&path).expect("a readable definition");
+        let def = config::WorkflowDef::parse(&path, &text, &roster)
+            .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
+        catalogue.push(
+            ResolvedWorkflow::resolve(&def, &manifest).expect("a shipped definition resolves"),
+        );
+    }
+    let held = held(catalogue);
+
+    // The three addresses, as `dispatch_studio_draft` sends them: the Link's
+    // own address, whole and alone. Spelled with the forge's own host because
+    // that is what a person pastes and what `adapters::forge_named` reads.
+    let host = adapters::FORGE_HOST;
+    for (address, expected) in [
+        (format!("https://{host}o/r/issues/1379"), None),
+        (format!("https://{host}o/r/pull/1391"), Some("code_review")),
+        (format!("https://{host}o/r/milestone/17"), Some("epic")),
+    ] {
+        let question = Brief::about(&address, &held).question().to_string();
+        assert!(
+            question.contains(&format!(
+                "The request, as the person wrote it:\n\n{address}\n"
+            )),
+            "the address is the request, whole and alone:\n{question}"
+        );
+        // An issue needs no line of its own: Fleet resolves an issue link
+        // before the call and appends the issue's own title and body, so the
+        // proposer reads the work rather than a URL. `adapters::IssueLookup`
+        // reads that shape and no other, which is why the other two do.
+        if let Some(id) = expected {
+            let for_line = held
+                .values()
+                .find(|workflow| workflow.id().as_str() == id)
+                .and_then(|workflow| workflow.for_requests())
+                .unwrap_or_else(|| panic!("`{id}` says what requests it is for"));
+            assert!(
+                question.contains(&format!("  {id} — {id}\n    for: {for_line}\n")),
+                "`{id}` is offered with what it is for under its name:\n{question}"
+            );
+        }
+    }
+
+    // And the one thing a Studio never does: name a workflow.
+    let question = Brief::about("https://example.invalid/anything", &held)
+        .question()
+        .to_string();
+    assert!(
+        !question.contains("code_review\n\n") && !question.contains("run the epic"),
+        "nothing on this path tells the proposer which one to pick"
+    );
+}
+
 /// A fixture workflow that says what requests it is for, in `workflow_named`'s
 /// shape otherwise.
 fn workflow_for(id: &str, for_requests: &str) -> ResolvedWorkflow {
