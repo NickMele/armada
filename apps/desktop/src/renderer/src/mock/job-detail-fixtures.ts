@@ -3,6 +3,7 @@
 // them — #1224.
 
 import type { ClaimedBreakage, DeclaredJudge, JobSummary, Refusal, StepDetail } from "@armada/protocol";
+import type { Outstanding } from "@armada/screens/src/outstanding";
 import { escalatedEvidenceSuspect, review } from "@armada/screens/src/fixtures/build/index";
 import { running } from "@armada/screens/src/fixtures/build/index";
 import { advancedStep, BUILD_CHECK, diffRead, freshStep, watchedRead } from "@armada/screens/src/fixtures/build/base";
@@ -161,4 +162,47 @@ export function heldByTheGamingCheck(recourse: string[]): JobFixture {
       diff: diffRead([{ path: TEST_FILE, change: "modified" }], PATCH),
     },
   };
+}
+
+/**
+ * The running Job, changed: a model chosen for its later steps and one command
+ * allowed for it. What the header counts, and what the panel lists.
+ */
+export function runningWithSettings(): JobFixture {
+  const fixture = running();
+  if (fixture.watched.state !== "read") return fixture;
+  return {
+    ...fixture,
+    watched: watchedRead({
+      ...fixture.watched.detail,
+      model_override: "opus",
+      allowed_commands: [
+        {
+          run: "pnpm add -D reselect@5.1.1",
+          reach: "job",
+          allowed_at: "2026-09-10T14:29:40Z",
+          by: "human",
+        },
+      ],
+      // Fleet's own table, since protocol 13.5 — covers every job against
+      // this repository, so the panel draws it read-only. #836's own case:
+      // `gh issue view`, always-allowed from Job 7 while filing #834.
+      repository_allowed_commands: [
+        {
+          run: "gh issue view",
+          reach: "repository",
+          allowed_at: "2026-09-13T09:41:00Z",
+          by: "human",
+        },
+      ],
+    }),
+  };
+}
+
+/** The command a Job waits on, as Helm's dock lists it. */
+export function commandOutstanding(fixture: JobFixture): Outstanding {
+  const whole = fixture.watched.state === "read" ? fixture.watched.detail : undefined;
+  const waiting = whole?.command_waiting;
+  if (waiting === undefined) throw new Error("fixture carries no command_waiting to share");
+  return { kind: "command", job_id: fixture.job.id, waiting };
 }
