@@ -295,6 +295,10 @@ export function JobRowStacked({
       data-selected={selected || undefined}
       data-dimmed={dimmed || undefined}
       data-badge-wide={badgeWide || undefined}
+      // **The row's tint is the badge's own hue**, from the same `status` stem the
+      // badge maps to `--status-{stem}` — one prop feeding both, so the row and its
+      // badge cannot name two states. The stylesheet mixes it at `--row-tint`.
+      style={{ "--armada-row-hue": `var(--status-${status})` } as CSSProperties}
       onClick={onOpen}
       onKeyDown={opens ? handleKeyDown : undefined}
     >

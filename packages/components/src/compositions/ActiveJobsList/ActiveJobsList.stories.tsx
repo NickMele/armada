@@ -39,7 +39,8 @@ const menu = [
 
 /**
  * Six states, one row shape. The running row is the only one here, so it
- * carries the loop.
+ * carries the loop. **Each row is washed in its own status hue** at
+ * `--row-tint`, so the list sorts by state before a badge is read.
  *
  * **One, because one row is running here — not because only one can be.** This
  * paragraph used to say the pulse rode the status "focused or not, because

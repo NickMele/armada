@@ -108,7 +108,25 @@
      rest, so focus adds no width and no row shifts when the cursor lands. */
   border-left: var(--row-focus-bar);
   border-left-color: transparent;
-  background: var(--bg-raised);
+  /* **Tinted by its own status, at --row-tint over --bg-raised** (design-system.md,
+     Table — the Job Board row). Hover, focus and selection below each set
+     `background` outright, so they REPLACE the tint rather than mix with it.
+
+     A mix against --bg-raised rather than a translucent gradient layered over
+     it: --bg-raised is opaque, so the two paint the same colour, and this one
+     stays a `background-color` the transition below can carry. A gradient is
+     an image, and hover would drop it in one frame before the colour moved.
+
+     `--armada-row-recent` is 0 at rest and 1 the moment a status changed; the
+     screen that saw the change walks it down across --duration-decay, so the
+     decay rides on this one tint and ends at it. */
+  --armada-row-recent: 0;
+  background: color-mix(
+    in srgb,
+    var(--armada-row-hue, var(--bg-raised))
+      calc(var(--row-tint) + var(--armada-row-recent) * (var(--row-tint-recent) - var(--row-tint))),
+    var(--bg-raised)
+  );
   transition:
     background-color var(--duration-fast) var(--ease),
     border-color var(--duration-fast) var(--ease);
@@ -179,9 +197,10 @@
   border-bottom-color: var(--border-subtle);
 }
 
-/* Status appears as a badge in its own column, never as a row-background
-   tint — eight tinted rows in a list is unreadable, and the tint would fight
-   --accent-muted on selection. */
+/* Status appears as a badge in its own column **and** as the row's tint above.
+   This read "never as a row-background tint" until 2026-09-16, which was true
+   at the badge's 12% and is not at --row-tint's 5%. Status takes no left edge:
+   that edge is focus and hover's. */
 .armada-job-row__badge {
   min-width: 0;
 }
