@@ -45,3 +45,31 @@
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
 }
+
+/* The message box: --bg-sunken, as Textarea already rests, on a --border-glass
+   edge rather than --border-default, so it sits in the dock's glass rather
+   than reading as a second card (design-system.md, Component → token mapping
+   → Helm dock). Focus is Textarea's own: the 2px --accent ring and the lift
+   to --bg-raised, never indigo. Disabled keeps its --border-subtle. */
+.armada-helm-composer .armada-textarea:not(:disabled) {
+  border-color: var(--border-glass);
+}
+
+/* Send, tinted Helm: --helm-muted fill, --helm text (4.82:1 on the fill), a
+   --helm-edge border, and no shadow — the tint is Helm's chrome, not the one
+   Primary a view is allowed. Hover brightens only the border to --helm, so the
+   text keeps the contrast it was measured at; a press keeps the rest and lets
+   Button's line carry it, as tonal does. Disabled, pending and an answer keep
+   Button's own renderings, which is why this skips them. Focus stays Button's
+   --accent ring. */
+.armada-helm-composer__actions > .armada-button[type="submit"]:not(:disabled):not([data-pending]) {
+  background: var(--helm-muted);
+  border-color: var(--helm-edge);
+  color: var(--helm);
+  box-shadow: none;
+}
+
+.armada-helm-composer__actions > .armada-button[type="submit"]:hover:not(:disabled):not([data-pending]),
+.armada-helm-composer__actions > .armada-button[type="submit"][data-preview-hover]:not(:disabled):not([data-pending]) {
+  border-color: var(--helm);
+}

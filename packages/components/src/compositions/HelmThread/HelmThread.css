@@ -1,4 +1,10 @@
-/* Helm's own conversation — two voices, `ActivityLog`'s well one subject over. */
+/* Helm's own conversation — two voices, `ActivityLog`'s well one subject over.
+
+   **No indigo in here.** The dock's frame, chip and Send are Helm's
+   (TheShell.css, HelmComposer.css); a Job, a badge or an approval card quoted
+   in the thread keeps its own tokens, because --helm sits between --accent
+   and --status-rejected and must never read beside a Job (design-system.md,
+   Tokens → Helm). */
 .armada-helm-thread {
   display: flex;
   flex-direction: column;
