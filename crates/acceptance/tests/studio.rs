@@ -220,6 +220,10 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
         studio.contains("\"write it up\" alone is a draft and nothing more"),
         "writing up never dispatches on its own: {studio}"
     );
+    assert!(
+        studio.contains("start_scout"),
+        "starting a scout waits for a person's ask: {studio}"
+    );
     for read in ["list_checkout_runs", "get_checkout_run_output"] {
         assert!(HELM_ONLY
             .iter()
@@ -242,6 +246,7 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
         received.about(),
         (None, Some(REPOSITORY.to_string())),
         "a poll's tally names the repository"
+    );
 }
 
 /// Step 4, the checkout's half: **a scout's Finding arrives Frozen, listing

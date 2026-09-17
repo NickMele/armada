@@ -141,6 +141,7 @@ fn a_proposed_finding() -> StudioNode {
         StudioNodeContent::Finding(StudioFinding::asked("how is routing decided")),
         StudioPosition { x: 0, y: 0 },
         at(),
+        StudioAuthor::Person,
     )
 }
 
@@ -198,6 +199,7 @@ fn only_a_proposed_finding_is_started() {
         },
         StudioPosition { x: 0, y: 0 },
         at(),
+        StudioAuthor::Person,
     );
     assert_eq!(note.scouting(checked_out()), Err(NotScoutable::NotAFinding));
     let started = a_proposed_finding()
@@ -228,6 +230,7 @@ fn a_finding_whose_content_does_not_fit_its_state_is_refused() {
             Some(state),
             StudioPosition { x: 0, y: 0 },
             at(),
+            Some(StudioAuthor::Person),
         );
         assert!(read.is_err(), "{state:?}");
     }

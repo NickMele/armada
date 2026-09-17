@@ -270,6 +270,7 @@ impl Studios for FakeDaemon {
                 state: StudioNodeState::from_wire("gathering"),
                 position: ask.position,
                 created_at: Instant::carried(AT),
+                added_by: None,
             });
             Ok(studio.clone())
         })

@@ -377,6 +377,7 @@ async fn a_finding_left_gathering_by_a_restart_freezes_as_failed() {
             )),
             core_model::StudioPosition { x: 0, y: 0 },
             fleet.now(),
+            core_model::StudioAuthor::Person,
         );
         store
             .add_studio_node(&id, &node, None, &fleet.now())

@@ -55,9 +55,7 @@ fn helms_node_edge_and_name_read_back_as_helms() {
         .expect("a person's Note");
     let finding = StudioNode::added(
         node("01FINDING"),
-        StudioNodeContent::Finding {
-            asked: "what reads it".to_string(),
-        },
+        StudioNodeContent::Finding(core_model::StudioFinding::asked("what reads it")),
         StudioPosition { x: 0, y: 200 },
         at(),
         StudioAuthor::Helm,

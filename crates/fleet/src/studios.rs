@@ -13,8 +13,8 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Redirector, Refusal, Studios};
 use core_model::{
-    Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName,
-    StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, ToItself,
+    Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioGraph, StudioId, StudioName, StudioNode,
+    StudioNodeContent, StudioNodeId, StudioNodeState, ToItself,
 };
 use std::sync::Arc;
 

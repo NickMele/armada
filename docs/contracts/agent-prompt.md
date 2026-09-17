@@ -1511,9 +1511,11 @@ never receives, so the block names the reads that say how it ended.
 │ running it would cost where you can tell.
 │
 │ Everything else on a Studio waits for a person's
-│ ask, as every other act does: starting a run,
-│ writing up an Issue draft, dispatching from one.
-│ Writing up and dispatching are two acts. Dispatch
+│ ask, as every other act does: starting a scout on
+│ a proposed Finding with start_scout, starting a
+│ run, writing up an Issue draft, dispatching from
+│ one. Writing up and dispatching are two acts.
+│ Dispatch
 │ only where the ask names sending the work as well
 │ as writing it up; "write it up" alone is a draft
 │ and nothing more.

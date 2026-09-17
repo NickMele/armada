@@ -310,6 +310,7 @@ fn a_scouts_finding_is_kept_as_it_gathers_and_reads_back_frozen_after_a_reopen()
             StudioNodeContent::Finding(StudioFinding::asked("how is routing decided")),
             StudioPosition { x: 0, y: 0 },
             at(1),
+            StudioAuthor::Person,
         );
         store
             .add_studio_node(&studio, &proposed, None, &at(1))

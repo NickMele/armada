@@ -68,6 +68,10 @@ where
             StudioNodeContent::Finding(StudioFinding::asked(&ask.asked)),
             ask.position.to_domain(),
             at.clone(),
+            // **A person's**, always: `ask_scout` is the ask they typed, and
+            // Helm reaches a scout through `start_scout` on a Finding whose
+            // author the row already holds.
+            core_model::StudioAuthor::Person,
         );
         let gathering = proposed
             .scouting(checkout)

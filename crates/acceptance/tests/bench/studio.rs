@@ -169,6 +169,7 @@ pub fn a_studio_with_a_frozen_finding() -> StudioGraph {
         StudioNodeContent::Finding(StudioFinding::asked(ASKED)),
         StudioPosition { x: 0, y: 240 },
         at(4),
+        StudioAuthor::Person,
     );
     let mut gathering = proposed
         .scouting(ScoutCheckout {
@@ -192,6 +193,7 @@ pub fn a_studio_with_a_frozen_finding() -> StudioGraph {
         graph.nodes[0].id().clone(),
         frozen.node().id().clone(),
         at(4),
+        StudioAuthor::Person,
     )
     .expect("a Note and a Finding");
     graph.nodes.push(frozen.node().clone());

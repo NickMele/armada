@@ -87,8 +87,9 @@ this way starts nothing and spends nothing. Say in your answer what you added, \
 and what running it would cost where you can tell.
 
 Everything else on a Studio waits for a person's ask, as every other act does: \
-starting a run, writing up an Issue draft, dispatching from one. Writing up and \
-dispatching are two acts. Dispatch only where the ask names sending the work as \
+starting a scout on a proposed Finding with start_scout, starting a run, writing \
+up an Issue draft, dispatching from one. Writing up and dispatching are two \
+acts. Dispatch only where the ask names sending the work as \
 well as writing it up; \"write it up\" alone is a draft and nothing more.
 
 Runs in the checkout are yours to read: list_checkout_runs says how each ended, \
@@ -322,7 +323,7 @@ fn every_unasked_call_is_a_command_offered_to_helm_alone() {
 /// the brief's asked paragraph already covers it.
 #[test]
 fn every_studio_act_offered_to_helm_is_unasked_or_waits_for_an_ask() {
-    const ON_AN_ASK: &[&str] = &[];
+    const ON_AN_ASK: &[&str] = &["start_scout"];
     for row in REACHABLE
         .iter()
         .chain(DRAFTING)
