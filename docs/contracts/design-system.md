@@ -156,9 +156,13 @@ measured under the accent pool. `--fg-subtle` reads 4.74:1 there, and every
 status badge clears 4.5:1 on its own 12% tint, `not_started` included at
 4.55:1. A lighter top, `rgb(30 41 55)`, dropped `--fg-subtle` to 4.37:1.
 
-**Blur is the one cost worth watching.** The window stays open all day on a
-second monitor. The glass is 86% opaque so that where blur is dropped for
-cost, the card paints nearly the same colour without it.
+**No blur while a scrim covers the card.** Behind an open Sheet or Dialog the
+blur cannot be seen, and redrawing it every frame under the scrim made presses
+on the sheet go missing: three full runs of the app's tests in six, and none in
+five once it was off. The glass is 86% opaque, so the card paints the same
+without it. A Drift or Verify panel inside a Sheet or Dialog is not on the
+canvas, so it takes no glass at all and stays on `--bg-raised` and
+`--border-subtle`.
 
 ### Foreground
 
