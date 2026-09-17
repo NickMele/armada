@@ -60,14 +60,14 @@ export const Pasted: Story = {
     const board = within(canvasElement);
     await expect(board.queryByLabelText("Your line")).toBeNull();
 
-    await userEvent.type(board.getByLabelText("Link"), "https://github.com/NickMele/armada/issues/1378");
+    await userEvent.type(board.getByLabelText("Link"), "https://example.invalid/armada/issues/1378");
     await expect(board.getByText(NOT_BUILT)).toBeVisible();
     await expect(board.getByRole("button", { name: "Read it in" })).toBeDisabled();
 
     await userEvent.type(board.getByLabelText("Your line"), "the owner's own report of this defect{Enter}");
     await expect(args.onAdd).toHaveBeenCalledWith({
       kind: "link",
-      address: "https://github.com/NickMele/armada/issues/1378",
+      address: "https://example.invalid/armada/issues/1378",
       said: "the owner's own report of this defect",
     });
   },
@@ -81,13 +81,13 @@ export const PastedWithReadIn: Story = {
   args: { adding: "link", readIn: fn() },
   play: async ({ canvasElement, args }) => {
     const board = within(canvasElement);
-    await userEvent.type(board.getByLabelText("Link"), "https://github.com/NickMele/armada/issues/1293");
+    await userEvent.type(board.getByLabelText("Link"), "https://example.invalid/armada/issues/1293");
     const read = board.getByRole("button", { name: "Read it in" });
     await expect(read).toBeEnabled();
     await userEvent.click(read);
     await expect(args.readIn).toHaveBeenCalledWith({
       kind: "link",
-      address: "https://github.com/NickMele/armada/issues/1293",
+      address: "https://example.invalid/armada/issues/1293",
     });
     // The Link is kept whatever is done with it: reading in adds nodes beside
     // it and never instead of it.

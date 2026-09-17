@@ -542,7 +542,7 @@ async fn a_notes_frame_is_read_back_by_its_node_and_a_note_without_one_is_not_a_
 /// refused by name.
 #[tokio::test]
 async fn a_links_line_is_written_edited_and_cleared_and_its_address_never_moves() {
-    const ADDRESS: &str = "https://github.com/NickMele/armada/issues/1378";
+    const ADDRESS: &str = "https://example.invalid/armada/issues/1378";
     let home = TempDir::new();
     let fleet = a_fleet(&home);
     let studio = a_studio(&fleet).await;

@@ -15,8 +15,8 @@ import { foldStudio } from "./studio-reads";
 
 const AT = "2026-09-17T10:00:00Z";
 
-/** A GitHub address of the length the owner pasted, which the card clips. */
-const LONG_ADDRESS = "https://github.com/NickMele/armada/issues/1378#issuecomment-2847190034-and-more";
+/** An address of the length the owner pasted, which the card clips. */
+const LONG_ADDRESS = "https://example.invalid/armada/issues/1378#issuecomment-2847190034-and-more";
 
 const STUDIO: Studio = {
   id: "s1",

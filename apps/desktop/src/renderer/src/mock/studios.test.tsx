@@ -350,7 +350,7 @@ test("a Contradiction is ended as Resolved here, with the answer kept on the nod
 });
 
 /** The address the owner pasted, long enough that a card cannot hold it whole. */
-const PASTED = "https://github.com/NickMele/armada/issues/1378#issuecomment-2847190034-and-then-some";
+const PASTED = "https://example.invalid/armada/issues/1378#issuecomment-2847190034-and-then-some";
 
 /**
  * #1378's own definition of done: a person pastes an address, is asked what to do with it, types a

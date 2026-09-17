@@ -160,11 +160,11 @@ export const Sketch: Story = {
   },
 };
 
-/** A GitHub address of the length the owner actually pasted, and then some. */
+/** An address of the length the owner actually pasted, and then some. */
 const LONG_ADDRESS =
-  "https://github.com/NickMele/armada/issues/1378#issuecomment-2847190034-a-pasted-link-does-nothing";
+  "https://example.invalid/armada/issues/1378#issuecomment-2847190034-a-pasted-link-does-nothing";
 
-const SHORT_ADDRESS = "https://github.com/NickMele/armada/issues/1378";
+const SHORT_ADDRESS = "https://example.invalid/armada/issues/1378";
 
 /**
  * The line a person wrote over the address they kept — #1378. Kept as its
