@@ -55,6 +55,19 @@ export function mountTwo(scenario: Scenario, labels: [string, string]): [HTMLEle
   return hosts as [HTMLElement, HTMLElement];
 }
 
+/**
+ * A sheet or dialog that has finished entering: travelled in, or scaled up, by its own animation.
+ * Visible holds from its first frame, while a sheet can still sit wholly past the window's
+ * trailing edge with its travel not yet started: under a loaded full run a press aimed at it then
+ * reached nothing, and the test read on as if it had landed — #1252. Its own animations only,
+ * never its subtree's, where a running step's pulse never finishes. One that does not animate
+ * returns at once.
+ */
+export async function entered(layer: ReturnType<typeof page.getByRole>): Promise<void> {
+  await expect.element(layer).toBeVisible();
+  await Promise.all(layer.element().getAnimations().map((one) => one.finished));
+}
+
 /** Every Board row drawn, in either arrangement. */
 export const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>("[data-job-id]")];
 

@@ -21,7 +21,7 @@ import {
 import { PLAN_PARTWAY, withPlan } from "@armada/screens/src/fixtures/plans";
 import type { FleetHandle } from "./scenario";
 import { onJob } from "./scenario";
-import { mount, unmountAfterEach } from "./testing";
+import { entered, mount, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -138,7 +138,9 @@ test("frozen, at review: the header says nothing lands until the repository unfr
 test("Merge confirmed while frozen is taken, waiting, and never drawn as a refusal", async () => {
   await opened(withRow(reviewAtDelivery(), { frozen_by: ["armada"] }));
   await page.getByRole("button", { name: /^Merge/ }).first().click();
-  await page.getByRole("dialog").getByRole("button", { name: "Merge and take the work" }).click();
+  const confirm = page.getByRole("dialog");
+  await entered(confirm);
+  await confirm.getByRole("button", { name: "Merge and take the work" }).click();
   await expect.element(page.getByText("Merge taken")).toBeVisible();
   await expect.element(page.getByText(/merges when the freeze lifts/)).toBeVisible();
 });

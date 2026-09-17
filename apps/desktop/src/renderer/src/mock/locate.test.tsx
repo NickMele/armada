@@ -10,7 +10,7 @@ import { MANIFEST_ID, repository } from "@armada/screens/src/fixtures/build/base
 
 import { CHOSEN, settingUp } from "./setup-fleet";
 import type { SettingUp } from "./setup-fleet";
-import { mount, mountTwo, unmountAfterEach } from "./testing";
+import { entered, mount, mountTwo, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -21,7 +21,7 @@ const dialog = () => page.getByRole("dialog", { name: "Add a repository" });
 async function opened(within: ReturnType<typeof page.elementLocator> | typeof page = page, pickerLabel = MANIFEST_ID) {
   await within.getByRole("button", { name: pickerLabel }).click();
   await page.getByRole("menuitem", { name: "Add a repository" }).click();
-  await expect.element(dialog()).toBeVisible();
+  await entered(dialog());
   return dialog();
 }
 
@@ -60,7 +60,7 @@ test("nothing served: the dialog opens by itself, nothing reads as a fault, and 
   const onAdded = vi.fn();
   locating({ repositories: [], onAdded });
   const add = dialog();
-  await expect.element(add).toBeVisible();
+  await entered(add);
   await expect.element(page.getByRole("button", { name: "Nothing set up yet" })).toBeInTheDocument();
   expect(page.getByText(/could not be read/).query()).toBeNull();
   await userEvent.type(add.getByLabelText("Project location"), CHOSEN);
