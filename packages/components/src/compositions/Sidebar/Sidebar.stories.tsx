@@ -50,7 +50,11 @@ const surfaces: SidebarItem[] = [
 
 const helm: SidebarItem = { id: "helm", label: "Helm", icon: MessageSquare };
 
-/** 200px, the resting width. Bridge above the rule, Helm beneath it. */
+/**
+ * 200px, the resting width. Bridge above the rule, Helm beneath it. Every
+ * glyph sits in the one accent-tinted chip, and the active row's chip is solid
+ * `--accent` on the row's own `--accent-muted` fill.
+ */
 export const Expanded: Story = {
   args: { surfaces, sibling: helm, activeId: "board", appName: "Armada" },
 };
@@ -65,8 +69,12 @@ export const HelmActive: Story = {
 };
 
 /**
- * The 48px rail. Labels go, the glyphs centre, and the rule stays. It is more
+ * The 48px rail. Labels go, the chips centre, and the rule stays. It is more
  * usable than it looks: ⌘-digit reaches every surface without labels.
+ *
+ * With no label, the chip is the whole affordance: every one shares the soft
+ * accent tint, and the current section's is solid. The row around it, not the
+ * 28px chip, is still what a click lands on (#1265).
  */
 export const CollapsedRail: Story = {
   args: { surfaces, sibling: helm, activeId: "board", appName: "Armada", collapsed: true },

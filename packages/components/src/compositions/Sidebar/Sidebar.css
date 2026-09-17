@@ -78,16 +78,16 @@
   min-width: 0;
 }
 
-/* A nav row, sized off the shell mock: 15px text, 12px icon-to-label gap,
-   7px/12px padding — the vertical figure is off the grid (--space-2 less a
-   quarter of --space-1), the horizontal is --space-3. Height is
-   padding-driven rather than fixed, the same reasoning --h-row-stacked
-   documents. */
+/* A nav row: 15px text beside a 28px chip, 4px around the chip, 8px from chip
+   to label, 12px trailing. That holds the row at the 36px it was before #1265
+   (4 + 28 + 4), and the label 40px in (4 + 28 + 8), where the bare 16px glyph
+   put it with 7px/12px padding and a 12px gap. Height is padding-driven
+   rather than fixed, the same reasoning --h-row-stacked documents. */
 .armada-sidebar__item {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: calc(var(--space-2) - var(--space-1) / 4) var(--space-3);
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
@@ -103,8 +103,27 @@
     color var(--duration-fast) var(--ease);
 }
 
-.armada-sidebar__item > svg {
+/* The chip, iconography.md → Navigation. lucide has no filled variants, so
+   the chip is what marks the active item, and in the collapsed rail it is the
+   whole affordance. One tint for every section: a hue per section would sit
+   beside status colours that already mean something.
+
+   NO TOKEN FOR 28px. Spelled --space-6 plus --space-1, the way SplitButton
+   spells its own 28px caret from tokens. Reported. */
+.armada-sidebar__chip {
+  display: flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-6) + var(--space-1));
+  height: calc(var(--space-6) + var(--space-1));
+  border-radius: var(--radius-md);
+  background: var(--accent-faint);
+  /* 5.88:1 on --bg-glass, the contract's figure. */
+  color: var(--accent-hover);
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
 }
 
 .armada-sidebar__item:hover {
@@ -114,11 +133,16 @@
 
 /* Active takes --accent-muted, the contract's fill for a selected row, and
    --fg-default text — --accent on --accent-muted measures 4.06:1 and would not
-   clear as body text. The glyph goes to --fg-default with it, never to a
-   status colour. */
+   clear as body text. The chip goes solid --accent with the glyph in
+   --fg-inverse (6.35:1), never a status colour. */
 .armada-sidebar__item[data-active] {
   background: var(--accent-muted);
   color: var(--fg-default);
+}
+
+.armada-sidebar__item[data-active] .armada-sidebar__chip {
+  background: var(--accent);
+  color: var(--fg-inverse);
 }
 
 .armada-sidebar__label {
@@ -161,15 +185,18 @@
   margin: var(--space-2) 0;
 }
 
-/* Collapsed: the 48px icon rail. Labels go, the glyphs centre, and the rule
+/* Collapsed: the 48px icon rail. Labels go, the chips centre, and the rule
    stays — the hierarchy survives the collapse. */
 .armada-sidebar[data-collapsed] {
   padding: var(--space-2);
 }
 
+/* The chip keeps the row's 4px above and below it, so a collapsed item is the
+   same 36px as an expanded one — and the button, not the chip, is still what
+   a click lands on. */
 .armada-sidebar[data-collapsed] .armada-sidebar__item {
   justify-content: center;
-  padding: 0;
+  padding-inline: 0;
 }
 
 /* Centred on the 48px rail, the same as every item beneath it. The chrome
