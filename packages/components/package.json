@@ -15,6 +15,7 @@
     "@armada/brand": "workspace:*",
     "@armada/protocol": "workspace:*",
     "@armada/tokens": "workspace:*",
+    "@xyflow/react": "^12.11.6",
     "lucide-react": "^0.550.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

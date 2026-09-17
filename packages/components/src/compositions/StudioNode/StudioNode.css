@@ -1,0 +1,99 @@
+/* Studio node. A glass Card, narrowed: the kind and the state on one line, the
+   title, and the facts. A Job's hue is its Badge; a Run's is its word, below.
+   One fixed width keeps a board of them reading as a board. */
+.armada-studio-node {
+  width: var(--w-studio-node);
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.armada-studio-node[data-selected] {
+  border-color: var(--edge-focus);
+}
+
+.armada-studio-node__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--h-badge);
+}
+
+.armada-studio-node__kind,
+.armada-studio-node__state {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* A run's word in its own hue, each aliasing a Job status. #1277. */
+.armada-studio-node__state[data-run="running"] {
+  color: var(--run-running);
+}
+
+.armada-studio-node__state[data-run="passed"] {
+  color: var(--run-passed);
+}
+
+.armada-studio-node__state[data-run="failed"] {
+  color: var(--run-failed);
+}
+
+.armada-studio-node__state[data-run="stopped"] {
+  color: var(--run-stopped);
+}
+
+.armada-studio-node__kind {
+  font-weight: var(--weight-medium);
+}
+
+.armada-studio-node__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.armada-studio-node__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.armada-studio-node__facts > li {
+  max-width: 100%;
+}
+
+/* A working state without a Badge — a Run running, a Finding gathering —
+   pulses its word. Opacity
+   only, at --duration-pulse, so nothing reflows. Badge carries Run and Job. */
+.armada-studio-node__state[data-working] {
+  animation: armada-studio-node-pulse var(--duration-pulse) var(--ease) infinite;
+}
+
+@keyframes armada-studio-node-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .armada-studio-node__state[data-working] {
+    animation: none;
+  }
+}
