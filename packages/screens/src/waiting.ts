@@ -118,12 +118,14 @@ export function telling(entered: readonly JobSummary[], now: number): Telling | 
  * One tone for a batch, decided by its most urgent job: one escalation among
  * four reviews is still work that has stopped.
  *
- * **`escalated` alone, not every status held for a person.** `awaiting_repair`
- * is owed a repair rather than stopped over a disputed verdict, and sounds as a
- * wait.
+ * **`escalated` and `awaiting_repair`, the two that have stopped.** A Job out of
+ * retries cannot go on until a person repairs it, which is why `status.css`
+ * gives it escalated's hue; a review, an approval or a question will keep.
  */
+const STOPPED: ReadonlySet<string> = new Set(["escalated", "awaiting_repair"]);
+
 function toneOf(batch: readonly JobSummary[]): Tone {
-  return batch.some((job) => job.status === "escalated") ? "blocked" : "waiting";
+  return batch.some((job) => STOPPED.has(job.status)) ? "blocked" : "waiting";
 }
 
 /**

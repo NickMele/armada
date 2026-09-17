@@ -23,6 +23,7 @@ import { ANNOTATE_FLAG } from "../shared/annotations";
 import { handleAnnotations } from "./annotations";
 import { FleetConnection } from "./connection";
 import { handleTaps } from "./haptics";
+import { installSounds } from "./dev-sounds";
 import { resolvedFolder } from "./locating";
 import { openArtifact } from "./open";
 import { openFindingIssue, openPullRequest, openRemarkLink } from "./forge";
@@ -384,6 +385,7 @@ void app.whenReady().then(() => {
     now: () => Date.now(),
   });
   handleTaps({ ipc: ipcMain, app });
+  if (!app.isPackaged) installSounds(join(app.getAppPath(), "sounds"), join(app.getPath("home"), "Library", "Sounds"));
 
   // The renderer initiates exactly these things and no others. There is no
   // arbitrary-channel invoke, which is what keeps the surface readable.
