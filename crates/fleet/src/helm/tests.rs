@@ -10,7 +10,7 @@ use std::path::Path;
 use config::Manifest;
 use ipc::door::{DRAFTING, HELM_ONLY, REACHABLE};
 
-use super::reach::RESERVED;
+use super::reach::{RESERVED, UNASKED};
 use super::{brief, may, Authority, Voice};
 
 /// Acts the door offers that stay a person's, independent of the ruling that
@@ -56,8 +56,8 @@ what is in it rather than assuming the line carries its contents.
 WHAT YOU MAY DO
 
 You may call every tool you are given that acts, once a person has asked you \
-to make that call, in this conversation, and never on your own initiative. \
-Approving a Job you drafted, redispatching, restarting a step, editing the \
+to make that call, in this conversation, and never on your own initiative but \
+for the calls ON A STUDIO names. Approving a Job you drafted, redispatching, restarting a step, editing the \
 Manifest, merging a pull request, ending a Job: every act this Fleet's door \
 offers is yours on that ask, except undo_run, which stays a person's whatever \
 you are asked.
@@ -71,6 +71,31 @@ on, unless they tell you to press it for them.
 
 How far you may raise a cap is bounded, and a raise past the bound is \
 refused, naming the most you may ask for.
+
+ON A STUDIO
+
+A Studio is this repository's graph of what a stretch of work produced: notes, \
+findings, links, drafts, and the edges that say where each came from. \
+list_studios names them and get_studio reads one whole. Read a Studio with \
+get_studio before answering about it, rather than from what you last saw.
+
+On a Studio you may call add_studio_node, propose_studio_edge and rename_studio \
+without being asked, and only to add a node that starts proposed, to propose an \
+edge between two nodes, and to name a Studio nobody has named. What you add \
+this way starts nothing and spends nothing. Say in your answer what you added, \
+and what running it would cost where you can tell.
+
+Everything else on a Studio waits for a person's ask, as every other act does: \
+starting a run, writing up an Issue draft, dispatching from one. Writing up and \
+dispatching are two acts. Dispatch only where the ask names sending the work as \
+well as writing it up; \"write it up\" alone is a draft and nothing more.
+
+Runs in the checkout are yours to read: list_checkout_runs says how each ended, \
+and get_checkout_run_output what it printed.
+
+Accepting an edge, deferring and deleting are a person's on a Studio, whatever \
+you are asked, and no tool you hold does them. Say which would help, and leave \
+it to them.
 
 HOW YOU ANSWER
 
@@ -101,6 +126,12 @@ You may call every tool that reads, and no tool that acts, including any you \
 have been given. This machine is set so that Helm only reads. Where an act \
 would help, say which and why, and leave it to the person.";
 
+/// The one paragraph of *On a Studio* read-only changes: the unasked calls and
+/// the asked ones become a single sentence saying it reads.
+const A_READ_ONLY_HELM_ON_A_STUDIO: &str = "\
+On a Studio you only read, as everywhere else. Where a proposed node, an edge \
+or a name would help, say which in your answer.";
+
 #[test]
 fn the_brief_for_an_acting_helm_reads_as_the_contract_draws_it() {
     let voice = Voice::said("Terse.");
@@ -108,24 +139,35 @@ fn the_brief_for_an_acting_helm_reads_as_the_contract_draws_it() {
     assert_eq!(brief.as_str(), ACTING_IN_A_TERSE_VOICE);
 }
 
-/// Read-only changes one block, and no Voice renders no Voice block.
+/// Read-only changes *What you may do* and the acting paragraphs of *On a
+/// Studio*, and no Voice renders no Voice block.
 #[test]
 fn a_read_only_helm_with_no_voice_is_told_it_only_reads() {
     let acting = brief(&a_manifest(), Authority::Acting, None);
     let reading = brief(&a_manifest(), Authority::ReadOnly, None);
-    let (before, _) = acting
-        .as_str()
-        .split_once("WHAT YOU MAY DO")
-        .expect("the acting brief has the block");
-    let (_, after) = acting
-        .as_str()
-        .split_once("\n\nHOW YOU ANSWER")
-        .expect("and the block after it");
+    let acting = acting.as_str();
+    let cut = |from: &str, to: &str| -> (String, String) {
+        let (before, rest) = acting.split_once(from).expect("the acting brief has it");
+        let (_, after) = rest.split_once(to).expect("and what follows it");
+        (before.to_string(), after.to_string())
+    };
+    let (before, _) = cut("WHAT YOU MAY DO", "\n\nON A STUDIO");
+    let (_, studio) = acting
+        .split_once("\n\nON A STUDIO")
+        .expect("a Studio block");
+    let (opening, _) = studio
+        .split_once("\n\nOn a Studio you may call")
+        .expect("unasked");
+    let (_, after) = studio.split_once("\n\nRuns in the checkout").expect("runs");
     assert_eq!(
         reading.as_str(),
-        format!("{before}{WHAT_A_READ_ONLY_HELM_MAY_DO}\n\nHOW YOU ANSWER{after}")
+        format!(
+            "{before}{WHAT_A_READ_ONLY_HELM_MAY_DO}\n\nON A STUDIO{opening}\n\n\
+             {A_READ_ONLY_HELM_ON_A_STUDIO}\n\nRuns in the checkout{after}"
+        )
     );
     assert!(!reading.as_str().contains("VOICE"));
+    assert!(!reading.as_str().contains("add_studio_node"));
 }
 
 /// Never told anything of the Manifest past its id and folder.
@@ -190,16 +232,22 @@ fn drafting_is_an_acting_helms_and_never_a_read_only_ones() {
 }
 
 /// The door offers `Helm only` rows to a Helm session alone, so an acting one
-/// must be allowed every row of it and a read-only one none. `#1150`.
+/// must be allowed every row of it, and a read-only one only its reads —
+/// the checkout's runs (`#1288`). `#1150`.
 #[test]
-fn helm_only_is_an_acting_helms_and_never_a_read_only_ones() {
+fn helm_only_is_an_acting_helms_and_only_its_reads_a_read_only_ones() {
     assert!(
         !HELM_ONLY.is_empty(),
         "the inventory has rows reading `Helm only`"
     );
     for row in HELM_ONLY {
         assert!(may(Authority::Acting, row), "`{}`", row.operation);
-        assert!(!may(Authority::ReadOnly, row), "`{}`", row.operation);
+        assert_eq!(
+            may(Authority::ReadOnly, row),
+            row.kind == "query",
+            "`{}`",
+            row.operation
+        );
     }
 }
 
@@ -240,5 +288,78 @@ fn a_read_only_helm_may_read_and_nothing_else() {
         if row.kind == "query" {
             assert!(may(Authority::Acting, row), "`{}` is a read", row.operation);
         }
+    }
+}
+
+/// `docs/concepts/studio.md`, *Helm on a Studio*: what Helm may do unasked is
+/// commands, offered to a Helm session and to no other agent, that an acting
+/// Helm may call and a read-only one may not. **Named in the brief from
+/// [`UNASKED`]**, so a call renamed in the inventory fails here first.
+#[test]
+fn every_unasked_call_is_a_command_offered_to_helm_alone() {
+    let brief = brief(&a_manifest(), Authority::Acting, None);
+    for call in UNASKED {
+        let row = HELM_ONLY
+            .iter()
+            .find(|row| row.operation == *call)
+            .unwrap_or_else(|| panic!("`{call}` does not read `Helm only`"));
+        assert_eq!(row.kind, "command", "`{call}`");
+        assert!(may(Authority::Acting, row), "`{call}`");
+        assert!(!may(Authority::ReadOnly, row), "`{call}`");
+        assert!(brief.as_str().contains(call), "the brief names `{call}`");
+        assert!(
+            !REACHABLE.iter().any(|row| row.operation == *call),
+            "`{call}` reaches an agent that is not Helm"
+        );
+    }
+}
+
+/// **Every act on a Studio Helm is offered is decided one way or the other.**
+/// A command a later step adds — a Run node (`#1289`), a write-up or a dispatch
+/// (`#1291`), a scout (`#1292`) — lands here: in [`UNASKED`] if `studio.md`
+/// lets Helm take it unasked, or in `ON_AN_ASK` below if it waits for one, and
+/// the brief's asked paragraph already covers it.
+#[test]
+fn every_studio_act_offered_to_helm_is_unasked_or_waits_for_an_ask() {
+    const ON_AN_ASK: &[&str] = &[];
+    for row in REACHABLE
+        .iter()
+        .chain(DRAFTING)
+        .chain(HELM_ONLY)
+        .filter(|row| row.kind == "command" && row.operation.contains("studio"))
+    {
+        assert!(
+            UNASKED.contains(&row.operation) || ON_AN_ASK.contains(&row.operation),
+            "`{}` is offered to Helm and nothing says whether it may be called unasked",
+            row.operation
+        );
+    }
+}
+
+/// **Helm reads the runs it can start.** `start_checkout_run` is Helm's on an
+/// ask, and its end arrives on a stream a session never receives, so the reads
+/// the brief names are offered to the same session.
+#[test]
+fn helm_reads_the_checkout_runs_it_can_start() {
+    let offered = |operation: &str| {
+        REACHABLE
+            .iter()
+            .chain(DRAFTING)
+            .chain(HELM_ONLY)
+            .find(|row| row.operation == operation)
+    };
+    assert!(offered("start_checkout_run").is_some());
+    let brief = brief(&a_manifest(), Authority::ReadOnly, None);
+    for read in [
+        "list_checkout_runs",
+        "get_checkout_run_sheet",
+        "get_checkout_run_output",
+    ] {
+        let row = offered(read).unwrap_or_else(|| panic!("`{read}` is offered to no Helm"));
+        assert_eq!(row.kind, "query", "`{read}`");
+        assert!(may(Authority::ReadOnly, row), "`{read}`");
+    }
+    for named in ["list_checkout_runs", "get_checkout_run_output"] {
+        assert!(brief.as_str().contains(named), "the brief names `{named}`");
     }
 }

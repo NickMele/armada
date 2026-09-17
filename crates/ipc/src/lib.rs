@@ -274,9 +274,9 @@ pub use setup::{LeftOutWorkflow, ManifestSummary, ModelChoices, WorkflowStep, Wo
 pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet, SpecPicked};
 pub use since::{EventTally, EventsSince};
 pub use studio::{
-    AddStudioNode, CreateStudio, DecideStudioEdge, MoveStudioNode, ProposeStudioEdge,
-    RemoveStudioNode, RenameStudio, Studio, StudioDeleted, StudioEdge, StudioList, StudioNode,
-    StudioNodeContent, StudioPosition, StudioSummary,
+    AddStudioNode, CreateStudio, DecideStudioEdge, HelmStudioAct, MoveStudioNode,
+    ProposeStudioEdge, RemoveStudioNode, RenameStudio, Studio, StudioDeleted, StudioEdge,
+    StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioSummary,
 };
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,

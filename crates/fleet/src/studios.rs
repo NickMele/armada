@@ -17,8 +17,9 @@ use core_model::{
     ToItself,
 };
 use ipc::{
-    AddStudioNode, CreateStudio, DecideStudioEdge, ManifestId, MoveStudioNode, ProposeStudioEdge,
-    RemoveStudioNode, RenameStudio, StudioDeleted, StudioList, StudioSummary, WireError,
+    AddStudioNode, CreateStudio, DecideStudioEdge, HelmStudioAct, ManifestId, MoveStudioNode,
+    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StudioDeleted, StudioHelmActed, StudioList,
+    StudioSummary, WireError,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -128,6 +129,23 @@ where
             .publish(ipc::Event::StudioChanged(studio.clone()));
         Ok(studio)
     }
+
+    /// Publish `act` as Helm's own, **after** the write's `studio.changed` and
+    /// only where the transport placed the call in a Helm session: a person's
+    /// act on a Studio is `studio.changed` alone. `docs/concepts/helm.md`,
+    /// *Audit trail*.
+    fn published_as_helms(&self, by: Redirector, studio: &ipc::Studio, act: HelmStudioAct) {
+        if by != Redirector::Helm {
+            return;
+        }
+        self.events()
+            .publish(ipc::Event::StudioHelmActed(StudioHelmActed {
+                studio_id: studio.id.clone(),
+                manifest_id: studio.manifest_id.clone(),
+                act,
+                at: ipc::Instant::from(&self.now()),
+            }));
+    }
 }
 
 impl<H, V, W> Studios for Fleet<H, V, W>
@@ -194,6 +212,7 @@ where
         &self,
         studio_id: ipc::StudioId,
         rename: RenameStudio,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<ipc::Studio, Refusal> {
         let Some(name) = StudioName::named(&rename.name) else {
@@ -202,10 +221,16 @@ where
             );
         };
         let at = self.now();
-        self.written(&studio_id, within, |store, id| {
-            store.rename_studio(id, &name, &at)
-        })
-        .await
+        let studio = self
+            .written(&studio_id, within, |store, id| {
+                store.rename_studio(id, &name, &at)
+            })
+            .await?;
+        let named = HelmStudioAct::Named {
+            name: name.as_str().to_string(),
+        };
+        self.published_as_helms(by, &studio, named);
+        Ok(studio)
     }
 
     async fn delete_studio(
@@ -268,13 +293,19 @@ where
         let produced_by = add
             .produced_by
             .map(|from| (from.to_domain(), StudioEdgeId::carried(self.mint().ulid())));
-        self.written(&studio_id, within, |store, id| {
-            let produced_by = produced_by
-                .as_ref()
-                .map(|(from, edge)| (from, edge.clone()));
-            store.add_studio_node(id, &node, produced_by, &at)
-        })
-        .await
+        let studio = self
+            .written(&studio_id, within, |store, id| {
+                let produced_by = produced_by
+                    .as_ref()
+                    .map(|(from, edge)| (from, edge.clone()));
+                store.add_studio_node(id, &node, produced_by, &at)
+            })
+            .await?;
+        let added = HelmStudioAct::AddedNode {
+            node_id: ipc::StudioNodeId::from(node.id()),
+        };
+        self.published_as_helms(by, &studio, added);
+        Ok(studio)
     }
 
     async fn move_studio_node(
@@ -310,6 +341,7 @@ where
         &self,
         studio_id: ipc::StudioId,
         proposal: ProposeStudioEdge,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<ipc::Studio, Refusal> {
         let at = self.now();
@@ -329,10 +361,16 @@ where
                 ),
             )
         })?;
-        self.written(&studio_id, within, |store, id| {
-            store.add_studio_edge(id, &edge, &at)
-        })
-        .await
+        let studio = self
+            .written(&studio_id, within, |store, id| {
+                store.add_studio_edge(id, &edge, &at)
+            })
+            .await?;
+        let proposed = HelmStudioAct::ProposedEdge {
+            edge_id: ipc::StudioEdgeId::from(edge.id()),
+        };
+        self.published_as_helms(by, &studio, proposed);
+        Ok(studio)
     }
 
     async fn decide_studio_edge(

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use config::Manifest;
 
-use super::reach::{Authority, RESERVED};
+use super::reach::{Authority, RESERVED, UNASKED};
 
 /// The Machine Voice setting as it reads. It tunes length and formality and
 /// nothing else, and a blank one is no Voice, so no block is rendered empty.
@@ -58,8 +58,8 @@ const MAY_ACT: &str = "\
 WHAT YOU MAY DO
 
 You may call every tool you are given that acts, once a person has asked you \
-to make that call, in this conversation, and never on your own initiative. \
-Approving a Job you drafted, redispatching, restarting a step, editing the \
+to make that call, in this conversation, and never on your own initiative but \
+for the calls ON A STUDIO names. Approving a Job you drafted, redispatching, restarting a step, editing the \
 Manifest, merging a pull request, ending a Job: every act this Fleet's door \
 offers is yours on that ask, except ";
 
@@ -98,6 +98,36 @@ assertions\". A figure that was derived rather than measured, mark as \
 approximate: \"~$2.40\". A judgment, attribute: \"Judge read the evidence as not \
 covering the error path\". A cause you are supposing, say you are supposing it.";
 
+const A_STUDIO: &str = "\
+ON A STUDIO
+
+A Studio is this repository's graph of what a stretch of work produced: notes, \
+findings, links, drafts, and the edges that say where each came from. \
+list_studios names them and get_studio reads one whole. Read a Studio with \
+get_studio before answering about it, rather than from what you last saw.";
+
+const ADDED_AND_ASKED: &str = "\
+What you add this way starts nothing and spends nothing. Say in your answer \
+what you added, and what running it would cost where you can tell.
+
+Everything else on a Studio waits for a person's ask, as every other act does: \
+starting a run, writing up an Issue draft, dispatching from one. Writing up and \
+dispatching are two acts. Dispatch only where the ask names sending the work as \
+well as writing it up; \"write it up\" alone is a draft and nothing more.";
+
+const READING_A_STUDIO: &str = "\
+On a Studio you only read, as everywhere else. Where a proposed node, an edge \
+or a name would help, say which in your answer.";
+
+const RUNS: &str = "\
+Runs in the checkout are yours to read: list_checkout_runs says how each ended, \
+and get_checkout_run_output what it printed.";
+
+const A_PERSONS_ON_A_STUDIO: &str = "\
+Accepting an edge, deferring and deleting are a person's on a Studio, whatever \
+you are asked, and no tool you hold does them. Say which would help, and leave \
+it to them.";
+
 /// Assemble the brief for one repository's Helm session.
 ///
 /// **The Manifest is named, not quoted.** Everything in it past its id and
@@ -110,6 +140,7 @@ pub fn brief(manifest: &Manifest, authority: Authority, voice: Option<&Voice>) -
         EACH_TURN.to_string(),
         WHERE_THEY_ARE.to_string(),
         what_you_may_do(authority),
+        on_a_studio(authority),
         HOW_YOU_ANSWER.to_string(),
     ];
     if let Some(Voice(voice)) = voice {
@@ -151,5 +182,32 @@ fn what_you_may_do(authority: Authority) -> String {
                  {APPROVAL_ASK}\n\n{CAP_BOUND}"
             )
         }
+    }
+}
+
+/// What a session may do on a Studio. **The unasked calls are named from
+/// [`UNASKED`]**, for [`RESERVED`]'s reason: the constant a test holds to the
+/// inventory is the one the brief reads, so the two cannot name different
+/// calls. What follows them is the asked column of `studio.md`'s table, stated
+/// before `#1289` and `#1291` add the operations it covers.
+fn on_a_studio(authority: Authority) -> String {
+    let acting = match authority {
+        Authority::ReadOnly => READING_A_STUDIO.to_string(),
+        Authority::Acting => format!(
+            "On a Studio you may call {} without being asked, and only to add a node that \
+             starts proposed, to propose an edge between two nodes, and to name a Studio \
+             nobody has named. {ADDED_AND_ASKED}",
+            listed(UNASKED)
+        ),
+    };
+    [A_STUDIO, &acting, RUNS, A_PERSONS_ON_A_STUDIO].join("\n\n")
+}
+
+/// `a`, `a and b`, `a, b and c`.
+fn listed(names: &[&str]) -> String {
+    match names {
+        [] => String::new(),
+        [only] => (*only).to_string(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
     }
 }

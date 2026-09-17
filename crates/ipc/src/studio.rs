@@ -109,6 +109,36 @@ pub struct StudioDeleted {
     pub manifest_id: ManifestId,
 }
 
+/// `studio.helm_acted`: one act Helm took on a Studio. **Helm's act as its own
+/// event type** — `docs/concepts/helm.md`, *Audit trail*. The write publishes
+/// `studio.changed` as any write does, and this besides only where the door
+/// placed the call in a Helm session, so a person's act and Helm's are told
+/// apart by kind.
+///
+/// **Ids, not the Studio.** What the Studio holds now is `studio.changed`'s to
+/// carry; this says who did which part of it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudioHelmActed {
+    pub studio_id: StudioId,
+    pub manifest_id: ManifestId,
+    #[serde(flatten)]
+    pub act: HelmStudioAct,
+    pub at: Instant,
+}
+
+/// Which of the acts Helm may take on a Studio unasked it took.
+/// `fleet::helm::reach::UNASKED`'s calls, one variant each.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "act", rename_all = "snake_case")]
+pub enum HelmStudioAct {
+    /// A node that starts proposed, by the id it was given.
+    AddedNode { node_id: StudioNodeId },
+    /// An edge, proposed, by the id it was given.
+    ProposedEdge { edge_id: StudioEdgeId },
+    /// The Studio named, and what it was named.
+    Named { name: String },
+}
+
 /// `create_studio`. **A name is not required**: `studio.md` has Helm name an
 /// untitled Studio.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

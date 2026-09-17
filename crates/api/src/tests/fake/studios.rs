@@ -110,8 +110,10 @@ impl Studios for FakeDaemon {
         &self,
         studio_id: StudioId,
         rename: RenameStudio,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
         self.changing(&studio_id, within, |studio| {
             studio.name = Some(rename.name);
             Ok(studio.clone())
@@ -202,8 +204,10 @@ impl Studios for FakeDaemon {
         &self,
         studio_id: StudioId,
         proposal: ProposeStudioEdge,
+        by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
         self.changing(&studio_id, within, |studio| {
             studio.edges.push(StudioEdge {
                 id: StudioEdgeId::carried(format!("01EDGE{}", studio.edges.len())),

@@ -78,6 +78,7 @@ async fn a_studio_reads_back_whole_after_fleet_restarts() {
                 to: second.clone(),
                 kind: StudioRelation::from_wire("same_as").expect("a relation"),
             },
+            Redirector::Person,
             None,
         )
         .await

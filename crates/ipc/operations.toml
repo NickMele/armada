@@ -29,7 +29,9 @@
 #                 working on the machine, on one shared set. `Helm only` is a
 #                 command Helm may call when a person asks it to in
 #                 conversation; the person's ask is the gate, not a further
-#                 tier. `Drafts only` is the narrower set offered a Helm
+#                 tier. On a query it is a read offered to a Helm session
+#                 alone — the checkout's runs, which only Helm can start.
+#                 `Drafts only` is the narrower set offered a Helm
 #                 session alone for drafting a Job. What stays `No` for Helm
 #                 too is named, not implied — `fleet::helm::reach::RESERVED`
 #   description - what the operation returns or does, in one line
@@ -191,7 +193,7 @@ description = "Start a Studio in one repository, named or untitled, and answer w
 notes = """
 `?manifest_id=` names the repository. A name is optional, since `docs/concepts/studio.md` has Helm name an untitled Studio; a blank one is no name.
 
-`agent_access` is `Bridge only` for now: a person opens a Studio, and Helm works on one it is in. #1288 decides whether Helm starts one on a person's ask.
+`agent_access` is `Bridge only`: a person opens a Studio, and Helm works on one it is in. #1288 left it there, because `studio.md`'s table of what Helm may do on a Studio names no start of one, asked or not.
 """
 
 [operations.rename_studio]
@@ -200,7 +202,7 @@ transport = "HTTP"
 agent_access = "Helm only"
 description = "Name a Studio, or name it again, and answer with it"
 notes = """
-A blank name is refused as `fleet.studio_name_blank`. `Helm only` because naming an untitled Studio is one of the things `studio.md` lets Helm do unasked.
+A blank name is refused as `fleet.studio_name_blank`. `Helm only` because naming an untitled Studio is one of the things `studio.md` lets Helm do unasked — `fleet::helm::reach::UNASKED`. From Helm it also publishes `studio.helm_acted`.
 """
 
 [operations.delete_studio]
@@ -223,6 +225,8 @@ A node starts in its kind's first state and nothing in the request sets one. `pr
 **From Helm, only a kind that starts `proposed`** — a Finding today — and anything else is refused as `fleet.studio_node_not_helms`: Helm adds proposed nodes, and a Note is what a person pointed at. A blank field is refused as `fleet.studio_node_blank`.
 
 **No act writes a node's content afterwards**, which is what fixes a Note at capture.
+
+From Helm it also publishes `studio.helm_acted`, after `studio.changed`: Helm's act is its own event type.
 """
 
 [operations.move_studio_node]
@@ -249,7 +253,7 @@ transport = "HTTP"
 agent_access = "Helm only"
 description = "Propose a Same as, Blocks or Answers edge between two nodes on one Studio, and answer with the Studio"
 notes = """
-**Lands `proposed`, whoever sends it**, and only a person accepts it. `produced` does not decode here: the Studio draws that edge itself. An edge to a node on another Studio is refused as `fleet.no_such_studio_node`, and the same relation twice as `fleet.studio_edge_exists`.
+**Lands `proposed`, whoever sends it**, and only a person accepts it. `produced` does not decode here: the Studio draws that edge itself. An edge to a node on another Studio is refused as `fleet.no_such_studio_node`, and the same relation twice as `fleet.studio_edge_exists`. From Helm it also publishes `studio.helm_acted`.
 """
 
 [operations.decide_studio_edge]
@@ -1978,7 +1982,7 @@ Refused while a Drone is working in the tree, while a run is in flight, on a run
 [operations.get_checkout_run_sheet]
 kind = "query"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "What a person can run in the main checkout - its Setup, Checks and Commands - off the Manifest Fleet holds"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still verifies. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning. With no root Manifest the three lists and `servers` are empty, and `verify` is still the checkout's. `workspaces` lists each directory Scan finds holding its own `armada.yml` that loads, with the Commands that file declares, pressed with `StartCheckoutRun.workspace`; it is listed with or without a root Manifest, so a root's own page can run a workspace's Command too. Which directories hold one is found once per repository, by Scan's walk, and found again when its root Manifest is re-read, the served repositories change, or Setup writes a file; each file is read afresh.
@@ -1989,13 +1993,13 @@ notes = """
 
 Under `/manifest` beside `get_manifest_reading`, for that operation's reason — a Fleet serves one repository, and this reads it before any Job exists to read one from instead.
 
-`agent_access` is `No` while the surface is being built. `get_run_sheet` is what an agent working a Job needs, and the main checkout is the tree a Drone is confined out of.
+`agent_access` is `Helm only`, `list_checkout_runs`' reason: it is where a Helm session finds what it may be asked to start. No other agent is offered it — `get_run_sheet` is what an agent working a Job needs, and the main checkout is the tree a Drone is confined out of.
 """
 
 [operations.list_checkout_runs]
 kind = "query"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "The main checkout's earlier runs: name, exit code, when, how long, what changed, and the log"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
@@ -2005,17 +2009,21 @@ A run of a workspace's own entry names it in `workspace`, so two of one name sta
 `list_runs` read off `.armada/runs/main/` rather than `.armada/runs/<job>/`. A Job handle always begins with the Job's own number, so no Job can be called `main` and the two cannot collide.
 
 Kept for the Machine's ad-hoc run log retention, swept when the checkout next starts a run.
+
+`agent_access` is `Helm only`: **Helm reads the runs it can start** (#1288). `start_checkout_run` answers at once and the end is `checkout_run.finished`, which no session receives, so a run Helm started on a person's ask would otherwise be one it could not say the end of. No other agent can start one, so no other agent is offered this.
 """
 
 [operations.get_checkout_run_output]
 kind = "query"
 transport = "HTTP"
-agent_access = "No"
+agent_access = "Helm only"
 description = "One checkout run's log, read back as a window that says it is one"
 notes = """
 **`?repository=<root>` names the checkout where `?manifest_id=` cannot**: a repository whose root has no `armada.yml` has no id, and a workspace there still runs. Naming both is refused with `fleet.repository_named_twice`, rather than one quietly winning.
 
 `get_run_output`'s shape and its allowlist: `:run_id` names a run the checkout recorded or the one in flight, resolved against its own run directories before anything is opened.
+
+`agent_access` is `Helm only`, `list_checkout_runs`' reason: what a run Helm started printed is what it reports back.
 """
 
 [operations.get_checkout_run_diff]
@@ -2034,7 +2042,7 @@ A read: it writes, stages and commits nothing. Refused while the run is still go
 
 `get_diff`'s split, for the same reason — the patch is the expensive half, so it is fetched by the one person who opened it rather than carried on `list_checkout_runs`.
 
-`agent_access` is `No`, on the seven checkout-run operations' terms, and it differs from `get_diff`'s `Yes` on purpose: that route lets an agent check its own change, and no agent can have made this one — `start_checkout_run` is `No`, and the main checkout is the tree a Drone is confined out of.
+`agent_access` is `No`, and it differs from `get_diff`'s `Yes` on purpose: that route lets an agent check its own change, and the main checkout is the tree a Drone is confined out of. `start_checkout_run` is `Helm only`, so a Helm session can have made this one; it reads how the run ended and what it printed through `list_checkout_runs` and `get_checkout_run_output`, and the patch stays the person's to open, for the cost above (#1288).
 """
 
 [operations.observe_checkout_run]
@@ -2111,7 +2119,7 @@ notes = """
 
 **No Evidence, no Check row, nothing reaches Doctor.** A step's exit code is a fact read beside the code it expects.
 
-`agent_access` is `No` on the checkout-run operations' terms: the main checkout is the tree a Drone is confined out of, and a Verify runs every Check in it.
+`agent_access` is `Helm only`, as `start_checkout_run` is: Helm starts one on a person's ask, and no other agent is offered it because the main checkout is the tree a Drone is confined out of and a Verify runs every Check in it.
 """
 
 [operations.save_manifest_file]
@@ -2485,6 +2493,17 @@ agent_access = "Bridge only"
 description = "A Studio after a write to it, whole, with every node and edge"
 notes = """
 Carries `Studio` itself, the answer to `get_studio`, for `repositories.changed`' reason: a whiteboard replaces what it holds rather than folding a change. Published after the write. `manifest_id` is at the top level, so a poll's tally names the repository.
+"""
+
+[operations."studio.helm_acted"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "Helm took one act on a Studio: added a node, proposed an edge or named it"
+notes = """
+**Helm's act, as its own event type** — `docs/concepts/helm.md`, *Audit trail* (#1288). Published after the `studio.changed` the same write publishes, and only where the door placed the call in a Helm session; a person's act on a Studio publishes `studio.changed` alone. So a reader tells the two apart by kind, never by a field on the Studio.
+
+`act` names which, with the id of what was added or the name given. The Studio itself is `studio.changed`'s to carry. `manifest_id` is at the top level, so a poll's tally names the repository.
 """
 
 [operations."studio.deleted"]

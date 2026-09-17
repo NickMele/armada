@@ -98,8 +98,11 @@ pub struct FakeDaemon {
     pub proposed_by: Mutex<Vec<crate::Redirector>>,
     /// Every Studio held, starting with [`THE_STUDIO`]. `#1285`.
     pub studios: Mutex<Vec<ipc::Studio>>,
-    /// Who each node added to a Studio was recorded against.
+    /// Who each Studio act that says who acted — add a node, propose an edge,
+    /// rename — was recorded against, in order.
     pub added_by: Mutex<Vec<crate::Redirector>>,
+    /// The repository each `list_checkout_runs` named, in order. `#1288`.
+    pub checkout_runs_named: Mutex<Vec<Option<ipc::ManifestId>>>,
 }
 
 impl FakeDaemon {
@@ -133,6 +136,7 @@ impl FakeDaemon {
             proposed_by: Mutex::new(Vec::new()),
             studios: Mutex::new(vec![studios::the_studio()]),
             added_by: Mutex::new(Vec::new()),
+            checkout_runs_named: Mutex::new(Vec::new()),
         }
     }
 
