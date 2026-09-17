@@ -24,10 +24,23 @@
   font-weight: var(--weight-medium);
   white-space: nowrap;
   cursor: pointer;
+  /* The line along the bottom edge is positioned against the button and
+     clipped to its rounded corners. `clip` rather than `hidden`: a scroll
+     container would move an inline-flex button's baseline. */
+  position: relative;
+  overflow: clip;
   transition:
     background-color var(--duration-fast) var(--ease),
     border-color var(--duration-fast) var(--ease),
     color var(--duration-fast) var(--ease);
+}
+
+/* A press answers at --duration-press; letting go eases back at
+   --duration-fast. A transition runs at the duration of the state it is
+   entering, so the shorter clock sits on :active alone. */
+.armada-button:active:not(:disabled):not([data-pending]),
+.armada-button[data-preview-press] {
+  transition-duration: var(--duration-press);
 }
 
 /* sm — use inside table rows. Every button in a group is the same height, so
@@ -64,6 +77,16 @@
   border-color: var(--accent-hover);
 }
 
+/* Pressed, a primary steps down off the accent to --accent-muted, so the line
+   that opens along its edge reads (see Accent: a status mark never sits on an
+   accent fill). --fg-inverse is dark text, and unreadable on that fill. */
+.armada-button[data-variant="primary"]:active:not(:disabled):not([data-pending]),
+.armada-button[data-variant="primary"][data-preview-press] {
+  background: var(--accent-muted);
+  border-color: var(--accent-muted);
+  color: var(--fg-default);
+}
+
 /* Secondary — filled one surface step from its ground, so the box reads as a
  * box. `--bg-sunken` on a card is the default; a secondary sitting on a sunken
  * or overlay row takes `--bg-raised` instead, or it shows only its text and
@@ -83,6 +106,13 @@
   background: var(--bg-hover);
 }
 
+/* On a card a secondary already rests on --bg-sunken, so its press is the walk
+   back down from hover; on a sunken ground it is one step below rest. */
+.armada-button[data-variant="secondary"]:active:not(:disabled):not([data-pending]),
+.armada-button[data-variant="secondary"][data-preview-press] {
+  background: var(--bg-sunken);
+}
+
 /* Ghost — recedes by losing its fill and dropping to --fg-muted, never by
  * shrinking. */
 .armada-button[data-variant="ghost"] {
@@ -94,6 +124,13 @@
 .armada-button[data-variant="ghost"]:hover:not(:disabled),
 .armada-button[data-variant="ghost"][data-preview-hover] {
   background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+.armada-button[data-variant="ghost"]:active:not(:disabled):not([data-pending]),
+.armada-button[data-variant="ghost"][data-preview-press] {
+  background: var(--bg-sunken);
+  border-color: var(--border-strong);
   color: var(--fg-default);
 }
 
@@ -111,6 +148,13 @@
   background: var(--status-completed-failed-bg);
 }
 
+/* One step past the 12% hover fill. No token carries the deeper step; 24% is
+   the step tonal's hover already takes. */
+.armada-button[data-variant="destructive"]:active:not(:disabled):not([data-pending]),
+.armada-button[data-variant="destructive"][data-preview-press] {
+  background: color-mix(in srgb, var(--status-completed-failed) 24%, transparent);
+}
+
 /* Tonal — chrome, not a list row's act. Same tokens as `SplitButton`'s own
  * `tonal`: `--accent-muted` fill, `--accent-hover` text (never `--accent`,
  * which reads too dim on the muted fill), no border. The title row's
@@ -124,6 +168,11 @@
 .armada-button[data-variant="tonal"]:hover:not(:disabled),
 .armada-button[data-variant="tonal"][data-preview-hover] {
   background: color-mix(in srgb, var(--accent) 24%, var(--accent-muted));
+}
+
+.armada-button[data-variant="tonal"]:active:not(:disabled):not([data-pending]),
+.armada-button[data-variant="tonal"][data-preview-press] {
+  background: var(--bg-sunken);
 }
 
 /* Focus is a 2px --accent ring at 2px offset, no glow — a resting edge and a
@@ -147,25 +196,44 @@
 
 /* Pending — the pressed control while Fleet has not answered. Every variant
    collapses onto one rendering, as disabled does, but with --fg-default text so
-   it is the one control in its group that is not greyed out. The bar moves on
-   transform alone, never opacity. #1117. */
+   it is the one control in its group that is not greyed out. #1117. */
 .armada-button[data-pending] {
-  position: relative;
-  overflow: hidden;
   background: var(--bg-sunken);
   border-color: var(--border-strong);
   color: var(--fg-default);
   cursor: default;
 }
 
-.armada-button[data-pending]::after {
+/* The line. One 2px object along the bottom edge across four states — press,
+   pending, accepted, refused — so a press, the wait and the answer read as one
+   thing rather than a bar appearing from nothing and vanishing to nothing
+   (design-system.md, Motion). It moves on transform alone, never opacity.
+
+   At rest it is closed to nothing at the centre. */
+.armada-button::after {
   content: "";
   position: absolute;
-  left: 0;
+  inset-inline: 0;
   bottom: 0;
-  width: 40%;
   height: var(--pending-bar);
   background: var(--status-running);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--duration-press) var(--ease);
+  pointer-events: none;
+}
+
+/* Press: opens from the centre to the full edge. */
+.armada-button:active:not(:disabled):not([data-pending])::after,
+.armada-button[data-preview-press]::after {
+  transform: scaleX(1);
+}
+
+/* Pending: a segment travels the edge. */
+.armada-button[data-pending]::after {
+  inset-inline-end: auto;
+  width: 40%;
+  transition: none;
   /* Linear, not --ease: a fast-out curve parks the bar past the right edge for
      most of the loop, and a screenshot showed no bar at all. */
   animation: armada-button-waiting var(--duration-pulse) linear infinite;
@@ -180,10 +248,98 @@
   }
 }
 
-/* Still, at full width: the label carries the reading. */
+/* Answered. While the answer shows, the control keeps the pending rendering
+   it was already wearing: the line may not sit on an accent fill, and the
+   refusal's rule is that nothing but the line moves. Both hold for
+   --duration-answer and then rest. A disabled control keeps its own
+   rendering, which is already off the accent. */
+.armada-button[data-answer]:not(:disabled) {
+  animation: armada-button-answering var(--duration-answer) linear;
+}
+
+@keyframes armada-button-answering {
+  from,
+  to {
+    background-color: var(--bg-sunken);
+    border-color: var(--border-strong);
+    color: var(--fg-default);
+  }
+}
+
+/* Accepted: fills the edge at --duration-press, holds for --duration-answer.
+   The colour lives in the keyframes, so the line rests --status-running and a
+   later press does not open green. */
+.armada-button[data-answer="accepted"]::after {
+  animation:
+    armada-button-accepted var(--duration-answer) linear,
+    armada-button-opening var(--duration-press) var(--ease);
+}
+
+/* Refused: starts at the full edge and retracts to the centre across
+   --duration-answer. Colour and direction together tell it from an
+   acceptance before the label is read. */
+.armada-button[data-answer="refused"]::after {
+  animation: armada-button-refused var(--duration-answer) var(--ease);
+}
+
+@keyframes armada-button-opening {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes armada-button-accepted {
+  from,
+  to {
+    transform: scaleX(1);
+    background-color: var(--status-completed-success);
+  }
+}
+
+@keyframes armada-button-refused {
+  from {
+    transform: scaleX(1);
+    background-color: var(--status-escalated);
+  }
+  to {
+    transform: scaleX(0);
+    background-color: var(--status-escalated);
+  }
+}
+
+/* A story holds an answer rather than letting it rest after 1.6s, so the state
+   can be looked at. Nothing in the app sets it. */
+.armada-button[data-preview-held][data-answer]:not(:disabled),
+.armada-button[data-preview-held][data-answer]::after {
+  animation-iteration-count: infinite;
+}
+
+.armada-button[data-preview-held][data-answer="accepted"]::after {
+  animation-iteration-count: infinite, 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  /* Pending: still, at full width. The label carries the reading. */
   .armada-button[data-pending]::after {
     width: 100%;
     animation: none;
+    transform: none;
+  }
+
+  /* Refused: the retract is motion, so the line holds full in
+     --status-escalated for --duration-answer instead. Colour carries it. */
+  .armada-button[data-answer="refused"]::after {
+    animation-name: armada-button-refused-still;
+  }
+}
+
+@keyframes armada-button-refused-still {
+  from,
+  to {
+    transform: scaleX(1);
+    background-color: var(--status-escalated);
   }
 }

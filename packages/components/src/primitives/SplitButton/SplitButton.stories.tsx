@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Plus } from "lucide-react";
 import { expect, fn } from "storybook/test";
-import { SplitButton } from "./SplitButton";
+import { SplitButton, type SplitButtonProps } from "./SplitButton";
 
 const meta: Meta<typeof SplitButton> = {
   title: "Primitives/Split button",
@@ -150,6 +150,88 @@ export const Pending: Story = {
     face.focus();
     await userEvent.keyboard("{Enter}");
     await expect(args.onAction).not.toHaveBeenCalled();
+  },
+};
+
+/** Every variant, each on the ground it is drawn against in the stories above. */
+const EVERY: SplitButtonProps["variant"][] = ["secondary", "primary", "destructive", "tonal"];
+
+/** One row holding a split button per variant, wrapped for a preview attribute. */
+function EveryVariant({
+  preview,
+  ...props
+}: Omit<SplitButtonProps, "children" | "items"> & { preview?: Record<string, string> }) {
+  return (
+    <div {...preview}>
+      <Row>
+        {EVERY.map((variant) => (
+          <SplitButton key={variant} {...props} variant={variant} items={reviewActions}>
+            {variant === "destructive" ? "Kill job" : "Approve"}
+          </SplitButton>
+        ))}
+      </Row>
+    </div>
+  );
+}
+
+/**
+ * Pressed, every variant — the face on the first row, the caret on the second.
+ * A segment walks one step down its ground at `--duration-press` and the face's
+ * line opens from the centre; the caret carries no line, since it sends
+ * nothing. `data-preview-press` selects the same declarations as `:active`.
+ */
+export const Pressed: Story = {
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+      <EveryVariant preview={{ "data-preview-press": "action" }} />
+      <EveryVariant preview={{ "data-preview-press": "caret" }} />
+    </div>
+  ),
+};
+
+/** Pending, every variant: one rendering, with the line travelling the face. */
+export const PendingEveryVariant: Story = {
+  render: () => <EveryVariant pending />,
+};
+
+/**
+ * Fleet accepted, every variant. The face's line fills the edge in
+ * `--status-completed-success` while the control keeps the pending rendering,
+ * held for `--duration-answer` in the app and on a loop here.
+ */
+export const Accepted: Story = {
+  render: () => <EveryVariant answer="accepted" preview={{ "data-preview-held": "" }} />,
+};
+
+/** Fleet refused, every variant. The line retracts in `--status-escalated`; nothing else moves. */
+export const Refused: Story = {
+  render: () => <EveryVariant answer="refused" preview={{ "data-preview-held": "" }} />,
+};
+
+/**
+ * Answered is not waiting. Where `Pending` swallows a press and closes the
+ * caret, a refused face takes the press again and the menu opens again.
+ */
+export const RefusedTakesAPressAgain: Story = {
+  args: {
+    items: reviewActions,
+    ground: "sunken",
+    answer: "refused",
+    onAction: fn(),
+    children: "Kill job",
+  } as Story["args"],
+  render: (args) => (
+    <Row>
+      <SplitButton {...args} />
+    </Row>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    const face = canvas.getByRole("button", { name: "Kill job" });
+    await expect(face).not.toHaveAttribute("aria-busy");
+    await userEvent.click(face);
+    await expect(args.onAction).toHaveBeenCalledTimes(1);
+    await userEvent.click(canvas.getByRole("button", { name: "More actions" }));
+    await expect(canvas.getByRole("menu")).toBeVisible();
   },
 };
 

@@ -16,6 +16,14 @@ import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode, type Re
  */
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive" | "tonal";
 
+/**
+ * What Fleet said to the press that was pending. The bottom edge's line takes
+ * the answer's colour — it fills the edge on `accepted`, retracts on `refused` —
+ * holds for `--duration-answer`, and rests. The line is decoration; the words
+ * of a refusal are the caller's to draw.
+ */
+export type ButtonAnswer = "accepted" | "refused";
+
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   /**
    * The element, for a caller that has to move focus to it — a sheet lands
@@ -46,6 +54,13 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
    * #1117.
    */
   pending?: boolean;
+  /**
+   * Fleet's answer to the press that was `pending`, set as `pending` clears.
+   * Pending wins while both are set. The line plays once each time the answer
+   * is newly set, so a caller clears it when the next press goes out rather
+   * than on a timer — the hold is `--duration-answer`, the stylesheet's clock.
+   */
+  answer?: ButtonAnswer;
   children?: ReactNode;
 };
 
@@ -55,6 +70,7 @@ export function Button({
   ground = "card",
   iconOnly = false,
   pending = false,
+  answer,
   type = "button",
   disabled,
   onClick,
@@ -71,6 +87,7 @@ export function Button({
       data-ground={ground}
       data-icon-only={iconOnly || undefined}
       data-pending={pending || undefined}
+      data-answer={pending ? undefined : answer}
       // Not `disabled`: a disabled button drops focus and is skipped by a
       // screen reader, and this one is the thing being waited on.
       disabled={pending ? undefined : disabled}
