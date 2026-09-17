@@ -382,7 +382,8 @@ function Row({
  *
  * The mark is contrast and not weight or hue: the rest of the label steps down
  * to `--fg-muted` and the span keeps `--fg-default`. Status hue is never chosen
- * and the accent is spoken for.
+ * and the accent is spoken for. A danger row underlines the span instead,
+ * because red has no contrast step.
  */
 function Marked({ label, query, at }: { label: string; query: string; at: number | null }) {
   if (at === null || query === "") return <>{label}</>;

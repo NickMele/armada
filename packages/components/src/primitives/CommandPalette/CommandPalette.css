@@ -150,8 +150,8 @@
  * row still speaks in one hue, and the mark is one step brighter than the rest.
  *
  * A dormant row is already --fg-subtle, so its span takes the step above that.
- * A danger row has no contrast step inside its red, so its span stays the
- * row's colour and is not marked. */
+ * A danger row has no contrast step inside its red, so its span is marked by
+ * shape instead: an underline in the row's own colour. */
 .armada-palette__mark {
   background: transparent;
   color: inherit;
@@ -169,6 +169,13 @@
 
 .armada-palette__row--dormant .armada-palette__mark {
   color: var(--fg-muted);
+}
+
+.armada-palette__row--danger .armada-palette__mark {
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: var(--border-width);
+  text-underline-offset: calc(var(--space-1) / 2);
 }
 
 /* A setting states its current value, in mono, right of the label. Metadata
