@@ -173,6 +173,8 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--helm", Slot::Named("color", "helm")),
     ("--helm-", Slot::NsFull("color")),
     ("--stat-", Slot::NsFull("color")),
+    // An instrument's marks, aliased in status.css below Job level.
+    ("--instrument-", Slot::NsFull("color")),
     // A caution notice — an alias of --status-awaiting-review, not a new
     // value. Below Job level, so it is declared in status.css rather than
     // picked at a component, same as --degraded-dot above.

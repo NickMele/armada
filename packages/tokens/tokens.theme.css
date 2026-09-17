@@ -111,6 +111,8 @@
   --color-degraded: var(--degraded);
   --color-degraded-dot: var(--degraded-dot);
   --color-notice-caution: var(--notice-caution);
+  --color-instrument-activity: var(--instrument-activity);
+  --color-instrument-outside-plan: var(--instrument-outside-plan);
   --color-notice-caution-bg: var(--notice-caution-bg);
   --color-stat-drones: var(--stat-drones);
   --color-stat-manifest-current: var(--stat-manifest-current);

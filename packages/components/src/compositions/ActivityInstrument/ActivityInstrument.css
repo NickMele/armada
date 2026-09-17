@@ -38,7 +38,8 @@
   );
   y: calc(100% - var(--armada-activity-axis) - var(--armada-activity-height));
   height: var(--armada-activity-height);
-  fill: var(--fg-muted);
+  fill: var(--instrument-activity);
+  fill-opacity: 0.75;
 }
 
 /* An empty window is never absent: that is what makes silence a tail. */

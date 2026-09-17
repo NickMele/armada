@@ -48,10 +48,10 @@
   fill-opacity: 0.45;
 }
 
-/* Neutral: drift is not a status. */
+/* Amber, as drift is on a badge: a person's to look at. */
 .armada-instrument-footprint__outside {
   fill: none;
-  stroke: var(--border-strong);
+  stroke: var(--instrument-outside-plan);
   stroke-width: calc(var(--border-width) * 1.5);
 }
 

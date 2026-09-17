@@ -1524,18 +1524,20 @@ exempt only while every mark in it is a value from the wire.
 | **Footprint** | A finished Job's footprint | Each file as a column, width by lines changed, split into added over deleted |
 
 ```
-activity bar      --fg-muted; an empty window --border-subtle at 1.5px, never absent
+activity bar      --instrument-activity at 75%; an empty window --border-subtle at 1.5px, never absent
 activity axis     1px --border-default along the base
 footprint added   --diff-add-fg at 55%
 footprint deleted --diff-del-fg at 45%
-outside the plan  1.5px --border-strong outline, and the words beside the key
+outside the plan  1.5px --instrument-outside-plan outline, and the words beside the key
 labels, key       --font-mono --text-2xs --fg-subtle
 ```
 
-**An instrument takes no status hue.** Activity is below Job level and
-drift stays neutral there, so neither reaches for `--status-running` or
-amber. A file with no line count is left out of the footprint and counted in
-its key, because a guessed width is a wrong measurement.
+**An instrument takes the hue of what it measures.** Tool calls are the
+running step's work, so activity draws in the running hue, aliased once in
+`tokens/status.css`. A file outside every declared plan is drift, which a
+badge already draws amber, so its outline is amber too. A file with no line
+count is left out of the footprint and counted in its key, because a guessed
+width is a wrong measurement.
 
 **An instrument carries its own reading in words.** Each has a label naming
 what it measures and an accessible description stating what it shows, such as
