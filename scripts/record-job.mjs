@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Record one Job off a running Fleet, as the wire carried it, for Storybook.
+// Record one Job off a running Fleet, as the wire carried it, for the mock.
 //
 // **Raw, and folded later.** What is written is what Fleet answered — each
 // read's status and body, and every message on the Job's two sockets — and

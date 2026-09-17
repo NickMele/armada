@@ -54,7 +54,7 @@ once. **A Job it dispatches escalates rather than spending anything.**
 | For | Not for |
 |---|---|
 | Reading a Job's wire data as Fleet serves it | Watching a Drone do real work. The agent exits at once, so a dispatched Job escalates |
-| Recording a Job for Storybook with `scripts/record-job.mjs` | Anything that must change the owner's Jobs. Every write lands on the copy and is thrown away with it |
+| Recording a Job for the mock with `scripts/record-job.mjs` | Anything that must change the owner's Jobs. Every write lands on the copy and is thrown away with it |
 | Testing a surface against a real Fleet without holding his screen | Replacing `armada-local`. That is still the owner's Fleet and the owner's Bridge |
 
 **Throw the directory away when you are done.** It holds a copy of the owner's
