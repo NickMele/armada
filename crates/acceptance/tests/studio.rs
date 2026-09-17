@@ -14,7 +14,7 @@
 //! |---|---|
 //! | 2. A Run node is started from it and ends failed, and keeps its log's tail and result past retention | #1289. **What it meets:** a checkout run today is `ipc::CheckoutRunRecord`, whose end is an exit code and a sentence documented as unhued — there is no run state for a Run node to alias to a Job status |
 //! | 3. A Note is captured, and nothing writes to it afterwards | #1290 |
-//! | 4. A scout's Finding arrives Frozen, listing every file and source it read | #1292 |
+//! | 4. A scout's Finding lists the sources it read beyond the checkout — an issue, a page, a session, a Helm thread | #1293. **The checkout half is asserted below** |
 //! | 5. An issue from the repository's forge is read in, and a Contradiction appears | #1293 |
 //! | 6. Two Notes are clustered, written up as an Issue draft, and dispatched, and a Job node stands at the gate | #1291. **The dispatch's far half is asserted below**: an Issue draft's text alone reaches the Job proposer, and the Job it proposes is told all of it |
 //! | Helm starts a Run node, writes up an Issue draft, and dispatches from one, each only on a person's ask | #1289 and #1291. **Helm's rule for them is asserted below**, with what it proposes unasked and the runs it reads |
@@ -27,6 +27,7 @@
 //! | That a reopened Studio is read-only until Continue | A Bridge state; #1287's mock browser test proves it |
 //! | Anything a person sees | Nothing here renders. The whiteboard is #1286 and #1287 |
 //! | That Helm keeps to what it is told | A model's. `fleet`'s `helm_studio` drives the door through a stand-in agent |
+//! | That a scout reads only the checkout, holds no write tool, and shows its cost when stopped | A process's, and nothing here spawns one: `adapters`' tests hold the launch to read tools under `--restricted`, and `fleet`'s run and stop it against a stand-in agent |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it.
@@ -38,8 +39,9 @@ use ipc::door::{DRAFTING, HELM_ONLY, REACHABLE};
 use ipc::{HelmStudioAct, StudioNodeContent};
 
 use bench::studio::{
-    a_studio_with_two_notes, an_issue_draft, held, helms_manifest, one_job_under, received_event,
-    received_request, received_studio, DRAFT_TITLE, FIRST_NOTE, LEFT_AT, REPOSITORY, SECOND_NOTE,
+    a_studio_with_a_frozen_finding, a_studio_with_two_notes, an_issue_draft, held, helms_manifest,
+    one_job_under, received_event, received_request, received_studio, ASKED, COMMIT, COST,
+    DRAFT_TITLE, FIRST_NOTE, LEFT_AT, READ, REPOSITORY, SECOND_NOTE,
 };
 
 /// Step 6's far half: **an Issue draft is dispatched from its text, through the
@@ -157,7 +159,10 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
 
 /// **Accepting a relation, removing a node and deleting a Studio are a
 /// person's acts**, whatever Helm's authority says: no agent is offered one,
-/// and Helm alone is offered what it may propose. `docs/concepts/studio.md`.
+/// and Helm alone is offered what it may propose. **A scout starts only on a
+/// person's ask**: typing one and pressing its stop are Bridge's, and Helm is
+/// offered only the start of a Finding already proposed, once asked.
+/// `docs/concepts/studio.md`, `docs/concepts/scout.md`.
 #[test]
 fn no_agent_is_offered_a_persons_act_on_a_studio() {
     let offered = |operation: &str| {
@@ -165,10 +170,16 @@ fn no_agent_is_offered_a_persons_act_on_a_studio() {
             .iter()
             .any(|door| door.iter().any(|row| row.operation == operation))
     };
-    for persons in ["decide_studio_edge", "remove_studio_node", "delete_studio"] {
+    for persons in [
+        "decide_studio_edge",
+        "remove_studio_node",
+        "delete_studio",
+        "ask_scout",
+        "stop_scout",
+    ] {
         assert!(!offered(persons), "`{persons}` reaches an agent");
     }
-    for helms in ["add_studio_node", "propose_studio_edge"] {
+    for helms in ["add_studio_node", "propose_studio_edge", "start_scout"] {
         assert!(
             HELM_ONLY.iter().any(|row| row.operation == helms),
             "`{helms}`"
@@ -231,5 +242,57 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
         received.about(),
         (None, Some(REPOSITORY.to_string())),
         "a poll's tally names the repository"
+}
+
+/// Step 4, the checkout's half: **a scout's Finding arrives Frozen, listing
+/// every file it read, the commit it read and that uncommitted changes were
+/// there, and what it cost.** `docs/concepts/scout.md`.
+///
+/// **The failure this is against is a Finding that reads as an answer about
+/// code nobody can find again.** A list that dropped a file, a commit dropped
+/// on the way out, or a clean checkout reported where there were changes
+/// would each send a person to read different code than the scout read.
+#[test]
+fn a_scouts_finding_arrives_frozen_with_every_file_it_read_its_commit_and_its_cost() {
+    let graph = a_studio_with_a_frozen_finding();
+    let studio = received_studio(&graph);
+    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
+
+    let finding = studio.nodes.last().expect("the Finding");
+    assert_eq!(
+        finding.state.map(|state| state.as_wire()),
+        Some("frozen"),
+        "done reading"
+    );
+    let StudioNodeContent::Finding {
+        asked,
+        checkout,
+        read,
+        learned,
+        ended,
+        ..
+    } = &finding.content
+    else {
+        panic!("a Finding: {:?}", finding.content);
+    };
+    assert_eq!(asked, ASKED, "what the person asked, verbatim");
+    assert_eq!(read, &READ, "every file it read, in order");
+    let checkout = checkout.as_ref().expect("the checkout it read");
+    assert_eq!(checkout.commit, COMMIT);
+    assert!(checkout.uncommitted, "the change on top of it is said");
+    assert!(
+        learned.is_some(),
+        "what it found is kept beside what it read"
+    );
+    let ended = ended.as_ref().expect("how it ended");
+    assert_eq!(ended.outcome, ipc::ScoutOutcome::Answered);
+    assert_eq!(ended.cost_micros, Some(COST), "its cost is shown");
+
+    let asked_from = studio.edges.last().expect("the edge the ask drew");
+    assert_eq!(asked_from.kind.as_wire(), "produced");
+    assert_eq!(
+        (&asked_from.from, &asked_from.to),
+        (&studio.nodes[0].id, &finding.id),
+        "the Note it was asked from made it"
     );
 }
