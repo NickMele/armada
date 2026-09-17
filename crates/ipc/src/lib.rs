@@ -284,4 +284,6 @@ pub use work::{
     ChangesRequested, DeclaredPlan, JobDiff, JobEvidence, JobFootprint, LineCount, Overruled,
     Submitted, TouchedFile, Work,
 };
-pub use work_plan::{AddTask, ChangedBy, DropTask, JobPlanChanged, PlanTask, TaskCounts, WorkPlan};
+pub use work_plan::{
+    AddTask, ChangedBy, DropTask, JobPlanChanged, PlanTask, TaskCounts, WorkPlan, WorkingWindow,
+};

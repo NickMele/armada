@@ -59,5 +59,5 @@ pub use job::{
 };
 pub use job::{
     Approach, DropReason, NewTask, NotAnUpdate, PlanAuthor, PlanChange, PlanEntry, PlanRefused,
-    PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, PLAN_RECORDED,
+    PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, WorkingWindow, PLAN_RECORDED,
 };
