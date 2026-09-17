@@ -212,6 +212,7 @@ async fn a_person_adds_only_what_a_person_makes() {
         StudioNodeContent::Contradiction {
             first: "the contract gives it a row".to_string(),
             second: "the Board draws it inside the bar".to_string(),
+            answer: None,
         },
         StudioNodeContent::finding_asked("where do the colours come from"),
     ];
