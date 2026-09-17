@@ -59,13 +59,27 @@ export type StudioNodeContent =
    * calls itself where a read-in learned one (`named`, since 14.16, #1293 — an
    * issue's number, title and state on one line). **Both are additional, never
    * a replacement**: a Link never stops being its address.
+   *
+   * `forge` is what Fleet read the address as, since 14.17, #1379, and absent
+   * where it names nothing on the forge. **Never worked out here**: which host
+   * is the forge is `crates/adapters`' to know, and the gate refuses its name
+   * anywhere else — so what a surface offers on a Link is decided by this.
    */
-  | { kind: "link"; address: string; said?: string; named?: string }
+  | { kind: "link"; address: string; said?: string; named?: string; forge?: StudioLinkForge }
   | { kind: "deferral"; what: string }
   | { kind: "outline"; body: string }
   | { kind: "issue_draft"; title: string; body: string }
   /** A reference to the Job, never its status. */
   | { kind: "job"; job_id: string };
+
+/**
+ * What a Link's address names on the repository's forge. Since 14.17, #1379.
+ *
+ * **Three, and no page or session among them.** An issue is work already filed
+ * and is dispatched against; a milestone is a list and is read in. Everything
+ * else names nothing there and carries no value at all.
+ */
+export type StudioLinkForge = "issue" | "pull_request" | "milestone";
 
 /**
  * What a Run node kept of its run once retention swept it: the result, and the

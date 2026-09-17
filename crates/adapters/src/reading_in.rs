@@ -143,11 +143,10 @@ pub fn source_of(address: &str, root: &str, home: &str) -> Option<Source> {
                 .map(|file| Source::Session { file }),
         };
     }
-    if !address.starts_with("http://") && !address.starts_with("https://") {
-        return None;
-    }
-    let forge = forge_reference(address);
-    let Some((owner, repo, marker, number)) = forge else {
+    let Some((owner, repo, marker, number)) = forge_link(address) else {
+        if !address.starts_with("http://") && !address.starts_with("https://") {
+            return None;
+        }
         // A link to anything else on the web is a page, which is a source.
         return Some(Source::Page {
             url: address.to_string(),
@@ -170,6 +169,36 @@ pub fn source_of(address: &str, root: &str, home: &str) -> Option<Source> {
             number,
         },
     })
+}
+
+/// What a Link's address names on this repository's forge, where it names
+/// anything there, and `None` for every other address — `#1379`.
+///
+/// **What Bridge is told, so it never reads an address itself.** Which host is
+/// the forge is this crate's to know and the gate keeps the vendor's name
+/// inside it, so a rule about issue links written in TypeScript or in
+/// `crates/ipc` could not be written at all, let alone kept in step with
+/// [`source_of`]. Fleet answers this on every Studio it puts on the wire.
+///
+/// **Read off the address every time, never kept on the record.** An address
+/// is fixed the moment a Link is pasted, so a stored answer could only go
+/// stale against the rule above it.
+pub fn forge_named(address: &str) -> Option<ipc::StudioLinkForge> {
+    let (_, _, marker, _) = forge_link(address.trim())?;
+    Some(match marker {
+        "issues" => ipc::StudioLinkForge::Issue,
+        "pull" => ipc::StudioLinkForge::PullRequest,
+        _ => ipc::StudioLinkForge::Milestone,
+    })
+}
+
+/// [`forge_reference`] behind the scheme check, so one reading answers both
+/// [`source_of`] and [`forge_named`].
+fn forge_link(address: &str) -> Option<(String, String, &'static str, String)> {
+    if !address.starts_with("http://") && !address.starts_with("https://") {
+        return None;
+    }
+    forge_reference(address)
 }
 
 /// The owner, the repository, what the link names and its number.

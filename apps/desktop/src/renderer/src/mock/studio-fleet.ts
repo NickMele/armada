@@ -20,7 +20,7 @@ import type {
   StudioNodeContent,
   StudioPromotion,
 } from "@armada/protocol";
-import { repository } from "@armada/screens/src/fixtures/build/base";
+import { job, repository } from "@armada/screens/src/fixtures/build/base";
 import { foldStudio } from "@armada/screens/src/studio-reads";
 
 import type { BridgeApi } from "../../../shared/api";
@@ -126,8 +126,11 @@ function legend(): Studio {
       { id: "legend-draft", kind: "issue_draft", title: "The Board's legend is illegible", body: "…", state: "draft", position: { x: 680, y: 110 }, created_at: at },
       // Two Links to read in — #1293. One issue, and one milestone, which fills
       // the board with a node per issue and runs no scout.
-      { id: "legend-issue", kind: "link", address: "https://example.invalid/o/r/issues/1293", position: { x: 0, y: 600 }, created_at: at },
-      { id: "legend-milestone", kind: "link", address: "https://example.invalid/o/r/milestone/17", position: { x: 0, y: 1400 }, created_at: at },
+      // `forge` is what Fleet read each address as — #1379. A mock has no
+      // forge, so it says what a real one would have said: which host is the
+      // forge is `crates/adapters`' to know and nothing here may spell one.
+      { id: "legend-issue", kind: "link", address: "https://example.invalid/o/r/issues/1293", forge: "issue", position: { x: 0, y: 600 }, created_at: at },
+      { id: "legend-milestone", kind: "link", address: "https://example.invalid/o/r/milestone/17", forge: "milestone", position: { x: 0, y: 1400 }, created_at: at },
     ],
     edges: [
       { id: "legend-e1", from: "legend-note", to: "legend-finding", kind: "produced", standing: "accepted", created_at: at },
@@ -260,6 +263,11 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
       },
       promoteOnStudio: async (studioId, promotion) => {
         const answer = write(studioId, (studio) => promoted(studio, promotion));
+        // **A dispatch puts a row on the Board as well as a node on the
+        // Studio** — #1379. A Job node holds a reference and no status, so a
+        // mock that minted the node alone would draw a bare id and prove
+        // nothing about the thing a person came to the Studio to do.
+        if (answer.ok && promotion.act === "dispatch") atTheGate(handle, answer.studio);
         return answer.ok ? OK : answer.outcome;
       },
     };
@@ -310,6 +318,35 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
   };
 }
 
+/**
+ * The Job the newest Job node references, put on the Board at the gate — the
+ * dispatch gate is unchanged, and a Job from a Studio stands where every other
+ * one does (#1379).
+ *
+ * Its title is whatever it was dispatched from: a draft's own title, or the
+ * line a read-in wrote on the Link, which is what the proposer would have read
+ * the issue as.
+ */
+function atTheGate(handle: FleetHandle, studio: Studio): void {
+  const nodes = studio.nodes.filter((node) => node.kind === "job");
+  const node = nodes[nodes.length - 1];
+  if (node?.kind !== "job") return;
+  const edge = studio.edges.find((one) => one.to === node.id && one.kind === "produced");
+  const from = studio.nodes.find((one) => one.id === edge?.from);
+  const title =
+    from?.kind === "issue_draft" ? from.title : from?.kind === "link" ? (from.named ?? from.address) : "Dispatched from a Studio";
+  const row = job("awaiting_approval", {
+    id: node.job_id,
+    handle: mint("dispatched-from-a-studio-"),
+    title,
+    origin: "manual",
+    created_at: tick(),
+    branch: undefined,
+    assigned_drone: undefined,
+  });
+  handle.publish({ jobs: [...handle.state().jobs, row] });
+}
+
 /** The `studios` scenario: this repository picked, and a Fleet keeping these Studios. */
 export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
   const fleet = keeping(seeded);
@@ -319,7 +356,19 @@ export function studying(seeded: readonly Studio[] = [legend()]): StudioFleet {
       ...onBoard([], { picked: repository().root }),
       name: "studios",
       says: "This repository's Studios, on a Fleet that keeps them",
-      behaves: fleet.routes,
+      // **Approving starts it here.** A real Fleet queues a Job and a slot
+      // takes it; this Fleet has no scheduler and one is always free, so
+      // approving a dispatch is what a person watches turn into a run — which
+      // is the half of the walkthrough a Studio's Job node is read against.
+      behaves: (handle) => ({
+        ...fleet.routes(handle),
+        approveDispatch: async (jobId: string) => {
+          handle.publish({
+            jobs: handle.state().jobs.map((one) => (one.id === jobId ? { ...one, status: "running" } : one)),
+          });
+          return { ok: true } as const;
+        },
+      }),
     },
   };
 }
@@ -346,8 +395,8 @@ const TOUCHED = "2026-09-17T08:40:00Z";
  */
 export function everyKind(jobId: string): Studio {
   const nodes: StudioNode[] = [
-    { id: "every-link", kind: "link", address: LONG_ADDRESS, said: "where the legend was drawn", position: place(0, 0), created_at: MADE },
-    { id: "every-link-bare", kind: "link", address: LONG_ADDRESS, position: place(-1, 0), created_at: MADE },
+    { id: "every-link", kind: "link", address: LONG_ADDRESS, forge: "issue", said: "where the legend was drawn", position: place(0, 0), created_at: MADE },
+    { id: "every-link-bare", kind: "link", address: LONG_ADDRESS, forge: "issue", position: place(-1, 0), created_at: MADE },
     // The one Note here that kept a picture — #1352. The rest draw no plate.
     { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", capture: pointedAt("every-note"), position: place(1, 0), created_at: MADE },
     { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
@@ -517,9 +566,9 @@ function readIn(studio: Studio, nodeId: string, position: { x: number; y: number
   const down = (n: number) => ({ x: position.x, y: position.y + n * 180 });
   if (link.address.includes("/milestone/")) {
     const issues = [
-      { address: "https://example.invalid/o/r/issues/1293", named: "#1293 An issue cannot be read into a Studio — open" },
-      { address: "https://example.invalid/o/r/issues/1291", named: "#1291 Promotion: cluster, defer, write up — closed" },
-      { address: "https://example.invalid/o/r/issues/1275", named: "#1275 Kit manages connections — open" },
+      { address: "https://example.invalid/o/r/issues/1293", forge: "issue" as const, named: "#1293 An issue cannot be read into a Studio — open" },
+      { address: "https://example.invalid/o/r/issues/1291", forge: "issue" as const, named: "#1291 Promotion: cluster, defer, write up — closed" },
+      { address: "https://example.invalid/o/r/issues/1275", forge: "issue" as const, named: "#1275 Kit manages connections — open" },
     ];
     const filled = issues.reduce((so_far, issue) => made(so_far, { kind: "link", ...issue }, [nodeId], down(issues.indexOf(issue))), studio);
     return {

@@ -43,6 +43,31 @@ const NOT_A_DRAFT: &str = "fleet.studio_not_a_draft";
 pub(crate) const NOT_A_LINK: &str = "fleet.studio_not_a_link";
 /// An outcome asked of a node that is not a Contradiction. A 422.
 const NOT_A_CONTRADICTION: &str = "fleet.studio_not_a_contradiction";
+
+/// The request a node dispatches as, and `None` on a node that dispatches
+/// nothing — `#1379`.
+///
+/// **An Issue draft sends its own words and a Link sends its address.** The
+/// first is text nobody has filed, which is why it is carried whole; the
+/// second names an issue that already exists, and the [Job
+/// proposer](../../../docs/concepts/job-proposer.md) has taken a ticket link
+/// as a request since it shipped, so there is nothing to summarise or fetch on
+/// the way.
+///
+/// **A pull request is not dispatched**, and neither is a milestone: what a
+/// milestone holds is read in as a Link per issue, and each of those is
+/// dispatched on its own.
+fn dispatched_as(content: &StudioNodeContent) -> Option<String> {
+    if let Some(request) = content.dispatched_as() {
+        return Some(request);
+    }
+    let address = content.address()?;
+    matches!(
+        adapters::forge_named(address),
+        Some(ipc::StudioLinkForge::Issue)
+    )
+    .then(|| String::from(address))
+}
 /// A Contradiction ended twice. A 409.
 const CONTRADICTION_SETTLED: &str = "fleet.studio_contradiction_settled";
 /// The kinds a rung writes up: what a person said, what they grouped, and
@@ -434,8 +459,14 @@ where
         .await
     }
 
-    /// `dispatch_studio_draft`: the draft's text, through the Job proposer, to
-    /// the dispatch gate — and a Job node for each Job it became.
+    /// `dispatch_studio_draft`: what the node dispatches as — an Issue draft's
+    /// text, or the address of a Link naming an issue — through the Job
+    /// proposer to the dispatch gate, and a Job node for each Job it became.
+    ///
+    /// **Two kinds and one path.** A draft is Armada's own unfiled words and a
+    /// Link naming an issue is one already on the forge, which the proposer
+    /// already takes as a request; nothing is filed either way and the gate is
+    /// the same. `#1379`.
     ///
     /// **The proposal runs outside the store's lock.** It is a model call, and
     /// holding the Studios' lock across one would stop every other Studio
@@ -453,18 +484,32 @@ where
             self.studio_held(&store, &studio_id.to_domain(), within.as_ref())?
         };
         let draft = self.node_on(&graph, &node_id)?;
-        let Some(request) = draft.content().dispatched_as() else {
+        let Some(request) = dispatched_as(draft.content()) else {
             return Err(self.studio_unacceptable(
                 NOT_A_DRAFT,
-                format!(
-                    "a {} is not dispatched: an Issue draft is, and a person writes one up first",
-                    draft.kind().as_wire()
-                ),
+                match draft.content().address() {
+                    // A Link is dispatchable or it is not, and which it is is
+                    // the address's doing rather than the kind's — so the
+                    // refusal names the address rather than saying *a link is
+                    // not dispatched*, which is untrue of the next one.
+                    Some(address) => format!(
+                        "`{address}` names no issue on this repository's forge, so there is \
+                         nothing filed to dispatch against. Write the work up as an Issue \
+                         draft and dispatch that"
+                    ),
+                    None => format!(
+                        "a {} is not dispatched: an Issue draft is, and so is a Link naming \
+                         an issue on this repository's forge",
+                        draft.kind().as_wire()
+                    ),
+                },
             ));
         };
         let served = self.served_named(Some(&ManifestId::from(&graph.studio.manifest_id)))?;
         // The draft's own text, verbatim, with nothing to point at: filing the
-        // issue anywhere is optional and a person's own act.
+        // issue anywhere is optional and a person's own act. A Link sends its
+        // address and nothing else, because the issue is already filed and
+        // Fleet reads a ticket link in a request the way it always has.
         //
         // **The origin is who pressed it, not the proposer's own.** Every other
         // request through this path is one Fleet read and `auto_detected` says

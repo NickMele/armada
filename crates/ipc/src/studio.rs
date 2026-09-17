@@ -152,6 +152,17 @@ pub enum StudioNodeContent {
         /// person's own. `#1293`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         named: Option<String>,
+        /// What the address names on the repository's forge, where it names
+        /// anything there — `#1379`.
+        ///
+        /// **Read off the address by whoever put this on the wire, and never
+        /// kept on the record.** Which host is the forge is
+        /// `crates/adapters`' to know — the gate keeps the vendor's name
+        /// inside that crate — so neither this crate nor Bridge works it out,
+        /// and what Bridge offers on a Link is decided by what Fleet said it
+        /// is. Absent where the address names nothing on the forge.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        forge: Option<StudioLinkForge>,
     },
     Deferral {
         what: String,
@@ -167,6 +178,30 @@ pub enum StudioNodeContent {
         job_id: JobId,
     },
 }
+
+/// What a Link's address names on the repository's forge — `#1379`.
+///
+/// **Three, and no page, session or thread among them.** The question this
+/// answers is what a person may do with a Link that names something already
+/// filed: an issue or a pull request is work to dispatch against, a milestone
+/// is a list to read in, and everything else names nothing on the forge and
+/// carries no value at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StudioLinkForge {
+    Issue,
+    PullRequest,
+    Milestone,
+}
+
+/// What each Link on a Studio names on the forge, as whoever is sending the
+/// Studio reads it — `adapters::forge_named`, always.
+///
+/// **A parameter rather than something [`Studio::of`] works out**, so no
+/// sender can put a Studio on the wire having forgotten to say: a Link drawn
+/// with nothing said about its address is one Bridge would offer no Dispatch
+/// on, silently, which is the failure `#1379` is about.
+pub type ForgeOf<'a> = &'a dyn Fn(&str) -> Option<StudioLinkForge>;
 
 /// What a Run node kept of its run, once retention swept the run away —
 /// `core_model::StudioRunKept`'s fields, one for one. `#1289`.
@@ -474,7 +509,10 @@ impl StudioSummary {
 }
 
 impl Studio {
-    pub fn of(graph: &core_model::StudioGraph) -> Studio {
+    /// The Studio on the wire. `forge` says what each Link's address names on
+    /// the forge — see [`ForgeOf`] for why it is asked for rather than worked
+    /// out here.
+    pub fn of(graph: &core_model::StudioGraph, forge: ForgeOf<'_>) -> Studio {
         let summary = StudioSummary::of(&graph.studio);
         Studio {
             id: summary.id,
@@ -483,17 +521,21 @@ impl Studio {
             named_by: graph.studio.named_by.map(StudioAuthor::from),
             created_at: summary.created_at,
             touched_at: summary.touched_at,
-            nodes: graph.nodes.iter().map(StudioNode::of).collect(),
+            nodes: graph
+                .nodes
+                .iter()
+                .map(|node| StudioNode::of(node, forge))
+                .collect(),
             edges: graph.edges.iter().map(StudioEdge::of).collect(),
         }
     }
 }
 
 impl StudioNode {
-    pub fn of(node: &core_model::StudioNode) -> StudioNode {
+    pub fn of(node: &core_model::StudioNode, forge: ForgeOf<'_>) -> StudioNode {
         StudioNode {
             id: StudioNodeId::from(node.id()),
-            content: StudioNodeContent::from(node.content()),
+            content: StudioNodeContent::from(node.content()).naming(forge),
             state: node.state().map(StudioNodeState::from),
             position: StudioPosition::from(node.position()),
             created_at: Instant::from(node.created_at()),
@@ -579,6 +621,9 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
                 address,
                 said,
                 named,
+                // Nothing is said about the address here: the record does not
+                // hold it, and `naming` is where a sender puts it on.
+                forge: None,
             },
             C::Deferral { what } => StudioNodeContent::Deferral { what },
             C::Outline { body } => StudioNodeContent::Outline { body },
@@ -591,6 +636,25 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
 }
 
 impl StudioNodeContent {
+    /// The content with what a Link's address names on the forge filled in.
+    /// Every other kind is returned untouched — `#1379`.
+    pub fn naming(self, forge: ForgeOf<'_>) -> StudioNodeContent {
+        match self {
+            StudioNodeContent::Link {
+                address,
+                said,
+                named,
+                ..
+            } => StudioNodeContent::Link {
+                forge: forge(&address),
+                address,
+                said,
+                named,
+            },
+            content => content,
+        }
+    }
+
     /// The content an arriving request names, as the domain holds it.
     pub fn to_domain(&self) -> core_model::StudioNodeContent {
         use core_model::StudioNodeContent as C;

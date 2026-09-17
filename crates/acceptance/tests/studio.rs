@@ -14,6 +14,7 @@
 //! | That a Studio survives a restart on disk | It touches a file. `store` and `fleet` reopen one in their own tests; what is asserted here is the record reading back through the wire |
 //! | That a sweep past retention is what fills a Run node in | It deletes a directory. `fleet`'s `studio_runs` drives a real run past a real sweep; what is asserted here is the tail that sweep takes and the node carrying it over the wire |
 //! | That a reopened Studio is read-only until Continue | A Bridge state; #1287's mock browser test proves it |
+//! | That a Link naming an issue dispatches its address, and that Dispatch is offered on that Link and no other | The route is `fleet`'s `promoting`, which drives a real dispatch to a Job at the gate; what Bridge offers off `forge` is #1379's mock browser test. What is asserted here is the field a Link carries on the wire |
 //! | Anything a person sees | Nothing here renders. The whiteboard is #1286 and #1287 |
 //! | That Helm keeps to what it is told | A model's. `fleet`'s `helm_studio` drives the door through a stand-in agent |
 //! | That a scout reads only the checkout, holds no write tool, and shows its cost when stopped | A process's, and nothing here spawns one: `adapters`' tests hold the launch to read tools under `--restricted`, and `fleet`'s run and stop it against a stand-in agent |
@@ -192,7 +193,11 @@ fn an_issue_drafts_text_alone_reaches_the_proposer_and_the_job_is_told_all_of_it
 fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unaccepted() {
     let graph = a_studio_with_two_notes();
     let studio = received_studio(&graph);
-    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
+    assert_eq!(
+        studio,
+        ipc::Studio::of(&graph, &adapters::forge_named),
+        "nothing lost on the wire"
+    );
     assert_eq!(
         studio.manifest_id.as_str(),
         REPOSITORY,
@@ -259,7 +264,11 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
 fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
     let graph = a_studio_with_a_captured_note();
     let studio = received_studio(&graph);
-    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
+    assert_eq!(
+        studio,
+        ipc::Studio::of(&graph, &adapters::forge_named),
+        "nothing lost on the wire"
+    );
 
     let note = studio.nodes.first().expect("the Note");
     assert_eq!(note.added_by.map(|by| by.as_wire()), Some("person"));
@@ -514,7 +523,11 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
 fn a_scouts_finding_arrives_frozen_with_every_file_it_read_its_commit_and_its_cost() {
     let graph = a_studio_with_a_frozen_finding();
     let studio = received_studio(&graph);
-    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
+    assert_eq!(
+        studio,
+        ipc::Studio::of(&graph, &adapters::forge_named),
+        "nothing lost on the wire"
+    );
 
     let finding = studio.nodes.last().expect("the Finding");
     assert_eq!(
@@ -670,6 +683,7 @@ fn four_sources_read_in_leave_their_links_standing_with_what_came_back_hung_off_
             address: kept,
             said,
             named,
+            forge,
         } = &node(link).content
         else {
             panic!("`{link}` is a Link");
@@ -679,6 +693,15 @@ fn four_sources_read_in_leave_their_links_standing_with_what_came_back_hung_off_
         assert_eq!(
             *named, None,
             "nothing a scout read renames the Link it read"
+        );
+        // `#1379`: what an address names on this repository's forge is read
+        // off it by Fleet and said here, so no surface reads an address. None
+        // of the four is on it — a page, a session and a thread never are, and
+        // the issue here is somebody else's forge — so each says nothing, and
+        // a Studio drawing these offers Dispatch on none of them.
+        assert_eq!(
+            *forge, None,
+            "`{address}` names nothing on this repository's forge"
         );
 
         let StudioNodeContent::Finding {

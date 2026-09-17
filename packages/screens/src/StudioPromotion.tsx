@@ -157,7 +157,7 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
       <Dialog
         open={filling !== null}
         tone="neutral"
-        title={filling === null ? "" : ASKED[filling]}
+        title={filling === null ? "" : asked(filling, one)}
         confirmLabel={filling === null ? "" : CONFIRMS[filling]}
         confirmDisabled={sending || !said(filling, title, body)}
         onCancel={() => setFilling(null)}
@@ -186,6 +186,16 @@ function Act({ label, onPress }: { label: string; onPress: () => void }) {
       {label}
     </Button>
   );
+}
+
+/**
+ * What the dialog is called. **Dispatch names what it was pressed on**, because
+ * a draft sends words a person wrote and a Link sends an issue that already
+ * exists, and those are two different things to be about to do — #1379.
+ */
+function asked(filling: Filling, one: StudioNode | undefined): string {
+  if (filling === "dispatch" && one?.kind === "link") return "Dispatch the issue this Link names";
+  return ASKED[filling];
 }
 
 /** What each rung's dialog is called, in sentence case, naming what happens. */
@@ -341,12 +351,16 @@ function Filling(props: FillingProps) {
       return (
         <>
           <p>
-            This text goes to the Job proposer, whole. Every Job it becomes waits at the dispatch gate, and appears
-            here as a Job node.
+            {one?.kind === "link"
+              ? // Nothing is filed here: the issue is already on the forge, and what goes to the
+                // proposer is its address — #1379.
+                "This address goes to the Job proposer, and it reads the issue. Nothing is filed: it already exists."
+              : "This text goes to the Job proposer, whole."}{" "}
+            Every Job it becomes waits at the dispatch gate, and appears here as a Job node.
           </p>
           <Textarea
             label="What is sent"
-            rows={8}
+            rows={one?.kind === "link" ? 2 : 8}
             readOnly
             value={one === undefined ? "" : (dispatchedAs(one) ?? "")}
           />

@@ -24,7 +24,10 @@ export type StudioActs = {
   edit: boolean;
   /** One Link: the line beside its address is a person's to change. #1378. */
   editLink: boolean;
-  /** One Issue draft: its text goes through the Job proposer. */
+  /**
+   * One Issue draft, or one Link whose address Fleet said names an issue: its
+   * text or its address goes through the Job proposer — #1379.
+   */
   dispatch: boolean;
   /** One Contradiction that has not ended yet. */
   settle: boolean;
@@ -71,7 +74,7 @@ export function actsOn(studio: Studio, selected: readonly string[]): StudioActs 
     defer: !ended,
     edit: one.kind === "issue_draft",
     editLink: one.kind === "link",
-    dispatch: one.kind === "issue_draft",
+    dispatch: dispatchedAs(one) !== null,
     settle: one.kind === "contradiction" && !ended,
     // **Offered on every Link**, because which addresses are sources is
     // `crates/adapters`' to know and a rule copied here would drift from it.
@@ -141,7 +144,22 @@ export function aWriteUp(studio: Studio, node: StudioNode): { title: string; bod
   return { title: firstLine(said), body };
 }
 
-/** The text a dispatch sends: the draft's title, a blank line, its body. `crates/core-model`'s own. */
+/**
+ * What dispatching this node sends, and `null` on one that dispatches nothing.
+ *
+ * **An Issue draft sends its own words and a Link sends its address** — the
+ * draft's title, a blank line, its body, which is `crates/core-model`'s own
+ * shape; and for a Link, the address alone, because the issue it names is
+ * already filed and the Job proposer takes a ticket link as a request (#1379).
+ *
+ * **What an address names is read off `forge` and never off the address.**
+ * Which host is the forge is `crates/adapters`' to know and the gate refuses
+ * its name here, so a rule about issue links written in this file could not be
+ * written at all — and would drift from Fleet's the day either moved. A Link
+ * to a milestone, a board or a page is offered no Dispatch: a milestone is
+ * read in, and the rest name nothing to dispatch against.
+ */
 export function dispatchedAs(node: StudioNode): string | null {
-  return node.kind === "issue_draft" ? `${node.title}\n\n${node.body}` : null;
+  if (node.kind === "issue_draft") return `${node.title}\n\n${node.body}`;
+  return node.kind === "link" && node.forge === "issue" ? node.address : null;
 }

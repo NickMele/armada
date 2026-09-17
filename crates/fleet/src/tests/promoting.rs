@@ -328,6 +328,88 @@ async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_wo
     );
 }
 
+/// `#1379`: **an issue already on the forge is dispatched from its Link, and
+/// the address is the whole request.** Nothing is filed and nothing is
+/// fetched on the way — the issue exists, and the Job proposer has taken a
+/// ticket link as a request since it shipped.
+#[tokio::test]
+async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_off_it() {
+    let home = TempDir::new();
+    let fleet = std::sync::Arc::new(a_fleet_that_proposes(&home));
+    let studio = a_studio(&fleet).await;
+    let address = format!("https://{}o/r/issues/1379", adapters::FORGE_HOST);
+    let link = added(
+        &fleet,
+        &studio,
+        StudioNodeContent::Link {
+            address: address.clone(),
+            said: None,
+            named: Some("#1379 An issue on a Studio cannot be dispatched — open".to_string()),
+            forge: None,
+        },
+    )
+    .await;
+
+    let dispatched = std::sync::Arc::clone(&fleet)
+        .dispatch_studio_draft(
+            studio.id.clone(),
+            DispatchStudioDraft {
+                node_id: link.clone(),
+                position: at(480, 0),
+            },
+            Redirector::Person,
+            None,
+        )
+        .await
+        .expect("an issue dispatched from its Link");
+
+    let [job] = of_kind(&dispatched, StudioNodeKind::Job)[..] else {
+        panic!("one Job node");
+    };
+    assert_eq!(
+        made_by(&dispatched, &job.id),
+        [&link],
+        "the Job points back at the Link it was dispatched from"
+    );
+    let [kept] = of_kind(&dispatched, StudioNodeKind::Link)[..] else {
+        panic!("the Link is still there");
+    };
+    let StudioNodeContent::Link {
+        address: still,
+        forge,
+        ..
+    } = &kept.content
+    else {
+        panic!("a Link");
+    };
+    assert_eq!(still, &address, "a Link never stops being its address");
+    assert_eq!(
+        *forge,
+        Some(ipc::StudioLinkForge::Issue),
+        "and the wire says what it names, so Bridge never reads the address"
+    );
+
+    let listed = api::Queries::list_jobs(fleet.as_ref(), None)
+        .await
+        .expect("the Board reads");
+    let [row] = &listed.jobs[..] else {
+        panic!("one Job, not {}", listed.jobs.len())
+    };
+    assert_eq!(
+        row.status.as_wire(),
+        "awaiting_approval",
+        "the dispatch gate is the same gate"
+    );
+    let detail = api::Queries::get_job(fleet.as_ref(), row.id.clone())
+        .await
+        .expect("the Job it dispatched");
+    assert_eq!(
+        detail.facts.expect("the brief the Link became"),
+        address,
+        "the address is the request, whole and on its own"
+    );
+}
+
 /// **Helm dispatching on a person's ask draws as Helm's.** The same draft, the
 /// same gate, and the one thing that differs is who a row says sent it.
 #[tokio::test]
@@ -564,6 +646,7 @@ async fn each_rung_refuses_the_kinds_it_is_not_for() {
             address: "https://example.invalid/board".to_string(),
             said: None,
             named: None,
+            forge: None,
         },
     )
     .await;
@@ -673,6 +756,6 @@ async fn each_rung_refuses_the_kinds_it_is_not_for() {
             None,
         )
         .await
-        .expect_err("a Link is not dispatched");
+        .expect_err("a Link to a board names no issue to dispatch against");
     assert_eq!(code(&refused), "fleet.studio_not_a_draft");
 }
