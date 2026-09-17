@@ -166,6 +166,10 @@ pub const THEME: &[(&str, Slot)] = &[
         "--dot-idle",
         Slot::CssOnly("a mix percentage read inside color-mix(), not a colour"),
     ),
+    (
+        "--glass-blur",
+        Slot::CssOnly("a backdrop-filter radius, not a scale value"),
+    ),
     ("--helm", Slot::Named("color", "helm")),
     ("--helm-", Slot::NsFull("color")),
     ("--stat-", Slot::NsFull("color")),

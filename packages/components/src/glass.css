@@ -34,9 +34,23 @@
    reads as a box on the glass. `ground="sunken"`'s --bg-raised is within a
    few levels of the glass and shows only its border.
 
-   **No backdrop blur.** It drew nothing over the smooth canvas light and
-   clipped every Tooltip, Popover and DropdownMenu inside a card; the reasons
-   are under Depth in the contract. */
+   **No backdrop blur, although the contract's card has one.** Two reasons,
+   both measured in headless Chromium on 17 Sep 2026 against these tokens:
+
+   1. **It draws nothing.** The only thing behind a card is the canvas's
+      radial light, which is already smooth, and a --glass-blur of it changed
+      no pixel inside a card by more than 1/255 (mean 0.04/255).
+   2. **It breaks every layer inside a card.** A `backdrop-filter` makes its
+      element the containing block for `position: fixed` descendants.
+      Tooltip, Popover and DropdownMenu all place themselves `position: fixed`
+      with anchor positioning, and Stats' rows and the dock's questions carry
+      Tooltips — so the bubble was laid out against the card and clipped by
+      its `overflow: hidden`, cut off at the card's edge rather than the
+      window's.
+
+   The glass is 86% opaque precisely so it paints the same without the blur,
+   which is the contract's own fallback. --glass-blur has no reader until
+   something with detail sits behind a card. */
 .armada-glass,
 .armada-drift-panel,
 .armada-verify-panel {
