@@ -401,6 +401,10 @@ export function App() {
     return () => window.removeEventListener("keydown", pressed);
   }, [openJob]);
 
+  // Escape leaves the composer too — bound inside `Composing`, not here,
+  // because with anything typed it asks first and what has been typed is
+  // known there.
+
   // The row is back in the document only after the list re-renders, so the
   // focus move is an effect rather than part of the click that closed it.
   useEffect(() => {

@@ -27,7 +27,7 @@
 // repeat and a synthetic click both reach the handler with the button drawn
 // live.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button, DispatchRequest } from "@armada/components";
@@ -97,6 +97,18 @@ export type DispatchJobProps = {
    * abandoned leaves the proposer running inside Fleet and spending.
    */
   onStop: () => void;
+  /**
+   * The way out of the composer, drawn on the head of the card that asks for
+   * the request. The caller draws it once and hands the same control to every
+   * state it opens; absent draws none.
+   */
+  close?: ReactNode;
+  /**
+   * Whether the request field or its attachments hold anything closing would
+   * throw away. Reported as it changes, and `false` on the way out, so the
+   * caller's way out can ask first. #1366.
+   */
+  onTyped?: (typed: boolean) => void;
   /** Nothing may be dispatched while the connection is not live. */
   disabled: boolean;
   /** Why the controls are off, where they are. */
@@ -114,6 +126,8 @@ export function DispatchJob({
   approving,
   statusOf,
   byHand,
+  close,
+  onTyped,
   watching,
   onStop,
   disabled,
@@ -130,6 +144,15 @@ export function DispatchJob({
   // renders from it: it is the guard, not a reading, and a re-render between
   // the press and the answer would be a second chance to fire.
   const outstanding = useRef(false);
+
+  // What a close would lose here: the words in the field, and anything staged
+  // against them. A proposal that came back is not in it — those jobs exist on
+  // the board already and closing this surface does not touch them.
+  const typed = request.trim() !== "" || attachments.length > 0;
+  useEffect(() => {
+    onTyped?.(typed);
+    return () => onTyped?.(false);
+  }, [typed, onTyped]);
 
   async function dispatch(): Promise<void> {
     const asked = request.trim();
@@ -201,6 +224,7 @@ export function DispatchJob({
       }
       onDispatch={() => void dispatch()}
       onEnterByHand={() => setHand(true)}
+      close={close}
       onReset={reset}
       onOpen={onOpen}
       onApprove={onApprove}

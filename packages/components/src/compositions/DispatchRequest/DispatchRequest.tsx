@@ -128,6 +128,12 @@ export type DispatchRequestProps = {
   onEnterByHand: () => void;
   /** Drop what came back and describe something else. */
   onReset: () => void;
+  /**
+   * The way out of the surface this card belongs to, drawn at the head's
+   * trailing edge — the card is what a person is leaving, so the exit sits on
+   * it rather than loose above it. The caller's control; absent draws none.
+   */
+  close?: ReactNode;
   /** Open one of the jobs that came back, where its own gate is drawn. */
   onOpen: (jobId: string) => void;
   /**
@@ -294,6 +300,7 @@ export function DispatchRequest({
   onDispatch,
   onEnterByHand,
   onReset,
+  close,
   onOpen,
   onApprove,
   approving = [],
@@ -348,6 +355,7 @@ export function DispatchRequest({
     <Card className="armada-dispatch">
       <CardHeader>
         <CardTitle>Dispatch a job</CardTitle>
+        {close}
       </CardHeader>
       <CardContent>
         <div className="armada-dispatch__body">
