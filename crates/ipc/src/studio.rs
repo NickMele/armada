@@ -152,17 +152,44 @@ pub enum StudioNodeContent {
         /// person's own. `#1293`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         named: Option<String>,
-        /// What the address names on the repository's forge, where it names
-        /// anything there — `#1379`.
-        ///
-        /// **Read off the address by whoever put this on the wire, and never
-        /// kept on the record.** Which host is the forge is
-        /// `crates/adapters`' to know — the gate keeps the vendor's name
-        /// inside that crate — so neither this crate nor Bridge works it out,
-        /// and what Bridge offers on a Link is decided by what Fleet said it
-        /// is. Absent where the address names nothing on the forge.
+    },
+    /// An issue on a forge — `#1394`. `address` and `number` were read off the
+    /// address when the node was made; `title` and `state` were read off the
+    /// forge, so both are absent until it has been read in.
+    Issue {
+        address: String,
+        number: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        forge: Option<StudioLinkForge>,
+        said: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        state: Option<ForgeState>,
+    },
+    /// A pull request on a forge. An Issue's fields, and `state` holds the one
+    /// an issue cannot: `merged`.
+    PullRequest {
+        address: String,
+        number: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        said: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        state: Option<ForgeState>,
+    },
+    /// What a forge calls a set of issues under one address. **No state and a
+    /// count instead**: what matters about an Epic is how much of it is on the
+    /// Studio, which is what reading it in answers.
+    Epic {
+        address: String,
+        number: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        said: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        read_in: Option<EpicRead>,
     },
     Deferral {
         what: String,
@@ -179,29 +206,23 @@ pub enum StudioNodeContent {
     },
 }
 
-/// What a Link's address names on the repository's forge — `#1379`.
-///
-/// **Three, and no page, session or thread among them.** The question this
-/// answers is what a person may do with a Link that names something already
-/// filed: an issue or a pull request is work to dispatch against, a milestone
-/// is a list to read in, and everything else names nothing on the forge and
-/// carries no value at all.
+/// Where something on a forge stands — `core_model::ForgeState`, one for one.
+/// `#1394`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum StudioLinkForge {
-    Issue,
-    PullRequest,
-    Milestone,
+pub enum ForgeState {
+    Open,
+    Closed,
+    /// A pull request's own end. An issue never holds it.
+    Merged,
 }
 
-/// What each Link on a Studio names on the forge, as whoever is sending the
-/// Studio reads it — `adapters::forge_named`, always.
-///
-/// **A parameter rather than something [`Studio::of`] works out**, so no
-/// sender can put a Studio on the wire having forgotten to say: a Link drawn
-/// with nothing said about its address is one Bridge would offer no Dispatch
-/// on, silently, which is the failure `#1379` is about.
-pub type ForgeOf<'a> = &'a dyn Fn(&str) -> Option<StudioLinkForge>;
+/// How much of an Epic is on the Studio — `core_model::EpicRead`, one for one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EpicRead {
+    pub issues: u64,
+    pub total: u64,
+}
 
 /// What a Run node kept of its run, once retention swept the run away —
 /// `core_model::StudioRunKept`'s fields, one for one. `#1289`.
@@ -509,10 +530,13 @@ impl StudioSummary {
 }
 
 impl Studio {
-    /// The Studio on the wire. `forge` says what each Link's address names on
-    /// the forge — see [`ForgeOf`] for why it is asked for rather than worked
-    /// out here.
-    pub fn of(graph: &core_model::StudioGraph, forge: ForgeOf<'_>) -> Studio {
+    /// The Studio on the wire.
+    ///
+    /// **Nothing is worked out here any more.** What a node's address names
+    /// was read once by `crates/adapters`, when the node was made, and is the
+    /// node's own kind — `#1394`. Until then this took a classifier as a
+    /// parameter so that no sender could forget to say.
+    pub fn of(graph: &core_model::StudioGraph) -> Studio {
         let summary = StudioSummary::of(&graph.studio);
         Studio {
             id: summary.id,
@@ -521,21 +545,17 @@ impl Studio {
             named_by: graph.studio.named_by.map(StudioAuthor::from),
             created_at: summary.created_at,
             touched_at: summary.touched_at,
-            nodes: graph
-                .nodes
-                .iter()
-                .map(|node| StudioNode::of(node, forge))
-                .collect(),
+            nodes: graph.nodes.iter().map(StudioNode::of).collect(),
             edges: graph.edges.iter().map(StudioEdge::of).collect(),
         }
     }
 }
 
 impl StudioNode {
-    pub fn of(node: &core_model::StudioNode, forge: ForgeOf<'_>) -> StudioNode {
+    pub fn of(node: &core_model::StudioNode) -> StudioNode {
         StudioNode {
             id: StudioNodeId::from(node.id()),
-            content: StudioNodeContent::from(node.content()).naming(forge),
+            content: StudioNodeContent::from(node.content()),
             state: node.state().map(StudioNodeState::from),
             position: StudioPosition::from(node.position()),
             created_at: Instant::from(node.created_at()),
@@ -570,6 +590,67 @@ impl StudioRunKept {
             lines: kept.lines.clone(),
             total_lines: kept.total_lines,
             whole: kept.whole,
+        }
+    }
+}
+
+/// One of the three forge kinds, as the domain holds it. **Built through
+/// `on_the_forge` and `resolved`**, so this crate never spells a variant of
+/// the domain's own set and a kind that is not one of the three cannot be
+/// reached from here at all.
+fn forge_content(
+    kind: core_model::StudioNodeKind,
+    address: String,
+    number: String,
+    said: Option<String>,
+    title: Option<String>,
+    state: Option<ForgeState>,
+    read_in: Option<EpicRead>,
+) -> core_model::StudioNodeContent {
+    let made = core_model::StudioNodeContent::on_the_forge(kind, address, number, said)
+        .expect("one of the three forge kinds");
+    made.resolved(&core_model::ForgeFacts {
+        title,
+        state: state.map(ForgeState::to_domain),
+        read_in: read_in.map(EpicRead::to_domain),
+    })
+    .expect("one of the three forge kinds")
+}
+
+impl From<core_model::ForgeState> for ForgeState {
+    fn from(state: core_model::ForgeState) -> ForgeState {
+        match state {
+            core_model::ForgeState::Open => ForgeState::Open,
+            core_model::ForgeState::Closed => ForgeState::Closed,
+            core_model::ForgeState::Merged => ForgeState::Merged,
+        }
+    }
+}
+
+impl ForgeState {
+    pub fn to_domain(self) -> core_model::ForgeState {
+        match self {
+            ForgeState::Open => core_model::ForgeState::Open,
+            ForgeState::Closed => core_model::ForgeState::Closed,
+            ForgeState::Merged => core_model::ForgeState::Merged,
+        }
+    }
+}
+
+impl From<core_model::EpicRead> for EpicRead {
+    fn from(read: core_model::EpicRead) -> EpicRead {
+        EpicRead {
+            issues: read.issues,
+            total: read.total,
+        }
+    }
+}
+
+impl EpicRead {
+    pub fn to_domain(self) -> core_model::EpicRead {
+        core_model::EpicRead {
+            issues: self.issues,
+            total: self.total,
         }
     }
 }
@@ -621,9 +702,45 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
                 address,
                 said,
                 named,
-                // Nothing is said about the address here: the record does not
-                // hold it, and `naming` is where a sender puts it on.
-                forge: None,
+            },
+            C::Issue {
+                address,
+                number,
+                said,
+                title,
+                state,
+            } => StudioNodeContent::Issue {
+                address,
+                number,
+                said,
+                title,
+                state: state.map(ForgeState::from),
+            },
+            C::PullRequest {
+                address,
+                number,
+                said,
+                title,
+                state,
+            } => StudioNodeContent::PullRequest {
+                address,
+                number,
+                said,
+                title,
+                state: state.map(ForgeState::from),
+            },
+            C::Epic {
+                address,
+                number,
+                said,
+                title,
+                read_in,
+            } => StudioNodeContent::Epic {
+                address,
+                number,
+                said,
+                title,
+                read_in: read_in.map(EpicRead::from),
             },
             C::Deferral { what } => StudioNodeContent::Deferral { what },
             C::Outline { body } => StudioNodeContent::Outline { body },
@@ -636,25 +753,6 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
 }
 
 impl StudioNodeContent {
-    /// The content with what a Link's address names on the forge filled in.
-    /// Every other kind is returned untouched — `#1379`.
-    pub fn naming(self, forge: ForgeOf<'_>) -> StudioNodeContent {
-        match self {
-            StudioNodeContent::Link {
-                address,
-                said,
-                named,
-                ..
-            } => StudioNodeContent::Link {
-                forge: forge(&address),
-                address,
-                said,
-                named,
-            },
-            content => content,
-        }
-    }
-
     /// The content an arriving request names, as the domain holds it.
     pub fn to_domain(&self) -> core_model::StudioNodeContent {
         use core_model::StudioNodeContent as C;
@@ -701,6 +799,49 @@ impl StudioNodeContent {
             // itself is a read-in's to record, so a request naming one is
             // dropped the way a Run's `kept` is.
             StudioNodeContent::Link { address, said, .. } => C::link(address, said),
+            // **The number does not decode into a write either.** What an
+            // address names on a forge is `crates/adapters`' reading, made
+            // once when the node was made, so a request naming a kind and a
+            // number is refused before it reaches here — `fleet::studios`
+            // classifies what arrives. Reconstructing the content keeps this
+            // total, and the fields a read-in filled in survive it.
+            StudioNodeContent::Issue {
+                address,
+                number,
+                said,
+                title,
+                state,
+            } => forge_content(core_model::StudioNodeKind::Issue, address, number, said, title, state, None),
+            StudioNodeContent::PullRequest {
+                address,
+                number,
+                said,
+                title,
+                state,
+            } => forge_content(
+                core_model::StudioNodeKind::PullRequest,
+                address,
+                number,
+                said,
+                title,
+                state,
+                None,
+            ),
+            StudioNodeContent::Epic {
+                address,
+                number,
+                said,
+                title,
+                read_in,
+            } => forge_content(
+                core_model::StudioNodeKind::Epic,
+                address,
+                number,
+                said,
+                title,
+                None,
+                read_in,
+            ),
             StudioNodeContent::Deferral { what } => C::Deferral { what },
             StudioNodeContent::Outline { body } => C::Outline { body },
             StudioNodeContent::IssueDraft { title, body } => C::IssueDraft { title, body },

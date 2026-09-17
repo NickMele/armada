@@ -97,6 +97,52 @@ ALTER TABLE studio_edges ADD COLUMN added_by TEXT
     CHECK (added_by IS NULL OR added_by IN ('person', 'helm'));
 "#;
 
+/// Version 79 — an Issue, a Pull request and an Epic are node kinds. `#1394`.
+///
+/// **The `CHECK` is rebuilt, because SQLite has no way to widen one.** The
+/// table is renamed aside, recreated under its own name with the wider set,
+/// and the rows copied back — `legacy_alter_table` so that `studio_edges`'
+/// `REFERENCES studio_nodes` is left saying what it said, rather than being
+/// rewritten to follow the rename and then pointing at a table this migration
+/// drops. Every column, its order and every other constraint are V77's and
+/// V78's, unchanged.
+///
+/// **No row is reclassified here, and that is deliberate.** Which addresses
+/// are an issue is `crates/adapters`' to know and the gate refuses a forge's
+/// name in this crate, so a `LIKE` over a host written in SQL is a rule that
+/// could not be written. Fleet converts the Links it recognises when it opens
+/// the file — `fleet::studios::forge_nodes_recognised`.
+pub(crate) const V79: &str = r#"
+PRAGMA legacy_alter_table = ON;
+
+ALTER TABLE studio_nodes RENAME TO studio_nodes_narrow;
+
+CREATE TABLE studio_nodes (
+    id         TEXT PRIMARY KEY,
+    studio_id  TEXT NOT NULL REFERENCES studios (id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('run', 'note', 'cluster', 'finding',
+               'contradiction', 'sketch', 'link', 'issue', 'pull_request', 'epic',
+               'deferral', 'outline', 'issue_draft', 'job')),
+    state      TEXT CHECK (state IS NULL OR state IN ('proposed', 'gathering', 'frozen',
+               'reported', 'issue_draft', 'deferral', 'not_a_problem', 'resolved_here', 'open',
+               'answered', 'draft')),
+    content    TEXT NOT NULL,
+    x          INTEGER NOT NULL,
+    y          INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    added_by   TEXT CHECK (added_by IS NULL OR added_by IN ('person', 'helm')),
+    UNIQUE (studio_id, id)
+) STRICT;
+
+INSERT INTO studio_nodes (id, studio_id, kind, state, content, x, y, created_at, added_by)
+SELECT id, studio_id, kind, state, content, x, y, created_at, added_by
+FROM studio_nodes_narrow;
+
+DROP TABLE studio_nodes_narrow;
+
+PRAGMA legacy_alter_table = OFF;
+"#;
+
 /// Why a Studio read or write did not happen.
 #[derive(Debug)]
 pub enum StudioError {

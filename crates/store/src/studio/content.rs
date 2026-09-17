@@ -5,9 +5,9 @@
 //! a kind cannot be said twice in two places that disagree.
 
 use core_model::{
-    CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, JobId, ScoutCheckout, ScoutEnded,
-    ScoutOutcome, ScoutSource, ScoutSourceKind, StudioCapture, StudioFinding, StudioNodeContent,
-    StudioNodeKind, StudioRunKept, Ulid,
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, EpicRead, ForgeFacts, ForgeState,
+    JobId, ScoutCheckout, ScoutEnded, ScoutOutcome, ScoutSource, ScoutSourceKind, StudioCapture,
+    StudioFinding, StudioNodeContent, StudioNodeKind, StudioRunKept, Ulid,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -87,6 +87,45 @@ pub(super) fn written(content: &StudioNodeContent) -> String {
             }
             Value::Object(link)
         }
+        // **Each of the three writes what it holds and nothing more**, so a
+        // node whose title and state no read-in has resolved reads back as one
+        // that has not, rather than as one whose forge said nothing.
+        StudioNodeContent::Issue {
+            address,
+            number,
+            said,
+            title,
+            state,
+        }
+        | StudioNodeContent::PullRequest {
+            address,
+            number,
+            said,
+            title,
+            state,
+        } => {
+            let mut node = forge_written(address, number, said, title);
+            if let Some(state) = state {
+                node.insert("state".into(), json!(state.as_wire()));
+            }
+            Value::Object(node)
+        }
+        StudioNodeContent::Epic {
+            address,
+            number,
+            said,
+            title,
+            read_in,
+        } => {
+            let mut node = forge_written(address, number, said, title);
+            if let Some(read_in) = read_in {
+                node.insert(
+                    "read_in".into(),
+                    json!({ "issues": read_in.issues, "total": read_in.total }),
+                );
+            }
+            Value::Object(node)
+        }
         StudioNodeContent::Deferral { what } => json!({ "what": what }),
         StudioNodeContent::IssueDraft { title, body } => json!({ "title": title, "body": body }),
         StudioNodeContent::Job { job_id } => json!({ "job_id": job_id.as_str() }),
@@ -151,6 +190,52 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
                 .and_then(Value::as_str)
                 .map(str::to_string),
         },
+        // **Read through `on_the_forge` and `resolved`**, the domain's own two
+        // constructors, so this module never spells one of the three kinds'
+        // fields itself and a row cannot read back as a shape they do not make.
+        kind @ (StudioNodeKind::Issue | StudioNodeKind::PullRequest | StudioNodeKind::Epic) => {
+            let made = StudioNodeContent::on_the_forge(
+                kind,
+                text("address")?,
+                text("number")?,
+                object.get("said").and_then(Value::as_str).map(str::to_string),
+            )
+            .expect("one of the three forge kinds");
+            let state = match object.get("state").and_then(Value::as_str) {
+                None => None,
+                Some(spelled) => Some(ForgeState::from_wire(spelled).ok_or_else(|| {
+                    UnreadableContent::UnknownValue {
+                        field: "state",
+                        value: spelled.to_string(),
+                    }
+                })?),
+            };
+            let read_in = match object.get("read_in") {
+                None => None,
+                Some(read) => Some(EpicRead {
+                    issues: read
+                        .get("issues")
+                        .and_then(Value::as_u64)
+                        .ok_or(UnreadableContent::MissingField {
+                            field: "read_in.issues",
+                        })?,
+                    total: read.get("total").and_then(Value::as_u64).ok_or(
+                        UnreadableContent::MissingField {
+                            field: "read_in.total",
+                        },
+                    )?,
+                }),
+            };
+            made.resolved(&ForgeFacts {
+                title: object
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                state,
+                read_in,
+            })
+            .expect("one of the three forge kinds")
+        }
         StudioNodeKind::Deferral => StudioNodeContent::Deferral {
             what: text("what")?,
         },
@@ -165,6 +250,27 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
             job_id: JobId::carried(Ulid::carried(text("job_id")?)),
         },
     })
+}
+
+/// The three fields every forge kind keeps, as its object holds them. `said`
+/// and `title` are left out where there is none, which is the shape every row
+/// a paste wrote has until it is read in.
+fn forge_written(
+    address: &str,
+    number: &str,
+    said: &Option<String>,
+    title: &Option<String>,
+) -> Map<String, Value> {
+    let mut node = Map::new();
+    node.insert("address".into(), json!(address));
+    node.insert("number".into(), json!(number));
+    if let Some(said) = said {
+        node.insert("said".into(), json!(said));
+    }
+    if let Some(title) = title {
+        node.insert("title".into(), json!(title));
+    }
+    node
 }
 
 /// A Finding's object. **Only what it holds is written**: a Proposed one is
