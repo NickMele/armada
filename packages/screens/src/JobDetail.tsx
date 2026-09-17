@@ -34,6 +34,7 @@ import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, NO_SHEET, sheetMoved, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
 import { landingsOf, stepTimelineOf, turnsOfAttempt, wroteIn } from "./timeline";
+import { PlanBar } from "./grouped";
 import type { AttemptRead } from "./timeline";
 import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
@@ -526,7 +527,8 @@ function OneJob({
 
   // The timeline arranges what the story builds, run by run; it derives
   // nothing either of them holds.
-  const timeline = open && stepTimelineOf(open, turns, now, storyOf);
+  const bar = whole?.work_plan === undefined ? undefined : <PlanBar plan={whole.work_plan} />;
+  const timeline = open && stepTimelineOf(open, turns, now, storyOf, bar);
 
   // The verdict sheet's slot: `Decide`'s place at the gate, and the finished
   // Job's own place, whichever of the three arrangements the render is —

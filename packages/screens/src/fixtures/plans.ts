@@ -23,6 +23,22 @@ export const PLAN_PARTWAY: WorkPlan = {
   ],
 };
 
+/**
+ * `PLAN_PARTWAY` with the windows Fleet sends since 14.5, set against
+ * `running()`'s Fix turns: T1 held the first edit, T2 the second. #1185.
+ */
+export const PLAN_MID_TASK: WorkPlan = {
+  ...PLAN_PARTWAY,
+  tasks: [
+    {
+      ...PLAN_PARTWAY.tasks[0]!,
+      working_windows: [{ entered: "2026-09-10T14:16:30Z", left: "2026-09-10T14:20:00Z" }],
+    },
+    { ...PLAN_PARTWAY.tasks[1]!, working_windows: [{ entered: "2026-09-10T14:20:00Z" }] },
+    PLAN_PARTWAY.tasks[2]!,
+  ],
+};
+
 export const PLAN_WITH_A_DROPPED_TASK: WorkPlan = {
   ...PLAN_PARTWAY,
   tasks: [

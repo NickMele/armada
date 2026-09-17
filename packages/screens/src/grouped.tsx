@@ -9,13 +9,21 @@
 // **The ids line up because both sides use the socket's sequence.** A
 // `WorkingAct` is named `String(turn.seq)` and so is a `LogRow`, which is what
 // lets a run select its own rows without a second pass over the wire.
-import { WorkGroups, type WorkGroup } from "@armada/components";
-import type { Turn } from "@armada/protocol";
+import {
+  NarrationPlanBar,
+  WorkGroups,
+  WorkNarration,
+  type NarrationSection,
+  type TaskMarkState,
+  type WorkGroup,
+} from "@armada/components";
+import type { Turn, WorkPlan } from "@armada/protocol";
 
 import type { Calls } from "./calls";
 import type { DetailKeys } from "./detail-keys";
-import { briefly } from "./duration";
+import { briefly, clock } from "./duration";
 import { Log } from "./Log";
+import { callsSaid, narrationOf, planBarOf, workSaid } from "./narration";
 import type { LogRow } from "./story";
 import { runsOf, workingOf, type WorkingRun } from "./working";
 
@@ -101,4 +109,90 @@ export function WorkGrouped({
       emptyNote={emptyNote}
     />
   );
+}
+
+/**
+ * The Working area: the Drone's sentences, under the plan task each served.
+ * #1185. **The Activity log sheet keeps `WorkGrouped`**, the raw record.
+ *
+ * The section holding the newest row is open, and in it the newest sentence.
+ * A sentence holding a failure is open wherever it is.
+ */
+export function WorkNarrated({
+  rows,
+  turns,
+  stepId,
+  plan,
+  live,
+  emptyNote,
+  calls: fetched,
+  log,
+  most,
+}: {
+  rows: LogRow[];
+  turns: readonly Turn[];
+  stepId: string;
+  /** The Job's plan. Absent draws the sentences with no task headings. */
+  plan: WorkPlan | undefined;
+  /** The step is being worked now, so the newest sentence reads `so far`. */
+  live: boolean;
+  emptyNote: string;
+  calls: Calls;
+  log: ReturnType<DetailKeys["inLog"]>;
+  /** How many sentences the open section draws, newest last. */
+  most?: number;
+}) {
+  // Armada's instruction is the Instructed row above, and the log sheet keeps it.
+  const worked = rows.filter((row) => row.kind !== "instructed");
+  const narration = narrationOf(worked, turns, stepId, plan);
+  const newestId = narration.sections.find((one) => one.newest)?.beats.at(-1)?.id;
+  const sections: NarrationSection[] = narration.sections.map((work) => {
+    const kept = most === undefined || !work.newest ? work.beats : work.beats.slice(-most);
+    const left = work.beats.length - kept.length;
+    const meta = workSaid(work);
+    return {
+      id: work.task?.id ?? "outside",
+      ...(narration.plan === undefined
+        ? {}
+        : {
+            heading:
+              work.task === undefined
+                ? { title: OUTSIDE_ANY_TASK }
+                : { task: work.task.id, mark: markOf(work.task.state), title: work.task.title },
+          }),
+      ...(meta === undefined ? {} : { meta }),
+      open: work.newest || work.beats.some((beat) => beat.wrong),
+      ...(left === 0 ? {} : { earlier: `${left} earlier, in the log` }),
+      beats: kept.map((beat) => {
+        const newest = beat.id === newestId;
+        return {
+          id: beat.id,
+          ...(beat.ts === undefined ? {} : { at: clock(beat.ts) }),
+          ...(beat.said === undefined ? {} : { said: beat.said }),
+          meta: callsSaid(beat, newest && live),
+          open: newest || beat.wrong,
+          ...(beat.rows.length === 0
+            ? {}
+            : { body: <Log rows={beat.rows} emptyNote={emptyNote} calls={fetched} {...log} /> }),
+        };
+      }),
+    };
+  });
+  return <WorkNarration sections={sections} emptyNote={emptyNote} />;
+}
+
+/**
+ * `2 of 5`, on the Working header: tasks done over tasks not dropped, the
+ * Plan well's own figure and bar. Nothing where the Job has no plan.
+ */
+export function PlanBar({ plan }: { plan: WorkPlan | undefined }) {
+  const bar = planBarOf(plan);
+  return bar === undefined ? null : <NarrationPlanBar tasks={bar.states} done={bar.done} />;
+}
+
+/** The heading over work done while no task was marked working. */
+export const OUTSIDE_ANY_TASK = "Outside any task";
+
+function markOf(state: string): TaskMarkState {
+  return state === "working" || state === "done" || state === "dropped" ? state : "open";
 }
