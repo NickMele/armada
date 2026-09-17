@@ -5,17 +5,13 @@
  *
  * **One treatment, not two.** This was `JobHoldsSummary`'s own `Figure`, and a
  * second key/value style would drift from it the day either changed. So the
- * right edge is both callers' or neither's, at the accepted cost that *Where
- * things are* — not a `FigureList` — keeps its left-aligned values.
+ * right edge is both callers' or neither's — Pulse's top line included, which
+ * is the whole of what `words` and `detail` are for — at the accepted cost
+ * that *Where things are*, not a `FigureList`, keeps its left-aligned values.
  *
  * **A figure with no value is not a row.** The caller leaves it out of the
  * list, because a label beside a blank reads the same whether the value is
  * nothing or never arrived.
- *
- * **Pulse's top line is a row here too**, on the same edges as the three under
- * it — which is what `words` and `detail` are for, and the whole of what they
- * are for. A row that keeps its own alignment is the second treatment this
- * list exists to prevent, one row higher up.
  */
 
 export type Figure = {

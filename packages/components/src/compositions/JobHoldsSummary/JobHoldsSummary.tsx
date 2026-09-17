@@ -17,11 +17,9 @@ import { FigureList, type Figure } from "../FigureList/FigureList";
  * and a person all act on a Job, and what a reader wants from this block is
  * the latest of them, not the last lines of one. The whole log is a press away.
  *
- * **Every line of it is one list.** That top row is a `FigureList` row like the
- * three under it — actor for a label, what was said for a value and the time as
- * the value's second line — so the labels start on one edge and the values end
- * on one. It kept its own markup until the figures were justified right, and
- * the row left behind was what the owner saw.
+ * **Every line of it is one list.** The top row is a `FigureList` row like the
+ * three under it, so the labels start on one edge and the values end on one;
+ * its own markup is what the right edge left behind, and the owner saw it.
  *
  * **Absence still speaks, in less room.** A read that has not answered and a
  * Job that holds nothing are different things — `JobResources` is careful about
