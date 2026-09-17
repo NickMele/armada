@@ -30,6 +30,10 @@ export * from "./freeze";
 export * from "./Sheets";
 export * from "./Worktrees";
 export * from "./BridgeSettings";
+// A repository's Studios, and one open on its whiteboard. #1287.
+export * from "./Studios";
+export * from "./studio";
+export * from "./studio-reads";
 export * from "./pending";
 export * from "./board";
 // On All repositories, the question a surface that needs one repository asks first.

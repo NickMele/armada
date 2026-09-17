@@ -86,6 +86,7 @@ function fakeHost(
     overviewAgain: async () => {},
     questions,
     helm: { reconnected: () => {} },
+    studios: { again: async () => {}, changed: () => {}, deleted: () => {} },
     material: {} as unknown as ReviewMaterial,
     socket: { close: () => {}, resetUnreachable: () => {} },
     publish: (change) => (state = { ...state, ...change }),

@@ -38,7 +38,8 @@ export type StudioOutlineState = "draft" | "frozen";
 
 /** Each kind, with the states `studio.md` gives it. A kind with none takes no `state`. */
 export type StudioNodeOf =
-  | { kind: "run"; state: StudioRunState }
+  /** `state` absent: the run has not been read, and nothing is said about it. */
+  | { kind: "run"; state?: StudioRunState }
   | { kind: "note" }
   | { kind: "cluster" }
   | { kind: "finding"; state: StudioFindingState }
@@ -48,8 +49,8 @@ export type StudioNodeOf =
   | { kind: "deferral"; state: StudioDeferralState }
   | { kind: "outline"; state: StudioOutlineState }
   | { kind: "issue_draft"; state: "draft" }
-  /** `state` is the `job_status` wire value. */
-  | { kind: "job"; state: string };
+  /** `state` is the `job_status` wire value, absent where the Job has not been read. */
+  | { kind: "job"; state?: string };
 
 export type StudioNodeKind = StudioNodeOf["kind"];
 
@@ -111,8 +112,16 @@ export type StudioNodeReading = {
   working: boolean;
 };
 
+/**
+ * A Run or Job whose state has not been read. A Studio carries a reference to
+ * the run or the Job and never its state, so until one is read there is nothing
+ * to say — and saying nothing beats guessing.
+ */
+const UNREAD: StudioNodeReading = { words: null, status: null, run: null, missing: null, working: false };
+
 export function studioNodeReading(node: StudioNodeOf): StudioNodeReading {
   if (node.kind === "job") {
+    if (node.state === undefined) return UNREAD;
     const rendering = JOB_STATUS[node.state] ?? null;
     const usable = rendering?.verb != null && rendering.badgeStatus != null && rendering.icon != null;
     return {
@@ -124,6 +133,7 @@ export function studioNodeReading(node: StudioNodeOf): StudioNodeReading {
     };
   }
   if (node.kind === "run") {
+    if (node.state === undefined) return UNREAD;
     return { words: node.state, status: null, run: node.state, missing: null, working: node.state === "running" };
   }
   if (!("state" in node)) return { words: null, status: null, run: null, missing: null, working: false };

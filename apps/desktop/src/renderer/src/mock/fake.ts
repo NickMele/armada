@@ -195,6 +195,19 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     frameStreamUrl: (jobId, kept) => `armada-frame://frame/${jobId}/${kept}`,
     readReports: async (want) => publish({ reports: want ? unread("/reports") : nothing }),
     readHeld: async (want) => publish({ held: want ? unread("/worktrees/held") : nothing }),
+    // A scenario with no Studios says so, and every act on one is refused: `studios` answers them.
+    watchStudios: async (manifestId) =>
+      publish({
+        studios: manifestId === null ? nothing : { state: "failed", manifestId, outcome: unanswered("/studios") },
+      }),
+    watchStudio: async (studioId) =>
+      publish({
+        studio: studioId === null ? nothing : { state: "failed", studioId, outcome: unanswered(`/studios/${studioId}`) },
+      }),
+    createStudio: async () => refused("/studios/create"),
+    moveStudioNode: async (studioId) => refused(`/studios/${studioId}/move_node`).outcome,
+    removeStudioNode: async (studioId) => refused(`/studios/${studioId}/remove_node`).outcome,
+    decideStudioEdge: async (studioId) => refused(`/studios/${studioId}/decide_edge`).outcome,
     approveReview: async () => OK,
     mergePullRequest: async () => OK,
     rerunFailedChecks: async () => OK,

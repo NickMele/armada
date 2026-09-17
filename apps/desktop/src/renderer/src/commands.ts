@@ -71,6 +71,15 @@ import type { Proposing } from "./dispatch";
 export const readDiff = (jobId: string | null): void => void window.armada.readDiff(jobId);
 export const readReports = (want: boolean): void => void window.armada.readReports(want);
 export const readHeld = (want: boolean): void => void window.armada.readHeld(want);
+// The Studios surface — #1287. The two reads are held by effects, so they are stable here too.
+export const watchStudios = (manifestId: string | null): void => void window.armada.watchStudios(manifestId);
+export const watchStudio = (studioId: string | null): void => void window.armada.watchStudio(studioId);
+export const createStudio = (manifestId: string) => window.armada.createStudio(manifestId);
+export const moveStudioNode = (studioId: string, nodeId: string, position: { x: number; y: number }) =>
+  window.armada.moveStudioNode(studioId, nodeId, position);
+export const removeStudioNode = (studioId: string, nodeId: string) => window.armada.removeStudioNode(studioId, nodeId);
+export const decideStudioEdge = (studioId: string, edgeId: string, accepted: boolean) =>
+  window.armada.decideStudioEdge(studioId, edgeId, accepted);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 export const deleteBranchOne = (jobId: string, tip: string) => window.armada.deleteBranch(jobId, tip);
 export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);

@@ -829,6 +829,34 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readHeld, (_event, want: boolean) =>
     connection?.readHeld(want),
   );
+  // A repository's Studios and the one open — #1287. An id that is not a string, or a position that
+  // is not two whole numbers, is not put on a route: the call answers nothing, as a typo would.
+  const text = (value: unknown): value is string => typeof value === "string" && value !== "";
+  const unsent = { ok: false, why: "not_connected" } as const;
+  ipcMain.handle(CHANNELS.watchStudios, (_event, manifestId: unknown) =>
+    text(manifestId) || manifestId === null ? connection?.studios.watchList(manifestId) : undefined,
+  );
+  ipcMain.handle(CHANNELS.watchStudio, (_event, studioId: unknown) =>
+    text(studioId) || studioId === null ? connection?.studios.watchStudio(studioId) : undefined,
+  );
+  ipcMain.handle(CHANNELS.createStudio, async (_event, manifestId: unknown) =>
+    text(manifestId)
+      ? ((await connection?.studios.create(manifestId)) ?? { ok: false, outcome: unsent })
+      : undefined,
+  );
+  ipcMain.handle(CHANNELS.moveStudioNode, async (_event, studioId: unknown, nodeId: unknown, position: unknown) => {
+    const at = (position ?? {}) as { x?: unknown; y?: unknown };
+    if (!text(studioId) || !text(nodeId) || !Number.isInteger(at.x) || !Number.isInteger(at.y)) return undefined;
+    return (await connection?.studios.moveNode(studioId, nodeId, { x: at.x as number, y: at.y as number })) ?? unsent;
+  });
+  ipcMain.handle(CHANNELS.removeStudioNode, async (_event, studioId: unknown, nodeId: unknown) =>
+    text(studioId) && text(nodeId) ? ((await connection?.studios.removeNode(studioId, nodeId)) ?? unsent) : undefined,
+  );
+  ipcMain.handle(CHANNELS.decideStudioEdge, async (_event, studioId: unknown, edgeId: unknown, accepted: unknown) =>
+    text(studioId) && text(edgeId) && typeof accepted === "boolean"
+      ? ((await connection?.studios.decideEdge(studioId, edgeId, accepted)) ?? unsent)
+      : undefined,
+  );
   // The four decisions on the work, and they stay four channels. Merging lands
   // the branch and then takes the work, approving takes it and leaves the pull
   // request open, requesting changes sends the drone back to the same step, and

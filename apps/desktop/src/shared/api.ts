@@ -51,6 +51,8 @@ import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
+import type { StudioAnswer } from "@armada/screens/src/studio-reads";
+import type { StudioPosition } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
 import type {
   ManifestProposalsRead,
@@ -731,6 +733,21 @@ export type BridgeApi = {
    * to scope it to, only whether somebody is looking.
    */
   readHeld: (want: boolean) => Promise<void>;
+  /**
+   * Hold one repository's Studios, by its Manifest id, or `null` to drop them. Published on
+   * `BridgeState.studios` and kept current by `studio.changed`. #1287.
+   */
+  watchStudios: (manifestId: string | null) => Promise<void>;
+  /** Hold one Studio whole, or `null` to drop it. Published on `BridgeState.studio`. */
+  watchStudio: (studioId: string | null) => Promise<void>;
+  /** Start an untitled Studio in one repository. Answers with it, which also lands on the list. */
+  createStudio: (manifestId: string) => Promise<StudioAnswer>;
+  /** Save where a person put a node down. Position only: nothing else about a node is written. */
+  moveStudioNode: (studioId: string, nodeId: string, position: StudioPosition) => Promise<Outcome>;
+  /** Delete a node and every edge on it. A person's act, and only from the Studios surface. */
+  removeStudioNode: (studioId: string, nodeId: string) => Promise<Outcome>;
+  /** Accept a proposed relation, or reject it, which removes it. A person's act, as above. */
+  decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean) => Promise<Outcome>;
   /**
    * Take the work. **The counterpart to `approveDispatch`, at the other end of
    * the Job.** On the workflow's last step Fleet commits and delivers before

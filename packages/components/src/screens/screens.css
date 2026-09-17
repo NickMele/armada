@@ -1199,3 +1199,65 @@
 .armada-inside__unreachable svg {
   color: var(--fg-subtle);
 }
+
+/* The Studios surface, one Studio open (#1287): a head, then the whiteboard
+   filling what is left. The whiteboard is the region that pans, so this pane
+   does not scroll. */
+.armada-studio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
+}
+
+.armada-studio__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.armada-studio__name {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-studio__standing {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-studio__board {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.armada-studio__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-studio__aside p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.armada-studio__proposed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-studio__acts {
+  display: flex;
+  gap: var(--space-2);
+}
