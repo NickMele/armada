@@ -201,15 +201,22 @@ export const LeftColumnResizable: Story = {
       </div>
     </div>
   ),
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    // Navigation, Stats and Fleet are one column, so each is as wide as the others.
+    const panelWidths = () =>
+      [...(canvasElement.querySelector(".armada-shell__left")?.children ?? [])].map(
+        (panel) => panel.getBoundingClientRect().width,
+      );
     const handle = canvas.getByRole("separator", { name: "Resize the left column" });
     await expect(handle).toHaveAttribute("aria-valuenow", "200");
     await userEvent.click(handle);
     await expect(handle).toHaveFocus();
     await userEvent.keyboard("{ArrowRight}");
     await expect(handle).toHaveAttribute("aria-valuenow", "216");
+    await expect(new Set(panelWidths()).size).toBe(1);
     await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
     await expect(handle).toHaveAttribute("aria-valuenow", "184");
+    await expect(new Set(panelWidths()).size).toBe(1);
   },
 };
 
