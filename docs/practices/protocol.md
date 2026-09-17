@@ -1189,6 +1189,18 @@ every Link written before it already has, so an older Bridge reads a Link as it 
 route carries the line and never the address — a Link never stops being its address — and a blank
 line clears it rather than being refused. A kind that is not a Link is refused as
 `fleet.studio_not_a_link`, a code added the way every other refusal here was.
+## Protocol 14.16: Helm writes a file in the checkout
+
+`#1373`. `helm.changed_checkout`, a new event kind, additive: published as a Helm session's own
+stream says it wrote a file, carrying `HelmChangedCheckout { manifest_id, tool, path, at }`.
+Helm edits the repository's checkout directly on a person's ask, with no worktree and no Job
+around the change, so this is what lets somebody who finds a file changed see that Helm changed
+it — `docs/concepts/helm.md`, *Audit trail*, and the rule `studio.helm_acted` already follows.
+
+**It names writes Armada can name, not every change Helm caused.** `tool` is one of the built-ins
+that edits a file, so the path is known; a shell line may also have written something and nothing
+in the stream says whether it did. Those calls stay on the conversation's own socket, where they
+already were.
 
 ## Protocol 14.17: what a Link's address names on the forge
 
