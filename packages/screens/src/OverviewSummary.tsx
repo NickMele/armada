@@ -1,22 +1,24 @@
-// Overview's summary strip, wired from the same read `OverviewLists` draws its panels from — so
-// the strip's counts and the panels beneath it can never disagree. #1091, Overview 27.
+// Overview's summary tiles, wired from the same read `OverviewLists` draws its panels from — so
+// the tiles' counts and the panels beneath them can never disagree. #1091, Overview 27.
 //
-// Recently ended joined the strip in Overview 28 (#1092), once `JobSummary.ended_at` gave a Job
+// Recently ended joined them in Overview 28 (#1092), once `JobSummary.ended_at` gave a Job
 // an end time to carry: `SECTIONS` below names all four panels this build can read, of the five
 // `OverviewLists` can draw — Other is the one left out.
 
-import { OverviewSummaryStrip } from "@armada/components";
+import { OverviewSummaryStrip, type OverviewSummaryStripTone } from "@armada/components";
 import type { JobSummary, RepositorySummary } from "@armada/protocol";
 import type { BoardSection } from "./board";
 import { overviewListsOf } from "./overview-lists";
 
 type StripSection = Extract<BoardSection, "needs-you" | "running" | "queued" | "recently-ended">;
 
-const SECTIONS: { id: StripSection; label: string }[] = [
-  { id: "needs-you", label: "Needs you" },
-  { id: "running", label: "Running" },
-  { id: "queued", label: "Queued" },
-  { id: "recently-ended", label: "Recently ended" },
+// `hue` is the status stem a tile wears at every count — design-system.md → Overview summary
+// tiles. `tone` colours a count past zero only, on the two rows that mean something is owed.
+const SECTIONS: { id: StripSection; label: string; hue: string; tone?: OverviewSummaryStripTone }[] = [
+  { id: "needs-you", label: "Needs you", hue: "awaiting-review", tone: "awaiting-review" },
+  { id: "running", label: "Running", hue: "running" },
+  { id: "queued", label: "Queued", hue: "not-started" },
+  { id: "recently-ended", label: "Recently ended", hue: "completed-success", tone: "completed-failed" },
 ];
 
 export type OverviewSummaryProps = {
@@ -36,14 +38,12 @@ export function OverviewSummary({ jobs, repositories, picked, onJump }: Overview
 
   return (
     <OverviewSummaryStrip
-      items={SECTIONS.map(({ id, label }) => ({
+      items={SECTIONS.map(({ id, label, hue, tone }) => ({
         id,
         label,
         count: countOf(id),
-        // Needs you and Recently ended are the strip's two tones — the two
-        // states `OverviewSummaryStripTone` carries, and the only two rows
-        // here that mean something is owed rather than something in flight.
-        tone: id === "needs-you" ? "awaiting-review" : id === "recently-ended" ? "completed-failed" : undefined,
+        hue,
+        tone,
         onPress: () => onJump(id),
       }))}
     />

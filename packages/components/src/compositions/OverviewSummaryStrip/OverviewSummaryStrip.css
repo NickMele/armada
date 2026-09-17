@@ -1,50 +1,89 @@
-/* Overview's summary strip — a joined row of counts, one press per panel.
-   `border-left` between items rather than a gap, so the strip reads as one
-   card wearing four windows and not four cards beside each other. */
+/* Overview's summary tiles — four cards, two by two, one press per panel.
+   `docs/contracts/design-system.md` → Overview summary tiles, #1261.
+
+   Each tile is a card: its surface — gradient, edge, shadow, blur — is
+   `armada-glass` (`src/glass.css`), which the tile carries beside this class.
+   Radius and the status wash stay here. The tile's hue arrives as
+   `--armada-tile-hue`, set from the caller's status stem. */
 .armada-overview-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border: var(--border-width) solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--bg-raised);
-  overflow: hidden;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* The surface's own gap between cards (`.armada-screen__overview`), so the
+     tiles sit apart the way the panels below them do. */
+  gap: var(--space-4);
   flex: none;
 }
 
-.armada-overview-summary[data-count="4"] {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
+/* No `border` or `background` here: both are the glass's, and this file
+   setting either would win or lose against `glass.css` on import order. */
 .armada-overview-summary__item {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: var(--space-1);
   min-width: 0;
-  /* --space-2, not --space-3: the --leading-2xl line box carries its own air,
-     and the strip stays the height it was with the count at --text-lg. */
-  padding: var(--space-2) var(--space-4);
-  border: 0;
-  border-left: var(--border-width) solid var(--border-subtle);
-  background: none;
-  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-sans);
+  text-align: start;
   cursor: pointer;
 }
 
-.armada-overview-summary__item:first-child {
-  border-left: 0;
+/* **The wash**, on `::after` over the glass and under the content — glass.css's
+   header says why neither the card's own background nor `::before` can hold it.
+   A radial of the tile's hue at --status-wash, centred on the top leading
+   corner and fading out across the tile. */
+.armada-overview-summary__item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    at 0 0,
+    color-mix(in srgb, var(--armada-tile-hue) var(--status-wash), transparent),
+    transparent
+  );
+  pointer-events: none;
 }
 
-.armada-overview-summary__item:hover {
+/* Hover REPLACES the wash rather than mixing with it — the Board row's rule
+   under Table, so no tile computes a colour nobody chose. */
+.armada-overview-summary__item:hover::after {
   background: var(--bg-hover);
 }
 
 .armada-overview-summary__item:focus-visible {
   outline: var(--focus-ring);
-  outline-offset: calc(var(--focus-ring-offset) * -1);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-overview-summary__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-heading);
+  color: var(--armada-tile-hue);
+}
+
+.armada-overview-summary__dot {
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--armada-tile-hue);
+}
+
+.armada-overview-summary__label-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .armada-overview-summary__count {
-  flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-2xl);
   line-height: var(--leading-2xl);
@@ -60,34 +99,8 @@
   color: var(--status-completed-failed);
 }
 
-.armada-overview-summary__item[data-empty] .armada-overview-summary__count,
-.armada-overview-summary__item[data-empty] .armada-overview-summary__label {
-  color: var(--fg-subtle);
-}
-
-.armada-overview-summary__label {
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
+/* An amber "0" reads as something waiting: at zero only the label, the dot and
+   the wash carry the hue. */
+.armada-overview-summary__item[data-empty] .armada-overview-summary__count {
   color: var(--fg-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
-   620px is the shell mock's own breakpoint for the two-up form — docs/contracts/design-system.md */
-@container (max-width: 620px) {
-  .armada-overview-summary,
-  .armada-overview-summary[data-count="4"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .armada-overview-summary__item:nth-child(3) {
-    border-left: 0;
-  }
-
-  .armada-overview-summary__item:nth-child(n + 3) {
-    border-top: var(--border-width) solid var(--border-subtle);
-  }
 }
