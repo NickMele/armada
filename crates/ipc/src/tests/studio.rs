@@ -20,7 +20,7 @@ fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent
         K::Run => C::Run { run_id: text() },
         K::Note => C::Note { said: text() },
         K::Cluster => C::Cluster { title: text() },
-        K::Finding => C::Finding { asked: text() },
+        K::Finding => C::Finding(core_model::StudioFinding::asked(&text())),
         K::Contradiction => C::Contradiction {
             first: text(),
             second: text(),
@@ -181,4 +181,48 @@ fn helms_act_on_a_studio_is_its_own_kind_and_names_its_repository() {
         decode::<Event>("an event", json.as_bytes()).expect("round-trips"),
         acted
     );
+}
+
+/// `#1292`: **a Finding sends what its scout recorded and nothing it did
+/// not.** A Proposed one is its ask alone, as before scouts; a stopped one
+/// that reported no cost leaves the cost out rather than saying nought.
+#[test]
+fn a_finding_carries_what_its_scout_read_and_leaves_out_what_it_never_recorded() {
+    let proposed = core_model::StudioFinding::asked("how is routing decided");
+    let json = encode(&StudioNodeContent::from(
+        &core_model::StudioNodeContent::Finding(proposed),
+    ))
+    .expect("plain data");
+    assert_eq!(
+        json,
+        r#"{"kind":"finding","asked":"how is routing decided"}"#
+    );
+
+    let stopped = core_model::StudioFinding::recorded(
+        "how is routing decided".to_string(),
+        Some(core_model::ScoutCheckout {
+            commit: "4bdb169c".to_string(),
+            uncommitted: false,
+        }),
+        vec!["crates/fleet/src/routing.rs".to_string()],
+        vec!["weight in crates".to_string()],
+        None,
+        Some(core_model::ScoutEnded {
+            outcome: core_model::ScoutOutcome::Stopped,
+            cost_micros: None,
+        }),
+    );
+    let content = core_model::StudioNodeContent::Finding(stopped);
+    let json = encode(&StudioNodeContent::from(&content)).expect("plain data");
+    assert!(
+        json.contains(r#""checkout":{"commit":"4bdb169c","uncommitted":false}"#),
+        "{json}"
+    );
+    assert!(
+        json.contains(r#""read":["crates/fleet/src/routing.rs"]"#),
+        "{json}"
+    );
+    assert!(json.contains(r#""ended":{"outcome":"stopped"}"#), "{json}");
+    let back: StudioNodeContent = decode("content", json.as_bytes()).expect("round-trips");
+    assert_eq!(back.to_domain(), content);
 }

@@ -10,10 +10,12 @@
 //! Job is.
 
 use std::future::Future;
+use std::sync::Arc;
 
 use ipc::{
-    AddStudioNode, CreateStudio, DecideStudioEdge, ManifestId, MoveStudioNode, ProposeStudioEdge,
-    RemoveStudioNode, RenameStudio, Studio, StudioDeleted, StudioId, StudioList,
+    AddStudioNode, AskScout, CreateStudio, DecideStudioEdge, ManifestId, MoveStudioNode,
+    ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StopScout, Studio,
+    StudioDeleted, StudioId, StudioList,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -99,6 +101,34 @@ pub trait Studios: Send + Sync + 'static {
         &self,
         studio_id: StudioId,
         decision: DecideStudioEdge,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `ask_scout` — a person's ask, made a Finding and started, answered with
+    /// the Studio once it is Gathering. **The scout's reading is a task of its
+    /// own**, so what it reads arrives on `studio.changed`.
+    fn ask_scout(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        ask: AskScout,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `start_scout` — a Proposed Finding started. [`Refusal::IllegalMove`]
+    /// where it is not Proposed.
+    fn start_scout(
+        self: Arc<Self>,
+        studio_id: StudioId,
+        start: StartScout,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `stop_scout` — the stop on a Gathering Finding. Answered with the Studio
+    /// as it stands; the Finding freezes on the stream once the scout ends.
+    fn stop_scout(
+        &self,
+        studio_id: StudioId,
+        stop: StopScout,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 }

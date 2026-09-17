@@ -1,16 +1,14 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { KbdCmd } from "../../primitives/Kbd/Kbd";
-import { Separator } from "../../primitives/Separator/Separator";
 import { useShortcutReveal } from "../../shortcut-reveal";
 
 /**
  * Sidebar — Bridge's navigation rail.
  *
- * **Two levels, rendered structurally.** Bridge is a section label above its
- * surfaces; a rule, then Helm as a sibling beneath — not one more peer in a
- * flat list. That is the app/surface-group hierarchy made visible, and a flat
- * nav quietly contradicts it.
+ * **One level, Bridge's own.** It lists Bridge's surfaces and nothing else.
+ * Helm left it for the dock (#948), so there is no second tier beneath the
+ * surfaces, and no rule to draw one. `design-system.md` → Left column.
  *
  * **The rail never disappears.** 48px is cheap and losing navigation entirely
  * is worse than losing 48px, at any width. Below the breakpoint it collapses
@@ -52,8 +50,6 @@ export type SidebarItem = {
 export type SidebarProps = {
   /** Bridge's surfaces, in rail order. ⌘1…⌘n follow this order. */
   surfaces: SidebarItem[];
-  /** Helm, the sibling beneath the rule. ⌘ the digit after the last surface. */
-  sibling?: SidebarItem;
   /** The label above the surfaces. "Bridge". */
   sectionLabel?: ReactNode;
   activeId?: string;
@@ -125,7 +121,6 @@ function Item({
 
 export function Sidebar({
   surfaces,
-  sibling,
   sectionLabel = "Bridge",
   activeId,
   appName,
@@ -158,22 +153,6 @@ export function Sidebar({
           />
         ))}
       </div>
-
-      {sibling ? (
-        <>
-          {/* The rule is the only thing stating the boundary between a surface
-              group and a sibling app, so it keeps its role. */}
-          <Separator decorative={false} className="armada-sidebar__rule" />
-          <div className="armada-sidebar__group">
-            <Item
-              item={sibling}
-              active={sibling.id === activeId}
-              collapsed={collapsed}
-              onSelect={onSelect}
-            />
-          </div>
-        </>
-      ) : null}
     </nav>
   );
 }

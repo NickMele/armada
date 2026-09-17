@@ -227,6 +227,10 @@ A node starts in its kind's first state and nothing in the request sets one. `pr
 **No act writes a node's content afterwards**, which is what fixes a Note at capture.
 
 From Helm it also publishes `studio.helm_acted`, after `studio.changed`: Helm's act is its own event type.
+
+**A Finding is added as its ask alone.** One carrying a checkout, files read or an ending is refused as `fleet.studio_finding_is_the_scouts`: those are a scout's to record, through `ask_scout` and `start_scout`.
+
+**No act writes a node's content afterwards but a scout's own reading**, which is what fixes a Note at capture.
 """
 
 [operations.move_studio_node]
@@ -265,6 +269,41 @@ notes = """
 **Only a person accepts a relation**, whatever Helm's authority setting says, so no agent is offered this. An edge that is not proposed is refused as `fleet.studio_edge_not_proposed`.
 
 A rejected edge is removed rather than kept as rejected; nothing yet stops the same relation being proposed again.
+"""
+
+[operations.ask_scout]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Ask a scout how something works in the code: a Finding is added Gathering and the scout starts reading, and the Studio is answered"
+notes = """
+**A person's ask, typed on a Studio.** `asked` is told to the scout verbatim, with the repository's checkout on disk as its directory and read tools alone (`docs/concepts/scout.md`). The Finding records the commit checked out and whether anything uncommitted sat on top of it before the scout reads a line; a checkout git will not read is refused as `fleet.scout_checkout_unreadable`, and nothing starts.
+
+Every file read and every search run is written to the Finding as each is answered, and each write publishes `studio.changed`, so a whiteboard watches it fill. It freezes however it ends, with `ended` saying `answered`, `stopped` or `failed` and the cost where the agent reported one.
+
+**No budget and no place under the concurrency cap**, decided with the owner: the cost is shown when it ends, and `stop_scout` is how a person ends one. `Bridge only` because it is the person's own ask; Helm acting on an ask adds a Proposed Finding and calls `start_scout`.
+"""
+
+[operations.start_scout]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Start a scout on a Proposed Finding already on a Studio, and answer with the Studio"
+notes = """
+**What Helm calls once a person asks it to find something out.** Helm may add a Proposed Finding unasked (`add_studio_node`), and spends nothing by doing so; starting its scout spends, so it is on a person's ask like every other act Helm takes. A person on Bridge starts a proposed one through the same route.
+
+A Finding that is not Proposed is refused as `fleet.scout_not_proposed`, checked again under the lock the start is written under, so two starts of one Finding cannot both run. A node that is not a Finding is `fleet.scout_not_a_finding`. Otherwise as `ask_scout`.
+"""
+
+[operations.stop_scout]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Stop the scout reading for a Finding, and answer with the Studio as it stands"
+notes = """
+**The stop on a Gathering Finding's node.** The scout's process group is interrupted, which the agent CLI answers by ending its turn and reporting its cost — measured in spike 017, where a terminate left no cost at all. A scout still running after ten seconds has its group ended, and its Finding says `stopped` with no cost.
+
+The answer is the Studio before the Finding freezes; the frozen one arrives on `studio.changed`. A node no scout is reading for is refused as `fleet.scout_not_running`. `Bridge only`: the stop is a press on a node, and no ask to Helm reaches it.
 """
 
 [operations.get_call]

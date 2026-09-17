@@ -278,6 +278,9 @@ where
         let helm = crate::helm::Conversations::hosted_by(Arc::new(
             crate::helm::ProcessHost::on_this_machine(&fittings.host),
         ));
+        let scouts = crate::scout::Scouts::hosted_by(Arc::new(
+            crate::scout::ScoutHost::on_this_machine(&fittings.host),
+        ));
         let shipped = Limits {
             concurrency: fittings.concurrency,
             headroom: fittings.headroom,
@@ -339,6 +342,7 @@ where
             events: fittings.events,
             turns: api::Turns::new(),
             helm,
+            scouts,
             inbox: EvidenceInbox::new(),
             delivered: Mutex::new(BTreeMap::new()),
             slots: Mutex::new(Slots::bounded_by(in_force.concurrency)),
@@ -376,5 +380,16 @@ where
     pub fn hosting_helm_on(mut self, host: Arc<dyn crate::helm::Hosting>) -> Fleet<H, V, W> {
         self.helm = crate::helm::Conversations::hosted_by(host);
         self
+    }
+
+    /// The same Fleet with its scouts started by `host` — a stand-in agent in
+    /// a test.
+    pub fn scouting_on(mut self, host: crate::scout::ScoutHost) -> Fleet<H, V, W> {
+        self.scouts = crate::scout::Scouts::hosted_by(Arc::new(host));
+        self
+    }
+
+    pub(crate) fn scouts(&self) -> &crate::scout::Scouts {
+        &self.scouts
     }
 }

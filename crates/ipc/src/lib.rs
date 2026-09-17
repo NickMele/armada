@@ -129,6 +129,9 @@ mod resources;
 /// What Scan found in a repository nobody set up for Armada. **Evidence,
 /// never a proposal** — every finding carries the file it came from.
 mod scan;
+/// A scout's run, as its Finding records it, and the acts that start and stop one.
+/// `#1292`.
+mod scouting;
 mod seeding;
 /// A Command that stays running, held by Fleet. **Lifecycle on `/events`,
 /// output on a socket of its own.**
@@ -265,6 +268,7 @@ pub use scan::{
     PackageWorkspaces, RepositoryScan, Runnable, ScannedWorkspace, ToolFile, ToolSection,
     WorkspaceGlob, WorkspaceGlobs,
 };
+pub use scouting::{AskScout, ScoutCheckout, ScoutEnded, ScoutOutcome, StartScout, StopScout};
 pub use seeding::{DeclaredSeed, SeedWarmth, WorktreeSeeding};
 pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,

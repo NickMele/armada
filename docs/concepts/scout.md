@@ -60,4 +60,26 @@ Reading Helm threads needs an operation: `observe_helm` in `crates/ipc/operation
 > **Rule.** A scout takes no place under Fleet's concurrency cap.
 > Why: research and Jobs then never wait on each other.
 
+> **Rule.** A stop interrupts the scout first, and ends its process group only if it has not ended ten seconds later.
+> Why: interrupted, the agent ends its turn and reports what it cost; ended outright, it reports nothing. Spike 017.
+
+## What it is started as
+
+| | How |
+|---|---|
+| Tools | Read, search and list, and nothing else: `--tools`, with every other built-in denied by name |
+| Directory | The repository's checkout, held there by `--restricted`, which refuses a read outside it |
+| Servers | None, under `--strict-mcp-config` |
+| Asked | Once, on stdin, never resumed. Its wording is `../contracts/agent-prompt.md`, section 5b |
+
+A Finding lists a file when the agent answered the read, so a read refused as outside the checkout is not listed. A search is listed as its pattern and where it looked. **A search that returns lines of files is a read of them**, so the files it returned lines from are listed with the files read; a listing that returns only names reads nothing, and adds none.
+
+| Operation | Who | Does |
+|---|---|---|
+| `ask_scout` | A person, on Bridge | Adds a Finding Gathering and starts its scout |
+| `start_scout` | Helm on a person's ask, or a person | Starts a Proposed Finding |
+| `stop_scout` | A person, on Bridge | The stop on its node |
+
+A Finding whose Fleet stopped while its scout was reading is frozen as failed when Fleet next starts, keeping what it read.
+
 What a scout is told and never told is `../contracts/agent-prompt.md`, section 2.

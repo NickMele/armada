@@ -92,6 +92,16 @@ owner's machine was unusable.
 build or a test suite while another is running, your own background runs
 included.
 
+**A wait loop that greps for the run matches itself.** Confirmed 17 Sep 2026: a
+session queued its gate behind `while pgrep -f 'vitest|cargo xtask' ...; do
+sleep 20; done`, and `pgrep -f` matched the shell running that very line. It
+waited on itself twice and cost an hour, with the owner asking what it was
+waiting for. Excluding the loop's own pid is not enough — the parent shell
+carries the same command line. Wait on the thing itself (`wait`, a pid file, or
+the tool's own background handle), or put the pattern where no shell repeats
+it, and read a wait that has lasted longer than the run would have as a bug in
+the wait.
+
 **Warnings and Format were missing from this table, and a merge paid for it.**
 Confirmed 12 Sep 2026: #843 ran every row above, merged green, and left `main`
 with ten unformatted hunks and an unused import. `format` is a Check in

@@ -60,6 +60,8 @@ mod merging_in;
 mod pull_request_diff;
 mod reclaim;
 mod rerunning;
+/// A scout's process: one ask, read tools only, inside one checkout.
+mod scouting;
 /// A worktree before a person's run, and putting back what the run changed.
 pub mod snapshot;
 mod transcript;
@@ -83,5 +85,9 @@ pub use mcp::{only_the_evidence_server, publish_the_agents_door, Published, REPO
 pub use reclaim::{
     delete_branch, reclaim, standing, BranchGone, BranchRefused, BranchStanding, Reclaimed,
     RepoUnreadable, Standing, UnmergedWork, WorktreeGone, WorktreeStanding,
+};
+pub use scouting::{
+    checkout_as_it_stands, denied_to_a_scout, files_a_search_showed, no_servers, CheckoutRead,
+    Looked, ScoutRefused, Scouting, Shown,
 };
 pub use worktree::GitVcs;

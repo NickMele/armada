@@ -618,8 +618,13 @@ trackpad answers the act that finger made, and nothing else.
 
 | Pattern | Plays when |
 |---|---|
-| **Alignment** | A control waiting on Fleet reaches *accepted* |
-| **Level change** | A control waiting on Fleet reaches *refused* |
+| **Alignment** | Fleet accepts an act a person pressed |
+| **Level change** | Fleet refuses one |
+
+**The tap follows the answer, not the control.** It plays where Fleet's
+answer arrives, so an act whose control is already gone — an accepted
+Forget leaves no row, and an event can replace a control mid-act — is still
+felt.
 
 **Touch only ever answers the person's own press.** Fleet's events never
 play one, and neither does hover or focus. A haptic is only felt while a
@@ -1562,7 +1567,8 @@ The left column's third panel — what the status bar used to read.
 state    --dot (6px) + --text-base --fg-default
 rows     pid / port / protocol / up, one row each: label --text-xs
          --text-label on the left, value --font-mono --text-xs --text-body
-         in one aligned column — Pulse's figure rows, FigureList
+         right-aligned to the panel's edge, where Stats puts its counts —
+         Pulse's figure rows, FigureList
 detail   --font-mono --text-2xs --fg-subtle, the sentence a state carries
 doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
          (--status-completed-success / --status-awaiting-review /

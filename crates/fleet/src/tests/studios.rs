@@ -135,9 +135,7 @@ async fn helm_adds_only_a_node_that_starts_proposed() {
     assert_eq!(code(&refused), "fleet.studio_node_not_helms");
 
     let finding = AddStudioNode {
-        content: StudioNodeContent::Finding {
-            asked: "what reads the count".to_string(),
-        },
+        content: StudioNodeContent::finding_asked("what reads the count"),
         position: StudioPosition { x: 0, y: 0 },
         produced_by: None,
     };
@@ -169,9 +167,7 @@ async fn every_write_is_published_and_a_produced_edge_is_not_decided() {
         .await
         .expect("added");
     let asked = AddStudioNode {
-        content: StudioNodeContent::Finding {
-            asked: "what reads it".to_string(),
-        },
+        content: StudioNodeContent::finding_asked("what reads it"),
         position: StudioPosition { x: 0, y: 160 },
         produced_by: Some(note.nodes[0].id.clone()),
     };
