@@ -109,12 +109,11 @@ until #1229.
 been wrong here.
 
 **The app suite passes twice in a row before a merge.** `desktop_test` on the
-branch, two full runs back to back. Confirmed 17 Sep 2026: three changes that
-put glass on Bridge's cards each failed a different `setup.test.tsx` test in
-one full run and passed the next, and the one that failed every time was
-caught only by running again. When a run fails, run `main` beside it: a test
-that fails on the branch and passes on `main` belongs to the branch, not to
-#1252.
+branch, two full runs back to back. When a run fails, compare the branch with
+`main` in alternating runs, several of each, never a block of runs on one tree:
+machine load drifts across a block and makes one tree look clean and the other
+broken. Confirmed 17 Sep 2026: runs alternated between `main` and a branch
+failed 3 of 10 on each, where blocks had blamed the branch.
 
 **A filtered Check that prints nothing did not pass.** `armada check` reads
 `armada.yml` from the working directory. Confirmed 14 Sep 2026 on #1117: a
