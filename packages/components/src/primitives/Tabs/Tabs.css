@@ -37,7 +37,7 @@
   font-size: var(--text-sm);
   white-space: nowrap;
   cursor: pointer;
-  transition: color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+  transition: color var(--duration-fast) var(--ease);
 }
 
 .armada-tabs__tab:hover {
@@ -47,7 +47,36 @@
 /* Emphasis comes from fill and weight, never from size. Every tab in the group
  * is the same height. */
 .armada-tabs__tab--active {
-  border-bottom-color: var(--accent);
   color: var(--fg-default);
   font-weight: var(--weight-medium);
+}
+
+/* The underline, one bar for the whole strip. It sits where the selected tab's
+ * own bottom edge was drawn — inside the strip, on the rule — and the component
+ * writes where that is. Each tab keeps its transparent edge so its label sits
+ * exactly where it did.
+ *
+ * It travels at --duration-base, and only once `data-travel` is set, so the
+ * first placement lands rather than slides. Transform and width, so nothing
+ * reflows; zero under reduced motion, so a new selection is simply underlined. */
+.armada-tabs {
+  position: relative;
+}
+
+.armada-tabs__bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--armada-tab-bar-w, 0);
+  height: var(--armada-active-bar);
+  background: var(--accent);
+  transform: translateX(var(--armada-tab-bar-x, 0));
+  pointer-events: none;
+}
+
+.armada-tabs__bar[data-travel] {
+  transition:
+    transform var(--duration-base) var(--ease),
+    width var(--duration-base) var(--ease),
+    background-color var(--duration-fast) var(--ease);
 }

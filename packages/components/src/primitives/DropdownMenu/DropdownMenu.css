@@ -168,8 +168,11 @@
  * overflow wins, so the trigger's own alignment stays the preference and only
  * the viewport overrides it.
  *
- * No transition. Placement resolves before the panel paints, so nothing shifts
- * on open, and the motion section forbids an entrance on a data surface. */
+ * Placement still resolves before the panel paints, and the layer never moves
+ * after it lands. What this block used to say beside that — no transition,
+ * because the motion section forbids an entrance — applied a rule about data
+ * to chrome. A menu is summoned by a press and fires once, so it enters; the
+ * entrance is at the foot of this file. */
 @supports (anchor-name: --a) {
   .armada-dropdown-menu {
     anchor-scope: --armada-dropdown-trigger;
@@ -190,6 +193,57 @@
     inset: auto;
     /* Logical, so flip-block moves the gap to the other side with the panel. */
     margin-block-start: var(--space-1);
+  }
+}
+
+/* The entrance. A menu rises out of its trigger and fades in at
+ * --duration-base: the contract's "chrome that a person summoned may enter".
+ *
+ * **The rise follows the side the menu resolved to.** Anchor positioning picks
+ * a fallback in layout, and no selector can read which one it picked, so the
+ * component compares the panel's box with the trigger's before the first paint
+ * and writes `data-opens` and `data-aligns`. The animation is keyed on
+ * `data-opens` rather than on the panel, so it starts on the frame the side is
+ * known and never runs from a guess: a menu that flipped upwards rises
+ * upwards, from the corner nearest its trigger.
+ *
+ * Transform and opacity only. The box the fallbacks measured is the box the
+ * menu lands in; nothing here reflows, and nothing moves once it has landed.
+ *
+ * No fill mode: the animation holds nothing after it ends, so at the zero
+ * duration reduced motion gives it, the panel is simply its own style. */
+.armada-dropdown-menu__panel[data-opens] {
+  animation: armada-dropdown-menu-in var(--duration-base) var(--ease);
+}
+
+.armada-dropdown-menu__panel[data-opens="down"] {
+  --armada-menu-rise: calc(-1 * var(--space-1));
+}
+
+.armada-dropdown-menu__panel[data-opens="up"] {
+  --armada-menu-rise: var(--space-1);
+}
+
+.armada-dropdown-menu__panel[data-opens="down"][data-aligns="end"] {
+  transform-origin: top right;
+}
+
+.armada-dropdown-menu__panel[data-opens="down"][data-aligns="start"] {
+  transform-origin: top left;
+}
+
+.armada-dropdown-menu__panel[data-opens="up"][data-aligns="end"] {
+  transform-origin: bottom right;
+}
+
+.armada-dropdown-menu__panel[data-opens="up"][data-aligns="start"] {
+  transform-origin: bottom left;
+}
+
+@keyframes armada-dropdown-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--armada-menu-rise)) scale(0.98);
   }
 }
 

@@ -59,13 +59,26 @@
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease);
+  /* The ring is --focus-ring from the start, at no width and no offset, so
+   * focus grows it out of the edge rather than switching it on — the contract's
+   * "a focused field's ring grows from its edge and its ground lifts one step".
+   * Both ends are `solid`, which is what lets the width interpolate. */
+  outline: var(--focus-ring);
+  outline-width: 0;
+  outline-offset: 0;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    outline-width var(--duration-fast) var(--ease),
+    outline-offset var(--duration-fast) var(--ease);
 }
 
+/* The ring grows and the well lifts one step, as Input's does. */
 .armada-select:focus-visible,
 .armada-select[data-preview-focus] {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+  background: var(--bg-raised);
 }
 
 .armada-select[aria-invalid="true"] {

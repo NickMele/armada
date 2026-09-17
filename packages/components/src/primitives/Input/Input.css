@@ -36,7 +36,18 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
-  transition: border-color var(--duration-fast) var(--ease);
+  /* The ring is --focus-ring from the start, at no width and no offset, so
+   * focus grows it out of the edge rather than switching it on — the contract's
+   * "a focused field's ring grows from its edge and its ground lifts one step".
+   * Both ends are `solid`, which is what lets the width interpolate. */
+  outline: var(--focus-ring);
+  outline-width: 0;
+  outline-offset: 0;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    outline-width var(--duration-fast) var(--ease),
+    outline-offset var(--duration-fast) var(--ease);
 }
 
 /* Mono means machine-derived — a path, a branch, a command — and runs one
@@ -76,7 +87,15 @@
   border-width: var(--border-width);
   border-color: var(--border-default);
   background: var(--bg-sunken);
-  transition: border-color var(--duration-fast) var(--ease);
+  /* At rest the ring is there at no width, as on the field itself. */
+  outline: var(--focus-ring);
+  outline-width: 0;
+  outline-offset: 0;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    outline-width var(--duration-fast) var(--ease),
+    outline-offset var(--duration-fast) var(--ease);
 }
 
 .armada-input-field__well[data-trailing] .armada-input {
@@ -89,15 +108,18 @@
   border-radius: 0;
 }
 
-/* The ring belongs to whatever draws the edge, and here that is the well. */
+/* The ring belongs to whatever draws the edge, and here that is the well —
+ * and so does the ground it lifts. */
 .armada-input-field__well[data-trailing]:focus-within {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+  background: var(--bg-raised);
 }
 
 .armada-input-field__well[data-trailing] .armada-input:focus-visible,
 .armada-input-field__well[data-trailing] .armada-input[data-preview-focus] {
   outline: none;
+  background: none;
 }
 
 /* Invalid moves with the edge, for the same reason the ring does. */
@@ -115,10 +137,13 @@
   color: var(--fg-subtle);
 }
 
+/* Focus lifts the well one step, --bg-sunken to --bg-raised, as the ring
+ * grows: the field a person is typing in is the one no longer recessed. */
 .armada-input:focus-visible,
 .armada-input[data-preview-focus] {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+  background: var(--bg-raised);
 }
 
 /* Invalid takes the --status-completed-failed edge and states why underneath.

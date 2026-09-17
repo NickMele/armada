@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 import { DropdownMenu, type DropdownMenuEntry } from "./DropdownMenu";
 
 const meta: Meta<typeof DropdownMenu> = {
@@ -43,14 +43,16 @@ export const RowMenu: Story = {
    * arrive is an item that does nothing.
    */
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByRole("menu")).toBeVisible();
+    // Waited for rather than read once: the menu enters from opacity 0 at
+    // --duration-base, and the first frame of that is a panel no one can see.
+    await waitFor(() => expect(canvas.getByRole("menu")).toBeVisible());
 
     // Esc closes an overlay, per the global tier.
     await userEvent.keyboard("{Escape}");
     await expect(canvas.queryByRole("menu")).toBeNull();
 
     await userEvent.click(canvas.getByRole("button", { name: "More" }));
-    await expect(canvas.getByRole("menu")).toBeVisible();
+    await waitFor(() => expect(canvas.getByRole("menu")).toBeVisible());
 
     await userEvent.click(canvas.getByRole("menuitem", { name: /Copy job ID/ }));
     await expect(args.onSelect).toHaveBeenCalledWith("copy");

@@ -34,6 +34,14 @@
   justify-content: center;
   padding: var(--space-6);
   background: var(--scrim);
+  animation: armada-dialog-scrim-in var(--duration-base) var(--ease);
+}
+
+/* Only the start is named, so the end is whatever --scrim computes to. */
+@keyframes armada-dialog-scrim-in {
+  from {
+    background-color: transparent;
+  }
 }
 
 /* max-height is the scrim's content box, which is the window less its inset —
@@ -52,6 +60,22 @@
   background: var(--bg-overlay);
   border: var(--armada-hairline) solid var(--border-default);
   box-shadow: var(--shadow-overlay);
+  animation: armada-dialog-in var(--duration-base) var(--ease);
+}
+
+/* The entrance: scale from 0.97 with opacity, while the scrim fades behind it —
+ * the contract's "a dialog scales from 0.97 with its scrim fading". The scrim
+ * centres the layer with flex rather than a transform, so this transform has
+ * nothing to compose with and the origin is the layer's own centre.
+ *
+ * No fill mode. Nothing is held after it ends, so under reduced motion, where
+ * the duration is zero, the layer is its own style from the first frame and
+ * never sits at opacity 0. */
+@keyframes armada-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
 }
 
 /* Head, field and actions are fixed. Only the body scrolls, which is what

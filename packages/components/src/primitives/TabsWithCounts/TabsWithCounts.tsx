@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Kbd } from "../Kbd/Kbd";
 
 /**
@@ -62,6 +62,54 @@ export type TabsWithCountsProps = {
   suspended?: boolean;
 };
 
+/**
+ * The same bar `Tabs` draws.
+ *
+ * Places the strip's one underline under the selected tab. **One bar that
+ * travels**, at `--duration-base`, so the eye follows the selection from the
+ * tab it left; an edge per tab can only swap.
+ *
+ * Measured from `offsetLeft` and `offsetWidth` before paint, and again when any
+ * tab or the strip changes size — a count arriving moves every tab after it.
+ * Written to the bar's style rather than rendered: a render would be a commit
+ * between the layout and the paint. **The first placement does not travel**:
+ * `data-travel`, which the transition is keyed on, is set a frame later.
+ */
+function useActiveBar(active: string | undefined, key: string) {
+  const strip = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const list = strip.current;
+    const line = bar.current;
+    if (list === null || line === null) return;
+
+    function place() {
+      if (list === null || line === null) return;
+      const tab = list.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (tab === null) {
+        line.hidden = true;
+        return;
+      }
+      line.hidden = false;
+      line.style.setProperty("--armada-tab-bar-x", `${tab.offsetLeft}px`);
+      line.style.setProperty("--armada-tab-bar-w", `${tab.offsetWidth}px`);
+    }
+
+    place();
+    const frame = requestAnimationFrame(() => line.setAttribute("data-travel", ""));
+    const watching = new ResizeObserver(place);
+    watching.observe(list);
+    for (const tab of list.querySelectorAll('[role="tab"]')) watching.observe(tab);
+    return () => {
+      cancelAnimationFrame(frame);
+      watching.disconnect();
+    };
+  }, [active, key]);
+
+  return { strip, bar };
+}
+
 export function TabsWithCounts({
   items,
   value,
@@ -71,6 +119,10 @@ export function TabsWithCounts({
 }: TabsWithCountsProps) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
   const active = value ?? internal;
+  const { strip, bar } = useActiveBar(
+    active,
+    items.map((item) => `${item.id}:${item.count ?? 0}:${item.shortcut ?? ""}`).join("\u0000"),
+  );
 
   function select(id: string) {
     if (value === undefined) setInternal(id);
@@ -97,6 +149,7 @@ export function TabsWithCounts({
 
   return (
     <div
+      ref={strip}
       className="armada-tabs-counts"
       role="tablist"
       data-suspended={suspended || undefined}
@@ -122,6 +175,7 @@ export function TabsWithCounts({
           {item.count ? <span className="armada-tabs-counts__count">{item.count}</span> : null}
         </button>
       ))}
+      <span ref={bar} className="armada-tabs-counts__bar" aria-hidden="true" hidden />
     </div>
   );
 }
