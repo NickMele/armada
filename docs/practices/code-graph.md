@@ -41,7 +41,7 @@ fetches the pinned version. Nothing else, and no global install.
 
 **What its output means:** it ends by printing the symbol, relationship and flow
 counts. A failure naming `@ladybugdb/core` or `tree-sitter` is an install
-script pnpm refused to run; the script passes the flags that allow those three.
+script pnpm refused to run; the script passes a flag allowing each one it needs.
 
 **It never writes to `AGENTS.md` or `.claude/skills/`.** A bare `gitnexus
 analyze` does both — it appends a block to `AGENTS.md` that fails the fifty-line
@@ -69,3 +69,8 @@ rebuild before trusting an empty answer.
 **The version is pinned in two places: `package.json` and `.mcp.json`.** Move
 both in one commit, then run `pnpm gitnexus analyze --skip-agents-md` once
 without `--skip-skills` to refresh the committed skills, and read their diff.
+
+**A refresh reverts every stale-index line to a bare `analyze`.** The committed
+skills point at `pnpm gitnexus:index` instead, and the upstream copy does not.
+Put those lines back before committing, or the next agent that finds a stale
+index rewrites `AGENTS.md`.
