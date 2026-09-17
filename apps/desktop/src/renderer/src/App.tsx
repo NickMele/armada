@@ -47,7 +47,7 @@ import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
 import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
-import { carryOut, dormantIn } from "./palette";
+import { absentIn, carryOut, dormantIn } from "./palette";
 import { failingIn } from "./failing";
 import {
   examine,
@@ -545,7 +545,7 @@ export function App() {
           onOpenChange: setStatsOpen,
         }}
         fleet={{
-          ...fleetPanelOf(state.connection, statement, state.health, now),
+          ...fleetPanelOf(state.connection, statement, state.health, now, state.readAt),
           open: fleetOpen,
           onOpenChange: setFleetOpen,
         }}
@@ -971,6 +971,7 @@ export function App() {
           cursor,
           failing: failing !== null,
         })}
+        absent={absentIn({ reading: reading !== null, cursor })}
         onChoose={(choice) =>
           carryOut(choice, onWhat?.id ?? null, {
             openJob: setOpenJob,

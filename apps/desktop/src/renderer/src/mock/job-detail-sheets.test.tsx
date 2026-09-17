@@ -50,6 +50,20 @@ test("the log opens from its chapter's own control, and the control leaves the c
   await expect.poll(() => page.getByRole("button", { name: /Open the log/ }).query()).toBeNull();
 });
 
+/** The loops drawing under this keyframe right now: what moves on screen, whatever element carries it. */
+const looping = (keyframes: string): number =>
+  document.getAnimations().filter((one) => (one as CSSAnimation).animationName === keyframes).length;
+
+test("the rail's current step keeps pulsing behind an open sheet", async () => {
+  await opened(running());
+  await expect.poll(() => looping("armada-step-mark-pulse")).toBeGreaterThan(0);
+  // The same loops before and after: the chapter's live step shares the keyframe, so only a count says the rail's stayed.
+  const before = looping("armada-step-mark-pulse");
+  await page.getByRole("button", { name: /Open the log/ }).click();
+  await expect.element(dialog("Activity log")).toBeVisible();
+  expect(looping("armada-step-mark-pulse")).toBe(before);
+});
+
 test("the Job's patch opens from the Produced chapter", async () => {
   await opened(running());
   await page.getByRole("button", { name: /Open the diff/ }).click();

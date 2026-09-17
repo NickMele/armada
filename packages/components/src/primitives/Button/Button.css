@@ -32,7 +32,8 @@
   transition:
     background-color var(--duration-fast) var(--ease),
     border-color var(--duration-fast) var(--ease),
-    color var(--duration-fast) var(--ease);
+    color var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
 }
 
 /* A press answers at --duration-press; letting go eases back at
@@ -64,11 +65,16 @@
   width: var(--h-control-sm);
 }
 
-/* Primary — one per view, and never on a list row. Emphasis is the fill. */
+/* Primary — one per view, and never on a list row. Emphasis is the fill, and
+   the one solid accent lifts a little off its card in its own light
+   (--shadow-primary, design-system.md → Button). The only shadow allowed
+   inside a card. Every rendering that leaves the accent — pressed, pending,
+   disabled, answering — drops it, since the light is the accent's. #1260. */
 .armada-button[data-variant="primary"] {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--fg-inverse);
+  box-shadow: var(--shadow-primary);
 }
 
 .armada-button[data-variant="primary"]:hover:not(:disabled),
@@ -85,6 +91,7 @@
   background: var(--accent-muted);
   border-color: var(--accent-muted);
   color: var(--fg-default);
+  box-shadow: none;
 }
 
 /* Secondary — filled one surface step from its ground, so the box reads as a
@@ -195,6 +202,7 @@
   background: var(--bg-sunken);
   border-color: var(--border-strong);
   color: var(--fg-subtle);
+  box-shadow: none;
   cursor: default;
 }
 
@@ -205,6 +213,7 @@
   background: var(--bg-sunken);
   border-color: var(--border-strong);
   color: var(--fg-default);
+  box-shadow: none;
   cursor: default;
 }
 
@@ -267,6 +276,7 @@
     background-color: var(--bg-sunken);
     border-color: var(--border-strong);
     color: var(--fg-default);
+    box-shadow: none;
   }
 }
 

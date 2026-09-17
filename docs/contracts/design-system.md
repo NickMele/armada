@@ -93,6 +93,13 @@ is allowed only as that light, and never where a person reads a state.
 4. **Dark is primary.** Design dark first. Light exists but is secondary.
 5. **Icons: lucide-react only**, used sparingly. A dashboard dense with
    icons reads as noise.
+6. **React Flow (`@xyflow/react`) is the one sanctioned graph surface**, and
+   a [Studio](../concepts/studio.md)'s whiteboard is what it draws. It
+   supplies placement, pan, zoom, fit and selection, and nothing that is
+   seen: every node inside it is built from the primitives above and the
+   tokens below, its controls are `button`, and every value its own
+   stylesheet would paint is set to a token. No second graph or canvas
+   library, and no node drawn from React Flow's defaults.
 
 ---
 
@@ -133,12 +140,15 @@ vibrating.
 --border-glass      rgb(255 255 255 / 0.07) card edge
 --border-highlight  rgb(255 255 255 / 0.05) 1px light along a card's top inner edge
 --accent-faint      --accent at 10%        the canvas's pool of light
---shadow-card       highlight + 1px contact + 28px soft drop
+--shadow-card       1px contact + 28px soft drop
 --glass-blur        12px                   backdrop blur under a card
 ```
 
 **A card** is a vertical gradient from `--bg-glass` to `--bg-glass-end`, with
-`--border-glass`, `--shadow-card` and a `--glass-blur` backdrop blur. It
+`--border-glass`, `--shadow-card`, a `--border-highlight` line along its top
+inner edge and a `--glass-blur` backdrop blur. The gradient, the highlight and
+the blur sit on a layer behind the card's content rather than on the card, so
+a tooltip or menu inside a card is never clipped by it. It
 replaces `--bg-raised` and `--border-subtle` on every panel that sits directly
 on the canvas: the left column's three panels, Overview's cards and Helm's
 dock. A row, a well or an input inside a card stays flat on its Ground token.
@@ -153,9 +163,13 @@ measured under the accent pool. `--fg-subtle` reads 4.74:1 there, and every
 status badge clears 4.5:1 on its own 12% tint, `not_started` included at
 4.55:1. A lighter top, `rgb(30 41 55)`, dropped `--fg-subtle` to 4.37:1.
 
-**Blur is the one cost worth watching.** The window stays open all day on a
-second monitor. The glass is 86% opaque so that where blur is dropped for
-cost, the card paints nearly the same colour without it.
+**No blur while a scrim covers the card.** Behind an open Sheet or Dialog the
+blur cannot be seen, and redrawing it every frame under the scrim made presses
+on the sheet go missing: three full runs of the app's tests in six, and none in
+five once it was off. The glass is 86% opaque, so the card paints the same
+without it. A Drift or Verify panel inside a Sheet or Dialog is not on the
+canvas, so it takes no glass at all and stays on `--bg-raised` and
+`--border-subtle`.
 
 ### Foreground
 
@@ -287,6 +301,10 @@ new one. The mapping is declared, so it is read rather than inferred.
 --step-stopped-bg  var(--status-escalated-bg)
 --verdict-met      var(--status-completed-success)
 --verdict-not-met  var(--status-completed-failed)
+--run-running      var(--status-running)
+--run-passed       var(--status-completed-success)
+--run-failed       var(--status-completed-failed)
+--run-stopped      var(--status-killed)
 ```
 
 **Step activity answers where the work is.** `retrying` and
@@ -330,6 +348,15 @@ criterion and why. **Verdict hue is per criterion and never sums onto
 the step or the Job** — that is the rule that lets a red cross sit under
 a running step beneath an escalated badge without any of the three
 contradicting the others.
+
+**A run started by hand takes Job colours, and is still no verdict.** A
+Check or Command run from a Job's run sheet or the Manifest surface hues its
+result: the code it expected is `--run-passed`, any other ending
+`--run-failed`, one in flight `--run-running`, and one somebody stopped
+`--run-stopped` — killed's grey, so it never reads as an error. The hue sits on the result's chip and the
+elapsed figure, and it counts for nothing — a run writes no Evidence and no
+`check_runs` row, and on Job detail the run sheet keeps its own heading so a
+rehearsal never reads as the gate's result.
 
 **Refusals sort first, and every criterion row carries its number.** A
 card that reorders breaks correspondence with the frozen
@@ -537,26 +564,71 @@ current; only motion says it is still working, and that is the reading
 a static rail cannot give — it matters most on the step that has been
 running for nine minutes.
 
-**It pulses in one place per screen, on the most specific mark present,
-and on the thing being read.** Job detail has a rail, so the
-rail's current step pulses and the header's Running badge stays static —
-the rail names *which* step is working, the badge one line above only
-names the Job's state. A list has no rail, so the Running badge pulses
-there instead, **on the focused row only**: a list carries one running
-mark per Job, and fourteen breathing dots is the thing the first
-sentence of this section forbids. The step bar never pulses — its job is
-where the work got to, which is a static fact, and the badge sits in a
-fixed column on every row so the motion appears in one predictable place
-rather than moving with the workflow's length.
+**Every working mark pulses.** A list pulses every running row's Running
+badge. Job detail pulses the rail's current step, and the header's Running
+badge stays static, because the rail names *which* step is working and the
+badge only names the Job's state. A sheet open over Job detail does not stop
+the rail, and the sheet's own live mark pulses beside it. A
+[Studio](../concepts/studio.md) pulses every node that is still working. The
+step bar never pulses — its job is where the work got to, which is a static
+fact, and the badge sits in a fixed column on every row so the motion appears
+in one predictable place rather than moving with the workflow's length.
 
 Opacity and scale only, at `--duration-pulse`. The ring holds still, so
-no row shifts and nothing reflows. The scope narrowed three times — per
-rail, then the focused Job, then this — and the reading survived each
-time because the pulse never carried *which* step is current. Hue does
-that, unchanged on every running row. The pulse carries *still working*,
-and that is only asked of the thing being read, which is why it follows
-focus rather than status. Under `prefers-reduced-motion` the pulse stops and
-`--step-running` carries the reading alone.
+no row shifts and nothing reflows. Hue says *which* state, unchanged on
+every running row; the pulse says *still working*, which is true of every
+working thing on screen, so the pulse follows status rather than focus.
+Under `prefers-reduced-motion` the pulse stops and `--step-running`
+carries the reading alone. #1276 carries this to the screens.
+
+---
+
+## Sound
+
+**A sound says which kind of wait, to a person who is not looking.** macOS
+gives every notification the same chime, so work that has stopped and a
+review that will keep sound identical. Armada gives the two their own tone.
+
+| Tone | Plays when | Notes |
+|---|---|---|
+| **Blocked** | A notification tells of a Job that entered Escalated | G4 → D4, falling, 170ms apart |
+| **Waiting** | A notification tells of any other Job that started waiting on a person | One A4 |
+
+Each note is a sine of 200ms, rising to full in 12ms and decaying
+exponentially. Both tones sit at one level, because loudness is macOS's
+setting and not Armada's.
+
+**A tone is the notification's own sound, never a second channel.** It rides
+on the banner, so macOS's permission, Focus and per-app sound settings govern
+it exactly as they govern the banner. Bridge never plays audio itself, and a
+refused notification is a silent one.
+
+**One notification, one tone.** A batch that holds an escalation plays
+Blocked, because the most urgent Job in it decides. Nothing else makes a
+sound: a Job that lands, a Check that passes and a press are silent, which
+keeps the loudness order in Behaviour rules intact.
+
+## Touch
+
+**A press that lands can be felt, so the eyes can already be elsewhere.** A
+person holds Kill and looks at the next row before Fleet has answered. The
+trackpad answers the act that finger made, and nothing else.
+
+| Pattern | Plays when |
+|---|---|
+| **Alignment** | A control waiting on Fleet reaches *accepted* |
+| **Level change** | A control waiting on Fleet reaches *refused* |
+
+**Touch only ever answers the person's own press.** Fleet's events never
+play one, and neither does hover or focus. A haptic is only felt while a
+finger rests on the trackpad, so anything else would be a signal that
+mostly fires into nothing.
+
+**Nothing may carry information by touch alone.** The press bar's colour and
+direction already say accepted or refused, and a mouse, or macOS's haptic
+feedback turned off, loses nothing. Electron cannot reach the trackpad, so
+the pattern is performed from outside the renderer, behind one seam that
+names the two patterns and not how they are played.
 
 ---
 
@@ -1088,6 +1160,14 @@ and an act the app cannot reach from where you are standing. Both are
 facts rather than a list of exceptions, which is the same reasoning the
 `not built` annotation carries under Two tiers.
 
+**One exception: an act on one Job, with no Job focused, is left out.**
+Open, Review, Attest, Redirect, Kill, Redispatch and Restart step need a
+Job to act on. With no Job open and nothing under the Board's cursor, six
+dimmed rows all saying *no job focused* led the palette and told a person
+nothing they could act on. They come back when a Job is focused, which
+is where their shortcuts are learned. A `not built` row is never left
+out. Settled 2026-09-17.
+
 **The palette is the discovery surface.** It is how a person learns
 forty shortcuts without a cheat sheet, which is why every entry displays
 its binding and why no action may exist outside it.
@@ -1438,18 +1518,60 @@ composer --bg-sunken, --border-glass
 Send     --helm-muted fill, --helm text, --helm-edge border
 ```
 
+### Instruments
+
+**A mark that draws a measurement is an instrument, not an icon or an
+illustration.** Twelve minutes of a Drone doing nothing is a flat line no
+figure can show, and a footprint's shape says where the work went before a
+path is read. The ban on decorative iconography stands; an instrument is
+exempt only while every mark in it is a value from the wire.
+
+| Instrument | Where | Draws |
+|---|---|---|
+| **Activity** | A running Job | Tool calls per 30s window over the last twelve minutes, one bar per window |
+| **Footprint** | A finished Job's footprint | Each file as a column, width by lines changed, split into added over deleted |
+
+```
+activity bar      --instrument-activity at 75%; an empty window --border-subtle at 1.5px, never absent
+activity axis     1px --border-default along the base
+footprint added   --diff-add-fg at 55%
+footprint deleted --diff-del-fg at 45%
+outside the plan  1.5px --instrument-outside-plan outline, and the words beside the key
+labels, key       --font-mono --text-2xs --fg-subtle
+```
+
+**An instrument takes the hue of what it measures.** Tool calls are the
+running step's work, so activity draws in the running hue, aliased once in
+`tokens/status.css`. A file outside every declared plan is drift, which a
+badge already draws amber, so its outline is amber too. A file with no line
+count is left out of the footprint and counted in its key, because a guessed
+width is a wrong measurement.
+
+**An instrument carries its own reading in words.** Each has a label naming
+what it measures and an accessible description stating what it shows, such as
+*no tool calls for the last 12 minutes*. It never animates in, and a new
+reading replaces the drawing rather than moving it.
+
 ### Fleet panel
 
 The left column's third panel — what the status bar used to read.
 
 ```
 state    --dot (6px) + --text-base --fg-default
-detail   --font-mono --text-2xs --fg-subtle
-meta     --font-mono --text-2xs --fg-subtle
+rows     pid / port / protocol / up, one row each: label --text-xs
+         --text-label on the left, value --font-mono --text-xs --text-body
+         in one aligned column — Pulse's figure rows, FigureList
+detail   --font-mono --text-2xs --fg-subtle, the sentence a state carries
 doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
          (--status-completed-success / --status-awaiting-review /
          --status-escalated) and the modules checked, in --fg-muted
 ```
+
+**The rows were settled on 2026-09-17**, replacing two `·`-joined mono lines,
+at the cost of two lines in a column that was already tall. **A state draws
+only the rows it has a value for**, never a label beside a blank: a Fleet
+being connected to or not answering has pid and port, and protocol and up
+arrive with the connection.
 
 **Fleet's state is one of three, and the panel's dot names which** — the
 same three the status bar used to carry, on the same grounds Doctor's pass,
@@ -1461,18 +1583,18 @@ carries no icons" is unaffected; see [Iconography](iconography.md).
 
 ```
 running       --status-completed-success dot
-              "Fleet running" · mono: pid, port
+              "Fleet running" · rows: pid, port, protocol, up
 not running   --status-escalated dot
               "Fleet is not running" · mono: what the runtime file says —
               no file at its path, a pid held by nothing, or a pid held by
               something else — plus what to do, since Bridge cannot start it
 unreachable   --status-awaiting-review dot
-              "Fleet unreachable" · mono: pid alive on its port, no answer
-              for N, plus how stale the last read is
+              "Fleet unreachable" · rows: pid, port · mono: alive, no
+              answer for N, plus how stale the last read is
 ```
 
-**Drone count moved to Stats.** This panel's own mono line carries pid and
-port only; the running count is Overview's own arithmetic, read once and
+**Drone count moved to Stats.** This panel's rows carry pid, port, protocol
+and up only; the running count is Overview's own arithmetic, read once and
 shared by both panels.
 
 The two failure states differ on the runtime file, which is the fact
@@ -1483,8 +1605,8 @@ wedged. Two different things to do about it, so two sentences rather
 than one timeout message.
 
 **A version gap rides the running state, not a fourth dot.** Where Fleet is
-newer than this Bridge — additive only, so nothing drawn is wrong — the
-detail line grows a clause naming both versions, as advice on a healthy
+newer than this Bridge — additive only, so nothing drawn is wrong — a
+detail line under the rows names both versions, as advice on a healthy
 connection rather than a failure notice. See `../practices/protocol.md`,
 What Bridge does with the version it reads.
 
@@ -1815,6 +1937,10 @@ read plausibly under a different job has failed.
 - **Doctor** the health check. Never diagnostics, system status.
 - **Workspace** one unit inside a repo. Never package, module,
   sub-repo.
+- **Studio** the typed graph of one stretch of work, kept per repository.
+  Never canvas, playground.
+- **Scout** the read-only agent a Studio sends to read and report back as a
+  Finding. Never researcher, explorer.
 - **Drone transcript** the record of a Drone's turns. Never the Drone
   log, the Drone output.
 - **Judge record** one Judge call and every judge's verdict inside it.
@@ -2120,7 +2246,8 @@ value and no merge, so no Manifest is party to it.
 **Stats and Fleet**, present in the left column on every surface. Stats
 reads Awaiting approval, Needs review and Escalated — amber past zero for
 the first two, red for the third — plus Jobs, Drones and Manifest drift.
-Fleet reads "Fleet running" when idle, and a mono `pid · port` beside it;
+Fleet reads "Fleet running" when idle, and pid, port, protocol and up as
+rows under it;
 neither panel carries spend or quota, which left the shell chrome
 entirely with the status bar Bridge/1088 replaced.
 
@@ -2157,16 +2284,6 @@ is verification source=Check with actor=Drone.
   marks still read at that density, and if not, whether a cap keeps the most
   recent few or the most urgent. Change detection and the ticker are in
   `packages/screens/src/recent.ts`.
-
-- **[running-mark-scope]** Should every running row's mark pulse, and should
-  the step keep pulsing behind an open sheet? Today the running mark pulses in
-  one place per screen: the focused row on a list, the rail's current step on
-  Job detail, and the sheet's live mark while a sheet is up. That scope was a
-  consequence of one-animation-per-screen, which is no longer a rule, so it is
-  now a choice. Every row pulsing says which Jobs are still working without
-  moving the cursor, at the cost of as many marks breathing as Jobs running;
-  a control waiting on Fleet already sweeps its own bar beside them.
-  `JobRowStacked`, `Row.tsx` and `JobDetail.tsx` carry the scope today.
 
 - **[pilot-exit-bindings]** What are the keys for Close as superseded and
   Override the verdict? Every action owes a verb, an icon and a shortcut, and

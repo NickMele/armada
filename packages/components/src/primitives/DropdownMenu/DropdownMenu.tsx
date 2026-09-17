@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
@@ -95,6 +95,9 @@ export function DropdownMenu({
         onClick={() => setOpen((v) => !v)}
       >
         {triggerLabel}
+        {/* Says this opens a menu, settled 2026-09-17 (icons.toml, chevron-down).
+            Every trigger here has a label, so none is left without it. */}
+        <ChevronDown className="armada-dropdown-menu__chevron" size={12} strokeWidth={2} aria-hidden />
       </button>
       {/* A menu open when its trigger turns off stays shut rather than sending
           from under a control that says it cannot. */}

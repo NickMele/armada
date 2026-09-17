@@ -67,6 +67,18 @@ wire_id! {
     /// The WorkflowDef a Job follows.
     WorkflowId, core_model::WorkflowId
 }
+wire_id! {
+    /// A Studio. `#1285`.
+    StudioId, core_model::StudioId
+}
+wire_id! {
+    /// One node on a Studio.
+    StudioNodeId, core_model::StudioNodeId
+}
+wire_id! {
+    /// One edge on a Studio.
+    StudioEdgeId, core_model::StudioEdgeId
+}
 
 /// A step's identifier, from the WorkflowDef and never generated.
 ///

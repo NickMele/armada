@@ -65,6 +65,12 @@ export const RowMenu: Story = {
  * `aria-current` names it for anyone not reading the glyph. A reset action
  * ("All repositories") sits above a separator from the specific choices below
  * it, the repository picker's own shape.
+ *
+ * **The trigger says it opens a menu, to the eye and to assistive tech.** The
+ * owner could not tell the picker was one (2026-09-17), so a label trigger
+ * draws `chevron-down` right of its label, and `aria-haspopup` says the same
+ * thing to anyone not reading the glyph. The glyph is `aria-hidden`, so the
+ * accessible name stays the label alone.
  */
 export const WithSelectedItem: Story = {
   args: {
@@ -78,6 +84,18 @@ export const WithSelectedItem: Story = {
     ],
   },
   play: async ({ canvas }) => {
+    const trigger = canvas.getByRole("button", { name: "All repositories" });
+    await expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    await expect(trigger).toHaveAccessibleName("All repositories");
+    // The mark trails the label: drawn, hidden from the tree, and to its right.
+    const mark = trigger.lastElementChild;
+    await expect(mark).toBeInstanceOf(SVGSVGElement);
+    await expect(mark).toBeVisible();
+    await expect(mark).toHaveAttribute("aria-hidden", "true");
+    const label = document.createRange();
+    label.selectNodeContents(trigger.firstChild!);
+    await expect(mark!.getBoundingClientRect().left).toBeGreaterThanOrEqual(label.getBoundingClientRect().right);
+
     await expect(canvas.getByRole("menuitem", { name: "All repositories" })).toHaveAttribute(
       "aria-current",
       "true",

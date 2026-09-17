@@ -89,6 +89,59 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/helm/start_fresh",
     },
+    // A repository's Studios, `#1285`: the collection reads `?manifest_id=`,
+    // a member is its id, and each act is spelled in the last segment without
+    // `studio_`, which the segment before it already says.
+    Route {
+        operation: "list_studios",
+        method: "GET",
+        path: "/studios",
+    },
+    Route {
+        operation: "create_studio",
+        method: "POST",
+        path: "/studios/create",
+    },
+    Route {
+        operation: "get_studio",
+        method: "GET",
+        path: "/studios/:studio_id",
+    },
+    Route {
+        operation: "rename_studio",
+        method: "POST",
+        path: "/studios/:studio_id/rename",
+    },
+    Route {
+        operation: "delete_studio",
+        method: "POST",
+        path: "/studios/:studio_id/delete",
+    },
+    Route {
+        operation: "add_studio_node",
+        method: "POST",
+        path: "/studios/:studio_id/add_node",
+    },
+    Route {
+        operation: "move_studio_node",
+        method: "POST",
+        path: "/studios/:studio_id/move_node",
+    },
+    Route {
+        operation: "remove_studio_node",
+        method: "POST",
+        path: "/studios/:studio_id/remove_node",
+    },
+    Route {
+        operation: "propose_studio_edge",
+        method: "POST",
+        path: "/studios/:studio_id/propose_edge",
+    },
+    Route {
+        operation: "decide_studio_edge",
+        method: "POST",
+        path: "/studios/:studio_id/decide_edge",
+    },
     // Fleet's reading of its own Manifest, and singular where `/manifests` is
     // plural on purpose: that route lists what Fleet holds, and this one is the
     // single `armada.yml` Fleet is running on and watching. Not under `/jobs`
@@ -841,6 +894,17 @@ pub const SERVED: &[Route] = &[
     // Fleet's own list, carried whole, so a picker replaces it rather than patching.
     Route {
         operation: "repositories.changed",
+        method: "GET",
+        path: "/events",
+    },
+    // A Studio after a write, whole, and a Studio deleted.
+    Route {
+        operation: "studio.changed",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "studio.deleted",
         method: "GET",
         path: "/events",
     },

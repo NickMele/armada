@@ -29,12 +29,14 @@
 // Split out of `JobDetail.tsx` at the 900-line line.
 
 import {
+  ActivityInstrument,
   briefSections,
   Button,
   ChangeSummary,
   ChangedFiles,
   Clamped,
   DroneBrief,
+  FootprintInstrument,
   FramesPaired,
   FramesShown,
   ShownAgain,
@@ -71,6 +73,7 @@ import {
 } from "./frames";
 import { fileRowsOf, readingFor, whyNoFootprint } from "./files";
 import { WorkNarrated } from "./grouped";
+import { ACTIVITY_SAID, activityOf, FOOTPRINT_LABEL, footprintOf } from "./instruments";
 import { Log } from "./Log";
 import { keptOf, type KeptRead, type Opens } from "./phases";
 import { changeSummaryOf, moreSaid } from "./change-summary";
@@ -276,6 +279,7 @@ export function chaptersOf({
   // tier's rows on the phase strip. Two readings is how the two surfaces
   // came to state one ordering separately. #321.
   const documents = keptOf(step, opens);
+  const activity = live ? activityOf(watching === null ? [] : watching.rows, step.step_id, now) : undefined;
   const shown = shownFrames(step.frames ?? [], frames);
   const pairs = pairedFrames(step.frames ?? [], frames);
   // **Numbered over what is drawn.** Every chapter below is built without an
@@ -379,6 +383,11 @@ export function chaptersOf({
       // note, so it is said once either way.
       preview: (
         <>
+          {/* Above the rows, on a running Job only: a quiet Drone is a flat
+              tail here before it is an absence of rows below. */}
+          {activity === undefined ? null : (
+            <ActivityInstrument {...ACTIVITY_SAID} windows={activity.windows} description={activity.description} />
+          )}
           {transcript === undefined || rows.length === 0 ? null : (
             <p className="text-2xs text-fg-muted">{transcript}</p>
           )}
@@ -442,12 +451,19 @@ export function chaptersOf({
               {whyNoFootprint(job.assigned_drone !== undefined)}
             </p>
           ) : ended === undefined ? (
-            // The Job's own panel beside the run, by folder. #1187.
-            <ChangeSummary
-              {...summarised(produced.files)}
-              emptyNote={nothingTouched(documents.length, false)}
-              {...(produced.note === undefined ? {} : { note: produced.note })}
-            />
+            <>
+              {/* The record's own shape, above its rows, where the record is
+                  what this chapter reads. */}
+              {kept === undefined || kept.files.length === 0 ? null : (
+                <FootprintInstrument label={FOOTPRINT_LABEL} {...footprintOf(kept)} />
+              )}
+              {/* The Job's own panel beside the run, by folder. #1187. */}
+              <ChangeSummary
+                {...summarised(produced.files)}
+                emptyNote={nothingTouched(documents.length, false)}
+                {...(produced.note === undefined ? {} : { note: produced.note })}
+              />
+            </>
           ) : (
             <ChangedFiles
               files={produced.files}

@@ -329,7 +329,7 @@ find the code without asking where you clicked.
 | Way | What happens |
 |---|---|
 | *Send to Fleet*, on the note or for every open note on the screen | Proposed as a Job at the approval gate, with a screenshot of the area attached. Nothing runs until you approve it on the Board, and no session has to be open. The pin says where it went |
-| `/annotations`, in a session | The agent reads the open notes, fixes, asks or leaves each for Fleet, and marks it done — `.claude/skills/annotations/` |
+| `/annotations`, in a session | The agent reads the open notes, asks what is the owner's to decide, dispatches a subagent for each change, verifies it, and marks it done — `.claude/skills/annotations/` |
 
 **Send needs Bridge and its Fleet.** In the mock there is no Fleet, so the layer
 says so and the note stays a file for `/annotations`.

@@ -23,6 +23,7 @@ mod reference;
 mod served;
 mod shapes;
 mod stream;
+mod studios;
 mod watching_run;
 
 use axum::Router;

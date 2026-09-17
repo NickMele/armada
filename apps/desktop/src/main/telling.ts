@@ -35,8 +35,24 @@
 // has the standing signal, and only the interruption is lost.
 
 import { entering, telling, waitingIn } from "@armada/screens/src/waiting";
-import type { Telling } from "@armada/screens/src/waiting";
+import type { Telling, Tone } from "@armada/screens/src/waiting";
 import type { JobSummary } from "@armada/protocol";
+
+/**
+ * The sound name a notification carries for each tone: `sounds/<name>.wav`,
+ * copied into the bundle's Resources by `electron-builder.yml`.
+ *
+ * **A name, never a player.** macOS plays it as the notification's own sound,
+ * so permission, Focus and per-app sound settings mute it with the banner.
+ */
+const SOUNDS: Record<Tone, string> = {
+  blocked: "armada-blocked",
+  waiting: "armada-waiting",
+};
+
+export function soundOf(tone: Tone): string {
+  return SOUNDS[tone];
+}
 
 /**
  * How long entries are collected before one notification goes out.

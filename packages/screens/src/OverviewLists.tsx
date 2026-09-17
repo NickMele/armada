@@ -24,7 +24,7 @@
 
 import { ActiveJobsList } from "@armada/components";
 import type { JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
-import { BoardEmpty } from "./BoardEmpty";
+import { BoardEmpty, OverviewEmpty } from "./BoardEmpty";
 import type { BoardSection } from "./board";
 import { columnsFor, repositoryOf } from "./board";
 import { boardPressOf, verbOf } from "./keys";
@@ -184,7 +184,18 @@ export function OverviewLists({
       // whichever section it is in.
       onFocusCapture={onFocusCapture}
     >
-      {sections.length === 0 ? (
+      {sections.length === 0 && disconnected === null && repositories.length > 0 ? (
+        // The null result is a card of its own on the canvas, not a well inside a panel — a
+        // card inside the panel would be a card in a card. `BoardEmpty`'s order: a fault or a
+        // fresh install reads first, and both keep the panel below unchanged. #1262.
+        //
+        // The wrapper is the empty panel's own frame, kept without the panel: `ActiveJobsList`
+        // named its empty frame by `label`; a region keeps that name without a list of no items, so
+        // assistive tech still finds "Overview" here. No class, so it draws nothing of its own.
+        <div role="region" aria-label="Overview">
+          <OverviewEmpty onCompose={onCompose} />
+        </div>
+      ) : sections.length === 0 ? (
         <ActiveJobsList
           variant="panel"
           selectable

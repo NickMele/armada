@@ -1,0 +1,50 @@
+/* Label left, figure right, so figures of different lengths still line up as a
+   column a person reads down. Was `JobHoldsSummary`'s own figure rows.
+
+   The tracks are declared once on the list and borrowed by each row, so a
+   `fit` column is as wide as the longest label rather than each row's own. */
+.armada-figures {
+  display: grid;
+  /* The label column Where things are draws, so Pulse and the rows under it
+     read as one list. WhereRow's own column says why it is this wide. */
+  grid-template-columns: calc(var(--space-12) * 2) minmax(0, 1fr);
+  column-gap: var(--space-2);
+  row-gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.armada-figures[data-column="fit"] {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.armada-figures__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-figures__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-label);
+}
+
+.armada-figures__value {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-figures__row[data-wrong] .armada-figures__value {
+  color: var(--error);
+}

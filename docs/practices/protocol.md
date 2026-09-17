@@ -987,7 +987,7 @@ instant, so the Working area can group a step's activity by task. **A claim,
 like the state it comes from**: a Drone that never calls `update_task` sends no
 windows, and its work belongs to no task.
 
-## Protocol 14.6: counts on the live file list
+## Protocol 14.7: counts on the live file list
 
 `#1187`. `ChangedFile.lines`, additive and left out where absent: what a file
 gained and lost, on `job.files_changed` only. Counting is the walk that renders

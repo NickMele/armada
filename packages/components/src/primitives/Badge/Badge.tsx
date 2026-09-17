@@ -33,8 +33,8 @@ export type BadgeProps = {
    */
   children: ReactNode;
   /**
-   * The running mark, still working. One per screen, on the focused row of a
-   * list, and never where a workflow rail carries a more specific mark. Only
+   * The running mark, still working. On every running row of a list (#1276),
+   * and never where a workflow rail carries a more specific mark. Only
    * the inner dot of `circle-dot` moves, so no row shifts.
    */
   pulsing?: boolean;

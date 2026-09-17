@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Panel } from "../Panel/Panel";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
@@ -17,8 +17,25 @@ export type StatRow = {
   /** A number, or `"2 of 4"` — Drones and Manifest read as pairs, not counts. */
   value: ReactNode;
   tone?: "warn" | "hot";
+  /**
+   * The row's dot, as the stem of the token it draws in: `status-escalated`
+   * draws `--status-escalated`. **The caller picks it**, so this component
+   * holds no row-to-status table. design-system.md → Stats panel.
+   */
+  hue: StatHue;
+  /** Nothing counted or nothing running: the dot mixes into the ground at `--dot-idle`. */
+  idle: boolean;
   hint?: string;
 };
+
+/** Every token a Stats row's dot may take, and no other. */
+export type StatHue =
+  | "status-awaiting-review"
+  | "status-escalated"
+  | "status-not-started"
+  | "stat-drones"
+  | "stat-manifest-current"
+  | "notice-caution";
 
 export type StatsPanelProps = {
   rows: StatRow[];
@@ -51,9 +68,15 @@ function StatRowLine({ row }: { row: StatRow }) {
       {row.value}
     </dd>
   );
+  // A mark, not a glyph: Iconography keeps this panel text-only, and the value
+  // beside it already says in words what the dot's strength says in colour.
+  const hue = { "--armada-stat-hue": `var(--${row.hue})` } as CSSProperties;
   return (
     <>
-      <dt className="armada-stats-panel__label">{row.label}</dt>
+      <dt className="armada-stats-panel__label">
+        <span className="armada-stats-panel__dot" aria-hidden="true" style={hue} data-idle={row.idle || undefined} />
+        {row.label}
+      </dt>
       {row.hint === undefined ? (
         value
       ) : (

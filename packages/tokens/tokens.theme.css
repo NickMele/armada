@@ -37,7 +37,7 @@
   --radius-md: 5px;
   --radius-lg: 8px;
   --shadow-overlay: 0 8px 24px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);
-  --shadow-card: inset 0 1px 0 var(--border-highlight), 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px -16px rgb(0 0 0 / 0.75);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px -16px rgb(0 0 0 / 0.75);
   --shadow-primary: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 2px 10px -3px color-mix(in srgb, var(--accent) 45%, transparent);
 
   --color-bg-base: var(--bg-base);
@@ -103,10 +103,16 @@
   --color-step-stopped-bg: var(--step-stopped-bg);
   --color-verdict-met: var(--verdict-met);
   --color-verdict-not-met: var(--verdict-not-met);
+  --color-run-running: var(--run-running);
+  --color-run-passed: var(--run-passed);
+  --color-run-failed: var(--run-failed);
+  --color-run-stopped: var(--run-stopped);
   --color-error: var(--error);
   --color-degraded: var(--degraded);
   --color-degraded-dot: var(--degraded-dot);
   --color-notice-caution: var(--notice-caution);
+  --color-instrument-activity: var(--instrument-activity);
+  --color-instrument-outside-plan: var(--instrument-outside-plan);
   --color-notice-caution-bg: var(--notice-caution-bg);
   --color-stat-drones: var(--stat-drones);
   --color-stat-manifest-current: var(--stat-manifest-current);
@@ -142,6 +148,7 @@
   --spacing-dock: var(--w-dock);
   --spacing-dock-min: var(--w-dock-min);
   --spacing-work-min: var(--w-work-min);
+  --spacing-studio-node: var(--w-studio-node);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
   --spacing-dialog: var(--w-dialog);

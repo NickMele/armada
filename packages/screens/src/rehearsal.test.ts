@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { RunFollowed } from "@armada/protocol";
-import { runOutputOf } from "./rehearsal";
+import { runOutcomeOf, runOutputOf } from "./rehearsal";
 
 const FMT_STILL_RUNNING: RunFollowed = {
   state: "following",
@@ -49,5 +49,24 @@ describe("runOutputOf", () => {
 
   it("draws nothing where nothing is being followed", () => {
     expect(runOutputOf({ state: "none" }, "fmt")).toBeUndefined();
+  });
+});
+
+// #1277: a run's result reads in Job colours, and both run surfaces take the
+// reading from here so the same run reads the same wherever it appears.
+describe("runOutcomeOf", () => {
+  it("passes a run that came to the code it expected, whatever the code", () => {
+    expect(runOutcomeOf({ exit_code: 0, expect_exit_code: 0, stopped: false })).toBe("passed");
+    expect(runOutcomeOf({ exit_code: 1, expect_exit_code: 1, stopped: false })).toBe("passed");
+  });
+
+  it("fails any other code, and an ending with no code at all", () => {
+    expect(runOutcomeOf({ exit_code: 101, expect_exit_code: 0, stopped: false })).toBe("failed");
+    // A budget, or a spawn that never started: no code, and nobody pressed Stop.
+    expect(runOutcomeOf({ expect_exit_code: 0, stopped: false })).toBe("failed");
+  });
+
+  it("reads a run somebody stopped as stopped, as a killed Job is not a failure", () => {
+    expect(runOutcomeOf({ expect_exit_code: 0, stopped: true })).toBe("stopped");
   });
 });

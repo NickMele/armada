@@ -126,3 +126,36 @@ describe("what one telling says", () => {
     expect(telling(four, NOON)?.body).toBe("a\nb\nc\nand 1 more");
   });
 });
+
+describe("how one telling sounds", () => {
+  it("falls for a job that escalated", () => {
+    expect(telling([job({ status: "escalated" })], NOON)?.tone).toBe("blocked");
+  });
+
+  it("is one note for a review, an approval, a repair and a question", () => {
+    const waits: Partial<JobSummary>[] = [
+      { status: "awaiting_review" },
+      { status: "awaiting_approval" },
+      { status: "awaiting_repair" },
+      { status: "running", asking: true },
+    ];
+    for (const over of waits) expect(telling([job(over)], NOON)?.tone).toBe("waiting");
+  });
+
+  it("falls for a batch holding one escalation among reviews, wherever it sorts", () => {
+    const batch = [
+      job({ id: "a", status: "awaiting_review", created_at: "2026-08-31T08:00:00Z" }),
+      job({ id: "b", status: "awaiting_review", created_at: "2026-08-31T09:00:00Z" }),
+      job({ id: "c", status: "awaiting_review", created_at: "2026-08-31T10:00:00Z" }),
+      job({ id: "d", status: "escalated", created_at: "2026-08-31T11:00:00Z" }),
+    ];
+    // Fourth by age, so past the three the body names, and it still decides.
+    expect(telling(batch, NOON)?.tone).toBe("blocked");
+    expect(telling([...batch].reverse(), NOON)?.tone).toBe("blocked");
+  });
+
+  it("is one note for a batch with no escalation in it", () => {
+    const batch = [job({ id: "a", status: "awaiting_review" }), job({ id: "b", status: "running", asking: true })];
+    expect(telling(batch, NOON)?.tone).toBe("waiting");
+  });
+});

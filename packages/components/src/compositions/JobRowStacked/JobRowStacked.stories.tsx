@@ -168,10 +168,8 @@ export const QueuedAfterARestart: Story = {
  * The running row standing alone, outside any list: the badge pulses and the
  * step bar beside it stays still.
  *
- * **Alone is why it pulses here.** `pulsing` says the Job is running; a row
- * inside a roving list takes the mark only when the cursor is on it, because
- * the running mark pulses in one place per screen and several Jobs run at once. There is no
- * cursor here to single a row out, so the row takes it.
+ * `pulsing` says the Job is running, and a running row pulses the same alone
+ * as inside a list, whether or not the cursor is on it (#1276).
  */
 export const Running: Story = {
   args: {

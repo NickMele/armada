@@ -1,4 +1,5 @@
 import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode, type Ref } from "react";
+import { useAnswerTap } from "../../haptics";
 
 /**
  * The five button variants of the design system contract. `tonal` is chrome,
@@ -59,6 +60,9 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
    * Pending wins while both are set. The line plays once each time the answer
    * is newly set, so a caller clears it when the next press goes out rather
    * than on a timer — the hold is `--duration-answer`, the stylesheet's clock.
+   *
+   * Newly set on a control that was `pending`, it also plays the answer's
+   * trackpad pattern through `HapticsProvider`, once.
    */
   answer?: ButtonAnswer;
   children?: ReactNode;
@@ -77,6 +81,8 @@ export function Button({
   children,
   ...rest
 }: ButtonProps) {
+  // The line says it to the eyes, and the trackpad to the finger that pressed.
+  useAnswerTap(pending, answer);
   return (
     <button
       {...rest}

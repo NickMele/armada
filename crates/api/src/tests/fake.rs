@@ -19,9 +19,11 @@
 mod commands;
 mod conversing;
 mod queries;
+mod studios;
 mod tools;
 
 pub use conversing::SERVED_MANIFEST;
+pub use studios::{the_studio, THE_STUDIO};
 
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
@@ -94,6 +96,10 @@ pub struct FakeDaemon {
     /// Who each proposal that reached this daemon was recorded against.
     /// `#943`.
     pub proposed_by: Mutex<Vec<crate::Redirector>>,
+    /// Every Studio held, starting with [`THE_STUDIO`]. `#1285`.
+    pub studios: Mutex<Vec<ipc::Studio>>,
+    /// Who each node added to a Studio was recorded against.
+    pub added_by: Mutex<Vec<crate::Redirector>>,
 }
 
 impl FakeDaemon {
@@ -125,6 +131,8 @@ impl FakeDaemon {
             helm_on: Mutex::new(None),
             redirected_by: Mutex::new(Vec::new()),
             proposed_by: Mutex::new(Vec::new()),
+            studios: Mutex::new(vec![studios::the_studio()]),
+            added_by: Mutex::new(Vec::new()),
         }
     }
 

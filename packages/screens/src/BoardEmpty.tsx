@@ -1,9 +1,38 @@
 // What the Board says when it draws no row. Out of `Jobs.tsx`, which reached the 500 lines the gate
 // warns at when a fourth case joined these three: Fleet serving no repository yet.
 
-import { BoardEmptyState, Button } from "@armada/components";
+import { actionOf, BoardEmptyState, Button, Kbd } from "@armada/components";
 
 import { NOTHING_SERVED } from "./locate-reads";
+
+/**
+ * Overview's null result: a Fleet that is up, serves a repository, and holds no Job. #1262.
+ *
+ * **A card with the act on it, not the Board's line pointing away.** "Propose one above" sent a
+ * person across the window to the title row's Dispatch; here the same composer is one press, and
+ * the Primary is the view's one solid accent — the title row's stays Tonal. **Only this case.**
+ * The fault and fresh-install states stay `BoardEmpty`'s own, and the fresh install offers no
+ * Dispatch because there is no repository to name.
+ */
+export function OverviewEmpty({ onCompose }: { onCompose: () => void }) {
+  // Verb and key from the registry's own act, never retyped: `n` is what the key map answers.
+  const dispatch = actionOf("new_job");
+  return (
+    <BoardEmptyState
+      card
+      quiet
+      lead="No jobs."
+      action={
+        <Button variant="primary" onClick={onCompose}>
+          {dispatch.verb}
+          <Kbd aria-hidden>{dispatch.shortcut}</Kbd>
+        </Button>
+      }
+    >
+      Propose one.
+    </BoardEmptyState>
+  );
+}
 
 export function BoardEmpty({
   disconnected,

@@ -139,6 +139,8 @@ mod showing;
 /// What crossed the stream since a cursor, counted rather than carried.
 /// **An agent's substitute for the socket it cannot hold.**
 mod since;
+/// A Studio, its nodes and edges, and the acts a client asks of one. `#1285`.
+mod studio;
 mod turn;
 /// A step's Checks while the gate is running them, and the socket a running
 /// Check's log is read over.
@@ -194,7 +196,8 @@ pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
     DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
-    Resumption, Side, StepState, TaskState, TopLevelOrigin, Urgency,
+    Resumption, Side, StepState, StudioEdgeKind, StudioEdgeStanding, StudioNodeKind,
+    StudioNodeState, StudioRelation, TaskState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
@@ -213,7 +216,8 @@ pub use helm::{
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{
-    CriterionId, DroneId, Instant, JobId, ManifestId, ProposalId, QuestionId, StepId, WorkflowId,
+    CriterionId, DroneId, Instant, JobId, ManifestId, ProposalId, QuestionId, StepId, StudioEdgeId,
+    StudioId, StudioNodeId, WorkflowId,
 };
 pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
@@ -269,6 +273,11 @@ pub use servers::{
 pub use setup::{LeftOutWorkflow, ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet, SpecPicked};
 pub use since::{EventTally, EventsSince};
+pub use studio::{
+    AddStudioNode, CreateStudio, DecideStudioEdge, MoveStudioNode, ProposeStudioEdge,
+    RemoveStudioNode, RenameStudio, Studio, StudioDeleted, StudioEdge, StudioList, StudioNode,
+    StudioNodeContent, StudioPosition, StudioSummary,
+};
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,
     Voice, Withheld,

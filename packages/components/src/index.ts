@@ -75,6 +75,8 @@ export * from "./compositions/TransitionHistory/TransitionHistory";
 export * from "./compositions/UnifiedDiff/UnifiedDiff";
 export * from "./compositions/WorkflowDiagram/WorkflowDiagram";
 export * from "./compositions/WorkflowRail/WorkflowRail";
+export * from "./compositions/ActivityInstrument/ActivityInstrument";
+export * from "./compositions/FootprintInstrument/FootprintInstrument";
 
 // What every job detail render shares. The five screens that took it are gone:
 // job detail is one arrangement, and the five were the defect.
@@ -175,6 +177,9 @@ export * from "./actions";
 // show its own `Kbd` badge. `TheShell` is the one provider; any control
 // beneath it reads `useShortcutReveal()` rather than taking a prop for it.
 export * from "./shortcut-reveal";
+
+// The trackpad's answer to a press, a no-op until Bridge's renderer provides one.
+export * from "./haptics";
 
 // The token specimens: what a value looks like, read off the running sheet.
 export * from "./foundations/Tokens/Tokens";
@@ -303,5 +308,10 @@ export * from "./compositions/HeldFlag/HeldFlag";
 export * from "./compositions/DroneMessageBox/DroneMessageBox";
 // A step's work as the Drone told it, under the plan task it served. #1185.
 export * from "./compositions/WorkNarration/WorkNarration";
+// A Studio's nodes, and the whiteboard React Flow draws them on. #1286.
+export * from "./compositions/StudioNode/StudioNode";
+export * from "./compositions/StudioWhiteboard/StudioWhiteboard";
+// A label and its figure in one aligned column — Pulse and the Fleet panel.
+export * from "./compositions/FigureList/FigureList";
 // What the Job has changed, as its own panel beside the run. #1187.
 export * from "./compositions/ProducedPanel/ProducedPanel";

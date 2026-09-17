@@ -237,8 +237,8 @@ export type InsideAJobProps = {
    */
   machineAct?: ReactNode;
   /**
-   * The running mark on the current step animates. One per screen: this is the
-   * Job being read, so the tree pulses and the header badge stays static.
+   * The running mark on the current step animates. The tree names which step
+   * is working, so it pulses and the header badge stays static.
    */
   pulsing?: boolean;
   onSelectStep?: (stepId: string) => void;
@@ -327,8 +327,9 @@ export type InsideAJobProps = {
   /** The step, while it is read. Present takes the slot over `step`/`stepAbsent`. */
   stepReading?: StepReading;
   /**
-   * The workflow overview, while a Job waits for approval. Takes the panel
-   * over `step`/`stepReading`/`stepAbsent` — the scope is the approval moment
+   * The workflow overview, while a Job waits for approval. Its diagram takes
+   * the run's place, and its facts take the panel over
+   * `step`/`stepReading`/`stepAbsent` — the scope is the approval moment
    * alone, never the running Job's own step view.
    */
   overview?: StepOverview;
@@ -349,9 +350,9 @@ export type InsideAJobProps = {
    * reader came back to is still where it was. A window-fixed layer would cover
    * the shell's rail as well, which nothing asked it to.
    *
-   * **The pulse goes with the reading.** With a sheet open the tree's current
-   * step is behind the layer, so `pulsing` is what the caller turns off and the
-   * sheet's own live mark takes it.
+   * **An open sheet does not stop the pulse** (#1276). The tree's current step
+   * is still working behind the layer, and the sheet's own live mark pulses
+   * beside it.
    */
   sheet?: ReactNode;
   onCopied?: (value: string) => void;
@@ -408,6 +409,10 @@ export function InsideAJob({
           </div>
           {runReading !== undefined ? (
             <RunTreeSkeleton {...runReading} />
+          ) : overview !== undefined ? (
+            // Nothing has run yet, so the run is what the workflow declares.
+            // It turns into the tree in this same place once the Job is approved.
+            <WorkflowDiagram steps={overview.diagram} />
           ) : run.length === 0 ? (
             <p className="armada-inside__absent" role="note">
               {unreachable ?? runAbsent}
@@ -500,7 +505,6 @@ export function InsideAJob({
             </div>
           ) : overview !== undefined ? (
             <div className="armada-inside__overview">
-              <WorkflowDiagram steps={overview.diagram} />
               <div className="armada-inside__step-fields">
                 {overview.facts.map((field, f) => (
                   <span className="armada-inside__field" key={f}>

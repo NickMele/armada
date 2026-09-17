@@ -23,6 +23,14 @@ files:
   - out/**
   - package.json
 
+# The notification tones, into `Contents/Resources`, the first place macOS looks
+# up a notification's `sound` name. `src/main/tones.ts` names them.
+extraResources:
+  - from: sounds
+    to: .
+    filter:
+      - "*.wav"
+
 mac:
   # The `.icns` here rather than the PNG the dock tile reads at runtime:
   # `Info.plist` is the reader for a packaged bundle, and it handles the format

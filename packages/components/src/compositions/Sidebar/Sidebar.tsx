@@ -27,7 +27,11 @@ import { useShortcutReveal } from "../../shortcut-reveal";
 export type SidebarItem = {
   id: string;
   label: string;
-  /** 16px in navigation, `--fg-muted` at rest and `--fg-default` when active. */
+  /**
+   * 16px, in a 28px chip — `--accent-hover` on `--accent-faint` at rest,
+   * `--fg-inverse` on solid `--accent` when active. One tint for every
+   * section, never a hue per section. `iconography.md` → Navigation.
+   */
   icon: LucideIcon;
   /**
    * A count beside the label. **Never an escalation or approval count** — the
@@ -96,7 +100,12 @@ function Item({
       aria-label={collapsed ? item.label : undefined}
       onClick={() => onSelect?.(item.id)}
     >
-      <item.icon size={NAV_ICON} strokeWidth={NAV_STROKE} aria-hidden />
+      {/* The chip is the column's, not the glyph's: the palette draws the same
+          registry icons bare. The button around it stays the click target, so
+          the rail's hit area is the whole row rather than the 28px chip. */}
+      <span className="armada-sidebar__chip" aria-hidden>
+        <item.icon size={NAV_ICON} strokeWidth={NAV_STROKE} />
+      </span>
       {collapsed ? null : <span className="armada-sidebar__label">{item.label}</span>}
       {!collapsed && item.count !== undefined ? (
         <span className="armada-sidebar__count">{item.count}</span>
@@ -127,7 +136,7 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <nav
-      className="armada-sidebar"
+      className="armada-sidebar armada-glass"
       data-collapsed={collapsed || undefined}
       style={{ width: collapsed ? "var(--sidebar-rail)" : (width ?? "var(--sidebar-default)") }}
     >

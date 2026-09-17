@@ -377,9 +377,11 @@ second notification channel alongside Alerts. See the decision in Armada
 Decisions.
 
 On a command, a plain agent's access is `agent_access = "Yes"`; a Helm session
-also reaches `Drafts only` and `Helm only` rows, which is every command but
-`undo_run` once a person asks for it in conversation — `fleet::helm::may` is
-the rule, and the Intervention Ladder no longer bounds it. The full set of
+also reaches `Drafts only` and `Helm only` rows, which is every command the door
+offers but `undo_run` once a person asks for it in conversation —
+`fleet::helm::may` is the rule, and the Intervention Ladder no longer bounds it.
+**A `Bridge only` command reaches no agent, Helm included**: accepting a Studio
+edge, removing a node and deleting a Studio are a person's acts. The full set of
 operations — each with its kind, its transport and what an agent may reach
 directly — is in `crates/ipc/operations.toml`.
 
@@ -578,15 +580,16 @@ Surfaces need UX. Shapes and policies need a home on a parent, not a page.
 | Surface | Renders other things, owns no data | Layout, states, copy |
 | Shape / Policy | An attribute of, or a rule applied to, an entity. Code branches on it | A section on the parent entity's page |
 
-## Agent is closed at two
+## Agent is closed at three
 
 **The test is a toolset.** Not every model invocation Armada makes is an
-Agent. Nine invocations exist across the docs; two carry a toolset.
+Agent. Drone, Helm and Scout carry a toolset; every other invocation below does not.
 
 | Invocation | Toolset | Worktree | Lifetime | Verdict |
 | --- | --- | --- | --- | --- |
 | Drone | Kit + Manifest resolved, plus Evidence MCP | Yes | One Job | **Agent** |
 | Helm | Its own set, via the Fleet MCP. Manifest-scoped | No | A session | **Agent** |
+| Scout | Read-only: the checkout on disk and the sources Kit allows. See [Scout](../concepts/scout.md) | No | One ask | **Agent** |
 | Judge | None | No | One call | Model call, in `verification` |
 | Job proposer | None | No | One call | Model call, in `fleet`. Reads a request and proposes a Job — its workflow, its title and the split. Renamed from Job-shape classifier: shape became derived and scope became the workflow's first step, so neither half of that name survived. See [Job proposer](../concepts/job-proposer.md) |
 | Voice / copy generation | None | No | Per message | Model call |

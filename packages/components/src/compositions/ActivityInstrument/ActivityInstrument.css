@@ -1,0 +1,69 @@
+/* Activity instrument. Geometry the drawing cannot state in percentages — the
+   axis, the empty window's 1.5px and a counted bar's floor — is spelled in
+   CSS geometry properties off --border-width, so nothing here is a px literal.
+   No transition anywhere: a new reading replaces the drawing. */
+.armada-instrument-activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-instrument-activity__head,
+.armada-instrument-activity__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-instrument-activity__plot {
+  --armada-activity-axis: var(--border-width);
+  /* A counted window never draws thinner than an empty one, or one call
+     reads as none. Twice the empty mark. */
+  --armada-activity-floor: calc(var(--border-width) * 3);
+  display: block;
+  width: 100%;
+  height: var(--space-8);
+  overflow: visible;
+}
+
+.armada-instrument-activity__bar {
+  --armada-activity-height: max(
+    calc((100% - var(--armada-activity-axis)) * var(--armada-activity-share)),
+    var(--armada-activity-floor)
+  );
+  y: calc(100% - var(--armada-activity-axis) - var(--armada-activity-height));
+  height: var(--armada-activity-height);
+  fill: var(--instrument-activity);
+  fill-opacity: 0.75;
+}
+
+/* An empty window is never absent: that is what makes silence a tail. */
+.armada-instrument-activity__empty {
+  y: calc(100% - var(--armada-activity-axis) - var(--border-width) * 1.5);
+  height: calc(var(--border-width) * 1.5);
+  fill: var(--border-subtle);
+}
+
+.armada-instrument-activity__axis {
+  y: calc(100% - var(--armada-activity-axis));
+  height: var(--armada-activity-axis);
+  fill: var(--border-default);
+}
+
+/* The reading, for the accessible description only. */
+.armada-instrument-activity__description {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

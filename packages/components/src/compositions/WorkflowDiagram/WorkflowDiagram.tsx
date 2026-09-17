@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 
 /**
- * Workflow diagram — one box per step, left to right, and the gate between
- * them. Job detail draws this in place of the idle step view while a Job
+ * Workflow diagram — one box per step, top to bottom, and the gate between
+ * them. Stacked, so a ten-step workflow still reads in a panel a third of
+ * the window wide. Job detail draws this in place of the idle step view while a Job
  * waits for approval, since nothing has run yet to draw a result for.
  *
  * **One box per step, never the gate machine** — a box lists only the step's
@@ -61,23 +62,29 @@ export type WorkflowDiagramProps = {
   steps: WorkflowDiagramStep[];
 };
 
-/** Two grid columns per step: the box, then the gate after it. The last
- * step's gate column carries no arrow, since nothing follows it. */
-function columnsOf(count: number): string {
-  return Array.from({ length: count }, () => "minmax(11rem, 1fr) auto").join(" ");
+/** One row for each step's box and one for the gate after it. A step's box
+ * sits on row `2i + 1`, its gate on `2i + 2`. */
+function boxRow(i: number): number {
+  return i * 2 + 1;
 }
 
 export function WorkflowDiagram({ steps }: WorkflowDiagramProps) {
-  const loops = steps.flatMap((step, from) => {
-    if (step.loop === undefined) return [];
-    const to = steps.findIndex((candidate) => candidate.id === step.loop?.to);
-    return to === -1 ? [] : [{ from, to, label: step.loop.label }];
-  });
+  // Shortest loop nearest the boxes, so a loop inside another never crosses it.
+  const loops = steps
+    .flatMap((step, from) => {
+      if (step.loop === undefined) return [];
+      const to = steps.findIndex((candidate) => candidate.id === step.loop?.to);
+      return to === -1 ? [] : [{ from, to, label: step.loop.label }];
+    })
+    .sort((a, b) => a.from - a.to - (b.from - b.to));
 
   return (
-    <div className="armada-diagram" style={{ gridTemplateColumns: columnsOf(steps.length) }}>
+    <div
+      className="armada-diagram"
+      style={{ gridTemplateColumns: ["minmax(0, 1fr)", ...loops.map(() => "var(--space-3)")].join(" ") }}
+    >
       {steps.map((step, i) => (
-        <div className="armada-diagram__step" style={{ gridColumn: i * 2 + 1, gridRow: 1 }} key={step.id}>
+        <div className="armada-diagram__step" style={{ gridColumn: 1, gridRow: boxRow(i) }} key={step.id}>
           <span className="armada-diagram__name" data-identifier={step.labelIsAnIdentifier || undefined}>
             {step.label}
           </span>
@@ -102,21 +109,32 @@ export function WorkflowDiagram({ steps }: WorkflowDiagramProps) {
       ))}
       {steps.map((step, i) => {
         const last = i === steps.length - 1;
-        if (last && step.gateLabel === undefined) return null;
+        const loop = loops.find((candidate) => candidate.from === i);
+        if (last && step.gateLabel === undefined && loop === undefined) return null;
         return (
           <div
             className="armada-diagram__gate"
             data-waits={step.gate === "person" || undefined}
-            style={{ gridColumn: i * 2 + 2, gridRow: 1 }}
+            style={{ gridColumn: 1, gridRow: boxRow(i) + 1 }}
             key={`gate-${step.id}`}
           >
-            {last ? null : (
-              <span className="armada-diagram__gate-arrow" aria-hidden>
-                →
-              </span>
+            {last && step.gateLabel === undefined ? null : (
+              <>
+                <span className="armada-diagram__gate-arrow" aria-hidden>
+                  {last ? "" : "↓"}
+                </span>
+                <span className="armada-diagram__gate-label">{step.gateLabel}</span>
+              </>
             )}
-            {step.gateLabel === undefined ? null : (
-              <span className="armada-diagram__gate-label">{step.gateLabel}</span>
+            {loop === undefined ? null : (
+              <>
+                <span className="armada-diagram__gate-arrow armada-diagram__loop-arrow" aria-hidden>
+                  ↑
+                </span>
+                <span className="armada-diagram__loop-note">
+                  back to {steps[loop.to]?.label} · <span className="armada-diagram__loop-label">{loop.label}</span>
+                </span>
+              </>
             )}
           </div>
         );
@@ -124,12 +142,10 @@ export function WorkflowDiagram({ steps }: WorkflowDiagramProps) {
       {loops.map((loop, l) => (
         <div
           className="armada-diagram__loop"
-          style={{ gridColumn: `${loop.to * 2 + 1} / ${loop.from * 2 + 2}`, gridRow: 2 }}
+          aria-hidden
+          style={{ gridColumn: l + 2, gridRow: `${boxRow(loop.to)} / ${boxRow(loop.from) + 2}` }}
           key={`loop-${l}`}
-        >
-          <div className="armada-diagram__loop-bracket" />
-          <span className="armada-diagram__loop-label">{loop.label}</span>
-        </div>
+        />
       ))}
     </div>
   );

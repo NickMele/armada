@@ -5,7 +5,7 @@
 
 import { expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
-import { reading, reviewAtDelivery, queued, running } from "@armada/screens/src/fixtures/build/index";
+import { awaitingApproval, reading, reviewAtDelivery, queued, running } from "@armada/screens/src/fixtures/build/index";
 import { JOB_ID } from "@armada/screens/src/fixtures/build/base";
 import { recorded } from "@armada/screens/src/fixtures/recorded";
 import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
@@ -63,6 +63,17 @@ test("still reading: the run reads, and Where things are draws from what the Boa
   await expect.element(run.getByText("Reproduction")).toBeVisible();
   await expect.element(page.getByText("Branch").first()).toBeInTheDocument();
   expect(page.getByText("Reading this job.").query()).toBeNull();
+});
+
+test("awaiting approval: the run is the workflow's diagram, drawn once, with each step's Checks showing", async () => {
+  await opened(awaitingApproval());
+  await expect.element(page.getByText("cargo_nextest · cargo nextest run --workspace")).toBeVisible();
+  expect(page.getByText("Regression check", { exact: true }).elements()).toHaveLength(1);
+});
+
+test("once approved, the run is the tree again and the diagram is gone", async () => {
+  await opened(queued());
+  expect(page.getByText("cargo_nextest · cargo nextest run --workspace").query()).toBeNull();
 });
 
 test("the header's one control opens the rest of what this Job can do", async () => {

@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
+import { actionOf } from "../../actions";
 import { Button } from "../../primitives/Button/Button";
+import { Kbd } from "../../primitives/Kbd/Kbd";
 import { BoardEmptyState } from "./BoardEmptyState";
+
+const DISPATCH = actionOf("new_job");
 
 /**
  * The two states first launch draws, side by side in the drawing because they
@@ -49,5 +54,42 @@ export const FleetIsNotRunning: Story = {
     children: "Fleet is not running. Bridge has nothing to read.",
     command: "armada-fleet start",
     note: "Run that in a terminal. Bridge connects on its own once the runtime file appears.",
+  },
+};
+
+const compose = fn();
+
+/**
+ * Overview with no Jobs — `design-system.md`, Overview empty state (#1262).
+ * A glass card rather than a well, because Overview's middle is a column of
+ * cards; the fact over what to do about it, and Dispatch beneath as the view's
+ * one Primary. The title row's Dispatch stays Tonal.
+ *
+ * **`n` is drawn on the button, and it is not part of its name.** The key is
+ * reference material beside the label, so the button still reads "Dispatch" —
+ * `Dialog`'s own rule for the key drawn where it fires. Verb and key both come
+ * from the registry's `new_job`.
+ */
+export const OverviewNoJobs: Story = {
+  args: {
+    card: true,
+    quiet: true,
+    lead: "No jobs.",
+    children: "Propose one.",
+    action: (
+      <Button variant="primary" onClick={compose}>
+        {DISPATCH.verb}
+        <Kbd aria-hidden>{DISPATCH.shortcut}</Kbd>
+      </Button>
+    ),
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText("No jobs.")).toBeVisible();
+    await expect(canvas.getByText("Propose one.")).toBeVisible();
+    const dispatch = canvas.getByRole("button", { name: "Dispatch" });
+    await expect(dispatch).toHaveTextContent("n");
+    compose.mockClear();
+    await userEvent.click(dispatch);
+    await expect(compose).toHaveBeenCalledOnce();
   },
 };

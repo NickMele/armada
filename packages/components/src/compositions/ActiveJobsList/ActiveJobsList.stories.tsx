@@ -42,11 +42,9 @@ const menu = [
  * carries the loop. **Each row is washed in its own status hue** at
  * `--row-tint`, so the list sorts by state before a badge is read.
  *
- * **One, because one row is running here — not because only one can be.** This
- * paragraph used to say the pulse rode the status "focused or not, because
- * Fleet runs one drone at M1". Fleet runs several now, and the pulse is the
- * cursor's: this list is a plain list with no cursor in it, so the running row
- * takes the mark. `Two jobs running at once` is the same rule where it bites.
+ * **One, because one row is running here — not because only one can be.** The
+ * pulse follows the status, so every running row takes it (#1276); `Two jobs
+ * running at once` is the same rule where it bites.
  */
 export const SixStates: Story = {
   args: {
@@ -252,10 +250,8 @@ export const AtAWideWindow: StoryObj = {
  * Clamped rather than wrapped: Down on the last row stays there. A Board is
  * scanned, and a list that jumps back to the top loses the reader's place.
  *
- * **The running row does not pulse here and the approval row is where the
- * cursor is.** A cursor exists in this list, so the mark is its to carry;
- * arrow down twice and the pulse arrives with it. `Six states` is the same
- * rows with no cursor at all, and there the running row keeps it.
+ * **The running row pulses here too**, wherever the cursor is. The cursor
+ * moves the tab stop and the edge, never the pulse (#1276).
  */
 export const Selectable: Story = {
   args: {
@@ -310,16 +306,11 @@ export const Selectable: Story = {
  * Two jobs running at once, which is a board this list could not hold until
  * Fleet's working slot became a roster of them.
  *
- * **Both rows read as running and one of them breathes.** Hue says which Jobs
- * are running, on both; the pulse says *still working*, and the Motion section
- * asks that of the row being read and no other. Two marks at
- * `--duration-pulse` is what that scope avoids, and it is what this
- * list drew for as long as the pulse followed the status — invisibly, because
- * a second running row was unreachable.
- *
- * The cursor starts on the first row, so the pulse starts there. Arrow down
- * onto the second running row and the mark moves with it: one screen, one
- * animated mark, wherever the eye is.
+ * **Both rows read as running and both breathe.** Hue says which Jobs are
+ * running; the pulse says *still working*, which is true of both, so a person
+ * scanning the list reads it off each without moving the cursor (#1276). For a
+ * while the pulse followed the cursor instead, and every other running row
+ * read as still.
  *
  * **Nothing here says two is the ceiling.** The bound is
  * `settings.concurrency-cap`, resolved in Fleet's composition root, and no

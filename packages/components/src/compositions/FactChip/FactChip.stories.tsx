@@ -35,8 +35,8 @@ export const TheFactsOnARunningStep: Story = {
 };
 
 /**
- * The verdicts, which are the only chips that take a hue — and they take it
- * per fact. A step with a refused first attempt and an advanced second says
+ * The verdicts, which take a hue per fact — and, beside them, only a run's
+ * result does. A step with a refused first attempt and an advanced second says
  * both, in the order they happened, rather than summing to one colour.
  */
 export const AVerdictPerFact: Story = {
@@ -47,6 +47,21 @@ export const AVerdictPerFact: Story = {
       <FactChip named="passed">2 of 2 passed</FactChip>
       <FactChip named="not_met">1 of 2 refused</FactChip>
       <FactChip named="waiting">on you · 2m 04s</FactChip>
+    </div>
+  ),
+};
+
+/**
+ * A run started by hand, in Job colours: the code it expected, any other
+ * ending, and one a person stopped. Not a verdict — a run writes no Evidence —
+ * so these read `--run-*`.
+ */
+export const ARunInJobColours: Story = {
+  render: () => (
+    <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+      <FactChip run="passed">exit 0 (expects 0)</FactChip>
+      <FactChip run="failed">exit 101 (expects 0)</FactChip>
+      <FactChip run="stopped">stopped</FactChip>
     </div>
   ),
 };

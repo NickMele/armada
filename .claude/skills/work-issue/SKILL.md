@@ -108,6 +108,14 @@ until #1229.
 **Verify it yourself rather than on a report.** An agent's claim of green has
 been wrong here.
 
+**The app suite passes twice in a row before a merge.** `desktop_test` on the
+branch, two full runs back to back. Confirmed 17 Sep 2026: three changes that
+put glass on Bridge's cards each failed a different `setup.test.tsx` test in
+one full run and passed the next, and the one that failed every time was
+caught only by running again. When a run fails, run `main` beside it: a test
+that fails on the branch and passes on `main` belongs to the branch, not to
+#1252.
+
 **A filtered Check that prints nothing did not pass.** `armada check` reads
 `armada.yml` from the working directory. Confirmed 14 Sep 2026 on #1117: a
 typecheck run from `packages/components` could not read the file, and the
@@ -172,7 +180,9 @@ in sequence, and the one that decides the arrangement runs first.
 **Pass the owner's rules down.** Report bottom line first, be brief, no
 unnecessary caveats, tables over paragraphs for anything comparative, label every
 finding and table row with who acts on it, and surface any question as a single
-`**QUESTION:**` line at the end rather than burying it in prose.
+`**QUESTION:**` line at the end rather than burying it in prose. **A decision
+the owner made is not the agent's to drop or reverse**, even with evidence
+against it: it stops, and that is its `**QUESTION:**`. See `asking-a-person`.
 
 **Tell every agent to wait for its own runs in the foreground.** An agent is
 woken only by a message, never by its background build finishing. Confirmed

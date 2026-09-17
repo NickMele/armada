@@ -229,6 +229,8 @@ pub mod spawning;
 /// What the fleet has spent, and which Jobs a ceiling is holding.
 mod spending;
 mod stuck;
+/// A repository's Studios, through the store and onto the stream. `#1285`.
+mod studios;
 pub mod sub_dispatch;
 mod summarising;
 mod superseding;

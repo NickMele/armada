@@ -155,6 +155,12 @@ export type PaletteProps = {
   /** Why an act cannot be chosen here, by action id. Absent means it can. */
   dormant?: Readonly<Record<string, string | undefined>>;
   /**
+   * Acts left out here rather than drawn dimmed, by action id. A binding the
+   * registry marks `unbuilt` is drawn whatever this says, since its reason
+   * holds everywhere and not just here.
+   */
+  absent?: readonly string[];
+  /**
    * A row was chosen. **Destructive acts do not come through here** — they go
    * to `onConfirmAct`, because every destructive action confirms even from the
    * keyboard, and the palette stays open behind the confirmation.
@@ -220,6 +226,7 @@ export function Palette({
   jobs,
   settings,
   dormant = {},
+  absent = [],
   onChoose,
   onConfirmAct,
 }: PaletteProps) {
@@ -238,7 +245,9 @@ export function Palette({
 
   const entries: PaletteEntry[] = [
     ...actsIn(context).flatMap((action) =>
-      action.id === STATE_FILTER && filters.length > 0
+      action.unbuilt === null && absent.includes(action.id)
+        ? []
+        : action.id === STATE_FILTER && filters.length > 0
         ? // Expanded into its five, for the reason the rail expands
           // `bridge_surfaces` into its four. The one registry row spells a
           // range over a set whose order is the rule; only the Board knows
@@ -270,7 +279,9 @@ export function Palette({
       ...(surface.shortcut === undefined ? {} : { shortcut: surface.shortcut }),
       ...(surface.aliases === undefined ? {} : { aliases: surface.aliases }),
     })),
-    ...globalActs().map((action) => entryOf(action, NAVIGATION, dormant)),
+    ...globalActs()
+      .filter((action) => action.unbuilt !== null || !absent.includes(action.id))
+      .map((action) => entryOf(action, NAVIGATION, dormant)),
     ...runnables.map((runnable) => ({
       id: `run:${runnable.id}`,
       section: RUN,

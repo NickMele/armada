@@ -160,3 +160,16 @@ test("a frozen repository: the queued row waits for it, the row at review says i
     await expect.poll(() => rowNaming("split-the-settings-reducer").textContent).toContain("lands after armada unfreezes");
   }
 });
+
+/** The loops drawing under this keyframe right now: what moves on screen, whatever element carries it. */
+const looping = (keyframes: string): number =>
+  document.getAnimations().filter((one) => (one as CSSAnimation).animationName === keyframes).length;
+
+test("every running row's badge pulses with the cursor on none of them", async () => {
+  // Three running, so a pulse that follows the cursor cannot pass by landing on the only one.
+  await board(boardJobs().map((job) => (job.status === "queued" ? { ...job, status: "running" } : job)));
+  (document.activeElement as HTMLElement | null)?.blur();
+  const running = () => rows().filter((row) => row.querySelector(".armada-job-row__badge")?.textContent?.toLowerCase() === "running");
+  await expect.poll(() => running().length).toBe(3);
+  await expect.poll(() => looping("armada-badge-pulse")).toBe(3);
+});

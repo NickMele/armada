@@ -1,0 +1,113 @@
+/* The card treatment under Depth — `docs/contracts/design-system.md`, Tokens →
+   Depth. Glass lifted off the lit canvas: a vertical gradient from --bg-glass
+   to --bg-glass-end with a --border-highlight line along its top inner edge,
+   a --glass-blur backdrop blur, a --border-glass edge and --shadow-card.
+
+   **One recipe, and every card on the canvas takes it rather than copying it.**
+   Put `armada-glass` beside a component's own class on the element that sits
+   directly on the canvas:
+
+       <section className="armada-panel armada-glass">
+
+   Today: the left column's panels (`Panel`), Helm's dock (`TheShell`), and
+   Drift and Verify on the Manifest surface. Next: Overview's summary tiles
+   (#1261), Overview's empty state (#1262) and the dock's Helm frame (#1264).
+   Drift and Verify are named by their own class below only because #1260 did
+   not reach their markup; each moves onto `armada-glass` with one className.
+
+   What this class does not carry, so the component keeps it:
+
+   - **Radius.** The contract names it per card (--radius-lg on every card
+     today) and the component already owns its geometry. The glass layer
+     inherits it.
+   - **Layout, padding and overflow.** Any `position` other than `static`
+     the component sets wins over this file's `relative`; the layer only
+     needs one.
+   - **A wash.** A tile's status hue or the dock's --helm-faint reads over
+     the glass, so it goes on the card's `::after` at `inset: 0; z-index: -1`,
+     which paints after the glass and under the content. Not on the card's
+     own `background`, which paints under the glass and all but vanishes, and
+     never on `::before`, which is the glass.
+
+   **The glass is a layer, not the card.** `::before` fills the card's padding
+   box behind its content and carries the gradient, the blur and the top
+   highlight. Two reasons it cannot sit on the card:
+
+   1. **A `backdrop-filter` makes its element the containing block for
+      `position: fixed` descendants.** Tooltip, Popover and DropdownMenu place
+      themselves `position: fixed` with anchor positioning, and Stats' rows
+      and the dock's questions carry Tooltips. On the card, a bubble laid out
+      against the card and was clipped by its `overflow: hidden`. On a layer
+      with no descendants it contains nothing.
+   2. **The highlight has to paint over the glass.** A card's own inset
+      shadow paints under its children, so under the layer, where 86% glass
+      all but hides it. That is why --shadow-card carries only the drops and
+      the highlight is written here.
+
+   **Cost of the layer.** It needs a stacking context on the card
+   (`isolation: isolate`) so `z-index: -1` stays inside the card, and a
+   stacking context traps its descendants' z-index: a Tooltip opened in one
+   card would paint under the card after it. So a card lifts one step above
+   its sibling cards while it is hovered or holds focus, which is exactly
+   when a layer inside it is open. It stays under the root's menus and
+   dialogs.
+
+   **Nothing inside a card takes a shadow.** A row, a well, an input or a
+   control inside one stays flat on its Ground token; a shadowed row inside a
+   card reads as a second card. The one exception is the view's single
+   Primary, which Button gives --shadow-primary. Light and glass carry no
+   information: never a status hue here, and nothing reads a state from it.
+
+   A secondary Button inside a card takes `ground="card"` (--bg-sunken), which
+   reads as a box on the glass. `ground="sunken"`'s --bg-raised is within a
+   few levels of the glass and shows only its border. */
+:where(.armada-glass, .armada-drift-panel:not(.armada-sheet *, .armada-dialog *), .armada-verify-panel:not(.armada-sheet *, .armada-dialog *)) {
+  position: relative;
+}
+
+/* `background: none` because Drift and Verify keep a flat --bg-raised of their
+   own for where they are not on the canvas — inside a Sheet or a Dialog, where
+   a card is not glass (design-system.md: "every panel that sits directly on
+   the canvas"). */
+.armada-glass,
+.armada-drift-panel:not(.armada-sheet *, .armada-dialog *),
+.armada-verify-panel:not(.armada-sheet *, .armada-dialog *) {
+  isolation: isolate;
+  border: var(--border-width) solid var(--border-glass);
+  background: none;
+  box-shadow: var(--shadow-card);
+}
+
+.armada-glass::before,
+.armada-drift-panel:not(.armada-sheet *, .armada-dialog *)::before,
+.armada-verify-panel:not(.armada-sheet *, .armada-dialog *)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(var(--bg-glass), var(--bg-glass-end));
+  box-shadow: inset 0 var(--border-width) 0 var(--border-highlight);
+  backdrop-filter: blur(var(--glass-blur));
+  pointer-events: none;
+}
+
+/* **No blur while a Sheet or a Dialog covers the window.** The cards are
+   under its scrim, where nothing on them is being read, and the 86% glass
+   paints the same without it. With the blur on, every frame of the layer
+   above re-filtered every card beneath it: on a software-rendered Chromium
+   (the app suite's), the mock Setup tests that open a proposal sheet failed
+   three full runs in five with presses that never landed, and none in five
+   with the blur off. */
+:root:has(.armada-sheet-scrim, .armada-dialog-scrim) :is(.armada-glass, .armada-drift-panel:not(.armada-sheet *, .armada-dialog *), .armada-verify-panel:not(.armada-sheet *, .armada-dialog *))::before {
+  backdrop-filter: none;
+}
+
+/* One step above the sibling cards while a layer inside may be open. `1`
+   rather than a --z token: it orders this card against the cards beside it,
+   and every --z layer in the root must stay above it. */
+.armada-glass:is(:hover, :focus-within),
+.armada-drift-panel:not(.armada-sheet *, .armada-dialog *):is(:hover, :focus-within),
+.armada-verify-panel:not(.armada-sheet *, .armada-dialog *):is(:hover, :focus-within) {
+  z-index: 1;
+}

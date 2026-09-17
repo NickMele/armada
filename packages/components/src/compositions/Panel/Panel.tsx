@@ -41,7 +41,7 @@ export function Panel({
 }: PanelProps) {
   if (narrow) {
     return (
-      <section className="armada-panel" data-narrow aria-label={typeof label === "string" ? label : undefined}>
+      <section className="armada-panel armada-glass" data-narrow aria-label={typeof label === "string" ? label : undefined}>
         <div className="armada-panel__head">
           <span className="armada-panel__dot" data-tone={dotTone} aria-hidden />
         </div>
@@ -50,7 +50,7 @@ export function Panel({
   }
 
   return (
-    <section className="armada-panel" data-open={open || undefined}>
+    <section className="armada-panel armada-glass" data-open={open || undefined}>
       <button
         type="button"
         className="armada-panel__head"

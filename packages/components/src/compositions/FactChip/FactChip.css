@@ -44,3 +44,18 @@
 .armada-chip[data-named="waiting"] {
   color: var(--step-waiting);
 }
+
+/* A run started by hand — Journey 9's rehearsal — in Job colours, through the
+   --run-* aliases rather than the verdict tokens: the same hue, declared for
+   what it is. The surface stays --bg-raised, as for a verdict. */
+.armada-chip[data-run="passed"] {
+  color: var(--run-passed);
+}
+
+.armada-chip[data-run="failed"] {
+  color: var(--run-failed);
+}
+
+.armada-chip[data-run="stopped"] {
+  color: var(--run-stopped);
+}

@@ -4,9 +4,11 @@
 // `packages/screens`. What is pinned here is the timing — the quiet window, the
 // seeding, and the dock count — which is the half that lives in this process.
 
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
-import { Attention, QUIET_MS } from "./telling";
+import { Attention, QUIET_MS, soundOf } from "./telling";
 import type { Effects } from "./telling";
 import type { Telling } from "@armada/screens/src/waiting";
 import type { JobSummary } from "@armada/protocol";
@@ -137,6 +139,25 @@ describe("a job entering the set", () => {
     expect(shown).toEqual([]);
     // And the dock is told once, not on every publish.
     expect(counts).toEqual([1]);
+  });
+});
+
+describe("the tone", () => {
+  it("is one for a batch, and the escalation in it decides", () => {
+    const { attention, shown } = watching();
+    attention.read([job({ id: "a" }), job({ id: "b" })], READ);
+    attention.read([job({ id: "a", status: "awaiting_review" }), job({ id: "b" })], READ);
+    attention.read([job({ id: "a", status: "awaiting_review" }), job({ id: "b", status: "escalated" })], READ);
+    vi.advanceTimersByTime(QUIET_MS);
+    expect(shown.map((told) => told.tone)).toEqual(["blocked"]);
+  });
+
+  it("names a file the bundle carries, one each", () => {
+    // A name with no file behind it is a silent notification, and nothing else would say so.
+    const shipped = readdirSync(join(__dirname, "../../sounds")).filter((file) => file.endsWith(".wav"));
+    const named = [soundOf("blocked"), soundOf("waiting")];
+    expect(new Set(named).size).toBe(2);
+    expect(shipped.sort()).toEqual(named.map((name) => `${name}.wav`).sort());
   });
 });
 

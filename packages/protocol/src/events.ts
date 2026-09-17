@@ -17,6 +17,7 @@ import type { ProposalInFlight } from "./proposing";
 import type { CheckoutRunRecord, RunRecord } from "./rehearsal";
 import type { ServerState } from "./servers";
 import type { RepositoryList } from "./setup";
+import type { Studio, StudioDeleted } from "./studio";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { CommandInFlight } from "./commanding";
@@ -72,7 +73,11 @@ export type Event =
   | ({ kind: "checkout_run.finished" } & CheckoutRunRecord)
   | ({ kind: "server.starting" } & ServerState)
   | ({ kind: "server.serving" } & ServerState)
-  | ({ kind: "server.exited" } & ServerState);
+  | ({ kind: "server.exited" } & ServerState)
+  /** A Studio after a write to it, whole. Since 14.6. */
+  | ({ kind: "studio.changed" } & Studio)
+  /** A Studio a person deleted. Since 14.6. */
+  | ({ kind: "studio.deleted" } & StudioDeleted);
 
 /**
  * A Job exists that did not before, carrying the row whole.
@@ -404,7 +409,7 @@ export type ChangedFile = {
   outside_plan?: boolean;
   /**
    * What the file gained and lost, as of Fleet's last counted reading. Since
-   * protocol 14.6, and only on `job.files_changed`. **Absent is not zero**: a
+   * protocol 14.7, and only on `job.files_changed`. **Absent is not zero**: a
    * file nothing counted, or one that arrived after the last count, which
    * Fleet takes once the Drone's calls settle and at most every ten seconds.
    */

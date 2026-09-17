@@ -161,6 +161,108 @@ The stored session and the thread's file both go, and every viewer is sent `clos
 `agent_access` is `No`, for `ask_helm`'s reason.
 """
 
+[operations.list_studios]
+kind = "query"
+transport = "HTTP"
+agent_access = "Yes"
+description = "Every Studio one repository keeps, each with its name and when it was last touched, the last touched first"
+notes = """
+`?manifest_id=` names the repository, absent being the first Fleet serves, and the door always names the session's own. **Keyed by the Manifest id**, the key Helm's conversation is kept under, so a Studio belongs to a repository and names no Workspace. Kept until a person deletes it; no retention sweep reads these rows.
+
+`agent_access` is `Yes`: a Studio is a record an agent reads as much as a person does.
+"""
+
+[operations.get_studio]
+kind = "query"
+transport = "HTTP"
+agent_access = "Yes"
+description = "One Studio with every node and edge on it, each node where a person left it"
+notes = """
+A node's `kind` is its content's tag, beside its fields. **A Run or Job node carries a reference and no state**: its state is read off the run or the Job, never copied. A `proposed` edge is drawn dashed until a person accepts it.
+
+A Studio in another repository than a door session's is refused as `fleet.studio_in_another_repository`, the way a Job is.
+"""
+
+[operations.create_studio]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Start a Studio in one repository, named or untitled, and answer with it"
+notes = """
+`?manifest_id=` names the repository. A name is optional, since `docs/concepts/studio.md` has Helm name an untitled Studio; a blank one is no name.
+
+`agent_access` is `Bridge only` for now: a person opens a Studio, and Helm works on one it is in. #1288 decides whether Helm starts one on a person's ask.
+"""
+
+[operations.rename_studio]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Name a Studio, or name it again, and answer with it"
+notes = """
+A blank name is refused as `fleet.studio_name_blank`. `Helm only` because naming an untitled Studio is one of the things `studio.md` lets Helm do unasked.
+"""
+
+[operations.delete_studio]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Delete a Studio and every node and edge on it"
+notes = """
+The only way a Studio ends. **A person's act**, whatever Helm's authority setting says, so no agent is offered it. Publishes `studio.deleted`.
+"""
+
+[operations.add_studio_node]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Add a node to a Studio where a person or Helm places it, and answer with the Studio"
+notes = """
+A node starts in its kind's first state and nothing in the request sets one. `produced_by` names the node that made this one, and the Studio draws the `produced` edge itself.
+
+**From Helm, only a kind that starts `proposed`** — a Finding today — and anything else is refused as `fleet.studio_node_not_helms`: Helm adds proposed nodes, and a Note is what a person pointed at. A blank field is refused as `fleet.studio_node_blank`.
+
+**No act writes a node's content afterwards**, which is what fixes a Note at capture.
+"""
+
+[operations.move_studio_node]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Move a node to where a person left it, and answer with the Studio"
+notes = """
+Position only. A Studio is laid out by hand, so no agent is offered a move; a node Helm adds is placed by the request that adds it.
+"""
+
+[operations.remove_studio_node]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Remove a node and every edge on it, and answer with the Studio"
+notes = """
+**A person's act**, whatever Helm's authority setting says. Removing a node a person did not want is how a proposed one is turned down.
+"""
+
+[operations.propose_studio_edge]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Propose a Same as, Blocks or Answers edge between two nodes on one Studio, and answer with the Studio"
+notes = """
+**Lands `proposed`, whoever sends it**, and only a person accepts it. `produced` does not decode here: the Studio draws that edge itself. An edge to a node on another Studio is refused as `fleet.no_such_studio_node`, and the same relation twice as `fleet.studio_edge_exists`.
+"""
+
+[operations.decide_studio_edge]
+kind = "command"
+transport = "HTTP"
+agent_access = "Bridge only"
+description = "Accept a proposed edge, or reject it, which removes it, and answer with the Studio"
+notes = """
+**Only a person accepts a relation**, whatever Helm's authority setting says, so no agent is offered this. An edge that is not proposed is refused as `fleet.studio_edge_not_proposed`.
+
+A rejected edge is removed rather than kept as rejected; nothing yet stops the same relation being proposed again.
+"""
+
 [operations.get_call]
 kind = "query"
 transport = "HTTP"
@@ -2374,6 +2476,24 @@ Published when a repository is added by folder, when a clone lands and is added,
 Names no Job, no Drone and no step. No actor and no `at`: the add that caused it answered its own caller, and every other Bridge only needs the list.
 
 A resync does not carry it. A client that reconnects asks `list_repositories` again, as it did before this existed.
+"""
+
+[operations."studio.changed"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "A Studio after a write to it, whole, with every node and edge"
+notes = """
+Carries `Studio` itself, the answer to `get_studio`, for `repositories.changed`' reason: a whiteboard replaces what it holds rather than folding a change. Published after the write. `manifest_id` is at the top level, so a poll's tally names the repository.
+"""
+
+[operations."studio.deleted"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "A Studio a person deleted, by id and repository"
+notes = """
+Published after the rows are gone, so a list re-read on it no longer names the Studio.
 """
 
 [operations."run.finished"]
