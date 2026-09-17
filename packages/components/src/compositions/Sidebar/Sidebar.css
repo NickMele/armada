@@ -176,15 +176,7 @@
   visibility: visible;
 }
 
-/* Two levels, rendered structurally: the rule is what makes Helm a sibling of
-   the group rather than one more peer inside it. The separator carries no
-   margin of its own, so the spacing belongs here. */
-.armada-sidebar__rule {
-  margin: var(--space-2) 0;
-}
-
-/* Collapsed: the 48px icon rail. Labels go, the chips centre, and the rule
-   stays — the hierarchy survives the collapse. */
+/* Collapsed: the 48px icon rail. Labels go and the chips centre. */
 .armada-sidebar[data-collapsed] {
   padding: var(--space-2);
 }

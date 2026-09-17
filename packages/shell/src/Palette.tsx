@@ -47,12 +47,12 @@ export type PaletteJob = { id: string; label: string };
  * A destination in Bridge, with the digit that reaches it where it has one.
  *
  * **The digit is optional and that is a gap, named rather than filled.** The
- * contract binds `⌘1–⌘4` to *Bridge surfaces in rail order* and `⌘5` to Helm,
- * so a digit is a position in the rail and nothing else. A destination that is
- * not in the rail has no position, and inventing one for it would either take
- * a digit the rail owes to a surface named in `docs/concepts/bridge.md` or
- * push Helm off `⌘5` — both of which change what a published binding says, and
- * neither of which is a wiring decision.
+ * contract binds `⌘1–⌘7` to *Bridge surfaces in rail order*, and Helm is on
+ * `⌘J`, which toggles the dock rather than taking a digit. So a digit is a
+ * position in the rail and nothing else. A destination that is not in the rail
+ * has no position, and inventing one for it would take a digit the rail owes
+ * to a surface named in `docs/concepts/bridge.md` — which changes what a
+ * published binding says, and is not a wiring decision.
  *
  * So a destination without a rail row is reached by name in here and by no
  * digit. That is a smaller thing than it looks: the palette is the discovery

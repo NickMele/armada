@@ -4,7 +4,6 @@ import {
   ClipboardList,
   FileCog,
   HardDrive,
-  MessageSquare,
   Stethoscope,
 } from "lucide-react";
 import { expect } from "storybook/test";
@@ -14,8 +13,9 @@ import { Sidebar, type SidebarItem } from "./Sidebar";
 
 /**
  * One story per width and state the layout model names: the 200px default, the
- * 160px and 320px ends of the drag range, the 48px rail, and the two-level
- * structure with Helm active.
+ * 160px and 320px ends of the drag range, and the 48px rail. Navigation is one
+ * level: Helm left it for the dock (#948), so no story draws a tier beneath
+ * the surfaces.
  *
  * The roster is Bridge's — it is passed in, and the glyphs are the registry's
  * `Navigation` group. It is the rail `docs/concepts/bridge.md` fixes: Active
@@ -26,11 +26,9 @@ import { Sidebar, type SidebarItem } from "./Sidebar";
  * row for Sidebar recorded its glyph list; that row is now short two entries.
  * Reported.
  *
- * **Five in the group and one beneath the rule is a different composition from
- * four and one**, which is the reason to look at this story rather than read
- * the roster: 48px of column is what the collapsed state has to stay legible
- * in, and the rule that separates Helm from the group is doing more work with
- * a longer group above it.
+ * **Five in the group is a different composition from four**, which is the
+ * reason to look at this story rather than read the roster: 48px of column is
+ * what the collapsed state has to stay legible in.
  */
 const meta: Meta<typeof Sidebar> = {
   title: "Compositions/Sidebar",
@@ -48,28 +46,17 @@ const surfaces: SidebarItem[] = [
   { id: "worktrees", label: "Cleanup", icon: HardDrive, shortcut: "⌘5" },
 ];
 
-const helm: SidebarItem = { id: "helm", label: "Helm", icon: MessageSquare };
-
 /**
- * 200px, the resting width. Bridge above the rule, Helm beneath it. Every
+ * 200px, the resting width, with Bridge's label above the surfaces. Every
  * glyph sits in the one accent-tinted chip, and the active row's chip is solid
  * `--accent` on the row's own `--accent-muted` fill.
  */
 export const Expanded: Story = {
-  args: { surfaces, sibling: helm, activeId: "board", appName: "Armada" },
+  args: { surfaces, activeId: "board", appName: "Armada" },
 };
 
 /**
- * Helm is a sibling of the whole group, not one more peer inside it, and its
- * active state reads the same as any surface's — the hierarchy is structural
- * rather than a second treatment.
- */
-export const HelmActive: Story = {
-  args: { surfaces, sibling: helm, activeId: "helm", appName: "Armada" },
-};
-
-/**
- * The 48px rail. Labels go, the chips centre, and the rule stays. It is more
+ * The 48px rail. Labels go and the chips centre. It is more
  * usable than it looks: ⌘-digit reaches every surface without labels.
  *
  * With no label, the chip is the whole affordance: every one shares the soft
@@ -77,17 +64,17 @@ export const HelmActive: Story = {
  * 28px chip, is still what a click lands on (#1265).
  */
 export const CollapsedRail: Story = {
-  args: { surfaces, sibling: helm, activeId: "board", appName: "Armada", collapsed: true },
+  args: { surfaces, activeId: "board", appName: "Armada", collapsed: true },
 };
 
 /** The narrow end of the drag range. */
 export const AtMinimumWidth: Story = {
-  args: { surfaces, sibling: helm, activeId: "board", appName: "Armada", width: "var(--sidebar-min)" },
+  args: { surfaces, activeId: "board", appName: "Armada", width: "var(--sidebar-min)" },
 };
 
 /** The wide end of the drag range. */
 export const AtMaximumWidth: Story = {
-  args: { surfaces, sibling: helm, activeId: "board", appName: "Armada", width: "var(--sidebar-max)" },
+  args: { surfaces, activeId: "board", appName: "Armada", width: "var(--sidebar-max)" },
 };
 
 /**
@@ -116,9 +103,9 @@ export const WhatIsBuilt: Story = {
 };
 
 /**
- * No section label and no sibling: the sidebar reduced to a flat list, which is
- * what the two-level rule exists to prevent. Drawn so the difference is visible
- * beside `Expanded` rather than argued for in prose.
+ * No section label: the surfaces alone, which is what `TheShell` draws — it
+ * passes `sectionLabel={null}`. Beside `Expanded`, the difference is the label
+ * and nothing else.
  */
 export const FlatForContrast: Story = {
   args: { surfaces, activeId: "board", sectionLabel: undefined, appName: "Armada" },
