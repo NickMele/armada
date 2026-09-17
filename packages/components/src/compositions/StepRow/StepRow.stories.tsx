@@ -33,7 +33,7 @@ type Story = StoryObj<typeof StepRow>;
  * accent left edge says which row you are on — the two are separate channels
  * on purpose, so a selected failed row keeps its own surface.
  *
- * The name is the only thing on the tree at full weight, and the duration
+ * The name is the only thing on the tree at full contrast, and the duration
  * comes up with it.
  */
 export const Selected: Story = {

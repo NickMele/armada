@@ -4,6 +4,8 @@ import { OverviewSummaryStrip } from "./OverviewSummaryStrip";
 
 /**
  * Overview's summary strip: a count first, then the panel it opens. #1091.
+ * The count is the design system's one `--text-2xl` figure, set at body
+ * weight — its size is the emphasis.
  */
 const meta = {
   title: "Compositions/Overview summary strip",

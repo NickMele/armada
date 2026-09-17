@@ -124,10 +124,9 @@ button.armada-srow__name:focus-visible {
   border-radius: var(--radius-sm);
 }
 
-/* The selected row's name is the one thing on the tree at full weight. */
+/* The selected row's name is the one thing on the tree at full contrast. */
 .armada-srow[data-sel] .armada-srow__name {
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
 }
 
 /* A step that has not been reached recedes further than one that has: the

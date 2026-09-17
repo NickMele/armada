@@ -32,7 +32,7 @@
 
 .armada-prose__strong {
   color: var(--fg-default);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-body);
 }
 
 /* A list is rows, not bullets. A marker glyph would be decorative iconography

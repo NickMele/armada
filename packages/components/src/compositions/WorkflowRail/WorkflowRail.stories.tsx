@@ -419,8 +419,8 @@ export const AVerdictBesideTheState: Story = {
  * refused still reads refused, with what it expected and what it saw. Overruling
  * is a person disagreeing on the record, not a verdict being erased.
  *
- * **Weight and not a second hue.** The verdict carries the row's one
- * `--step-failed`; the override sits beside it in `--fg-default` at medium, so
+ * **Contrast and not a second hue.** The verdict carries the row's one
+ * `--step-failed`; the override sits beside it in `--fg-default`, so
  * the pair reads as two facts rather than one louder failure. No glyph — the
  * `circle-*` family is the Judge's and `shield-*` is the Checks', and an
  * override is neither.

@@ -69,6 +69,8 @@
   text-transform: none;
   letter-spacing: normal;
   font-variant: normal;
+  /* The reset above clears the root's figures too; put them back. */
+  font-variant-numeric: lining-nums tabular-nums;
   text-align: left;
   /* A bubble cloned inside a mono cell or a preformatted block would keep that
      block's whitespace handling and stop wrapping. It has a prose width cap;
