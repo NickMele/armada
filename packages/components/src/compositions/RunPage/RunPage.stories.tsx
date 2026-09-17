@@ -173,7 +173,10 @@ export const Running: Story = {
   },
 };
 
-/** Finished, with an exit code other than the one expected — unhued either way. */
+/**
+ * Finished, with an exit code other than the one expected — the failed colour,
+ * beside a passed run.
+ */
 export const UnexpectedExit: Story = {
   args: {
     ...EDITED,
@@ -192,12 +195,20 @@ export const UnexpectedExit: Story = {
         },
       ],
     },
-    result: { name: "test", exitCode: 101, expected: 0, ended: "exited", duration: "41s" },
+    result: {
+      name: "test",
+      exitCode: 101,
+      expected: 0,
+      ended: "exited",
+      duration: "41s",
+      outcome: "failed",
+    },
     runs: [
       {
         id: "run_7f",
         name: "typecheck",
         result: "exit 0 (expects 0)",
+        outcome: "passed",
         time: "14:02:11",
         duration: "9.4s",
         onOpen: fn(),
@@ -228,7 +239,14 @@ export const AfterARunThatChangedFiles: Story = {
     onRun: fn(),
     onDismiss: fn(),
     output: { rows: [{ row: "line", at: 1, text: "Diff in crates/fleet/src/rehearsing/checkout.rs" }] },
-    result: { name: "fmt", exitCode: 0, expected: 0, ended: "exited", duration: "2.7s" },
+    result: {
+      name: "fmt",
+      exitCode: 0,
+      expected: 0,
+      ended: "exited",
+      duration: "2.7s",
+      outcome: "passed",
+    },
     changed: { files: REFORMATTED, onOpenDiff: fn(), onUndo: fn() },
   },
   play: async ({ args, canvas, userEvent }) => {
@@ -253,7 +271,14 @@ export const AfterTheRunWasUndone: Story = {
     onSelect: fn(),
     onRun: fn(),
     onDismiss: fn(),
-    result: { name: "fmt", exitCode: 0, expected: 0, ended: "exited", duration: "2.7s" },
+    result: {
+      name: "fmt",
+      exitCode: 0,
+      expected: 0,
+      ended: "exited",
+      duration: "2.7s",
+      outcome: "passed",
+    },
     changed: {
       files: REFORMATTED,
       onOpenDiff: fn(),
@@ -361,7 +386,14 @@ export const UndoNamesWhatItDiscards: Story = {
     onSelect: fn(),
     onRun: fn(),
     onDismiss: fn(),
-    result: { name: "fmt", exitCode: 0, expected: 0, ended: "exited", duration: "2.7s" },
+    result: {
+      name: "fmt",
+      exitCode: 0,
+      expected: 0,
+      ended: "exited",
+      duration: "2.7s",
+      outcome: "passed",
+    },
     changed: { files: REFORMATTED, onUndo: fn() },
   },
   play: async ({ args, canvas, userEvent }) => {

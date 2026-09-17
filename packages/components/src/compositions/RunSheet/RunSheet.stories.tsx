@@ -242,11 +242,16 @@ export const OutputWithALongLine: Story = {
     onToggleNarrow: fn(),
     onRun: fn(),
     output: { rows: LONG_LINE_ROWS },
-    result: { name: "test", exitCode: 101, expected: 0, duration: "41s" },
+    result: { name: "test", exitCode: 101, expected: 0, duration: "41s", outcome: "failed" },
   },
 };
 
-/** Finished, with an exit code other than the one expected — unhued either way. */
+/**
+ * Finished, with an exit code other than the one expected, in the failed
+ * colour — and *Earlier runs* beside it, a failed `test` and a passing `lint`
+ * each in its own. **Job colours, and still a rehearsal**: no Evidence is
+ * written, and the Job's gate rows under this sheet do not move.
+ */
 export const UnexpectedExit: Story = {
   args: {
     open: true,
@@ -262,7 +267,36 @@ export const UnexpectedExit: Story = {
         { row: "line", at: 2, text: "thread 'checking::retrying' panicked at crates/fleet/src/tests/retrying.rs:41" },
       ],
     },
-    result: { name: "test", exitCode: 101, expected: 0, duration: "41s" },
+    result: { name: "test", exitCode: 101, expected: 0, duration: "41s", outcome: "failed" },
+    runs: [
+      {
+        id: "run_91",
+        name: "test",
+        result: "exit 101 (expects 0)",
+        outcome: "failed",
+        time: "14:06:40",
+        duration: "41.0s",
+        onOpen: fn(),
+      },
+      {
+        id: "run_90",
+        name: "lint",
+        result: "exit 0 (expects 0)",
+        outcome: "passed",
+        time: "14:05:12",
+        duration: "6.8s",
+        onOpen: fn(),
+      },
+      {
+        id: "run_8f",
+        name: "test",
+        result: "stopped",
+        outcome: "stopped",
+        time: "14:04:02",
+        duration: "12.3s",
+        onOpen: fn(),
+      },
+    ],
   },
 };
 
@@ -283,7 +317,7 @@ export const ChangedTheTree: Story = {
     onSelect: fn(),
     onRun: fn(),
     output: { rows: [], emptyNote: "cargo fmt wrote no output." },
-    result: { name: "fmt", exitCode: 0, expected: 0, duration: "3.2s" },
+    result: { name: "fmt", exitCode: 0, expected: 0, duration: "3.2s", outcome: "passed" },
     changed: {
       files: CHANGED_FILES,
       onOpenDiff: fn(),
@@ -492,9 +526,8 @@ export const ServerStartedByADrone: Story = {
 
 /**
  * **A server that exits on its own has failed, whatever its exit code** —
- * worded as stopped on its own, and unhued: a server's activity carries no
- * status token, so words carry the reading the way an unhued exit code does
- * everywhere else on this sheet.
+ * worded as stopped on its own, with its code in the failed colour. The words
+ * take no hue; a server somebody stopped takes killed's grey.
  */
 export const ServerExitedOnItsOwn: Story = {
   args: {

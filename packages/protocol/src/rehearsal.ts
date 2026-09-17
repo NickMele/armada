@@ -2,7 +2,8 @@
 // checkout. `crates/ipc/src/rehearsal.rs`. Since protocol 10.6.
 //
 // **A rehearsal, never a verdict.** Nothing here is a Check row or Evidence,
-// and nothing here moves a Job, so no field maps onto a status colour.
+// and nothing here moves a Job. Bridge still draws a run's result in Job
+// colours, read from its code and `stopped` — how it looks, not what it counts.
 
 import type { ChangedFile } from "./events";
 import type { JobRead, Outcome } from "./reads";
@@ -107,7 +108,7 @@ export type RunRecord = {
   /** Absent where there was no code: a signal, a budget, a spawn that failed. */
   exit_code?: number;
   expect_exit_code: number;
-  /** How it ended, in a sentence. Unhued: a rehearsal. */
+  /** How it ended, in a sentence. A rehearsal: the hue is Bridge's reading. */
   ended: string;
   stopped: boolean;
   changed: ChangedFile[];
@@ -276,7 +277,7 @@ export type CheckoutRunRecord = {
   /** Absent where there was no code: a signal, a budget, a spawn that failed. */
   exit_code?: number;
   expect_exit_code: number;
-  /** How it ended, in a sentence. Unhued: a rehearsal. */
+  /** How it ended, in a sentence. A rehearsal: the hue is Bridge's reading. */
   ended: string;
   stopped: boolean;
   changed: ChangedFile[];

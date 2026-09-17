@@ -4,7 +4,7 @@ import { Button } from "../../primitives/Button/Button";
 import { Alert } from "../../primitives/Alert/Alert";
 import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
-import { FactChip } from "../FactChip/FactChip";
+import { FactChip, type FactChipRun } from "../FactChip/FactChip";
 import { CheckRuns, type CheckRun } from "../CheckRuns/CheckRuns";
 import { ConsoleOutput, type ConsoleOutputProps } from "../ConsoleOutput/ConsoleOutput";
 import { ChangedFiles, type ChangedFile } from "../ChangedFiles/ChangedFiles";
@@ -18,9 +18,8 @@ import { ChangedFiles, type ChangedFile } from "../ChangedFiles/ChangedFiles";
  * the tree the gate will judge, which is the one the Job's work is already in.
  *
  * **A run from this sheet writes no Evidence and moves nothing on the Job.**
- * The result line and the run list both stay unhued for that reason: a run
- * from here is a rehearsal, not a verdict, and the Job state machine is the
- * only thing status colour ever maps onto.
+ * Its result still reads in Job colours, `--run-*`, as on the Manifest
+ * surface — per run, and never on the gate rows under this sheet.
  *
  * **Data in, callbacks out.** This component holds no protocol type and no
  * fetch — a caller resolves the Manifest, starts the run and streams the
@@ -72,8 +71,14 @@ export type RunSheetGroup = {
 export type RunSheetPastRun = {
   id: string;
   name: ReactNode;
-  /** `exit 0 (expects 0)`. Unhued — a rehearsal is not a verdict. */
+  /** `exit 0 (expects 0)`, in a chip hued by `outcome`. */
   result: ReactNode;
+  /**
+   * How it ended, for its hue. `passed` is the code it expected; `failed` is
+   * any other ending; `stopped` is a person pressing Stop, which takes killed's
+   * hue because a run somebody ended is not a failure.
+   */
+  outcome?: FactChipRun;
   time: ReactNode;
   duration: ReactNode;
   onOpen?: () => void;
@@ -84,6 +89,8 @@ export type RunSheetResult = {
   exitCode: number;
   expected: number;
   duration: ReactNode;
+  /** As `RunSheetPastRun`'s. */
+  outcome?: FactChipRun;
 };
 
 /**
@@ -102,10 +109,10 @@ export type RunSheetServerLink = {
  * entry. Three phases, and only `serving` carries links — pressing one before
  * `ready` passes would open an address nothing is answering on yet.
  *
- * **Nothing here is hued.** A server's activity is not a Job state, and
- * `tokens/status.css` declares no value for it — so `exited`, which reads
- * closest to a failure, stays as neutral as `starting` and `serving`. Words
- * carry the reading: *serving*, *stopped on its own*.
+ * **Only an ending is hued.** A server that stopped on its own has failed,
+ * whatever its code, so its code takes `--run-failed`; one somebody stopped
+ * takes `--run-stopped`. `starting` and `serving` are words: *serving*, *stopped on its
+ * own*.
  */
 export type RunSheetServerStatus =
   | { phase: "starting" }
@@ -160,7 +167,7 @@ export type RunSheetProps = {
   output?: ConsoleOutputProps;
   /** Present while a run is in flight. Elapsed is the caller's own figure — this draws no arithmetic. */
   running?: { elapsed: ReactNode; onStop?: () => void };
-  /** The last run's result line. Unhued: a run from here carries no verdict. */
+  /** The last run's result line, in Job colours. Still no verdict: it writes no Evidence. */
   result?: RunSheetResult;
 
   /** Earlier runs from this sheet. */
@@ -304,7 +311,9 @@ export function RunSheet({
           {result === undefined ? null : (
             <p className="armada-run-sheet__result">
               {result.name}{" "}
-              <FactChip>{`exit ${result.exitCode} (expects ${result.expected})`}</FactChip>{" "}
+              <FactChip run={result.outcome}>
+                {`exit ${result.exitCode} (expects ${result.expected})`}
+              </FactChip>{" "}
               {result.duration}
             </p>
           )}
@@ -338,12 +347,15 @@ export function RunSheet({
                   id: run.id,
                   says: run.name,
                   identifier: run.time,
+                  // The chip, not CheckRuns' own `named`: that hue is a gate's
+                  // result, and a rehearsal beside the gate rows must not read
+                  // as one.
                   result: (
-                    <>
+                    <FactChip run={run.outcome}>
                       {run.result}
                       {" · "}
                       {run.duration}
-                    </>
+                    </FactChip>
                   ),
                   output: run.onOpen === undefined ? undefined : "log",
                 }),
@@ -475,7 +487,14 @@ function RunSheetServer({
     return (
       <p className="armada-run-sheet__server-status">
         {status.stopped === true ? "Stopped." : "Stopped on its own."}
-        {status.exitCode === undefined ? null : <> <FactChip>{`exit ${status.exitCode}`}</FactChip></>}
+        {status.exitCode === undefined ? null : (
+          <>
+            {" "}
+            <FactChip run={status.stopped === true ? "stopped" : "failed"}>
+              {`exit ${status.exitCode}`}
+            </FactChip>
+          </>
+        )}
       </p>
     );
   }

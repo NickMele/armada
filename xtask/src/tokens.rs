@@ -191,6 +191,7 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--status-", Slot::NsFull("color")),
     ("--step-", Slot::NsFull("color")),
     ("--verdict-", Slot::NsFull("color")),
+    ("--run-", Slot::NsFull("color")),
     ("--surface-", Slot::NsFull("color")),
     // Exact before prefix, and this pair is why the table says so: --edge-active
     // is a width, and `--edge-` below would claim it first and emit

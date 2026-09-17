@@ -173,7 +173,24 @@ export function runOutputOf(followed: RunFollowed, selectedName?: string): Conso
   };
 }
 
-/** One row of *Earlier runs* — unhued, because a rehearsal carries no verdict. */
+/**
+ * How a finished run ended, for its hue — the one reading both run surfaces
+ * share, so a run reads the same wherever it appears. `passed` is the code it
+ * expected; `failed` is any other ending, a signal or a spawn that never
+ * started included. **A run somebody stopped is `stopped`**: a person ended
+ * it, which is killed's reading and not a failure's.
+ *
+ * Still no verdict. Nothing here is stored, and nothing reaches Evidence or a
+ * `check_runs` row.
+ */
+export function runOutcomeOf(
+  record: Pick<RunRecord, "exit_code" | "expect_exit_code" | "stopped">,
+): "passed" | "failed" | "stopped" {
+  if (record.stopped) return "stopped";
+  return record.exit_code === record.expect_exit_code ? "passed" : "failed";
+}
+
+/** One row of *Earlier runs*, in Job colours. */
 export function pastRunOf(record: RunRecord, onOpen: (id: string) => void): RunSheetPastRun {
   return {
     id: record.id,
@@ -182,6 +199,7 @@ export function pastRunOf(record: RunRecord, onOpen: (id: string) => void): RunS
       record.exit_code === undefined
         ? record.ended
         : `exit ${record.exit_code} (expects ${record.expect_exit_code})`,
+    outcome: runOutcomeOf(record),
     time: clockOf(record.started_at),
     duration: `${(record.duration_ms / 1000).toFixed(1)}s`,
     onOpen: () => onOpen(record.id),

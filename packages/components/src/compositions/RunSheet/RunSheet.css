@@ -243,10 +243,11 @@
   gap: var(--space-2);
 }
 
+/* A run in flight, in Job colours: --run-running aliases running. */
 .armada-run-sheet__elapsed {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--fg-subtle);
+  color: var(--run-running);
 }
 
 /* The output panel. `flex: 1` is what claims the remaining height of the
@@ -265,8 +266,9 @@
   min-height: 100%;
 }
 
-/* Unhued: a rehearsal is not a verdict, and a Check's exit code below the Job
-   never carries status colour. */
+/* The line stays --fg-default and only its chip takes the run's hue: a
+   rehearsal is not a verdict, so the colour sits on the code it came to and
+   nowhere else. */
 .armada-run-sheet__result {
   margin: 0;
   display: flex;
@@ -291,9 +293,9 @@
 
 /* --- a server: starting, serving, or exited on its own -------------------- */
 
-/* Starting and exited are both one line of words. No status hue on either —
-   a server's activity carries no token in tokens/status.css, and words carry
-   the reading the way an unhued exit code does everywhere else on this sheet. */
+/* Starting and exited are both one line of words, and the words take no hue.
+   An exit code a server came to on its own is a chip in --run-failed; the
+   component decides that, not this sheet. */
 .armada-run-sheet__server-status {
   margin: 0;
   font-family: var(--font-sans);
