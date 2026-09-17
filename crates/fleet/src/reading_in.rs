@@ -395,7 +395,7 @@ where
             Fetch::Calls(calls) => {
                 let mut printed = Vec::new();
                 for call in &calls {
-                    printed.push(ran(call).await.map_err(&unreadable)?);
+                    printed.push(ran(call, &self.host().path).await.map_err(&unreadable)?);
                 }
                 Ok(printed.join("\n"))
             }
@@ -439,10 +439,15 @@ where
 
 /// One rendered fetch, run in Fleet's own process. `crate::proposal`'s
 /// `resolved`, with this read-in's own budget.
-async fn ran(call: &LookupCall) -> Result<String, String> {
+///
+/// **`path` is the one Fleet gives every process it spawns**, so a fetch finds
+/// the same programs a Drone would and a Fleet configured with a narrow PATH
+/// does not quietly reach a wider one.
+async fn ran(call: &LookupCall, path: &str) -> Result<String, String> {
     let mut spawning = Command::new(call.program());
     spawning
         .args(call.args())
+        .env("PATH", path)
         .stdin(std::process::Stdio::null())
         .kill_on_drop(true);
     let output = timeout(

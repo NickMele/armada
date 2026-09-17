@@ -18,7 +18,11 @@ use adapter_traits::LookupCall;
 use serde::Deserialize;
 
 /// The forge this workspace already assumes, as its host appears in a link.
-const FORGE_HOST: &str = "github.com/";
+///
+/// **Public so a fixture can spell one.** A test elsewhere that needs a forge
+/// link would otherwise have to write the vendor's name, which is the thing
+/// the gate keeps inside this crate.
+pub const FORGE_HOST: &str = "github.com/";
 /// Where the agent CLI keeps a session's transcript, under a person's home.
 const SESSIONS: &str = ".claude/projects";
 
