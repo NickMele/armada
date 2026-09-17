@@ -11,26 +11,20 @@ import { FactChip } from "../FactChip/FactChip";
  * and the state on one line, the title under it, and the facts as chips. What a
  * node holds at length is read beside the whiteboard, not on it.
  *
- * **Only Run and Job take status colour**, through `Badge`. Every other state
- * is plain text in `--fg-muted`, because a bordered pill is a Job state and
- * nothing else.
+ * **Only Run and Job take status colour.** A Job's is its `Badge`; a Run's is
+ * its word in `--run-{state}`, because a bordered pill is a Job state and
+ * nothing else. Every other state is plain text in `--fg-muted`.
  *
  * **Every working node pulses** and says so with `aria-busy`, which is what a
  * reader who cannot see the pulse is told.
  */
 
 /**
- * A run's result, aliased onto the Job status it reads as. `status.css`
- * declares no run states yet; #1277 adds them, each aliasing the same Job
- * status, and this map then reads those tokens instead.
+ * How a run started from the Studio stands. Each takes its hue from
+ * `--run-{state}` in `tokens/status.css`, which aliases the Job status it reads
+ * as (#1277).
  */
-const RUN_AS_JOB = {
-  running: "running",
-  passed: "completed_success",
-  failed: "completed_failed",
-} as const;
-
-export type StudioRunState = keyof typeof RUN_AS_JOB;
+export type StudioRunState = "running" | "passed" | "failed" | "stopped";
 
 export type StudioFindingState = "proposed" | "gathering" | "frozen";
 export type StudioContradictionState =
@@ -99,34 +93,44 @@ const NEUTRAL_STATE: Readonly<Record<string, string>> = {
   open: "open",
   answered: "answered",
   draft: "draft",
+  running: "running",
+  passed: "passed",
+  failed: "failed",
+  stopped: "stopped",
 };
 
 /** What the node's state reads as, and whether it is still working. */
 export type StudioNodeReading = {
   words: string | null;
-  /** A Job status rendering, for Run and Job only. */
+  /** A Job status rendering, for Job only. */
   status: Rendering | null;
+  /** The run's state, for its `--run-*` hue. Run only. */
+  run: StudioRunState | null;
   /** The wire value, where the registry carries no verb for it. */
   missing: string | null;
   working: boolean;
 };
 
 export function studioNodeReading(node: StudioNodeOf): StudioNodeReading {
-  if (node.kind === "run" || node.kind === "job") {
-    const wire = node.kind === "run" ? RUN_AS_JOB[node.state] : node.state;
-    const rendering = JOB_STATUS[wire] ?? null;
+  if (node.kind === "job") {
+    const rendering = JOB_STATUS[node.state] ?? null;
     const usable = rendering?.verb != null && rendering.badgeStatus != null && rendering.icon != null;
     return {
-      words: usable ? rendering.verb : wire,
+      words: usable ? rendering.verb : node.state,
       status: usable ? rendering : null,
-      missing: usable ? null : wire,
-      working: wire === "running",
+      run: null,
+      missing: usable ? null : node.state,
+      working: node.state === "running",
     };
   }
-  if (!("state" in node)) return { words: null, status: null, missing: null, working: false };
+  if (node.kind === "run") {
+    return { words: node.state, status: null, run: node.state, missing: null, working: node.state === "running" };
+  }
+  if (!("state" in node)) return { words: null, status: null, run: null, missing: null, working: false };
   return {
     words: NEUTRAL_STATE[node.state] ?? node.state,
     status: null,
+    run: null,
     missing: null,
     working: node.kind === "finding" && node.state === "gathering",
   };
@@ -145,7 +149,8 @@ export function StudioNode(props: StudioNodeProps) {
   const { status } = reading;
   return (
     <Card
-      className="armada-studio-node"
+      // A card on the canvas is glass. `docs/contracts/design-system.md`, Depth.
+      className="armada-studio-node armada-glass"
       data-kind={props.kind}
       data-selected={selected || undefined}
       aria-busy={reading.working || undefined}
@@ -159,6 +164,7 @@ export function StudioNode(props: StudioNodeProps) {
         ) : reading.words === null ? null : (
           <span
             className="armada-studio-node__state"
+            data-run={reading.run ?? undefined}
             data-working={reading.working || undefined}
             title={reading.missing === null ? undefined : `No verb in the registry for ${reading.missing}`}
           >

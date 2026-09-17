@@ -25,13 +25,14 @@ function Row({ children }: { children: ReactNode }) {
   );
 }
 
-/** Running, passed and failed, each in the Job colour it aliases until #1277. */
+/** Running, passed, failed and stopped, each in its `--run-*` hue, which aliases a Job colour. */
 export const Run: Story = {
   render: () => (
     <Row>
       <StudioNode kind="run" state="running" title="pnpm test" facts={["test", "1m 12s"]} />
       <StudioNode kind="run" state="passed" title="cargo xtask verify-foundations" facts={["exit 0", "48s"]} />
       <StudioNode kind="run" state="failed" title="pnpm -C packages/components test" facts={["exit 1", "2m 04s"]} />
+      <StudioNode kind="run" state="stopped" title="pnpm dev" facts={["6m 40s"]} />
     </Row>
   ),
   play: async ({ canvas }) => {
@@ -39,7 +40,11 @@ export const Run: Story = {
     const busy = canvas.getByText("pnpm test").closest("[aria-busy]");
     await expect(busy).not.toBeNull();
     await expect(canvas.getByText("cargo xtask verify-foundations").closest("[aria-busy]")).toBeNull();
-    await expect(canvas.getByText("failed")).toBeVisible();
+    // A run reads as a run, never with a Job's verb.
+    for (const words of ["running", "passed", "failed", "stopped"]) {
+      await expect(canvas.getByText(words)).toBeVisible();
+    }
+    await expect(canvas.queryByText("done")).toBeNull();
   },
 };
 

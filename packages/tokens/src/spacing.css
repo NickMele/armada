@@ -153,6 +153,10 @@
      pane holding a diff is allowed to go, and the panel beside the dock is
      asked to hold the same kind of thing. */
   --w-work-min: 380px;
+  /* A node on a Studio's whiteboard. Its own width rather than a floating
+     layer's, so a menu that widens does not resize a Studio. 240px holds a
+     title of about thirty characters to the line at --text-sm. #1286. */
+  --w-studio-node: 240px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 

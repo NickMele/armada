@@ -75,15 +75,46 @@ type BoardNode = Node<BoardNodeData, "studio">;
 type BoardEdgeData = { label: string | null; proposed: boolean };
 type BoardEdge = Edge<BoardEdgeData, "studio">;
 
-/** The card, with the two anchors an edge needs. Nothing connects by hand, so both are hidden. */
+const SIDES = [Position.Left, Position.Right, Position.Top, Position.Bottom] as const;
+
+/**
+ * The card, with an anchor for each end of an edge on every side. Which side
+ * an edge takes is chosen from where the two nodes sit — see `sides`. Nothing
+ * connects by hand, so none is drawn.
+ */
 function BoardNodeView({ data, selected }: NodeProps<BoardNode>) {
   return (
     <>
-      <Handle type="target" position={Position.Left} isConnectable={false} />
+      {SIDES.map((side) => (
+        <Handle key={`t-${side}`} id={`t-${side}`} type="target" position={side} isConnectable={false} />
+      ))}
       <StudioNode {...data} selected={selected} />
-      <Handle type="source" position={Position.Right} isConnectable={false} />
+      {SIDES.map((side) => (
+        <Handle key={`s-${side}`} id={`s-${side}`} type="source" position={side} isConnectable={false} />
+      ))}
     </>
   );
+}
+
+/**
+ * The facing sides of two nodes: across when they are further apart
+ * horizontally than vertically, otherwise up or down. A fixed right-to-left
+ * pair looped every edge whose target sat left of or above its source.
+ */
+function sides(source: BoardNode | undefined, target: BoardNode | undefined) {
+  const centre = (node: BoardNode | undefined) => ({
+    x: (node?.position.x ?? 0) + (node?.measured?.width ?? 0) / 2,
+    y: (node?.position.y ?? 0) + (node?.measured?.height ?? 0) / 2,
+  });
+  const from = centre(source);
+  const to = centre(target);
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const [out, into] =
+    Math.abs(dx) >= Math.abs(dy)
+      ? dx >= 0 ? [Position.Right, Position.Left] : [Position.Left, Position.Right]
+      : dy >= 0 ? [Position.Bottom, Position.Top] : [Position.Top, Position.Bottom];
+  return { sourceHandle: `s-${out}`, targetHandle: `t-${into}` };
 }
 
 function BoardEdgeView(props: EdgeProps<BoardEdge>) {
@@ -185,10 +216,12 @@ function Board({ nodes: given, edges: givenEdges, onNodeMoved, onSelectionChange
   const edges = useMemo<BoardEdge[]>(() => {
     const titles = new Map(given.map(({ id, node }) => [id, `${STUDIO_NODE_KIND[node.kind]} ${node.title}`]));
     const titleOf = (id: string) => titles.get(id) ?? id;
+    const placed = new Map(nodes.map((node) => [node.id, node]));
     return givenEdges.map((edge) => ({
       id: edge.id,
       source: edge.source,
       target: edge.target,
+      ...sides(placed.get(edge.source), placed.get(edge.target)),
       type: "studio",
       ariaLabel: edgeLabel(edge, titleOf),
       markerEnd: { type: MarkerType.ArrowClosed },
@@ -197,7 +230,7 @@ function Board({ nodes: given, edges: givenEdges, onNodeMoved, onSelectionChange
         proposed: edge.kind !== "produced" && edge.proposed,
       },
     }));
-  }, [given, givenEdges]);
+  }, [given, givenEdges, nodes]);
 
   const onPicked = useCallback(
     ({ nodes: picked }: { nodes: BoardNode[] }) => onSelectionChange?.(picked.map((node) => node.id)),
