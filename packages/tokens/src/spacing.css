@@ -31,7 +31,7 @@
   --radius-md: 5px;  /* buttons, inputs, cards */
   --radius-lg: 8px;  /* dialogs, panels */
 
-  /* Fixed heights — elevation is surface, not shadow, so these are load-bearing */
+  /* Fixed heights. A shadow never adds to a box's height, so these are load-bearing */
   --h-row: 36px;          /* table body row */
   --h-row-header: 32px;   /* table header row */
   /* A table row carrying a control. --h-row is 36px against --h-control-sm's
@@ -223,8 +223,18 @@
      desk distance and an 8px one reads as a badge that lost its label. */
   --dot: 6px;
 
-  /* Shadows are legal on floating layers only */
+  /* Shadows. A card lifts off the canvas and a floating layer lifts off the
+     card, so the overlay's shadow stays the deeper of the two. Rows, wells,
+     inputs and anything inside a card stay flat: a shadow inside a card would
+     make it a second card. */
   --shadow-overlay: 0 8px 24px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --shadow-card: inset 0 1px 0 var(--border-highlight), 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px -16px rgb(0 0 0 / 0.75);
+  /* The one solid accent on a view lifts a little further, in its own light */
+  --shadow-primary: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 2px 10px -3px color-mix(in srgb, var(--accent) 45%, transparent);
+  /* How far a card blurs what is behind it. Only the canvas's light shows
+     through, so 12px is enough to smooth it and cheap enough to hold on an
+     always-open window. */
+  --glass-blur: 12px;
   /* The ground behind a floating layer. Dialog and Sheet each mixed this from
      --bg-sunken at 62% and each said in a comment that no token carried it, so
      the value was written twice and owned nowhere. Declared here, from what

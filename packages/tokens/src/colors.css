@@ -23,6 +23,37 @@
   --accent-hover: #5FB0E8;
   --accent-muted: #1C3A52;   /* subtle fills, selected row backgrounds */
 
+  /* Depth. A card is frosted glass over a canvas lit in two faint pools of
+     light, so a quiet day still reads as depth rather than as a flat grey.
+     Light and glass carry no information: they never take a status hue, and
+     nothing reads a state from them.
+
+     The glass top is the lightest ground text sits on, and it is set by
+     contrast rather than taste. At rgb(30 41 55) under the accent pool,
+     --fg-subtle fell to 4.37:1 and rejected badge text to 4.43:1. At
+     rgb(25 33 45) the worst case is --fg-subtle at 4.74:1, every status badge
+     clears 4.5:1 on its own 12% tint, not_started included at 4.55:1.
+     Measured over --bg-base with --accent-faint laid on it.
+
+     86% rather than more see-through, so a machine where backdrop blur is
+     dropped for cost paints nearly the same colour without it. */
+  --bg-glass: rgb(25 33 45 / 0.86);     /* card top */
+  --bg-glass-end: rgb(22 30 41 / 0.86); /* card bottom */
+  --border-glass: rgb(255 255 255 / 0.07);
+  /* The 1px highlight along a card's top inner edge, read as light catching it */
+  --border-highlight: rgb(255 255 255 / 0.05);
+  /* The canvas's pool of accent light, top leading corner */
+  --accent-faint: color-mix(in srgb, var(--accent) 10%, transparent);
+
+  /* Helm. The one hue outside status and accent, so the dock reads as Helm at
+     a glance. Indigo sits between --accent and --status-rejected, which is why
+     it never appears on or beside a Job row: it marks Helm's own chrome only.
+     6.09:1 as text on --bg-glass under the light. */
+  --helm: #8E95FF;
+  --helm-muted: color-mix(in srgb, var(--helm) 14%, transparent); /* chip and Send fill */
+  --helm-edge: color-mix(in srgb, var(--helm) 38%, transparent);  /* the dock's top edge, Send's border */
+  --helm-faint: color-mix(in srgb, var(--helm) 6%, transparent);  /* the canvas's pool, and the dock's wash */
+
   /* Diff */
   --diff-add-bg: #14301F;
   --diff-add-fg: #6FD196;

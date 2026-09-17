@@ -378,7 +378,16 @@ it deliberately takes none, is an open question.
 
 ## Navigation
 
-16px, `--fg-muted` at rest, `--fg-default` when active. Never
+16px, in a 28px `--radius-md` chip, the same in the expanded column and the
+collapsed 48px rail. At rest the chip is `--accent-faint` with the icon in
+`--accent-hover` (5.88:1 on `--bg-glass`). Active, the chip is solid
+`--accent` with the icon in `--fg-inverse`, and the label goes to
+`--fg-default`. lucide has no filled variants, so the chip is what marks the
+active item; in the collapsed rail it is the whole affordance.
+
+**Every section shares the one accent tint.** A hue per section would sit
+beside status colours that already mean something (teal beside running, pink
+beside failed), and colour in the column means where you are. Never
 status-coloured. The full mapping (Job Board, Alerts, Doctor, Manifest,
 Helm, Worktrees) is `packages/icons/icons.toml`, group
 `Navigation` — `eye` and `file-cog` are shared assignments, carried under
@@ -650,17 +659,6 @@ status vocabulary (Specified, Proposed, Retired, Banned) has no analogue to
 "Decided", so the file and the settled-as-of-2026-08-21 claim do not fully
 line up — worth a person's attention rather than something this document
 should paper over.
-
-- **[nav-icon-active-fill]** Does the active nav surface change icon fill,
-  or only colour?
-  Navigation icons render at 16px, `--fg-muted` at rest and `--fg-default`
-  when active, never status-coloured. lucide icons are stroke-only outlines
-  with no matched filled variant, so "fill" would mean a background shape
-  behind the icon rather than a swapped glyph — the realistic option, and it
-  matters most in the collapsed 48px rail, where the icon is the whole nav
-  item and a background is the only affordance available. Expanded, the
-  label carries the affordance too, so the answer may differ by sidebar
-  state.
 
 - **[kit-file-icons]** Do the three Kit-file states — in Kit, drifted, not
   in Kit — get icons, or stay label-only?

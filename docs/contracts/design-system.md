@@ -50,8 +50,14 @@ is not a surface — see Window and layout model, Content area, below.
 needs them, and what broke.
 
 This is an instrument panel, not a marketing page. No hero sections, no
-gradients, no decorative iconography, no illustration. Density and
-legibility win over impact.
+decorative iconography, no illustration. Density and legibility win over
+impact.
+
+**An instrument panel still has depth.** It sits open all day, and on a quiet
+day nothing on it carries status colour, so a flat grey screen reads as a dead
+one. Cards are glass lifted off a canvas lit in faint pools of light (see
+Depth, under Tokens). Light, glass and shadow carry no information. A gradient
+is allowed only as that light, and never where a person reads a state.
 
 ---
 
@@ -81,6 +87,9 @@ legibility win over impact.
    declared rather than inferred. Read the file rather than a list; this
    rule used to enumerate the cases and went stale twice. Anything the
    file does not declare stays neutral. See Below Job level under Tokens.
+   **Outside status and accent, one hue exists: `--helm`**, and it marks
+   Helm's own chrome and nothing else. Depth's light and glass never take a
+   status hue.
 4. **Dark is primary.** Design dark first. Light exists but is secondary.
 5. **Icons: lucide-react only**, used sparingly. A dashboard dense with
    icons reads as noise.
@@ -116,6 +125,38 @@ vibrating.
 --border-strong  #3D4A5A   focus rings, active edges
 ```
 
+### Depth
+
+```
+--bg-glass          rgb(25 33 45 / 0.86)   card top
+--bg-glass-end      rgb(22 30 41 / 0.86)   card bottom
+--border-glass      rgb(255 255 255 / 0.07) card edge
+--border-highlight  rgb(255 255 255 / 0.05) 1px light along a card's top inner edge
+--accent-faint      --accent at 10%        the canvas's pool of light
+--shadow-card       highlight + 1px contact + 28px soft drop
+--glass-blur        12px                   backdrop blur under a card
+```
+
+**A card** is a vertical gradient from `--bg-glass` to `--bg-glass-end`, with
+`--border-glass`, `--shadow-card` and a `--glass-blur` backdrop blur. It
+replaces `--bg-raised` and `--border-subtle` on every panel that sits directly
+on the canvas: the left column's three panels, Overview's cards and Helm's
+dock. A row, a well or an input inside a card stays flat on its Ground token.
+
+**The canvas** is `--bg-base` under two radial pools of light. `--accent-faint`
+sits in a 760 × 480px ellipse centred on the top leading corner.
+`--helm-faint` sits in a 640 × 520px ellipse on the bottom trailing corner,
+behind Helm's dock, and only while the dock is open.
+
+**The glass top is set by contrast.** It is the lightest ground text sits on,
+measured under the accent pool. `--fg-subtle` reads 4.74:1 there, and every
+status badge clears 4.5:1 on its own 12% tint, `not_started` included at
+4.55:1. A lighter top, `rgb(30 41 55)`, dropped `--fg-subtle` to 4.37:1.
+
+**Blur is the one cost worth watching.** The window stays open all day on a
+second monitor. The glass is 86% opaque so that where blur is dropped for
+cost, the card paints nearly the same colour without it.
+
 ### Foreground
 
 ```
@@ -141,6 +182,21 @@ cannot be seen. A control that has to carry a status mark first steps
 down off the accent — to `--accent-muted` for a press, to the pending
 rendering under Button while Fleet has not answered — and the mark reads
 against that.
+
+### Helm
+
+```
+--helm        #8E95FF   Helm's chip icon, Send's text
+--helm-muted  14%       chip and Send fill
+--helm-edge   38%       the dock's top edge, Send's border
+--helm-faint  6%        the dock's wash, the canvas's pool behind it
+```
+
+Helm answers questions about whatever is on screen, so the dock needs to
+read as Helm at a glance and not as another panel. **Indigo sits between
+`--accent` and `--status-rejected`**, so it appears on Helm's own chrome only,
+never on or beside a Job row. `--helm` reads 6.09:1 on `--bg-glass` and 4.82:1
+on its own chip.
 
 ### Status — derived from the state machine
 
@@ -383,9 +439,13 @@ and content left edges align with their header's left edge.
 --radius-lg  8px    dialogs, panels
 ```
 
-No full-round pills except avatars. No shadows on flat surfaces —
-elevation comes from `--bg-raised` / `--bg-overlay`, not blur. Shadows
-only on floating layers (dialog, popover, dropdown).
+No full-round pills except avatars.
+
+**Two heights of shadow.** A card lifts off the canvas on `--shadow-card`. A
+floating layer (dialog, popover, dropdown) lifts off the card on
+`--shadow-overlay`, the deeper of the two. Nothing inside a card takes a
+shadow: a shadowed row inside a card reads as a second card. The one solid
+accent on a view takes `--shadow-primary` (see Button).
 
 ---
 
@@ -528,8 +588,8 @@ collapsed   48px icon rail — Navigation's own form; Stats and Fleet
 persistence width and collapsed state survive app restart
 ```
 
-**One panel style, shared by all three.** `--radius-lg`, `--border-subtle`
-on `--bg-raised`, held apart by the column's own 16px gap (`--space-4`)
+**One panel style, shared by all three.** `--radius-lg` and the card
+treatment under Depth, held apart by the column's own 16px gap (`--space-4`)
 rather than by margin on each panel. A panel's head is 40px
 (`--space-8` + `--space-2`), 12px horizontal padding (`--space-3`), and
 collapses to its head only — never to nothing, so a glance still answers
@@ -1179,7 +1239,7 @@ one claim.
 
 | Variant | Rest | Hover | Use |
 | --- | --- | --- | --- |
-| Primary | `--accent` fill, `--fg-inverse` text | `--accent-hover` | One per view. Approve, Dispatch |
+| Primary | `--accent` fill, `--fg-inverse` text, `--shadow-primary` | `--accent-hover` | One per view. Approve, Dispatch |
 | Secondary | `--bg-sunken`, `--border-strong`, `--fg-default` | `--bg-hover` | Everything ordinary |
 | Ghost | transparent, `--fg-muted` | `--bg-hover` • `--fg-default` | Row actions, icon buttons, toolbars |
 | Destructive | transparent, `--status-completed-failed` text and border | fill at 12% | Kill only. Never a filled red button |
@@ -1299,11 +1359,28 @@ counts, gathered with what Overview's own tiles already read for Drones and
 Manifest drift.
 
 ```
-row     --text-xs, label in --fg-muted, value right-aligned in --font-mono
+row     --text-xs, --dot, label in --fg-muted, value right-aligned in --font-mono
 value   --fg-default at rest; past zero, amber (--status-awaiting-review)
         for Awaiting approval and Needs review, red (--status-escalated)
         for Escalated
+dot     the row's hue, mixed into the ground at --dot-idle while the count
+        is zero, full past it
 ```
+
+**Every row carries a dot in its own hue**, so the panel has colour on a quiet
+day, and a full dot still means something is waiting.
+
+| Row | Dot |
+| --- | --- |
+| Awaiting approval, Needs review | `--status-awaiting-review` |
+| Escalated | `--status-escalated` |
+| Jobs | `--status-not-started` |
+| Drones | `--stat-drones`, dim with nothing running |
+| Manifest | `--stat-manifest-current`; `--notice-caution` while behind |
+
+`--dot-idle` is 65%, the lowest mix that keeps every dot at 3:1 against
+`--bg-glass`. A dot is a mark and not an icon, so Iconography's text-only rule
+for this panel stands.
 
 **Three counts, not two.** Awaiting approval and Needs review are the old
 approval count, split by which gate a Job is waiting at; Escalated is the
@@ -1315,6 +1392,51 @@ Jobs, and a count here would be a second place to check the same fact.
 **The panel's own dot, at the collapsed 48px width, is the worst tone among
 its rows** — red past an Escalated count, amber past any other, neutral
 otherwise — the same rollup reasoning Doctor's pass/warn/fail uses.
+
+### Overview summary tiles
+
+Overview's four counts, each its own card, two by two.
+
+```
+tile     the card treatment under Depth, --radius-lg, and a radial wash of
+         the tile's hue at --status-wash from the top leading corner
+label    --text-xs, weight 600, in the tile's hue, after a --dot of it
+count    --font-mono --text-2xl, --fg-muted; past zero, the tone the
+         caller passes
+```
+
+| Tile | Hue |
+| --- | --- |
+| Needs you | `--status-awaiting-review` |
+| Running | `--status-running` |
+| Queued | `--status-not-started` |
+| Recently ended | `--status-completed-success` |
+
+**The label takes the hue at every count, and the count only past zero.** An
+amber "0" reads as something waiting. The label reads 4.39:1 or better on its
+own wash, `not_started` the lowest.
+
+### Overview empty state
+
+```
+card     the card treatment under Depth, centred content
+line     "No jobs." --text-base weight 600, then "Propose one." --fg-muted
+action   Dispatch, Primary — the view's one solid accent
+```
+
+**No icon.** Iconography's empty-state rule holds. **The title row's Dispatch
+stays Tonal** while this one is Primary, so the view still carries one solid
+accent, and it is the one beside the empty space.
+
+### Helm dock
+
+```
+frame    a 1px --helm-edge top edge fading to --border-glass, over the card
+         treatment, with --helm-faint washed in from the top trailing corner
+chip     --helm-muted fill, --helm icon, beside "Helm"
+composer --bg-sunken, --border-glass
+Send     --helm-muted fill, --helm text, --helm-edge border
+```
 
 ### Fleet panel
 
