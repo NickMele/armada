@@ -50,6 +50,7 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     approving: false,
     deciding: false,
     onAct: noop,
+    onActHeld: noop,
     onRedirect: noop,
     onAnswer: noop,
     onAnswerCommand: noop,
