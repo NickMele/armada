@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * The row menu, and the one place besides a dialog, sheet, popover, tooltip
@@ -45,6 +45,26 @@ export function DropdownMenu({
 }: DropdownMenuProps) {
   const [open, setOpen] = useState(defaultOpen);
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const shown = open && !disabled;
+
+  // Which side the menu resolved to, read before the first paint so its
+  // entrance rises from that side. Anchor positioning chooses a fallback in
+  // layout and no selector can see which, so the boxes are compared instead.
+  // Written straight onto the element rather than into state: it is a fact
+  // about this one layout, and a render for it would be a second commit
+  // between the layout and the paint. The panel is unmounted on close, so a
+  // reopen measures afresh.
+  useLayoutEffect(() => {
+    const layer = panel.current;
+    const anchor = trigger.current;
+    if (!shown || layer === null || anchor === null) return;
+    const at = layer.getBoundingClientRect();
+    const from = anchor.getBoundingClientRect();
+    layer.dataset.opens = at.top < from.top ? "up" : "down";
+    layer.dataset.aligns = Math.abs(at.right - from.right) <= Math.abs(at.left - from.left) ? "end" : "start";
+  }, [shown]);
 
   // Esc closes an overlay, per the global tier.
   useEffect(() => {
@@ -66,6 +86,7 @@ export function DropdownMenu({
   return (
     <div className="armada-dropdown-menu" ref={root}>
       <button
+        ref={trigger}
         type="button"
         className="armada-dropdown-menu__trigger"
         aria-haspopup="menu"
@@ -77,8 +98,8 @@ export function DropdownMenu({
       </button>
       {/* A menu open when its trigger turns off stays shut rather than sending
           from under a control that says it cannot. */}
-      {open && !disabled ? (
-        <div className="armada-dropdown-menu__panel" role="menu">
+      {shown ? (
+        <div ref={panel} className="armada-dropdown-menu__panel" role="menu">
           {entries.map((entry) => {
             if (entry.kind === "separator") {
               return <div key={entry.id} className="armada-dropdown-menu__separator" role="separator" />;
