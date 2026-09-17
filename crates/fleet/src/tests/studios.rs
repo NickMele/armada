@@ -166,6 +166,7 @@ async fn a_person_adds_only_what_a_person_makes() {
         StudioNodeContent::Link {
             address: "docs/contracts/design-system.md".to_string(),
             said: None,
+            named: None,
         },
         StudioNodeContent::Sketch {
             body: "legend on its own row".to_string(),
@@ -259,6 +260,7 @@ async fn every_write_is_published_and_a_produced_edge_is_not_decided() {
         content: StudioNodeContent::Link {
             address: "https://example.invalid/counts".to_string(),
             said: None,
+            named: None,
         },
         position: StudioPosition { x: 0, y: 160 },
         produced_by: Some(note.nodes[0].id.clone()),

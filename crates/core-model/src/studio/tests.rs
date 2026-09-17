@@ -220,6 +220,7 @@ fn a_finding_whose_content_does_not_fit_its_state_is_refused() {
     let claimed = StudioFinding::recorded(
         String::from("how is routing decided"),
         None,
+        alloc::vec::Vec::new(),
         alloc::vec![String::from("src/lib.rs")],
         alloc::vec::Vec::new(),
         None,

@@ -36,6 +36,7 @@ fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent
         K::Link => C::Link {
             address: text(),
             said: Some(text()),
+            named: None,
         },
         K::Deferral => C::Deferral { what: text() },
         K::Outline => C::Outline { body: text() },
@@ -215,6 +216,7 @@ fn a_finding_carries_what_its_scout_read_and_leaves_out_what_it_never_recorded()
             commit: "4bdb169c".to_string(),
             uncommitted: false,
         }),
+        Vec::new(),
         vec!["crates/fleet/src/routing.rs".to_string()],
         vec!["weight in crates".to_string()],
         None,

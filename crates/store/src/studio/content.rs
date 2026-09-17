@@ -6,8 +6,8 @@
 
 use core_model::{
     CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, JobId, ScoutCheckout, ScoutEnded,
-    ScoutOutcome, StudioCapture, StudioFinding, StudioNodeContent, StudioNodeKind, StudioRunKept,
-    Ulid,
+    ScoutOutcome, ScoutSource, ScoutSourceKind, StudioCapture, StudioFinding, StudioNodeContent,
+    StudioNodeKind, StudioRunKept, Ulid,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -70,12 +70,23 @@ pub(super) fn written(content: &StudioNodeContent) -> String {
         StudioNodeContent::Sketch { body } | StudioNodeContent::Outline { body } => {
             json!({ "body": body })
         }
-        // `said` is left out where there is none, which is what every row
-        // written before `#1378` already looks like.
-        StudioNodeContent::Link { address, said } => match said {
-            None => json!({ "address": address }),
-            Some(said) => json!({ "address": address, "said": said }),
-        },
+        // Each is left out where there is none, which is what every row
+        // written before `#1378` and `#1293` already looks like.
+        StudioNodeContent::Link {
+            address,
+            said,
+            named,
+        } => {
+            let mut link = Map::new();
+            link.insert("address".into(), json!(address));
+            if let Some(said) = said {
+                link.insert("said".into(), json!(said));
+            }
+            if let Some(named) = named {
+                link.insert("named".into(), json!(named));
+            }
+            Value::Object(link)
+        }
         StudioNodeContent::Deferral { what } => json!({ "what": what }),
         StudioNodeContent::IssueDraft { title, body } => json!({ "title": title, "body": body }),
         StudioNodeContent::Job { job_id } => json!({ "job_id": job_id.as_str() }),
@@ -131,8 +142,9 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
         },
         StudioNodeKind::Link => StudioNodeContent::Link {
             address: text("address")?,
-            said: object
-                .get("said")
+            said: object.get("said").and_then(Value::as_str).map(str::to_string),
+            named: object
+                .get("named")
                 .and_then(Value::as_str)
                 .map(str::to_string),
         },
@@ -162,6 +174,16 @@ fn finding_written(finding: &StudioFinding) -> Value {
             "checkout".into(),
             json!({ "commit": checkout.commit, "uncommitted": checkout.uncommitted }),
         );
+    }
+    if !finding.sources().is_empty() {
+        let sources: Vec<Value> = finding
+            .sources()
+            .iter()
+            .map(|source| {
+                json!({ "address": source.address, "kind": source.kind.as_wire(), "cut": source.cut })
+            })
+            .collect();
+        object.insert("sources".into(), Value::Array(sources));
     }
     if !finding.read().is_empty() {
         object.insert("read".into(), json!(finding.read()));
@@ -221,6 +243,33 @@ fn finding_read(object: &Map<String, Value>) -> Result<StudioFinding, Unreadable
             Some(_) => Err(missing(field)),
         }
     };
+    let sources = match object.get("sources") {
+        None => Vec::new(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                let spelled = item
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .ok_or(missing("sources.kind"))?;
+                Ok(ScoutSource {
+                    address: item
+                        .get("address")
+                        .and_then(Value::as_str)
+                        .ok_or(missing("sources.address"))?
+                        .to_string(),
+                    kind: ScoutSourceKind::from_wire(spelled).ok_or_else(|| {
+                        UnreadableContent::UnknownValue {
+                            field: "sources.kind",
+                            value: spelled.to_string(),
+                        }
+                    })?,
+                    cut: item.get("cut").and_then(Value::as_u64).unwrap_or(0),
+                })
+            })
+            .collect::<Result<Vec<_>, UnreadableContent>>()?,
+        Some(_) => return Err(missing("sources")),
+    };
     let ended = match object.get("ended") {
         None => None,
         Some(end) => {
@@ -254,6 +303,7 @@ fn finding_read(object: &Map<String, Value>) -> Result<StudioFinding, Unreadable
     Ok(StudioFinding::recorded(
         asked.to_string(),
         checkout,
+        sources,
         texts("read")?,
         texts("searched")?,
         object
