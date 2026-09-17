@@ -9,7 +9,7 @@ import { MANIFEST_ID, repository } from "@armada/screens/src/fixtures/build/base
 import { endShownIn, pressable, scrollerOf } from "./scrolled";
 import { SCRATCH, SHEET_READ, VERIFY_ENDED, settingUp } from "./setup-fleet";
 import type { SettingUp } from "./setup-fleet";
-import { mount, unmountAfterEach } from "./testing";
+import { entered, mount, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -21,16 +21,6 @@ async function setup(options: SettingUp = {}) {
   const list = page.getByRole("region", { name: "Workspaces" });
   await expect.element(list).toBeVisible();
   return list;
-}
-
-/**
- * A sheet that has finished travelling in. Visible holds from its first frame, while it can still
- * sit wholly past the window's trailing edge with its travel not yet started: under a loaded full
- * run a press aimed at it then reached nothing, and the test read on as if it had landed — #1252.
- */
-async function entered(sheet: ReturnType<typeof page.getByRole>) {
-  await expect.element(sheet).toBeVisible();
-  await Promise.all(sheet.element().getAnimations().map((one) => one.finished));
 }
 
 /** A workspace's proposal, opened from the picker, in place to be pressed. */

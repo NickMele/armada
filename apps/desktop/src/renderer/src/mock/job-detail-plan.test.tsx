@@ -21,7 +21,7 @@ import type { BridgeApi } from "../../../shared/api";
 import { commandOutstanding, runningWithSettings } from "./job-detail-fixtures";
 import type { FleetHandle, Scenario } from "./scenario";
 import { onJob } from "./scenario";
-import { mount, unmountAfterEach } from "./testing";
+import { entered, mount, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -153,6 +153,7 @@ test("a refused Add task says nothing was sent, and keeps the title typed", asyn
   await opened(withPlan(PLAN_PARTWAY), planUnreachable);
   await page.getByRole("button", { name: "Add task" }).click();
   const dialog = page.getByRole("dialog");
+  await entered(dialog);
   await userEvent.type(dialog.getByLabelText("Title"), "Add a regression test");
   await dialog.getByRole("button", { name: "Add task" }).click();
   await expect.element(dialog.getByText("Fleet is not connected. Nothing was sent.")).toBeVisible();
@@ -164,6 +165,7 @@ test("Job settings: a choice sends this Job's id and the wire's word, and the re
   const setWhenBlocked = vi.spyOn(api, "setWhenBlocked");
   await page.getByRole("button", { name: /^Job settings/ }).click();
   const panel = page.getByRole("dialog", { name: "Job settings" });
+  await entered(panel);
   (panel.getByRole("radio", { name: "Ask me first" }).element() as HTMLElement).click();
   await expect.poll(() => setWhenBlocked.mock.calls.length).toBe(1);
   expect(setWhenBlocked).toHaveBeenCalledWith(JOB_ID, "ask_me");
