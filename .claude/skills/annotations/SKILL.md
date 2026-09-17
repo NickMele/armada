@@ -88,8 +88,9 @@ the contract wins, and the proof is a story or a mock test, not a screenshot.
 
 Set `status` to `"done"` and `updatedAt` to now, in the file, once its change is
 merged or its question answered. The layer re-reads the files each time it is
-turned on, so the pin turns grey there. **Never delete a note**, unless the owner
-says to. He deletes his own.
+turned on, so the pin is gone there and the numbering closes over it — the bar
+says how many are done and shows them again on request. **Never delete a note**,
+unless the owner says to. He deletes his own.
 
 ### 6. Report
 

@@ -341,6 +341,12 @@ find the code without asking where you clicked.
 **Send needs Bridge and its Fleet.** In the mock there is no Fleet, so the layer
 says so and the note stays a file for `/annotations`.
 
+**A note marked done draws no pin and takes no number**, so the numbers run over
+the open notes alone and a new note takes the next one rather than counting
+everything ever written. Its file stays where it was; the bar says how many are
+done and *Show done notes* draws them again, unnumbered, for as long as the layer
+is on.
+
 ## Running a Check or a Command by hand
 
 **`armada check` and `armada run` need no Fleet.** They read `armada.yml` and

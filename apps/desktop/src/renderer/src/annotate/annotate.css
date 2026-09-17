@@ -79,6 +79,9 @@
   color: var(--accent);
 }
 
+/* A done note draws no pin at all unless the bar is asked to show them, and it
+ * carries no number when it does — so it is a grey dot beside the numbered open
+ * ones, and the numbering a person reads never counts finished work. */
 .armada-annotate__pin[data-status="done"] {
   border-color: var(--border-default);
   background: var(--bg-raised);
