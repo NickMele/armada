@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
@@ -11,6 +11,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
  * separator. `selected` takes that same slot as a checkmark, and
  * `aria-current` carries the fact for anyone not reading the glyph — a chosen
  * item never also has a shortcut.
+ *
+ * The trigger carries `chevron-down` right of its label, at 12px in the
+ * label's own colour, so it reads as a menu and not a button that acts. The
+ * owner settled it 2026-09-17 against a picker nobody could tell was one; the
+ * registry widened the glyph's reservation to cover it. Every trigger here has
+ * a label — `triggerLabel` is required and always drawn — so there is no
+ * icon-only trigger to leave it off. A split button's caret is its own
+ * primitive and never renders this one.
  *
  * No glyphs otherwise: icons stay on ghost/icon-only row actions, confirmation
  * dialogs and toolbars, per iconography; one drawing in the sheet disagrees,
@@ -95,6 +103,7 @@ export function DropdownMenu({
         onClick={() => setOpen((v) => !v)}
       >
         {triggerLabel}
+        <ChevronDown className="armada-dropdown-menu__chevron" size={12} strokeWidth={2} aria-hidden />
       </button>
       {/* A menu open when its trigger turns off stays shut rather than sending
           from under a control that says it cannot. */}
