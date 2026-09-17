@@ -542,11 +542,13 @@ Until a build carrying it is installed, point `ARMADA_LAND_ARMADA` at that
 binary by its **absolute** path — the gate runs in a worktree of its own, so a
 relative one is refused.
 
-**A gated turn takes minutes.** It cuts a worktree under `.armada/gates/` at the
-commit being merged — inside the repository, where this project's tooling works
-— clones the build directories into it, runs `verify-foundations` there and
-again in a worktree at `main` itself, then installs and runs each Check that
-either side hits. What landed is measured from the merge base, so an old branch meets
+**A gated turn takes minutes.** It keeps two worktrees under `.armada/land/` —
+one for the candidate, one for `main` itself — resets each to the commit it
+needs, keeps their build directories, and runs `verify-foundations` in both,
+then installs and runs each Check that either side hits. They are inside the
+repository because that is where this project's tooling works, and they are the
+only two: nothing accumulates per turn. What does accumulate is Fleet's own
+`.armada/bases/`, which `armada clean` gives back. What landed is measured from the merge base, so an old branch meets
 nearly every Check on the way in.
 
 **`scripts/land` returns at once**, and a runner in the background does the work.
