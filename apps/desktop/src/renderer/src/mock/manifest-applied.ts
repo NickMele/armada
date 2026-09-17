@@ -1,5 +1,5 @@
-// A form's edits, applied to what a story's fake Fleet declares — as far as a
-// play test presses them. Fleet's writer is what places an edit for real.
+// A form's edits, applied to what the mock's Manifest Fleet declares — as far as a
+// test presses them. Fleet's writer is what places an edit for real.
 
 import type { EvidenceDraft, ManifestDeclared, ManifestEdit } from "@armada/protocol";
 
