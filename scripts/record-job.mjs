@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
 const RECORDED = join(REPO, "packages/screens/src/fixtures/recorded");
-/** Where a recording of the whole Board goes. `Screens/Board` replays it. */
+/** Where a recording of the whole Board goes. The mock's `recorded-board` scenario replays one. */
 const BOARDS = join(REPO, "packages/screens/src/fixtures/boards");
 /** How long a socket may stay quiet before a stream still running is cut. */
 const QUIET_MS = 2000;
@@ -66,8 +66,8 @@ const BASE = `http://127.0.0.1:${port}`;
 
 // **`--board` records the Board rather than one Job**: every row `list_jobs`
 // serves, and the workflows and manifests those rows name, scrubbed and checked
-// the way a Job's recording is. `Screens/Board` replays it beside the rows it
-// builds, so a real Board's mix of states is in Storybook too.
+// the way a Job's recording is. The mock's `recorded-board` scenario replays
+// one, so a real Board's mix of states can be opened in Bridge on no Fleet.
 if (boardSlug !== undefined) {
   const [listedJobs, heldWorkflows, heldManifests] = await Promise.all([
     get("/jobs"),

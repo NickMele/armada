@@ -1,31 +1,12 @@
 // The mock's own claim, through `App` and nothing else: on `every-state` the
 // Board lists every Job the scenario holds, and each row opens that Job.
 
-import { afterEach, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
-import { mountApp } from "./mount";
-import type { Mounted } from "./mount";
+import { mount, openBoard, rows, unmountAfterEach } from "./testing";
 
-let mounted: { app: Mounted; host: HTMLElement } | null = null;
-
-afterEach(() => {
-  mounted?.app.unmount();
-  mounted?.host.remove();
-  mounted = null;
-});
-
-/** Mount `App` on a scenario, in a host the app's stylesheet sizes as its window. */
-function mount(name: string): Mounted {
-  const host = document.createElement("div");
-  host.id = "root";
-  document.body.append(host);
-  const app = mountApp(name, host);
-  mounted = { app, host };
-  return app;
-}
-
-const rows = () => [...document.querySelectorAll<HTMLElement>("[data-job-id]")];
+unmountAfterEach();
 
 /** The Board, with its collapsed Done group opened so every row is drawn. */
 async function everyRowDrawn(): Promise<void> {
@@ -37,7 +18,7 @@ async function everyRowDrawn(): Promise<void> {
 test("every-state lists a row per Job, and every row opens its own detail", async () => {
   const { scenario } = mount("every-state");
   const jobs = scenario.state.jobs;
-  await page.getByRole("button", { name: "Job Board" }).first().click();
+  await openBoard();
   await everyRowDrawn();
   await expect.poll(() => rows().map((row) => row.dataset.jobId).sort()).toEqual(jobs.map((job) => job.id).sort());
 
