@@ -222,12 +222,12 @@ function Board(props: StudiosProps & { open: OpenStudio }) {
           onSelectionChange={(ids) => onSelectNode(ids[0] ?? null)}
         >
           {studio.nodes.length === 0 ? (
-            <Card className="armada-glass">
+            <Card>
               <CardContent>Nothing on this Studio yet.</CardContent>
             </Card>
           ) : null}
           {selected === undefined ? null : (
-            <Card className="armada-glass" aria-label="Selected node">
+            <Card aria-label="Selected node">
               <CardContent className="armada-studio__aside">
                 <p>{nodeNamed(studio, selected.id, jobs)}</p>
                 {editable ? (
@@ -239,7 +239,7 @@ function Board(props: StudiosProps & { open: OpenStudio }) {
             </Card>
           )}
           {proposed.length === 0 ? null : (
-            <Card className="armada-glass" aria-label="Proposed relations">
+            <Card aria-label="Proposed relations">
               <CardHeader>
                 <CardTitle>Proposed</CardTitle>
               </CardHeader>
