@@ -157,6 +157,7 @@ class Line(unittest.TestCase):
             ARMADA_LAND_FOUNDATIONS="sh foundations.sh",
             ARMADA_LAND_SETUP="marker",
             ARMADA_LAND_SEED="seeded",
+            ARMADA_LAND_KEEP="node_modules",
             LAND_TEST_EVIDENCE=os.path.join(self.root, "evidence.txt"),
             ARMADA_LAND_HEAD_WAIT="10",
             STUB_GH_STATE=self.prs,
@@ -171,9 +172,13 @@ class Line(unittest.TestCase):
             "checks.json": json.dumps({"test": None, "ui": ["ui/"]}),
             # Red only in combination: each branch alone passes.
             "checks/test.sh": (
-                'printf "%s seed=%s setup=%s at=%s\\n" check '
+                'printf "%s seed=%s setup=%s at=%s stray=%s node=%s\\n" check '
                 '"$([ -f seeded/mark.txt ] && echo yes || echo no)" '
-                '"$([ -f marker.stamp ] && echo yes || echo no)" "$PWD" >> "$LAND_TEST_EVIDENCE"\n'
+                '"$([ -f marker.stamp ] && echo yes || echo no)" "$PWD" '
+                '"$([ -f stray.stamp ] && echo yes || echo no)" '
+                '"$([ -f node_modules/mark ] && echo yes || echo no)" >> "$LAND_TEST_EVIDENCE"\n'
+                "touch stray.stamp\n"
+                "mkdir -p node_modules && touch node_modules/mark\n"
                 "! { [ -f one.txt ] && [ -f two.txt ]; }\n"
             ),
             "foundations.sh": (
@@ -683,14 +688,91 @@ class Line(unittest.TestCase):
         self.assertNotEqual(self.git(where, "ls-remote", "origin", "refs/heads/fix/no-such-tool"), "",
                             "nothing was merged, so the branch is still there")
 
-    def test_a_killed_runners_gate_worktree_is_reclaimed(self):
+    def test_a_worktree_an_older_script_left_is_swept(self):
         left = os.path.join(self.repo, ".armada", "gates", "left-behind")
         self.git(self.repo, "worktree", "add", "--quiet", "--detach", left, "HEAD")
         where = self.branch("fix/after-a-death", {"x.txt": "1\n"})
         self.land(where, "preflight")
         self.land(where)
         self.assertEqual(self.settle(where, "fix/after-a-death").returncode, 0)
-        self.assertFalse(os.path.exists(left), "the next turn takes back what a dead runner left")
+        self.assertFalse(os.path.exists(left), "the first turn to hold the lock takes it back")
+
+    def test_the_worktree_is_reused_with_its_build_and_none_of_the_last_turn(self):
+        # One unmoved turn to move `main`, then two gated turns with a red one
+        # between them: what the red turn checked out may not survive either.
+        moves = self.branch("fix/turn-moves", {"a.txt": "1\n"})
+        first = self.branch("fix/turn-one", {"b.txt": "2\n"})
+        red = self.branch("fix/turn-red", {"red-only.txt": "3\n", "checks/test.sh": "exit 1\n"})
+        second = self.branch("fix/turn-two", {"d.txt": "4\n"})
+        for wt, name, code in ((moves, "fix/turn-moves", 0), (first, "fix/turn-one", 0),
+                               (red, "fix/turn-red", 4), (second, "fix/turn-two", 0)):
+            self.land(wt, "preflight")
+            self.land(wt)
+            self.assertEqual(self.settle(wt, name).returncode, code, name)
+
+        runs = [dict(part.split("=", 1) for part in line.split()[1:])
+                for line in open(self.env["LAND_TEST_EVIDENCE"]).read().splitlines()
+                if line.startswith("check ")]
+        # The candidate worktree's own runs: `main`'s own tree is the other one.
+        runs = [run for run in runs if run["at"].endswith("/land/candidate")]
+        self.assertGreaterEqual(len(runs), 2, "two gated turns ran the Check")
+        self.assertEqual(runs[-1]["stray"], "no", "the last turn's files are gone")
+        self.assertEqual(runs[-1]["node"], "yes", "its build directories are not")
+        self.assertEqual(runs[-1]["seed"], "yes", "nor the seed")
+        self.assertFalse(os.path.exists(os.path.join(self.repo, ".armada", "land", "candidate", "red-only.txt")),
+                         "and nothing a turn that went red checked out")
+
+    def test_a_killed_turn_leaves_nothing_in_the_worktree_for_the_next(self):
+        once = os.path.join(self.root, "slept-once")
+        mover = self.branch("fix/moves-12", {"moved.txt": "1\n"})
+        where = self.branch("fix/killed-mid-turn", {
+            "checks/test.sh": (
+                f'printf "killed stray=%s\\n" "$([ -f half.stamp ] && echo yes || echo no)" '
+                '>> "$LAND_TEST_EVIDENCE"\n'
+                f'[ -f {once} ] && exit 0\n'
+                f"touch {once}\n"
+                "touch half.stamp\n"
+                "sleep 60\n"
+            ),
+        })
+        self.land(mover, "preflight")
+        self.land(mover)
+        self.assertEqual(self.settle(mover, "fix/moves-12").returncode, 0)
+        self.land(where, "preflight")
+        self.land(where)
+
+        deadline = time.monotonic() + 30
+        while not os.path.exists(once):
+            self.assertLess(time.monotonic(), deadline, "the slow Check never started")
+            time.sleep(0.1)
+        os.killpg(os.getpgid(self.outcome("fix/killed-mid-turn")["runner"]), signal.SIGKILL)
+
+        done = self.settle(where, "fix/killed-mid-turn")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        killed = [line for line in open(self.env["LAND_TEST_EVIDENCE"]).read().splitlines()
+                  if line.startswith("killed ")]
+        self.assertEqual(killed[-1], "killed stray=no", "the dead turn's files went with it")
+
+    def test_a_worktree_that_is_gone_or_broken_is_remade(self):
+        one = self.branch("fix/remade-one", {"a.txt": "1\n"})
+        two = self.branch("fix/remade-two", {"b.txt": "2\n"})
+        three = self.branch("fix/remade-three", {"c.txt": "3\n"})
+        self.land(one, "preflight")
+        self.land(one)
+        self.assertEqual(self.settle(one, "fix/remade-one").returncode, 0)
+
+        # Registered, and no longer on disk.
+        shutil.rmtree(os.path.join(self.repo, ".armada", "land", "candidate"))
+        self.land(two, "preflight")
+        self.land(two)
+        self.assertEqual(self.settle(two, "fix/remade-two").returncode, 0)
+
+        # There, and not a worktree any more.
+        with open(os.path.join(self.repo, ".armada", "land", "candidate", ".git"), "w") as out:
+            out.write("gitdir: /nowhere\n")
+        self.land(three, "preflight")
+        self.land(three)
+        self.assertEqual(self.settle(three, "fix/remade-three").returncode, 0)
 
     def test_a_check_already_red_on_main_is_not_the_branchs_fault(self):
         # It reaches main on an unmoved turn, where no Check runs — which is how
@@ -781,7 +863,7 @@ class Line(unittest.TestCase):
                              "both sides are seeded, and neither is installed into")
         self.assertTrue(checks and all(line[1:3] == ["seed=yes", "setup=yes"] for line in checks),
                         "a Check runs after setup")
-        inside = os.path.join(os.path.realpath(self.repo), ".armada", "gates")
+        inside = os.path.join(os.path.realpath(self.repo), ".armada", "land")
         for line in foundations + checks:
             self.assertTrue(line[3].startswith("at=" + inside), line)
 
