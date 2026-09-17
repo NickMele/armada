@@ -42,6 +42,17 @@
   --status-completed-failed-bg: color-mix(in srgb, var(--status-completed-failed) 12%, transparent);
   --status-rejected-bg: color-mix(in srgb, var(--status-rejected) 12%, transparent);
   --status-killed-bg: color-mix(in srgb, var(--status-killed) 12%, transparent);
+
+  /* Row tint. 12% is right for a 22px badge and heavy across a full-width
+     row, where fourteen of them become a coloured list rather than a list with
+     colour in it. 5% reads as a wash at desk distance: enough to sort the
+     Board by state without reading a badge, quiet enough that --accent-muted
+     still owns selection. Selection and hover REPLACE the tint rather than
+     mixing with it, so no row computes a colour nobody chose. */
+  --row-tint: 5%;
+  /* A row that changed recently starts at this strength and decays to the
+     resting --row-tint across --duration-decay. */
+  --row-tint-recent: 14%;
 }
 
 /* The three statuses the CSS was missing, added 2026-08-25 after the M0 token

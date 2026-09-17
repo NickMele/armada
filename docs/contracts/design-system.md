@@ -135,6 +135,13 @@ One accent, used for interactive affordance only — never for status.
 --accent-muted  #1C3A52   subtle fills, selected row backgrounds
 ```
 
+**A status mark never sits on an accent fill.** `--status-running` is
+1.28:1 against `--accent`, so a status line drawn on a primary button
+cannot be seen. A control that has to carry a status mark first steps
+down off the accent — to `--accent-muted` for a press, to the pending
+rendering under Button while Fleet has not answered — and the mark reads
+against that.
+
 ### Status — derived from the state machine
 
 One token per Job state, and the set is the state machine's — not a
@@ -153,7 +160,8 @@ errors.
 --status-killed             #9BA3AC   you stopped it
 ```
 
-Each has a `-bg` variant at ~12% opacity for badge and row-tint fills.
+Each has a `-bg` variant at ~12% opacity for badge fills. A Job Board
+row takes the same hue at `--row-tint` (5%) — see Table.
 
 **Contrast pass, 2026-08-20.** Five values were lifted in lightness so
 badge text clears 4.5:1 as 12px text on its own 12% tint over
@@ -330,7 +338,23 @@ authority on each one.
 --text-2xl   28px / 36px   the rare hero number
 ```
 
-Weights: 400 body, 500 labels and emphasis, 600 headings. Never 700+.
+Weights: 400 body, 500 labels, 600 headings. Never 700+.
+
+**Emphasis on the dark ground is bought with size, tracking and hue, not
+weight.** Dark polarity reads slower than light, and raising weight
+improved glanceable reading in light mode only; it did not resolve
+halation on a dark ground (Beier et al., *How bold can we be?*,
+Readability Consortium, 2023). That is also why the 20 Aug legibility
+lift raised the whole ladder and touched no weights. Emphasis within
+body is one step up the ladder, or `0.012em` tracking at body sizes, or
+`--fg-default` against `--fg-muted` — never 500 on a dense surface. 500
+stays for labels, which is a role, not emphasis.
+
+**Figures are lining and tabular everywhere**, set once at the root, so
+numbers in a column align in the sans and compare by shape. Mono is
+therefore never used to line figures up; it keeps its one job, marking
+a fact the system reported. `--text-2xl` is the Overview summary's
+count, the one hero number.
 Mono runs one step smaller than adjacent sans at the same optical size —
 14px mono next to 15px sans.
 
@@ -368,15 +392,54 @@ only on floating layers (dialog, popover, dropdown).
 ## Motion
 
 ```
---duration-fast   120ms    hover, focus
---duration-base   180ms    panel and dropdown transitions
---duration-pulse  1600ms   a loop that says still working
---ease            cubic-bezier(0.2, 0, 0, 1)
+--duration-press   90ms     a press answering
+--duration-fast    120ms    hover, focus, a body crossfade
+--duration-base    180ms    menus, dialogs, toasts, a tab bar travelling
+--duration-sheet   220ms    a sheet from the trailing edge
+--duration-travel  300ms    a row re-sorting to its new place
+--duration-pulse   1600ms   a loop that says still working
+--duration-answer  1600ms   how long a control shows Fleet's answer
+--duration-hold    900ms    holding a destructive control to commit
+--duration-decay   45s      a changed row's mark fading
+--ease             cubic-bezier(0.2, 0, 0, 1)
 ```
 
-No entrance animations on data. A Job Board that animates rows in on
-every poll is unusable. Live-updating values may pulse once on change —
-nothing more. Respect `prefers-reduced-motion`.
+**Three clocks, for three audiences.** A *transition* (press to travel,
+under 300ms) is for a person watching. A *loop* (pulse) says something
+is still working. A *decay* (45s) is for a person returning: a change
+away from the focus of attention is missed, and a one-shot flash is only
+seen by someone already looking, so a changed row keeps a mark that
+fades slowly enough to still be there when they look back. A decay is
+neither a loop nor an entrance, so neither rule below governs it.
+
+**No entrance animations on data.** A Job Board that animates rows in on
+every poll is unusable. The rule is about data. **Chrome that a person
+summoned may enter**: a menu rises from its trigger, a dialog scales from
+0.97 with its scrim fading, a sheet travels in from the trailing edge,
+and a toast rises, because each fires once, on an act, and says where it
+came from. A row re-sorting under a person **travels** to its new place
+rather than teleporting, because animation measurably improves tracking
+an object across a change (Heer & Robertson, InfoVis 2007); a new row
+does not travel, so nothing enters. "Placement resolves before paint"
+still holds: a layer never moves after it lands.
+
+**A changed row decays.** When a Job's status changes, its row takes its
+new status hue at `--row-tint-recent`, falling to the resting
+`--row-tint` across `--duration-decay`, and a mono line in the same hue
+says what changed and how long ago, fading with it. It takes no edge:
+the left edge is focus and hover's. The decay rides on the resting tint and ends at it, so there
+is one tint channel and never two computed on top of each other. Every
+changed row decays; there is no cap yet.
+
+**Press moves colour, never geometry.** A pressed control walks one step
+down its ground ladder at `--duration-press`: `--accent` to
+`--accent-muted`, a secondary or ghost to `--bg-sunken`. Nothing
+transforms and nothing reflows. A focused field's ring grows from its
+edge and its ground lifts one step at `--duration-fast`.
+
+**Nothing may carry information by motion alone.** Under
+`prefers-reduced-motion` every transition duration is zero and each
+state still reads from colour and label.
 
 **What animates on a loop is what is still working**, because a hue or a
 label can say *which* and only motion says *still*. Two things do: the
@@ -392,6 +455,20 @@ width and the label carries the reading. A person who pressed it and has
 waited five seconds is told under the group that Fleet is still on it.
 The Job itself does not move until Fleet says so — a refused act would
 otherwise have to snap back.
+
+**The bar is one line across four states**, so a press, the wait and the
+answer read as one object rather than a bar appearing from nothing and
+vanishing to nothing:
+
+| State | The 2px line |
+|---|---|
+| press | opens from the centre to full width at `--duration-press` |
+| pending | travels in `--status-running` at `--duration-pulse` |
+| accepted | fills the edge in `--status-completed-success`, held for `--duration-answer` |
+| refused | retracts to nothing in `--status-escalated`, and nothing else moves |
+
+A refusal is told from an acceptance by the line's colour and direction
+before the label is read. The control never moves in any of the four.
 
 **The running mark animates continuously.** A hue says which step is
 current; only motion says it is still working, and that is the reading
@@ -846,7 +923,8 @@ These are constraints on the map, not suggestions.
 - **Destructive keys are never adjacent to navigation keys.** Kill is
   `x`, never `k`, because `k` sits against `j` and a mistyped navigation
   keystroke must not be able to end a running job.
-- **Every destructive action confirms**, even from the keyboard. In the
+- **Every destructive action confirms**, even from the keyboard. A
+  confirmation is a dialog or a hold, never nothing. In the
   confirmation dialog **Cancel holds initial focus, so `Enter` cancels**
   — `Enter` fires whatever holds focus, and Cancel is what holds it. The
   kbd is drawn on Cancel, where the key actually fires; confirming is a
@@ -865,6 +943,14 @@ These are constraints on the map, not suggestions.
   — it bound `Enter` on the window and confirmed past the focused
   Cancel, which is exactly the one-keystroke destruction the rule above
   refuses.
+- **A hold confirms in place.** Kill on Job detail fills while held and
+  commits only once it has been held for `--duration-hold`; releasing,
+  leaving the control or cancelling the pointer before then does
+  nothing, and it behaves the same from Space or Enter. It sits beside
+  the dialog rather than replacing it: `x` and a row's menu still reach
+  the dialog. **Under `prefers-reduced-motion` the hold is not offered**
+  and the control opens the dialog, because the fill is the only thing
+  that shows how long is left.
 - **Single-key shortcuts are suppressed whenever a text input holds
   focus.** Typing "axe" into a filter box must not approve, kill, and
   open something.
@@ -1027,9 +1113,14 @@ mono cell    --text-xs mono              (job id, path, branch, duration, cost)
 ```
 
 No zebra striping. At 36px rows it reads as noise, and the row rule
-already separates. Status appears as a badge in its own column, never as
-a row-background tint — eight tinted rows in a list is unreadable, and
-the tint would fight `--accent-muted` on selection.
+already separates. Status appears as a badge in its own column **and** as
+a row tint of its own hue at `--row-tint` (5%), so a person scanning the
+Board sorts rows by state without reading a badge. This read "never as a
+row-background tint" until 2026-09-16: that was true at the badge's 12%,
+where eight tinted rows were unreadable. At 5% it is a wash. Hover and
+selection **replace** the tint rather than mixing with it, so
+`--accent-muted` still owns selection, and the row's left edge stays the
+focus and hover edge — status takes no edge of its own.
 
 **An identifier copies on click.** A job id, a drone id, a branch
 name — a value whose whole use is being quoted somewhere else — copies
