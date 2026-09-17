@@ -20,7 +20,9 @@
   align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
+  /* --space-2, not --space-3: the --leading-2xl line box carries its own air,
+     and the strip stays the height it was with the count at --text-lg. */
+  padding: var(--space-2) var(--space-4);
   border: 0;
   border-left: var(--border-width) solid var(--border-subtle);
   background: none;
@@ -44,9 +46,9 @@
 .armada-overview-summary__count {
   flex: none;
   font-family: var(--font-mono);
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
-  font-weight: var(--weight-medium);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-2xl);
+  font-weight: var(--weight-body);
   color: var(--fg-default);
 }
 
