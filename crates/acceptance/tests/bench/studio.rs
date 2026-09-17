@@ -7,8 +7,11 @@
 //! Same as edge proposed between them — built through the constructors `store`
 //! reads a row back with, so nothing here is a second vocabulary for a node.
 //!
-//! The draft is still written out rather than read off an Issue draft node:
-//! writing one up from Notes is #1291's, and its constants go when that lands.
+//! **The draft is read off an Issue draft node, never written out beside
+//! one.** `#1291` builds the Studio a person promoted — the Cluster, the draft
+//! and the Job — and the text a dispatch sends is that node's own, through
+//! `StudioNodeContent::dispatched_as`. A constant here would be a second
+//! statement of what Fleet composes.
 
 use std::collections::BTreeMap;
 
@@ -31,18 +34,27 @@ pub const SECOND_NOTE: &str = "Overview still says three waiting after I answere
 /// The Issue draft's title, as a person would write it up.
 pub const DRAFT_TITLE: &str = "Counts go stale after the thing they count changes";
 
-/// The Issue draft, title and body, as the text a dispatch sends.
+/// The Issue draft's body, as a person edited it before dispatching.
 ///
-/// **Both Notes' words are in the body**, because a write-up is made from the
-/// Notes feeding it, and what the proposer and then the Drone are told has to
-/// be what the person actually saw rather than a summary of it.
+/// **Both Notes' words are in it**, because a write-up is made from the Notes
+/// feeding it, and what the proposer and then the Drone are told has to be
+/// what the person actually saw rather than a summary of it.
+pub const DRAFT_BODY: &str = concat!(
+    "Two places show a count that does not move when what it counts does.\n\n",
+    "- The Board's filter chip keeps its count after the filter is cleared\n",
+    "- Overview still says three waiting after I answered one\n"
+);
+
+/// The text a dispatch sends: **read off the Issue draft node on the Studio a
+/// person promoted**, not written out beside it. `#1291` composes it in one
+/// place and this is that place's answer.
 pub fn an_issue_draft() -> String {
-    format!(
-        "{DRAFT_TITLE}\n\n\
-         Two places show a count that does not move when what it counts does.\n\n\
-         - {FIRST_NOTE}\n\
-         - {SECOND_NOTE}\n"
-    )
+    let promoted = a_studio_promoted_to_a_job();
+    promoted
+        .nodes
+        .iter()
+        .find_map(|node| node.content().dispatched_as())
+        .expect("the Issue draft the Cluster was written up as")
 }
 
 /// The request as Fleet receives it: encoded, sent, and read back.
@@ -405,4 +417,80 @@ pub fn a_studio_with_a_captured_note() -> StudioGraph {
         nodes: vec![note],
         edges: Vec::new(),
     }
+}
+
+/// The Studio after `#1291`'s own rungs: both Notes accepted as one **Cluster**
+/// with a `Produced` edge from each, the Cluster written up as an **Issue
+/// draft** a person edited, and the draft dispatched to a **Job** node.
+///
+/// **Built through the constructors alone**, so every edge here is one the
+/// Studio draws itself and nothing sets a state by hand.
+pub fn a_studio_promoted_to_a_job() -> StudioGraph {
+    let mut graph = a_studio_with_two_notes();
+    let notes: Vec<StudioNodeId> = graph.nodes.iter().map(|node| node.id().clone()).collect();
+    let made = |graph: &mut StudioGraph,
+                id: &str,
+                edge: &str,
+                content: StudioNodeContent,
+                from: &[StudioNodeId],
+                at_minute: u32,
+                x: i64| {
+        let node = StudioNode::added(
+            StudioNodeId::carried(Ulid::carried(id)),
+            content,
+            StudioPosition { x, y: 240 },
+            at(at_minute),
+            StudioAuthor::Person,
+        );
+        for (nth, source) in from.iter().enumerate() {
+            let produced = StudioEdge::produced(
+                StudioEdgeId::carried(Ulid::carried(format!("{edge}{nth}"))),
+                source.clone(),
+                node.id().clone(),
+                at(at_minute),
+                StudioAuthor::Person,
+            )
+            .expect("two different nodes");
+            graph.edges.push(produced);
+        }
+        let id = node.id().clone();
+        graph.nodes.push(node);
+        id
+    };
+
+    let cluster = made(
+        &mut graph,
+        "01CLUSTER",
+        "01EDGECLUSTER",
+        StudioNodeContent::Cluster {
+            title: String::from("Counts go stale"),
+        },
+        &notes,
+        5,
+        0,
+    );
+    let draft = made(
+        &mut graph,
+        "01DRAFT",
+        "01EDGEDRAFT",
+        StudioNodeContent::IssueDraft {
+            title: DRAFT_TITLE.to_string(),
+            body: DRAFT_BODY.to_string(),
+        },
+        &[cluster],
+        6,
+        240,
+    );
+    made(
+        &mut graph,
+        "01JOBNODE",
+        "01EDGEJOB",
+        StudioNodeContent::Job {
+            job_id: core_model::JobId::carried(Ulid::carried("01JOBATTHEGATE")),
+        },
+        &[draft],
+        7,
+        480,
+    );
+    graph
 }
