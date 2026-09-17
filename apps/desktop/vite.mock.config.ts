@@ -4,9 +4,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { annotationsServer } from "./src/main/annotations-server";
 
 export default defineConfig({
   root: "src/renderer/src/mock",
-  plugins: [react(), tailwindcss()],
+  // `annotationsServer` saves the dev annotation layer's notes (#1226) to
+  // `.armada/annotations/`, as main does inside Electron.
+  plugins: [react(), tailwindcss(), annotationsServer()],
   server: { open: true },
 });

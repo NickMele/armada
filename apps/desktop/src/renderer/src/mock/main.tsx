@@ -24,3 +24,6 @@ if (root !== null && picker !== null) {
     </StrictMode>,
   );
 }
+
+// The annotation layer (#1226), saving through this dev server's `annotationsServer`.
+void import("../annotate/mount").then(({ mount }) => mount());
