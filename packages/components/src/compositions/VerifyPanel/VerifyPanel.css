@@ -1,12 +1,15 @@
 /* Verify — Journey 9's live dry-run, behind its own button. A panel of its
-   own beside drift's, above the run page. Nothing in it is hued. It sits on
-   the canvas, so its surface is the card treatment in `src/glass.css`. #1260. */
+   own beside drift's, above the run page. Nothing in it is hued. On the
+   canvas its surface is the card treatment in `src/glass.css`; inside a Sheet
+   or a Dialog it stays this flat --bg-raised. #1260. */
 .armada-verify-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  background: var(--bg-raised);
   min-width: 0;
   flex: 0 0 auto;
 }

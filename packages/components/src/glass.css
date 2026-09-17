@@ -61,21 +61,26 @@
    A secondary Button inside a card takes `ground="card"` (--bg-sunken), which
    reads as a box on the glass. `ground="sunken"`'s --bg-raised is within a
    few levels of the glass and shows only its border. */
-:where(.armada-glass, .armada-drift-panel, .armada-verify-panel) {
+:where(.armada-glass, .armada-drift-panel:not(.armada-sheet *, .armada-dialog *), .armada-verify-panel:not(.armada-sheet *, .armada-dialog *)) {
   position: relative;
 }
 
+/* `background: none` because Drift and Verify keep a flat --bg-raised of their
+   own for where they are not on the canvas — inside a Sheet or a Dialog, where
+   a card is not glass (design-system.md: "every panel that sits directly on
+   the canvas"). */
 .armada-glass,
-.armada-drift-panel,
-.armada-verify-panel {
+.armada-drift-panel:not(.armada-sheet *, .armada-dialog *),
+.armada-verify-panel:not(.armada-sheet *, .armada-dialog *) {
   isolation: isolate;
   border: var(--border-width) solid var(--border-glass);
+  background: none;
   box-shadow: var(--shadow-card);
 }
 
 .armada-glass::before,
-.armada-drift-panel::before,
-.armada-verify-panel::before {
+.armada-drift-panel:not(.armada-sheet *, .armada-dialog *)::before,
+.armada-verify-panel:not(.armada-sheet *, .armada-dialog *)::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -87,11 +92,22 @@
   pointer-events: none;
 }
 
+/* **No blur while a Sheet or a Dialog covers the window.** The cards are
+   under its scrim, where nothing on them is being read, and the 86% glass
+   paints the same without it. With the blur on, every frame of the layer
+   above re-filtered every card beneath it: on a software-rendered Chromium
+   (the app suite's), the mock Setup tests that open a proposal sheet failed
+   three full runs in five with presses that never landed, and none in five
+   with the blur off. */
+:root:has(.armada-sheet-scrim, .armada-dialog-scrim) :is(.armada-glass, .armada-drift-panel:not(.armada-sheet *, .armada-dialog *), .armada-verify-panel:not(.armada-sheet *, .armada-dialog *))::before {
+  backdrop-filter: none;
+}
+
 /* One step above the sibling cards while a layer inside may be open. `1`
    rather than a --z token: it orders this card against the cards beside it,
    and every --z layer in the root must stay above it. */
 .armada-glass:is(:hover, :focus-within),
-.armada-drift-panel:is(:hover, :focus-within),
-.armada-verify-panel:is(:hover, :focus-within) {
+.armada-drift-panel:not(.armada-sheet *, .armada-dialog *):is(:hover, :focus-within),
+.armada-verify-panel:not(.armada-sheet *, .armada-dialog *):is(:hover, :focus-within) {
   z-index: 1;
 }
