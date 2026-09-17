@@ -44,7 +44,7 @@ const EDGE_EXISTS: &str = "fleet.studio_edge_exists";
 /// An accept or reject of an edge that is not proposed. A 409.
 const EDGE_NOT_PROPOSED: &str = "fleet.studio_edge_not_proposed";
 /// A proposed edge from a node to itself. A 422.
-const EDGE_TO_ITSELF: &str = "fleet.studio_edge_to_itself";
+pub(crate) const EDGE_TO_ITSELF: &str = "fleet.studio_edge_to_itself";
 /// A node added with a field left blank, naming which. A 422.
 pub(crate) const NODE_BLANK: &str = "fleet.studio_node_blank";
 /// A node Helm added of a kind that does not start proposed. A 422.

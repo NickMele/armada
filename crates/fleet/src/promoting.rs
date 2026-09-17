@@ -26,7 +26,7 @@ use ipc::{
 };
 
 use crate::daemon::Fleet;
-use crate::studios::{author, NODE_BLANK, NO_SUCH_NODE};
+use crate::studios::{author, EDGE_TO_ITSELF, NODE_BLANK, NO_SUCH_NODE};
 
 /// A group of a kind that is not a Cluster or an Outline. A 422.
 const NOT_A_GROUP: &str = "fleet.studio_group_not_a_group";
@@ -42,9 +42,6 @@ const NOT_A_DRAFT: &str = "fleet.studio_not_a_draft";
 const NOT_A_CONTRADICTION: &str = "fleet.studio_not_a_contradiction";
 /// A Contradiction ended twice. A 409.
 const CONTRADICTION_SETTLED: &str = "fleet.studio_contradiction_settled";
-/// A Deferral that blocks the node it was raised on. A 422.
-const EDGE_TO_ITSELF: &str = "fleet.studio_edge_to_itself";
-
 /// The kinds a rung writes up: what a person said, what they grouped, and
 /// what disagreed. `docs/concepts/studio.md`, *Promotion*, plus the Outline,
 /// which that page says can itself be written up.

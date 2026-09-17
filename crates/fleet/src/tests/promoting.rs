@@ -8,6 +8,11 @@
 //! **Nothing here reaches a forge**, and nothing could: no seam in this crate
 //! offers one to a Studio, which is the point — `docs/concepts/studio.md`
 //! makes filing a person's own act.
+//!
+//! **Over 500 lines, and staying one file**, `crate::tests::proposing`'s
+//! reason: the rungs share a Studio and two of them end a Contradiction as
+//! they go, so a change to one has to be checked against the others it runs
+//! beside. Split by rung, the four-outcomes test would have nowhere to live.
 
 use api::{Redirector, Refusal, Studios};
 use core_model::StudioNodeKind;

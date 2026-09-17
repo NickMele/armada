@@ -40,6 +40,17 @@ const node = (name: RegExp) => page.getByRole("group", { name });
 /** The acts on what is selected, and the dialog whichever one opened. */
 const acts = () => page.getByRole("group", { name: "Acts on what is selected" });
 const asked = (name: string) => page.getByRole("dialog").getByRole("button", { name, exact: true });
+
+/**
+ * Pick one node, the way React Flow's own keyboard contract does. **Not a pointer click**: a node
+ * the board has just drawn passes a visibility check before it has settled, and a click that lands
+ * in that window selects nothing — which failed under a full parallel suite and nowhere else.
+ */
+async function pick(name: RegExp): Promise<void> {
+  await expect.element(node(name)).toBeVisible();
+  node(name).element().focus();
+  await userEvent.keyboard("{Enter}");
+}
 const centre = (element: Element) => {
   const box = element.getBoundingClientRect();
   return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
@@ -211,7 +222,7 @@ test("two Notes clustered, the Cluster written up, the draft edited and dispatch
   await expect.element(node(/^Note: The chip keeps its count/)).toBeVisible();
 
   // Picked together: the second joins the first rather than replacing it.
-  await node(/^Note: The chip keeps its count/).click();
+  await pick(/^Note: The chip keeps its count/);
   await userEvent.keyboard("{Meta>}");
   await node(/^Note: Overview still says three/).click();
   await userEvent.keyboard("{/Meta}");
@@ -224,7 +235,7 @@ test("two Notes clustered, the Cluster written up, the draft edited and dispatch
   // Every Note it was made of keeps an edge to it, so the Cluster says where it came from.
   await expect.poll(() => fleet.studios()[0]!.edges.filter((edge) => edge.kind === "produced").length).toBe(2);
 
-  await node(/^Cluster: Counts go stale/).click();
+  await pick(/^Cluster: Counts go stale/);
   await acts().getByRole("button", { name: "Write up" }).click();
   // The write-up opens on the Notes' own words rather than on an empty field.
   await expect
@@ -235,7 +246,7 @@ test("two Notes clustered, the Cluster written up, the draft edited and dispatch
   await expect.element(node(/^Issue draft: Counts go stale after what they count changes/)).toBeVisible();
 
   // Edited before it is sent: what is dispatched is what the person left.
-  await node(/^Issue draft: Counts go stale after what they count changes/).click();
+  await pick(/^Issue draft: Counts go stale after what they count changes/);
   await acts().getByRole("button", { name: "Edit draft" }).click();
   await page.getByRole("textbox", { name: "Body" }).fill("Both counts are read off a row that is stale.");
   await asked("Save draft").click();
@@ -243,7 +254,7 @@ test("two Notes clustered, the Cluster written up, the draft edited and dispatch
     .poll(() => fleet.studios()[0]!.nodes.find((one) => one.kind === "issue_draft"))
     .toMatchObject({ body: "Both counts are read off a row that is stale." });
 
-  await node(/^Issue draft: Counts go stale after what they count changes/).click();
+  await pick(/^Issue draft: Counts go stale after what they count changes/);
   await acts().getByRole("button", { name: "Dispatch" }).click();
   // What is sent is the draft's own text, title first, and a person reads it before pressing.
   await expect
@@ -270,7 +281,7 @@ test("a Contradiction is ended as Resolved here, with the answer kept on the nod
   fleet.aContradiction(fleet.studios()[0]!.id);
   await expect.element(node(/^Contradiction: The chip reads the Board/)).toBeVisible();
 
-  await node(/^Contradiction: The chip reads the Board/).click();
+  await pick(/^Contradiction: The chip reads the Board/);
   // All four outcomes are offered on the node, and two of them are the rungs beside them.
   for (const offered of ["Write up", "Defer", "Not a problem", "Resolved here"]) {
     await expect.element(acts().getByRole("button", { name: offered, exact: true })).toBeVisible();
@@ -286,6 +297,6 @@ test("a Contradiction is ended as Resolved here, with the answer kept on the nod
       answer: "The Board wins; the row is stale",
     });
   // Ended once: nothing offers a second outcome on it.
-  await node(/^Contradiction: The chip reads the Board/).click();
+  await pick(/^Contradiction: The chip reads the Board/);
   expect(acts().getByRole("button", { name: "Not a problem", exact: true }).query()).toBeNull();
 });
