@@ -262,6 +262,7 @@ back to the first scenario and says so in the browser console.
 | `empty-store` | One repository and no Job yet |
 | `recorded-board` | The Board as Fleet served it, from `--board` above |
 | `setting-up` | A set-up repository and a folder nobody set up, over a Fleet that scans, proposes, applies each Setup edit and Write, and adds or clones a repository |
+| `manifest` | This repository's own Manifest, on a Fleet that saves the file, applies the forms' edits, and lists runs, drift and an always-allowed command |
 | `job/<builder>` | One Job, already open, for each builder `packages/screens/src/fixtures/build/index.ts` exports |
 | `recorded/<slug>` | One recorded Job, already open, for each recording under `packages/screens/src/fixtures/recorded/` |
 
@@ -290,8 +291,10 @@ unanswered. Guessing Fleet's next state would draw a Fleet that does not exist.
 
 **A scenario can answer a flow as Fleet would.** Its `behaves` replaces the
 fake's answer to the calls it names, over state it can publish. `setting-up`
-does this for Setup and Locate in `setup-fleet.ts`, because an edit is only
-worth drawing if the next read shows it applied.
+does this for Setup and Locate in `setup-fleet.ts`, and `manifesting()` in
+`manifest-fleet.ts` does it for the Manifest surface's saves, edits, runs and
+drift, because an edit is only worth drawing if the next read shows it
+applied.
 
 **A little is made up, and none of it is what a real Fleet says.** The Fleet
 panel's pid and port, the model list, and the root folder of a repository a
