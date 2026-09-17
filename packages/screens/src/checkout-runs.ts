@@ -200,9 +200,8 @@ export function checkoutPastRunOf(
   record: CheckoutRunRecord,
   onOpen: (id: string) => void,
 ): RunPagePastRun {
-  const outcome = runOutcomeOf(record);
   return {
-    ...(outcome === undefined ? {} : { outcome }),
+    outcome: runOutcomeOf(record),
     id: record.id,
     name: checkoutRunLabelOf(record),
     result:
@@ -481,9 +480,8 @@ export function exitedOf(instance: ServerState): RunPageServerStatus {
 
 /** The result line for a finished run, in Job colours. Still not a verdict. */
 function resultOf(record: CheckoutRunRecord): RunPageResult {
-  const outcome = runOutcomeOf(record);
   return {
-    ...(outcome === undefined ? {} : { outcome }),
+    outcome: runOutcomeOf(record),
     name: checkoutRunLabelOf(record),
     ...(record.exit_code === undefined ? {} : { exitCode: record.exit_code }),
     expected: record.expect_exit_code,

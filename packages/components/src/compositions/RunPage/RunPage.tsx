@@ -100,8 +100,8 @@ export type RunPagePastRun = {
   result: ReactNode;
   /**
    * How it ended, for its hue. `passed` is the code it expected; `failed` is
-   * any other ending. **Absent where a person pressed Stop** — a run somebody
-   * ended is not a failure, as a killed Job is not one.
+   * any other ending; `stopped` is a person pressing Stop, which takes killed's
+   * hue because a run somebody ended is not a failure.
    */
   outcome?: FactChipRun;
   time: ReactNode;
@@ -118,7 +118,7 @@ export type RunPageResult = {
   /** How it ended, in a sentence, for the case with no code. */
   ended: ReactNode;
   duration: ReactNode;
-  /** As `RunPagePastRun`'s. Absent where a person stopped it. */
+  /** As `RunPagePastRun`'s. */
   outcome?: FactChipRun;
 };
 
@@ -628,7 +628,7 @@ function RunPageServer({
         {status.exitCode === undefined ? null : (
           <>
             {" "}
-            <FactChip run={status.stopped === true ? undefined : "failed"}>
+            <FactChip run={status.stopped === true ? "stopped" : "failed"}>
               {`exit ${status.exitCode}`}
             </FactChip>
           </>

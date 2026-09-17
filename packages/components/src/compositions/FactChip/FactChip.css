@@ -55,3 +55,7 @@
 .armada-chip[data-run="failed"] {
   color: var(--run-failed);
 }
+
+.armada-chip[data-run="stopped"] {
+  color: var(--run-stopped);
+}

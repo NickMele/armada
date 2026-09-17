@@ -332,8 +332,8 @@
    A run takes Job colours, and the same run reads the same wherever it
    appears. running aliases running; passed aliases completed_success, the
    code it expected; failed aliases completed_failed, any other ending that was
-   not a person pressing Stop. A stopped run takes no hue, for the reason
-   killed does not read as an error: a person ended it.
+   not a person pressing Stop; stopped aliases killed, because a person ended
+   it and it must not read as an error.
 
    Colour changes how a rehearsal looks, not what it counts for. A run still
    writes no Evidence and no check_runs row, and its hue is per run — never
@@ -342,6 +342,7 @@
   --run-running: var(--status-running);
   --run-passed: var(--status-completed-success);
   --run-failed: var(--status-completed-failed);
+  --run-stopped: var(--status-killed);
 }
 
 /* The error treatment: one red, told apart from a Job status by shape.

@@ -291,6 +291,7 @@ export const UnexpectedExit: Story = {
         id: "run_8f",
         name: "test",
         result: "stopped",
+        outcome: "stopped",
         time: "14:04:02",
         duration: "12.3s",
         onOpen: fn(),
@@ -526,7 +527,7 @@ export const ServerStartedByADrone: Story = {
 /**
  * **A server that exits on its own has failed, whatever its exit code** —
  * worded as stopped on its own, with its code in the failed colour. The words
- * take no hue; a server somebody stopped takes none at all.
+ * take no hue; a server somebody stopped takes killed's grey.
  */
 export const ServerExitedOnItsOwn: Story = {
   args: {

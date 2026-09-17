@@ -52,16 +52,16 @@ export const AVerdictPerFact: Story = {
 };
 
 /**
- * A run started by hand, in Job colours: the code it expected, and any other
- * ending. Not a verdict — a run writes no Evidence — so these read
- * `--run-*`, and a stopped run passes no `run` and stays neutral.
+ * A run started by hand, in Job colours: the code it expected, any other
+ * ending, and one a person stopped. Not a verdict — a run writes no Evidence —
+ * so these read `--run-*`.
  */
 export const ARunInJobColours: Story = {
   render: () => (
     <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
       <FactChip run="passed">exit 0 (expects 0)</FactChip>
       <FactChip run="failed">exit 101 (expects 0)</FactChip>
-      <FactChip>stopped</FactChip>
+      <FactChip run="stopped">stopped</FactChip>
     </div>
   ),
 };

@@ -297,6 +297,7 @@ new one. The mapping is declared, so it is read rather than inferred.
 --run-running      var(--status-running)
 --run-passed       var(--status-completed-success)
 --run-failed       var(--status-completed-failed)
+--run-stopped      var(--status-killed)
 ```
 
 **Step activity answers where the work is.** `retrying` and
@@ -344,8 +345,8 @@ contradicting the others.
 **A run started by hand takes Job colours, and is still no verdict.** A
 Check or Command run from a Job's run sheet or the Manifest surface hues its
 result: the code it expected is `--run-passed`, any other ending
-`--run-failed`, one in flight `--run-running`. A run somebody stopped takes
-none, for killed's reason. The hue sits on the result's chip and the
+`--run-failed`, one in flight `--run-running`, and one somebody stopped
+`--run-stopped` — killed's grey, so it never reads as an error. The hue sits on the result's chip and the
 elapsed figure, and it counts for nothing — a run writes no Evidence and no
 `check_runs` row, and on Job detail the run sheet keeps its own heading so a
 rehearsal never reads as the gate's result.

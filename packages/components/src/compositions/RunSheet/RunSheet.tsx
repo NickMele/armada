@@ -75,8 +75,8 @@ export type RunSheetPastRun = {
   result: ReactNode;
   /**
    * How it ended, for its hue. `passed` is the code it expected; `failed` is
-   * any other ending. **Absent where a person pressed Stop** — a run somebody
-   * ended is not a failure, as a killed Job is not one.
+   * any other ending; `stopped` is a person pressing Stop, which takes killed's
+   * hue because a run somebody ended is not a failure.
    */
   outcome?: FactChipRun;
   time: ReactNode;
@@ -89,7 +89,7 @@ export type RunSheetResult = {
   exitCode: number;
   expected: number;
   duration: ReactNode;
-  /** As `RunSheetPastRun`'s. Absent where a person stopped it. */
+  /** As `RunSheetPastRun`'s. */
   outcome?: FactChipRun;
 };
 
@@ -111,7 +111,7 @@ export type RunSheetServerLink = {
  *
  * **Only an ending is hued.** A server that stopped on its own has failed,
  * whatever its code, so its code takes `--run-failed`; one somebody stopped
- * takes none. `starting` and `serving` are words: *serving*, *stopped on its
+ * takes `--run-stopped`. `starting` and `serving` are words: *serving*, *stopped on its
  * own*.
  */
 export type RunSheetServerStatus =
@@ -490,7 +490,7 @@ function RunSheetServer({
         {status.exitCode === undefined ? null : (
           <>
             {" "}
-            <FactChip run={status.stopped === true ? undefined : "failed"}>
+            <FactChip run={status.stopped === true ? "stopped" : "failed"}>
               {`exit ${status.exitCode}`}
             </FactChip>
           </>

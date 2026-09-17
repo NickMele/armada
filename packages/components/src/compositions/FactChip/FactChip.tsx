@@ -43,12 +43,11 @@ export type FactChipNamed =
 
 /**
  * How a run started by hand ended, for its hue — `tokens/status.css`'s
- * `--run-passed` and `--run-failed`, each an alias of its Job status. **A run
- * is not a verdict**: it writes no Evidence, so it takes its own tokens rather
- * than `named`'s, and the two are never passed together. A stopped run has
- * none.
+ * `--run-passed`, `--run-failed` and `--run-stopped`, each an alias of its Job
+ * status. **A run is not a verdict**: it writes no Evidence, so it takes its
+ * own tokens rather than `named`'s, and the two are never passed together.
  */
-export type FactChipRun = "passed" | "failed";
+export type FactChipRun = "passed" | "failed" | "stopped";
 
 export type FactChipProps = {
   /** The value. One line, mono, clipped where the column is narrower. */

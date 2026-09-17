@@ -66,7 +66,7 @@ describe("runOutcomeOf", () => {
     expect(runOutcomeOf({ expect_exit_code: 0, stopped: false })).toBe("failed");
   });
 
-  it("gives a run somebody stopped no outcome, as a killed Job is not a failure", () => {
-    expect(runOutcomeOf({ expect_exit_code: 0, stopped: true })).toBeUndefined();
+  it("reads a run somebody stopped as stopped, as a killed Job is not a failure", () => {
+    expect(runOutcomeOf({ expect_exit_code: 0, stopped: true })).toBe("stopped");
   });
 });
