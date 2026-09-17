@@ -50,14 +50,14 @@ becomes `JobRowStacked`, with `title: "Compositions/Job row (stacked)"`. The
 exact name lives in the title so nothing is lost, and a name maps to a path with
 no lookup table.
 
-## Screens
+## Screens are not stories
 
-**A `Screens` entry is a screen the app renders.** One assembled from wire data
-lives under `packages/screens/src/stories/screens/<Name>/`, drawn by the app's
-own component from data in the shape Fleet sends: `Screens/Job detail` and
-`Screens/Board` are the worked examples, and only the data in them is made up.
-A screen in the component library is one the app mounts, like `The shell`. The
-gate fails a `Screens` entry nothing in the app renders.
+**Storybook draws components, never a whole screen.** A screen assembled in a
+story is a second copy of `App`'s wiring, and it goes stale the day `App.tsx`
+changes; the `Screens` group did, and #1225 removed it. Look at a screen — and
+test what it does with a press — in the app itself on a mock Fleet:
+`pnpm -C apps/desktop mock`, and `apps/desktop/src/renderer/src/mock/*.test.tsx`.
+`docs/practices/running-locally.md` has both.
 
 **A design not built yet is not committed as a story.** Storybook shows what the
 app draws; a design drawn ahead of its screen stays off `main`.

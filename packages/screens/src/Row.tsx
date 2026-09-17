@@ -24,9 +24,9 @@
 // eight-column table because the Board and Alerts disagreed about what a job
 // looks like. Bridge had re-created the thing that was replaced.
 //
-// So the rows are `JobRowStacked` inside `ActiveJobsList`, and the screen story
-// `Screens/The list — six states, one row shape` is what they are measured
-// against. Nothing here draws a cell, a column or a border.
+// So the rows are `JobRowStacked` inside `ActiveJobsList`, and the Board in the
+// app — `pnpm -C apps/desktop mock` — is what they are measured against.
+// Nothing here draws a cell, a column or a border.
 //
 // # The field run is four of the drawing's six, and the two missing are left
 // out rather than drawn empty

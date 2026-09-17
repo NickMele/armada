@@ -246,7 +246,7 @@
 @import "./compositions/TaskMark/TaskMark.css";
 
 /* Helm's dock, beside the shell's panel. */
-@import "./screens/TheShell/TheShell.css";
+@import "./compositions/TheShell/TheShell.css";
 
 /* Overview's band of readings. */
 @import "./compositions/OverviewSummaryStrip/OverviewSummaryStrip.css";

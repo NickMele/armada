@@ -1,10 +1,10 @@
 import { MessageSquare } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { BoardEmptyState } from "../../compositions/BoardEmptyState/BoardEmptyState";
-import { FleetPanel, type FleetPanelProps } from "../../compositions/FleetPanel/FleetPanel";
-import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
-import { StatsPanel, type StatsPanelProps } from "../../compositions/StatsPanel/StatsPanel";
-import { TitleBar } from "../../compositions/TitleBar/TitleBar";
+import { BoardEmptyState } from "../BoardEmptyState/BoardEmptyState";
+import { FleetPanel, type FleetPanelProps } from "../FleetPanel/FleetPanel";
+import { Sidebar, type SidebarItem } from "../Sidebar/Sidebar";
+import { StatsPanel, type StatsPanelProps } from "../StatsPanel/StatsPanel";
+import { TitleBar } from "../TitleBar/TitleBar";
 import { Button } from "../../primitives/Button/Button";
 import { KbdCmd } from "../../primitives/Kbd/Kbd";
 import { Sheet } from "../../primitives/Sheet/Sheet";
