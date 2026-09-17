@@ -325,8 +325,9 @@ export type InsideAJobProps = {
   /** The step, while it is read. Present takes the slot over `step`/`stepAbsent`. */
   stepReading?: StepReading;
   /**
-   * The workflow overview, while a Job waits for approval. Takes the panel
-   * over `step`/`stepReading`/`stepAbsent` — the scope is the approval moment
+   * The workflow overview, while a Job waits for approval. Its diagram takes
+   * the run's place, and its facts take the panel over
+   * `step`/`stepReading`/`stepAbsent` — the scope is the approval moment
    * alone, never the running Job's own step view.
    */
   overview?: StepOverview;
@@ -406,6 +407,10 @@ export function InsideAJob({
           </div>
           {runReading !== undefined ? (
             <RunTreeSkeleton {...runReading} />
+          ) : overview !== undefined ? (
+            // Nothing has run yet, so the run is what the workflow declares.
+            // It turns into the tree in this same place once the Job is approved.
+            <WorkflowDiagram steps={overview.diagram} />
           ) : run.length === 0 ? (
             <p className="armada-inside__absent" role="note">
               {unreachable ?? runAbsent}
@@ -498,7 +503,6 @@ export function InsideAJob({
             </div>
           ) : overview !== undefined ? (
             <div className="armada-inside__overview">
-              <WorkflowDiagram steps={overview.diagram} />
               <div className="armada-inside__step-fields">
                 {overview.facts.map((field, f) => (
                   <span className="armada-inside__field" key={f}>
