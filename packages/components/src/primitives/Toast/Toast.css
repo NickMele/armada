@@ -2,7 +2,11 @@
  * right, --bg-overlay, --border-default, --radius-md and a shadow. No blur,
  * and never a second floating layer inside it.
  *
- * It does not animate in. No entrance animations on data.
+ * It rises --space-2 and fades in at --duration-base. This used to say it did
+ * not animate in, citing "no entrance animations on data" — but that rule is
+ * about data, and a toast is chrome: it fires once, on an act, and its rise
+ * says where it came from. The rule was applied too widely; the entrance is
+ * below the base rule.
  *
  * MISSING TOKENS on the line below.
  * --armada-hairline: no border-width token exists in packages/tokens.
@@ -30,6 +34,19 @@
   color: var(--fg-default);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
+  /* No fill mode, so nothing is held once it ends: at the zero duration reduced
+     motion gives it, the toast is its own style from the first frame. */
+  animation: armada-toast-in var(--duration-base) var(--ease);
+}
+
+/* Transform and opacity only, so the entrance itself reflows nothing. Each
+   toast enters once, when it mounts; one already on screen does not replay
+   when another arrives. */
+@keyframes armada-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
 }
 
 .armada-toast__dot {
