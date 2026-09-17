@@ -2,6 +2,13 @@
 # carries what all eight hold to, and where the schema, the catalogue and the
 # Check reasoning live.
 #
+# **`for_requests` is here because a pull request arrives as a link and nothing
+# else.** The steps are in this workflow's own vocabulary -- nothing in `Read
+# the diff` is a word somebody asking for a review would use -- so without this
+# line the proposer is choosing off a URL and eight step lists. That is the
+# position `epic` was in on 3 Sep 2026 when a milestone asked for by link was
+# declined with `epic` on the list (#424), and this is the same repair. #1379.
+#
 # The designed `code-review.json` is already linear and already three steps, so
 # nothing here is folded. `deliver`'s `manifest_rule:review_gate` was dropped
 # while the parser deferred it; #264 carries it now, and `deliver` still says
@@ -37,6 +44,7 @@
   "version": 1,
   "workflow_id": "code_review",
   "name": "code_review",
+  "for_requests": "A pull request somebody wants reviewed: a link to one, where the code is already written and what is wanted is a judgement on it rather than a change to it.",
   "structure": "linear",
   "steps": [
     {

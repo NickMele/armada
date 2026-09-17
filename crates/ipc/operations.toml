@@ -381,11 +381,13 @@ A node that is not a Contradiction is `fleet.studio_not_a_contradiction`, and on
 kind = "command"
 transport = "HTTP"
 agent_access = "Helm only"
-description = "Send what a node dispatches as — an Issue draft's text, or the address of a Link naming an issue — through the Job proposer to the dispatch gate, and answer with the Studio carrying a Job node for each Job"
+description = "Send what a node dispatches as — an Issue draft's text, or the address of a Link naming an issue, a pull request or a milestone — through the Job proposer to the dispatch gate, and answer with the Studio carrying a Job node for each Job"
 notes = """
 **The same call `propose_from_request` makes, with what the node dispatches as the request.** The gate is unchanged: every Job stands at `awaiting_approval` and is approved where any other proposal is. Nothing summarises, trims or re-fetches it on the way — a write-up is made from the nodes feeding it, and a lossy hop would hand a Drone something other than what the person saw.
 
-**Two kinds reach it.** An Issue draft sends its title and body, which is Armada's own unfiled text; a Link whose `forge` says `issue` sends its address alone, because that issue is already filed and the proposer has taken a ticket link as a request since it shipped (`#1379`). A milestone is not dispatched — it is read in as a Link per issue, and each of those is dispatched on its own — and whether a pull request should be is open.
+**Two kinds reach it.** An Issue draft sends its title and body, which is Armada's own unfiled text; a Link whose `forge` names anything — an issue, a pull request or a milestone — sends its address alone, because what it names is already filed and the proposer has taken a ticket link as a request since it shipped (`#1379`).
+
+**Nothing on this route names a workflow.** The three are three asks, and which workflow each runs under is the proposer's answer off the request and each definition's `for_requests` line. `code-review.json` gained one for `#1379`: `adapters::IssueLookup` resolves an issue link and no other shape, so a pull request reaches the call as a bare URL, which is the position `epic` was in when `#424` measured a milestone being declined with `epic` on the list. A milestone also *reads in*, and the two are different asks rather than rivals: reading one in puts its issues on the board, dispatching one asks for the wave.
 
 Each Job the proposal became is added as a Job node with a `produced` edge from the draft, the first at `position` and the rest below it, so the whiteboard shows where the work went without a person moving anything. A Job node holds the Job's id and no status: the Board's row is where its status is read.
 

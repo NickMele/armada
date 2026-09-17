@@ -131,6 +131,12 @@ function legend(): Studio {
       // forge is `crates/adapters`' to know and nothing here may spell one.
       { id: "legend-issue", kind: "link", address: "https://example.invalid/o/r/issues/1293", forge: "issue", position: { x: 0, y: 600 }, created_at: at },
       { id: "legend-milestone", kind: "link", address: "https://example.invalid/o/r/milestone/17", forge: "milestone", position: { x: 0, y: 1400 }, created_at: at },
+      // A pull request, which dispatches like the other two and reads in like
+      // them — three kinds of ask, one address each — #1379.
+      { id: "legend-pull", kind: "link", address: "https://example.invalid/o/r/pull/1391", forge: "pull_request", said: "the branch that needs reading", position: { x: 700, y: 1400 }, created_at: at },
+      // And one naming nothing on the forge, which is offered no Dispatch:
+      // there is nothing filed to dispatch against.
+      { id: "legend-board", kind: "link", address: "https://example.invalid/a-board", said: "where the legend was drawn", position: { x: 1400, y: 1400 }, created_at: at },
     ],
     edges: [
       { id: "legend-e1", from: "legend-note", to: "legend-finding", kind: "produced", standing: "accepted", created_at: at },
