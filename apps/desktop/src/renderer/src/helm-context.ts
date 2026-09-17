@@ -48,11 +48,13 @@ export function screenOf(where: {
   clearing: boolean;
   manifesting: boolean;
   overviewing: boolean;
+  studying: boolean;
 }): HelmScreen {
   if (where.reading) return "job_detail";
   if (where.clearing) return "cleanup";
   if (where.manifesting) return "manifest";
   if (where.overviewing) return "overview";
+  if (where.studying) return "studio";
   return "board";
 }
 
@@ -73,20 +75,32 @@ export function cursorRowFor(where: {
   return null;
 }
 
-/** `AskHelm.context`, sent with every ask. Absent fields are left off the wire rather than sent `null`. */
+/**
+ * `AskHelm.context`, sent with every ask. Absent fields are left off the wire rather than sent `null`.
+ * `studio` and `node` are the Studios surface's own — #1287 — and a node is sent only beside its Studio.
+ */
 export function contextOf(where: {
   screen: HelmScreen;
   picked: string | null;
   chip: string | null;
   cursor: string | null;
+  studio?: string | null;
+  node?: string | null;
 }): HelmContext {
+  const studio = where.screen === "studio" ? (where.studio ?? null) : null;
+  const node = studio === null ? null : (where.node ?? null);
   return {
     screen: where.screen,
     ...(where.picked !== null ? { picked: where.picked } : {}),
     ...(where.chip !== null ? { chip: where.chip } : {}),
     ...(where.cursor !== null ? { cursor: where.cursor } : {}),
+    ...(studio !== null ? { studio } : {}),
+    ...(node !== null ? { node } : {}),
   };
 }
+
+/** How the open Studio and its selected node are named on the footer — `App.tsx` resolves the ids. */
+export type StudioNamed = { name: string; node?: string };
 
 /** Every screen but `job_detail`, which names itself off the Job it is reading rather than off this. */
 const SCREEN_LABEL: Record<Exclude<HelmScreen, "job_detail">, string> = {
@@ -94,6 +108,7 @@ const SCREEN_LABEL: Record<Exclude<HelmScreen, "job_detail">, string> = {
   board: "Job Board",
   manifest: "Manifest",
   cleanup: "Cleanup",
+  studio: "Studios",
 };
 
 /**
@@ -103,7 +118,7 @@ const SCREEN_LABEL: Record<Exclude<HelmScreen, "job_detail">, string> = {
  * turns `cursor` and `chip`'s bare ids into the number Fleet's handle carries,
  * off the Board's own `jobNumber`.
  */
-export function locationOf(context: HelmContext, jobs: readonly JobSummary[]): string {
+export function locationOf(context: HelmContext, jobs: readonly JobSummary[], studio?: StudioNamed): string {
   const numberOf = (jobId: string): string | undefined => {
     const job = jobs.find((one) => one.id === jobId);
     return job === undefined ? undefined : jobNumber(job);
@@ -113,6 +128,12 @@ export function locationOf(context: HelmContext, jobs: readonly JobSummary[]): s
     return number === undefined ? "Job's detail" : `Job ${number}'s detail (in context)`;
   }
   const label = SCREEN_LABEL[context.screen];
+  // A Studio names itself, and the node selected on it, only where the wire carries the Studio.
+  if (context.screen === "studio") {
+    if (context.studio === undefined || studio === undefined) return label;
+    const on = context.node === undefined || studio.node === undefined ? "" : ` · ${studio.node} selected`;
+    return `${label} · ${studio.name}${on}`;
+  }
   const number = context.cursor === undefined ? undefined : numberOf(context.cursor);
   return number === undefined ? label : `${label} · cursor on Job ${number}`;
 }

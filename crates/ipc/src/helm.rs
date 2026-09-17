@@ -16,7 +16,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::event::Missed;
-use crate::ids::{Instant, JobId, ManifestId};
+use crate::ids::{Instant, JobId, ManifestId, StudioId, StudioNodeId};
 use crate::turn::Shown;
 use crate::version::ProtocolVersion;
 
@@ -50,6 +50,13 @@ pub struct HelmContext {
     /// has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<JobId>,
+    /// The Studio open on the Studios surface — absent on its list, where
+    /// `screen` is still [`HelmScreen::Studio`]. Since 14.7, `#1287`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub studio: Option<StudioId>,
+    /// The node selected on that Studio's whiteboard. Only beside `studio`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node: Option<StudioNodeId>,
 }
 
 /// Which screen is showing. `apps/desktop/src/renderer/src/App.tsx` is the
@@ -61,6 +68,8 @@ pub enum HelmScreen {
     Board,
     Manifest,
     Cleanup,
+    /// The Studios surface: a repository's list, or one Studio open. Since 14.7.
+    Studio,
     JobDetail,
 }
 

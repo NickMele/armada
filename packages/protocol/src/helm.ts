@@ -33,10 +33,14 @@ export type HelmContext = {
   chip?: string;
   /** The row the cursor is on, in the Board or in Overview. Neither always has one. */
   cursor?: string;
+  /** The Studio open on the Studios surface. Absent on its list, where `screen` is still `studio`. Since 14.7, #1287. */
+  studio?: string;
+  /** The node selected on that Studio's whiteboard. Only with `studio`. Since 14.7. */
+  node?: string;
 };
 
 /** Which screen is showing. `App.tsx` is the one place that decides between them. */
-export type HelmScreen = "overview" | "board" | "manifest" | "cleanup" | "job_detail";
+export type HelmScreen = "overview" | "board" | "manifest" | "cleanup" | "studio" | "job_detail";
 
 /**
  * What `POST /helm/ask` and `POST /helm/start_fresh` answer with. **Not the

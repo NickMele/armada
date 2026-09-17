@@ -42,11 +42,13 @@ test("switching from one open Job to another chips and points at the new one", (
 });
 
 test("screenOf follows the precedence App.tsx draws by", () => {
-  expect(screenOf({ reading: true, clearing: true, manifesting: true, overviewing: true })).toBe("job_detail");
-  expect(screenOf({ reading: false, clearing: true, manifesting: true, overviewing: true })).toBe("cleanup");
-  expect(screenOf({ reading: false, clearing: false, manifesting: true, overviewing: true })).toBe("manifest");
-  expect(screenOf({ reading: false, clearing: false, manifesting: false, overviewing: true })).toBe("overview");
-  expect(screenOf({ reading: false, clearing: false, manifesting: false, overviewing: false })).toBe("board");
+  const none = { reading: false, clearing: false, manifesting: false, overviewing: false, studying: false };
+  expect(screenOf({ reading: true, clearing: true, manifesting: true, overviewing: true, studying: true })).toBe("job_detail");
+  expect(screenOf({ ...none, clearing: true, manifesting: true, overviewing: true, studying: true })).toBe("cleanup");
+  expect(screenOf({ ...none, manifesting: true, overviewing: true, studying: true })).toBe("manifest");
+  expect(screenOf({ ...none, overviewing: true, studying: true })).toBe("overview");
+  expect(screenOf({ ...none, studying: true })).toBe("studio");
+  expect(screenOf(none)).toBe("board");
 });
 
 test("cursorRowFor sends the Board's cursor on the Board and Overview's on Overview", () => {
@@ -90,4 +92,19 @@ test("locationOf reports the Job's detail generically once the wire carries no c
 
 test("locationOf never invents a number for an id the Board does not hold", () => {
   expect(locationOf({ screen: "overview", cursor: "missing" }, JOBS)).toBe("Overview");
+});
+
+test("a Studio rides on the context only on the Studios surface, and a node only beside its Studio", () => {
+  const base = { picked: null, chip: null, cursor: null };
+  expect(contextOf({ ...base, screen: "studio", studio: "s1", node: "n1" })).toEqual({ screen: "studio", studio: "s1", node: "n1" });
+  expect(contextOf({ ...base, screen: "studio", studio: null, node: "n1" })).toEqual({ screen: "studio" });
+  expect(contextOf({ ...base, screen: "board", studio: "s1", node: "n1" })).toEqual({ screen: "board" });
+});
+
+test("locationOf names the Studio open, and the node selected on it", () => {
+  expect(locationOf({ screen: "studio" }, JOBS)).toBe("Studios");
+  expect(locationOf({ screen: "studio", studio: "s1" }, JOBS, { name: "Untitled Studio" })).toBe("Studios · Untitled Studio");
+  expect(locationOf({ screen: "studio", studio: "s1", node: "n1" }, JOBS, { name: "Legend", node: "Note The legend" })).toBe(
+    "Studios · Legend · Note The legend selected",
+  );
 });

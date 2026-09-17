@@ -284,6 +284,12 @@ fn where_they_are(context: &HelmContext) -> String {
     if let Some(cursor) = &context.cursor {
         said.push_str(&format!(". The cursor is on Job {}", cursor.as_str()));
     }
+    if let Some(studio) = &context.studio {
+        said.push_str(&format!(". Studio {} is open", studio.as_str()));
+        if let Some(node) = &context.node {
+            said.push_str(&format!(", with node {} selected", node.as_str()));
+        }
+    }
     said.push('.');
     said
 }
@@ -294,6 +300,7 @@ fn screen_phrase(screen: HelmScreen) -> &'static str {
         HelmScreen::Board => "the Job Board",
         HelmScreen::Manifest => "the Manifest",
         HelmScreen::Cleanup => "Cleanup",
+        HelmScreen::Studio => "Studios",
         HelmScreen::JobDetail => "a Job's detail",
     }
 }
