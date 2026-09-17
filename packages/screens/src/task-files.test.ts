@@ -85,9 +85,9 @@ describe("each task's files", () => {
   });
 
   it("keeps a file the diff does not name, by the call's own path", () => {
-    const edits = [{ id: "1", path: "~/.claude/notes.md", added: 3, deleted: 0, task: "T1" }];
+    const edits = [{ id: "1", path: "~/notes/scratch.md", added: 3, deleted: 0, task: "T1" }];
     expect(filesByTask(edits, DIFF).get("T1")).toEqual([
-      { path: "~/.claude/notes.md", inDiff: false, added: 3, deleted: 0 },
+      { path: "~/notes/scratch.md", inDiff: false, added: 3, deleted: 0 },
     ]);
   });
 });
