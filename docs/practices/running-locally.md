@@ -258,6 +258,7 @@ back to the first scenario and says so in the browser console.
 |---|---|
 | `every-state` | One Job in every state, each opening onto its own detail. The page opens here |
 | `fleet-not-running` | No runtime file, so what Bridge draws with no Fleet |
+| `nothing-set-up` | Two repositories served and neither set up, so no surface that needs a Manifest has one |
 | `first-launch` | A Fleet serving no repository, so Add a repository opens by itself |
 | `empty-store` | One repository and no Job yet |
 | `recorded-board` | The Board as Fleet served it, from `--board` above |
