@@ -6,6 +6,8 @@
 // as `string`**: a node's `kind` is the tag its fields hang off, so the content
 // is a union on it. Its state, an edge's kind and its standing stay `string`.
 
+import type { CheckoutRunUnderway } from "./rehearsal";
+
 /** Every Studio one repository keeps, the last touched first — `GET /studios`. */
 export type StudioList = {
   studios: StudioSummary[];
@@ -37,8 +39,12 @@ export type Studio = StudioSummary & {
 
 /** What a node holds, tagged by its kind. `docs/concepts/studio.md`, Nodes. */
 export type StudioNodeContent =
-  /** A reference to the run, never its status. */
-  | { kind: "run"; run_id: string }
+  /**
+   * A reference to the run, never its status. `kept` is absent while the run
+   * is still there to read; present is partial — the run has been swept and
+   * this is all there is. Since 14.10, #1289.
+   */
+  | { kind: "run"; run_id: string; kept?: StudioRunKept }
   /** What a person pointed at and said, fixed at capture. */
   | { kind: "note"; said: string }
   | { kind: "cluster"; title: string }
@@ -52,6 +58,28 @@ export type StudioNodeContent =
   | { kind: "issue_draft"; title: string; body: string }
   /** A reference to the Job, never its status. */
   | { kind: "job"; job_id: string };
+
+/**
+ * What a Run node kept of its run once retention swept it: the result, and the
+ * log's last lines. `exit_code`, `expect_exit_code` and `stopped` are the three
+ * a run's colour is derived from, so a swept run reads the same as it did while
+ * it ran. Since 14.10, #1289.
+ */
+export type StudioRunKept = {
+  name: string;
+  command: string;
+  /** Absent where the run was killed before it exited. */
+  exit_code?: number;
+  expect_exit_code: number;
+  stopped: boolean;
+  duration_ms: number;
+  /** The log's last lines, oldest first. */
+  lines: string[];
+  /** How many lines the log held in all, whether or not they are here. */
+  total_lines: number;
+  /** Whether `lines` is the whole log rather than its tail. */
+  whole: boolean;
+};
 
 /** Where a person left a node, in whole canvas units. */
 export type StudioPosition = { x: number; y: number };
@@ -187,3 +215,25 @@ export type StartScout = { node_id: string };
  * freezes; the frozen one arrives on `studio.changed`.
  */
 export type StopScout = { node_id: string };
+
+/**
+ * `POST /studios/:studio_id/start_run`. Runs one Manifest entry in the
+ * checkout of the repository this Studio belongs to, so it names no
+ * repository. `produced_by` names the node it was started from, and the Studio
+ * draws the `produced` edge. Since 14.10, #1289.
+ */
+export type StartStudioRun = {
+  name: string;
+  /** A directory below the root whose own file declares `name`. */
+  workspace?: string;
+  position: StudioPosition;
+  produced_by?: string;
+};
+
+/** `start_studio_run`'s answer, 202: the Studio whole, the node it made, and
+ * the run underway. Since 14.10, #1289. */
+export type StudioRunStarted = {
+  studio: Studio;
+  node_id: string;
+  run: CheckoutRunUnderway;
+};
